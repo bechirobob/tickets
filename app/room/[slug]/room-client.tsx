@@ -153,19 +153,21 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
           const parent = message.parentId ? messages.find((candidate) => candidate.id === message.parentId) : null;
           const own = message.attendeeId === selfId;
           return <article key={message.id} className={`room-message ${own ? "own" : ""} ${message.kind === "announcement" ? "announcement" : ""}`}>
-            <div className="room-avatar">{message.displayName.slice(0, 1).toUpperCase()}</div>
+            {!own && <div className="room-avatar" aria-hidden="true">{message.displayName.slice(0, 1).toUpperCase()}</div>}
             <div className="room-message__body">
-              <header><b>{message.displayName}</b>{message.role !== "attendee" && <span><BadgeCheck size={12} /> Organiser</span>}<time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
-              {parent && <div className="room-reply-preview"><Reply size={12} /><b>{parent.displayName}</b><span>{parent.content.slice(0, 90)}</span></div>}
-              <p className={message.deletedAt ? "removed" : ""}>{message.content}</p>
-              {!message.deletedAt && <footer>
-                <button onClick={() => setReplyingTo(message)}><Reply size={13} /> Reply</button>
+              <header><b>{own ? "You" : message.displayName}</b>{message.role !== "attendee" && <span><BadgeCheck size={12} /> Organiser</span>}<time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
+              <div className="room-bubble">
+                {parent && <div className="room-reply-preview"><Reply size={12} /><b>{parent.attendeeId === selfId ? "You" : parent.displayName}</b><span>{parent.content.slice(0, 90)}</span></div>}
+                <p className={message.deletedAt ? "removed" : ""}>{message.content}</p>
+              </div>
+              {!message.deletedAt && <div className="room-message__actions" aria-label={`Actions for ${own ? "your" : message.displayName + "'s"} message`}>
+                <button type="button" onClick={() => setReplyingTo(message)} aria-label={`Reply to ${own ? "your message" : message.displayName}`}><Reply size={13} /><span>Reply</span></button>
                 {["🔥", "❤️", "😂", "👏", "👀"].map((emoji) => {
                   const reaction = message.reactions.find((item) => item.emoji === emoji);
-                  return <button key={emoji} className={reaction?.mine ? "active" : ""} onClick={() => react(message.id, emoji)}>{emoji}{reaction ? <span>{reaction.count}</span> : null}</button>;
+                  return <button type="button" key={emoji} aria-label={`React ${emoji}`} className={reaction?.mine ? "active" : ""} onClick={() => react(message.id, emoji)}>{emoji}{reaction ? <span>{reaction.count}</span> : null}</button>;
                 })}
-                {!own && message.role === "attendee" && <><button onClick={() => setReporting(message)} title="Report"><Flag size={13} /></button><button onClick={() => block(message.attendeeId, message.displayName)} title="Block"><UserRoundX size={13} /></button></>}
-              </footer>}
+                {!own && message.role === "attendee" && <><button type="button" onClick={() => setReporting(message)} aria-label={`Report ${message.displayName}'s message`}><Flag size={13} /></button><button type="button" onClick={() => block(message.attendeeId, message.displayName)} aria-label={`Block ${message.displayName}`}><UserRoundX size={13} /></button></>}
+              </div>}
             </div>
           </article>;
         })}
@@ -174,8 +176,8 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
       <section className="room-composer">
         {replyingTo && <div><Reply size={13} /> Replying to <b>{replyingTo.displayName}</b><button onClick={() => setReplyingTo(null)}>Cancel</button></div>}
         {policy?.readOnly ? <p><ShieldCheck size={15} /> This event Room is now read-only. The conversation remains available as an archive.</p> : <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
-          <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} placeholder="Say something useful to the room…" rows={1} />
-          <span>{draft.length}/500</span><button aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><Send size={18} /></button>
+          <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} placeholder="Message The Room" rows={1} />
+          <span className={draft.length > 450 ? "near-limit" : ""}>{draft.length ? `${draft.length}/500` : ""}</span><button aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><Send size={18} /></button>
         </form>}
       </section>
       {reporting && <div className="room-modal" role="dialog" aria-modal="true"><section><Flag /><p className="eyebrow">Private report</p><h2>Tell the moderation team what happened.</h2><label>Reason<select value={reportReason} onChange={(event) => setReportReason(event.target.value)}><option value="harassment">Harassment</option><option value="spam">Spam</option><option value="impersonation">Impersonation</option><option value="unsafe">Unsafe behaviour</option><option value="other">Other</option></select></label><label>Details<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value.slice(0, 500))} placeholder="Optional context for the moderator" /></label><div><button onClick={() => setReporting(null)}>Cancel</button><button onClick={submitReport}>Send report</button></div></section></div>}
