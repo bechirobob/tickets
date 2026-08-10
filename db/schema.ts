@@ -14,6 +14,7 @@ export const orders = sqliteTable("orders", {
   id: text("id").primaryKey(),
   reference: text("reference").notNull(),
   eventSlug: text("event_slug").notNull(),
+  ticketType: text("ticket_type").notNull().default("general"),
   quantity: integer("quantity").notNull(),
   faceAmountMinor: integer("face_amount_minor").notNull(),
   bookingFeeMinor: integer("booking_fee_minor").notNull(),

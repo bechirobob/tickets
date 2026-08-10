@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Clock3, MapPin, MessageCircle, Share2, ShieldCheck, Ticket } from "lucide-react";
 import { getCuratedEvent } from "../../events";
+import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 
 export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -49,18 +50,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
         <aside className="ticket-panel">
           <p className="eyebrow">Tickets</p>
-          <div className="ticket-option">
-            <div><strong>General admission</strong><span>For people who can arrive before the plot thickens</span></div>
-            <b>GH₵{event.price}</b>
-          </div>
-          <div className="ticket-option">
-            <div><strong>VIP</strong><span>Priority entry + less queue, more composure</span></div>
-            <b>GH₵250</b>
-          </div>
-          <div className="ticket-option">
-            <div><strong>Table for 5</strong><span>Five VIP entries. Group-chat arithmetic solved.</span></div>
-            <b>GH₵1,800</b>
-          </div>
+          {event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => (
+            <div className={`ticket-option${tier.status === "sold_out" ? " ticket-option--sold-out" : ""}`} key={tier.id}>
+              <div><strong>{tier.name}</strong><span>{tier.description}</span></div>
+              <b>{tier.status === "sold_out" ? "Sold out" : formatGhanaCedis(tier.priceMinor)}</b>
+            </div>
+          ))}
           <Link href={`/checkout/${slug}`} className="checkout-link">Choose your night <Ticket size={18} /></Link>
           <p className="secure-note"><ShieldCheck size={15} /> Secure checkout · Instant QR ticket</p>
           <div className="room-promise"><MessageCircle size={17} /><span><b>The Room opens after checkout</b>Talk with verified attendees and receive organiser updates.</span></div>

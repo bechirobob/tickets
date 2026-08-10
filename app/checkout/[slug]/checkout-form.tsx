@@ -4,18 +4,23 @@ import Link from "next/link";
 import { ArrowLeft, Check, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CuratedEvent } from "../../events";
+import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 
 export default function CheckoutForm({ slug, event }: { slug: string; event: CuratedEvent }) {
   const [quantity, setQuantity] = useState(1);
+  const [selectedTierId, setSelectedTierId] = useState(() => event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id);
   const [network, setNetwork] = useState("mtn");
   const [message, setMessage] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [feePercent, setFeePercent] = useState(7.5);
-  const ticketTotal = quantity * event.price;
-  const fee = useMemo(() => Math.round(ticketTotal * feePercent) / 100, [ticketTotal, feePercent]);
-  const total = ticketTotal + fee;
+  const [isPaying, setIsPaying] = useState(false);
+  const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
+  const ticketTotalMinor = quantity * selectedTier.priceMinor;
+  const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
+  const totalMinor = ticketTotalMinor + feeMinor;
+  const admissionCount = quantity * selectedTier.admissionsPerUnit;
 
   useEffect(() => {
     fetch("/api/config/booking-fee")
@@ -29,19 +34,28 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
   }, []);
 
   async function continueToPay() {
+    if (isPaying) return;
+    setIsPaying(true);
     setMessage("Preparing secure payment…");
     try {
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventSlug: slug, quantity, network, email, phone, fullName }),
+        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName }),
       });
       const data = await response.json() as { authorizationUrl?: string; error?: string };
       if (!response.ok || !data.authorizationUrl) throw new Error(data.error || "Payment could not be started");
       window.location.href = data.authorizationUrl;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Payment could not be started");
+      setIsPaying(false);
     }
+  }
+
+  function chooseTier(tierId: typeof selectedTierId) {
+    setSelectedTierId(tierId);
+    setQuantity(1);
+    setMessage("");
   }
 
   return (
@@ -56,13 +70,34 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
           <div className="checkout-step">
             <span>1</span><div><small>Your order</small><h1>{event.title}</h1></div>
           </div>
-          <div className="quantity-row">
-            <div><strong>General admission</strong><small>GH₵{event.price} each · One ticket, one human, no creative interpretations</small></div>
-            <div className="quantity-control">
-              <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label="Remove ticket"><Minus size={15} /></button>
-              <b>{quantity}</b>
-              <button type="button" onClick={() => setQuantity((value) => Math.min(10, value + 1))} aria-label="Add ticket"><Plus size={15} /></button>
-            </div>
+          <div className="ticket-tier-list" role="radiogroup" aria-label="Choose ticket tier">
+            {event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => {
+              const selected = tier.id === selectedTier.id;
+              const soldOut = tier.status === "sold_out";
+              return (
+                <div className={`checkout-tier${selected ? " selected" : ""}${soldOut ? " sold-out" : ""}`} key={tier.id}>
+                  <button
+                    type="button"
+                    className="checkout-tier__choice"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={soldOut}
+                    onClick={() => chooseTier(tier.id)}
+                  >
+                    <i aria-hidden="true" />
+                    <span><strong>{tier.name}</strong><small>{tier.description}{tier.admissionsPerUnit > 1 ? ` · Admits ${tier.admissionsPerUnit}` : ""}</small></span>
+                    <b>{soldOut ? "Sold out" : formatGhanaCedis(tier.priceMinor)}</b>
+                  </button>
+                  {selected && !soldOut && (
+                    <div className="quantity-control" aria-label={`${tier.name} quantity`}>
+                      <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label={`Remove ${tier.name}`}><Minus size={15} /></button>
+                      <b>{quantity}</b>
+                      <button type="button" onClick={() => setQuantity((value) => Math.min(tier.maxUnitsPerOrder, value + 1))} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <div className="checkout-step checkout-step--second">
@@ -93,11 +128,12 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
           <h2>{event.title}</h2>
           <p>{event.shortDate} · {event.time.split(" — ")[0]}<br />{event.venue}, {event.area}</p>
           <div className="summary-lines">
-            <span>{quantity} × General admission <b>GH₵{ticketTotal.toFixed(2)}</b></span>
-            <span>Booking fee ({feePercent}%) <b>GH₵{fee.toFixed(2)}</b></span>
-            <strong>Total <b>GH₵{total.toFixed(2)}</b></strong>
+            <span>{quantity} × {selectedTier.name} <b>{formatGhanaCedis(ticketTotalMinor)}</b></span>
+            {selectedTier.admissionsPerUnit > 1 && <span>Admissions included <b>{admissionCount}</b></span>}
+            <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
+            <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <button type="button" className="pay-button" onClick={continueToPay}>Pay GH₵{total.toFixed(2)} · secure the plan</button>
+          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying}>{isPaying ? "Preparing payment…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
         </aside>
