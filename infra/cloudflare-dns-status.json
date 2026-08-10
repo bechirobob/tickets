@@ -1,0 +1,8 @@
+{
+  "checked_at": "2026-08-10T18:50:12.928Z",
+  "zone": "becoreops.com",
+  "success": false,
+  "zone_status": "pending",
+  "actions": [],
+  "error": "{\"http_status\":403,\"errors\":[{\"code\":10000,\"message\":\"Authentication error\"}]}"
+}
