@@ -29,6 +29,37 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Ensure Workers subdomain exists
+        env:
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint =
+            `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/workers/subdomain`;
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+
+          const current = await fetch(endpoint, { headers });
+          if (current.ok) {
+            console.log("Workers subdomain is already registered.");
+            process.exit(0);
+          }
+
+          const created = await fetch(endpoint, {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ subdomain: "becoreops" }),
+          });
+          const responseBody = await created.text();
+          if (!created.ok) {
+            console.error(responseBody);
+            process.exit(1);
+          }
+          console.log("Workers subdomain registered.");
+          NODE
+
       - name: Install dependencies
         run: npm ci
 
@@ -37,16 +68,6 @@ jobs:
 
       - name: Build application
         run: npm run build
-
-      - name: Register Workers subdomain
-        env:
-          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
-        run: |
-          curl --fail-with-body --silent --show-error \
-            --request PUT \
-            --url "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
-            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            --json '{"subdomain":"becoreops"}'
 
       - name: Deploy Worker
         run: npm run deploy:built
