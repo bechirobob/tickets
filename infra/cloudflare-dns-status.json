@@ -1,8 +1,33 @@
 {
-  "checked_at": "2026-08-10T18:50:12.928Z",
+  "checked_at": "2026-08-10T19:00:09.240Z",
   "zone": "becoreops.com",
-  "success": false,
+  "success": true,
   "zone_status": "pending",
-  "actions": [],
-  "error": "{\"http_status\":403,\"errors\":[{\"code\":10000,\"message\":\"Authentication error\"}]}"
+  "actions": [
+    {
+      "record": "address.becoreops.com",
+      "action": "created"
+    },
+    {
+      "record": "_openai-site-verification.address.becoreops.com",
+      "action": "created"
+    },
+    {
+      "record": "_cf-custom-hostname.address.becoreops.com",
+      "action": "created"
+    },
+    {
+      "record": "becoreops.com",
+      "action": "already_dns_only"
+    },
+    {
+      "record": "becoreops.com",
+      "action": "already_dns_only"
+    },
+    {
+      "record": "www.becoreops.com",
+      "action": "already_dns_only"
+    }
+  ],
+  "error": null
 }
