@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { env } from "cloudflare:test";
 import { POST as initializePayment } from "../app/api/payments/initialize/route";
 import { curatedEvents } from "../app/events";
 
@@ -55,5 +56,38 @@ describe("payment ticket validation", () => {
   it("keeps already-open General Admission checkouts compatible during deployment", async () => {
     const response = await initializePayment(legacyGeneralAdmissionRequest(curatedEvents[1].slug));
     expect(response.status).toBe(503);
+  });
+
+  it("accepts tiers for newly published database events without a slug allowlist", async () => {
+    const now = new Date().toISOString();
+    const slug = "future-event-never-hard-coded";
+    await env.DB.prepare(`
+      INSERT INTO curated_event_records (
+        id, submission_id, slug, title, venue, area, starts_at, ends_at,
+        vibe, price_from_minor, image_url, curation_note, status,
+        published_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      "future-event-record",
+      "future-event-submission",
+      slug,
+      "Future Event",
+      "Future Venue",
+      "Accra",
+      "2027-01-15T21:00:00.000Z",
+      "2027-01-16T03:00:00.000Z",
+      "Late night",
+      20_000,
+      "https://example.com/future-event.jpg",
+      "A future event created after this release must remain bookable.",
+      "published",
+      now,
+      now,
+      now,
+    ).run();
+
+    const response = await initializePayment(paymentRequest(slug, "vip"));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: "Live Paystack credentials have not been connected yet." });
   });
 });
