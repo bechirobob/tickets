@@ -89,6 +89,44 @@ jobs:
           console.log("D1 database binding resolved.");
           NODE
 
+      - name: Ensure event media bucket exists
+        env:
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: |
+          node --input-type=module <<'NODE'
+          const bucketName = "becore-tickets-media";
+          const endpoint = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/r2/buckets`;
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+
+          const listed = await fetch(`${endpoint}?name_contains=${encodeURIComponent(bucketName)}&per_page=100`, { headers });
+          const listPayload = await listed.json();
+          if (!listed.ok || listPayload.success === false) {
+            console.error(JSON.stringify(listPayload.errors ?? listPayload));
+            process.exit(1);
+          }
+
+          const exists = listPayload.result?.buckets?.some((bucket) => bucket.name === bucketName);
+          if (exists) {
+            console.log("Event media bucket is ready.");
+            process.exit(0);
+          }
+
+          const created = await fetch(endpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ name: bucketName }),
+          });
+          const createPayload = await created.json();
+          if (!created.ok || createPayload.success === false || createPayload.result?.name !== bucketName) {
+            console.error(JSON.stringify(createPayload.errors ?? createPayload));
+            process.exit(1);
+          }
+          console.log("Event media bucket created.");
+          NODE
+
       - name: Install dependencies
         run: npm ci
 

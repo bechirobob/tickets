@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, Clock3, MapPin, Shuffle, Ticket } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Clock3, MapPin, Shuffle, Ticket } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import type { CuratedEvent } from "./events";
 
 const vibes = [
@@ -16,6 +16,8 @@ const vibes = [
 export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
   const [active, setActive] = useState("All");
   const [picked, setPicked] = useState<string | null>(null);
+  const [position, setPosition] = useState(0);
+  const railRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(
     () => active === "All" ? events : events.filter((event) => event.vibe === active),
     [active, events]
@@ -27,8 +29,41 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
     const event = pool[Math.floor(Math.random() * pool.length)] ?? visible[0];
     setPicked(event.slug);
     window.setTimeout(() => {
-      document.getElementById(`party-${event.slug}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById(`party-${event.slug}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     }, 80);
+  }
+
+  function selectVibe(value: string) {
+    setActive(value);
+    setPicked(null);
+    setPosition(0);
+    railRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+  }
+
+  function moveRail(direction: -1 | 1) {
+    const cards = Array.from(railRef.current?.querySelectorAll<HTMLElement>(".curated-card") ?? []);
+    if (!cards.length) return;
+    const next = Math.max(0, Math.min(cards.length - 1, position + direction));
+    cards[next]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    setPosition(next);
+  }
+
+  function trackRail() {
+    const rail = railRef.current;
+    if (!rail) return;
+    const cards = Array.from(rail.querySelectorAll<HTMLElement>(".curated-card"));
+    const centre = rail.scrollLeft + rail.clientWidth / 2;
+    let closest = 0;
+    let distance = Number.POSITIVE_INFINITY;
+    cards.forEach((card, index) => {
+      const cardCentre = card.offsetLeft + card.offsetWidth / 2;
+      const nextDistance = Math.abs(cardCentre - centre);
+      if (nextDistance < distance) {
+        closest = index;
+        distance = nextDistance;
+      }
+    });
+    if (closest !== position) setPosition(closest);
   }
 
   return (
@@ -48,7 +83,7 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
               role="tab"
               aria-selected={active === value}
               className={active === value ? "active" : ""}
-              onClick={() => { setActive(value); setPicked(null); }}
+              onClick={() => selectVibe(value)}
             >
               {label}
             </button>
@@ -59,7 +94,16 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
         </p>
       </div>
 
-      <div className="curated-grid" aria-live="polite">
+      <div className="event-rail-status" aria-label="Event carousel position">
+        <span><b>{String(position + 1).padStart(2, "0")}</b> / {String(visible.length).padStart(2, "0")}</span>
+        <p>Swipe the edit</p>
+        <div>
+          <button type="button" onClick={() => moveRail(-1)} disabled={position === 0} aria-label="Previous event"><ArrowLeft size={17} /></button>
+          <button type="button" onClick={() => moveRail(1)} disabled={position >= visible.length - 1} aria-label="Next event"><ArrowRight size={17} /></button>
+        </div>
+      </div>
+
+      <div id="event-rail" className="curated-grid" aria-live="polite" ref={railRef} onScroll={trackRail}>
         {visible.map((event, index) => (
           <article
             id={`party-${event.slug}`}

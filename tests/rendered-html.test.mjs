@@ -9,6 +9,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
   assert.equal(config.configPath, undefined);
   assert.equal(config.userConfigPath, undefined);
   assert.deepEqual(config.routes, [{ pattern: "tickets.becoreops.com", custom_domain: true }]);
+  assert.deepEqual(config.r2_buckets, [{ binding: "BUCKET", bucket_name: "becore-tickets-media" }]);
   assert.deepEqual(config.durable_objects, { bindings: [{ name: "THE_ROOM", class_name: "TheRoom" }] });
   assert.deepEqual(config.migrations, [{ tag: "v1", new_sqlite_classes: ["TheRoom"] }]);
 });

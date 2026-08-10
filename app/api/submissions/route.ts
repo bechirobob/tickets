@@ -42,21 +42,15 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const poster = form.get("poster");
-    let posterObjectKey: string | null = null;
-    let posterContentType: string | null = null;
-
-    if (poster instanceof File && poster.size > 0) {
-      if (poster.size > 8 * 1024 * 1024 || !allowedPosterTypes.has(poster.type)) {
-        return Response.json({ error: "Poster must be a JPG, PNG or WebP under 8 MB." }, { status: 400 });
-      }
-      const { env } = await import("cloudflare:workers");
-      if (!env.BUCKET) return Response.json({ error: "Poster storage is temporarily unavailable." }, { status: 503 });
-      posterObjectKey = `submission-posters/${id}`;
-      posterContentType = poster.type;
-      await env.BUCKET.put(posterObjectKey, await poster.arrayBuffer(), {
-        httpMetadata: { contentType: poster.type, cacheControl: "public, max-age=86400" },
-      });
+    if (!(poster instanceof File) || poster.size === 0) {
+      return Response.json({ error: "Add a flyer or key visual before submitting." }, { status: 400 });
     }
+    if (poster.size > 8 * 1024 * 1024 || !allowedPosterTypes.has(poster.type)) {
+      return Response.json({ error: "Flyer must be a JPG, PNG or WebP under 8 MB." }, { status: 400 });
+    }
+
+    const posterObjectKey = `submission-posters/${id}`;
+    const posterContentType = poster.type;
 
     const record = {
       id,
@@ -88,8 +82,30 @@ export async function POST(request: Request) {
       updatedAt: now,
     };
 
-    const db = await getDb();
-    await db.insert(partySubmissions).values(record);
+    const { env } = await import("cloudflare:workers");
+    if (!env.BUCKET) {
+      return Response.json({ error: "Flyer upload is temporarily unavailable. Please try again shortly." }, { status: 503 });
+    }
+
+    try {
+      await env.BUCKET.put(posterObjectKey, poster.stream(), {
+        httpMetadata: { contentType: poster.type, cacheControl: "public, max-age=86400" },
+      });
+    } catch (error) {
+      console.error(JSON.stringify({ message: "submission flyer upload failed", error: error instanceof Error ? error.message : String(error) }));
+      return Response.json({ error: "The flyer could not be uploaded. Please try again shortly." }, { status: 503 });
+    }
+
+    try {
+      const db = await getDb();
+      await db.insert(partySubmissions).values(record);
+    } catch (error) {
+      await env.BUCKET.delete(posterObjectKey).catch((cleanupError) => {
+        console.error(JSON.stringify({ message: "orphaned submission flyer cleanup failed", error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) }));
+      });
+      console.error(JSON.stringify({ message: "party submission save failed", error: error instanceof Error ? error.message : String(error) }));
+      return Response.json({ error: "The submission could not be saved. Please try again." }, { status: 500 });
+    }
     return Response.json({ id, reference: `BC-${id.slice(0, 8).toUpperCase()}`, status: record.status }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "We could not save this submission.";

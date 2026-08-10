@@ -12,7 +12,7 @@ export default function PartySubmissionForm() {
     setState("sending");
     setMessage("");
     const response = await fetch("/api/submissions", { method: "POST", body: new FormData(event.currentTarget) });
-    const result = await response.json() as { error?: string; reference?: string };
+    const result = await response.json().catch(() => ({ error: "The upload did not finish. Please try again." })) as { error?: string; reference?: string };
     if (!response.ok) {
       setState("error");
       setMessage(result.error ?? "The submission refused to behave. Try again.");
@@ -68,7 +68,7 @@ export default function PartySubmissionForm() {
 
       <section>
         <div className="submission-step"><b>03</b><span>The proof</span></div>
-        <label className="poster-upload"><Upload size={20} /><span><b>Upload the poster or key visual</b><small>JPG, PNG or WebP · 8 MB maximum</small></span><input name="poster" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+        <label className="poster-upload"><Upload size={20} /><span><b>Upload the poster or key visual</b><small>JPG, PNG or WebP · 8 MB maximum</small></span><input name="poster" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
         <p className="submission-consent">Submitting does not guarantee placement. If approved, BeCore may edit customer-facing copy for clarity and tone; the organiser remains responsible for accurate event, venue and refund information.</p>
       </section>
 

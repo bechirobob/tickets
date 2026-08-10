@@ -25,3 +25,14 @@ test("the final mobile cascade keeps the homepage hero inside the viewport", asy
   assert.match(finalMobileBlock, /\.night-hero__copy\s*\{[^}]*top:\s*178px/su);
   assert.match(finalMobileBlock, /\.night-ticker\s*\{[^}]*overflow:\s*hidden/su);
 });
+
+test("customer actions are editorial links and the mobile event list is a smooth snap rail", async () => {
+  const css = await readFile(cssUrl, "utf8");
+  const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
+
+  assert.match(css, /\.night-submit\s*\{[^}]*border-bottom:[^}]*color:\s*white/su);
+  assert.match(css, /\.night-shuffle\s*\{[^}]*background:\s*transparent[^}]*color:\s*var\(--signal\)/su);
+  assert.match(css, /\.vibe-filter button\.active\s*\{[^}]*background:\s*transparent/su);
+  assert.match(finalMobileBlock, /\.curated-grid\s*\{[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory[^}]*scroll-behavior:\s*smooth/su);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
+});
