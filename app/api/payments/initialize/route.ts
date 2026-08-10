@@ -2,16 +2,16 @@ import { getDb } from "../../../../db";
 import { orderAccessGrants, orders } from "../../../../db/schema";
 import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
 import { resolveBookingFee } from "../../../../lib/booking-fees";
+import { resolveTicketSelection } from "../../../../lib/ticket-selection";
+import { findCuratedEvent } from "../../../events";
 import { eq } from "drizzle-orm";
 
-const EVENT_PRICES: Record<string, number> = { "after-dark-osu": 12000 };
-
 export async function POST(request: Request) {
-  const body = await request.json() as { eventSlug?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string };
+  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string };
   const eventSlug = body.eventSlug?.trim() ?? "";
-  const quantity = Math.floor(Number(body.quantity));
-  const facePriceMinor = EVENT_PRICES[eventSlug];
-  if (!facePriceMinor || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) return Response.json({ error: "Invalid ticket selection." }, { status: 400 });
+  const event = await findCuratedEvent(eventSlug);
+  const selection = event ? resolveTicketSelection(event, body.ticketTierId ?? "general", body.quantity) : null;
+  if (!event || !selection) return Response.json({ error: "That ticket tier is unavailable. Refresh the page and choose an available ticket." }, { status: 400 });
   if (!body.email?.includes("@") || !body.phone?.trim()) return Response.json({ error: "A valid email and phone number are required." }, { status: 400 });
 
   const { env } = await import("cloudflare:workers");
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (!secret) return Response.json({ error: "Live Paystack credentials have not been connected yet." }, { status: 503 });
 
   const feeBasisPoints = await resolveBookingFee(eventSlug);
-  const faceAmountMinor = facePriceMinor * quantity;
+  const faceAmountMinor = selection.faceAmountMinor;
   const bookingFeeMinor = Math.round(faceAmountMinor * feeBasisPoints / 10000);
   const totalAmountMinor = faceAmountMinor + bookingFeeMinor;
   const id = crypto.randomUUID();
@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       id,
       reference,
       eventSlug,
-      quantity,
+      ticketType: selection.tier.id,
+      quantity: selection.ticketCount,
       faceAmountMinor,
       bookingFeeMinor,
       totalAmountMinor,
@@ -66,7 +67,19 @@ export async function POST(request: Request) {
       reference,
       channels: ["mobile_money"],
       callback_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`,
-      metadata: { orderId: id, eventSlug, quantity, customerName: body.fullName?.trim(), phone: body.phone, network: body.network, faceAmountMinor, bookingFeeMinor },
+      metadata: JSON.stringify({
+        orderId: id,
+        eventSlug,
+        ticketTierId: selection.tier.id,
+        ticketTierName: selection.tier.name,
+        purchaseQuantity: selection.unitQuantity,
+        ticketCount: selection.ticketCount,
+        customerName: body.fullName?.trim(),
+        phone: body.phone,
+        network: body.network,
+        faceAmountMinor,
+        bookingFeeMinor,
+      }),
     }),
   });
   const result = await response.json() as { status?: boolean; message?: string; data?: { authorization_url?: string; access_code?: string; reference?: string } };

@@ -1,3 +1,5 @@
+import { createStandardTicketTiers, type TicketTier } from "../lib/ticket-tiers";
+
 export type CuratedEvent = {
   slug: string;
   title: string;
@@ -9,6 +11,7 @@ export type CuratedEvent = {
   area: string;
   vibe: "Late night" | "Day party" | "Alté" | "Amapiano";
   price: number;
+  ticketTiers: TicketTier[];
   image: string;
   note: string;
   quip: string;
@@ -27,6 +30,7 @@ export const curatedEvents: CuratedEvent[] = [
     area: "Osu",
     vibe: "Late night",
     price: 120,
+    ticketTiers: createStandardTicketTiers(12_000),
     image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88",
     note: "A compact room, a sharp DJ line-up and zero space for standing like you were forced to attend. Come early.",
     quip: "Small room. Big decisions.",
@@ -43,6 +47,7 @@ export const curatedEvents: CuratedEvent[] = [
     area: "Labone",
     vibe: "Alté",
     price: 180,
+    ticketTiers: createStandardTicketTiers(18_000),
     image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1500&q=88",
     note: "For a dressed-up crowd that wants discovery, not the same playlist on repeat. Your everyday black T-shirt needs a convincing argument.",
     quip: "Dress like your ex might be there.",
@@ -59,6 +64,7 @@ export const curatedEvents: CuratedEvent[] = [
     area: "Labadi",
     vibe: "Day party",
     price: 150,
+    ticketTiers: createStandardTicketTiers(15_000),
     image: "https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1500&q=88",
     note: "Sunset timing, open air and enough space to make a full Sunday of it. Sunglasses may become emotional support by 7 PM.",
     quip: "Sunset first. Regret nothing.",
@@ -75,6 +81,7 @@ export const curatedEvents: CuratedEvent[] = [
     area: "Spintex",
     vibe: "Amapiano",
     price: 100,
+    ticketTiers: createStandardTicketTiers(10_000),
     image: "https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?auto=format&fit=crop&w=1500&q=88",
     note: "A focused dance floor with production that earns the warehouse. Sensible shoes were considered, then respectfully declined.",
     quip: "The shoes will not survive.",
@@ -100,6 +107,7 @@ function fromRecord(record: {
     area: record.area,
     vibe: record.vibe,
     price: record.priceFromMinor / 100,
+    ticketTiers: createStandardTicketTiers(record.priceFromMinor),
     image: record.imageUrl,
     note: record.curationNote,
     quip: {
@@ -131,6 +139,10 @@ export async function getPublicEvents(): Promise<CuratedEvent[]> {
 }
 
 export async function getCuratedEvent(slug: string) {
+  return (await findCuratedEvent(slug)) ?? curatedEvents[0];
+}
+
+export async function findCuratedEvent(slug: string) {
   const events = await getPublicEvents();
-  return events.find((event) => event.slug === slug) ?? curatedEvents.find((event) => event.slug === slug) ?? curatedEvents[0];
+  return events.find((event) => event.slug === slug) ?? curatedEvents.find((event) => event.slug === slug);
 }

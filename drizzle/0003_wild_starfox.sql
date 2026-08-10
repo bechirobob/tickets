@@ -1,0 +1,1 @@
+ALTER TABLE `orders` ADD `ticket_type` text DEFAULT 'general' NOT NULL;

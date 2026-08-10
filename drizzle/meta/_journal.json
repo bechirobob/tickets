@@ -22,6 +22,13 @@
       "when": 1786392129638,
       "tag": "0002_tiny_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786397770094,
+      "tag": "0003_wild_starfox",
+      "breakpoints": true
     }
   ]
 }

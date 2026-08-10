@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       for (let index = 0; index < order.quantity; index += 1) {
         const token = crypto.randomUUID() + crypto.randomUUID();
         const qrTokenHash = toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)));
-        issuedTickets.push(db.insert(tickets).values({ id: crypto.randomUUID(), orderId: order.id, eventSlug: order.eventSlug, ticketType: "general", qrTokenHash, status: "issued", issuedAt }));
+        issuedTickets.push(db.insert(tickets).values({ id: crypto.randomUUID(), orderId: order.id, eventSlug: order.eventSlug, ticketType: order.ticketType, qrTokenHash, status: "issued", issuedAt }));
       }
       await db.batch([
         recordEvent,
