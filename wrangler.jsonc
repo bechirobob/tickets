@@ -4,6 +4,12 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-10",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "tickets.becoreops.com",
+      "custom_domain": true
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
