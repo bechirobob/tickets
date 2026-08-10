@@ -60,6 +60,35 @@ jobs:
           console.log("Workers subdomain registered.");
           NODE
 
+      - name: Resolve D1 database binding
+        env:
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+
+          const endpoint =
+            `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database?name=becore-tickets-db`;
+          const response = await fetch(endpoint, {
+            headers: {
+              Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            },
+          });
+          const payload = await response.json();
+          const database = payload.result?.find(
+            (candidate) => candidate.name === "becore-tickets-db",
+          );
+          if (!response.ok || !database?.uuid) {
+            console.error(JSON.stringify(payload));
+            process.exit(1);
+          }
+
+          const config = JSON.parse(await readFile("wrangler.jsonc", "utf8"));
+          config.d1_databases[0].database_id = database.uuid;
+          await writeFile("wrangler.jsonc", `${JSON.stringify(config, null, 2)}\n`);
+          console.log("D1 database binding resolved.");
+          NODE
+
       - name: Install dependencies
         run: npm ci
 
