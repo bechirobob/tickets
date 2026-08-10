@@ -10,11 +10,6 @@
       "migrations_dir": "./drizzle"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET"
-    }
-  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
