@@ -45,6 +45,7 @@ jobs:
             zone: zoneName,
             success: false,
             zone_status: null,
+            assigned_nameservers: [],
             actions: [],
             error: null,
           };
@@ -81,6 +82,7 @@ jobs:
             if (!zone?.id) throw new Error("Cloudflare zone not found or token lacks Zone Read.");
 
             status.zone_status = zone.status;
+            status.assigned_nameservers = Array.isArray(zone.name_servers) ? zone.name_servers : [];
             const listed = await request(`/zones/${zone.id}/dns_records?per_page=500`);
             let records = listed.result || [];
 
