@@ -46,8 +46,7 @@ jobs:
             --request PUT \
             --url "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            --header "Content-Type: application/json" \
-            --data '{"subdomain":"becoreops"}'
+            --json '{"subdomain":"becoreops"}'
 
       - name: Deploy Worker
         run: npm run deploy:built
