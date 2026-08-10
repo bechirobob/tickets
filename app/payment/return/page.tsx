@@ -1,6 +1,71 @@
+"use client";
+
 import Link from "next/link";
-import { Clock3, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function PaymentReturn() {
-  return <main className="payment-return"><div><Clock3 size={45} /><p className="eyebrow">Your MoMo prompt did its thing</p><h1>We’re making sure the money really arrived.</h1><p>Keep this page open for a moment. We issue the ticket only after Paystack confirms payment—because optimism is lovely, but it is not a receipt.</p><Link href="/tickets">Check the ticket wallet</Link><span><ShieldCheck size={15} /> The browser saying “success” does not get the final vote.</span></div></main>;
+  const params = useSearchParams();
+  const [state, setState] = useState<"checking" | "ready" | "failed">("checking");
+  const [eventSlug, setEventSlug] = useState("");
+  const [message, setMessage] = useState("Paystack is confirming the payment. This normally takes a few seconds.");
+
+  useEffect(() => {
+    const reference = params.get("reference") ?? "";
+    const claim = params.get("claim") ?? "";
+    if (!reference || !claim) {
+      const timer = window.setTimeout(() => {
+        setState("failed");
+        setMessage("This payment return link is incomplete. Open your original checkout tab or contact support.");
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+    window.history.replaceState({}, "", "/payment/return");
+    let cancelled = false;
+    let attempt = 0;
+    const check = async () => {
+      attempt += 1;
+      try {
+        const response = await fetch("/api/customer/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reference, claim }),
+        });
+        const result = await response.json() as { pending?: boolean; signedIn?: boolean; eventSlug?: string; error?: string };
+        if (cancelled) return;
+        if (response.ok && result.signedIn) {
+          setEventSlug(result.eventSlug ?? "");
+          setState("ready");
+          setMessage("Your verified attendee access is ready. The Room is now part of your ticket.");
+          return;
+        }
+        if (response.status === 202 && attempt < 20) {
+          window.setTimeout(check, 2500);
+          return;
+        }
+        setState("failed");
+        setMessage(result.error ?? "We could not confirm this payment yet. Your money is not treated as a ticket until Paystack confirms it.");
+      } catch {
+        if (attempt < 20) window.setTimeout(check, 2500);
+        else {
+          setState("failed");
+          setMessage("The confirmation service is temporarily unavailable. Your order is still recorded safely.");
+        }
+      }
+    };
+    void check();
+    return () => { cancelled = true; };
+  }, [params]);
+
+  return (
+    <main className="payment-return"><div>
+      {state === "ready" ? <CheckCircle2 size={45} /> : <Clock3 size={45} />}
+      <p className="eyebrow">{state === "ready" ? "Payment confirmed" : "Secure confirmation"}</p>
+      <h1>{state === "ready" ? "Ticket verified. You’re in The Room." : "We’re making sure the money really arrived."}</h1>
+      <p>{message}</p>
+      {state === "ready" && eventSlug ? <Link href={`/room/${eventSlug}`}>Enter The Room</Link> : <Link href="/tickets">Open ticket wallet</Link>}
+      <span><ShieldCheck size={15} /> Room access only follows a valid paid ticket.</span>
+    </div></main>
+  );
 }

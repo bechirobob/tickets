@@ -15,6 +15,13 @@
       "when": 1786377639433,
       "tag": "0001_normal_mikhail_rasputin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786392129638,
+      "tag": "0002_tiny_scorpion",
+      "breakpoints": true
     }
   ]
 }

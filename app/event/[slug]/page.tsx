@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Clock3, MapPin, Share2, ShieldCheck, Ticket } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock3, MapPin, MessageCircle, Share2, ShieldCheck, Ticket } from "lucide-react";
 import { getCuratedEvent } from "../../events";
 
 export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -63,6 +63,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </div>
           <Link href={`/checkout/${slug}`} className="checkout-link">Choose your night <Ticket size={18} /></Link>
           <p className="secure-note"><ShieldCheck size={15} /> Secure checkout · Instant QR ticket</p>
+          <div className="room-promise"><MessageCircle size={17} /><span><b>The Room opens after checkout</b>Talk with verified attendees and receive organiser updates.</span></div>
         </aside>
       </section>
     </main>

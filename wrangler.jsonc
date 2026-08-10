@@ -16,6 +16,20 @@
       "migrations_dir": "./drizzle"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "THE_ROOM",
+        "class_name": "TheRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["TheRoom"]
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

@@ -1,6 +1,8 @@
 import { getDb } from "../../../../db";
-import { orders } from "../../../../db/schema";
+import { orderAccessGrants, orders } from "../../../../db/schema";
+import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
 import { resolveBookingFee } from "../../../../lib/booking-fees";
+import { eq } from "drizzle-orm";
 
 const EVENT_PRICES: Record<string, number> = { "after-dark-osu": 12000 };
 
@@ -23,6 +25,36 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const reference = `BCT-${Date.now().toString(36).toUpperCase()}-${id.slice(0, 6).toUpperCase()}`;
   const origin = new URL(request.url).origin;
+  const claimToken = createSecureToken();
+  const claimTokenHash = await hashToken(claimToken);
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const db = await getDb();
+
+  await db.batch([
+    db.insert(orders).values({
+      id,
+      reference,
+      eventSlug,
+      quantity,
+      faceAmountMinor,
+      bookingFeeMinor,
+      totalAmountMinor,
+      currency: "GHS",
+      customerEmail: body.email.trim().toLowerCase(),
+      customerPhone: body.phone.trim(),
+      customerName: body.fullName?.trim() || null,
+      paymentChannel: `mobile_money:${body.network ?? "unknown"}`,
+      status: "payment_pending",
+      createdAt,
+    }),
+    db.insert(orderAccessGrants).values({
+      orderId: id,
+      tokenHash: claimTokenHash,
+      createdAt,
+      expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    }),
+  ]);
 
   const response = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
@@ -33,14 +65,16 @@ export async function POST(request: Request) {
       currency: "GHS",
       reference,
       channels: ["mobile_money"],
-      callback_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}`,
+      callback_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`,
       metadata: { orderId: id, eventSlug, quantity, customerName: body.fullName?.trim(), phone: body.phone, network: body.network, faceAmountMinor, bookingFeeMinor },
     }),
   });
   const result = await response.json() as { status?: boolean; message?: string; data?: { authorization_url?: string; access_code?: string; reference?: string } };
-  if (!response.ok || !result.status || !result.data?.authorization_url) return Response.json({ error: result.message ?? "Paystack could not start the payment." }, { status: 502 });
+  if (!response.ok || !result.status || !result.data?.authorization_url) {
+    await db.update(orders).set({ status: "failed" }).where(eq(orders.id, id));
+    return Response.json({ error: result.message ?? "Paystack could not start the payment." }, { status: 502 });
+  }
 
-  const db = await getDb();
-  await db.insert(orders).values({ id, reference, eventSlug, quantity, faceAmountMinor, bookingFeeMinor, totalAmountMinor, currency: "GHS", customerEmail: body.email, customerPhone: body.phone, paymentChannel: `mobile_money:${body.network ?? "unknown"}`, status: "payment_pending", paystackReference: result.data.reference ?? reference, createdAt: new Date().toISOString() });
+  await db.update(orders).set({ paystackReference: result.data.reference ?? reference }).where(eq(orders.id, id));
   return Response.json({ authorizationUrl: result.data.authorization_url, reference });
 }

@@ -98,8 +98,8 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Deploy Worker
-        run: npm run deploy:built
-
       - name: Apply database migrations
         run: npm run db:migrate:remote
+
+      - name: Deploy Worker
+        run: npm run deploy:built
