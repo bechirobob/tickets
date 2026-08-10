@@ -14,6 +14,7 @@ delete generatedConfig.userConfigPath;
 // Keep the production hostname declarative so every deployment preserves the
 // Worker Custom Domain and Cloudflare manages its DNS record and certificate.
 generatedConfig.routes = sourceConfig.routes;
+generatedConfig.r2_buckets = sourceConfig.r2_buckets;
 generatedConfig.durable_objects = sourceConfig.durable_objects;
 generatedConfig.migrations = sourceConfig.migrations;
 
