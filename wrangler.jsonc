@@ -15,13 +15,6 @@
       "binding": "BUCKET"
     }
   ],
-  "secrets": {
-    "required": [
-      "ADMIN_ACCESS_KEY",
-      "ADMIN_SESSION_SECRET",
-      "PAYSTACK_SECRET_KEY"
-    ]
-  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
