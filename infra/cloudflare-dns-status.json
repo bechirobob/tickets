@@ -1,20 +1,24 @@
 {
-  "checked_at": "2026-08-10T19:00:09.240Z",
+  "checked_at": "2026-08-10T19:03:21.312Z",
   "zone": "becoreops.com",
   "success": true,
   "zone_status": "pending",
+  "assigned_nameservers": [
+    "langston.ns.cloudflare.com",
+    "raquel.ns.cloudflare.com"
+  ],
   "actions": [
     {
       "record": "address.becoreops.com",
-      "action": "created"
+      "action": "updated"
     },
     {
       "record": "_openai-site-verification.address.becoreops.com",
-      "action": "created"
+      "action": "updated"
     },
     {
       "record": "_cf-custom-hostname.address.becoreops.com",
-      "action": "created"
+      "action": "updated"
     },
     {
       "record": "becoreops.com",
