@@ -38,6 +38,17 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Register Workers subdomain
+        env:
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request PUT \
+            --url "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data '{"subdomain":"becoreops"}'
+
       - name: Deploy Worker
         run: npm run deploy:built
 
