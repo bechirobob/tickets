@@ -1,33 +1,19 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
+test("keeps the production Worker configuration portable and preserves The Room", async () => {
+  const config = JSON.parse(await readFile(new URL("../dist/server/wrangler.json", import.meta.url), "utf8"));
 
-test("renders development preview metadata", async () => {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
+  assert.equal(config.legacy_env, undefined);
+  assert.equal(config.configPath, undefined);
+  assert.equal(config.userConfigPath, undefined);
+  assert.deepEqual(config.routes, [{ pattern: "tickets.becoreops.com", custom_domain: true }]);
+  assert.deepEqual(config.durable_objects, { bindings: [{ name: "THE_ROOM", class_name: "TheRoom" }] });
+  assert.deepEqual(config.migrations, [{ tag: "v1", new_sqlite_classes: ["TheRoom"] }]);
+});
 
-  const response = await worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-
-  assert.equal(response.status, 200);
-  assert.match(
-    response.headers.get("content-type") ?? "",
-    /^text\/html\b/i,
-  );
-  assert.match(await response.text(), developmentPreviewMeta);
+test("does not ship editor preview metadata or workspace paths in customer assets", async () => {
+  const manifest = await readFile(new URL("../dist/client/.vite/manifest.json", import.meta.url), "utf8");
+  assert.doesNotMatch(manifest, /codex-preview|\/workspace\/scratch|\.sites\//iu);
 });

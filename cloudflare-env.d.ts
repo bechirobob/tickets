@@ -7,6 +7,8 @@ declare namespace Cloudflare {
     ASSETS: Fetcher;
     BUCKET: R2Bucket;
     DB: D1Database;
+    IMAGES: ImagesBinding;
     PAYSTACK_SECRET_KEY: string;
+    THE_ROOM: DurableObjectNamespace<import("./worker/index").TheRoom>;
   }
 }
