@@ -8,6 +8,8 @@
   --yellow: #f4d84c;
   --muted: #69675f;
   --line: #d8d4ca;
+  --font-geist-sans: Inter, Aptos, "Segoe UI", Arial, sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 * { box-sizing: border-box; }
