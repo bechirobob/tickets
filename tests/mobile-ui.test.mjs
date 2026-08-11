@@ -61,8 +61,11 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The chat your.*ticket gets.*you into\./su);
   assert.match(home, /No ticket\. No lurking\./u);
-  assert.match(home, /aria-label="A preview of The Room conversation"/u);
+  assert.match(home, /Ticket-holder mobile preview/u);
+  assert.match(home, /aria-label="A preview of The Room conversation inside a mobile device"/u);
   assert.doesNotMatch(home, /href="\/room\//u);
+  assert.match(css, /\.night-room-device\s*\{[^}]*border-radius:\s*42px[^}]*background:\s*#050604/su);
+  assert.match(css, /\.night-room-device__status\s*\{[^}]*display:\s*grid/su);
   assert.match(css, /\.night-room-peek__stream::after\s*\{[^}]*linear-gradient/su);
   assert.match(finalMobileBlock, /\.night-room-tease\s*\{[^}]*grid-template-columns:\s*1fr/su);
   assert.match(css, /\.curated-card, \.night-room-message\s*\{\s*animation:\s*none/su);

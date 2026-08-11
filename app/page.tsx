@@ -83,36 +83,45 @@ export default async function Home() {
           </div>
         </div>
 
-        <div className="night-room-peek" aria-label="A preview of The Room conversation">
-          <header>
-            <div><i /><span><b>The Room</b><small>After Dark: Osu · ticket holders only</small></span></div>
-            <span className="night-room-peek__preview"><ShieldCheck size={17} /> Preview</span>
-          </header>
-          <div className="night-room-peek__stream">
-            <p className="night-room-peek__day">Tonight · 10:00 PM</p>
-            <article className="night-room-message night-room-message--left">
-              <span>Where&apos;s everyone meeting first?</span>
-              <small>9:42 PM</small>
-              <i>🔥 4</i>
-            </article>
-            <article className="night-room-message night-room-message--right">
-              <span>Outside the venue at 10. I&apos;ll drop the spot here 👀</span>
-              <small>9:43 PM</small>
-            </article>
-            <aside className="night-room-update">
-              <MessageCircle size={16} />
-              <span><b>Organiser update</b>Doors open at 10. Your QR must be ready at the gate.</span>
-            </aside>
-            <article className="night-room-message night-room-message--left night-room-message--last">
-              <span>Okay, this just saved the group chat 😂</span>
-              <small>9:45 PM</small>
-              <i>❤️ 7</i>
-            </article>
+        <div className="night-room-showcase">
+          <p><ShieldCheck size={14} /> Ticket-holder mobile preview</p>
+          <div className="night-room-device" aria-label="A preview of The Room conversation inside a mobile device">
+            <div className="night-room-device__status" aria-hidden="true">
+              <span>9:41</span><i /><span>5G&nbsp;&nbsp;▰</span>
+            </div>
+            <div className="night-room-peek">
+              <header>
+                <div><i /><span><b>The Room</b><small>After Dark: Osu · ticket holders only</small></span></div>
+                <span className="night-room-peek__preview"><ShieldCheck size={17} /> Preview</span>
+              </header>
+              <div className="night-room-peek__stream">
+                <p className="night-room-peek__day">Tonight · 10:00 PM</p>
+                <article className="night-room-message night-room-message--left">
+                  <span>Where&apos;s everyone meeting first?</span>
+                  <small>9:42 PM</small>
+                  <i>🔥 4</i>
+                </article>
+                <article className="night-room-message night-room-message--right">
+                  <span>Outside the venue at 10. I&apos;ll drop the spot here 👀</span>
+                  <small>9:43 PM</small>
+                </article>
+                <aside className="night-room-update">
+                  <MessageCircle size={16} />
+                  <span><b>Organiser update</b>Doors open at 10. Your QR must be ready at the gate.</span>
+                </aside>
+                <article className="night-room-message night-room-message--left night-room-message--last">
+                  <span>Okay, this just saved the group chat 😂</span>
+                  <small>9:45 PM</small>
+                  <i>❤️ 7</i>
+                </article>
+              </div>
+              <footer className="night-room-peek__lock">
+                <LockKeyhole size={16} />
+                <span><b>Conversation locked</b>Your verified ticket is the key.</span>
+              </footer>
+            </div>
+            <i className="night-room-device__home" aria-hidden="true" />
           </div>
-          <footer className="night-room-peek__lock">
-            <LockKeyhole size={16} />
-            <span><b>Conversation locked</b>Your verified ticket is the key.</span>
-          </footer>
         </div>
       </section>
 
