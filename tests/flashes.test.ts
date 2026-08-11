@@ -1,6 +1,10 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
+  FLASH_MAX_ACTIVE_PER_ATTENDEE,
+  FLASH_MAX_ACTIVE_PER_EVENT,
+  FLASH_MAX_ACTIVE_STORAGE_BYTES,
+  FLASH_MAX_STORED_BYTES,
   hasAcceptedFlashType,
   hasValidFlashSignature,
   parseFlashModerationResponse,
@@ -9,6 +13,13 @@ import {
 } from "../lib/flashes";
 
 describe("Room Flashes", () => {
+  it("keeps temporary media inside the free D1 safety budget", () => {
+    expect(FLASH_MAX_STORED_BYTES).toBe(512 * 1024);
+    expect(FLASH_MAX_ACTIVE_PER_ATTENDEE).toBe(8);
+    expect(FLASH_MAX_ACTIVE_PER_EVENT).toBe(200);
+    expect(FLASH_MAX_ACTIVE_STORAGE_BYTES).toBe(150 * 1024 * 1024);
+  });
+
   it("accepts only supported image signatures", () => {
     expect(hasAcceptedFlashType("image/jpeg")).toBe(true);
     expect(hasAcceptedFlashType("image/gif")).toBe(false);
@@ -30,29 +41,23 @@ describe("Room Flashes", () => {
     expect(parseFlashModerationResponse(undefined)).toBe("unavailable");
   });
 
-  it("physically deletes expired objects and leaves live Flashes alone", async () => {
+  it("physically erases expired image bytes and leaves live Flashes alone", async () => {
     const suffix = crypto.randomUUID();
     const expiredId = `expired-${suffix}`;
     const liveId = `live-${suffix}`;
-    const expiredKey = `room/event-${suffix}/${expiredId}.webp`;
-    const liveKey = `room/event-${suffix}/${liveId}.webp`;
     const now = Date.now();
 
-    await Promise.all([
-      env.FLASHES_BUCKET.put(expiredKey, new Uint8Array([1, 2, 3])),
-      env.FLASHES_BUCKET.put(liveKey, new Uint8Array([4, 5, 6])),
-    ]);
     await env.DB.batch([
-      env.DB.prepare(`INSERT INTO room_flashes (id, event_slug, attendee_id, object_key, width, height, byte_size, status, moderation_result, created_at, expires_at) VALUES (?, ?, ?, ?, 1, 1, 3, 'active', 'allowed', ?, ?)`)
-        .bind(expiredId, `event-${suffix}`, `attendee-${suffix}`, expiredKey, new Date(now - 60_000).toISOString(), new Date(now - 1_000).toISOString()),
-      env.DB.prepare(`INSERT INTO room_flashes (id, event_slug, attendee_id, object_key, width, height, byte_size, status, moderation_result, created_at, expires_at) VALUES (?, ?, ?, ?, 1, 1, 3, 'active', 'allowed', ?, ?)`)
-        .bind(liveId, `event-${suffix}`, `attendee-${suffix}`, liveKey, new Date(now - 60_000).toISOString(), new Date(now + 60_000).toISOString()),
+      env.DB.prepare(`INSERT INTO room_flashes (id, event_slug, attendee_id, image_data, content_type, width, height, byte_size, status, moderation_result, created_at, expires_at) VALUES (?, ?, ?, ?, 'image/webp', 1, 1, 3, 'active', 'allowed', ?, ?)`)
+        .bind(expiredId, `event-${suffix}`, `attendee-${suffix}`, new Uint8Array([1, 2, 3]), new Date(now - 60_000).toISOString(), new Date(now - 1_000).toISOString()),
+      env.DB.prepare(`INSERT INTO room_flashes (id, event_slug, attendee_id, image_data, content_type, width, height, byte_size, status, moderation_result, created_at, expires_at) VALUES (?, ?, ?, ?, 'image/webp', 1, 1, 3, 'active', 'allowed', ?, ?)`)
+        .bind(liveId, `event-${suffix}`, `attendee-${suffix}`, new Uint8Array([4, 5, 6]), new Date(now - 60_000).toISOString(), new Date(now + 60_000).toISOString()),
     ]);
 
-    expect(await purgeExpiredFlashes(env.DB, env.FLASHES_BUCKET, `event-${suffix}`)).toBe(1);
-    expect(await env.FLASHES_BUCKET.get(expiredKey)).toBeNull();
-    expect(await env.FLASHES_BUCKET.get(liveKey)).not.toBeNull();
-    expect(await env.DB.prepare("SELECT status, moderation_result AS moderationResult FROM room_flashes WHERE id = ?").bind(expiredId).first())
-      .toEqual({ status: "deleted", moderationResult: "expired" });
+    expect(await purgeExpiredFlashes(env.DB, `event-${suffix}`)).toBe(1);
+    expect(await env.DB.prepare("SELECT image_data AS imageData, status, moderation_result AS moderationResult FROM room_flashes WHERE id = ?").bind(expiredId).first())
+      .toEqual({ imageData: null, status: "deleted", moderationResult: "expired" });
+    expect(await env.DB.prepare("SELECT image_data AS imageData FROM room_flashes WHERE id = ?").bind(liveId).first())
+      .toEqual({ imageData: [4, 5, 6] });
   });
 });

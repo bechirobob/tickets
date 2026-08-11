@@ -24,7 +24,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
   });
   assert.deepEqual(config.images, { binding: "IMAGES" });
   assert.deepEqual(config.ai, { binding: "AI" });
-  assert.deepEqual(config.r2_buckets, [{ binding: "FLASHES_BUCKET", bucket_name: "becore-tickets-flashes" }]);
+  assert.equal(config.r2_buckets, undefined);
   assert.deepEqual(config.durable_objects, { bindings: [{ name: "THE_ROOM", class_name: "TheRoom" }] });
   assert.deepEqual(config.migrations, [{ tag: "v1", new_sqlite_classes: ["TheRoom"] }]);
 });

@@ -6,7 +6,6 @@ declare namespace Cloudflare {
     ASSETS: Fetcher;
     DB: D1Database;
     AI: Ai;
-    FLASHES_BUCKET: R2Bucket;
     ENVIRONMENT?: string;
     LOGIN_RATE_LIMITER: RateLimit;
     PUBLIC_WRITE_RATE_LIMITER: RateLimit;

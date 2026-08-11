@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "becore-tickets",
   "main": "./worker/index.ts",
-  "compatibility_date": "2026-08-10",
+  "compatibility_date": "2026-08-11",
   "compatibility_flags": ["nodejs_compat"],
   "routes": [
     {
@@ -23,12 +23,6 @@
   "ai": {
     "binding": "AI"
   },
-  "r2_buckets": [
-    {
-      "binding": "FLASHES_BUCKET",
-      "bucket_name": "becore-tickets-flashes"
-    }
-  ],
   "d1_databases": [
     {
       "binding": "DB",

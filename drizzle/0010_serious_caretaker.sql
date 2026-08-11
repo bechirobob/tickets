@@ -27,7 +27,8 @@ CREATE TABLE `room_flashes` (
 	`id` text PRIMARY KEY NOT NULL,
 	`event_slug` text NOT NULL,
 	`attendee_id` text NOT NULL,
-	`object_key` text NOT NULL,
+	`image_data` blob,
+	`content_type` text DEFAULT 'image/webp' NOT NULL,
 	`width` integer NOT NULL,
 	`height` integer NOT NULL,
 	`byte_size` integer NOT NULL,
@@ -38,7 +39,6 @@ CREATE TABLE `room_flashes` (
 	`deleted_at` text
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `room_flashes_object_unique` ON `room_flashes` (`object_key`);--> statement-breakpoint
 CREATE INDEX `room_flashes_event_status_idx` ON `room_flashes` (`event_slug`,`status`,`created_at`);--> statement-breakpoint
 CREATE INDEX `room_flashes_expiry_idx` ON `room_flashes` (`status`,`expires_at`);--> statement-breakpoint
 CREATE INDEX `room_flashes_attendee_idx` ON `room_flashes` (`attendee_id`,`event_slug`,`status`);

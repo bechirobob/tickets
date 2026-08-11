@@ -1,5 +1,8 @@
 export const FLASH_MAX_UPLOAD_BYTES = 6 * 1024 * 1024;
-export const FLASH_MAX_ACTIVE_PER_ATTENDEE = 20;
+export const FLASH_MAX_STORED_BYTES = 512 * 1024;
+export const FLASH_MAX_ACTIVE_PER_ATTENDEE = 8;
+export const FLASH_MAX_ACTIVE_PER_EVENT = 200;
+export const FLASH_MAX_ACTIVE_STORAGE_BYTES = 150 * 1024 * 1024;
 export const FLASH_QUARANTINE_REPORT_COUNT = 3;
 export const FLASH_OUTPUT_CONTENT_TYPE = "image/webp";
 
@@ -71,19 +74,18 @@ export async function moderateFlashImage(ai: Ai, bytes: Uint8Array): Promise<Fla
   }
 }
 
-export async function purgeExpiredFlashes(db: D1Database, bucket: R2Bucket, eventSlug?: string): Promise<number> {
+export async function purgeExpiredFlashes(db: D1Database, eventSlug?: string): Promise<number> {
   const now = new Date().toISOString();
   const query = eventSlug
-    ? `SELECT id, object_key AS objectKey FROM room_flashes WHERE event_slug = ? AND status != 'deleted' AND expires_at <= ? LIMIT 200`
-    : `SELECT id, object_key AS objectKey FROM room_flashes WHERE status != 'deleted' AND expires_at <= ? LIMIT 200`;
+    ? `SELECT id FROM room_flashes WHERE event_slug = ? AND status != 'deleted' AND expires_at <= ? LIMIT 200`
+    : `SELECT id FROM room_flashes WHERE status != 'deleted' AND expires_at <= ? LIMIT 200`;
   const rows = eventSlug
-    ? await db.prepare(query).bind(eventSlug, now).all<{ id: string; objectKey: string }>()
-    : await db.prepare(query).bind(now).all<{ id: string; objectKey: string }>();
+    ? await db.prepare(query).bind(eventSlug, now).all<{ id: string }>()
+    : await db.prepare(query).bind(now).all<{ id: string }>();
   if (rows.results.length === 0) return 0;
-  await bucket.delete(rows.results.map((row) => row.objectKey));
   const statements = rows.results.map((row) => db.prepare(`
     UPDATE room_flashes
-    SET status = 'deleted', moderation_result = 'expired', deleted_at = ?
+    SET image_data = NULL, status = 'deleted', moderation_result = 'expired', deleted_at = ?
     WHERE id = ? AND status != 'deleted'
   `).bind(now, row.id));
   await db.batch(statements);

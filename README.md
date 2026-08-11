@@ -10,9 +10,9 @@ event staff.
 ## Runtime
 
 - Cloudflare Workers
-- D1 for transactional application records
+- D1 for transactional records and short-lived, size-capped media
 - Durable Objects with hibernating WebSockets for one isolated Room per event
-- R2 for organiser poster uploads
+- Cloudflare Images transformations and Workers AI within their free allowances
 - Paystack Ghana for Mobile Money checkout
 - Vinext, React, TypeScript and Drizzle ORM
 
@@ -94,7 +94,8 @@ ticket assignment and ticket status in D1 before reaching the event's Durable
 Object. Full processed refunds, voided tickets and suspended profiles lose
 access automatically.
 
-Version one supports text, replies, reactions, pinned organiser announcements,
-presence, reporting, blocking, moderation removal, rate limiting and a
-72-hour post-event read-only archive. Direct messages and attendee media uploads
-are intentionally excluded from this release.
+The Room supports text, replies, reactions, pinned organiser announcements,
+presence, reporting, blocking, moderation removal, rate limiting, automatic
+reconnection and temporary Flashes. Flash image bytes are privately served from
+D1 and permanently erased when the Room closes; only moderation metadata remains.
+The text conversation becomes a 72-hour post-event read-only archive.

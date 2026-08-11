@@ -2429,12 +2429,20 @@
           "notNull": true,
           "autoincrement": false
         },
-        "object_key": {
-          "name": "object_key",
+        "image_data": {
+          "name": "image_data",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "content_type": {
+          "name": "content_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'image/webp'"
         },
         "width": {
           "name": "width",
@@ -2496,13 +2504,6 @@
         }
       },
       "indexes": {
-        "room_flashes_object_unique": {
-          "name": "room_flashes_object_unique",
-          "columns": [
-            "object_key"
-          ],
-          "isUnique": true
-        },
         "room_flashes_event_status_idx": {
           "name": "room_flashes_event_status_idx",
           "columns": [

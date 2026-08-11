@@ -112,7 +112,7 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
   try {
-    await purgeExpiredFlashes(env.DB, env.FLASHES_BUCKET);
+    await purgeExpiredFlashes(env.DB);
   } catch (error) {
     await recordSystemAlert(env, "flash-expiry", error);
   }

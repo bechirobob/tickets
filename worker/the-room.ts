@@ -294,7 +294,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       "SELECT event_slug AS eventSlug FROM room_config WHERE id = 1 LIMIT 1",
     ).toArray()[0];
     if (!configured) return;
-    await purgeExpiredFlashes(this.env.DB, this.env.FLASHES_BUCKET, configured.eventSlug);
+    await purgeExpiredFlashes(this.env.DB, configured.eventSlug);
     this.broadcast({ type: "room_closed" });
   }
 
