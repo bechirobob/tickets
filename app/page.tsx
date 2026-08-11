@@ -47,10 +47,10 @@ export default async function Home() {
         <div className="room-product-scene__header"><div><small>The Room</small><b>{featured?.title ?? "After Dark"}</b></div><span>18 online</span></div>
         <div className="room-product-scene__stream">
           <article className="scene-host"><BadgeCheck size={14} /><div><small>HOST UPDATE · 9:14 PM</small><p>Doors are open. Main set at 11:30. Pace yourselves; we know you won&apos;t.</p></div></article>
-          <article className="scene-message"><span>KM</span><div><small>Kofi · 9:18 PM</small><p>Who is actually in Osu already?</p></div></article>
-          <article className="scene-message scene-message--own"><div><small>You · 9:19 PM</small><p>“Five minutes away” in the spiritual sense.</p></div></article>
+          <article className="scene-message"><span>KM</span><div><small>Kofi · 9:18 PM</small><p>Who is actually in Osu already?</p><i>😂 4</i></div></article>
+          <article className="scene-message scene-message--own"><div><small>You · 9:19 PM</small><p>“Five minutes away” in the spiritual sense.</p><i>😭 2</i></div></article>
           <article className="scene-flash"><img src={eventImageUrl(heroImage, 520)} alt="Flash shared inside The Room" loading="lazy" decoding="async" /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
-          <article className="scene-message"><span>YA</span><div><small>Yaw · 9:22 PM</small><p>Okay fine. Leaving now.</p></div></article>
+          <article className="scene-message"><span>YA</span><div><small>Yaw · 9:22 PM</small><p>Okay fine. Leaving now.</p><i>🔥 3</i></div></article>
         </div>
         <div className="room-product-scene__composer"><Camera size={17} /><span>Message The Room</span><Send size={16} /></div>
       </div>
