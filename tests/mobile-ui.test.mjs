@@ -145,6 +145,7 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(turnstile, /Security check is taking too long\./u);
   assert.match(turnstile, /Try the security check again/u);
   assert.match(turnstile, /"refresh-timeout": "auto"/u);
+  assert.equal(turnstile.match(/clearTimeout\(loadTimeout\)/gu)?.length, 2, "the security watchdog stays active until a token arrives");
   assert.match(layout, /preconnect" href="https:\/\/challenges\.cloudflare\.com"/u);
 });
 
