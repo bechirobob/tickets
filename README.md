@@ -49,13 +49,10 @@ Production requires the following encrypted Worker secrets:
 - `ADMIN_ACCESS_KEY` (one-time owner bootstrap only)
 - `PAYSTACK_SECRET_KEY`
 - `RESEND_API_KEY`
-- `TURNSTILE_SITE_KEY`
-- `TURNSTILE_SECRET_KEY`
 
-Turnstile is required for production sign-in, owner bootstrap, checkout,
-ticket recovery and organiser submission. The production application fails
-closed when either key is missing. Create a Turnstile widget for the production
-hostname and add both keys before deploying.
+Public and staff mutations are protected without customer-facing challenges:
+same-origin enforcement, hashed per-identity/IP rate limits, account lockouts,
+honeypot screening, strict input validation and provider-side payment checks.
 
 After migration `0008`, visit `/admin/bootstrap` once and use
 `ADMIN_ACCESS_KEY` to create the first named owner. The route closes as soon as

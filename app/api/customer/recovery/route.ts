@@ -1,24 +1,25 @@
 import { hashToken } from "../../../../lib/attendee-auth";
 import { issueRecoveryGrant } from "../../../../lib/email-delivery";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
-import { enforceRateLimit, verifyTurnstile } from "../../../../lib/security-controls";
+import { enforceRateLimit } from "../../../../lib/security-controls";
 
 const GENERIC_MESSAGE = "If that email has active paid tickets, a secure access link is on the way.";
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
-  const body = await request.json().catch(() => ({})) as { email?: string; turnstileToken?: string };
+  const body = await request.json().catch(() => ({})) as { email?: string };
   const normalizedEmail = body.email?.trim().toLowerCase() ?? "";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalizedEmail)) {
     return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
   }
   const { env } = await import("cloudflare:workers");
   const metadata = requestMetadata(request);
-  if (!(await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `recovery:${await hashStaffToken(normalizedEmail || metadata.ip || "anonymous")}`))) {
+  const [ipRateAllowed, customerRateAllowed] = await Promise.all([
+    enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `recovery-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
+    enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `recovery-customer:${await hashStaffToken(normalizedEmail)}`),
+  ]);
+  if (!ipRateAllowed || !customerRateAllowed) {
     await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: normalizedEmail || metadata.ip, path: "/api/customer/recovery", requestId: metadata.requestId });
-    return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
-  }
-  if (!(await verifyTurnstile(request, String(body.turnstileToken ?? ""), "ticket_recovery", env))) {
     return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
   }
   const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";

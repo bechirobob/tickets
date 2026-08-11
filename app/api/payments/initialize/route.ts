@@ -4,13 +4,13 @@ import { expireReservations } from "../../../../lib/payment-operations";
 import { resolveTicketSelection } from "../../../../lib/ticket-selection";
 import { findCuratedEvent } from "../../../events";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
-import { enforceRateLimit, verifyTurnstile } from "../../../../lib/security-controls";
+import { enforceRateLimit } from "../../../../lib/security-controls";
 
 const RESERVATION_MINUTES = 15;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string; turnstileToken?: string };
+  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string };
   const eventSlug = body.eventSlug?.trim() ?? "";
   const event = await findCuratedEvent(eventSlug);
   const selection = event ? resolveTicketSelection(event, body.ticketTierId ?? "general", body.quantity) : null;
@@ -21,12 +21,13 @@ export async function POST(request: Request) {
 
   const { env } = await import("cloudflare:workers");
   const metadata = requestMetadata(request);
-  if (!(await enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment:${await hashStaffToken(email || metadata.ip || "anonymous")}`))) {
+  const [ipRateAllowed, customerRateAllowed] = await Promise.all([
+    enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
+    enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-customer:${await hashStaffToken(email)}`),
+  ]);
+  if (!ipRateAllowed || !customerRateAllowed) {
     await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: email || metadata.ip, path: "/api/payments/initialize", requestId: metadata.requestId });
     return Response.json({ error: "Too many payment attempts. Wait a minute and try again." }, { status: 429 });
-  }
-  if (!(await verifyTurnstile(request, String(body.turnstileToken ?? ""), "payment_initialize", env))) {
-    return Response.json({ error: "Complete the browser security check and try again." }, { status: 400 });
   }
   if (!env.PAYSTACK_SECRET_KEY) return Response.json({ error: "Live Paystack credentials have not been connected yet." }, { status: 503 });
   if (event.isTestEvent && !env.PAYSTACK_SECRET_KEY.startsWith("sk_test_")) {

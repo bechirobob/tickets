@@ -122,7 +122,7 @@ const worker = {
 
 function securityResponse(response: Response): Response {
   const headers = new Headers(response.headers);
-  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; worker-src 'self' blob:");
+  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; media-src 'self' blob:; worker-src 'self' blob:");
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

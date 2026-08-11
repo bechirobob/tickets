@@ -2,7 +2,6 @@
 
 import { CheckCircle2, Loader2, Send, Upload } from "lucide-react";
 import { FormEvent, useState } from "react";
-import Turnstile from "../../turnstile";
 
 const maximumSourceBytes = 8 * 1024 * 1024;
 const maximumPreparedBytes = 1_500_000;
@@ -68,8 +67,6 @@ async function preparePoster(file: File) {
 export default function PartySubmissionForm() {
   const [state, setState] = useState<"idle" | "preparing" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
-  const [turnstileToken, setTurnstileToken] = useState("");
-  const [challengeKey, setChallengeKey] = useState(0);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,8 +75,6 @@ export default function PartySubmissionForm() {
     setState("preparing");
     setMessage("");
     try {
-      if (!turnstileToken) throw new Error("Complete the browser security check first.");
-      form.set("turnstileToken", turnstileToken);
       const poster = form.get("poster");
       if (!(poster instanceof File) || poster.size === 0) throw new Error("Add a flyer or key visual before submitting.");
       form.set("poster", await preparePoster(poster));
@@ -95,8 +90,6 @@ export default function PartySubmissionForm() {
     } catch (error) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "The submission refused to behave. Try again.");
-      setTurnstileToken("");
-      setChallengeKey((value) => value + 1);
     }
   }
 
@@ -154,7 +147,6 @@ export default function PartySubmissionForm() {
         <p>Good concept? Clear venue? Real line-up? Lovely. Send it over.</p>
         <button disabled={state === "preparing" || state === "sending"}>{state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : <Send size={17} />} {state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : "Submit for review"}</button>
       </div>
-      <Turnstile key={challengeKey} action="organizer_submission" onToken={setTurnstileToken} />
       {state === "error" && <p className="submission-error" role="alert">{message}</p>}
     </form>
   );

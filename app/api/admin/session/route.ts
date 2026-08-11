@@ -14,7 +14,7 @@ import {
   safeReturnTo,
   verifyStaffPassword,
 } from "../../../../lib/admin-session";
-import { enforceRateLimit, verifyTurnstile } from "../../../../lib/security-controls";
+import { enforceRateLimit } from "../../../../lib/security-controls";
 
 function allowedReturnTo(role: string, requested: string): string {
   if (role === "owner") return requested;
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   const { env } = await import("cloudflare:workers");
   const metadata = requestMetadata(request);
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
-  const body = (await request.json()) as { email?: string; password?: string; turnstileToken?: string; returnTo?: string };
+  const body = (await request.json()) as { email?: string; password?: string; returnTo?: string };
   const email = String(body.email ?? "").trim().toLowerCase();
   const [ipRateAllowed, accountRateAllowed] = await Promise.all([
     enforceRateLimit(env.LOGIN_RATE_LIMITER, `login-ip:${await hashToken(metadata.ip || "unknown")}`),
@@ -39,9 +39,6 @@ export async function POST(request: Request) {
   if (!ipRateAllowed || !accountRateAllowed) {
     await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: email || metadata.ip, path: "/api/admin/session", requestId: metadata.requestId });
     return Response.json({ error: "Too many sign-in attempts. Wait a minute and try again." }, { status: 429 });
-  }
-  if (!(await verifyTurnstile(request, String(body.turnstileToken ?? ""), "staff_login", env))) {
-    return Response.json({ error: "Complete the browser security check and try again." }, { status: 400 });
   }
 
   const authentication = await authenticateStaff(env.DB, email, String(body.password ?? ""));

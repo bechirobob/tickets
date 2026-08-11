@@ -11,7 +11,6 @@ import {
   readAdminSession,
   type StaffRole,
 } from "../lib/admin-session";
-import { verifyTurnstile } from "../lib/security-controls";
 
 const password = "TemporaryPass9";
 
@@ -97,12 +96,6 @@ describe("named staff access", () => {
     expect(await env.DB.prepare("SELECT venue FROM curated_event_records WHERE slug = ?").bind(assignedSlug).first()).toMatchObject({ venue: "Updated Venue" });
     expect(await env.DB.prepare("SELECT actor_account_id AS actorId, action, target_id AS targetId FROM operational_audit_events WHERE request_id = ?")
       .bind(`test-${suffix}`).first()).toMatchObject({ actorId: organizer.id, action: "organizer.event_details_updated", targetId: assignedSlug });
-  });
-
-  it("fails closed when production Turnstile keys are absent", async () => {
-    const request = new Request("https://tickets.becoreops.com/api/admin/session", { headers: { "cf-ray": "turnstile-test" } });
-    expect(await verifyTurnstile(request, "token", "staff_login", { DB: env.DB, ENVIRONMENT: "production" })).toBe(false);
-    expect(await verifyTurnstile(request, "development-bypass", "staff_login", { DB: env.DB, ENVIRONMENT: "test" })).toBe(true);
   });
 
   it("keeps fee audit identities out of the public configuration response", async () => {

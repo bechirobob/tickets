@@ -125,11 +125,11 @@ test("mobile customers retain wallet access and form controls do not trigger iOS
 });
 
 test("checkout conversion actions look and behave like primary controls", async () => {
-  const [css, checkout, turnstile, layout] = await Promise.all([
+  const [css, checkout, layout, paymentRoute] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(new URL("../app/checkout/[slug]/checkout-form.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/turnstile.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/initialize/route.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(css, /\.event-page \.checkout-link\s*\{[^}]*background:\s*var\(--ink\)[^}]*font-weight:\s*600/su);
@@ -142,11 +142,29 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(checkout, /payment-providers\/at-money\.svg/u);
   assert.doesNotMatch(checkout, /Smartphone/u);
   assert.match(checkout, /controller\.abort\(\), 15_000/u);
-  assert.match(turnstile, /Security check is taking too long\./u);
-  assert.match(turnstile, /Try the security check again/u);
-  assert.match(turnstile, /"refresh-timeout": "auto"/u);
-  assert.equal(turnstile.match(/clearTimeout\(loadTimeout\)/gu)?.length, 2, "the security watchdog stays active until a token arrives");
-  assert.match(layout, /preconnect" href="https:\/\/challenges\.cloudflare\.com"/u);
+  assert.doesNotMatch(checkout, /Turnstile|turnstileToken|browser security/iu);
+  assert.doesNotMatch(paymentRoute, /Turnstile|turnstileToken|browser security/iu);
+  assert.doesNotMatch(layout, /challenges\.cloudflare\.com/u);
+});
+
+test("customer and staff journeys do not load Cloudflare challenges", async () => {
+  const paths = [
+    "../app/checkout/[slug]/checkout-form.tsx",
+    "../app/tickets/ticket-wallet.tsx",
+    "../app/organizer/submit/submission-form.tsx",
+    "../app/admin/login/login-form.tsx",
+    "../app/admin/bootstrap/bootstrap-form.tsx",
+    "../app/api/payments/initialize/route.ts",
+    "../app/api/customer/recovery/route.ts",
+    "../app/api/submissions/route.ts",
+    "../app/api/admin/session/route.ts",
+    "../app/api/admin/bootstrap/route.ts",
+    "../worker/index.ts",
+    "../.github/workflows/deploy.yml",
+  ];
+  const source = (await Promise.all(paths.map((path) => readFile(new URL(path, import.meta.url), "utf8")))).join("\n");
+
+  assert.doesNotMatch(source, /Turnstile|turnstileToken|challenges\.cloudflare\.com|browser security/iu);
 });
 
 test("public organiser actions keep submission public and named workspaces protected", async () => {
