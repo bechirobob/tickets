@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const reference = body.reference?.trim() ?? "";
   const claim = body.claim?.trim() ?? "";
   if (!reference || claim.length < 40 || claim.length > 128) {
-    return Response.json({ error: "This ticket access link is invalid." }, { status: 400 });
+    return Response.json({ error: "That ticket link arrived missing a piece. Open the original checkout tab." }, { status: 400 });
   }
 
   const db = await runtimeDb();
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   let record = await findClaimRecord();
 
   if (!record || record.expiresAt <= now || record.claimedAt) {
-    return Response.json({ error: "This ticket access link is invalid or has already been used." }, { status: 401 });
+    return Response.json({ error: "That ticket link already did its one job—or took too long getting here." }, { status: 401 });
   }
   if (record.orderStatus === "payment_pending") {
     const { env } = await import("cloudflare:workers");
@@ -82,7 +82,9 @@ export async function POST(request: Request) {
   }
 
   const normalizedEmail = record.customerEmail.trim().toLowerCase();
-  const attendeeId = `att_${(await hashToken(normalizedEmail)).slice(0, 32)}`;
+  // A payment-return claim proves ownership of this order, not control of the
+  // email address typed at checkout. Keep it isolated until inbox verification.
+  const attendeeId = `order_att_${crypto.randomUUID()}`;
   const fallbackName = normalizedEmail.split("@")[0]?.replace(/[._-]+/gu, " ").slice(0, 40) || "Guest";
   const displayName = (record.customerName?.trim() || fallbackName).slice(0, 50);
   const sessionToken = createSecureToken();
@@ -101,13 +103,9 @@ export async function POST(request: Request) {
       WHERE order_id = ? AND claimed_at IS NULL
     `).bind(now, sessionId, record.orderId),
     db.prepare(`
-      INSERT INTO attendee_profiles (id, normalized_email, phone, display_name, status, created_at, updated_at)
-      SELECT ?, ?, ?, ?, 'active', ?, ?
+      INSERT INTO attendee_profiles (id, normalized_email, phone, display_name, email_verified_at, status, created_at, updated_at)
+      SELECT ?, ?, ?, ?, NULL, 'active', ?, ?
       WHERE ${ownsClaim}
-      ON CONFLICT(normalized_email) DO UPDATE SET
-        phone = excluded.phone,
-        display_name = excluded.display_name,
-        updated_at = excluded.updated_at
     `).bind(attendeeId, normalizedEmail, record.customerPhone, displayName, now, now, record.orderId, sessionId),
     ...issued.results.map((ticket) => db.prepare(`
       INSERT INTO ticket_assignments (ticket_id, attendee_id, assigned_by, status, assigned_at)
@@ -124,7 +122,7 @@ export async function POST(request: Request) {
   const [claimResult] = await db.batch(statements);
   if (claimResult.meta.changes !== 1) {
     return Response.json(
-      { error: "This ticket access link has already been used." },
+      { error: "That ticket link already did its one job." },
       { status: 401, headers: { "cache-control": "no-store" } },
     );
   }

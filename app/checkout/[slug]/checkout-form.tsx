@@ -40,12 +40,12 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
   async function continueToPay() {
     if (isPaying) return;
     if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim()) || phone.trim().length < 7) {
-      setMessage("Add your name, a valid email address and a reachable phone number first.");
+      setMessage("We need the boring three before the fun one: your name, a valid email and a reachable phone number.");
       return;
     }
-    if (!turnstileToken) { setMessage("Complete the browser security check first."); return; }
+    if (!turnstileToken) { setMessage("One tiny robot check first. We blame the actual robots."); return; }
     setIsPaying(true);
-    setMessage("Preparing secure payment…");
+    setMessage("Getting Paystack and your night on speaking terms…");
     try {
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
@@ -53,10 +53,10 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
         body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, turnstileToken }),
       });
       const data = await response.json() as { authorizationUrl?: string; error?: string };
-      if (!response.ok || !data.authorizationUrl) throw new Error(data.error || "Payment could not be started");
+      if (!response.ok || !data.authorizationUrl) throw new Error(data.error || "Payment refused to leave the house. Try again.");
       window.location.href = data.authorizationUrl;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Payment could not be started");
+      setMessage(error instanceof Error ? error.message : "Payment refused to leave the house. Try again.");
       setIsPaying(false);
       setTurnstileToken("");
       setChallengeKey((value) => value + 1);
@@ -74,7 +74,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       <header className="checkout-header">
         <Link href={`/event/${slug}`}><ArrowLeft size={17} /> Back to event</Link>
         <Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link>
-        <span><LockKeyhole size={15} /> Secure checkout</span>
+        <span><LockKeyhole size={15} /> Secure, not dramatic</span>
       </header>
       <div className="checkout-layout">
         <section className="checkout-main">
@@ -129,7 +129,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             {[{ id: "mtn", label: "MTN MoMo", colour: "#ffcc00" }, { id: "telecel", label: "Telecel Cash", colour: "#e60000" }, { id: "at", label: "AT Money", colour: "#1870d5" }].map((item) => (
               <button type="button" key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
                 <i style={{ background: item.colour }}><Smartphone size={17} /></i>
-                <span>{item.label}<small>Approve the prompt on your phone</small></span>
+                <span>{item.label}<small>Your phone gets the final say</small></span>
                 {network === item.id && <Check size={18} />}
               </button>
             ))}
@@ -146,7 +146,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying}>{isPaying ? "Preparing payment…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
+          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying}>{isPaying ? "Making it official…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
           <Turnstile key={challengeKey} action="payment_initialize" onToken={setTurnstileToken} />
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>

@@ -5,6 +5,7 @@ export type AttendeeIdentity = {
   attendeeId: string;
   displayName: string;
   normalizedEmail: string;
+  emailVerified: boolean;
 };
 
 export type AttendeeRoomAccess = AttendeeIdentity & {
@@ -59,7 +60,8 @@ export async function readAttendeeIdentity(
   const tokenHash = await hashToken(token);
   const now = new Date().toISOString();
   const identity = await db.prepare(`
-    SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail
+    SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
+           p.email_verified_at IS NOT NULL AS emailVerified
     FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id = s.attendee_id
     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
@@ -68,7 +70,7 @@ export async function readAttendeeIdentity(
   if (!identity) return null;
   await db.prepare("UPDATE attendee_sessions SET last_seen_at = ? WHERE token_hash = ?")
     .bind(now, tokenHash).run();
-  return identity;
+  return { ...identity, emailVerified: Boolean(identity.emailVerified) };
 }
 
 export async function readAttendeeRoomAccess(
@@ -82,6 +84,7 @@ export async function readAttendeeRoomAccess(
   const now = new Date().toISOString();
   const access = await db.prepare(`
     SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
+           p.email_verified_at IS NOT NULL AS emailVerified,
            t.event_slug AS eventSlug, t.id AS ticketId
     FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id = s.attendee_id
@@ -94,7 +97,7 @@ export async function readAttendeeRoomAccess(
   if (!access) return null;
   await db.prepare("UPDATE attendee_sessions SET last_seen_at = ? WHERE token_hash = ?")
     .bind(now, tokenHash).run();
-  return access;
+  return { ...access, emailVerified: Boolean(access.emailVerified) };
 }
 
 export async function listAttendeeEvents(

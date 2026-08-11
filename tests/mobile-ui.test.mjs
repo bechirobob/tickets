@@ -11,6 +11,7 @@ const adminSubmissionsUrl = new URL("../app/api/admin/submissions/route.ts", imp
 const organizerWorkspaceUrl = new URL("../app/organizer/workspace/organizer-workspace.tsx", import.meta.url);
 const organizerWorkspaceApiUrl = new URL("../app/api/organizer/workspace/route.ts", import.meta.url);
 const scrollRevealUrl = new URL("../app/scroll-reveal.tsx", import.meta.url);
+const workerUrl = new URL("../worker/index.ts", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -26,11 +27,9 @@ test("message controls cannot inherit a full-page footer layout", async () => {
 
 test("Room text controls keep iOS at the existing page scale", async () => {
   const css = await readFile(cssUrl, "utf8");
-  const roomMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 640px)"));
-
   assert.match(css, /\.room-composer textarea\s*\{[^}]*font-size:\s*16px/su);
-  assert.match(roomMobileBlock, /\.room-stream\s*\{[^}]*min-height:\s*0/su);
-  assert.match(roomMobileBlock, /\.room-modal select,\s*\.room-modal textarea\s*\{[^}]*font-size:\s*16px/su);
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.room-stream\s*\{[^}]*min-height:\s*0/su);
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.room-modal select,\s*\.room-modal textarea\s*\{[^}]*font-size:\s*16px/su);
   assert.doesNotMatch(css, /maximum-scale\s*=\s*1|user-scalable\s*=\s*no/u);
 });
 
@@ -50,6 +49,12 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
   assert.match(home, /events\.slice\(0, 6\)/u);
   assert.match(home, /href="\/events"/u);
   assert.match(css, /\.drop-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/su);
+  assert.match(css, /\.drop-grid--rail\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/su);
+  assert.match(explorer, /label: "Alté"/u);
+  assert.match(explorer, /label: "Amapiano"/u);
+  assert.match(explorer, /event\.quip/u);
+  assert.match(explorer, /event\.note/u);
+  assert.match(explorer, /event\.lineup/u);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
 });
 
@@ -59,14 +64,15 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
     readFile(homeUrl, "utf8"),
   ]);
   assert.match(home, /id="the-room"/u);
-  assert.match(home, /The Room meets Flashes\./u);
-  assert.match(home, /Both stay ticket-only/u);
-  assert.match(home, /the pictures disappear when the Room closes/u);
-  assert.match(home, /No ticket\. No access\./u);
-  assert.match(home, /Night Updates from the Host/u);
+  assert.match(home, /The night has a Room\./u);
+  assert.match(home, /drop Flashes into the same conversation/u);
+  assert.match(home, /The chat remembers\. The photos know when to leave\./u);
+  assert.match(home, /No ticket, no lurking\. Very civilised\./u);
+  assert.match(home, /HOST UPDATE/u);
   assert.doesNotMatch(home, /href="\/room\//u);
-  assert.match(css, /\.room-flashes-strip\s*\{[^}]*min-height:\s*315px[^}]*grid-template-columns:\s*1fr 1fr/su);
-  assert.doesNotMatch(home, /night-room-device/u);
+  assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
+  assert.match(css, /\.room-product-scene__crop\s*\{[^}]*overflow:\s*hidden/su);
+  assert.doesNotMatch(home, /device|phone mock/iu);
 });
 
 test("The Room reconnects when a ticket holder returns to the page", async () => {
@@ -81,7 +87,9 @@ test("The Room reconnects when a ticket holder returns to the page", async () =>
   assert.match(room, /Math\.min\(15_000, 750 \* \(2 \*\* Math\.min\(attempt, 5\)\)\)/u);
   assert.match(room, /JSON\.stringify\(\{ type: "ping" \}\)/u);
   assert.match(room, /Date\.now\(\) - lastSocketActivityRef\.current > 60_000/u);
-  assert.match(room, /Reconnecting/u);
+  assert.match(room, /Finding the signal/u);
+  assert.match(room, /type: "flash" as const/u);
+  assert.match(room, /className="room-camera"/u);
   assert.match(durableObject, /input\.type === "ping"/u);
   assert.match(durableObject, /type: "pong"/u);
 });
@@ -202,4 +210,14 @@ test("launch inventory is database-backed and public defects stay closed", async
   assert.match(privacy, /Privacy notice/u);
   assert.match(home, /featured\?\.image/u);
   assert.match(wallet, /\/api\/customer\/recovery/u);
+});
+
+test("public browsing is edge-cached without caching private customer journeys", async () => {
+  const worker = await readFile(workerUrl, "utf8");
+  assert.match(worker, /path === "\/" \|\| path === "\/events" \|\| path === "\/hosts"/u);
+  assert.match(worker, /\^\\\/event\\\//u);
+  assert.match(worker, /headers\.delete\("set-cookie"\)/u);
+  assert.match(worker, /ctx\.waitUntil\(edgeCache\.put\(cacheKey, secured\.clone\(\)\)\)/u);
+  assert.match(worker, /x-becore-edge-cache/u);
+  assert.doesNotMatch(worker, /eligible[^;]+(?:checkout|payment|tickets|my-nights|room)/su);
 });

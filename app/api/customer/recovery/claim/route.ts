@@ -29,7 +29,9 @@ export async function GET(request: Request) {
   `).bind(grant.normalizedEmail).all<{ id: string }>();
   if (!orders.results.length || !tickets.results.length) return Response.redirect(`${origin}/tickets?recovery=invalid`, 303);
 
-  const attendeeId = `att_${(await hashToken(grant.normalizedEmail)).slice(0, 32)}`;
+  // Inbox verification is the only point where orders sharing an email may be
+  // consolidated into a single member wallet.
+  const attendeeId = `member_${(await hashToken(grant.normalizedEmail)).slice(0, 32)}`;
   const displayName = (orders.results[0].customerName?.trim() || grant.normalizedEmail.split("@")[0]?.replace(/[._-]+/gu, " ") || "Guest").slice(0, 50);
   const sessionToken = createSecureToken();
   const sessionId = crypto.randomUUID();
@@ -38,12 +40,20 @@ export async function GET(request: Request) {
     env.DB.prepare("UPDATE attendee_recovery_grants SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?")
       .bind(now, grant.id, now),
     env.DB.prepare(`
-      INSERT INTO attendee_profiles (id, normalized_email, phone, display_name, status, created_at, updated_at)
-      SELECT ?, ?, ?, ?, 'active', ?, ?
+      INSERT INTO attendee_profiles (id, normalized_email, phone, display_name, email_verified_at, status, created_at, updated_at)
+      SELECT ?, ?, ?, ?, ?, 'active', ?, ?
       WHERE EXISTS (SELECT 1 FROM attendee_recovery_grants WHERE id = ? AND used_at = ?)
-      ON CONFLICT(normalized_email) DO UPDATE SET phone = excluded.phone,
-        display_name = excluded.display_name, updated_at = excluded.updated_at
-    `).bind(attendeeId, grant.normalizedEmail, orders.results[0].customerPhone, displayName, now, now, grant.id, now),
+      ON CONFLICT(id) DO UPDATE SET
+        email_verified_at = COALESCE(attendee_profiles.email_verified_at, excluded.email_verified_at),
+        updated_at = excluded.updated_at
+    `).bind(attendeeId, grant.normalizedEmail, orders.results[0].customerPhone, displayName, now, now, now, grant.id, now),
+    env.DB.prepare(`
+      UPDATE attendee_sessions SET revoked_at = ?
+      WHERE revoked_at IS NULL AND attendee_id IN (
+        SELECT id FROM attendee_profiles WHERE normalized_email = ? AND id <> ?
+      )
+      AND EXISTS (SELECT 1 FROM attendee_recovery_grants WHERE id = ? AND used_at = ?)
+    `).bind(now, grant.normalizedEmail, attendeeId, grant.id, now),
     ...tickets.results.map((ticket) => env.DB.prepare(`
       INSERT INTO ticket_assignments (ticket_id, attendee_id, assigned_by, status, assigned_at)
       SELECT ?, ?, ?, 'active', ?
