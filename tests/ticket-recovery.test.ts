@@ -62,7 +62,7 @@ describe("ticket email delivery and recovery", () => {
 
     const claimResponse = await claimRecovery(new Request(`https://tickets.becoreops.com/api/customer/recovery/claim?token=${match![1]}`));
     expect(claimResponse.status).toBe(303);
-    expect(claimResponse.headers.get("location")).toBe("https://tickets.becoreops.com/tickets?recovered=1");
+    expect(claimResponse.headers.get("location")).toBe("https://tickets.becoreops.com/my-nights?recovered=1");
     const cookie = claimResponse.headers.get("set-cookie")?.split(";")[0];
     expect(cookie).toMatch(/^bct_attendee=/u);
 
