@@ -12,6 +12,9 @@ const organizerWorkspaceUrl = new URL("../app/organizer/workspace/organizer-work
 const organizerWorkspaceApiUrl = new URL("../app/api/organizer/workspace/route.ts", import.meta.url);
 const scrollRevealUrl = new URL("../app/scroll-reveal.tsx", import.meta.url);
 const workerUrl = new URL("../worker/index.ts", import.meta.url);
+const customerDockUrl = new URL("../app/customer-dock.tsx", import.meta.url);
+const myNightsUrl = new URL("../app/my-nights/my-nights-client.tsx", import.meta.url);
+const nightHubUrl = new URL("../app/my-nights/[slug]/night-hub.tsx", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -117,11 +120,34 @@ test("homepage sections reveal once without overriding reduced-motion preference
 });
 
 test("mobile customers retain wallet access and form controls do not trigger iOS zoom", async () => {
-  const css = await readFile(cssUrl, "utf8");
-  const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
+  const [css, dock] = await Promise.all([readFile(cssUrl, "utf8"), readFile(customerDockUrl, "utf8")]);
 
-  assert.match(finalMobileBlock, /\.night-ticket-link\s*\{[^}]*display:\s*flex[^}]*font-size:\s*0/su);
+  assert.match(css, /\.customer-dock\s*\{[^}]*display:\s*none/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.customer-dock\s*\{[^}]*position:\s*fixed/su);
+  assert.match(dock, /label: "My Nights"/u);
+  assert.match(dock, /pathname\.startsWith\("\/my-nights"\)/u);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
+});
+
+test("returning buyers recover and manage the whole purchase through My Nights", async () => {
+  const [myNights, hub, recoveryClaim, paymentReturn] = await Promise.all([
+    readFile(myNightsUrl, "utf8"),
+    readFile(nightHubUrl, "utf8"),
+    readFile(new URL("../app/api/customer/recovery/claim/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/payment/return/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(myNights, /Bring back my Nights/u);
+  assert.match(myNights, /every confirmed purchase/u);
+  assert.match(myNights, /Ticket &amp; perks/u);
+  assert.match(myNights, /Enter the live Room/u);
+  assert.match(hub, />Ticket \(\{tickets\.length\}\)</u);
+  assert.match(hub, />Perks</u);
+  assert.match(hub, />Details</u);
+  assert.match(hub, />Purchase</u);
+  assert.match(hub, /tierDescription/u);
+  assert.match(hub, /Payment reference, totals and support/u);
+  assert.match(recoveryClaim, /\/my-nights\?recovered=1/u);
+  assert.match(paymentReturn, /\/my-nights\/\$\{encodeURIComponent/u);
 });
 
 test("checkout conversion actions look and behave like primary controls", async () => {

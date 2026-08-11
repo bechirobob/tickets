@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import CustomerDock from "./customer-dock";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
-      <body>{children}</body>
+      <body>{children}<CustomerDock /></body>
     </html>
   );
 }
