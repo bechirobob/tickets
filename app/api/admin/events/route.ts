@@ -46,7 +46,8 @@ export async function GET(request: Request) {
              area, starts_at AS startsAt, ends_at AS endsAt, vibe,
              price_from_minor AS priceFromMinor, capacity, sales_open_at AS salesOpenAt,
              sales_close_at AS salesCloseAt, age_restriction AS ageRestriction,
-             lineup, event_state AS eventState, rescheduled_from AS rescheduledFrom,
+             lineup, event_state AS eventState, is_test_event AS isTestEvent,
+             rescheduled_from AS rescheduledFrom,
              image_url AS imageUrl, curation_note AS curationNote, status,
              scheduled_publish_at AS scheduledPublishAt, published_at AS publishedAt, updated_at AS updatedAt
       FROM curated_event_records ORDER BY starts_at DESC

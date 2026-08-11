@@ -8,6 +8,7 @@ const homeUrl = new URL("../app/page.tsx", import.meta.url);
 const organizerUrl = new URL("../app/organizer/page.tsx", import.meta.url);
 const submissionUrl = new URL("../app/organizer/submit/page.tsx", import.meta.url);
 const adminSubmissionsUrl = new URL("../app/api/admin/submissions/route.ts", import.meta.url);
+const scrollRevealUrl = new URL("../app/scroll-reveal.tsx", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -74,7 +75,23 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(css, /\.night-room-peek__stream::after\s*\{[^}]*linear-gradient/su);
   assert.match(css, /\.night-room-peek__composer\s*\{[^}]*grid-template-columns:/su);
   assert.match(finalMobileBlock, /\.night-room-tease\s*\{[^}]*grid-template-columns:\s*1fr/su);
-  assert.match(css, /\.curated-card, \.night-room-message\s*\{\s*animation:\s*none/su);
+  assert.match(css, /\.night-room-message\s*\{\s*animation:\s*none/su);
+});
+
+test("homepage sections reveal once without overriding reduced-motion preferences", async () => {
+  const [css, home, reveal] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(homeUrl, "utf8"),
+    readFile(scrollRevealUrl, "utf8"),
+  ]);
+
+  assert.match(reveal, /new IntersectionObserver/u);
+  assert.match(reveal, /prefers-reduced-motion: reduce/u);
+  assert.match(reveal, /observer\.unobserve\(entry\.target\)/u);
+  assert.match(home, /data-scroll-reveal/u);
+  assert.match(css, /\.scroll-reveal-ready \[data-scroll-reveal\]/u);
+  assert.match(css, /opacity\s+\.68s/u);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.scroll-reveal-ready \[data-scroll-reveal\][^{]*\{[^}]*opacity:\s*1[^}]*transform:\s*none[^}]*transition:\s*none/su);
 });
 
 test("mobile customers retain wallet access and form controls do not trigger iOS zoom", async () => {
@@ -133,17 +150,26 @@ test("ticket entry uses a protected real scanner and printable QR receipt", asyn
 });
 
 test("launch inventory is database-backed and public defects stay closed", async () => {
-  const [events, eventPage, privacy, home, wallet] = await Promise.all([
+  const [events, eventPage, privacy, home, wallet, previewMigration, paymentRoute] = await Promise.all([
     readFile(new URL("../app/events.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/event/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/privacy/page.tsx", import.meta.url), "utf8"),
     readFile(homeUrl, "utf8"),
     readFile(new URL("../app/tickets/ticket-wallet.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0009_eminent_champions.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/initialize/route.ts", import.meta.url), "utf8"),
   ]);
 
   assert.doesNotMatch(events, /after-dark-osu|noir-room-labone|sun-chasers-labadi|longitude-spintex/u);
   assert.match(events, /FROM curated_event_records/u);
   assert.match(events, /FROM event_ticket_tiers/u);
+  assert.match(events, /is_test_event AS isTestEvent/u);
+  assert.match(previewMigration, /'after-dark-osu'/u);
+  assert.match(previewMigration, /'noir-room-labone'/u);
+  assert.match(previewMigration, /'sun-chasers-labadi'/u);
+  assert.match(previewMigration, /'longitude-spintex'/u);
+  assert.match(previewMigration, /`is_test_event`/u);
+  assert.match(paymentRoute, /event\.isTestEvent && !env\.PAYSTACK_SECRET_KEY\.startsWith\("sk_test_"\)/u);
   assert.match(eventPage, /if \(!event\) notFound\(\)/u);
   assert.match(eventPage, /<EventActions/u);
   assert.match(eventPage, /event\.venueMapUrl/u);

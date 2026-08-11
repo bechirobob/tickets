@@ -19,6 +19,7 @@ export const ticketSelectionEvent: CuratedEvent = {
   ageRestriction: "18+",
   lineup: "Test DJ",
   eventState: "on_sale",
+  isTestEvent: false,
   rescheduledFrom: null,
   salesOpenAt: null,
   salesCloseAt: "2026-12-30T20:00:00.000Z",

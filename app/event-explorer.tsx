@@ -72,7 +72,7 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
 
   return (
     <>
-      <div className="night-finder" aria-label="Find a party by mood">
+      <div className="night-finder" aria-label="Find a party by mood" data-scroll-reveal>
         <div className="night-finder__question">
           <span>What are we feeling?</span>
           <button type="button" onClick={chooseForMe} className="night-shuffle">
@@ -98,7 +98,7 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
         </p>
       </div>
 
-      <div className="event-rail-status" aria-label="Event carousel position">
+      <div className="event-rail-status" aria-label="Event carousel position" data-scroll-reveal>
         <span><b>{String(position + 1).padStart(2, "0")}</b> / {String(visible.length).padStart(2, "0")}</span>
         <p>Swipe the edit</p>
         <div>
@@ -107,7 +107,7 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
         </div>
       </div>
 
-      <div id="event-rail" className="curated-grid" aria-live="polite" ref={railRef} onScroll={trackRail}>
+      <div id="event-rail" className="curated-grid" aria-live="polite" ref={railRef} onScroll={trackRail} data-scroll-reveal data-reveal-delay="1">
         {visible.map((event, index) => (
           <article
             id={`party-${event.slug}`}
@@ -117,6 +117,7 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
             <Link href={`/event/${event.slug}`} className="curated-card__image">
               <img src={event.image} alt={`Atmosphere for ${event.title}`} />
               <span className="curated-card__number">{event.sequence}</span>
+              {event.isTestEvent ? <span className="curated-card__preview">Preview event</span> : null}
               <span className="curated-card__vibe">{event.vibe}</span>
               <span className="curated-card__overlay">
                 <small>{event.shortDate} · {event.time.split(" — ")[0]}</small>
