@@ -44,19 +44,23 @@ export default function NightHub({ event }: { event: EventSummary }) {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(() => params.get("welcome") === "1" ? "Paid. Verified. This Night is officially yours." : "");
   const [locked, setLocked] = useState(false);
+  const [unread, setUnread] = useState(0);
   const [now] = useState(() => Date.now());
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/customer/experience/${encodeURIComponent(event.slug)}`, { cache: "no-store" }),
       fetch("/api/customer/tickets", { method: "POST", cache: "no-store" }),
-    ]).then(async ([experienceResponse, ticketsResponse]) => {
+      fetch("/api/customer/notifications", { cache: "no-store" }),
+    ]).then(async ([experienceResponse, ticketsResponse, notificationsResponse]) => {
       if (experienceResponse.status === 401) { setLocked(true); return; }
       const experienceData = await experienceResponse.json() as Experience;
       const ticketsData = await ticketsResponse.json() as { orders?: TicketOrder[] };
+      const notificationsData = notificationsResponse.ok ? await notificationsResponse.json() as { unread?: number } : null;
       setExperience(experienceData);
       setAnswers(Object.fromEntries(experienceData.questions.map((question) => [question.id, question.answer])));
       setOrders((ticketsData.orders ?? []).filter((order) => order.eventSlug === event.slug));
+      setUnread(notificationsData?.unread ?? 0);
     }).catch(() => setLocked(true));
   }, [event.slug]);
 
@@ -86,7 +90,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
 
   return <main className="night-hub">
     <OfflineTicketSaver event={{ slug: event.slug, title: event.title, fullDate: event.fullDate, time: event.time, venue: event.venue, area: event.area }} tickets={tickets} />
-    <header className="night-hub__header"><Link href="/my-nights"><ArrowLeft size={16} /> My Nights</Link><div><b>{event.title}</b><span>{event.fullDate} · {event.venue}</span></div><span className="night-hub__header-actions"><Link href="/notifications"><Bell size={15} /> The Buzz</Link><Link href={`/room/${event.slug}`}><MessageCircle size={15} /> Enter The Room</Link></span></header>
+    <header className="night-hub__header"><Link href="/my-nights"><ArrowLeft size={16} /> My Nights</Link><div><b>{event.title}</b><span>{event.fullDate} · {event.venue}</span></div><span className="night-hub__header-actions"><Link className="notification-bell" href="/notifications" aria-label={unread ? `${unread} unread notifications` : "Notifications"}><Bell size={16} />{unread ? <b>{unread > 9 ? "9+" : unread}</b> : null}</Link><Link href={`/room/${event.slug}`}><MessageCircle size={15} /> Enter The Room</Link></span></header>
     <section className="night-hub__hero"><img src={event.image} alt={`Atmosphere for ${event.title}`} /><div><p className="eyebrow">Your Night</p><h1>{event.title}</h1><span>{event.fullDate} · {event.time} · {event.venue}, {event.area}</span></div><p className="night-hub__countdown">{hoursUntil > 24 ? `${Math.ceil(hoursUntil / 24)} days to go` : hoursUntil > 0 ? `${hoursUntil} hours to go` : "The night is happening"}</p></section>
     <nav className="night-hub__tabs" aria-label="Night views">
       <button type="button" aria-current={view === "overview" ? "page" : undefined} onClick={() => setView("overview")}>Overview</button>

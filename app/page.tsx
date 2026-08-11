@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, BadgeCheck, Bell, Camera, LockKeyhole, Send, Ticket } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, LockKeyhole, Send, Ticket } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { eventImageSrcSet, eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
@@ -21,7 +21,7 @@ export default async function Home() {
     <header className="night-header">
       <Link href="/" className="night-brand-link"><BrandMark /></Link>
       <nav aria-label="Main navigation"><Link href="/events">The Drop</Link><Link href="/hosts">Hosts</Link><Link href="/organizer/submit">Organisers</Link></nav>
-      <div className="night-header__actions"><Link href="/notifications" className="night-ticket-link"><Bell size={15} /> The Buzz</Link><Link href="/my-nights" className="night-ticket-link"><Ticket size={16} /> My Nights</Link></div>
+      <div className="night-header__actions"><Link href="/my-nights" className="night-ticket-link"><Ticket size={16} /> My Nights</Link></div>
     </header>
 
     <section className="compact-hero">

@@ -61,7 +61,23 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
   assert.match(explorer, /event\.quip/u);
   assert.match(explorer, /event\.note/u);
   assert.match(explorer, /event\.lineup/u);
+  assert.match(css, /:root\s*\{[^}]*--night:\s*#090a09[^}]*--signal:\s*#ff4d24[^}]*--acid:\s*#d7f45b/su);
+  assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*#090a09[^}]*color:\s*#fffdfa/su);
+  assert.match(css, /\.drop-card__image > span\s*\{[^}]*background:\s*#090a09[^}]*color:\s*#d7f45b/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
+});
+
+test("notification history stays behind the verified My Nights entrance", async () => {
+  const [home, dock, myNights, hub] = await Promise.all([
+    readFile(homeUrl, "utf8"),
+    readFile(customerDockUrl, "utf8"),
+    readFile(myNightsUrl, "utf8"),
+    readFile(nightHubUrl, "utf8"),
+  ]);
+  assert.doesNotMatch(home, /href="\/notifications"/u);
+  assert.doesNotMatch(dock, /\/notifications/u);
+  assert.match(myNights, /payload \? <Link className="notification-bell" href="\/notifications"/u);
+  assert.match(hub, /className="notification-bell" href="\/notifications"/u);
 });
 
 test("The Room is promoted as a ticket-locked preview without exposing a public chat", async () => {
@@ -161,7 +177,8 @@ test("event-day journeys remain available beyond the open browser tab", async ()
     readFile(serviceWorkerUrl, "utf8"),
     readFile(scannerUrl, "utf8"),
   ]);
-  assert.match(dock, /label: unread \? `Buzz/u);
+  assert.doesNotMatch(dock, /\/notifications/u);
+  assert.match(hub, /notification-bell/u);
   assert.match(hub, /Open offline door pass/u);
   assert.match(hub, /TicketTransfer/u);
   assert.match(roomNotifications, /Notification\.requestPermission\(\)/u);
