@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowUpRight, LockKeyhole, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
+import { ArrowDown, ArrowUpRight, BadgeCheck, BatteryFull, CheckCheck, ChevronLeft, CirclePlus, LockKeyhole, MapPin, MessageCircle, Mic, ShieldCheck, Signal, Ticket, Wifi } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { getPublicEvents } from "./events";
 
@@ -87,37 +87,46 @@ export default async function Home() {
           <p><ShieldCheck size={14} /> Ticket-holder mobile preview</p>
           <div className="night-room-device" aria-label="A preview of The Room conversation inside a mobile device">
             <div className="night-room-device__status" aria-hidden="true">
-              <span>9:41</span><i /><span>5G&nbsp;&nbsp;▰</span>
+              <span>9:41</span>
+              <i><b /></i>
+              <span><Signal size={11} /><Wifi size={12} /><BatteryFull size={15} /></span>
             </div>
             <div className="night-room-peek">
               <header>
-                <div><i /><span><b>The Room</b><small>After Dark: Osu · ticket holders only</small></span></div>
-                <span className="night-room-peek__preview"><ShieldCheck size={17} /> Preview</span>
+                <div className="night-room-peek__identity">
+                  <ChevronLeft size={18} />
+                  <span className="night-room-peek__avatars" aria-hidden="true"><i>AM</i><i>KB</i></span>
+                  <span><b>The Room <BadgeCheck size={13} /></b><small>After Dark: Osu · 284 inside</small></span>
+                </div>
+                <span className="night-room-peek__preview"><ShieldCheck size={14} /> Preview</span>
               </header>
               <div className="night-room-peek__stream">
-                <p className="night-room-peek__day">Tonight · 10:00 PM</p>
+                <p className="night-room-peek__day">Tonight · 9:41 PM</p>
                 <article className="night-room-message night-room-message--left">
+                  <p><b>Ama</b><time>9:42 PM</time></p>
                   <span>Where&apos;s everyone meeting first?</span>
-                  <small>9:42 PM</small>
                   <i>🔥 4</i>
                 </article>
                 <article className="night-room-message night-room-message--right">
                   <span>Outside the venue at 10. I&apos;ll drop the spot here 👀</span>
-                  <small>9:43 PM</small>
+                  <small>9:43 PM <CheckCheck size={11} /></small>
                 </article>
                 <aside className="night-room-update">
-                  <MessageCircle size={16} />
-                  <span><b>Organiser update</b>Doors open at 10. Your QR must be ready at the gate.</span>
+                  <header><span><MessageCircle size={15} /><b>Organiser update</b></span><small><BadgeCheck size={11} /> Verified</small></header>
+                  <p>Doors open at 10. Your QR must be ready at the gate.</p>
+                  <footer><MapPin size={12} /> Main entrance · Gate 2</footer>
                 </aside>
                 <article className="night-room-message night-room-message--left night-room-message--last">
+                  <p><b>Kojo</b><time>9:45 PM</time></p>
                   <span>Okay, this just saved the group chat 😂</span>
-                  <small>9:45 PM</small>
                   <i>❤️ 7</i>
                 </article>
               </div>
-              <footer className="night-room-peek__lock">
-                <LockKeyhole size={16} />
-                <span><b>Conversation locked</b>Your verified ticket is the key.</span>
+              <div className="night-room-peek__lock"><LockKeyhole size={12} /> Preview locked · your ticket opens this Room</div>
+              <footer className="night-room-peek__composer" aria-hidden="true">
+                <CirclePlus size={19} />
+                <span>Message The Room</span>
+                <Mic size={17} />
               </footer>
             </div>
             <i className="night-room-device__home" aria-hidden="true" />
