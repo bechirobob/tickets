@@ -200,7 +200,30 @@ jobs:
           NODE
 
       - name: Record D1 recovery bookmark
-        run: npx wrangler d1 time-travel info DB --remote | tee d1-pre-migration-bookmark.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 time-travel info DB --json | tee d1-pre-migration-bookmark.json
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const record = JSON.parse(
+            await readFile("d1-pre-migration-bookmark.json", "utf8"),
+          );
+          if (typeof record.bookmark !== "string" || record.bookmark.length === 0) {
+            console.error("Cloudflare did not return a D1 recovery bookmark.");
+            process.exit(1);
+          }
+          console.log("D1 recovery bookmark captured.");
+          NODE
+
+      - name: Preserve D1 recovery bookmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-pre-migration-bookmark-${{ github.sha }}
+          path: d1-pre-migration-bookmark.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Apply database migrations
         run: npm run db:migrate:remote
