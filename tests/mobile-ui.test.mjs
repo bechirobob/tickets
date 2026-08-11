@@ -69,9 +69,15 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /The chat remembers\. The photos know when to leave\./u);
   assert.match(home, /No ticket, no lurking\. Very civilised\./u);
   assert.match(home, /HOST UPDATE/u);
+  assert.match(home, /😂 4/u);
+  assert.match(home, /😭 2/u);
+  assert.match(home, /🔥 3/u);
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
   assert.match(css, /\.room-product-scene__crop\s*\{[^}]*overflow:\s*hidden/su);
+  assert.match(css, /\.scene-message\s*\{[^}]*max-width:\s*62%/su);
+  assert.match(css, /\.room-bubble\s*\{[^}]*padding:\s*8px 11px/su);
+  assert.match(css, /\.room-message__actions\s*\{[^}]*min-height:\s*29px/su);
   assert.doesNotMatch(home, /device|phone mock/iu);
 });
 
@@ -119,13 +125,27 @@ test("mobile customers retain wallet access and form controls do not trigger iOS
 });
 
 test("checkout conversion actions look and behave like primary controls", async () => {
-  const css = await readFile(cssUrl, "utf8");
+  const [css, checkout, turnstile, layout] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(new URL("../app/checkout/[slug]/checkout-form.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/turnstile.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+  ]);
 
   assert.match(css, /\.event-page \.checkout-link\s*\{[^}]*background:\s*var\(--ink\)[^}]*font-weight:\s*600/su);
   assert.match(css, /\.event-page \.checkout-link:hover\s*\{[^}]*transform:\s*translateY\(-2px\)/su);
   assert.match(css, /\.pay-button\s*\{[^}]*min-height:\s*53px[^}]*background:\s*#f0ecdf[^}]*font-weight:\s*600/su);
   assert.match(css, /\.pay-button:hover:not\(:disabled\)\s*\{[^}]*transform:\s*translateY\(-2px\)/su);
   assert.match(css, /\.pay-button:focus-visible\s*\{[^}]*outline:/su);
+  assert.match(checkout, /payment-providers\/mtn-momo\.svg/u);
+  assert.match(checkout, /payment-providers\/telecel-cash\.svg/u);
+  assert.match(checkout, /payment-providers\/at-money\.svg/u);
+  assert.doesNotMatch(checkout, /Smartphone/u);
+  assert.match(checkout, /controller\.abort\(\), 15_000/u);
+  assert.match(turnstile, /Security check is taking too long\./u);
+  assert.match(turnstile, /Try the security check again/u);
+  assert.match(turnstile, /"refresh-timeout": "auto"/u);
+  assert.match(layout, /preconnect" href="https:\/\/challenges\.cloudflare\.com"/u);
 });
 
 test("public organiser actions keep submission public and named workspaces protected", async () => {

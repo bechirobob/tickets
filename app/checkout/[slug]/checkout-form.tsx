@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Check, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, Check, LockKeyhole, Minus, Plus, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import Turnstile from "../../turnstile";
+
+const paymentNetworks = [
+  { id: "mtn", label: "MTN MoMo", icon: "/payment-providers/mtn-momo.svg" },
+  { id: "telecel", label: "Telecel Cash", icon: "/payment-providers/telecel-cash.svg" },
+  { id: "at", label: "AT Money", icon: "/payment-providers/at-money.svg" },
+] as const;
 
 export default function CheckoutForm({ slug, event }: { slug: string; event: CuratedEvent }) {
   const [quantity, setQuantity] = useState(1);
@@ -46,20 +53,27 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
     if (!turnstileToken) { setMessage("One tiny robot check first. We blame the actual robots."); return; }
     setIsPaying(true);
     setMessage("Getting Paystack and your night on speaking terms…");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, turnstileToken }),
+        signal: controller.signal,
       });
       const data = await response.json() as { authorizationUrl?: string; error?: string };
       if (!response.ok || !data.authorizationUrl) throw new Error(data.error || "Payment refused to leave the house. Try again.");
       window.location.href = data.authorizationUrl;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Payment refused to leave the house. Try again.");
+      setMessage(error instanceof DOMException && error.name === "AbortError"
+        ? "Paystack took too long to answer. Nothing was charged—give it another go."
+        : error instanceof Error ? error.message : "Payment refused to leave the house. Try again.");
       setIsPaying(false);
       setTurnstileToken("");
       setChallengeKey((value) => value + 1);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -126,10 +140,10 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             <span>3</span><div><small>Payment</small><h2>MoMo. Prompt. Approve. Done.</h2></div>
           </div>
           <div className="network-list">
-            {[{ id: "mtn", label: "MTN MoMo", colour: "#ffcc00" }, { id: "telecel", label: "Telecel Cash", colour: "#e60000" }, { id: "at", label: "AT Money", colour: "#1870d5" }].map((item) => (
+            {paymentNetworks.map((item) => (
               <button type="button" key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
-                <i style={{ background: item.colour }}><Smartphone size={17} /></i>
-                <span>{item.label}<small>Your phone gets the final say</small></span>
+                <span className="network-logo" aria-hidden="true"><Image src={item.icon} alt="" width={38} height={38} /></span>
+                <span className="network-copy">{item.label}<small>Your phone gets the final say</small></span>
                 {network === item.id && <Check size={18} />}
               </button>
             ))}
