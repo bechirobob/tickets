@@ -78,6 +78,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       </header>
       <div className="checkout-layout">
         <section className="checkout-main">
+          {event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. Paystack test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP.</span></div> : null}
           <div className="checkout-step">
             <span>1</span><div><small>Your order</small><h1>{event.title}</h1></div>
           </div>

@@ -21,6 +21,7 @@ export type CuratedEvent = {
   ageRestriction: string;
   lineup: string;
   eventState: EventState;
+  isTestEvent: boolean;
   rescheduledFrom: string | null;
   salesOpenAt: string | null;
   salesCloseAt: string | null;
@@ -47,6 +48,7 @@ type EventRecord = {
   ageRestriction: string;
   lineup: string;
   eventState: EventState;
+  isTestEvent: number;
   rescheduledFrom: string | null;
   imageUrl: string;
   curationNote: string;
@@ -90,6 +92,7 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     ageRestriction: record.ageRestriction,
     lineup: record.lineup,
     eventState: record.eventState,
+    isTestEvent: Boolean(record.isTestEvent),
     rescheduledFrom: record.rescheduledFrom,
     salesOpenAt: record.salesOpenAt,
     salesCloseAt: record.salesCloseAt,
@@ -133,7 +136,8 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
            price_from_minor AS priceFromMinor, capacity,
            sales_open_at AS salesOpenAt, sales_close_at AS salesCloseAt,
            age_restriction AS ageRestriction, lineup,
-           event_state AS eventState, rescheduled_from AS rescheduledFrom,
+           event_state AS eventState, is_test_event AS isTestEvent,
+           rescheduled_from AS rescheduledFrom,
            image_url AS imageUrl, curation_note AS curationNote
     FROM curated_event_records
     WHERE (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))

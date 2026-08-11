@@ -4,6 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import { readAttendeeRoomAccess } from "../lib/attendee-auth";
 import { resolveRoomPolicy } from "../lib/room-policy";
 import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
+import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
 export { TheRoom } from "./the-room";
 
@@ -113,6 +114,13 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
     await expireReservations(env.DB);
   } catch (error) {
     await recordSystemAlert(env, "reservation-expiry", error);
+  }
+  if (controller.cron === "15 3 * * *") {
+    try {
+      await refreshExpiredPreviewEvents(env.DB);
+    } catch (error) {
+      await recordSystemAlert(env, "preview-event-rollover", error);
+    }
   }
   if (controller.cron === "15 3 * * *" && env.PAYSTACK_SECRET_KEY) {
     try {

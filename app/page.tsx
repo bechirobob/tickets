@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUpRight, BadgeCheck, BatteryFull, CheckCheck, ChevronLeft, CirclePlus, LockKeyhole, MapPin, MessageCircle, Mic, ShieldCheck, Signal, Ticket, Wifi } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { getPublicEvents } from "./events";
+import ScrollReveal from "./scroll-reveal";
 
 function BrandMark() {
   return (
@@ -25,10 +26,12 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const curatedEvents = await getPublicEvents();
   const featured = curatedEvents[0];
+  const previewCount = curatedEvents.filter((event) => event.isTestEvent).length;
   const heroImage = featured?.image ?? "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
 
   return (
     <main className="night-home">
+      <ScrollReveal />
       <header className="night-header">
         <Link href="/" className="night-brand-link"><BrandMark /></Link>
         <nav aria-label="Main navigation">
@@ -53,36 +56,36 @@ export default async function Home() {
           <Link href={featured ? "#drop" : "/organizer/submit"} className="night-scroll">{featured ? "Pick your night" : "Submit a party"} <ArrowDown size={17} /></Link>
         </div>
         {featured ? <Link href={`/event/${featured.slug}`} className="night-featured">
-          <span className="night-featured__label">BeCore pick · 01</span>
+          <span className="night-featured__label">{featured.isTestEvent ? "Working preview" : "BeCore pick"} · 01</span>
           <strong>{featured.title}</strong>
           <span>{featured.day} · {featured.venue}, {featured.area}</span>
           <i><ArrowUpRight size={22} /></i>
-        </Link> : <div className="night-featured night-featured--empty"><span className="night-featured__label">Next drop</span><strong>No filler while we verify the list.</strong><span>Real events will appear here once approved.</span></div>}
-        <p className="night-hero__side">NO FILLER · JUST GOOD NIGHTS</p>
+        </Link> : <div className="night-featured night-featured--empty"><span className="night-featured__label">Event desk</span><strong>The list is temporarily unavailable.</strong><span>We are reconnecting the event catalogue.</span></div>}
+        <p className="night-hero__side">{previewCount ? "WORKING PREVIEWS · REAL FLOW" : "CURATED NIGHTS · GOOD PLANS"}</p>
       </section>
 
       <section className="night-ticker" aria-label="This week's edit">
         <span>THIS WEEK</span>
         <b>A private Room with every ticket</b>
         <i>•</i>
-        <b>{String(curatedEvents.length).padStart(2, "0")} handpicked {curatedEvents.length === 1 ? "party" : "parties"}</b>
+        <b>{previewCount ? `${String(previewCount).padStart(2, "0")} working preview ${previewCount === 1 ? "party" : "parties"}` : `${String(curatedEvents.length).padStart(2, "0")} handpicked ${curatedEvents.length === 1 ? "party" : "parties"}`}</b>
         <i>•</i>
         <b>00 awkward mixers</b>
       </section>
 
       <section className="night-drop" id="drop">
-        <div className="night-section-head">
+        <div className="night-section-head" data-scroll-reveal>
           <div>
             <p className="night-kicker"><span /> The weekly edit</p>
             <h2>Pick your<br />problem.</h2>
           </div>
-          <p>{curatedEvents.length ? "Accra gave us options. We kept the good ones." : "Only verified events make the public list."}</p>
+          <p>{previewCount ? "Working listings keep the complete booking flow open while the real calendar is being curated." : curatedEvents.length ? "Accra gave us options. We kept the good ones." : "Only verified events make the public list."}</p>
         </div>
         <EventExplorer events={curatedEvents} />
       </section>
 
       <section className="night-room-tease" id="the-room">
-        <div className="night-room-tease__copy">
+        <div className="night-room-tease__copy" data-scroll-reveal>
           <p className="night-kicker"><span /> BeCore exclusive</p>
           <h2>The chat your<br />ticket gets<br />you into.</h2>
           <p>Meet the crowd, sort the link-up and get updates straight from the organiser. Every event has its own private conversation, open only to verified ticket holders.</p>
@@ -92,7 +95,7 @@ export default async function Home() {
           </div>
         </div>
 
-        <div className="night-room-showcase">
+        <div className="night-room-showcase" data-scroll-reveal data-reveal-delay="1">
           <p><ShieldCheck size={14} /> Ticket-holder mobile preview</p>
           <div className="night-room-device" aria-label="A preview of The Room conversation inside a mobile device">
             <div className="night-room-device__status" aria-hidden="true">
@@ -144,12 +147,12 @@ export default async function Home() {
       </section>
 
       <section className="night-standard" id="standard">
-        <div className="night-standard__copy">
+        <div className="night-standard__copy" data-scroll-reveal>
           <p className="night-kicker"><span /> Our one serious bit</p>
           <h2>Good parties.<br />No paid opinions.</h2>
           <p>We check the organiser, venue, ticket terms and the actual plan. Money can buy an ad. It cannot buy a place in the edit.</p>
         </div>
-        <div className="night-standard__rules">
+        <div className="night-standard__rules" data-scroll-reveal data-reveal-delay="1">
           <article><b>01</b><span>Real organisers</span></article>
           <article><b>02</b><span>Checked venues</span></article>
           <article><b>03</b><span>Clear tickets</span></article>
@@ -158,11 +161,11 @@ export default async function Home() {
       </section>
 
       <section className="night-pitch">
-        <div>
+        <div data-scroll-reveal>
           <p className="night-kicker"><span /> Organisers, hello</p>
           <h2>Got a party<br />worth leaving<br />home for?</h2>
         </div>
-        <div className="night-pitch__copy">
+        <div className="night-pitch__copy" data-scroll-reveal data-reveal-delay="1">
           <p>Show us. “Good vibes” is not a production plan.</p>
           <Link href="/organizer/submit">Submit your party <ArrowUpRight size={17} /></Link>
         </div>

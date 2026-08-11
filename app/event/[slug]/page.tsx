@@ -21,13 +21,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       <section className="event-hero">
         <img src={event.image} alt={`Atmosphere for ${event.title}`} />
         <div className="event-hero__overlay">
-          <p className="eyebrow">BeCore pick · {event.sequence} · {event.vibe}</p>
+          <p className="eyebrow">{event.isTestEvent ? "Working preview" : "BeCore pick"} · {event.sequence} · {event.vibe}</p>
           <h1>{event.title}</h1>
         </div>
       </section>
 
       <section className="event-layout">
         <article className="event-story">
+          {event.isTestEvent ? <div className="preview-event-notice"><strong>Preview event</strong><span>This is a working test listing, not a real scheduled event. You can use it to try the complete BeCore Tickets journey.</span></div> : null}
           {event.eventState === "rescheduled" && event.rescheduledFrom ? <p className="event-state-notice">New date confirmed. This event moved from {new Intl.DateTimeFormat("en-GH", { dateStyle: "full", timeZone: "Africa/Accra" }).format(new Date(event.rescheduledFrom))}; existing paid tickets remain valid.</p> : null}
           <div className="event-facts">
             <div><CalendarDays /><span><small>Date</small>{event.fullDate}</span></div>
@@ -51,7 +52,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <div>
               <p className="eyebrow">The venue</p>
               <h3>{event.venue}, {event.area}</h3>
-              <p>Accra, Ghana · Exact venue location supplied by the organiser</p>
+              <p>Accra, Ghana · {event.isTestEvent ? "Sample location for workflow testing" : "Exact venue location supplied by the organiser"}</p>
             </div>
             {event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer">Open map</Link> : <span>Map pending</span>}
           </div>

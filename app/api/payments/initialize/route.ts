@@ -29,6 +29,9 @@ export async function POST(request: Request) {
     return Response.json({ error: "Complete the browser security check and try again." }, { status: 400 });
   }
   if (!env.PAYSTACK_SECRET_KEY) return Response.json({ error: "Live Paystack credentials have not been connected yet." }, { status: 503 });
+  if (event.isTestEvent && !env.PAYSTACK_SECRET_KEY.startsWith("sk_test_")) {
+    return Response.json({ error: "Preview events can only use Paystack test mode. No live payment was started." }, { status: 503 });
+  }
   const now = new Date();
   const createdAt = now.toISOString();
   const expiresAt = new Date(now.getTime() + RESERVATION_MINUTES * 60 * 1000).toISOString();

@@ -200,6 +200,7 @@ export const curatedEventRecords = sqliteTable("curated_event_records", {
   lineup: text("lineup").notNull().default("Line-up to be announced"),
   eventState: text("event_state", { enum: ["on_sale", "sold_out", "cancelled", "postponed", "rescheduled"] }).notNull().default("on_sale"),
   rescheduledFrom: text("rescheduled_from"),
+  isTestEvent: integer("is_test_event", { mode: "boolean" }).notNull().default(false),
   imageUrl: text("image_url").notNull(),
   curationNote: text("curation_note").notNull(),
   status: text("status", { enum: ["scheduled", "published", "unpublished"] }).notNull(),

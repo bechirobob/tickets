@@ -64,6 +64,13 @@
       "when": 1786421750138,
       "tag": "0008_burly_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1786426672868,
+      "tag": "0009_eminent_champions",
+      "breakpoints": true
     }
   ]
 }
