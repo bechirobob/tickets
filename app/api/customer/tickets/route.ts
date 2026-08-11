@@ -22,6 +22,8 @@ type TicketRow = {
   eventVenue: string | null;
   eventArea: string | null;
   eventState: string | null;
+  tierName: string | null;
+  tierDescription: string | null;
 };
 
 export async function POST(request: Request) {
@@ -39,11 +41,13 @@ export async function POST(request: Request) {
            o.customer_name AS customerName,
            event.title AS eventTitle, event.starts_at AS eventStartsAt,
            event.ends_at AS eventEndsAt, event.venue AS eventVenue, event.area AS eventArea,
-           event.event_state AS eventState
+           event.event_state AS eventState,
+           tier.name AS tierName, tier.description AS tierDescription
     FROM ticket_assignments a
     JOIN tickets t ON t.id = a.ticket_id
     JOIN orders o ON o.id = t.order_id
     LEFT JOIN curated_event_records event ON event.slug = t.event_slug
+    LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
     WHERE a.attendee_id = ? AND a.status = 'active' AND o.status = 'paid'
       AND t.status IN ('issued', 'checked_in', 'voided')
     ORDER BY o.paid_at DESC, t.issued_at, t.id
@@ -69,6 +73,7 @@ export async function POST(request: Request) {
     bookingFeeMinor: number; totalAmountMinor: number; currency: string; quantity: number;
     paidAt: string | null; event: { title: string; date: string; venue: string; state: string } | null; tickets: Array<Record<string, unknown>>;
     bookedFor: string | null;
+    tierName: string | null; tierDescription: string | null;
   }>();
   for (const ticket of rows.results) {
     const order = orderMap.get(ticket.orderId) ?? {
@@ -82,6 +87,8 @@ export async function POST(request: Request) {
       quantity: ticket.quantity,
       paidAt: ticket.paidAt,
       bookedFor: ticket.customerName,
+      tierName: ticket.tierName,
+      tierDescription: ticket.tierDescription,
       event: ticket.eventTitle && ticket.eventStartsAt && ticket.eventEndsAt ? {
         title: ticket.eventTitle,
         date: `${new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} · ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} — ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventEndsAt))}`,
