@@ -262,7 +262,7 @@ export async function recordAudit(
 
 export async function recordSecurityEvent(
   db: D1Database,
-  input: { kind: "login_failed" | "login_locked" | "turnstile_failed" | "rate_limited" | "access_denied" | "runtime_error"; subject?: string | null; path: string; requestId?: string | null; detail?: string | null },
+  input: { kind: "login_failed" | "login_locked" | "rate_limited" | "access_denied" | "runtime_error"; subject?: string | null; path: string; requestId?: string | null; detail?: string | null },
 ): Promise<void> {
   await db.prepare(`
     INSERT INTO security_events (id, kind, subject_hash, path, request_id, detail, created_at)

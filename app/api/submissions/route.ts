@@ -1,7 +1,7 @@
 import { getDb } from "../../../db";
 import { partySubmissions } from "../../../db/schema";
 import { hashToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../lib/admin-session";
-import { enforceRateLimit, verifyTurnstile } from "../../../lib/security-controls";
+import { enforceRateLimit } from "../../../lib/security-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -50,12 +50,14 @@ export async function POST(request: Request) {
     }
     const { env } = await import("cloudflare:workers");
     const contactEmail = String(form.get("contactEmail") ?? "").trim().toLowerCase();
-    if (!(await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `submission:${await hashToken(contactEmail || requestMetadata(request).ip || "anonymous")}`))) {
-      await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: contactEmail, path: "/api/submissions", requestId: requestMetadata(request).requestId });
+    const metadata = requestMetadata(request);
+    const [ipRateAllowed, organizerRateAllowed] = await Promise.all([
+      enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `submission-ip:${await hashToken(metadata.ip || "anonymous")}`),
+      enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `submission-organizer:${await hashToken(contactEmail || "anonymous")}`),
+    ]);
+    if (!ipRateAllowed || !organizerRateAllowed) {
+      await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: contactEmail || metadata.ip, path: "/api/submissions", requestId: metadata.requestId });
       return Response.json({ error: "Too many submissions were attempted. Wait a minute and try again." }, { status: 429 });
-    }
-    if (!(await verifyTurnstile(request, String(form.get("turnstileToken") ?? ""), "organizer_submission", env))) {
-      return Response.json({ error: "Complete the browser security check and try again." }, { status: 400 });
     }
 
     const startsAt = required(form, "startsAt", 40);

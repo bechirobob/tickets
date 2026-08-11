@@ -278,7 +278,6 @@ button, select { cursor: pointer; }
 @media (max-width: 960px) { .settings-layout > aside button { margin: 0 11px; flex: 0 0 auto; } }
 
 /* Named operations access and the organiser workspace. */
-.turnstile-control { width: 100%; min-height: 65px; overflow: hidden; }.turnstile-control > small { display: block; color: #aaa89f; font-size: 9px; line-height: 1.4; }.turnstile-control > button { min-height: 35px; margin-top: 7px; padding: 0 12px; border: 1px solid #64645e; background: transparent; color: #f0ede5; font-size: 9px; font-weight: 700; }.turnstile-control > button:hover { border-color: var(--yellow); color: var(--yellow); }
 .curation-signout { margin-top: 10px; padding: 11px; display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #85867f; font: inherit; font-size: 9px; text-align: left; }
 .curation-signout:hover { color: white; }
 .staff-workspace { margin-top: 30px; display: grid; grid-template-columns: minmax(220px, .42fr) minmax(420px, 1fr); gap: 22px; align-items: start; }

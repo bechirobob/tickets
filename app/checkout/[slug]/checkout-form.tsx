@@ -6,7 +6,6 @@ import { ArrowLeft, Check, LockKeyhole, Minus, Plus, ShieldCheck } from "lucide-
 import { useEffect, useMemo, useState } from "react";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
-import Turnstile from "../../turnstile";
 
 const paymentNetworks = [
   { id: "mtn", label: "MTN MoMo", icon: "/payment-providers/mtn-momo.svg" },
@@ -24,8 +23,6 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
   const [phone, setPhone] = useState("");
   const [feePercent, setFeePercent] = useState(7.5);
   const [isPaying, setIsPaying] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState("");
-  const [challengeKey, setChallengeKey] = useState(0);
   const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
   const ticketTotalMinor = quantity * selectedTier.priceMinor;
   const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
@@ -50,7 +47,6 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       setMessage("We need the boring three before the fun one: your name, a valid email and a reachable phone number.");
       return;
     }
-    if (!turnstileToken) { setMessage("One tiny robot check first. We blame the actual robots."); return; }
     setIsPaying(true);
     setMessage("Getting Paystack and your night on speaking terms…");
     const controller = new AbortController();
@@ -59,7 +55,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, turnstileToken }),
+        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName }),
         signal: controller.signal,
       });
       const data = await response.json() as { authorizationUrl?: string; error?: string };
@@ -70,8 +66,6 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
         ? "Paystack took too long to answer. Nothing was charged—give it another go."
         : error instanceof Error ? error.message : "Payment refused to leave the house. Try again.");
       setIsPaying(false);
-      setTurnstileToken("");
-      setChallengeKey((value) => value + 1);
     } finally {
       clearTimeout(timeout);
     }
@@ -161,7 +155,6 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
           <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying}>{isPaying ? "Making it official…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
-          <Turnstile key={challengeKey} action="payment_initialize" onToken={setTurnstileToken} />
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
         </aside>

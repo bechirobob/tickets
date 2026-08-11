@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, Loader2, LogOut, Mail, MapPin, MessageCircle, ReceiptText, Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 import QrPass from "./qr-pass";
-import Turnstile from "../turnstile";
 
 type GateTicket = {
   id: string;
@@ -48,7 +47,6 @@ export default function TicketWallet() {
   const [recoveryInvalid] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recovery") === "invalid");
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
-  const [turnstileToken, setTurnstileToken] = useState("");
 
   useEffect(() => {
     fetch("/api/customer/tickets", { method: "POST", cache: "no-store" })
@@ -70,9 +68,8 @@ export default function TicketWallet() {
   async function requestRecovery(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (recoveryState === "sending") return;
-    if (!turnstileToken) { setError("Complete the browser security check first."); return; }
     setRecoveryState("sending");
-    await fetch("/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: recoveryEmail, turnstileToken }) }).catch(() => undefined);
+    await fetch("/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: recoveryEmail }) }).catch(() => undefined);
     setRecoveryState("sent");
   }
 
@@ -84,7 +81,7 @@ export default function TicketWallet() {
       {wallet && !wallet.attendee.emailVerified ? <div className="wallet-confirmed wallet-confirmed--verify"><Mail size={21} /><div><b>This checkout is isolated for your security</b><span>Use the one-time link sent to your email to join earlier purchases into this wallet.</span></div></div> : null}
       <Ticket size={38} /><p className="eyebrow">Your ticket wallet</p><h1>{loading ? "Preparing your entry passes…" : wallet ? `Good to see you, ${wallet.attendee.displayName}.` : "Your verified tickets live here."}</h1>
       {error ? <p className="wallet-error" role="alert">{error}</p> : null}
-      {!loading && !wallet && <div className="wallet-locked"><BadgeCheck /><h2>{recoveryInvalid ? "That link already did its one job—or took too long getting dressed." : "Your wallet is waiting for a paid ticket."}</h2><p>Complete payment in this browser, or recover existing paid tickets securely by email. We never put reusable ticket secrets in the message. We enjoy sleeping at night.</p><form className="wallet-recovery" onSubmit={requestRecovery}><label>Email used at checkout<input type="email" required autoComplete="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} placeholder="you@example.com" /></label><Turnstile action="ticket_recovery" onToken={setTurnstileToken} /><button disabled={recoveryState !== "idle" || !turnstileToken}>{recoveryState === "sending" ? <Loader2 className="spin" size={15} /> : <Mail size={15} />} {recoveryState === "sent" ? "Check your email" : recoveryState === "sending" ? "Sending…" : "Email secure access link"}</button></form>{recoveryState === "sent" ? <small>If that address has active paid tickets, the one-time link will arrive shortly. Inbox ownership gets the final say.</small> : null}<Link href="/#drop">Choose a night</Link></div>}
+      {!loading && !wallet && <div className="wallet-locked"><BadgeCheck /><h2>{recoveryInvalid ? "That link already did its one job—or took too long getting dressed." : "Your wallet is waiting for a paid ticket."}</h2><p>Complete payment in this browser, or recover existing paid tickets securely by email. We never put reusable ticket secrets in the message. We enjoy sleeping at night.</p><form className="wallet-recovery" onSubmit={requestRecovery}><label>Email used at checkout<input type="email" required autoComplete="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} placeholder="you@example.com" /></label><button disabled={recoveryState !== "idle"}>{recoveryState === "sending" ? <Loader2 className="spin" size={15} /> : <Mail size={15} />} {recoveryState === "sent" ? "Check your email" : recoveryState === "sending" ? "Sending…" : "Email secure access link"}</button></form>{recoveryState === "sent" ? <small>If that address has active paid tickets, the one-time link will arrive shortly. Inbox ownership gets the final say.</small> : null}<Link href="/#drop">Choose a night</Link></div>}
       {wallet?.orders.map((order) => {
         const detail = order.event ?? { title: order.eventSlug.replaceAll("-", " "), date: "Event date confirmed in your order", venue: "See event details", state: "unavailable" };
         return <article className="wallet-order" key={order.orderId}>

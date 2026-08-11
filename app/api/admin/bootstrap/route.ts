@@ -9,7 +9,7 @@ import {
   recordSecurityEvent,
   requestMetadata,
 } from "../../../../lib/admin-session";
-import { enforceRateLimit, verifyTurnstile } from "../../../../lib/security-controls";
+import { enforceRateLimit } from "../../../../lib/security-controls";
 
 async function equalSecret(left: string, right: string): Promise<boolean> {
   const [leftHash, rightHash] = await Promise.all([hashToken(left), hashToken(right)]);
@@ -23,15 +23,12 @@ export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This setup request was not accepted." }, { status: 403 });
   const existing = await env.DB.prepare("SELECT COUNT(*) AS count FROM staff_accounts").first<{ count: number }>();
   if ((existing?.count ?? 0) > 0) return Response.json({ error: "Owner setup is already complete." }, { status: 409 });
-  const body = await request.json() as { accessKey?: string; displayName?: string; email?: string; password?: string; turnstileToken?: string };
+  const body = await request.json() as { accessKey?: string; displayName?: string; email?: string; password?: string };
   const metadata = requestMetadata(request);
   const normalizedEmail = normalizeStaffEmail(String(body.email ?? ""));
   if (!(await enforceRateLimit(env.LOGIN_RATE_LIMITER, `bootstrap:${await hashToken(metadata.ip ?? normalizedEmail)}`))) {
     await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: metadata.ip ?? normalizedEmail, path: "/api/admin/bootstrap", requestId: metadata.requestId });
     return Response.json({ error: "Too many setup attempts. Wait a minute and try again." }, { status: 429 });
-  }
-  if (!(await verifyTurnstile(request, String(body.turnstileToken ?? ""), "owner_bootstrap", env))) {
-    return Response.json({ error: "Complete the browser security check and try again." }, { status: 400 });
   }
   if (!env.ADMIN_ACCESS_KEY || !(await equalSecret(String(body.accessKey ?? ""), env.ADMIN_ACCESS_KEY))) {
     await recordSecurityEvent(env.DB, { kind: "login_failed", subject: metadata.ip ?? normalizedEmail, path: "/api/admin/bootstrap", requestId: metadata.requestId, detail: "bootstrap_key_invalid" });
