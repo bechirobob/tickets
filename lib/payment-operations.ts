@@ -37,9 +37,16 @@ export async function expireReservations(db: D1Database, now = new Date().toISOS
       WHERE status = 'held' AND expires_at <= ?
     `).bind(now, now),
     db.prepare(`
-      UPDATE orders SET status = 'expired', paystack_status = 'abandoned',
-        payment_updated_at = ?, failure_reason = 'Payment window expired before confirmation.'
+      UPDATE orders SET status = 'expired',
+        payment_updated_at = ?, failure_reason = 'Payment window expired before confirmation; provider status awaits verification.'
       WHERE status = 'payment_pending' AND reservation_expires_at <= ?
+    `).bind(now, now),
+    db.prepare(`
+      UPDATE event_waitlist_entries SET status = 'waiting', offer_token_hash = NULL,
+        offered_at = NULL, offer_expires_at = NULL, updated_at = ?
+      WHERE id IN (SELECT waitlist_entry_id FROM orders WHERE status = 'expired'
+        AND reservation_expires_at <= ? AND waitlist_entry_id IS NOT NULL)
+        AND status = 'claimed'
     `).bind(now, now),
   ]);
   return { reservations: reservations.meta.changes, orders: orders.meta.changes };
@@ -210,8 +217,6 @@ export async function initiatePaystackRefund(db: D1Database, input: { orderId: s
     db.prepare("UPDATE orders SET status = 'refund_pending', refund_status = ?, payment_updated_at = ? WHERE id = ?")
       .bind(providerStatus, now, order.id),
     db.prepare("UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'").bind(order.id),
-    db.prepare(`UPDATE ticket_assignments SET status = 'revoked', revoked_at = ? WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id = ?)`)
-      .bind(now, order.id),
   ]);
   return { refundId, status: providerStatus };
 }
@@ -238,8 +243,6 @@ export async function applyRefundWebhook(db: D1Database, input: { eventType: str
     statements.push(
       db.prepare("UPDATE orders SET status = 'paid', refund_status = 'failed' WHERE id = ?").bind(order.id),
       db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided'").bind(order.id),
-      db.prepare(`UPDATE ticket_assignments SET status = 'active', revoked_at = NULL WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id = ?)`)
-        .bind(order.id),
     );
   }
   await db.batch(statements);
@@ -270,7 +273,6 @@ export async function recordDisputeWebhook(db: D1Database, input: { eventType: s
     statements.push(
       db.prepare("UPDATE orders SET status = 'disputed', dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status <> 'refunded'").bind(status, now, order.id),
       db.prepare("UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'").bind(order.id),
-      db.prepare("UPDATE ticket_assignments SET status = 'revoked', revoked_at = ? WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id = ?)").bind(now, order.id),
     );
   } else if (order && input.eventType === "charge.dispute.resolve" && ["merchant-accepted", "accepted"].includes(resolution)) {
     statements.push(
@@ -282,7 +284,6 @@ export async function recordDisputeWebhook(db: D1Database, input: { eventType: s
     statements.push(
       db.prepare("UPDATE orders SET status = 'paid', dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status <> 'refunded'").bind(status, now, order.id),
       db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided'").bind(order.id),
-      db.prepare("UPDATE ticket_assignments SET status = 'active', revoked_at = NULL WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id = ?)").bind(order.id),
     );
   }
   await db.batch(statements);

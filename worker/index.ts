@@ -7,6 +7,7 @@ import { expireReservations, runDailyReconciliation } from "../lib/payment-opera
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
 import { purgeExpiredFlashes } from "../lib/flashes";
+import { recoverAbandonedPayments, releaseWaitlistOffers } from "../lib/sales-recovery";
 export { TheRoom } from "./the-room";
 
 const PUBLIC_PAGE_CACHE_SECONDS = 45;
@@ -49,6 +50,11 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
     resolveRoomPolicy(env.DB, eventSlug),
   ]);
   if (!access || !policy) return new Response("A valid paid ticket is required", { status: 401 });
+  const suspension = await env.DB.prepare(`
+    SELECT 1 AS blocked FROM room_suspensions
+    WHERE event_slug = ? AND attendee_id = ? AND restored_at IS NULL LIMIT 1
+  `).bind(eventSlug, access.attendeeId).first<{ blocked: number }>();
+  if (suspension) return new Response("Room access suspended", { status: 403 });
   const blocked = await env.DB.prepare(`
     SELECT blocked_attendee_id AS attendeeId
     FROM room_blocks
@@ -67,6 +73,9 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
   headers.set("x-bct-ends-at", policy.endsAt);
   headers.set("x-bct-read-only-at", policy.readOnlyAt);
   headers.set("x-bct-read-only", policy.readOnly ? "1" : "0");
+  headers.set("x-bct-emergency-read-only", policy.emergencyReadOnly ? "1" : "0");
+  headers.set("x-bct-slow-mode-seconds", String(policy.slowModeSeconds));
+  headers.set("x-bct-archived", policy.archived ? "1" : "0");
   return env.THE_ROOM.getByName(eventSlug).fetch(new Request(request, { headers }));
 }
 
@@ -151,6 +160,18 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
     await expireReservations(env.DB);
   } catch (error) {
     await recordSystemAlert(env, "reservation-expiry", error);
+  }
+  try {
+    await releaseWaitlistOffers(env, "https://tickets.becoreops.com");
+  } catch (error) {
+    await recordSystemAlert(env, "waitlist-offers", error);
+  }
+  if (env.PAYSTACK_SECRET_KEY) {
+    try {
+      await recoverAbandonedPayments(env, "https://tickets.becoreops.com");
+    } catch (error) {
+      await recordSystemAlert(env, "abandoned-payment-recovery", error);
+    }
   }
   if (controller.cron === "15 3 * * *") {
     try {

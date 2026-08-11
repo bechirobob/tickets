@@ -12,7 +12,7 @@ type Message = {
   kind: "message" | "announcement"; content: string; parentId: string | null; pinned: boolean;
   createdAt: string; deletedAt: string | null; reactions: Reaction[];
 };
-type Policy = { eventSlug: string; eventTitle: string; readOnlyAt: string; readOnly: boolean };
+type Policy = { eventSlug: string; eventTitle: string; readOnlyAt: string; readOnly: boolean; emergencyReadOnly?: boolean; slowModeSeconds?: number; archived?: boolean };
 
 export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug: string; fallbackTitle: string; fallbackDate: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -94,6 +94,10 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
         setPolicy((current) => current ? { ...current, readOnly: true } : current);
         setFlashCount(0);
         setFlashes([]);
+      } else if (payload.type === "policy") {
+        setPolicy(payload.room as Policy);
+      } else if (payload.type === "pins_cleared") {
+        setMessages((current) => current.map((message) => ({ ...message, pinned: false })));
       } else if (payload.type === "error") {
         setNotice(String(payload.error ?? "The Room could not complete that action."));
       }
@@ -241,7 +245,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
         <div className="room-header__activity"><span><Users size={15} /> {online} online</span><button type="button" onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera size={14} /> Flashes · {flashCount}</button></div>
       </header>
       <RoomNotifications slug={slug} />
-      <section className="room-trust"><BadgeCheck size={16} /><b>Ticket holders only</b><span>No ticket, no lurking. Very civilised.</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Finding the signal"}</i></section>
+      <section className="room-trust"><BadgeCheck size={16} /><b>Ticket holders only</b><span>{policy?.emergencyReadOnly ? "Host pause active." : policy?.slowModeSeconds ? `Slow mode · ${policy.slowModeSeconds}s` : "No ticket, no lurking. Very civilised."}</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Finding the signal"}</i></section>
       {pinned && <aside className="room-pinned"><ShieldCheck size={17} /><div><small>The Host has spoken</small><p>{pinned.content}</p></div></aside>}
       {notice && <button className="room-notice" onClick={() => setNotice("")}>{notice}<span>Dismiss</span></button>}
       <section className="room-stream" aria-live="polite">
@@ -287,7 +291,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
       </section>
       <section className="room-composer">
         {replyingTo && <div><Reply size={13} /> Replying to <b>{replyingTo.displayName}</b><button onClick={() => setReplyingTo(null)}>Cancel</button></div>}
-        {policy?.readOnly ? <p><ShieldCheck size={15} /> The Room is read-only now. Even the best afterparty eventually gets lights-on.</p> : <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
+        {policy?.readOnly ? <p><ShieldCheck size={15} /> {policy.emergencyReadOnly ? "The Host paused messages. Updates still land here." : "The Room is read-only now. Even the best afterparty eventually gets lights-on."}</p> : <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
           <button type="button" className="room-camera" onClick={() => setCaptureRequest((value) => value + 1)} aria-label="Share a Flash"><Camera size={18} /></button>
           <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} placeholder="Message The Room" rows={1} />
           <span className={draft.length > 450 ? "near-limit" : ""}>{draft.length ? `${draft.length}/500` : ""}</span><button aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><Send size={18} /></button>

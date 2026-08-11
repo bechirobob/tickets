@@ -8,7 +8,9 @@ import type { StaffRole } from "../../lib/admin-session";
 const links = [
   { href: "/admin", label: "Submission queue", roles: ["owner", "curator"] },
   { href: "/admin/events", label: "Events & inventory", roles: ["owner", "curator"] },
+  { href: "/admin/promoters", label: "Promoter links", roles: ["owner", "curator"] },
   { href: "/admin/orders", label: "Orders & payments", roles: ["owner", "finance"] },
+  { href: "/admin/support", label: "Ticket support", roles: ["owner", "finance"] },
   { href: "/scan", label: "Gate scanner", roles: ["owner", "gate"] },
   { href: "/admin/rooms", label: "Room moderation", roles: ["owner", "moderator"] },
   { href: "/admin/fees", label: "Fees & charges", roles: ["owner", "finance"] },

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     SELECT event.slug AS eventSlug, event.title, event.starts_at AS startsAt,
            event.ends_at AS endsAt, event.venue, event.area, event.image_url AS imageUrl,
            event.event_state AS eventState, event.is_test_event AS isTestEvent,
-           COUNT(DISTINCT CASE WHEN assignment.status = 'active' AND ticket.status IN ('issued', 'checked_in') THEN ticket.id END) AS ticketCount,
+           COUNT(DISTINCT CASE WHEN assignment.status = 'active' AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded') THEN ticket.id END) AS ticketCount,
            COALESCE(preference.keep_posted, false) AS keepPosted,
            COALESCE(preference.attendee_visible, false) AS attendeeVisible,
            host.slug AS hostSlug, host.name AS hostName,
@@ -55,7 +55,8 @@ export async function GET(request: Request) {
           JOIN orders owned_order ON owned_order.id = owned_ticket.order_id
           WHERE owned_assignment.attendee_id = ? AND owned_assignment.status = 'active'
             AND owned_ticket.event_slug = event.slug
-            AND owned_ticket.status IN ('issued', 'checked_in') AND owned_order.status = 'paid'
+            AND owned_ticket.status IN ('issued', 'checked_in', 'voided', 'refunded')
+            AND owned_order.status IN ('paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
         )
       )
     GROUP BY event.slug

@@ -52,8 +52,9 @@ export async function POST(request: Request) {
     LEFT JOIN curated_event_records event ON event.slug = t.event_slug
     LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
     LEFT JOIN ticket_gate_credentials credential ON credential.ticket_id = t.id
-    WHERE a.attendee_id = ? AND a.status = 'active' AND o.status = 'paid'
-      AND t.status IN ('issued', 'checked_in', 'voided')
+    WHERE a.attendee_id = ? AND a.status = 'active'
+      AND o.status IN ('paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
+      AND t.status IN ('issued', 'checked_in', 'voided', 'refunded')
     ORDER BY o.paid_at DESC, t.issued_at, t.id
     LIMIT 100
   `).bind(identity.attendeeId).all<TicketRow>();

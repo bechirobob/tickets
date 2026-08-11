@@ -34,6 +34,8 @@ export const orders = sqliteTable("orders", {
   reservationExpiresAt: text("reservation_expires_at"),
   paymentUpdatedAt: text("payment_updated_at"),
   paymentVerifiedAt: text("payment_verified_at"),
+  promoterCode: text("promoter_code"),
+  waitlistEntryId: text("waitlist_entry_id"),
   failureReason: text("failure_reason"),
   refundStatus: text("refund_status"),
   refundedAmountMinor: integer("refunded_amount_minor").notNull().default(0),
@@ -201,7 +203,7 @@ export const attendeeNotifications = sqliteTable("attendee_notifications", {
   id: text("id").primaryKey(),
   attendeeId: text("attendee_id").notNull(),
   eventSlug: text("event_slug"),
-  kind: text("kind", { enum: ["room_message", "host_update", "ticket_transfer", "gate_update", "event_reminder"] }).notNull(),
+  kind: text("kind", { enum: ["room_message", "host_update", "ticket_transfer", "gate_update", "event_reminder", "test", "waitlist_offer", "payment_recovery", "event_status", "support_update"] }).notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
   url: text("url").notNull(),
@@ -321,6 +323,38 @@ export const roomModerationActions = sqliteTable("room_moderation_actions", {
   note: text("note"),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("room_moderation_event_idx").on(table.eventSlug, table.createdAt)]);
+
+export const roomSettings = sqliteTable("room_settings", {
+  eventSlug: text("event_slug").primaryKey(),
+  emergencyReadOnly: integer("emergency_read_only", { mode: "boolean" }).notNull().default(false),
+  slowModeSeconds: integer("slow_mode_seconds").notNull().default(0),
+  archivedAt: text("archived_at"),
+  updatedAt: text("updated_at").notNull(),
+  updatedBy: text("updated_by").notNull(),
+});
+
+export const eventMemories = sqliteTable("event_memories", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  imageUrl: text("image_url"),
+  publishedAt: text("published_at").notNull(),
+  publishedBy: text("published_by").notNull(),
+}, (table) => [index("event_memories_event_idx").on(table.eventSlug, table.publishedAt)]);
+
+export const roomSuspensions = sqliteTable("room_suspensions", {
+  eventSlug: text("event_slug").notNull(),
+  attendeeId: text("attendee_id").notNull(),
+  reason: text("reason").notNull(),
+  suspendedAt: text("suspended_at").notNull(),
+  suspendedBy: text("suspended_by").notNull(),
+  restoredAt: text("restored_at"),
+  restoredBy: text("restored_by"),
+}, (table) => [
+  uniqueIndex("room_suspensions_event_attendee_unique").on(table.eventSlug, table.attendeeId),
+  index("room_suspensions_active_idx").on(table.eventSlug, table.restoredAt),
+]);
 
 export const roomFlashes = sqliteTable("room_flashes", {
   id: text("id").primaryKey(),
@@ -456,6 +490,45 @@ export const eventTicketTiers = sqliteTable("event_ticket_tiers", {
   index("event_ticket_tiers_event_idx").on(table.eventSlug, table.status, table.sortOrder),
 ]);
 
+export const eventWaitlistEntries = sqliteTable("event_waitlist_entries", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  ticketTierId: text("ticket_tier_id"),
+  normalizedEmail: text("normalized_email").notNull(),
+  phone: text("phone"),
+  status: text("status", { enum: ["waiting", "offered", "claimed", "expired", "cancelled"] }).notNull().default("waiting"),
+  offerTokenHash: text("offer_token_hash"),
+  offeredAt: text("offered_at"),
+  offerExpiresAt: text("offer_expires_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("event_waitlist_active_email_unique").on(table.eventSlug, table.normalizedEmail),
+  uniqueIndex("event_waitlist_offer_token_unique").on(table.offerTokenHash),
+  index("event_waitlist_queue_idx").on(table.eventSlug, table.ticketTierId, table.status, table.createdAt),
+]);
+
+export const eventPromoterCodes = sqliteTable("event_promoter_codes", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  code: text("code").notNull(),
+  label: text("label").notNull(),
+  status: text("status", { enum: ["active", "disabled"] }).notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+  createdBy: text("created_by").notNull(),
+}, (table) => [
+  uniqueIndex("event_promoter_codes_event_code_unique").on(table.eventSlug, table.code),
+  index("event_promoter_codes_event_status_idx").on(table.eventSlug, table.status),
+]);
+
+export const paymentRecoveryEvents = sqliteTable("payment_recovery_events", {
+  orderId: text("order_id").primaryKey(),
+  providerStatus: text("provider_status").notNull(),
+  deliveryStatus: text("delivery_status", { enum: ["queued", "sent", "failed", "suppressed"] }).notNull(),
+  attemptedAt: text("attempted_at").notNull(),
+  detail: text("detail"),
+});
+
 export const inventoryReservations = sqliteTable("inventory_reservations", {
   orderId: text("order_id").primaryKey(),
   eventSlug: text("event_slug").notNull(),
@@ -566,7 +639,7 @@ export const deliveryEvents = sqliteTable("delivery_events", {
   id: text("id").primaryKey(),
   orderId: text("order_id"),
   recoveryGrantId: text("recovery_grant_id"),
-  kind: text("kind", { enum: ["payment_confirmation", "ticket_recovery", "ticket_transfer"] }).notNull(),
+  kind: text("kind", { enum: ["payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update"] }).notNull(),
   recipient: text("recipient").notNull(),
   providerId: text("provider_id"),
   status: text("status", { enum: ["queued", "sent", "failed", "bounced"] }).notNull(),
@@ -649,6 +722,41 @@ export const organizerRequests = sqliteTable("organizer_requests", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("organizer_requests_event_status_idx").on(table.eventSlug, table.status, table.createdAt)]);
+
+export const attendeeEventDecisions = sqliteTable("attendee_event_decisions", {
+  attendeeId: text("attendee_id").notNull(),
+  eventSlug: text("event_slug").notNull(),
+  decision: text("decision", { enum: ["accepted_reschedule", "refund_requested"] }).notNull(),
+  decidedAt: text("decided_at").notNull(),
+}, (table) => [
+  uniqueIndex("attendee_event_decisions_unique").on(table.attendeeId, table.eventSlug),
+  index("attendee_event_decisions_event_idx").on(table.eventSlug, table.decision),
+]);
+
+export const supportCases = sqliteTable("support_cases", {
+  id: text("id").primaryKey(),
+  attendeeId: text("attendee_id").notNull(),
+  eventSlug: text("event_slug").notNull(),
+  orderId: text("order_id"),
+  kind: text("kind", { enum: ["general", "refund", "reschedule", "ticket", "entry"] }).notNull().default("general"),
+  subject: text("subject").notNull(),
+  status: text("status", { enum: ["open", "waiting_customer", "waiting_support", "resolved", "closed"] }).notNull().default("open"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("support_cases_attendee_idx").on(table.attendeeId, table.updatedAt),
+  index("support_cases_queue_idx").on(table.status, table.updatedAt),
+  index("support_cases_event_idx").on(table.eventSlug, table.status),
+]);
+
+export const supportMessages = sqliteTable("support_messages", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  authorType: text("author_type", { enum: ["attendee", "staff", "system"] }).notNull(),
+  authorId: text("author_id").notNull(),
+  body: text("body").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("support_messages_case_idx").on(table.caseId, table.createdAt)]);
 
 export const operationalAuditEvents = sqliteTable("operational_audit_events", {
   id: text("id").primaryKey(),

@@ -7,11 +7,14 @@ import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import { findPrimaryHost } from "../../../lib/event-experience";
 import EventActions from "./event-actions";
 import MemberActions from "../../member-actions";
+import WaitlistControl from "./waitlist-control";
 
 export const dynamic = "force-dynamic";
 
-export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function EventPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ ref?: string }> }) {
   const { slug } = await params;
+  const query = await searchParams;
+  const promoterCode = query.ref?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const { env } = await import("cloudflare:workers");
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
   if (!event) notFound();
@@ -31,11 +34,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       </article>
 
       <aside className="compact-ticket-panel">
-        <div><p className="eyebrow">Choose your access</p>{event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => <section key={tier.id}><div><b>{tier.name}</b><span>{tier.description}</span></div><strong>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</strong></section>)}</div>
-        {event.eventState === "cancelled" ? <p className="event-state-notice">This event has been cancelled. Existing customers will receive refund instructions.</p> : event.eventState === "postponed" ? <p className="event-state-notice">This event has been postponed. A new date will be published after confirmation.</p> : available ? <Link href={`/checkout/${slug}`} className="checkout-link">Get tickets <Ticket size={17} /></Link> : <span className="checkout-link checkout-link--disabled">Tickets are not currently available</span>}
+        <div><p className="eyebrow">Choose your access</p>{event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => <section key={tier.id}><div><b>{tier.name}</b><span>{tier.description}{tier.status === "available" && tier.remainingAdmissions <= Math.max(5, Math.ceil(tier.capacityAdmissions * 0.1)) ? ` · Only ${tier.remainingAdmissions} left` : ""}</span></div><strong>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</strong></section>)}</div>
+        {event.eventState === "cancelled" ? <p className="event-state-notice">This event has been cancelled. Existing customers will receive refund instructions.</p> : event.eventState === "postponed" ? <p className="event-state-notice">This event has been postponed. A new date will be published after confirmation.</p> : available ? <Link href={`/checkout/${slug}${promoterCode ? `?ref=${encodeURIComponent(promoterCode)}` : ""}`} className="checkout-link">Get tickets <Ticket size={17} /></Link> : <span className="checkout-link checkout-link--disabled">Tickets are not currently available</span>}
         <p className="secure-note"><ShieldCheck size={14} /> Secure checkout · Fresh QR · Screenshot confidence discouraged</p>
         <div className="ticket-unlocks"><MessageCircle size={17} /><span><b>Your ticket unlocks the night</b>My Nights, Before the Night, updates, The Room and Flashes.</span></div>
         <MemberActions eventSlug={event.slug} hostSlug={host?.slug} />
+        <WaitlistControl eventSlug={event.slug} tiers={event.ticketTiers} />
       </aside>
     </section>
   </main>;
