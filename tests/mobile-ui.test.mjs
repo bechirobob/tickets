@@ -63,12 +63,26 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /No ticket\. No lurking\./u);
   assert.match(home, /Ticket-holder mobile preview/u);
   assert.match(home, /aria-label="A preview of The Room conversation inside a mobile device"/u);
+  assert.match(home, /284 inside/u);
+  assert.match(home, /Organiser update/u);
+  assert.match(home, /Main entrance · Gate 2/u);
+  assert.match(home, /Message The Room/u);
+  assert.match(home, /Preview locked · your ticket opens this Room/u);
   assert.doesNotMatch(home, /href="\/room\//u);
-  assert.match(css, /\.night-room-device\s*\{[^}]*border-radius:\s*42px[^}]*background:\s*#050604/su);
+  assert.match(css, /\.night-room-device\s*\{[^}]*border-radius:\s*43px[^}]*linear-gradient/su);
   assert.match(css, /\.night-room-device__status\s*\{[^}]*display:\s*grid/su);
   assert.match(css, /\.night-room-peek__stream::after\s*\{[^}]*linear-gradient/su);
+  assert.match(css, /\.night-room-peek__composer\s*\{[^}]*grid-template-columns:/su);
   assert.match(finalMobileBlock, /\.night-room-tease\s*\{[^}]*grid-template-columns:\s*1fr/su);
   assert.match(css, /\.curated-card, \.night-room-message\s*\{\s*animation:\s*none/su);
+});
+
+test("mobile customers retain wallet access and form controls do not trigger iOS zoom", async () => {
+  const css = await readFile(cssUrl, "utf8");
+  const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
+
+  assert.match(finalMobileBlock, /\.night-ticket-link\s*\{[^}]*display:\s*flex[^}]*font-size:\s*0/su);
+  assert.match(finalMobileBlock, /input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
 });
 
 test("checkout conversion actions look and behave like primary controls", async () => {

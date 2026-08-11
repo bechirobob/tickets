@@ -605,44 +605,59 @@ button, select { cursor: pointer; }
 .night-room-tease__actions a:hover { gap: 14px; }
 .night-room-tease__actions span { display: inline-flex; align-items: center; gap: 8px; color: #777871; font-size: 10px; font-weight: 650; }
 .night-room-showcase { min-width: 0; position: relative; z-index: 1; display: grid; justify-items: center; gap: 12px; }
+.night-room-showcase::before { content: ""; width: min(490px, 115%); aspect-ratio: 1; position: absolute; left: 50%; top: 48%; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(215,244,91,.13), rgba(255,77,36,.045) 42%, transparent 69%); filter: blur(12px); transform: translate(-50%, -50%); }
 .night-room-showcase > p { width: min(390px, 100%); margin: 0; display: flex; align-items: center; gap: 7px; color: #777871; font-size: 8px; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
 .night-room-showcase > p svg { color: var(--acid); }
-.night-room-device { width: min(390px, 100%); padding: 8px 8px 12px; position: relative; border: 1px solid #44453f; border-radius: 42px; background: #050604; box-shadow: 0 34px 80px rgba(0,0,0,.35); }
-.night-room-device::before, .night-room-device::after { content: ""; width: 2px; position: absolute; left: -3px; border-radius: 2px 0 0 2px; background: #44453f; }
-.night-room-device::before { height: 54px; top: 112px; }
-.night-room-device::after { height: 78px; top: 180px; }
-.night-room-device__status { min-height: 32px; padding: 0 17px 0 15px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; color: #d8d6ce; font-size: 8px; font-weight: 720; }
-.night-room-device__status > i { width: 72px; height: 19px; display: block; border-radius: 12px; background: #000; }
-.night-room-device__status > span:last-child { justify-self: end; }
+.night-room-device { width: min(390px, 100%); padding: 7px 7px 11px; position: relative; isolation: isolate; border: 1px solid #555650; border-radius: 43px; background: linear-gradient(145deg, #32332e 0%, #080907 17%, #030403 82%, #2e2f2a 100%); box-shadow: 0 40px 90px rgba(0,0,0,.52), 0 8px 22px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.09); }
+.night-room-device::after { content: ""; position: absolute; inset: 2px 2px 10px; z-index: 3; border-radius: 40px; background: linear-gradient(118deg, rgba(255,255,255,.075), transparent 20%, transparent 72%, rgba(255,255,255,.025)); pointer-events: none; }
+.night-room-device::before { content: ""; width: 2px; height: 55px; position: absolute; left: -3px; top: 116px; border-radius: 2px 0 0 2px; background: #44453f; box-shadow: 0 73px 0 #44453f; }
+.night-room-device__status { min-height: 34px; padding: 0 17px 0 16px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; position: relative; z-index: 2; color: #f2f0e9; font-size: 8px; font-weight: 760; }
+.night-room-device__status > i { width: 78px; height: 21px; display: block; position: relative; border-radius: 14px; background: #000; box-shadow: inset 0 -1px rgba(255,255,255,.04); }
+.night-room-device__status > i > b { width: 5px; height: 5px; position: absolute; right: 8px; top: 8px; border-radius: 50%; background: #111c27; box-shadow: 0 0 0 1px #07101a, inset 0 0 2px #2d4960; }
+.night-room-device__status > span:last-child { justify-self: end; display: flex; align-items: center; gap: 4px; }
 .night-room-device__home { width: 104px; height: 4px; margin: 9px auto 0; display: block; border-radius: 3px; background: #a5a59f; opacity: .75; }
-.night-room-peek { min-width: 0; position: relative; overflow: hidden; border: 1px solid #282925; border-radius: 27px; background: #11120f; }
-.night-room-peek > header { min-height: 72px; padding: 0 17px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #343530; }
-.night-room-peek > header > div { display: flex; align-items: center; gap: 12px; }
-.night-room-peek > header i { width: 9px; height: 9px; display: block; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 5px rgba(215,244,91,.08); }
-.night-room-peek > header span { display: grid; gap: 4px; }
-.night-room-peek > header b { font-size: 12px; }
-.night-room-peek > header small { color: #787972; font-size: 9px; }
-.night-room-peek__preview { display: inline-flex; align-items: center; gap: 6px; color: #83847d; font-size: 8px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.night-room-peek { min-width: 0; position: relative; z-index: 1; overflow: hidden; border: 1px solid #2f302c; border-radius: 29px; background: linear-gradient(#11120f, #0d0e0c); box-shadow: inset 0 1px rgba(255,255,255,.035); }
+.night-room-peek > header { min-height: 76px; padding: 0 15px 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #30312d; background: rgba(19,20,17,.92); backdrop-filter: blur(18px); }
+.night-room-peek__identity { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.night-room-peek__identity > svg { flex: 0 0 auto; color: var(--acid); }
+.night-room-peek__identity > span:last-child { min-width: 0; display: grid; gap: 4px; }
+.night-room-peek__identity b { display: flex; align-items: center; gap: 4px; color: #f0eee7; font-size: 12px; }
+.night-room-peek__identity b svg { color: var(--acid); fill: rgba(215,244,91,.14); }
+.night-room-peek__identity small { overflow: hidden; color: #777871; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.night-room-peek__avatars { min-width: 39px; height: 33px; display: flex; align-items: center; }
+.night-room-peek__avatars i { width: 30px; height: 30px; display: grid; place-items: center; border: 2px solid #11120f; border-radius: 50%; background: linear-gradient(145deg, #f6bd92, #935a3d); color: #1a1511; font-size: 7px; font-style: normal; font-weight: 820; }
+.night-room-peek__avatars i + i { margin-left: -13px; background: linear-gradient(145deg, #d8f7a0, #62753c); }
+.night-room-peek__preview { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; color: #8a8b84; font-size: 7px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
 .night-room-peek__preview > svg { color: var(--acid); }
-.night-room-peek__stream { min-height: 420px; padding: 30px 17px 28px; display: flex; flex-direction: column; justify-content: center; gap: 12px; position: relative; overflow: hidden; }
-.night-room-peek__stream::after { content: ""; height: 88px; position: absolute; inset: auto 0 0; background: linear-gradient(transparent, #11120f 88%); pointer-events: none; }
-.night-room-peek__day { margin: 0 0 5px; color: #64655f; font-size: 8px; font-weight: 750; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
+.night-room-peek__stream { min-height: 430px; padding: 24px 16px 19px; display: flex; flex-direction: column; justify-content: center; gap: 11px; position: relative; overflow: hidden; background: radial-gradient(circle at 75% 12%, rgba(215,244,91,.025), transparent 32%); }
+.night-room-peek__stream::after { content: ""; height: 62px; position: absolute; inset: auto 0 0; background: linear-gradient(transparent, #0d0e0c 92%); pointer-events: none; }
+.night-room-peek__day { width: max-content; margin: 0 auto 6px; padding: 4px 8px; border-radius: 9px; background: #1a1b18; color: #65665f; font-size: 7px; font-weight: 750; letter-spacing: .09em; text-align: center; text-transform: uppercase; }
 .night-room-message { width: fit-content; max-width: 78%; margin: 0; position: relative; animation: room-peek-arrive .55s cubic-bezier(.2,.72,.2,1) both; }
-.night-room-message > span { padding: 12px 15px; display: block; border-radius: 17px 17px 17px 5px; background: #2a2b27; color: #efede6; font-size: 12px; line-height: 1.45; }
-.night-room-message > small { margin: 5px 4px 0; display: block; color: #686963; font-size: 8px; }
+.night-room-message > p { margin: 0 5px 4px; display: flex; align-items: center; gap: 7px; color: #74756e; font-size: 7px; }
+.night-room-message > p b { color: #adaea7; font-size: 8px; }
+.night-room-message > p time { font-size: 7px; }
+.night-room-message > span { padding: 11px 14px; display: block; border-radius: 17px 17px 17px 5px; background: linear-gradient(145deg, #2d2e2a, #252622); box-shadow: 0 4px 10px rgba(0,0,0,.16); color: #efede6; font-size: 11px; line-height: 1.45; }
+.night-room-message > small { margin: 5px 4px 0; display: flex; align-items: center; justify-content: flex-end; gap: 3px; color: #686963; font-size: 7px; }
+.night-room-message > small svg { color: var(--acid); }
 .night-room-message > i { padding: 4px 7px; position: absolute; right: -19px; bottom: -8px; border: 1px solid #3d3e39; border-radius: 10px; background: #171815; color: #dad8d0; font-size: 8px; font-style: normal; }
 .night-room-message--right { margin-left: auto; animation-delay: .08s; }
-.night-room-message--right > span { border-radius: 17px 17px 5px 17px; background: #f2efe8; color: #171815; }
+.night-room-message--right > span { border-radius: 17px 17px 5px 17px; background: linear-gradient(145deg, #f8f5ed, #e7e3da); box-shadow: 0 5px 15px rgba(0,0,0,.2); color: #171815; }
 .night-room-message--right > small { text-align: right; }
-.night-room-update { margin: 10px 0; padding: 14px 0; display: flex; align-items: center; gap: 11px; border-top: 1px solid #343530; border-bottom: 1px solid #343530; color: #a6a59e; }
-.night-room-update > svg { flex: 0 0 auto; color: var(--signal); }
-.night-room-update span { display: grid; gap: 3px; font-size: 10px; line-height: 1.45; }
-.night-room-update b { color: #e6e3db; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
+.night-room-update { margin: 7px 0; padding: 12px 13px; border: 1px solid #343630; border-left: 2px solid var(--signal); border-radius: 8px; background: linear-gradient(110deg, rgba(255,77,36,.07), rgba(255,255,255,.015)); color: #a6a59e; }
+.night-room-update > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.night-room-update > header span, .night-room-update > header small { display: flex; align-items: center; gap: 5px; }
+.night-room-update > header span svg { color: var(--signal); }
+.night-room-update b { color: #e6e3db; font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
+.night-room-update > header small { color: var(--acid); font-size: 7px; }
+.night-room-update > p { margin: 8px 0 10px; color: #c2c1ba; font-size: 9px; line-height: 1.45; }
+.night-room-update > footer { padding-top: 8px; display: flex; align-items: center; gap: 5px; border-top: 1px solid #343630; color: #73746d; font-size: 7px; }
 .night-room-message--last { animation-delay: .16s; }
-.night-room-peek__lock { min-height: 68px; padding: 0 17px; display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; border-top: 1px solid #343530; }
-.night-room-peek__lock > svg { color: var(--signal); }
-.night-room-peek__lock span { display: grid; gap: 3px; color: #6f706a; font-size: 9px; }
-.night-room-peek__lock b { color: #cac8c0; font-size: 10px; }
+.night-room-peek__lock { width: max-content; max-width: calc(100% - 30px); min-height: 24px; margin: 0 auto 9px; padding: 0 9px; display: flex; align-items: center; justify-content: center; gap: 6px; position: relative; z-index: 2; border: 1px solid #393a35; border-radius: 12px; background: #171815; color: #85867f; font-size: 7px; }
+.night-room-peek__lock > svg { flex: 0 0 auto; color: var(--signal); }
+.night-room-peek__composer { min-height: 52px; padding: 8px 11px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; position: relative; z-index: 2; border-top: 1px solid #2c2d29; background: rgba(16,17,14,.96); color: #777871; }
+.night-room-peek__composer > span { min-height: 35px; padding: 0 12px; display: flex; align-items: center; border: 1px solid #3c3d38; border-radius: 18px; background: #191a17; color: #676861; font-size: 9px; }
+.night-room-peek__composer > svg:first-child { color: #85867f; }
+.night-room-peek__composer > svg:last-child { color: #85867f; }
 @keyframes room-peek-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 .night-standard {
@@ -684,6 +699,9 @@ button, select { cursor: pointer; }
   .night-header { height: 72px; padding: 0 16px; }
   .night-brand > b { width: 32px; height: 36px; }
   .night-submit { min-height: 40px; padding: 0 0 4px; }
+  .night-header__actions { gap: 13px; }
+  .night-ticket-link { min-width: 40px; min-height: 40px; display: flex; justify-content: center; font-size: 0; }
+  .night-ticket-link > svg { width: 18px; height: 18px; }
   .night-hero { height: 650px; min-height: 650px; max-height: none; }
   .night-hero > img { object-position: 52% center; }
   .night-hero__shade { background: linear-gradient(0deg, rgba(7,8,7,.94) 0%, rgba(7,8,7,.62) 60%, rgba(7,8,7,.28)); }
@@ -723,13 +741,15 @@ button, select { cursor: pointer; }
   .night-room-tease__actions { margin-top: 28px; align-items: flex-start; flex-direction: column; }
   .night-room-showcase { width: 100%; }
   .night-room-device { width: min(360px, 100%); border-radius: 38px; }
-  .night-room-peek__stream { min-height: 390px; padding-top: 24px; }
+  .night-room-peek__stream { min-height: 405px; padding: 22px 13px 17px; }
   .night-room-message { max-width: 86%; }
   .night-room-message > span { font-size: 11px; }
+  .night-room-peek__identity small { max-width: 135px; }
   .night-standard { padding: 58px 20px; grid-template-columns: 1fr; gap: 38px; }
   .night-pitch { min-height: 430px; padding: 58px 20px; gap: 38px; }
   .event-hero__overlay h1 { font-size: 52px; }
   .submission-intro h1 { font-size: 53px; }
+  input, select, textarea { font-size: 16px; }
 }
 
 @keyframes event-card-arrive {
