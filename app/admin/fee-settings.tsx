@@ -17,7 +17,7 @@ export default function FeeSettings() {
     <main className="settings-page">
       <header><Link href="/admin"><ChevronLeft size={17} /> Curation queue</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Admin</span></span><span><ShieldCheck size={16} /> Restricted</span></header>
       <div className="settings-layout">
-        <aside><p>Platform configuration</p><Link href="/admin">Curation queue</Link><Link className="active" href="/admin/fees">Fees & charges</Link><Link href="/admin/payments">Payment provider</Link><Link href="/admin/payouts">Payout rules</Link><Link href="/admin/audit">Audit log</Link></aside>
+        <aside><p>Platform configuration</p><Link href="/admin">Curation queue</Link><Link href="/scan">Gate scanner</Link><Link className="active" href="/admin/fees">Fees & charges</Link><Link href="/admin/payments">Payment provider</Link><Link href="/admin/payouts">Payout rules</Link><Link href="/admin/audit">Audit log</Link></aside>
         <section className="settings-content">
           <p className="eyebrow">Commercial controls</p><h1>Booking fee</h1><p className="lead">Set the customer booking fee without changing completed orders or active reconciliation records.</p>
           <div className="settings-card">

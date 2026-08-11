@@ -46,7 +46,7 @@ export default function AdminLoginForm() {
       />
       {error ? <p role="alert">{error}</p> : null}
       <button disabled={busy} type="submit">
-        {busy ? "Checking…" : "Enter curation desk"}
+        {busy ? "Checking…" : "Enter secure workspace"}
       </button>
     </form>
   );

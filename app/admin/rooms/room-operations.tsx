@@ -54,7 +54,7 @@ export default function RoomOperations({ actor }: { actor: string }) {
   }
 
   return <main className="room-ops">
-    <aside><Link href="/" className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></Link><nav><span>Curation</span><Link href="/admin">Submission queue</Link><Link className="active" href="/admin/rooms">Room moderation</Link><Link href="/admin/fees">Fees & charges</Link></nav><p><ShieldCheck size={14} /> Restricted<br /><small>{actor}</small></p></aside>
+    <aside><Link href="/" className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></Link><nav><span>Curation</span><Link href="/admin">Submission queue</Link><Link href="/scan">Gate scanner</Link><Link className="active" href="/admin/rooms">Room moderation</Link><Link href="/admin/fees">Fees & charges</Link></nav><p><ShieldCheck size={14} /> Restricted<br /><small>{actor}</small></p></aside>
     <section>
       <header><div><p>Verified attendee operations</p><h1>The Room</h1></div><button onClick={load}><RefreshCw size={14} /> Refresh reports</button></header>
       {notice && <button className="room-ops__notice" onClick={() => setNotice("")}>{notice}</button>}

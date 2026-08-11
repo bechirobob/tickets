@@ -1,10 +1,11 @@
-/// <reference types="@cloudflare/vitest-pool-workers" />
+/// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import "cloudflare:test";
+import type { D1Migration } from "@cloudflare/vitest-pool-workers";
 
-declare module "cloudflare:test" {
-  // The test runtime injects the generated production bindings.
-  interface ProvidedEnv extends Cloudflare.Env {
-    TEST_MIGRATIONS: D1Migration[];
+declare global {
+  namespace Cloudflare {
+    interface Env {
+      TEST_MIGRATIONS: D1Migration[];
+    }
   }
 }

@@ -3,7 +3,7 @@ import {
   createAdminSession,
   expiredAdminCookieHeader,
   safeReturnTo,
-} from "../../../../lib/admin-auth";
+} from "../../../../lib/admin-session";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { accessKey?: string; returnTo?: string };

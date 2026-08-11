@@ -82,6 +82,8 @@ export const tickets = sqliteTable("tickets", {
   status: text("status", { enum: ["issued", "transferred", "checked_in", "voided", "refunded"] }).notNull(),
   issuedAt: text("issued_at").notNull(),
   checkedInAt: text("checked_in_at"),
+  checkedInBy: text("checked_in_by"),
+  checkedInGate: text("checked_in_gate"),
 }, (table) => [
   uniqueIndex("tickets_qr_token_unique").on(table.qrTokenHash),
   index("tickets_order_idx").on(table.orderId),

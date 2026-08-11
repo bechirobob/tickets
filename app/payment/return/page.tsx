@@ -37,7 +37,8 @@ export default function PaymentReturn() {
         if (response.ok && result.signedIn) {
           setEventSlug(result.eventSlug ?? "");
           setState("ready");
-          setMessage("Your verified attendee access is ready. The Room is now part of your ticket.");
+          setMessage("Your QR ticket, payment receipt and Room access are ready.");
+          window.setTimeout(() => window.location.replace("/tickets?confirmed=1"), 700);
           return;
         }
         if (response.status === 202 && attempt < 20) {
@@ -62,9 +63,9 @@ export default function PaymentReturn() {
     <main className="payment-return"><div>
       {state === "ready" ? <CheckCircle2 size={45} /> : <Clock3 size={45} />}
       <p className="eyebrow">{state === "ready" ? "Payment confirmed" : "Secure confirmation"}</p>
-      <h1>{state === "ready" ? "Ticket verified. You’re in The Room." : "We’re making sure the money really arrived."}</h1>
+      <h1>{state === "ready" ? "Ticket verified. Your pass is ready." : "We’re making sure the money really arrived."}</h1>
       <p>{message}</p>
-      {state === "ready" && eventSlug ? <Link href={`/room/${eventSlug}`}>Enter The Room</Link> : <Link href="/tickets">Open ticket wallet</Link>}
+      {state === "ready" && eventSlug ? <Link href="/tickets?confirmed=1">Open ticket &amp; receipt</Link> : <Link href="/tickets">Open ticket wallet</Link>}
       <span><ShieldCheck size={15} /> Room access only follows a valid paid ticket.</span>
     </div></main>
   );
