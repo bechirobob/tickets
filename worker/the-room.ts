@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { purgeExpiredFlashes, type FlashRecord } from "../lib/flashes";
 
 type RoomRole = "attendee" | "organizer" | "moderator";
 
@@ -112,6 +113,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         readOnly: request.headers.get("x-bct-read-only") === "1",
       };
       this.configure(policy);
+      await this.scheduleFlashExpiry(policy);
 
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
@@ -157,6 +159,11 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     if (!isRecord(input) || typeof input.type !== "string") return;
 
     const readOnly = state.readOnly || Date.now() >= Date.parse(state.readOnlyAt);
+
+    if (input.type === "ping") {
+      socket.send(JSON.stringify({ type: "pong", sentAt: new Date().toISOString() }));
+      return;
+    }
 
     if (input.type === "message") {
       if (readOnly) {
@@ -263,6 +270,32 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     this.ctx.storage.sql.exec("UPDATE messages SET deleted_at = ? WHERE id = ?", new Date().toISOString(), messageId);
     this.broadcast({ type: "message_removed", messageId });
     return true;
+  }
+
+  async publishFlash(flash: FlashRecord, policy: RoomPolicyInput): Promise<void> {
+    this.configure(policy);
+    await this.scheduleFlashExpiry(policy);
+    this.broadcast({ type: "flash_added", flash });
+  }
+
+  removeFlash(flashId: string): void {
+    this.broadcast({ type: "flash_removed", flashId });
+  }
+
+  async scheduleFlashExpiry(policy: RoomPolicyInput): Promise<void> {
+    const expiry = Date.parse(policy.readOnlyAt);
+    if (!Number.isFinite(expiry)) return;
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || current !== expiry) await this.ctx.storage.setAlarm(expiry);
+  }
+
+  async alarm(): Promise<void> {
+    const configured = this.ctx.storage.sql.exec<{ eventSlug: string }>(
+      "SELECT event_slug AS eventSlug FROM room_config WHERE id = 1 LIMIT 1",
+    ).toArray()[0];
+    if (!configured) return;
+    await purgeExpiredFlashes(this.env.DB, this.env.FLASHES_BUCKET, configured.eventSlug);
+    this.broadcast({ type: "room_closed" });
   }
 
   hasMessage(messageId: string): boolean {

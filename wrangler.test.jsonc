@@ -1,0 +1,56 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "becore-tickets-test",
+  "main": "./worker/the-room.ts",
+  "compatibility_date": "2026-08-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "test",
+    "EMAIL_FROM": "BeCore Tickets <tickets@tickets.becoreops.com>"
+  },
+  "r2_buckets": [
+    {
+      "binding": "FLASHES_BUCKET",
+      "bucket_name": "becore-tickets-flashes-test"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "becore-tickets-test",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "./drizzle"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "LOGIN_RATE_LIMITER",
+      "namespace_id": "93101",
+      "simple": { "limit": 1000, "period": 60 }
+    },
+    {
+      "name": "PUBLIC_WRITE_RATE_LIMITER",
+      "namespace_id": "93102",
+      "simple": { "limit": 1000, "period": 60 }
+    },
+    {
+      "name": "PAYMENT_RATE_LIMITER",
+      "namespace_id": "93103",
+      "simple": { "limit": 1000, "period": 60 }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "THE_ROOM",
+        "class_name": "TheRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["TheRoom"]
+    }
+  ]
+}

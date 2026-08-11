@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowUpRight, BadgeCheck, BatteryFull, CheckCheck, ChevronLeft, CirclePlus, LockKeyhole, MapPin, MessageCircle, Mic, ShieldCheck, Signal, Ticket, Wifi } from "lucide-react";
+import { ArrowDown, ArrowUpRight, BadgeCheck, BatteryFull, Camera, CheckCheck, ChevronLeft, CirclePlus, LockKeyhole, MapPin, MessageCircle, Mic, ShieldCheck, Signal, Ticket, Wifi } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { getPublicEvents } from "./events";
 import ScrollReveal from "./scroll-reveal";
@@ -36,7 +36,7 @@ export default async function Home() {
         <Link href="/" className="night-brand-link"><BrandMark /></Link>
         <nav aria-label="Main navigation">
           <Link href="#drop">The drop</Link>
-          <Link href="#the-room">The Room</Link>
+          <Link href="#the-room">Room + Flashes</Link>
           <Link href="#standard">Our standard</Link>
           <Link href="/organizer/submit">For organisers</Link>
         </nav>
@@ -66,7 +66,7 @@ export default async function Home() {
 
       <section className="night-ticker" aria-label="This week's edit">
         <span>THIS WEEK</span>
-        <b>A private Room with every ticket</b>
+        <b>The Room + Flashes with every ticket</b>
         <i>•</i>
         <b>{previewCount ? `${String(previewCount).padStart(2, "0")} working preview ${previewCount === 1 ? "party" : "parties"}` : `${String(curatedEvents.length).padStart(2, "0")} handpicked ${curatedEvents.length === 1 ? "party" : "parties"}`}</b>
         <i>•</i>
@@ -86,18 +86,22 @@ export default async function Home() {
 
       <section className="night-room-tease" id="the-room">
         <div className="night-room-tease__copy" data-scroll-reveal>
-          <p className="night-kicker"><span /> BeCore exclusive</p>
-          <h2>The chat your<br />ticket gets<br />you into.</h2>
-          <p>Meet the crowd, sort the link-up and get updates straight from the organiser. Every event has its own private conversation, open only to verified ticket holders.</p>
+          <p className="night-kicker"><span /> One ticket. Two private sides.</p>
+          <h2>Say it in<br />The Room.<br />Leave it in<br />Flashes.</h2>
+          <p>Make the plan in Chat. Catch the moment in Flashes. Both stay inside the event, both are open only to verified ticket holders—and the pictures leave when the Room closes.</p>
+          <div className="night-room-duo">
+            <article><span><MessageCircle size={15} /> The Room</span><p>The crowd, the link-up and organiser updates. No ticket. No lurking.</p></article>
+            <article><span><Camera size={15} /> Flashes</span><p>Selfies, drinks and proof the outfit made sense. No downloads. Nothing follows you home.</p></article>
+          </div>
           <div className="night-room-tease__actions">
-            <Link href="#drop">Find your Room <ArrowUpRight size={17} /></Link>
-            <span><LockKeyhole size={14} /> No ticket. No lurking.</span>
+            <Link href="#drop">Get into both <ArrowUpRight size={17} /></Link>
+            <span><LockKeyhole size={14} /> Private by ticket. Temporary by design.</span>
           </div>
         </div>
 
         <div className="night-room-showcase" data-scroll-reveal data-reveal-delay="1">
-          <p><ShieldCheck size={14} /> Ticket-holder mobile preview</p>
-          <div className="night-room-device" aria-label="A preview of The Room conversation inside a mobile device">
+          <p><ShieldCheck size={14} /> Ticket-holder Room + Flashes preview</p>
+          <div className="night-room-device" aria-label="A preview of The Room and Flashes inside a mobile device">
             <div className="night-room-device__status" aria-hidden="true">
               <span>9:41</span>
               <i><b /></i>
@@ -112,6 +116,7 @@ export default async function Home() {
                 </div>
                 <span className="night-room-peek__preview"><ShieldCheck size={14} /> Preview</span>
               </header>
+              <nav className="night-room-peek__tabs" aria-label="Preview views"><span className="active"><MessageCircle size={10} /> Chat</span><span><Camera size={10} /> Flashes <i>New</i></span></nav>
               <div className="night-room-peek__stream">
                 <p className="night-room-peek__day">Tonight · 9:41 PM</p>
                 <article className="night-room-message night-room-message--left">
@@ -123,6 +128,12 @@ export default async function Home() {
                   <span>Outside the venue at 10. I&apos;ll drop the spot here 👀</span>
                   <small>9:43 PM <CheckCheck size={11} /></small>
                 </article>
+                <aside className="night-flash-arrival">
+                  {/* This is a public event visual used only inside a non-interactive product preview. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={heroImage} alt="A nightlife moment shared as a temporary Flash" />
+                  <div><p><Camera size={11} /><b>New Flash from Ama</b></p><span>Here for the night. Gone with the Room.</span></div>
+                </aside>
                 <aside className="night-room-update">
                   <header><span><MessageCircle size={15} /><b>Organiser update</b></span><small><BadgeCheck size={11} /> Verified</small></header>
                   <p>Doors open at 10. Your QR must be ready at the gate.</p>
@@ -134,7 +145,7 @@ export default async function Home() {
                   <i>❤️ 7</i>
                 </article>
               </div>
-              <div className="night-room-peek__lock"><LockKeyhole size={12} /> Preview locked · your ticket opens this Room</div>
+              <div className="night-room-peek__lock"><LockKeyhole size={12} /> One ticket opens Chat + Flashes</div>
               <footer className="night-room-peek__composer" aria-hidden="true">
                 <CirclePlus size={19} />
                 <span>Message The Room</span>

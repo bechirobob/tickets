@@ -60,22 +60,42 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
 
   assert.match(home, /id="the-room"/u);
-  assert.match(home, /The chat your.*ticket gets.*you into\./su);
+  assert.match(home, /Say it in.*The Room\..*Leave it in.*Flashes\./su);
+  assert.match(home, /One ticket\. Two private sides\./u);
   assert.match(home, /No ticket\. No lurking\./u);
-  assert.match(home, /Ticket-holder mobile preview/u);
-  assert.match(home, /aria-label="A preview of The Room conversation inside a mobile device"/u);
+  assert.match(home, /No downloads\. Nothing follows you home\./u);
+  assert.match(home, /Ticket-holder Room \+ Flashes preview/u);
+  assert.match(home, /aria-label="A preview of The Room and Flashes inside a mobile device"/u);
   assert.match(home, /ticket holders only/u);
   assert.match(home, /Organiser update/u);
   assert.match(home, /Main entrance · Gate 2/u);
   assert.match(home, /Message The Room/u);
-  assert.match(home, /Preview locked · your ticket opens this Room/u);
+  assert.match(home, /One ticket opens Chat \+ Flashes/u);
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.night-room-device\s*\{[^}]*border-radius:\s*43px[^}]*linear-gradient/su);
   assert.match(css, /\.night-room-device__status\s*\{[^}]*display:\s*grid/su);
   assert.match(css, /\.night-room-peek__stream::after\s*\{[^}]*linear-gradient/su);
   assert.match(css, /\.night-room-peek__composer\s*\{[^}]*grid-template-columns:/su);
   assert.match(finalMobileBlock, /\.night-room-tease\s*\{[^}]*grid-template-columns:\s*1fr/su);
+  assert.match(finalMobileBlock, /\.night-room-duo\s*\{[^}]*grid-template-columns:\s*1fr/su);
   assert.match(css, /\.night-room-message\s*\{\s*animation:\s*none/su);
+});
+
+test("The Room reconnects when a ticket holder returns to the page", async () => {
+  const [room, durableObject] = await Promise.all([
+    readFile(roomUrl, "utf8"),
+    readFile(new URL("../worker/the-room.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(room, /addEventListener\("online", reconnectIfNeeded\)/u);
+  assert.match(room, /addEventListener\("pageshow", reconnectIfNeeded\)/u);
+  assert.match(room, /addEventListener\("visibilitychange", onVisibility\)/u);
+  assert.match(room, /Math\.min\(15_000, 750 \* \(2 \*\* Math\.min\(attempt, 5\)\)\)/u);
+  assert.match(room, /JSON\.stringify\(\{ type: "ping" \}\)/u);
+  assert.match(room, /Date\.now\(\) - lastSocketActivityRef\.current > 60_000/u);
+  assert.match(room, /Reconnecting/u);
+  assert.match(durableObject, /input\.type === "ping"/u);
+  assert.match(durableObject, /type: "pong"/u);
 });
 
 test("homepage sections reveal once without overriding reduced-motion preferences", async () => {

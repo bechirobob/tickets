@@ -6,6 +6,7 @@ import { resolveRoomPolicy } from "../lib/room-policy";
 import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
+import { purgeExpiredFlashes } from "../lib/flashes";
 export { TheRoom } from "./the-room";
 
 function supportedImageFormat(format: string): "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif" {
@@ -92,7 +93,7 @@ function securityResponse(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; worker-src 'self' blob:");
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), usb=()");
+  headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
@@ -110,6 +111,11 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
 }
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  try {
+    await purgeExpiredFlashes(env.DB, env.FLASHES_BUCKET);
+  } catch (error) {
+    await recordSystemAlert(env, "flash-expiry", error);
+  }
   try {
     await expireReservations(env.DB);
   } catch (error) {

@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       main: "./worker/the-room.ts",
-      wrangler: { configPath: "./wrangler.jsonc" },
+      wrangler: { configPath: "./wrangler.test.jsonc" },
       miniflare: {
         bindings: {
           TEST_MIGRATIONS: migrations,
