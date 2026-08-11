@@ -7,6 +7,7 @@ import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, r
 import { enforceRateLimit } from "../../../../lib/security-controls";
 
 const RESERVATION_MINUTES = 15;
+const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
@@ -16,8 +17,10 @@ export async function POST(request: Request) {
   const selection = event ? resolveTicketSelection(event, body.ticketTierId ?? "general", body.quantity) : null;
   if (!event || !selection) return Response.json({ error: "That ticket tier is unavailable. Refresh the page and choose an available ticket." }, { status: 400 });
   const email = body.email?.trim().toLowerCase() ?? "";
-  const phone = body.phone?.trim() ?? "";
+  const phone = body.phone?.replace(/[^\d+]/gu, "") ?? "";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) || phone.length < 7 || phone.length > 40) return Response.json({ error: "A valid email and phone number are required." }, { status: 400 });
+  const provider = paystackProviders[body.network as keyof typeof paystackProviders];
+  if (!provider) return Response.json({ error: "Choose a supported mobile money network." }, { status: 400 });
 
   const { env } = await import("cloudflare:workers");
   const metadata = requestMetadata(request);
@@ -44,7 +47,6 @@ export async function POST(request: Request) {
   const totalAmountMinor = faceAmountMinor + bookingFeeMinor;
   const id = crypto.randomUUID();
   const reference = `BCT-${Date.now().toString(36).toUpperCase()}-${id.slice(0, 6).toUpperCase()}`;
-  const origin = new URL(request.url).origin;
   const claimToken = createSecureToken();
   const claimTokenHash = await hashToken(claimToken);
 
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
       id, reference, eventSlug, selection.tier.id, selection.tier.recordId,
       selection.unitQuantity, selection.ticketCount, faceAmountMinor, bookingFeeMinor,
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
-      `mobile_money:${body.network ?? "unknown"}`, expiresAt, createdAt, createdAt, id,
+      `mobile_money:${body.network}`, expiresAt, createdAt, createdAt, id,
     ),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Those admissions were just reserved or sold. Refresh the event to see current availability." }, { status: 409 });
   }
 
-  const response = await fetch("https://api.paystack.co/transaction/initialize", {
+  const response = await fetch("https://api.paystack.co/charge", {
     method: "POST",
     headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`, "content-type": "application/json" },
     body: JSON.stringify({
@@ -108,9 +110,8 @@ export async function POST(request: Request) {
       amount: totalAmountMinor,
       currency: "GHS",
       reference,
-      channels: ["mobile_money"],
-      callback_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`,
-      metadata: JSON.stringify({
+      mobile_money: { phone, provider },
+      metadata: {
         orderId: id,
         eventSlug,
         ticketTierId: selection.tier.id,
@@ -123,11 +124,12 @@ export async function POST(request: Request) {
         faceAmountMinor,
         bookingFeeMinor,
         reservationExpiresAt: expiresAt,
-      }),
+      },
     }),
   });
-  const result = await response.json() as { status?: boolean; message?: string; data?: { authorization_url?: string; access_code?: string; reference?: string } };
-  if (!response.ok || !result.status || !result.data?.authorization_url) {
+  const result = await response.json() as { status?: boolean; message?: string; data?: { reference?: string; status?: string; display_text?: string } };
+  const chargeReady = result.data?.status === "pay_offline" || result.data?.status === "success";
+  if (!response.ok || !result.status || !result.data?.reference || !chargeReady) {
     await env.DB.batch([
       env.DB.prepare("UPDATE orders SET status = 'failed', failure_reason = ?, payment_updated_at = ? WHERE id = ?")
         .bind(result.message ?? "Paystack could not start the payment.", new Date().toISOString(), id),
@@ -137,7 +139,8 @@ export async function POST(request: Request) {
     return Response.json({ error: result.message ?? "Paystack could not start the payment." }, { status: 502 });
   }
 
-  await env.DB.prepare("UPDATE orders SET paystack_reference = ?, payment_updated_at = ? WHERE id = ?")
-    .bind(result.data.reference ?? reference, new Date().toISOString(), id).run();
-  return Response.json({ authorizationUrl: result.data.authorization_url, reference, reservationExpiresAt: expiresAt });
+  await env.DB.prepare("UPDATE orders SET paystack_reference = ?, paystack_status = ?, payment_updated_at = ? WHERE id = ?")
+    .bind(result.data.reference, result.data.status, new Date().toISOString(), id).run();
+  const nextUrl = `/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}&prompt=1`;
+  return Response.json({ nextUrl, reference, displayText: result.data.display_text ?? "Approve the payment prompt on your phone.", reservationExpiresAt: expiresAt });
 }

@@ -9,7 +9,9 @@ export default function PaymentReturn() {
   const params = useSearchParams();
   const [state, setState] = useState<"checking" | "ready" | "failed">("checking");
   const [eventSlug, setEventSlug] = useState("");
-  const [message, setMessage] = useState("Paystack is confirming the payment. The serious little pause before the good part.");
+  const [message, setMessage] = useState(() => params.get("prompt") === "1"
+    ? "Your MoMo prompt is on its way. Approve it on your phone; this page will update automatically."
+    : "Paystack is confirming the payment. The serious little pause before the good part.");
 
   useEffect(() => {
     const reference = params.get("reference") ?? "";
@@ -41,14 +43,14 @@ export default function PaymentReturn() {
           window.setTimeout(() => window.location.replace("/tickets?confirmed=1"), 700);
           return;
         }
-        if (response.status === 202 && attempt < 20) {
+        if (response.status === 202 && attempt < 72) {
           window.setTimeout(check, 2500);
           return;
         }
         setState("failed");
         setMessage(result.error ?? "We cannot call it a ticket until Paystack calls it paid. The money check is still the boss here.");
       } catch {
-        if (attempt < 20) window.setTimeout(check, 2500);
+        if (attempt < 72) window.setTimeout(check, 2500);
         else {
           setState("failed");
           setMessage("Confirmation is taking the scenic route. Your order is still recorded safely.");

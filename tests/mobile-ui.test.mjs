@@ -144,6 +144,9 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(checkout, /controller\.abort\(\), 15_000/u);
   assert.doesNotMatch(checkout, /Turnstile|turnstileToken|browser security/iu);
   assert.doesNotMatch(paymentRoute, /Turnstile|turnstileToken|browser security/iu);
+  assert.match(paymentRoute, /https:\/\/api\.paystack\.co\/charge/u);
+  assert.match(paymentRoute, /mtn: "mtn", telecel: "vod", at: "atl"/u);
+  assert.doesNotMatch(checkout, /authorizationUrl|checkout\.paystack/iu);
   assert.doesNotMatch(layout, /challenges\.cloudflare\.com/u);
 });
 
