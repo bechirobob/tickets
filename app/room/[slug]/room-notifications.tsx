@@ -65,11 +65,27 @@ export default function RoomNotifications({ slug }: { slug: string }) {
     setBusy(false);
   }
 
+  async function sendTest() {
+    setBusy(true); setNotice("Sending one outside the tab…");
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) throw new Error("Turn lock-screen updates on first.");
+      const response = await fetch("/api/customer/notifications/test", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: subscription.endpoint, eventSlug: slug }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "The test notification did not leave.");
+      setNotice("Sent. Close or leave this tab and check your normal notification centre.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "The test notification did not leave."); }
+    finally { setBusy(false); }
+  }
+
   const currentlyMuted = Boolean(mutedUntil && Date.parse(mutedUntil) > now);
   return <section className="room-notifications" aria-label="Room notifications">
     {available && permission !== "denied" && !subscribed ? <div className="room-notifications__invite"><Bell size={17} /><span><b>Let the Room find you.</b><small>Messages and Host updates can reach your lock screen—even when this tab is closed.</small></span><button type="button" onClick={enable} disabled={busy}>{busy ? <Loader2 className="spin" size={14} /> : "Turn it on"}</button></div> : null}
     {permission === "denied" ? <div className="room-notifications__invite"><BellOff size={17} /><span><b>Your browser muted us first.</b><small>Allow notifications for this site in browser settings whenever you want back in.</small></span></div> : null}
-    {subscribed ? <div className="room-notifications__controls"><span>{currentlyMuted ? <VolumeX size={14} /> : <Check size={14} />} {currentlyMuted ? "Room muted" : "Lock-screen updates on"}</span><select aria-label="Mute Room notifications" disabled={busy} value={currentlyMuted ? "muted" : "off"} onChange={(event) => void mute(event.target.value === "1h" ? "1h" : event.target.value === "tonight" ? "tonight" : "off")}><option value="off">Notifications on</option>{currentlyMuted ? <option value="muted">Muted</option> : null}<option value="1h">Mute for 1 hour</option><option value="tonight">Mute for tonight</option></select></div> : null}
+    {subscribed ? <div className="room-notifications__controls"><span>{currentlyMuted ? <VolumeX size={14} /> : <Check size={14} />} {currentlyMuted ? "Room muted" : "Lock-screen updates on"}</span><button type="button" onClick={sendTest} disabled={busy}>Send me a test notification</button><select aria-label="Mute Room notifications" disabled={busy} value={currentlyMuted ? "muted" : "off"} onChange={(event) => void mute(event.target.value === "1h" ? "1h" : event.target.value === "tonight" ? "tonight" : "off")}><option value="off">Notifications on</option>{currentlyMuted ? <option value="muted">Muted</option> : null}<option value="1h">Mute for 1 hour</option><option value="tonight">Mute for tonight</option></select></div> : null}
     {notice ? <button className="room-notifications__notice" type="button" onClick={() => setNotice("")}>{notice}</button> : null}
   </section>;
 }

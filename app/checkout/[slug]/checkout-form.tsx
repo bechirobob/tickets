@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Check, LockKeyhole, Minus, Plus, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 
@@ -14,6 +15,7 @@ const paymentNetworks = [
 ] as const;
 
 export default function CheckoutForm({ slug, event }: { slug: string; event: CuratedEvent }) {
+  const params = useSearchParams();
   const [quantity, setQuantity] = useState(1);
   const [selectedTierId, setSelectedTierId] = useState(() => event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id);
   const [network, setNetwork] = useState("mtn");
@@ -55,7 +57,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName }),
+        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, offer: params.get("offer"), promoterCode: params.get("ref") }),
         signal: controller.signal,
       });
       const data = await response.json() as { authorizationUrl?: string; nextUrl?: string; error?: string };

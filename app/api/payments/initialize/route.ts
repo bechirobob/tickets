@@ -11,10 +11,19 @@ const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string };
+  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string; offer?: string | null; promoterCode?: string | null };
   const eventSlug = body.eventSlug?.trim() ?? "";
+  const { env } = await import("cloudflare:workers");
   const event = await findCuratedEvent(eventSlug);
-  const selection = event ? resolveTicketSelection(event, body.ticketTierId ?? "general", body.quantity) : null;
+  const candidateTier = event?.ticketTiers.find((tier) => tier.id === (body.ticketTierId ?? "general"));
+  const offerToken = body.offer?.trim() ?? "";
+  const offer = offerToken && candidateTier ? await env.DB.prepare(`
+    SELECT id FROM event_waitlist_entries WHERE event_slug = ? AND ticket_tier_id = ?
+      AND offer_token_hash = ? AND status = 'offered' AND offer_expires_at > ? LIMIT 1
+  `).bind(eventSlug, candidateTier.recordId, await hashToken(offerToken), new Date().toISOString()).first<{ id: string }>() : null;
+  if (offerToken && !offer) return Response.json({ error: "That waitlist offer has expired or belongs to another ticket." }, { status: 410 });
+  const selectableEvent = event && offer && candidateTier ? { ...event, eventState: "on_sale" as const, ticketTiers: event.ticketTiers.map((tier) => tier.id === candidateTier.id ? { ...tier, status: "available" as const, remainingAdmissions: Math.max(tier.remainingAdmissions, tier.admissionsPerUnit) } : tier) } : event;
+  const selection = selectableEvent ? resolveTicketSelection(selectableEvent, body.ticketTierId ?? "general", body.quantity) : null;
   if (!event || !selection) return Response.json({ error: "That ticket tier is unavailable. Refresh the page and choose an available ticket." }, { status: 400 });
   const email = body.email?.trim().toLowerCase() ?? "";
   const phone = body.phone?.replace(/[^\d+]/gu, "") ?? "";
@@ -22,7 +31,9 @@ export async function POST(request: Request) {
   const provider = paystackProviders[body.network as keyof typeof paystackProviders];
   if (!provider) return Response.json({ error: "Choose a supported mobile money network." }, { status: 400 });
 
-  const { env } = await import("cloudflare:workers");
+  const requestedPromoterCode = body.promoterCode?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
+  const promoter = requestedPromoterCode ? await env.DB.prepare(`SELECT code FROM event_promoter_codes WHERE event_slug = ? AND code = ? AND status = 'active' LIMIT 1`)
+    .bind(eventSlug, requestedPromoterCode).first<{ code: string }>() : null;
   const metadata = requestMetadata(request);
   const [ipRateAllowed, customerRateAllowed] = await Promise.all([
     enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
@@ -62,8 +73,8 @@ export async function POST(request: Request) {
       JOIN event_ticket_tiers tier ON tier.event_slug = event.slug
       WHERE event.slug = ? AND tier.id = ? AND tier.code = ?
         AND (event.status = 'published' OR (event.status = 'scheduled' AND event.scheduled_publish_at <= ?))
-        AND event.event_state IN ('on_sale', 'rescheduled')
-        AND tier.status = 'available'
+        AND (event.event_state IN ('on_sale', 'rescheduled') OR ? IS NOT NULL)
+        AND (tier.status = 'available' OR ? IS NOT NULL)
         AND (COALESCE(tier.sales_open_at, event.sales_open_at) IS NULL OR COALESCE(tier.sales_open_at, event.sales_open_at) <= ?)
         AND (COALESCE(tier.sales_close_at, event.sales_close_at, event.starts_at) > ?)
         AND event.starts_at > ?
@@ -75,7 +86,7 @@ export async function POST(request: Request) {
         ) + ? <= tier.capacity_admissions
     `).bind(
       id, selection.unitQuantity, selection.ticketCount, expiresAt, createdAt, createdAt,
-      eventSlug, selection.tier.recordId, selection.tier.id, createdAt,
+      eventSlug, selection.tier.recordId, selection.tier.id, createdAt, offer?.id ?? null, offer?.id ?? null,
       createdAt, createdAt, createdAt, createdAt, selection.ticketCount,
     ),
     env.DB.prepare(`
@@ -83,15 +94,15 @@ export async function POST(request: Request) {
         id, reference, event_slug, ticket_type, ticket_tier_id, unit_quantity, quantity,
         face_amount_minor, booking_fee_minor, total_amount_minor, currency,
         customer_email, customer_phone, customer_name, payment_channel, status,
-        reservation_expires_at, payment_updated_at, created_at
+        reservation_expires_at, payment_updated_at, promoter_code, waitlist_entry_id, created_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GHS', ?, ?, ?, ?, 'payment_pending', ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GHS', ?, ?, ?, ?, 'payment_pending', ?, ?, ?, ?, ?
       FROM inventory_reservations WHERE order_id = ? AND status = 'held'
     `).bind(
       id, reference, eventSlug, selection.tier.id, selection.tier.recordId,
       selection.unitQuantity, selection.ticketCount, faceAmountMinor, bookingFeeMinor,
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
-      `mobile_money:${body.network}`, expiresAt, createdAt, createdAt, id,
+      `mobile_money:${body.network}`, expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
     ),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
@@ -101,6 +112,10 @@ export async function POST(request: Request) {
 
   if (reservation.meta.changes !== 1) {
     return Response.json({ error: "Those admissions were just reserved or sold. Refresh the event to see current availability." }, { status: 409 });
+  }
+  if (offer) {
+    await env.DB.prepare("UPDATE event_waitlist_entries SET status = 'claimed', updated_at = ? WHERE id = ? AND status = 'offered'")
+      .bind(new Date().toISOString(), offer.id).run();
   }
 
   const paymentMetadata = {

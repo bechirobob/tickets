@@ -29,6 +29,8 @@ export type EventUpdate = {
   publishedBy: string;
 };
 
+export type EventMemory = { id: string; title: string; body: string; imageUrl: string | null; publishedAt: string; publishedBy: string };
+
 type HostRecord = Omit<PublicHost, "role"> & { role?: string | null };
 
 function safeOptions(value: string | null): string[] {
@@ -100,9 +102,10 @@ export async function loadTicketedEventExperience(
   preference: { attendeeVisible: boolean; keepPosted: boolean };
   questions: EventQuestion[];
   updates: EventUpdate[];
+  memories: EventMemory[];
   visibleAttendees: number;
 }> {
-  const [preference, questions, updates, visibleCount] = await Promise.all([
+  const [preference, questions, updates, memories, visibleCount] = await Promise.all([
     db.prepare(`
       SELECT
         COALESCE(
@@ -128,6 +131,8 @@ export async function loadTicketedEventExperience(
       SELECT id, title, body, pinned, published_at AS publishedAt, published_by AS publishedBy
       FROM event_updates WHERE event_slug = ? ORDER BY pinned DESC, published_at DESC LIMIT 50
     `).bind(eventSlug).all<{ id: string; title: string; body: string; pinned: number; publishedAt: string; publishedBy: string }>(),
+    db.prepare(`SELECT id, title, body, image_url AS imageUrl, published_at AS publishedAt, published_by AS publishedBy
+      FROM event_memories WHERE event_slug = ? ORDER BY published_at DESC LIMIT 24`).bind(eventSlug).all<EventMemory>(),
     db.prepare(`
       SELECT COUNT(*) AS count FROM attendee_event_preferences
       WHERE event_slug = ? AND attendee_visible = true
@@ -144,6 +149,7 @@ export async function loadTicketedEventExperience(
       answer: question.answer,
     })),
     updates: updates.results.map((update) => ({ ...update, pinned: Boolean(update.pinned) })),
+    memories: memories.results,
     visibleAttendees: visibleCount?.count ?? 0,
   };
 }

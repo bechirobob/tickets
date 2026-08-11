@@ -18,6 +18,9 @@ const nightHubUrl = new URL("../app/my-nights/[slug]/night-hub.tsx", import.meta
 const scannerUrl = new URL("../app/scan/scanner.tsx", import.meta.url);
 const serviceWorkerUrl = new URL("../public/sw.js", import.meta.url);
 const roomNotificationsUrl = new URL("../app/room/[slug]/room-notifications.tsx", import.meta.url);
+const supportCentreUrl = new URL("../app/my-nights/[slug]/support-centre.tsx", import.meta.url);
+const waitlistUrl = new URL("../app/event/[slug]/waitlist-control.tsx", import.meta.url);
+const roomOperationsUrl = new URL("../app/admin/rooms/room-operations.tsx", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -183,6 +186,8 @@ test("event-day journeys remain available beyond the open browser tab", async ()
   assert.match(hub, /TicketTransfer/u);
   assert.match(roomNotifications, /Notification\.requestPermission\(\)/u);
   assert.match(roomNotifications, /Mute for tonight/u);
+  assert.match(roomNotifications, />Send me a test notification</u);
+  assert.match(roomNotifications, /api\/customer\/notifications\/test/u);
   assert.match(serviceWorker, /addEventListener\("push"/u);
   assert.match(serviceWorker, /showNotification/u);
   assert.match(serviceWorker, /notificationclick/u);
@@ -190,6 +195,26 @@ test("event-day journeys remain available beyond the open browser tab", async ()
   assert.match(scanner, /clientScanId/u);
   assert.match(scanner, /Find a guest or purchase/u);
   assert.match(scanner, /Supervisor undo/u);
+});
+
+test("roadmap 5–7 stays inside compact existing journeys", async () => {
+  const [css, support, waitlist, roomOperations, hub] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(supportCentreUrl, "utf8"),
+    readFile(waitlistUrl, "utf8"),
+    readFile(roomOperationsUrl, "utf8"),
+    readFile(nightHubUrl, "utf8"),
+  ]);
+  assert.match(roomOperations, /Emergency read-only/u);
+  assert.match(roomOperations, /Slow mode/u);
+  assert.match(roomOperations, /Official memory/u);
+  assert.match(waitlist, /private 30-minute offer/u);
+  assert.match(support, /Order attached\. No retelling the whole story\./u);
+  assert.match(support, /Accept new date/u);
+  assert.match(support, /Request refund/u);
+  assert.match(hub, /<SupportCentre slug=\{event\.slug\}/u);
+  assert.match(css, /\.event-waitlist\s*\{[^}]*display:\s*grid[^}]*gap:\s*7px/su);
+  assert.match(css, /\.night-support\s*\{[^}]*max-width:\s*820px/su);
 });
 
 test("checkout conversion actions look and behave like primary controls", async () => {

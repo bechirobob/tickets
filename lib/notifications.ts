@@ -1,6 +1,6 @@
 import { sendNotification, type PushSubscription } from "web-push-neo";
 
-type NotificationKind = "room_message" | "host_update" | "ticket_transfer" | "gate_update" | "event_reminder";
+type NotificationKind = "room_message" | "host_update" | "ticket_transfer" | "gate_update" | "event_reminder" | "test" | "waitlist_offer" | "payment_recovery" | "event_status" | "support_update";
 
 type PushRow = {
   attendeeId: string;
@@ -26,9 +26,9 @@ function chunks<T>(items: T[], size: number): T[][] {
   return result;
 }
 
-async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: NotificationPayload): Promise<void> {
-  if (!row.subscriptionId || !row.endpoint || !row.p256dh || !row.auth) return;
-  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return;
+async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: NotificationPayload): Promise<boolean> {
+  if (!row.subscriptionId || !row.endpoint || !row.p256dh || !row.auth) return false;
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return false;
   const subscription = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } } satisfies PushSubscription;
   try {
     await sendNotification(subscription, JSON.stringify({
@@ -47,6 +47,7 @@ async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: Notificat
     });
     await env.DB.prepare("UPDATE push_subscriptions SET last_success_at = ?, failure_count = 0, updated_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), new Date().toISOString(), row.subscriptionId).run();
+    return true;
   } catch (error) {
     const status = typeof error === "object" && error !== null && "statusCode" in error ? Number(error.statusCode) : 0;
     await env.DB.prepare(`
@@ -57,10 +58,11 @@ async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: Notificat
       WHERE id = ?
     `).bind(status, new Date().toISOString(), new Date().toISOString(), row.subscriptionId).run();
     console.error(JSON.stringify({ message: "push delivery failed", status, subscriptionId: row.subscriptionId }));
+    return false;
   }
 }
 
-async function persistAndPush(env: Cloudflare.Env, recipients: PushRow[], payload: NotificationPayload): Promise<void> {
+async function persistAndPush(env: Cloudflare.Env, recipients: PushRow[], payload: NotificationPayload): Promise<number> {
   const now = new Date().toISOString();
   const uniqueAttendees = [...new Set(recipients.map((row) => row.attendeeId))];
   for (const batch of chunks(uniqueAttendees, 50)) {
@@ -74,9 +76,12 @@ async function persistAndPush(env: Cloudflare.Env, recipients: PushRow[], payloa
       payload.sourceId ?? null, now,
     )));
   }
+  let delivered = 0;
   for (const batch of chunks(recipients.filter((row) => row.subscriptionId), 20)) {
-    await Promise.all(batch.map((row) => deliverPush(env, row, payload)));
+    const results = await Promise.all(batch.map((row) => deliverPush(env, row, payload)));
+    delivered += results.filter(Boolean).length;
   }
+  return delivered;
 }
 
 export async function notifyRoomMessage(env: Cloudflare.Env, input: {
@@ -124,4 +129,26 @@ export async function notifyAttendee(env: Cloudflare.Env, attendeeId: string, pa
     FROM push_subscriptions WHERE attendee_id = ? AND revoked_at IS NULL LIMIT 12
   `).bind(attendeeId, attendeeId).all<PushRow>();
   await persistAndPush(env, rows.results.length ? rows.results : [{ attendeeId, subscriptionId: null, endpoint: null, p256dh: null, auth: null }], payload);
+}
+
+export async function notifyAttendeeDevice(env: Cloudflare.Env, attendeeId: string, endpoint: string, payload: NotificationPayload): Promise<boolean> {
+  const row = await env.DB.prepare(`
+    SELECT attendee_id AS attendeeId, id AS subscriptionId, endpoint, p256dh, auth
+    FROM push_subscriptions
+    WHERE attendee_id = ? AND endpoint = ? AND revoked_at IS NULL LIMIT 1
+  `).bind(attendeeId, endpoint).first<PushRow>();
+  if (!row) return false;
+  return (await persistAndPush(env, [row], payload)) === 1;
+}
+
+export async function notifyEventAttendees(env: Cloudflare.Env, eventSlug: string, payload: NotificationPayload): Promise<void> {
+  const rows = await env.DB.prepare(`
+    SELECT DISTINCT assignment.attendee_id AS attendeeId,
+      subscription.id AS subscriptionId, subscription.endpoint, subscription.p256dh, subscription.auth
+    FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id
+    LEFT JOIN push_subscriptions subscription ON subscription.attendee_id = assignment.attendee_id AND subscription.revoked_at IS NULL
+    WHERE assignment.status = 'active' AND ticket.event_slug = ?
+      AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded') LIMIT 2500
+  `).bind(eventSlug).all<PushRow>();
+  if (rows.results.length) await persistAndPush(env, rows.results, { ...payload, eventSlug });
 }

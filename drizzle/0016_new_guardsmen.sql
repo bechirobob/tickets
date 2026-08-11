@@ -1,0 +1,1 @@
+ALTER TABLE `orders` ADD `waitlist_entry_id` text;

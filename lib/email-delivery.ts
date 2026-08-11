@@ -1,6 +1,6 @@
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "payment_confirmation" | "ticket_recovery" | "ticket_transfer";
+type DeliveryKind = "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update";
 
 type OrderForEmail = {
   id: string;
@@ -33,7 +33,7 @@ async function sendEmail(input: {
   text: string;
   idempotencyKey: string;
   orderId?: string;
-  recoveryGrantId: string;
+  recoveryGrantId?: string;
 }) {
   const { env } = await import("cloudflare:workers");
   const deliveryId = crypto.randomUUID();
@@ -42,7 +42,7 @@ async function sendEmail(input: {
     INSERT INTO delivery_events (
       id, order_id, recovery_grant_id, kind, recipient, status, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
-  `).bind(deliveryId, input.orderId ?? null, input.recoveryGrantId, input.kind, input.recipient, now, now).run();
+  `).bind(deliveryId, input.orderId ?? null, input.recoveryGrantId ?? null, input.kind, input.recipient, now, now).run();
 
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
     await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, updated_at = ? WHERE id = ?")
@@ -150,4 +150,24 @@ export async function sendOrderConfirmation(db: D1Database, order: OrderForEmail
   `).bind(order.id).first();
   if (existing) return { sent: true, duplicate: true };
   return issueRecoveryGrant({ db, normalizedEmail: order.customerEmail.trim().toLowerCase(), origin, kind: "payment_confirmation", order, ttlMinutes: 7 * 24 * 60 });
+}
+
+export async function sendWaitlistOfferEmail(input: { db: D1Database; entryId: string; recipient: string; eventTitle: string; tierName: string; expiresAt: string; claimUrl: string }) {
+  const subject = `${input.eventTitle}: a ticket found its way back`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#181914"><p style="color:#f05a28;font-weight:700">BECORE TICKETS</p><h1 style="font-size:28px">Your wait is doing something useful.</h1><p>A <strong>${escapeHtml(input.tierName)}</strong> ticket for <strong>${escapeHtml(input.eventTitle)}</strong> is available.</p><p>This private checkout link is yours until ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(input.expiresAt)))}. After that, the next person gets the nod.</p><p style="margin:28px 0"><a href="${escapeHtml(input.claimUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Take the ticket</a></p><p style="color:#666;font-size:13px">The invite is private and one-time. Payment still has to complete before the timer does.</p></div>`;
+  const text = `${input.eventTitle}: ${input.tierName} is available.\n\nTake the ticket before ${input.expiresAt}: ${input.claimUrl}`;
+  return sendEmail({ db: input.db, kind: "waitlist_offer", recipient: input.recipient, subject, html, text, idempotencyKey: `waitlist/${input.entryId}/${input.expiresAt}`, recoveryGrantId: input.entryId });
+}
+
+export async function sendAbandonedCheckoutEmail(input: { db: D1Database; orderId: string; recipient: string; eventTitle: string; eventUrl: string }) {
+  const subject = `${input.eventTitle}: the payment did not finish`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#181914"><p style="color:#f05a28;font-weight:700">BECORE TICKETS</p><h1 style="font-size:28px">The plan stopped one tap short.</h1><p>Paystack confirmed that the checkout for <strong>${escapeHtml(input.eventTitle)}</strong> was abandoned—not pending and not still processing.</p><p>No ticket was issued. If the night still has your attention, start a fresh secure checkout.</p><p style="margin:28px 0"><a href="${escapeHtml(input.eventUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Try the night again</a></p></div>`;
+  const text = `${input.eventTitle}: Paystack confirmed the checkout was abandoned. No ticket was issued. Start again: ${input.eventUrl}`;
+  return sendEmail({ db: input.db, kind: "payment_recovery", recipient: input.recipient, subject, html, text, idempotencyKey: `payment-recovery/${input.orderId}`, orderId: input.orderId, recoveryGrantId: input.orderId });
+}
+
+export async function sendSupportUpdateEmail(input: { db: D1Database; caseId: string; recipient: string; subject: string; body: string; url: string }) {
+  const subject = `${input.subject}: ticket support replied`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#181914"><p style="color:#f05a28;font-weight:700">BECORE TICKETS</p><h1 style="font-size:28px">Support wrote back.</h1><p>${escapeHtml(input.body)}</p><p style="margin:28px 0"><a href="${escapeHtml(input.url)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open the conversation</a></p></div>`;
+  return sendEmail({ db: input.db, kind: "support_update", recipient: input.recipient, subject, html, text: `${input.body}\n\n${input.url}`, idempotencyKey: `support/${input.caseId}/${await hashToken(input.body)}`, recoveryGrantId: input.caseId });
 }

@@ -11,6 +11,9 @@ type ConnectionState = {
   blockedAttendeeIds: string[];
   readOnly: boolean;
   readOnlyAt: string;
+  emergencyReadOnly: boolean;
+  slowModeSeconds: number;
+  lastMessageAt: number;
   rateWindowStartedAt: number;
   rateCount: number;
 };
@@ -37,6 +40,9 @@ type RoomPolicyInput = {
   endsAt: string;
   readOnlyAt: string;
   readOnly: boolean;
+  emergencyReadOnly?: boolean;
+  slowModeSeconds?: number;
+  archived?: boolean;
 };
 
 const REACTIONS = new Set(["🔥", "❤️", "😂", "👏", "👀"]);
@@ -112,6 +118,9 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         endsAt: requiredHeader(request, "x-bct-ends-at"),
         readOnlyAt: requiredHeader(request, "x-bct-read-only-at"),
         readOnly: request.headers.get("x-bct-read-only") === "1",
+        emergencyReadOnly: request.headers.get("x-bct-emergency-read-only") === "1",
+        slowModeSeconds: Number(request.headers.get("x-bct-slow-mode-seconds") ?? 0),
+        archived: request.headers.get("x-bct-archived") === "1",
       };
       this.configure(policy);
       await this.scheduleFlashExpiry(policy);
@@ -125,6 +134,9 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         blockedAttendeeIds: blocked,
         readOnly: policy.readOnly,
         readOnlyAt: policy.readOnlyAt,
+        emergencyReadOnly: Boolean(policy.emergencyReadOnly),
+        slowModeSeconds: policy.slowModeSeconds ?? 0,
+        lastMessageAt: 0,
         rateWindowStartedAt: Date.now(),
         rateCount: 0,
       };
@@ -172,6 +184,11 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         return;
       }
       const now = Date.now();
+      if (state.slowModeSeconds > 0 && now - state.lastMessageAt < state.slowModeSeconds * 1000) {
+        const wait = Math.ceil((state.slowModeSeconds * 1000 - (now - state.lastMessageAt)) / 1000);
+        socket.send(JSON.stringify({ type: "error", error: `Slow mode is on. Give it ${wait}s.` }));
+        return;
+      }
       if (now - state.rateWindowStartedAt >= 10_000) {
         state.rateWindowStartedAt = now;
         state.rateCount = 0;
@@ -201,6 +218,8 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         parentId,
         pinned: false,
       });
+      state.lastMessageAt = now;
+      socket.serializeAttachment(state);
       this.broadcast({ type: "message", message });
       this.ctx.waitUntil(notifyRoomMessage(this.env, {
         eventSlug: this.eventSlug(),
@@ -286,6 +305,33 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     this.ctx.storage.sql.exec("UPDATE messages SET deleted_at = ? WHERE id = ?", new Date().toISOString(), messageId);
     this.broadcast({ type: "message_removed", messageId });
     return true;
+  }
+
+  updatePolicy(policy: RoomPolicyInput): void {
+    this.configure(policy);
+    for (const socket of this.ctx.getWebSockets()) {
+      const state = socket.deserializeAttachment() as ConnectionState | null;
+      if (!state) continue;
+      state.readOnly = policy.readOnly;
+      state.readOnlyAt = policy.readOnlyAt;
+      state.emergencyReadOnly = Boolean(policy.emergencyReadOnly);
+      state.slowModeSeconds = policy.slowModeSeconds ?? 0;
+      socket.serializeAttachment(state);
+    }
+    this.broadcast({ type: "policy", room: policy });
+  }
+
+  clearPins(): number {
+    const result = this.ctx.storage.sql.exec("UPDATE messages SET pinned = 0 WHERE pinned = 1 AND deleted_at IS NULL");
+    this.broadcast({ type: "pins_cleared" });
+    return result.rowsWritten;
+  }
+
+  suspendAttendee(attendeeId: string): void {
+    for (const socket of this.ctx.getWebSockets()) {
+      const state = socket.deserializeAttachment() as ConnectionState | null;
+      if (state?.attendeeId === attendeeId) socket.close(4003, "Room access suspended");
+    }
   }
 
   async publishFlash(flash: FlashRecord, policy: RoomPolicyInput): Promise<void> {

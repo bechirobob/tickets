@@ -1,4 +1,5 @@
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
+import { notifyEventAttendees } from "../../../../lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -90,8 +91,8 @@ export async function PATCH(request: Request) {
     if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > 12) throw new Error("Every event needs between one and twelve ticket tiers.");
 
     const { env } = await import("cloudflare:workers");
-    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, starts_at AS startsAt, status FROM curated_event_records WHERE slug = ? LIMIT 1")
-      .bind(slug).first<{ id: string; submissionId: string; startsAt: string; status: string }>();
+    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, status FROM curated_event_records WHERE slug = ? LIMIT 1")
+      .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; status: string }>();
     if (!current) return Response.json({ error: "Event not found." }, { status: 404 });
     const existing = await env.DB.prepare("SELECT id, code FROM event_ticket_tiers WHERE event_slug = ?").bind(slug).all<{ id: string; code: string }>();
     const existingIds = new Set(existing.results.map((tier) => tier.id));
@@ -172,11 +173,8 @@ export async function PATCH(request: Request) {
       ...existing.results.filter((tier) => !activeIds.has(tier.id)).map((tier) => env.DB.prepare("UPDATE event_ticket_tiers SET status = 'hidden', updated_at = ? WHERE id = ? AND event_slug = ?").bind(now, tier.id, slug)),
       ...(["cancelled", "postponed"].includes(eventState) ? [
         env.DB.prepare("UPDATE tickets SET status = 'voided' WHERE event_slug = ? AND status = 'issued'").bind(slug),
-        env.DB.prepare(`UPDATE ticket_assignments SET status = 'revoked', revoked_at = ? WHERE ticket_id IN (SELECT id FROM tickets WHERE event_slug = ?)`)
-          .bind(now, slug),
       ] : [
         env.DB.prepare(`UPDATE tickets SET status = 'issued' WHERE event_slug = ? AND status = 'voided' AND order_id IN (SELECT id FROM orders WHERE status = 'paid')`).bind(slug),
-        env.DB.prepare(`UPDATE ticket_assignments SET status = 'active', revoked_at = NULL WHERE ticket_id IN (SELECT tickets.id FROM tickets JOIN orders ON orders.id = tickets.order_id WHERE tickets.event_slug = ? AND orders.status = 'paid')`).bind(slug),
       ]),
       env.DB.prepare(`
         INSERT INTO curation_audit_events (id, submission_id, action, from_status, to_status, note, actor, created_at)
@@ -184,6 +182,11 @@ export async function PATCH(request: Request) {
       `).bind(crypto.randomUUID(), current.submissionId, current.status, current.status, `Updated ${normalizedTiers.length} ticket tiers and event operations.`, session.actor, now),
     ];
     await env.DB.batch(statements);
+    if (current.eventState !== eventState || current.startsAt !== startsAt) {
+      const title = eventState === "cancelled" ? `${current.title} is cancelled` : eventState === "postponed" ? `${current.title} is postponed` : eventState === "rescheduled" ? `${current.title} has a new date` : `${current.title} was updated`;
+      const message = eventState === "rescheduled" ? "Open My Nights to accept the new date or request a refund review." : eventState === "cancelled" || eventState === "postponed" ? "Open My Nights for status, refund eligibility and support." : "Open My Nights for the latest details.";
+      await notifyEventAttendees(env, slug, { kind: "event_status", title, body: message, url: `/my-nights/${encodeURIComponent(slug)}?view=purchase`, sourceId: `event-status-${slug}-${now}`, tag: `event-${slug}` });
+    }
     await recordAudit(env.DB, { session, action: "events.inventory_updated", targetType: "event", targetId: slug, outcome: "success", detail: `${normalizedTiers.length} tiers`, requestId: requestMetadata(request).requestId });
     return Response.json({ saved: true, slug, updatedAt: now });
   } catch (error) {

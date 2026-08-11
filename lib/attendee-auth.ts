@@ -13,6 +13,26 @@ export type AttendeeRoomAccess = AttendeeIdentity & {
   ticketId: string;
 };
 
+export async function readAttendeeNightAccess(db: D1Database, cookieHeader: string | null, eventSlug: string): Promise<AttendeeRoomAccess | null> {
+  const token = readCookie(cookieHeader);
+  if (!token) return null;
+  const tokenHash = await hashToken(token);
+  const access = await db.prepare(`
+    SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
+      p.email_verified_at IS NOT NULL AS emailVerified, ticket.event_slug AS eventSlug, ticket.id AS ticketId
+    FROM attendee_sessions session JOIN attendee_profiles p ON p.id = session.attendee_id
+    JOIN ticket_assignments assignment ON assignment.attendee_id = p.id AND assignment.status = 'active'
+    JOIN tickets ticket ON ticket.id = assignment.ticket_id
+    JOIN orders orders ON orders.id = ticket.order_id
+    WHERE session.token_hash = ? AND session.revoked_at IS NULL AND session.expires_at > ?
+      AND p.status = 'active' AND ticket.event_slug = ?
+      AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded')
+      AND orders.status IN ('paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
+    LIMIT 1
+  `).bind(tokenHash, new Date().toISOString(), eventSlug).first<AttendeeRoomAccess>();
+  return access ? { ...access, emailVerified: Boolean(access.emailVerified) } : null;
+}
+
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
