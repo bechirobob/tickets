@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowUpRight, Ticket } from "lucide-react";
+import { ArrowDown, ArrowUpRight, LockKeyhole, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { getPublicEvents } from "./events";
 
@@ -24,6 +24,7 @@ export default async function Home() {
         <Link href="/" className="night-brand-link"><BrandMark /></Link>
         <nav aria-label="Main navigation">
           <Link href="#drop">The drop</Link>
+          <Link href="#the-room">The Room</Link>
           <Link href="#standard">Our standard</Link>
           <Link href="/organizer/submit">For organisers</Link>
         </nav>
@@ -53,11 +54,11 @@ export default async function Home() {
 
       <section className="night-ticker" aria-label="This week's edit">
         <span>THIS WEEK</span>
+        <b>A private Room with every ticket</b>
+        <i>•</i>
         <b>04 handpicked parties</b>
         <i>•</i>
         <b>00 awkward mixers</b>
-        <i>•</i>
-        <b>Tickets in under two minutes</b>
       </section>
 
       <section className="night-drop" id="drop">
@@ -69,6 +70,50 @@ export default async function Home() {
           <p>Accra gave us options. We kept the good ones.</p>
         </div>
         <EventExplorer events={curatedEvents} />
+      </section>
+
+      <section className="night-room-tease" id="the-room">
+        <div className="night-room-tease__copy">
+          <p className="night-kicker"><span /> BeCore exclusive</p>
+          <h2>The chat your<br />ticket gets<br />you into.</h2>
+          <p>Meet the crowd, sort the link-up and get updates straight from the organiser. Every event has its own private conversation, open only to verified ticket holders.</p>
+          <div className="night-room-tease__actions">
+            <Link href="#drop">Find your Room <ArrowUpRight size={17} /></Link>
+            <span><LockKeyhole size={14} /> No ticket. No lurking.</span>
+          </div>
+        </div>
+
+        <div className="night-room-peek" aria-label="A preview of The Room conversation">
+          <header>
+            <div><i /><span><b>The Room</b><small>After Dark: Osu · ticket holders only</small></span></div>
+            <span className="night-room-peek__preview"><ShieldCheck size={17} /> Preview</span>
+          </header>
+          <div className="night-room-peek__stream">
+            <p className="night-room-peek__day">Tonight · 10:00 PM</p>
+            <article className="night-room-message night-room-message--left">
+              <span>Where&apos;s everyone meeting first?</span>
+              <small>9:42 PM</small>
+              <i>🔥 4</i>
+            </article>
+            <article className="night-room-message night-room-message--right">
+              <span>Outside the venue at 10. I&apos;ll drop the spot here 👀</span>
+              <small>9:43 PM</small>
+            </article>
+            <aside className="night-room-update">
+              <MessageCircle size={16} />
+              <span><b>Organiser update</b>Doors open at 10. Your QR must be ready at the gate.</span>
+            </aside>
+            <article className="night-room-message night-room-message--left night-room-message--last">
+              <span>Okay, this just saved the group chat 😂</span>
+              <small>9:45 PM</small>
+              <i>❤️ 7</i>
+            </article>
+          </div>
+          <footer className="night-room-peek__lock">
+            <LockKeyhole size={16} />
+            <span><b>Conversation locked</b>Your verified ticket is the key.</span>
+          </footer>
+        </div>
       </section>
 
       <section className="night-standard" id="standard">
