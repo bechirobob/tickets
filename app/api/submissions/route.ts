@@ -5,6 +5,21 @@ export const dynamic = "force-dynamic";
 
 const allowedVibes = new Set(["Late night", "Day party", "Alté", "Amapiano"]);
 const allowedPosterTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const maximumStoredPosterBytes = 1_500_000;
+
+function hasValidPosterSignature(bytes: Uint8Array, type: string) {
+  if (type === "image/jpeg") return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (type === "image/png") {
+    const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return bytes.length >= png.length && png.every((value, index) => bytes[index] === value);
+  }
+  if (type === "image/webp") {
+    return bytes.length >= 12
+      && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF"
+      && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  }
+  return false;
+}
 
 function required(form: FormData, key: string, max = 500) {
   const value = String(form.get(key) ?? "").trim();
@@ -14,6 +29,11 @@ function required(form: FormData, key: string, max = 500) {
 
 export async function POST(request: Request) {
   try {
+    const declaredLength = Number(request.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > 9 * 1024 * 1024) {
+      return Response.json({ error: "The complete submission must stay under 9 MB." }, { status: 413 });
+    }
+
     const form = await request.formData();
     if (String(form.get("website") ?? "").trim()) {
       return Response.json({ accepted: true }, { status: 202 });
@@ -45,8 +65,13 @@ export async function POST(request: Request) {
     if (!(poster instanceof File) || poster.size === 0) {
       return Response.json({ error: "Add a flyer or key visual before submitting." }, { status: 400 });
     }
-    if (poster.size > 8 * 1024 * 1024 || !allowedPosterTypes.has(poster.type)) {
-      return Response.json({ error: "Flyer must be a JPG, PNG or WebP under 8 MB." }, { status: 400 });
+    if (poster.size > maximumStoredPosterBytes || !allowedPosterTypes.has(poster.type)) {
+      return Response.json({ error: "The prepared flyer must be a JPG, PNG or WebP under 1.5 MB." }, { status: 400 });
+    }
+
+    const posterBytes = new Uint8Array(await poster.arrayBuffer());
+    if (!hasValidPosterSignature(posterBytes, poster.type)) {
+      return Response.json({ error: "The flyer file does not match its image format." }, { status: 400 });
     }
 
     const posterObjectKey = `submission-posters/${id}`;
@@ -72,6 +97,7 @@ export async function POST(request: Request) {
       socialUrl: String(form.get("socialUrl") ?? "").trim() || null,
       posterObjectKey,
       posterContentType,
+      posterData: Buffer.from(posterBytes),
       status: "submitted" as const,
       reviewNote: null,
       curationNote: null,
@@ -82,27 +108,10 @@ export async function POST(request: Request) {
       updatedAt: now,
     };
 
-    const { env } = await import("cloudflare:workers");
-    if (!env.BUCKET) {
-      return Response.json({ error: "Flyer upload is temporarily unavailable. Please try again shortly." }, { status: 503 });
-    }
-
-    try {
-      await env.BUCKET.put(posterObjectKey, poster.stream(), {
-        httpMetadata: { contentType: poster.type, cacheControl: "public, max-age=86400" },
-      });
-    } catch (error) {
-      console.error(JSON.stringify({ message: "submission flyer upload failed", error: error instanceof Error ? error.message : String(error) }));
-      return Response.json({ error: "The flyer could not be uploaded. Please try again shortly." }, { status: 503 });
-    }
-
     try {
       const db = await getDb();
       await db.insert(partySubmissions).values(record);
     } catch (error) {
-      await env.BUCKET.delete(posterObjectKey).catch((cleanupError) => {
-        console.error(JSON.stringify({ message: "orphaned submission flyer cleanup failed", error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) }));
-      });
       console.error(JSON.stringify({ message: "party submission save failed", error: error instanceof Error ? error.message : String(error) }));
       return Response.json({ error: "The submission could not be saved. Please try again." }, { status: 500 });
     }

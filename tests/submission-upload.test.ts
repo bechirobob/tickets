@@ -20,12 +20,16 @@ function validSubmission(includeFlyer = true) {
   form.set("capacity", "500");
   form.set("priceFrom", "120");
   form.set("lineup", "DJ Test and friends");
-  if (includeFlyer) form.set("poster", new File([new Uint8Array([82, 73, 70, 70])], "flyer.webp", { type: "image/webp" }));
+  if (includeFlyer) {
+    form.set("poster", new File([
+      new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 69, 66, 80]),
+    ], "flyer.webp", { type: "image/webp" }));
+  }
   return form;
 }
 
 describe("organiser flyer upload", () => {
-  it("stores the flyer in R2 and serves it through the protected media route", async () => {
+  it("stores the flyer atomically with its D1 submission and serves it through the media route", async () => {
     const response = await submitParty(new Request("https://tickets.becoreops.com/api/submissions", {
       method: "POST",
       body: validSubmission(),
@@ -34,9 +38,11 @@ describe("organiser flyer upload", () => {
     const result = await response.json() as { id: string; reference: string };
     expect(result.reference).toMatch(/^BC-[A-F0-9]{8}$/u);
 
-    const stored = await env.BUCKET.head(`submission-posters/${result.id}`);
-    expect(stored).not.toBeNull();
-    expect(stored?.httpMetadata?.contentType).toBe("image/webp");
+    const stored = await env.DB.prepare(
+      "SELECT poster_content_type, poster_data FROM party_submissions WHERE id = ?",
+    ).bind(result.id).first<{ poster_content_type: string; poster_data: number[] }>();
+    expect(stored?.poster_content_type).toBe("image/webp");
+    expect(stored?.poster_data).toEqual([82, 73, 70, 70, 4, 0, 0, 0, 87, 69, 66, 80]);
 
     const media = await readSubmissionMedia(
       new Request(`https://tickets.becoreops.com/api/media/${result.id}`),
@@ -44,7 +50,8 @@ describe("organiser flyer upload", () => {
     );
     expect(media.status).toBe(200);
     expect(media.headers.get("content-type")).toBe("image/webp");
-    expect(new Uint8Array(await media.arrayBuffer())).toEqual(new Uint8Array([82, 73, 70, 70]));
+    expect(media.headers.get("content-length")).toBe("12");
+    expect(new Uint8Array(await media.arrayBuffer())).toEqual(new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 69, 66, 80]));
   });
 
   it("rejects an event submission that has no flyer", async () => {
@@ -54,5 +61,29 @@ describe("organiser flyer upload", () => {
     }));
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Add a flyer or key visual before submitting." });
+  });
+
+  it("rejects a file whose bytes do not match its claimed image format", async () => {
+    const form = validSubmission(false);
+    form.set("poster", new File(["not an image"], "fake.webp", { type: "image/webp" }));
+    const response = await submitParty(new Request("https://tickets.becoreops.com/api/submissions", {
+      method: "POST",
+      body: form,
+    }));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "The flyer file does not match its image format." });
+  });
+
+  it("keeps every stored flyer safely below the D1 row limit", async () => {
+    const bytes = new Uint8Array(1_500_001);
+    bytes.set([82, 73, 70, 70, 4, 0, 0, 0, 87, 69, 66, 80]);
+    const form = validSubmission(false);
+    form.set("poster", new File([bytes], "too-large.webp", { type: "image/webp" }));
+    const response = await submitParty(new Request("https://tickets.becoreops.com/api/submissions", {
+      method: "POST",
+      body: form,
+    }));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "The prepared flyer must be a JPG, PNG or WebP under 1.5 MB." });
   });
 });

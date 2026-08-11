@@ -3,24 +3,94 @@
 import { CheckCircle2, Loader2, Send, Upload } from "lucide-react";
 import { FormEvent, useState } from "react";
 
+const maximumSourceBytes = 8 * 1024 * 1024;
+const maximumPreparedBytes = 1_500_000;
+const supportedPosterTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function loadPoster(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("We could not read that flyer. Choose a JPG, PNG or WebP image."));
+    };
+    image.src = url;
+  });
+}
+
+function encodeCanvas(canvas: HTMLCanvasElement, type: "image/webp" | "image/jpeg", quality: number) {
+  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function canvasBlob(canvas: HTMLCanvasElement, quality: number) {
+  const webp = await encodeCanvas(canvas, "image/webp", quality);
+  if (webp?.type === "image/webp") return webp;
+  return encodeCanvas(canvas, "image/jpeg", quality);
+}
+
+async function preparePoster(file: File) {
+  if (file.size > maximumSourceBytes) throw new Error("Choose a flyer under 8 MB.");
+  if (!supportedPosterTypes.has(file.type)) throw new Error("Choose a JPG, PNG or WebP flyer.");
+  if (file.size <= maximumPreparedBytes) return file;
+
+  const image = await loadPoster(file);
+  let maximumEdge = 1800;
+  let quality = 0.84;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const scale = Math.min(1, maximumEdge / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser could not prepare the flyer. Try another image.");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const prepared = await canvasBlob(canvas, quality);
+    if (prepared && prepared.size <= maximumPreparedBytes) {
+      const name = file.name.replace(/\.[^.]+$/u, "") || "event-flyer";
+      const extension = prepared.type === "image/webp" ? "webp" : "jpg";
+      return new File([prepared], `${name}.${extension}`, { type: prepared.type, lastModified: Date.now() });
+    }
+    maximumEdge = Math.round(maximumEdge * 0.82);
+    quality = Math.max(0.6, quality - 0.06);
+  }
+
+  throw new Error("That flyer stays too large after preparation. Choose a simpler or smaller image.");
+}
+
 export default function PartySubmissionForm() {
-  const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [state, setState] = useState<"idle" | "preparing" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setState("sending");
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setState("preparing");
     setMessage("");
-    const response = await fetch("/api/submissions", { method: "POST", body: new FormData(event.currentTarget) });
-    const result = await response.json().catch(() => ({ error: "The upload did not finish. Please try again." })) as { error?: string; reference?: string };
-    if (!response.ok) {
+    try {
+      const poster = form.get("poster");
+      if (!(poster instanceof File) || poster.size === 0) throw new Error("Add a flyer or key visual before submitting.");
+      form.set("poster", await preparePoster(poster));
+      setState("sending");
+
+      const response = await fetch("/api/submissions", { method: "POST", body: form });
+      const result = await response.json().catch(() => ({ error: "The upload did not finish. Please try again." })) as { error?: string; reference?: string };
+      if (!response.ok) throw new Error(result.error ?? "The submission refused to behave. Try again.");
+
+      setState("done");
+      setMessage(result.reference ?? "Submitted");
+      formElement.reset();
+    } catch (error) {
       setState("error");
-      setMessage(result.error ?? "The submission refused to behave. Try again.");
-      return;
+      setMessage(error instanceof Error ? error.message : "The submission refused to behave. Try again.");
     }
-    setState("done");
-    setMessage(result.reference ?? "Submitted");
-    event.currentTarget.reset();
   }
 
   if (state === "done") {
@@ -68,13 +138,13 @@ export default function PartySubmissionForm() {
 
       <section>
         <div className="submission-step"><b>03</b><span>The proof</span></div>
-        <label className="poster-upload"><Upload size={20} /><span><b>Upload the poster or key visual</b><small>JPG, PNG or WebP · 8 MB maximum</small></span><input name="poster" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
+        <label className="poster-upload"><Upload size={20} /><span><b>Upload the poster or key visual</b><small>JPG, PNG or WebP · up to 8 MB · prepared automatically</small></span><input name="poster" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
         <p className="submission-consent">Submitting does not guarantee placement. If approved, BeCore may edit customer-facing copy for clarity and tone; the organiser remains responsible for accurate event, venue and refund information.</p>
       </section>
 
       <div className="submission-submit">
         <p>Good concept? Clear venue? Real line-up? Lovely. Send it over.</p>
-        <button disabled={state === "sending"}>{state === "sending" ? <Loader2 className="spin" size={17} /> : <Send size={17} />} {state === "sending" ? "Sending to the queue…" : "Submit for review"}</button>
+        <button disabled={state === "preparing" || state === "sending"}>{state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : <Send size={17} />} {state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : "Submit for review"}</button>
       </div>
       {state === "error" && <p className="submission-error" role="alert">{message}</p>}
     </form>
