@@ -31,6 +31,7 @@ export default function MyNightsClient() {
   const [now] = useState(() => Date.now());
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
+  const [unread, setUnread] = useState(0);
   const [recovered] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recovered") === "1");
 
   useEffect(() => {
@@ -43,6 +44,10 @@ export default function MyNightsClient() {
       })
       .then((data) => { setPayload(data); setLoading(false); })
       .catch(() => { setLocked(true); setLoading(false); });
+    void fetch("/api/customer/notifications", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ unread?: number }> : null)
+      .then((result) => setUnread(result?.unread ?? 0))
+      .catch(() => setUnread(0));
   }, []);
 
   async function requestRecovery(event: React.FormEvent<HTMLFormElement>) {
@@ -62,7 +67,7 @@ export default function MyNightsClient() {
   }, [now, payload, view]);
 
   return <main className="my-nights-page">
-    <header className="directory-header"><Link href="/"><ArrowLeft size={16} /> Home</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><span className="my-nights-header-actions"><Link href="/notifications"><Bell size={15} /> The Buzz</Link><Link href="/account/privacy"><ShieldCheck size={15} /> Privacy</Link></span></header>
+    <header className="directory-header"><Link href="/"><ArrowLeft size={16} /> Home</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><span className="my-nights-header-actions">{payload ? <Link className="notification-bell" href="/notifications" aria-label={unread ? `${unread} unread notifications` : "Notifications"}><Bell size={16} />{unread ? <b>{unread > 9 ? "9+" : unread}</b> : null}</Link> : null}<Link href="/account/privacy"><ShieldCheck size={15} /> Privacy</Link></span></header>
     <section className="my-nights-shell">
       <header><div><p className="eyebrow">Tickets, perks and the Room</p><h1>{loading ? "Gathering your evidence…" : payload ? `${payload.attendee.displayName}’s nights.` : "Been here before? Good."}</h1><p className="my-nights-intro">Everything your ticket unlocked, exactly where you left it. No password archaeology.</p></div>{payload ? <span><LockKeyhole size={13} /> The useful kind of exclusive</span> : null}</header>
       {recovered && payload ? <div className="my-nights-recovered"><CheckCircle2 size={18} /><span><b>Your nights are back.</b> Fresh passes, familiar plans. We love a clean recovery.</span></div> : null}
