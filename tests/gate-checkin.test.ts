@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { POST as preparePasses } from "../app/api/customer/tickets/route";
-import { POST as checkIn } from "../app/api/admin/check-in/route";
+import { DELETE as undoCheckIn, POST as checkIn } from "../app/api/admin/check-in/route";
 import { adminCookieHeader, createStaffSession } from "../lib/admin-session";
 import { attendeeCookieHeader, hashToken } from "../lib/attendee-auth";
 
@@ -104,5 +104,30 @@ describe("secure gate passes", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ result: "wrong_event" });
     expect(await env.DB.prepare("SELECT status FROM tickets WHERE id = ?").bind(ticketId).first()).toMatchObject({ status: "issued" });
+  });
+
+  it("replays an offline scan idempotently and limits undo to an audited supervisor", async () => {
+    const { attendeeToken, ticketId } = await seedIssuedTicket("offline");
+    const wallet = await (await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
+      method: "POST", headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0] },
+    }))).json() as { orders: Array<{ tickets: Array<{ gateCode: string }> }> };
+    const cookie = await ownerCookie("offline");
+    const clientScanId = crypto.randomUUID();
+    const scan = () => checkIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
+      method: "POST", headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
+      body: JSON.stringify({ code: wallet.orders[0].tickets[0].gateCode, eventSlug: "after-dark-osu", gate: "Offline lane", deviceId: "gate-device-a", clientScanId }),
+    }));
+    expect((await scan()).status).toBe(200);
+    const replay = await scan();
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toMatchObject({ result: "valid", replayed: true });
+
+    const undone = await undoCheckIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
+      method: "DELETE", headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
+      body: JSON.stringify({ ticketId, eventSlug: "after-dark-osu", gate: "Supervisor", reason: "Test correction" }),
+    }));
+    expect(undone.status).toBe(200);
+    await expect(env.DB.prepare("SELECT status FROM tickets WHERE id = ?").bind(ticketId).first()).resolves.toMatchObject({ status: "issued" });
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id = ?").bind(ticketId).first()).resolves.toMatchObject({ count: 2 });
   });
 });

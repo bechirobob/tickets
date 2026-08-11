@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Camera, Flag, MessageCircle, Reply, Send, ShieldCheck, UserRoundX, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import FlashesPanel, { type RoomFlash } from "./flashes-panel";
+import RoomNotifications from "./room-notifications";
 
 type Reaction = { emoji: string; count: number; mine: boolean };
 type Message = {
@@ -235,10 +236,11 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
   return (
     <main className="room-page">
       <header className="room-header">
-        <Link href="/tickets"><ArrowLeft size={17} /> Tickets</Link>
+        <Link href="/my-nights"><ArrowLeft size={17} /> My Nights</Link>
         <div><small>The Room</small><strong>{policy?.eventTitle ?? fallbackTitle}</strong><span>{fallbackDate}</span></div>
         <div className="room-header__activity"><span><Users size={15} /> {online} online</span><button type="button" onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera size={14} /> Flashes · {flashCount}</button></div>
       </header>
+      <RoomNotifications slug={slug} />
       <section className="room-trust"><BadgeCheck size={16} /><b>Ticket holders only</b><span>No ticket, no lurking. Very civilised.</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Finding the signal"}</i></section>
       {pinned && <aside className="room-pinned"><ShieldCheck size={17} /><div><small>The Host has spoken</small><p>{pinned.content}</p></div></aside>}
       {notice && <button className="room-notice" onClick={() => setNotice("")}>{notice}<span>Dismiss</span></button>}

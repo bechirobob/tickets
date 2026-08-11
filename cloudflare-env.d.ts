@@ -14,6 +14,9 @@ declare namespace Cloudflare {
     PAYSTACK_SECRET_KEY: string;
     RESEND_API_KEY?: string;
     EMAIL_FROM?: string;
+    VAPID_PUBLIC_KEY?: string;
+    VAPID_PRIVATE_KEY?: string;
+    VAPID_SUBJECT?: string;
     THE_ROOM: DurableObjectNamespace<import("./worker/index").TheRoom>;
   }
 }

@@ -15,6 +15,9 @@ const workerUrl = new URL("../worker/index.ts", import.meta.url);
 const customerDockUrl = new URL("../app/customer-dock.tsx", import.meta.url);
 const myNightsUrl = new URL("../app/my-nights/my-nights-client.tsx", import.meta.url);
 const nightHubUrl = new URL("../app/my-nights/[slug]/night-hub.tsx", import.meta.url);
+const scannerUrl = new URL("../app/scan/scanner.tsx", import.meta.url);
+const serviceWorkerUrl = new URL("../public/sw.js", import.meta.url);
+const roomNotificationsUrl = new URL("../app/room/[slug]/room-notifications.tsx", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -148,6 +151,28 @@ test("returning buyers recover and manage the whole purchase through My Nights",
   assert.match(hub, /Payment reference, totals and support/u);
   assert.match(recoveryClaim, /\/my-nights\?recovered=1/u);
   assert.match(paymentReturn, /\/my-nights\/\$\{encodeURIComponent/u);
+});
+
+test("event-day journeys remain available beyond the open browser tab", async () => {
+  const [dock, hub, roomNotifications, serviceWorker, scanner] = await Promise.all([
+    readFile(customerDockUrl, "utf8"),
+    readFile(nightHubUrl, "utf8"),
+    readFile(roomNotificationsUrl, "utf8"),
+    readFile(serviceWorkerUrl, "utf8"),
+    readFile(scannerUrl, "utf8"),
+  ]);
+  assert.match(dock, /label: unread \? `Buzz/u);
+  assert.match(hub, /Open offline door pass/u);
+  assert.match(hub, /TicketTransfer/u);
+  assert.match(roomNotifications, /Notification\.requestPermission\(\)/u);
+  assert.match(roomNotifications, /Mute for tonight/u);
+  assert.match(serviceWorker, /addEventListener\("push"/u);
+  assert.match(serviceWorker, /showNotification/u);
+  assert.match(serviceWorker, /notificationclick/u);
+  assert.match(scanner, /Saved offline/u);
+  assert.match(scanner, /clientScanId/u);
+  assert.match(scanner, /Find a guest or purchase/u);
+  assert.match(scanner, /Supervisor undo/u);
 });
 
 test("checkout conversion actions look and behave like primary controls", async () => {

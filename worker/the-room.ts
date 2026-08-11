@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { purgeExpiredFlashes, type FlashRecord } from "../lib/flashes";
+import { notifyRoomMessage } from "../lib/notifications";
 
 type RoomRole = "attendee" | "organizer" | "moderator";
 
@@ -201,6 +202,13 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         pinned: false,
       });
       this.broadcast({ type: "message", message });
+      this.ctx.waitUntil(notifyRoomMessage(this.env, {
+        eventSlug: this.eventSlug(),
+        messageId: message.id,
+        senderAttendeeId: state.attendeeId,
+        senderName: state.displayName,
+        content: message.content,
+      }));
       return;
     }
 
@@ -261,6 +269,14 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       pinned,
     });
     this.broadcast({ type: "message", message });
+    this.ctx.waitUntil(notifyRoomMessage(this.env, {
+      eventSlug: policy.eventSlug,
+      messageId: message.id,
+      senderAttendeeId: `admin:${actor}`,
+      senderName: "The Host",
+      content: message.content,
+      announcement: true,
+    }));
     return message;
   }
 
@@ -331,6 +347,12 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       "SELECT 1 AS found FROM messages WHERE id = ? AND deleted_at IS NULL LIMIT 1",
       messageId,
     ).toArray().length > 0;
+  }
+
+  private eventSlug(): string {
+    return this.ctx.storage.sql.exec<{ eventSlug: string }>(
+      "SELECT event_slug AS eventSlug FROM room_config WHERE id = 1 LIMIT 1",
+    ).toArray()[0]?.eventSlug ?? "";
   }
 
   private insertMessage(input: Omit<RoomMessage, "id" | "sequence" | "createdAt" | "deletedAt" | "reactions">): RoomMessage {

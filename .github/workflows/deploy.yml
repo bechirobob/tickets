@@ -93,6 +93,43 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Ensure persistent Web Push identity
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from "node:child_process";
+          import { generateVAPIDKeys } from "web-push-neo";
+
+          const listed = spawnSync("npx", ["wrangler", "secret", "list", "--format", "json"], {
+            encoding: "utf8",
+            env: process.env,
+          });
+          if (listed.status !== 0) {
+            console.error(listed.stderr || "Could not inspect Worker secrets.");
+            process.exit(1);
+          }
+          const names = new Set(JSON.parse(listed.stdout).map((item) => item.name));
+          if (names.has("VAPID_PUBLIC_KEY") && names.has("VAPID_PRIVATE_KEY")) {
+            console.log("Web Push identity already exists.");
+            process.exit(0);
+          }
+          const keys = await generateVAPIDKeys();
+          for (const [name, value] of [
+            ["VAPID_PUBLIC_KEY", keys.publicKey],
+            ["VAPID_PRIVATE_KEY", keys.privateKey],
+          ]) {
+            const written = spawnSync("npx", ["wrangler", "secret", "put", name], {
+              input: `${value}\n`,
+              encoding: "utf8",
+              env: process.env,
+            });
+            if (written.status !== 0) {
+              console.error(written.stderr || `Could not configure ${name}.`);
+              process.exit(1);
+            }
+          }
+          console.log("Web Push identity provisioned without exposing key material.");
+          NODE
+
       - name: Verify generated Worker bindings
         run: npm run cf:types
 
