@@ -71,6 +71,13 @@
       "when": 1786426672868,
       "tag": "0009_eminent_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1786442809810,
+      "tag": "0010_serious_caretaker",
+      "breakpoints": true
     }
   ]
 }

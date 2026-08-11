@@ -20,10 +20,22 @@ export async function GET(request: Request) {
     ...report,
     message: await env.THE_ROOM.getByName(report.eventSlug).getMessage(report.messageId),
   })));
+  const flashReports = await env.DB.prepare(`
+    SELECT report.id, report.flash_id AS flashId, report.event_slug AS eventSlug,
+           report.reason, report.details, report.status, report.created_at AS createdAt,
+           flash.status AS flashStatus, flash.attendee_id AS attendeeId,
+           profile.display_name AS displayName
+    FROM room_flash_reports report
+    JOIN room_flashes flash ON flash.id = report.flash_id
+    JOIN attendee_profiles profile ON profile.id = flash.attendee_id
+    ORDER BY CASE report.status WHEN 'open' THEN 0 ELSE 1 END, report.created_at DESC
+    LIMIT 100
+  `).all<{ id: string; flashId: string; eventSlug: string; reason: string; details: string | null; status: string; createdAt: string; flashStatus: string; attendeeId: string; displayName: string }>();
+  const scopedFlashReports = session.role === "owner" ? flashReports.results : (await Promise.all(flashReports.results.map(async (report) => await hasEventAssignment(env.DB, session, report.eventSlug) ? report : null))).filter((report): report is typeof flashReports.results[number] => Boolean(report));
   const eventRows = session.role === "owner"
     ? await env.DB.prepare("SELECT slug, title FROM curated_event_records ORDER BY starts_at DESC").all<{ slug: string; title: string }>()
     : await env.DB.prepare("SELECT event.slug, event.title FROM curated_event_records event JOIN staff_event_assignments assignment ON assignment.event_slug = event.slug WHERE assignment.account_id = ? ORDER BY event.starts_at DESC").bind(session.accountId).all<{ slug: string; title: string }>();
-  return Response.json({ reports: enriched, events: eventRows.results }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ reports: enriched, flashReports: scopedFlashReports, events: eventRows.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {

@@ -18,7 +18,9 @@ generatedConfig.vars = sourceConfig.vars;
 generatedConfig.triggers = sourceConfig.triggers;
 generatedConfig.ratelimits = sourceConfig.ratelimits;
 generatedConfig.observability = sourceConfig.observability;
-delete generatedConfig.r2_buckets;
+generatedConfig.images = sourceConfig.images;
+generatedConfig.ai = sourceConfig.ai;
+generatedConfig.r2_buckets = sourceConfig.r2_buckets;
 generatedConfig.durable_objects = sourceConfig.durable_objects;
 generatedConfig.migrations = sourceConfig.migrations;
 

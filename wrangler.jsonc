@@ -17,6 +17,18 @@
   "triggers": {
     "crons": ["*/5 * * * *", "15 3 * * *"]
   },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "r2_buckets": [
+    {
+      "binding": "FLASHES_BUCKET",
+      "bucket_name": "becore-tickets-flashes"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

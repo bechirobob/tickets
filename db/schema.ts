@@ -139,12 +139,57 @@ export const roomModerationActions = sqliteTable("room_moderation_actions", {
   id: text("id").primaryKey(),
   eventSlug: text("event_slug").notNull(),
   actor: text("actor").notNull(),
-  action: text("action", { enum: ["announcement", "pin", "unpin", "remove_message", "suspend_attendee", "restore_attendee"] }).notNull(),
+  action: text("action", { enum: ["announcement", "pin", "unpin", "remove_message", "remove_flash", "suspend_attendee", "restore_attendee"] }).notNull(),
   messageId: text("message_id"),
   targetAttendeeId: text("target_attendee_id"),
   note: text("note"),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("room_moderation_event_idx").on(table.eventSlug, table.createdAt)]);
+
+export const roomFlashes = sqliteTable("room_flashes", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  attendeeId: text("attendee_id").notNull(),
+  objectKey: text("object_key").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  status: text("status", { enum: ["active", "hidden", "deleted"] }).notNull().default("active"),
+  moderationResult: text("moderation_result", { enum: ["allowed", "reported", "moderator_removed", "owner_removed", "expired"] }).notNull().default("allowed"),
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  deletedAt: text("deleted_at"),
+}, (table) => [
+  uniqueIndex("room_flashes_object_unique").on(table.objectKey),
+  index("room_flashes_event_status_idx").on(table.eventSlug, table.status, table.createdAt),
+  index("room_flashes_expiry_idx").on(table.status, table.expiresAt),
+  index("room_flashes_attendee_idx").on(table.attendeeId, table.eventSlug, table.status),
+]);
+
+export const roomFlashReports = sqliteTable("room_flash_reports", {
+  id: text("id").primaryKey(),
+  flashId: text("flash_id").notNull(),
+  eventSlug: text("event_slug").notNull(),
+  reporterAttendeeId: text("reporter_attendee_id").notNull(),
+  reason: text("reason", { enum: ["nonconsensual", "explicit", "unsafe", "spam", "other"] }).notNull(),
+  details: text("details"),
+  status: text("status", { enum: ["open", "actioned", "dismissed"] }).notNull().default("open"),
+  createdAt: text("created_at").notNull(),
+  resolvedAt: text("resolved_at"),
+  resolvedBy: text("resolved_by"),
+}, (table) => [
+  uniqueIndex("room_flash_reports_reporter_unique").on(table.flashId, table.reporterAttendeeId),
+  index("room_flash_reports_event_status_idx").on(table.eventSlug, table.status, table.createdAt),
+]);
+
+export const roomFlashModerationEvents = sqliteTable("room_flash_moderation_events", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  attendeeId: text("attendee_id").notNull(),
+  outcome: text("outcome", { enum: ["allowed", "blocked", "unavailable"] }).notNull(),
+  detail: text("detail"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("room_flash_moderation_event_idx").on(table.eventSlug, table.createdAt)]);
 
 export const partySubmissions = sqliteTable("party_submissions", {
   id: text("id").primaryKey(),
