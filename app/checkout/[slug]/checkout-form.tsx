@@ -58,9 +58,10 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
         body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName }),
         signal: controller.signal,
       });
-      const data = await response.json() as { nextUrl?: string; error?: string };
-      if (!response.ok || !data.nextUrl) throw new Error(data.error || "Payment refused to leave the house. Try again.");
-      window.location.href = data.nextUrl;
+      const data = await response.json() as { authorizationUrl?: string; nextUrl?: string; error?: string };
+      const paymentUrl = data.authorizationUrl ?? data.nextUrl;
+      if (!response.ok || !paymentUrl) throw new Error(data.error || "Payment refused to leave the house. Try again.");
+      window.location.href = paymentUrl;
     } catch (error) {
       setMessage(error instanceof DOMException && error.name === "AbortError"
         ? "Paystack took too long to answer. Nothing was charged—give it another go."
