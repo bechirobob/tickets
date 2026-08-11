@@ -12,6 +12,7 @@ function validSubmission(includeFlyer = true) {
   form.set("title", `Runtime Party ${crypto.randomUUID().slice(0, 6)}`);
   form.set("concept", "A deliberately detailed late-night event concept with a confirmed venue, line-up and a clear reason for guests to attend.");
   form.set("venueName", "Test Venue");
+  form.set("venueMapUrl", "https://maps.google.com/?q=Test+Venue+Osu");
   form.set("area", "Osu");
   form.set("startsAt", "2027-02-14T21:00");
   form.set("endsAt", "2027-02-15T03:00");
@@ -32,6 +33,7 @@ describe("organiser flyer upload", () => {
   it("stores the flyer atomically with its D1 submission and serves it through the media route", async () => {
     const response = await submitParty(new Request("https://tickets.becoreops.com/api/submissions", {
       method: "POST",
+      headers: { origin: "https://tickets.becoreops.com" },
       body: validSubmission(),
     }));
     expect(response.status).toBe(201);
@@ -57,6 +59,7 @@ describe("organiser flyer upload", () => {
   it("rejects an event submission that has no flyer", async () => {
     const response = await submitParty(new Request("https://tickets.becoreops.com/api/submissions", {
       method: "POST",
+      headers: { origin: "https://tickets.becoreops.com" },
       body: validSubmission(false),
     }));
     expect(response.status).toBe(400);
@@ -68,6 +71,7 @@ describe("organiser flyer upload", () => {
     form.set("poster", new File(["not an image"], "fake.webp", { type: "image/webp" }));
     const response = await submitParty(new Request("https://tickets.becoreops.com/api/submissions", {
       method: "POST",
+      headers: { origin: "https://tickets.becoreops.com" },
       body: form,
     }));
     expect(response.status).toBe(400);
@@ -81,6 +85,7 @@ describe("organiser flyer upload", () => {
     form.set("poster", new File([bytes], "too-large.webp", { type: "image/webp" }));
     const response = await submitParty(new Request("https://tickets.becoreops.com/api/submissions", {
       method: "POST",
+      headers: { origin: "https://tickets.becoreops.com" },
       body: form,
     }));
     expect(response.status).toBe(400);

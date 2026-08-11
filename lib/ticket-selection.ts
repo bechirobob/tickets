@@ -19,7 +19,7 @@ export function resolveTicketSelection(
   ) return null;
 
   const ticketCount = unitQuantity * tier.admissionsPerUnit;
-  if (ticketCount > MAX_ADMISSIONS_PER_ORDER) return null;
+  if (ticketCount > MAX_ADMISSIONS_PER_ORDER || ticketCount > tier.remainingAdmissions) return null;
 
   return {
     tier,

@@ -5,6 +5,7 @@ import { ArrowLeft, Check, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } f
 import { useEffect, useMemo, useState } from "react";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
+import Turnstile from "../../turnstile";
 
 export default function CheckoutForm({ slug, event }: { slug: string; event: CuratedEvent }) {
   const [quantity, setQuantity] = useState(1);
@@ -16,11 +17,14 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
   const [phone, setPhone] = useState("");
   const [feePercent, setFeePercent] = useState(7.5);
   const [isPaying, setIsPaying] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [challengeKey, setChallengeKey] = useState(0);
   const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
   const ticketTotalMinor = quantity * selectedTier.priceMinor;
   const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
   const totalMinor = ticketTotalMinor + feeMinor;
   const admissionCount = quantity * selectedTier.admissionsPerUnit;
+  const maxPurchasableUnits = Math.max(1, Math.min(selectedTier.maxUnitsPerOrder, Math.floor(selectedTier.remainingAdmissions / selectedTier.admissionsPerUnit)));
 
   useEffect(() => {
     fetch("/api/config/booking-fee")
@@ -35,13 +39,18 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
 
   async function continueToPay() {
     if (isPaying) return;
+    if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim()) || phone.trim().length < 7) {
+      setMessage("Add your name, a valid email address and a reachable phone number first.");
+      return;
+    }
+    if (!turnstileToken) { setMessage("Complete the browser security check first."); return; }
     setIsPaying(true);
     setMessage("Preparing secure payment…");
     try {
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName }),
+        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, turnstileToken }),
       });
       const data = await response.json() as { authorizationUrl?: string; error?: string };
       if (!response.ok || !data.authorizationUrl) throw new Error(data.error || "Payment could not be started");
@@ -49,6 +58,8 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Payment could not be started");
       setIsPaying(false);
+      setTurnstileToken("");
+      setChallengeKey((value) => value + 1);
     }
   }
 
@@ -73,7 +84,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
           <div className="ticket-tier-list" role="radiogroup" aria-label="Choose ticket tier">
             {event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => {
               const selected = tier.id === selectedTier.id;
-              const soldOut = tier.status === "sold_out";
+              const soldOut = tier.status !== "available";
               return (
                 <div className={`checkout-tier${selected ? " selected" : ""}${soldOut ? " sold-out" : ""}`} key={tier.id}>
                   <button
@@ -86,15 +97,16 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
                   >
                     <i aria-hidden="true" />
                     <span><strong>{tier.name}</strong><small>{tier.description}{tier.admissionsPerUnit > 1 ? ` · Admits ${tier.admissionsPerUnit}` : ""}</small></span>
-                    <b>{soldOut ? "Sold out" : formatGhanaCedis(tier.priceMinor)}</b>
+                    <b>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</b>
                   </button>
                   {selected && !soldOut && (
                     <div className="quantity-control" aria-label={`${tier.name} quantity`}>
                       <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label={`Remove ${tier.name}`}><Minus size={15} /></button>
                       <b>{quantity}</b>
-                      <button type="button" onClick={() => setQuantity((value) => Math.min(tier.maxUnitsPerOrder, value + 1))} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
+                      <button type="button" onClick={() => setQuantity((value) => Math.min(maxPurchasableUnits, value + 1))} disabled={quantity >= maxPurchasableUnits} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
                     </div>
                   )}
+                  {selected && !soldOut ? <small className="tier-availability">{tier.remainingAdmissions} admissions currently available</small> : null}
                 </div>
               );
             })}
@@ -134,6 +146,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
           <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying}>{isPaying ? "Preparing payment…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
+          <Turnstile key={challengeKey} action="payment_initialize" onToken={setTurnstileToken} />
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
         </aside>

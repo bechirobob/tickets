@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { curatedEvents } from "../app/events";
 import { resolveTicketSelection } from "../lib/ticket-selection";
+import { ticketSelectionEvent } from "./fixtures";
 
 describe("ticket tier selection", () => {
-  const event = curatedEvents[0];
+  const event = ticketSelectionEvent;
 
   it("prices every advertised tier from the shared event catalogue", () => {
     expect(resolveTicketSelection(event, "general", 2)).toMatchObject({ unitQuantity: 2, ticketCount: 2, faceAmountMinor: 24_000 });

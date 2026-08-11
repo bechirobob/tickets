@@ -9,9 +9,34 @@ test("keeps the production Worker configuration portable and preserves The Room"
   assert.equal(config.configPath, undefined);
   assert.equal(config.userConfigPath, undefined);
   assert.deepEqual(config.routes, [{ pattern: "tickets.becoreops.com", custom_domain: true }]);
+  assert.deepEqual(config.triggers, { crons: ["*/5 * * * *", "15 3 * * *"] });
+  assert.equal(config.vars.EMAIL_FROM, "BeCore Tickets <tickets@tickets.becoreops.com>");
+  assert.equal(config.vars.ENVIRONMENT, "production");
+  assert.deepEqual(config.ratelimits.map(({ name, simple }) => ({ name, simple })), [
+    { name: "LOGIN_RATE_LIMITER", simple: { limit: 10, period: 60 } },
+    { name: "PUBLIC_WRITE_RATE_LIMITER", simple: { limit: 12, period: 60 } },
+    { name: "PAYMENT_RATE_LIMITER", simple: { limit: 10, period: 60 } },
+  ]);
+  assert.deepEqual(config.observability, {
+    enabled: true,
+    logs: { enabled: true, head_sampling_rate: 1 },
+    traces: { enabled: true, head_sampling_rate: 0.05 },
+  });
   assert.equal(config.r2_buckets, undefined);
   assert.deepEqual(config.durable_objects, { bindings: [{ name: "THE_ROOM", class_name: "TheRoom" }] });
   assert.deepEqual(config.migrations, [{ tag: "v1", new_sqlite_classes: ["TheRoom"] }]);
+});
+
+test("the Worker applies the production browser security baseline", async () => {
+  const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
+
+  assert.match(worker, /Content-Security-Policy/u);
+  assert.match(worker, /frame-ancestors 'none'/u);
+  assert.match(worker, /Strict-Transport-Security/u);
+  assert.match(worker, /X-Content-Type-Options/u);
+  assert.match(worker, /Cross-Origin-Opener-Policy/u);
+  assert.match(worker, /recordSecurityEvent/u);
+  assert.match(worker, /system_alerts/u);
 });
 
 test("does not ship editor preview metadata or workspace paths in customer assets", async () => {

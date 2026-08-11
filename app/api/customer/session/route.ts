@@ -8,6 +8,7 @@ import {
   readAttendeeIdentity,
   readCookie,
 } from "../../../../lib/attendee-auth";
+import { deliverConfirmedOrder, verifyAndFulfill } from "../../../../lib/payment-operations";
 
 type ClaimRecord = {
   orderId: string;
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   const db = await runtimeDb();
   const claimHash = await hashToken(claim);
   const now = new Date().toISOString();
-  const record = await db.prepare(`
+  const findClaimRecord = () => db.prepare(`
     SELECT o.id AS orderId, o.event_slug AS eventSlug, o.customer_email AS customerEmail,
            o.customer_phone AS customerPhone, o.customer_name AS customerName, o.status AS orderStatus,
            g.expires_at AS expiresAt, g.claimed_at AS claimedAt
@@ -45,12 +46,27 @@ export async function POST(request: Request) {
     WHERE o.reference = ? AND g.token_hash = ?
     LIMIT 1
   `).bind(reference, claimHash).first<ClaimRecord>();
+  let record = await findClaimRecord();
 
   if (!record || record.expiresAt <= now || record.claimedAt) {
     return Response.json({ error: "This ticket access link is invalid or has already been used." }, { status: 401 });
   }
   if (record.orderStatus === "payment_pending") {
-    return Response.json({ pending: true }, { status: 202, headers: { "cache-control": "no-store" } });
+    const { env } = await import("cloudflare:workers");
+    if (env.PAYSTACK_SECRET_KEY) {
+      try {
+        const verified = await verifyAndFulfill(db, reference, env.PAYSTACK_SECRET_KEY);
+        if (verified.result === "paid") {
+          await deliverConfirmedOrder(db, verified.order, new URL(request.url).origin);
+          record = await findClaimRecord();
+        }
+      } catch (error) {
+        console.error(JSON.stringify({ message: "payment return verification failed", reference, error: error instanceof Error ? error.message : String(error) }));
+      }
+    }
+    if (!record || record.orderStatus === "payment_pending") {
+      return Response.json({ pending: true }, { status: 202, headers: { "cache-control": "no-store" } });
+    }
   }
   if (record.orderStatus !== "paid") {
     return Response.json({ error: "This order does not have an active paid ticket." }, { status: 409 });
@@ -58,7 +74,7 @@ export async function POST(request: Request) {
 
   const issued = await db.prepare(`
     SELECT id FROM tickets
-    WHERE order_id = ? AND status IN ('issued', 'checked_in')
+    WHERE order_id = ? AND status IN ('issued', 'checked_in', 'voided')
     ORDER BY issued_at, id
   `).bind(record.orderId).all<{ id: string }>();
   if (!issued.results.length) {

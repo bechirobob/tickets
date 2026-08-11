@@ -1,10 +1,11 @@
 # BeCore Tickets
 
 Curated party discovery and ticketing for Accra. The application includes the
-customer experience, organiser submissions, BeCore curation, configurable
-booking fees, Paystack payment initialization and webhooks, ticket records, and
-gate operations. Paid tickets also unlock **The Room**, a private real-time
-space for verified attendees and authorised event staff.
+customer experience, organiser submissions and workspaces, named role-based
+operations access, configurable booking fees, Paystack payment initialization
+and webhooks, ticket records, and gate operations. Paid tickets also unlock
+**The Room**, a private real-time space for verified attendees and authorised
+event staff.
 
 ## Runtime
 
@@ -36,19 +37,52 @@ Cloudflare credentials.
 
 ## Deployment
 
-The Worker is built from `main`. CI validates the application, applies pending
+The Worker is built from `main`. CI generates binding types, audits production
+dependencies, lints, type-checks, runs the complete test suite, performs a
+Wrangler dry-run, captures the current D1 time-travel bookmark, applies pending
 versioned D1 migrations, and only then deploys the Worker. This order keeps the
 currently deployed code compatible while the additive schema update is applied
-and prevents new routes from reaching an older database schema.
+and gives operators a precise pre-migration recovery point.
 
 Production requires the following encrypted Worker secrets:
 
-- `ADMIN_ACCESS_KEY`
-- `ADMIN_SESSION_SECRET`
+- `ADMIN_ACCESS_KEY` (one-time owner bootstrap only)
 - `PAYSTACK_SECRET_KEY`
+- `RESEND_API_KEY`
+- `TURNSTILE_SITE_KEY`
+- `TURNSTILE_SECRET_KEY`
+
+Turnstile is required for production sign-in, owner bootstrap, checkout,
+ticket recovery and organiser submission. The production application fails
+closed when either key is missing. Create a Turnstile widget for the production
+hostname and add both keys before deploying.
+
+After migration `0008`, visit `/admin/bootstrap` once and use
+`ADMIN_ACCESS_KEY` to create the first named owner. The route closes as soon as
+the first staff account exists. Confirm the owner can sign in, then remove the
+legacy bootstrap secret with `wrangler secret delete ADMIN_ACCESS_KEY`. Owners
+can create named curator, finance, organiser, gate and moderator accounts from
+`/admin/accounts`; organiser, gate and moderator accounts can be scoped to
+specific events. Temporary passwords must be changed on first sign-in.
+
+`EMAIL_FROM` is a non-secret Worker variable. Its domain must be verified with
+the transactional email provider before customer delivery is enabled. The
+email contains an itemised receipt and one-time wallet recovery link; it never
+contains a reusable QR code.
 
 Paystack must remain in test mode until the business account, webhook, refund,
 settlement and reconciliation checks have passed.
+
+## Operational security
+
+Staff sessions are random opaque credentials; only their SHA-256 hashes are
+stored in D1. Passwords use PBKDF2-HMAC-SHA-256 with 600,000 iterations and
+per-account salts. Five consecutive failures lock an account for 15 minutes.
+State-changing operations enforce same-origin requests, named permissions and
+event assignments, and sensitive activity is written to the operational audit
+log. Public writes and sign-in are protected by Cloudflare rate-limit bindings.
+Worker logs are enabled at 100%, traces are sampled at 5%, and scheduled
+operational failures create durable alerts in D1.
 
 ## The Room access model
 

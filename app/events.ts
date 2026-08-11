@@ -1,4 +1,6 @@
-import { createStandardTicketTiers, type TicketTier } from "../lib/ticket-tiers";
+import type { TicketTier } from "../lib/ticket-tiers";
+
+export type EventState = "on_sale" | "sold_out" | "cancelled" | "postponed" | "rescheduled";
 
 export type CuratedEvent = {
   slug: string;
@@ -7,10 +9,21 @@ export type CuratedEvent = {
   fullDate: string;
   day: string;
   time: string;
+  startsAt: string;
+  endsAt: string;
   venue: string;
+  venueMapUrl: string | null;
   area: string;
   vibe: "Late night" | "Day party" | "Alté" | "Amapiano";
   price: number;
+  priceFromMinor: number;
+  capacity: number;
+  ageRestriction: string;
+  lineup: string;
+  eventState: EventState;
+  rescheduledFrom: string | null;
+  salesOpenAt: string | null;
+  salesCloseAt: string | null;
   ticketTiers: TicketTier[];
   image: string;
   note: string;
@@ -18,82 +31,44 @@ export type CuratedEvent = {
   sequence: string;
 };
 
-export const curatedEvents: CuratedEvent[] = [
-  {
-    slug: "after-dark-osu",
-    title: "After Dark: Osu",
-    shortDate: "14 AUG",
-    fullDate: "Friday, 14 August 2026",
-    day: "Friday",
-    time: "10:00 PM — 4:00 AM",
-    venue: "The Treehouse",
-    area: "Osu",
-    vibe: "Late night",
-    price: 120,
-    ticketTiers: createStandardTicketTiers(12_000),
-    image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88",
-    note: "A compact room, a sharp DJ line-up and zero space for standing like you were forced to attend. Come early.",
-    quip: "Small room. Big decisions.",
-    sequence: "01",
-  },
-  {
-    slug: "noir-room-labone",
-    title: "The Noir Room",
-    shortDate: "15 AUG",
-    fullDate: "Saturday, 15 August 2026",
-    day: "Saturday",
-    time: "9:30 PM — 3:00 AM",
-    venue: "The Glass House",
-    area: "Labone",
-    vibe: "Alté",
-    price: 180,
-    ticketTiers: createStandardTicketTiers(18_000),
-    image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1500&q=88",
-    note: "For a dressed-up crowd that wants discovery, not the same playlist on repeat. Your everyday black T-shirt needs a convincing argument.",
-    quip: "Dress like your ex might be there.",
-    sequence: "02",
-  },
-  {
-    slug: "sun-chasers-labadi",
-    title: "Sun Chasers",
-    shortDate: "16 AUG",
-    fullDate: "Sunday, 16 August 2026",
-    day: "Sunday",
-    time: "3:00 PM — 11:00 PM",
-    venue: "The Cove",
-    area: "Labadi",
-    vibe: "Day party",
-    price: 150,
-    ticketTiers: createStandardTicketTiers(15_000),
-    image: "https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1500&q=88",
-    note: "Sunset timing, open air and enough space to make a full Sunday of it. Sunglasses may become emotional support by 7 PM.",
-    quip: "Sunset first. Regret nothing.",
-    sequence: "03",
-  },
-  {
-    slug: "longitude-spintex",
-    title: "Longitude 05",
-    shortDate: "21 AUG",
-    fullDate: "Friday, 21 August 2026",
-    day: "Next Friday",
-    time: "11:00 PM — late",
-    venue: "Untamed Empire",
-    area: "Spintex",
-    vibe: "Amapiano",
-    price: 100,
-    ticketTiers: createStandardTicketTiers(10_000),
-    image: "https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?auto=format&fit=crop&w=1500&q=88",
-    note: "A focused dance floor with production that earns the warehouse. Sensible shoes were considered, then respectfully declined.",
-    quip: "The shoes will not survive.",
-    sequence: "04",
-  },
-];
+type EventRecord = {
+  slug: string;
+  title: string;
+  venue: string;
+  venueMapUrl: string | null;
+  area: string;
+  startsAt: string;
+  endsAt: string;
+  vibe: CuratedEvent["vibe"];
+  priceFromMinor: number;
+  capacity: number;
+  salesOpenAt: string | null;
+  salesCloseAt: string | null;
+  ageRestriction: string;
+  lineup: string;
+  eventState: EventState;
+  rescheduledFrom: string | null;
+  imageUrl: string;
+  curationNote: string;
+};
 
-function fromRecord(record: {
-  slug: string; title: string; startsAt: string; endsAt: string; venue: string; area: string;
-  vibe: "Late night" | "Day party" | "Alté" | "Amapiano"; priceFromMinor: number;
-  imageUrl: string; curationNote: string;
-}, index = 0): CuratedEvent {
+type TierRecord = {
+  recordId: string;
+  eventSlug: string;
+  code: string;
+  name: string;
+  description: string;
+  priceMinor: number;
+  admissionsPerUnit: number;
+  capacityAdmissions: number;
+  maxUnitsPerOrder: number;
+  configuredStatus: "available" | "sold_out" | "hidden";
+  salesOpenAt: string | null;
+  salesCloseAt: string | null;
+  reservedAdmissions: number;
+};
+
+function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): CuratedEvent {
   const starts = new Date(record.startsAt);
   const ends = new Date(record.endsAt);
   return {
@@ -103,11 +78,22 @@ function fromRecord(record: {
     fullDate: new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
     day: new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" }).format(starts),
     time: `${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(starts)} — ${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(ends)}`,
+    startsAt: record.startsAt,
+    endsAt: record.endsAt,
     venue: record.venue,
+    venueMapUrl: record.venueMapUrl,
     area: record.area,
     vibe: record.vibe,
     price: record.priceFromMinor / 100,
-    ticketTiers: createStandardTicketTiers(record.priceFromMinor),
+    priceFromMinor: record.priceFromMinor,
+    capacity: record.capacity,
+    ageRestriction: record.ageRestriction,
+    lineup: record.lineup,
+    eventState: record.eventState,
+    rescheduledFrom: record.rescheduledFrom,
+    salesOpenAt: record.salesOpenAt,
+    salesCloseAt: record.salesCloseAt,
+    ticketTiers: tiers,
     image: record.imageUrl,
     note: record.curationNote,
     quip: {
@@ -120,29 +106,121 @@ function fromRecord(record: {
   };
 }
 
+function resolveTierStatus(record: EventRecord, tier: TierRecord, now: string): TicketTier["status"] {
+  if (tier.configuredStatus === "hidden") return "hidden";
+  if (record.eventState === "cancelled" || record.eventState === "postponed") return "closed";
+  if (record.eventState === "sold_out" || tier.configuredStatus === "sold_out") return "sold_out";
+  const opensAt = tier.salesOpenAt ?? record.salesOpenAt;
+  const closesAt = tier.salesCloseAt ?? record.salesCloseAt;
+  if (opensAt && opensAt > now) return "upcoming";
+  if ((closesAt && closesAt <= now) || record.startsAt <= now) return "closed";
+  if (tier.reservedAdmissions >= tier.capacityAdmissions) return "sold_out";
+  return "available";
+}
+
+async function runtimeDb(): Promise<D1Database> {
+  const { env } = await import("cloudflare:workers");
+  return env.DB;
+}
+
+async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
+  const db = await runtimeDb();
+  const now = new Date().toISOString();
+  const slugFilter = slug ? "AND slug = ?" : "";
+  const statement = db.prepare(`
+    SELECT slug, title, venue, venue_map_url AS venueMapUrl, area,
+           starts_at AS startsAt, ends_at AS endsAt, vibe,
+           price_from_minor AS priceFromMinor, capacity,
+           sales_open_at AS salesOpenAt, sales_close_at AS salesCloseAt,
+           age_restriction AS ageRestriction, lineup,
+           event_state AS eventState, rescheduled_from AS rescheduledFrom,
+           image_url AS imageUrl, curation_note AS curationNote
+    FROM curated_event_records
+    WHERE (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
+      ${slugFilter}
+    ORDER BY starts_at, title
+    LIMIT 100
+  `);
+  const result = slug
+    ? await statement.bind(now, slug).all<EventRecord>()
+    : await statement.bind(now).all<EventRecord>();
+  return result.results;
+}
+
+async function loadTiers(eventSlugs: string[], now: string): Promise<TierRecord[]> {
+  if (!eventSlugs.length) return [];
+  const db = await runtimeDb();
+  const placeholders = eventSlugs.map(() => "?").join(",");
+  const result = await db.prepare(`
+    SELECT tier.id AS recordId, tier.event_slug AS eventSlug, tier.code,
+           tier.name, tier.description, tier.price_minor AS priceMinor,
+           tier.admissions_per_unit AS admissionsPerUnit,
+           tier.capacity_admissions AS capacityAdmissions,
+           tier.max_units_per_order AS maxUnitsPerOrder,
+           tier.status AS configuredStatus,
+           tier.sales_open_at AS salesOpenAt, tier.sales_close_at AS salesCloseAt,
+           COALESCE(SUM(CASE
+             WHEN reservation.status = 'consumed' THEN reservation.admission_count
+             WHEN reservation.status = 'held' AND reservation.expires_at > ? THEN reservation.admission_count
+             ELSE 0 END), 0) AS reservedAdmissions
+    FROM event_ticket_tiers tier
+    LEFT JOIN inventory_reservations reservation ON reservation.ticket_tier_id = tier.id
+    WHERE tier.event_slug IN (${placeholders})
+    GROUP BY tier.id
+    ORDER BY tier.event_slug, tier.sort_order, tier.name
+  `).bind(now, ...eventSlugs).all<TierRecord>();
+  return result.results;
+}
+
 export async function getPublicEvents(): Promise<CuratedEvent[]> {
   try {
-    const [{ and, asc, eq, lte, or }, { getDb }, { curatedEventRecords }] = await Promise.all([
-      import("drizzle-orm"), import("../db"), import("../db/schema"),
-    ]);
-    const db = await getDb();
     const now = new Date().toISOString();
-    const records = await db.select().from(curatedEventRecords).where(or(
-      eq(curatedEventRecords.status, "published"),
-      and(eq(curatedEventRecords.status, "scheduled"), lte(curatedEventRecords.scheduledPublishAt, now)),
-    )).orderBy(asc(curatedEventRecords.startsAt));
-    if (records.length) return records.map(fromRecord);
-  } catch {
-    // The representative edit remains available during builds and before D1 is provisioned.
+    const records = await loadPublicEventRecords();
+    const tiers = await loadTiers(records.map((record) => record.slug), now);
+    return records.map((record, index) => formatEvent(
+      record,
+      tiers.filter((tier) => tier.eventSlug === record.slug).map((tier) => ({
+        id: tier.code,
+        recordId: tier.recordId,
+        name: tier.name,
+        description: tier.description,
+        priceMinor: tier.priceMinor,
+        admissionsPerUnit: tier.admissionsPerUnit,
+        maxUnitsPerOrder: tier.maxUnitsPerOrder,
+        capacityAdmissions: tier.capacityAdmissions,
+        remainingAdmissions: Math.max(0, tier.capacityAdmissions - tier.reservedAdmissions),
+        status: resolveTierStatus(record, tier, now),
+      })),
+      index,
+    ));
+  } catch (error) {
+    console.error(JSON.stringify({ message: "public event inventory unavailable", error: error instanceof Error ? error.message : String(error) }));
+    return [];
   }
-  return curatedEvents;
 }
 
-export async function getCuratedEvent(slug: string) {
-  return (await findCuratedEvent(slug)) ?? curatedEvents[0];
-}
-
-export async function findCuratedEvent(slug: string) {
-  const events = await getPublicEvents();
-  return events.find((event) => event.slug === slug) ?? curatedEvents.find((event) => event.slug === slug);
+export async function findCuratedEvent(slug: string): Promise<CuratedEvent | null> {
+  if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return null;
+  try {
+    const now = new Date().toISOString();
+    const records = await loadPublicEventRecords(slug);
+    const record = records[0];
+    if (!record) return null;
+    const tiers = await loadTiers([record.slug], now);
+    return formatEvent(record, tiers.map((tier) => ({
+      id: tier.code,
+      recordId: tier.recordId,
+      name: tier.name,
+      description: tier.description,
+      priceMinor: tier.priceMinor,
+      admissionsPerUnit: tier.admissionsPerUnit,
+      maxUnitsPerOrder: tier.maxUnitsPerOrder,
+      capacityAdmissions: tier.capacityAdmissions,
+      remainingAdmissions: Math.max(0, tier.capacityAdmissions - tier.reservedAdmissions),
+      status: resolveTierStatus(record, tier, now),
+    })), 0);
+  } catch (error) {
+    console.error(JSON.stringify({ message: "event lookup unavailable", slug, error: error instanceof Error ? error.message : String(error) }));
+    return null;
+  }
 }

@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { POST as preparePasses } from "../app/api/customer/tickets/route";
 import { POST as checkIn } from "../app/api/admin/check-in/route";
-import { adminCookieHeader, createAdminSession } from "../lib/admin-session";
+import { adminCookieHeader, createStaffSession } from "../lib/admin-session";
 import { attendeeCookieHeader, hashToken } from "../lib/attendee-auth";
 
 async function seedIssuedTicket(suffix: string) {
@@ -40,6 +40,18 @@ async function seedIssuedTicket(suffix: string) {
   return { attendeeToken, ticketId };
 }
 
+async function ownerCookie(suffix: string) {
+  const id = `owner-${suffix}`;
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO staff_accounts (
+    id, normalized_email, display_name, role, password_hash, password_salt, password_iterations,
+    must_change_password, status, failed_login_count, password_changed_at, created_at, created_by, updated_at
+  ) VALUES (?, ?, 'Gate Owner', 'owner', 'test', 'test', 1, 0, 'active', 0, ?, ?, 'test', ?)`)
+    .bind(id, `${id}@example.com`, now, now, now).run();
+  const token = await createStaffSession(env.DB, { id });
+  return adminCookieHeader(token).split(";")[0];
+}
+
 describe("secure gate passes", () => {
   it("prepares an opaque QR pass and admits it exactly once", async () => {
     const { attendeeToken, ticketId } = await seedIssuedTicket("once");
@@ -54,11 +66,10 @@ describe("secure gate passes", () => {
     expect(pass.qrPayload).not.toContain("Gate Guest");
     expect(pass.qrPayload).not.toContain("example.com");
 
-    const adminSession = await createAdminSession("test-admin-access");
-    expect(adminSession).toBeTruthy();
+    const cookie = await ownerCookie("once");
     const request = () => new Request("https://tickets.becoreops.com/api/admin/check-in", {
       method: "POST",
-      headers: { "content-type": "application/json", cookie: adminCookieHeader(adminSession!).split(";")[0] },
+      headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
       body: JSON.stringify({ code: pass.qrPayload, eventSlug: "after-dark-osu", gate: "Gate A" }),
     });
     const responses = await Promise.all([checkIn(request()), checkIn(request())]);
@@ -68,7 +79,7 @@ describe("secure gate passes", () => {
     expect(payloads.find((payload) => payload.result === "duplicate")).toMatchObject({ result: "duplicate" });
     const stored = await env.DB.prepare("SELECT status, checked_in_by AS actor, checked_in_gate AS gate FROM tickets WHERE id = ?")
       .bind(ticketId).first<{ status: string; actor: string; gate: string }>();
-    expect(stored).toMatchObject({ status: "checked_in", actor: "BeCore Admin", gate: "Gate A" });
+    expect(stored).toMatchObject({ status: "checked_in", actor: "Gate Owner <owner-once@example.com>", gate: "Gate A" });
   });
 
   it("keeps the gate API private and rejects a pass at the wrong event", async () => {
@@ -84,10 +95,10 @@ describe("secure gate passes", () => {
       method: "POST",
       headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0] },
     }))).json() as { orders: Array<{ tickets: Array<{ gateCode: string }> }> };
-    const adminSession = await createAdminSession("test-admin-access");
+    const cookie = await ownerCookie("wrong");
     const response = await checkIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
       method: "POST",
-      headers: { "content-type": "application/json", cookie: adminCookieHeader(adminSession!).split(";")[0] },
+      headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
       body: JSON.stringify({ code: wallet.orders[0].tickets[0].gateCode, eventSlug: "noir-room-labone" }),
     }));
     expect(response.status).toBe(409);

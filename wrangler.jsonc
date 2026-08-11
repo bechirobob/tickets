@@ -10,10 +10,34 @@
       "custom_domain": true
     }
   ],
+  "vars": {
+    "EMAIL_FROM": "BeCore Tickets <tickets@tickets.becoreops.com>",
+    "ENVIRONMENT": "production"
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *", "15 3 * * *"]
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "migrations_dir": "./drizzle"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "LOGIN_RATE_LIMITER",
+      "namespace_id": "83101",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "PUBLIC_WRITE_RATE_LIMITER",
+      "namespace_id": "83102",
+      "simple": { "limit": 12, "period": 60 }
+    },
+    {
+      "name": "PAYMENT_RATE_LIMITER",
+      "namespace_id": "83103",
+      "simple": { "limit": 10, "period": 60 }
     }
   ],
   "durable_objects": {
@@ -32,6 +56,7 @@
   ],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
   }
 }

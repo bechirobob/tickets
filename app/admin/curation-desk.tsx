@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Check, ChevronRight, Eye, Loader2, RotateCcw, ShieldCheck, X } from "lucide-react";
+import { CalendarClock, Check, ChevronRight, Eye, Loader2, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import OperationsNav from "./operations-nav";
+import type { StaffRole } from "../../lib/admin-session";
 
 type Submission = {
   id: string; organizerName: string; contactName: string; contactEmail: string; contactPhone: string;
-  title: string; concept: string; venueName: string; area: string; startsAt: string; endsAt: string;
+  title: string; concept: string; venueName: string; venueMapUrl: string | null; area: string; startsAt: string; endsAt: string;
   vibe: string; lineup: string; capacity: number; priceFromMinor: number; ageRestriction: string;
   posterObjectKey: string | null; status: string; reviewNote: string | null; curationNote: string | null;
   scheduledPublishAt: string | null; eventSlug: string | null; createdAt: string;
@@ -14,7 +16,7 @@ type Submission = {
 
 const labels: Record<string, string> = { submitted: "New", in_review: "In review", changes_requested: "Changes requested", approved: "Approved", rejected: "Rejected", scheduled: "Scheduled", published: "Published", unpublished: "Unpublished", archived: "Archived" };
 
-export default function CurationDesk({ actor }: { actor: string }) {
+export default function CurationDesk({ actor, role }: { actor: string; role: StaffRole }) {
   const [items, setItems] = useState<Submission[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,11 +80,7 @@ export default function CurationDesk({ actor }: { actor: string }) {
 
   return (
     <main className="curation-page">
-      <aside className="curation-nav">
-        <Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link>
-        <nav><span>Curation</span><Link className="active" href="/admin">Submission queue</Link><Link href="/scan">Gate scanner</Link><Link href="/admin/rooms">Room moderation</Link><Link href="/admin/fees">Fees & charges</Link><Link href="/organizer/submit">Submission form</Link></nav>
-        <p><ShieldCheck size={14} /> Restricted<br /><small>{actor}</small></p>
-      </aside>
+      <OperationsNav actor={actor} role={role} active="/admin" />
       <section className="curation-main">
         <header><div><p>BeCore editorial operations</p><h1>Curation queue</h1></div><span>{items.filter((item) => item.status === "submitted").length} waiting</span></header>
         {loading ? <div className="curation-empty"><Loader2 className="spin" /> Loading submissions…</div> : items.length === 0 ? <div className="curation-empty"><h2>Quiet queue. Suspiciously quiet.</h2><p>New organiser submissions will appear here for review.</p><Link href="/organizer/submit">Open submission form</Link></div> : (

@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { curatedEventRecords, curationAuditEvents, partySubmissions } from "../../../../db/schema";
-import { readAdminSession } from "../../../../lib/admin-session";
+import { curatedEventRecords, curationAuditEvents, eventTicketTiers, partySubmissions } from "../../../../db/schema";
+import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,8 @@ function slugify(value: string) {
 }
 
 async function actorOrUnauthorized(request: Request) {
-  return readAdminSession(request.headers.get("cookie"));
+  const actor = await readAdminSession(request.headers.get("cookie"));
+  return actor && hasPermission(actor, "curation.manage") ? actor : null;
 }
 
 export async function GET(request: Request) {
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const actor = await actorOrUnauthorized(request);
   if (!actor) return Response.json({ error: "Sign in is required." }, { status: 401 });
+  if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
   const body = await request.json() as { id?: string; action?: Action; note?: string; curationNote?: string; scheduledPublishAt?: string };
   if (!body.id || !body.action || !transitions[body.action]) return Response.json({ error: "Invalid review action." }, { status: 400 });
 
@@ -104,11 +106,18 @@ export async function PATCH(request: Request) {
       slug: eventSlug,
       title: current.title,
       venue: current.venueName,
+      venueMapUrl: current.venueMapUrl,
       area: current.area,
       startsAt: current.startsAt,
       endsAt: current.endsAt,
       vibe: current.vibe,
       priceFromMinor: current.priceFromMinor,
+      capacity: current.capacity,
+      salesOpenAt: now,
+      salesCloseAt: current.startsAt,
+      ageRestriction: current.ageRestriction,
+      lineup: current.lineup,
+      eventState: "on_sale",
       imageUrl: current.posterObjectKey ? `/api/media/${current.id}` : "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88",
       curationNote,
       status: publicStatus,
@@ -118,12 +127,30 @@ export async function PATCH(request: Request) {
       updatedAt: now,
     }).onConflictDoUpdate({
       target: curatedEventRecords.submissionId,
-      set: { status: publicStatus, scheduledPublishAt, publishedAt: next === "published" ? now : current.publishedAt, curationNote, updatedAt: now },
+      set: {
+        title: current.title, venue: current.venueName, venueMapUrl: current.venueMapUrl,
+        area: current.area, startsAt: current.startsAt, endsAt: current.endsAt,
+        vibe: current.vibe, priceFromMinor: current.priceFromMinor, capacity: current.capacity,
+        salesCloseAt: current.startsAt, ageRestriction: current.ageRestriction, lineup: current.lineup,
+        status: publicStatus, scheduledPublishAt,
+        publishedAt: next === "published" ? now : current.publishedAt,
+        curationNote, updatedAt: now,
+      },
     });
-    await db.batch([updateSubmission, addAuditEvent, publishEvent]);
+    const defaultTier = db.insert(eventTicketTiers).values({
+      id: `${current.id}:general`, eventSlug, code: "general", name: "General admission",
+      description: "One admission to the event", priceMinor: current.priceFromMinor,
+      admissionsPerUnit: 1, capacityAdmissions: current.capacity, maxUnitsPerOrder: 10,
+      status: "available", salesOpenAt: now, salesCloseAt: current.startsAt,
+      sortOrder: 0, createdAt: now, updatedAt: now,
+    }).onConflictDoNothing({ target: [eventTicketTiers.eventSlug, eventTicketTiers.code] });
+    await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier]);
   } else {
     await db.batch([updateSubmission, addAuditEvent]);
   }
+
+  const { env } = await import("cloudflare:workers");
+  await recordAudit(env.DB, { session: actor, action: `curation.${body.action}`, targetType: "submission", targetId: current.id, outcome: "success", detail: next, requestId: requestMetadata(request).requestId });
 
   return Response.json({ id: current.id, status: next, scheduledPublishAt });
 }
