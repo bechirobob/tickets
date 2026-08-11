@@ -17,6 +17,16 @@ test("message controls cannot inherit a full-page footer layout", async () => {
   assert.match(css, /\.room-bubble\s*\{[^}]*border-radius:/su);
 });
 
+test("Room text controls keep iOS at the existing page scale", async () => {
+  const css = await readFile(cssUrl, "utf8");
+  const roomMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 640px)"));
+
+  assert.match(css, /\.room-composer textarea\s*\{[^}]*font-size:\s*16px/su);
+  assert.match(roomMobileBlock, /\.room-stream\s*\{[^}]*min-height:\s*0/su);
+  assert.match(roomMobileBlock, /\.room-modal select,\s*\.room-modal textarea\s*\{[^}]*font-size:\s*16px/su);
+  assert.doesNotMatch(css, /maximum-scale\s*=\s*1|user-scalable\s*=\s*no/u);
+});
+
 test("the final mobile cascade keeps the homepage hero inside the viewport", async () => {
   const css = await readFile(cssUrl, "utf8");
   const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
