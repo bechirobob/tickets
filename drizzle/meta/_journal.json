@@ -78,6 +78,13 @@
       "when": 1786442809810,
       "tag": "0010_serious_caretaker",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1786448740914,
+      "tag": "0011_unique_mantis",
+      "breakpoints": true
     }
   ]
 }

@@ -1,144 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, ArrowUpRight, Clock3, MapPin, Shuffle, Ticket } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, MapPin, Ticket } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { CuratedEvent } from "./events";
 
-const vibes = [
-  ["All", "All events"],
-  ["Late night", "After midnight"],
-  ["Day party", "Sun first"],
-  ["Alté", "Look expensive"],
-  ["Amapiano", "Dance, obviously"],
-] as const;
+type WindowFilter = "tonight" | "weekend" | "next";
 
-export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
-  const [active, setActive] = useState("All");
-  const [picked, setPicked] = useState<string | null>(null);
-  const [position, setPosition] = useState(0);
-  const railRef = useRef<HTMLDivElement>(null);
-  const visible = useMemo(
-    () => active === "All" ? events : events.filter((event) => event.vibe === active),
-    [active, events]
-  );
+function matchesWindow(event: CuratedEvent, filter: WindowFilter, now: number) {
+  const starts = new Date(event.startsAt);
+  const distance = starts.getTime() - now;
+  if (filter === "tonight") return distance >= -4 * 60 * 60 * 1000 && distance <= 18 * 60 * 60 * 1000;
+  if (filter === "weekend") {
+    const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "Africa/Accra" }).format(starts);
+    return distance >= 0 && distance <= 7 * 24 * 60 * 60 * 1000 && ["Fri", "Sat", "Sun"].includes(weekday);
+  }
+  return distance >= -4 * 60 * 60 * 1000;
+}
+
+export default function EventExplorer({ events, full = false }: { events: CuratedEvent[]; full?: boolean }) {
+  const [windowFilter, setWindowFilter] = useState<WindowFilter>("next");
+  const [area, setArea] = useState("All areas");
+  const [page, setPage] = useState(0);
+  const [now] = useState(() => Date.now());
+  const pageSize = full ? 9 : 6;
+  const areas = useMemo(() => ["All areas", ...new Set(events.map((event) => event.area))], [events]);
+  const visible = useMemo(() => events.filter((event) => matchesWindow(event, windowFilter, now) && (area === "All areas" || event.area === area)), [area, events, now, windowFilter]);
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pageEvents = visible.slice(page * pageSize, page * pageSize + pageSize);
+
+  function changeWindow(value: WindowFilter) {
+    setWindowFilter(value);
+    setPage(0);
+  }
 
   if (!events.length) {
-    return <section className="event-empty"><Ticket size={28} /><h3>The next drop is still being checked.</h3><p>Nothing is published until the organiser, venue and ticket terms are ready for customers.</p><Link href="/organizer/submit">Submit a party <ArrowUpRight size={16} /></Link></section>;
+    return <section className="event-empty"><Ticket size={28} /><h3>The next Drop is still being checked.</h3><p>Nothing is published until the Host, venue and ticket terms are ready.</p><Link href="/organizer/submit">Submit a night <ArrowUpRight size={16} /></Link></section>;
   }
 
-  function chooseForMe() {
-    if (!visible.length) return;
-    const pool = visible.filter((event) => event.slug !== picked);
-    const event = pool[Math.floor(Math.random() * pool.length)] ?? visible[0];
-    setPicked(event.slug);
-    window.setTimeout(() => {
-      document.getElementById(`party-${event.slug}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    }, 80);
-  }
-
-  function selectVibe(value: string) {
-    setActive(value);
-    setPicked(null);
-    setPosition(0);
-    railRef.current?.scrollTo({ left: 0, behavior: "smooth" });
-  }
-
-  function moveRail(direction: -1 | 1) {
-    const cards = Array.from(railRef.current?.querySelectorAll<HTMLElement>(".curated-card") ?? []);
-    if (!cards.length) return;
-    const next = Math.max(0, Math.min(cards.length - 1, position + direction));
-    cards[next]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    setPosition(next);
-  }
-
-  function trackRail() {
-    const rail = railRef.current;
-    if (!rail) return;
-    const cards = Array.from(rail.querySelectorAll<HTMLElement>(".curated-card"));
-    const centre = rail.scrollLeft + rail.clientWidth / 2;
-    let closest = 0;
-    let distance = Number.POSITIVE_INFINITY;
-    cards.forEach((card, index) => {
-      const cardCentre = card.offsetLeft + card.offsetWidth / 2;
-      const nextDistance = Math.abs(cardCentre - centre);
-      if (nextDistance < distance) {
-        closest = index;
-        distance = nextDistance;
-      }
-    });
-    if (closest !== position) setPosition(closest);
-  }
-
-  return (
-    <>
-      <div className="night-finder" aria-label="Find a party by mood" data-scroll-reveal>
-        <div className="night-finder__question">
-          <span>What are we feeling?</span>
-          <button type="button" onClick={chooseForMe} className="night-shuffle">
-            <Shuffle size={14} /> {picked ? "Try me again" : "Choose for me"}
-          </button>
-        </div>
-        <div className="vibe-filter" role="tablist" aria-label="Party atmosphere">
-          {vibes.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={active === value}
-              className={active === value ? "active" : ""}
-              onClick={() => selectVibe(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="night-finder__answer" aria-live="polite">
-          {picked ? `Fine. ${events.find((event) => event.slug === picked)?.title}. Don’t overthink it.` : "We narrowed Accra down. You’re welcome."}
-        </p>
+  return <div className={`drop-explorer${full ? " drop-explorer--full" : ""}`} data-scroll-reveal>
+    <div className="drop-controls" aria-label="Filter The Drop">
+      <div role="tablist" aria-label="When">
+        <button type="button" role="tab" aria-selected={windowFilter === "tonight"} onClick={() => changeWindow("tonight")}>Tonight</button>
+        <button type="button" role="tab" aria-selected={windowFilter === "weekend"} onClick={() => changeWindow("weekend")}>This weekend</button>
+        <button type="button" role="tab" aria-selected={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
       </div>
+      <label><MapPin size={13} /><span className="sr-only">Area</span><select value={area} onChange={(event) => { setArea(event.target.value); setPage(0); }}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
+    </div>
 
-      <div className="event-rail-status" aria-label="Event carousel position" data-scroll-reveal>
-        <span><b>{String(position + 1).padStart(2, "0")}</b> / {String(visible.length).padStart(2, "0")}</span>
-        <p>Swipe the edit</p>
-        <div>
-          <button type="button" onClick={() => moveRail(-1)} disabled={position === 0} aria-label="Previous event"><ArrowLeft size={17} /></button>
-          <button type="button" onClick={() => moveRail(1)} disabled={position >= visible.length - 1} aria-label="Next event"><ArrowRight size={17} /></button>
+    {pageEvents.length ? <div className="drop-grid" aria-live="polite">
+      {pageEvents.map((event) => <article className="drop-card" key={event.slug}>
+        <Link href={`/event/${event.slug}`} className="drop-card__image">
+          <img src={event.image} alt={`Atmosphere for ${event.title}`} />
+          {event.isTestEvent ? <span>Working preview</span> : null}
+        </Link>
+        <div className="drop-card__body">
+          <p>{event.shortDate} · {event.time.split(" — ")[0]}</p>
+          <h3><Link href={`/event/${event.slug}`}>{event.title}</Link></h3>
+          <div><span><MapPin size={12} /> {event.area}</span><span><Ticket size={12} /> From GH₵{event.price}</span></div>
+          <Link href={`/event/${event.slug}`} aria-label={`See ${event.title}`}>See the night <ArrowUpRight size={14} /></Link>
         </div>
-      </div>
+      </article>)}
+    </div> : <div className="drop-no-match"><CalendarDays size={22} /><h3>Nothing in that window yet.</h3><p>Try Next up or another area. We only show nights that have passed the checks.</p></div>}
 
-      <div id="event-rail" className="curated-grid" aria-live="polite" ref={railRef} onScroll={trackRail} data-scroll-reveal data-reveal-delay="1">
-        {visible.map((event, index) => (
-          <article
-            id={`party-${event.slug}`}
-            className={`${index === 0 && active === "All" ? "curated-card curated-card--lead" : "curated-card"}${picked === event.slug ? " is-picked" : ""}`}
-            key={event.slug}
-          >
-            <Link href={`/event/${event.slug}`} className="curated-card__image">
-              <img src={event.image} alt={`Atmosphere for ${event.title}`} />
-              <span className="curated-card__number">{event.sequence}</span>
-              {event.isTestEvent ? <span className="curated-card__preview">Preview event</span> : null}
-              <span className="curated-card__vibe">{event.vibe}</span>
-              <span className="curated-card__overlay">
-                <small>{event.shortDate} · {event.time.split(" — ")[0]}</small>
-                <strong>{event.title}</strong>
-                <i>{event.venue} · {event.area}</i>
-              </span>
-            </Link>
-            <div className="curated-card__body">
-              <p>{event.quip}</p>
-              <div className="curated-card__meta" aria-label="Party details">
-                <span><MapPin size={12} /> {event.area}</span>
-                <span><Clock3 size={12} /> {event.time.split(" — ")[0]}</span>
-                <span><Ticket size={12} /> GH₵{event.price}</span>
-              </div>
-              <Link href={`/event/${event.slug}`} className="curated-card__link" aria-label={`View ${event.title}`}>
-                I&apos;m listening <ArrowUpRight size={16} />
-              </Link>
-            </div>
-          </article>
-        ))}
-      </div>
-    </>
-  );
+    {full && pageCount > 1 ? <nav className="drop-pagination" aria-label="Event pages"><button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}><ArrowLeft size={15} /> Previous</button><span>{page + 1} of {pageCount}</span><button type="button" disabled={page >= pageCount - 1} onClick={() => setPage((value) => value + 1)}>Next <ArrowRight size={15} /></button></nav> : null}
+  </div>;
 }

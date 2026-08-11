@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { curatedEventRecords, curationAuditEvents, eventTicketTiers, partySubmissions } from "../../../../db/schema";
+import { curatedEventRecords, curationAuditEvents, eventHosts, eventTicketTiers, hosts, partySubmissions } from "../../../../db/schema";
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 
 export const dynamic = "force-dynamic";
@@ -144,7 +144,22 @@ export async function PATCH(request: Request) {
       status: "available", salesOpenAt: now, salesCloseAt: current.startsAt,
       sortOrder: 0, createdAt: now, updatedAt: now,
     }).onConflictDoNothing({ target: [eventTicketTiers.eventSlug, eventTicketTiers.code] });
-    await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier]);
+    const hostSlug = slugify(current.organizerName) || `host-${current.id.slice(0, 8)}`;
+    const [existingHost] = await db.select({ id: hosts.id }).from(hosts).where(eq(hosts.slug, hostSlug)).limit(1);
+    const hostId = existingHost?.id ?? `host:${hostSlug}`;
+    const publishHost = db.insert(hosts).values({
+      id: hostId, slug: hostSlug, name: current.organizerName,
+      bio: `${current.organizerName} is a reviewed event Host on BeCore Tickets.`,
+      city: "Accra", verificationStatus: "reviewed", profileImageUrl: null,
+      createdAt: now, updatedAt: now,
+    }).onConflictDoUpdate({
+      target: hosts.slug,
+      set: { name: current.organizerName, updatedAt: now },
+    });
+    const connectHost = db.insert(eventHosts).values({
+      eventSlug, hostId, role: "Host", isPrimary: true, createdAt: now,
+    }).onConflictDoNothing({ target: [eventHosts.eventSlug, eventHosts.hostId] });
+    await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, publishHost, connectHost]);
   } else {
     await db.batch([updateSubmission, addAuditEvent]);
   }
