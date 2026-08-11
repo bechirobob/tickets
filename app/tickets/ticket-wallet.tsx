@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, LogOut, MapPin, MessageCircle, ReceiptText, Ticket } from "lucide-react";
+import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, Loader2, LogOut, Mail, MapPin, MessageCircle, ReceiptText, Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 import QrPass from "./qr-pass";
+import Turnstile from "../turnstile";
 
 type GateTicket = {
   id: string;
   ticketType: string;
-  status: "issued" | "checked_in";
+  status: "issued" | "checked_in" | "unavailable" | "voided";
   checkedInAt: string | null;
   gateCode: string | null;
   qrPayload: string | null;
@@ -24,16 +25,9 @@ type Order = {
   quantity: number;
   paidAt: string | null;
   tickets: GateTicket[];
-  event: { title: string; date: string; venue: string } | null;
+  event: { title: string; date: string; venue: string; state: string } | null;
 };
 type Wallet = { attendee: { displayName: string }; orders: Order[] };
-
-const DETAILS: Record<string, { title: string; date: string; venue: string }> = {
-  "after-dark-osu": { title: "After Dark: Osu", date: "Fri, 14 Aug · 10:00 PM", venue: "The Treehouse, Osu" },
-  "noir-room-labone": { title: "The Noir Room", date: "Sat, 15 Aug · 9:30 PM", venue: "The Glass House, Labone" },
-  "sun-chasers-labadi": { title: "Sun Chasers", date: "Sun, 16 Aug · 3:00 PM", venue: "The Cove, Labadi" },
-  "longitude-spintex": { title: "Longitude 05", date: "Fri, 21 Aug · 11:00 PM", venue: "Untamed Empire, Spintex" },
-};
 
 function money(minor: number, currency: string) {
   return new Intl.NumberFormat("en-GH", { style: "currency", currency, minimumFractionDigits: 2 }).format(minor / 100);
@@ -49,6 +43,11 @@ export default function TicketWallet() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [confirmed] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("confirmed") === "1");
+  const [recovered] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recovered") === "1");
+  const [recoveryInvalid] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recovery") === "invalid");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
+  const [turnstileToken, setTurnstileToken] = useState("");
 
   useEffect(() => {
     fetch("/api/customer/tickets", { method: "POST", cache: "no-store" })
@@ -67,21 +66,31 @@ export default function TicketWallet() {
     setWallet(null);
   }
 
+  async function requestRecovery(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (recoveryState === "sending") return;
+    if (!turnstileToken) { setError("Complete the browser security check first."); return; }
+    setRecoveryState("sending");
+    await fetch("/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: recoveryEmail, turnstileToken }) }).catch(() => undefined);
+    setRecoveryState("sent");
+  }
+
   return <main className="wallet-page wallet-page--real">
     <header><Link href="/"><ArrowLeft size={17} /> Back to the shortlist</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></span>{wallet ? <button onClick={signOut}><LogOut size={14} /> Sign out</button> : <span />}</header>
     <section>
       {confirmed ? <div className="wallet-confirmed"><CheckCircle2 size={21} /><div><b>Payment confirmed</b><span>Your ticket passes and receipt are ready below.</span></div></div> : null}
+      {recovered ? <div className="wallet-confirmed"><CheckCircle2 size={21} /><div><b>Wallet recovered</b><span>Fresh QR passes were generated for this device.</span></div></div> : null}
       <Ticket size={38} /><p className="eyebrow">Your ticket wallet</p><h1>{loading ? "Preparing your entry passes…" : wallet ? `Good to see you, ${wallet.attendee.displayName}.` : "Your verified tickets live here."}</h1>
       {error ? <p className="wallet-error" role="alert">{error}</p> : null}
-      {!loading && !wallet && <div className="wallet-locked"><BadgeCheck /><h2>Access starts after a verified checkout.</h2><p>Complete payment in the same browser and we’ll unlock your QR ticket, receipt and event Room automatically. A screenshot or public event link cannot create access.</p><Link href="/#drop">Choose an event</Link></div>}
+      {!loading && !wallet && <div className="wallet-locked"><BadgeCheck /><h2>{recoveryInvalid ? "That access link expired or was already used." : "Access starts after a verified checkout."}</h2><p>Complete payment in this browser, or recover existing paid tickets securely by email. No QR code or reusable ticket secret is sent in the message.</p><form className="wallet-recovery" onSubmit={requestRecovery}><label>Email used at checkout<input type="email" required autoComplete="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} placeholder="you@example.com" /></label><Turnstile action="ticket_recovery" onToken={setTurnstileToken} /><button disabled={recoveryState !== "idle" || !turnstileToken}>{recoveryState === "sending" ? <Loader2 className="spin" size={15} /> : <Mail size={15} />} {recoveryState === "sent" ? "Check your email" : recoveryState === "sending" ? "Sending…" : "Email secure access link"}</button></form>{recoveryState === "sent" ? <small>If that address has active paid tickets, the one-time link will arrive shortly.</small> : null}<Link href="/#drop">Choose an event</Link></div>}
       {wallet?.orders.map((order) => {
-        const detail = order.event ?? DETAILS[order.eventSlug] ?? { title: order.eventSlug.replaceAll("-", " "), date: "Event date confirmed in your order", venue: "See event details" };
+        const detail = order.event ?? { title: order.eventSlug.replaceAll("-", " "), date: "Event date confirmed in your order", venue: "See event details", state: "unavailable" };
         return <article className="wallet-order" key={order.orderId}>
           <header><div><small><BadgeCheck size={12} /> Paid and verified · {order.quantity} {order.quantity === 1 ? "admission" : "admissions"}</small><h2>{detail.title}</h2><p><CalendarDays size={15} /> {detail.date}</p><p><MapPin size={15} /> {detail.venue}</p></div><Link href={`/room/${order.eventSlug}`}><MessageCircle size={16} /> Enter The Room</Link></header>
           <div className="wallet-passes">
             {order.tickets.map((ticketItem, index) => <section className={`wallet-pass wallet-pass--${ticketItem.status}`} key={ticketItem.id}>
               <div><span>Pass {index + 1} of {order.tickets.length}</span><b>{ticketItem.ticketType.replaceAll("-", " ")}</b></div>
-              {ticketItem.qrPayload && ticketItem.gateCode ? <><QrPass payload={ticketItem.qrPayload} label={`Entry QR code for pass ${index + 1}`} /><code>{ticketItem.gateCode}</code><p>Present this moving pass at the gate. Opening the wallet again refreshes the code.</p></> : ticketItem.status === "checked_in" ? <div className="wallet-admitted"><CheckCircle2 size={34} /><b>Admitted</b><span>{ticketItem.checkedInAt ? paidDate(ticketItem.checkedInAt) : "Entry recorded"}</span></div> : <p className="wallet-pass-error">This pass could not refresh. Reload before arriving at the gate.</p>}
+              {ticketItem.qrPayload && ticketItem.gateCode ? <><QrPass payload={ticketItem.qrPayload} label={`Entry QR code for pass ${index + 1}`} /><code>{ticketItem.gateCode}</code><p>Present this moving pass at the gate. Opening the wallet again refreshes the code.</p></> : ticketItem.status === "checked_in" ? <div className="wallet-admitted"><CheckCircle2 size={34} /><b>Admitted</b><span>{ticketItem.checkedInAt ? paidDate(ticketItem.checkedInAt) : "Entry recorded"}</span></div> : ticketItem.status === "unavailable" ? <p className="wallet-pass-error">This pass is paused because the event is {detail.state}. Watch your email for the organiser&apos;s next steps.</p> : <p className="wallet-pass-error">This pass could not refresh. Reload before arriving at the gate.</p>}
             </section>)}
           </div>
           <section className="wallet-receipt">

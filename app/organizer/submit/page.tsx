@@ -7,7 +7,7 @@ export default function SubmitPartyPage() {
     <main className="submission-page">
       <header className="submission-header">
         <Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link>
-        <Link href="/"><ArrowLeft size={15} /> Back to events</Link>
+        <div><Link href="/organizer/workspace">Organiser sign in</Link><Link href="/"><ArrowLeft size={15} /> Back to events</Link></div>
       </header>
       <section className="submission-intro">
         <p className="night-kicker"><span /> Party submissions</p>

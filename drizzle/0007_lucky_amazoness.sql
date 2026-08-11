@@ -1,0 +1,1 @@
+ALTER TABLE `party_submissions` ADD `venue_map_url` text;

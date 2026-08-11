@@ -1,8 +1,11 @@
 import CheckoutForm from "./checkout-form";
-import { getCuratedEvent } from "../../events";
+import { notFound, redirect } from "next/navigation";
+import { findCuratedEvent } from "../../events";
 
 export default async function CheckoutPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const event = await getCuratedEvent(slug);
+  const event = await findCuratedEvent(slug);
+  if (!event) notFound();
+  if (!event.ticketTiers.some((tier) => tier.status === "available")) redirect(`/event/${slug}`);
   return <CheckoutForm slug={slug} event={event} />;
 }

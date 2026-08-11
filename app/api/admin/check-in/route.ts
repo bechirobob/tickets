@@ -1,4 +1,4 @@
-import { readAdminSession } from "../../../../lib/admin-session";
+import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { hashGateToken, normalizeGateToken } from "../../../../lib/gate-pass";
 
 type TicketAtGate = {
@@ -12,8 +12,9 @@ type TicketAtGate = {
 };
 
 async function requireGateAdmin(request: Request) {
-  const session = await readAdminSession(request.headers.get("cookie"));
-  return session;
+  const { env } = await import("cloudflare:workers");
+  const session = await readAdminSession(request.headers.get("cookie"), env.DB);
+  return { env, session: session && hasPermission(session, "gate.scan") ? session : null };
 }
 
 async function findTicket(db: D1Database, tokenHash: string) {
@@ -31,12 +32,13 @@ async function findTicket(db: D1Database, tokenHash: string) {
 }
 
 export async function GET(request: Request) {
-  if (!(await requireGateAdmin(request))) {
+  const { env, session } = await requireGateAdmin(request);
+  if (!session) {
     return Response.json({ error: "Gate staff access required." }, { status: 401, headers: { "cache-control": "no-store" } });
   }
   const eventSlug = new URL(request.url).searchParams.get("eventSlug")?.trim() ?? "";
   if (!/^[a-z0-9-]{1,80}$/u.test(eventSlug)) return Response.json({ error: "Choose an event." }, { status: 400 });
-  const { env } = await import("cloudflare:workers");
+  if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
   const stats = await env.DB.prepare(`
     SELECT COUNT(*) AS issued,
            SUM(CASE WHEN status = 'checked_in' THEN 1 ELSE 0 END) AS checkedIn
@@ -46,10 +48,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await requireGateAdmin(request);
+  const { env, session } = await requireGateAdmin(request);
   if (!session) {
     return Response.json({ error: "Gate staff access required." }, { status: 401, headers: { "cache-control": "no-store" } });
   }
+  if (!mutationHasValidOrigin(request)) return Response.json({ error: "This scan request was not accepted." }, { status: 403 });
   const body = await request.json() as { code?: string; eventSlug?: string; gate?: string };
   const token = normalizeGateToken(body.code ?? "");
   const eventSlug = body.eventSlug?.trim() ?? "";
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "That QR or ticket code is not valid." }, { status: 400, headers: { "cache-control": "no-store" } });
   }
 
-  const { env } = await import("cloudflare:workers");
+  if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
   const tokenHash = await hashGateToken(token);
   const ticket = await findTicket(env.DB, tokenHash);
   if (!ticket) return Response.json({ result: "invalid", error: "Ticket not recognised. No entry was recorded." }, { status: 404, headers: { "cache-control": "no-store" } });
@@ -76,10 +79,11 @@ export async function POST(request: Request) {
   const result = await env.DB.prepare(`
     UPDATE tickets SET status = 'checked_in', checked_in_at = ?, checked_in_by = ?, checked_in_gate = ?
     WHERE id = ? AND status = 'issued' AND qr_token_hash = ?
-  `).bind(checkedInAt, session.actor, gate, ticket.ticketId, tokenHash).run();
+  `).bind(checkedInAt, `${session.actor} <${session.email}>`, gate, ticket.ticketId, tokenHash).run();
   if (result.meta.changes !== 1) {
     const current = await findTicket(env.DB, tokenHash);
     return Response.json({ result: "duplicate", ticket: current, error: "This ticket was admitted by another gate." }, { status: 409, headers: { "cache-control": "no-store" } });
   }
+  await recordAudit(env.DB, { session, action: "gate.ticket_checked_in", targetType: "ticket", targetId: ticket.ticketId, outcome: "success", detail: `${eventSlug}:${gate}`, requestId: requestMetadata(request).requestId });
   return Response.json({ result: "valid", ticket: { ...ticket, status: "checked_in", checkedInAt, checkedInGate: gate } }, { headers: { "cache-control": "no-store" } });
 }

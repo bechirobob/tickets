@@ -12,11 +12,20 @@ function BrandMark() {
   );
 }
 
+function currentWeekNumber() {
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const curatedEvents = await getPublicEvents();
   const featured = curatedEvents[0];
+  const heroImage = featured?.image ?? "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
 
   return (
     <main className="night-home">
@@ -35,20 +44,20 @@ export default async function Home() {
       </header>
 
       <section className="night-hero">
-        <img src={featured.image} alt="A crowd under warm stage lights at night" />
+        <img src={heroImage} alt="A crowd under warm stage lights at night" />
         <div className="night-hero__shade" />
         <div className="night-hero__copy">
-          <p className="night-kicker"><span /> Accra · Week 33</p>
+          <p className="night-kicker"><span /> Accra · Week {currentWeekNumber()}</p>
           <h1>Plans,<br />sorted.</h1>
-          <p>Four parties. We did the scrolling.</p>
-          <Link href="#drop" className="night-scroll">Pick your night <ArrowDown size={17} /></Link>
+          <p>{featured ? `${curatedEvents.length} ${curatedEvents.length === 1 ? "party" : "parties"}. We did the scrolling.` : "The next verified drop is being prepared."}</p>
+          <Link href={featured ? "#drop" : "/organizer/submit"} className="night-scroll">{featured ? "Pick your night" : "Submit a party"} <ArrowDown size={17} /></Link>
         </div>
-        <Link href={`/event/${featured.slug}`} className="night-featured">
+        {featured ? <Link href={`/event/${featured.slug}`} className="night-featured">
           <span className="night-featured__label">BeCore pick · 01</span>
           <strong>{featured.title}</strong>
           <span>{featured.day} · {featured.venue}, {featured.area}</span>
           <i><ArrowUpRight size={22} /></i>
-        </Link>
+        </Link> : <div className="night-featured night-featured--empty"><span className="night-featured__label">Next drop</span><strong>No filler while we verify the list.</strong><span>Real events will appear here once approved.</span></div>}
         <p className="night-hero__side">NO FILLER · JUST GOOD NIGHTS</p>
       </section>
 
@@ -56,7 +65,7 @@ export default async function Home() {
         <span>THIS WEEK</span>
         <b>A private Room with every ticket</b>
         <i>•</i>
-        <b>04 handpicked parties</b>
+        <b>{String(curatedEvents.length).padStart(2, "0")} handpicked {curatedEvents.length === 1 ? "party" : "parties"}</b>
         <i>•</i>
         <b>00 awkward mixers</b>
       </section>
@@ -67,7 +76,7 @@ export default async function Home() {
             <p className="night-kicker"><span /> The weekly edit</p>
             <h2>Pick your<br />problem.</h2>
           </div>
-          <p>Accra gave us options. We kept the good ones.</p>
+          <p>{curatedEvents.length ? "Accra gave us options. We kept the good ones." : "Only verified events make the public list."}</p>
         </div>
         <EventExplorer events={curatedEvents} />
       </section>
@@ -96,7 +105,7 @@ export default async function Home() {
                 <div className="night-room-peek__identity">
                   <ChevronLeft size={18} />
                   <span className="night-room-peek__avatars" aria-hidden="true"><i>AM</i><i>KB</i></span>
-                  <span><b>The Room <BadgeCheck size={13} /></b><small>After Dark: Osu · 284 inside</small></span>
+                  <span><b>The Room <BadgeCheck size={13} /></b><small>{featured ? `${featured.title} · ticket holders only` : "Your event · ticket holders only"}</small></span>
                 </div>
                 <span className="night-room-peek__preview"><ShieldCheck size={14} /> Preview</span>
               </header>

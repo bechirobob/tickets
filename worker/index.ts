@@ -3,6 +3,8 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { readAttendeeRoomAccess } from "../lib/attendee-auth";
 import { resolveRoomPolicy } from "../lib/room-policy";
+import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
+import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
 export { TheRoom } from "./the-room";
 
 function supportedImageFormat(format: string): "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif" {
@@ -55,24 +57,73 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
 const worker = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-
-    if (url.pathname === "/api/room/socket") {
-      return handleRoomSocket(request, env);
+    try {
+      let response: Response;
+      if (url.pathname === "/api/room/socket") {
+        response = await handleRoomSocket(request, env);
+      } else if (url.pathname === "/_vinext/image") {
+        const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
+        response = await handleImageOptimization(request, {
+          fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, request.url))),
+          transformImage: async (body, { width, format, quality }) => {
+            const result = await env.IMAGES.input(body).transform(width > 0 ? { width } : {}).output({ format: supportedImageFormat(format), quality });
+            return result.response();
+          },
+        }, allowedWidths);
+      } else {
+        response = await handler.fetch(request, env, ctx);
+      }
+      return response.status === 101 ? response : securityResponse(response);
+    } catch (error) {
+      const metadata = requestMetadata(request);
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(JSON.stringify({ message: "request failed", requestId: metadata.requestId, method: request.method, path: url.pathname, error: detail }));
+      ctx.waitUntil(recordSecurityEvent(env.DB, { kind: "runtime_error", subject: metadata.ip, path: url.pathname, requestId: metadata.requestId, detail }));
+      return securityResponse(Response.json({ error: "The service could not complete this request." }, { status: 500 }));
     }
-
-    if (url.pathname === "/_vinext/image") {
-      const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
-      return handleImageOptimization(request, {
-        fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, request.url))),
-        transformImage: async (body, { width, format, quality }) => {
-          const result = await env.IMAGES.input(body).transform(width > 0 ? { width } : {}).output({ format: supportedImageFormat(format), quality });
-          return result.response();
-        },
-      }, allowedWidths);
-    }
-
-    return handler.fetch(request, env, ctx);
+  },
+  async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runScheduledOperations(controller, env));
   },
 };
+
+function securityResponse(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; worker-src 'self' blob:");
+  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), usb=()");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  headers.delete("X-Powered-By");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unknown): Promise<void> {
+  const detail = error instanceof Error ? error.message : String(error);
+  console.error(JSON.stringify({ message: "scheduled operation failed", source, error: detail }));
+  await env.DB.prepare(`INSERT INTO system_alerts (id, source, severity, message, detail, status, created_at) VALUES (?, ?, 'critical', ?, ?, 'open', ?)`)
+    .bind(crypto.randomUUID(), source, `${source} failed`, detail.slice(0, 2000), new Date().toISOString()).run();
+}
+
+async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  try {
+    await expireReservations(env.DB);
+  } catch (error) {
+    await recordSystemAlert(env, "reservation-expiry", error);
+  }
+  if (controller.cron === "15 3 * * *" && env.PAYSTACK_SECRET_KEY) {
+    try {
+      const periodEnd = new Date();
+      periodEnd.setUTCHours(0, 0, 0, 0);
+      const periodStart = new Date(periodEnd.getTime() - 24 * 60 * 60 * 1000);
+      await runDailyReconciliation(env.DB, { secret: env.PAYSTACK_SECRET_KEY, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString(), actor: "system:daily-reconciliation" });
+    } catch (error) {
+      await recordSystemAlert(env, "daily-payment-reconciliation", error);
+    }
+  }
+}
 
 export default worker satisfies ExportedHandler<Cloudflare.Env>;

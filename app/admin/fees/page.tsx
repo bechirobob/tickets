@@ -4,6 +4,6 @@ import FeeSettings from "../fee-settings";
 export const dynamic = "force-dynamic";
 
 export default async function AdminFeesPage() {
-  await requireAdminSession("/admin/fees");
-  return <FeeSettings />;
+  const session = await requireAdminSession("/admin/fees", "fees.manage");
+  return <FeeSettings actor={session.actor} role={session.role} />;
 }

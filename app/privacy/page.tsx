@@ -1,0 +1,20 @@
+import Link from "next/link";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
+
+export const metadata = { title: "Privacy · BeCore Tickets" };
+
+export default function PrivacyPage() {
+  return <main className="legal-page">
+    <header><Link href="/"><ArrowLeft size={16} /> Back to events</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></span></header>
+    <article>
+      <p className="eyebrow"><ShieldCheck size={14} /> Privacy notice</p>
+      <h1>Your ticket needs some information. The crowd does not.</h1>
+      <p className="legal-updated">Effective 11 August 2026</p>
+      <section><h2>What BeCore Tickets collects</h2><p>We collect the name, email address and phone number supplied at checkout, order and payment references, event and ticket selections, ticket status, gate check-in records, and security records needed to protect The Room and prevent ticket abuse. Paystack processes payment credentials; BeCore Tickets does not store card or Mobile Money PIN details.</p></section>
+      <section><h2>Why we use it</h2><p>We use this information to reserve inventory, confirm payment, issue and recover tickets, operate entry scanning, provide receipts, unlock ticket-holder features, handle refunds and disputes, provide support, prevent fraud, and maintain financial and security records.</p></section>
+      <section><h2>Who receives it</h2><p>Payment data is exchanged with Paystack for transaction processing and verification. Transactional email details are sent to the configured delivery provider. Approved organisers and gate staff receive only the operational information required for their role. We do not sell attendee data.</p></section>
+      <section><h2>Retention and control</h2><p>Financial and entry records are retained for legal, accounting, refund and fraud-prevention needs. Expired recovery links and sessions are invalidated automatically. You may request access, correction or deletion where the law permits by contacting <a href="mailto:contact@becoreops.com">contact@becoreops.com</a>.</p></section>
+      <section><h2>Security</h2><p>Ticket, recovery and session secrets are stored as one-way hashes. QR passes rotate when the verified wallet opens, and no name, email, phone number or payment reference is embedded in the QR code.</p></section>
+    </article>
+  </main>;
+}

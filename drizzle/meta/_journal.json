@@ -43,6 +43,27 @@
       "when": 1786410334900,
       "tag": "0005_gifted_matthew_murdock",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786418968701,
+      "tag": "0006_cheerful_omega_red",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1786418990408,
+      "tag": "0007_lucky_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786421750138,
+      "tag": "0008_burly_the_hunter",
+      "breakpoints": true
     }
   ]
 }

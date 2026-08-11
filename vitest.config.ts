@@ -11,8 +11,9 @@ export default defineConfig({
       miniflare: {
         bindings: {
           TEST_MIGRATIONS: migrations,
-          ADMIN_ACCESS_KEY: "test-admin-access",
-          ADMIN_SESSION_SECRET: "test-admin-session-secret-with-enough-entropy",
+          ENVIRONMENT: "test",
+          PAYSTACK_SECRET_KEY: "sk_test_payment-operations",
+          RESEND_API_KEY: "re_test_delivery",
         },
       },
     }),

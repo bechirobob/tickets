@@ -6,7 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import type { CuratedEvent } from "./events";
 
 const vibes = [
-  ["All", "All four"],
+  ["All", "All events"],
   ["Late night", "After midnight"],
   ["Day party", "Sun first"],
   ["Alté", "Look expensive"],
@@ -22,6 +22,10 @@ export default function EventExplorer({ events }: { events: CuratedEvent[] }) {
     () => active === "All" ? events : events.filter((event) => event.vibe === active),
     [active, events]
   );
+
+  if (!events.length) {
+    return <section className="event-empty"><Ticket size={28} /><h3>The next drop is still being checked.</h3><p>Nothing is published until the organiser, venue and ticket terms are ready for customers.</p><Link href="/organizer/submit">Submit a party <ArrowUpRight size={16} /></Link></section>;
+  }
 
   function chooseForMe() {
     if (!visible.length) return;

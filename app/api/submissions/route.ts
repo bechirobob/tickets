@@ -1,5 +1,7 @@
 import { getDb } from "../../../db";
 import { partySubmissions } from "../../../db/schema";
+import { hashToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../lib/admin-session";
+import { enforceRateLimit, verifyTurnstile } from "../../../lib/security-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +29,16 @@ function required(form: FormData, key: string, max = 500) {
   return value;
 }
 
+function requiredHttpUrl(form: FormData, key: string) {
+  const value = required(form, key, 500);
+  const url = new URL(value);
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error(`Please check ${key}.`);
+  return url.toString();
+}
+
 export async function POST(request: Request) {
   try {
+    if (!mutationHasValidOrigin(request)) return Response.json({ error: "This submission request was not accepted." }, { status: 403 });
     const declaredLength = Number(request.headers.get("content-length"));
     if (Number.isFinite(declaredLength) && declaredLength > 9 * 1024 * 1024) {
       return Response.json({ error: "The complete submission must stay under 9 MB." }, { status: 413 });
@@ -37,6 +47,15 @@ export async function POST(request: Request) {
     const form = await request.formData();
     if (String(form.get("website") ?? "").trim()) {
       return Response.json({ accepted: true }, { status: 202 });
+    }
+    const { env } = await import("cloudflare:workers");
+    const contactEmail = String(form.get("contactEmail") ?? "").trim().toLowerCase();
+    if (!(await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `submission:${await hashToken(contactEmail || requestMetadata(request).ip || "anonymous")}`))) {
+      await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: contactEmail, path: "/api/submissions", requestId: requestMetadata(request).requestId });
+      return Response.json({ error: "Too many submissions were attempted. Wait a minute and try again." }, { status: 429 });
+    }
+    if (!(await verifyTurnstile(request, String(form.get("turnstileToken") ?? ""), "organizer_submission", env))) {
+      return Response.json({ error: "Complete the browser security check and try again." }, { status: 400 });
     }
 
     const startsAt = required(form, "startsAt", 40);
@@ -81,11 +100,12 @@ export async function POST(request: Request) {
       id,
       organizerName: required(form, "organizerName", 120),
       contactName: required(form, "contactName", 120),
-      contactEmail: required(form, "contactEmail", 180).toLowerCase(),
+      contactEmail,
       contactPhone: required(form, "contactPhone", 40),
       title: required(form, "title", 120),
       concept: required(form, "concept", 1800),
       venueName: required(form, "venueName", 160),
+      venueMapUrl: requiredHttpUrl(form, "venueMapUrl"),
       area: required(form, "area", 80),
       startsAt: new Date(startTime).toISOString(),
       endsAt: new Date(endTime).toISOString(),

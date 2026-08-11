@@ -1,3 +1,5 @@
 ADMIN_ACCESS_KEY=replace-with-a-long-local-development-key
-ADMIN_SESSION_SECRET=replace-with-a-different-random-secret
 PAYSTACK_SECRET_KEY=sk_test_replace_me
+RESEND_API_KEY=re_replace_me
+TURNSTILE_SITE_KEY=replace-with-your-widget-site-key
+TURNSTILE_SECRET_KEY=replace-with-your-widget-secret-key

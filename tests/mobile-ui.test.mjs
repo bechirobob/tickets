@@ -63,7 +63,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /No ticket\. No lurking\./u);
   assert.match(home, /Ticket-holder mobile preview/u);
   assert.match(home, /aria-label="A preview of The Room conversation inside a mobile device"/u);
-  assert.match(home, /284 inside/u);
+  assert.match(home, /ticket holders only/u);
   assert.match(home, /Organiser update/u);
   assert.match(home, /Main entrance · Gate 2/u);
   assert.match(home, /Message The Room/u);
@@ -95,7 +95,7 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(css, /\.pay-button:focus-visible\s*\{[^}]*outline:/su);
 });
 
-test("public organiser actions converge on submission without exposing a workspace", async () => {
+test("public organiser actions keep submission public and named workspaces protected", async () => {
   const [home, organizer, submission, adminSubmissions] = await Promise.all([
     readFile(homeUrl, "utf8"),
     readFile(organizerUrl, "utf8"),
@@ -106,10 +106,10 @@ test("public organiser actions converge on submission without exposing a workspa
   assert.doesNotMatch(home, /href="\/organizer"/u);
   assert.ok(home.match(/href="\/organizer\/submit"/gu)?.length >= 4);
   assert.match(home, />Submit your party\s*</u);
-  assert.match(organizer, /redirect\("\/organizer\/submit"\)/u);
+  assert.match(organizer, /redirect\("\/organizer\/workspace"\)/u);
   assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
   assert.match(submission, /href="\/"[^>]*>.*Back to events/su);
-  assert.doesNotMatch(submission, /Organiser workspace/u);
+  assert.match(submission, /Organiser sign in/u);
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
 });
@@ -122,11 +122,32 @@ test("ticket entry uses a protected real scanner and printable QR receipt", asyn
     readFile(cssUrl, "utf8"),
   ]);
 
-  assert.match(scanPage, /requireAdminSession\("\/scan"\)/u);
+  assert.match(scanPage, /requireAdminSession\("\/scan", "gate\.scan"\)/u);
+  assert.match(scanPage, /staff_event_assignments/u);
   assert.match(scanner, /new QrScanner/u);
   assert.match(scanner, /\/api\/admin\/check-in/u);
   assert.doesNotMatch(scanner, /code\.trim\(\)\.length\s*>\s*5/u);
   assert.match(wallet, /<QrPass/u);
   assert.match(wallet, /Payment receipt/u);
   assert.match(receiptCss, /@media print/u);
+});
+
+test("launch inventory is database-backed and public defects stay closed", async () => {
+  const [events, eventPage, privacy, home, wallet] = await Promise.all([
+    readFile(new URL("../app/events.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/event/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/privacy/page.tsx", import.meta.url), "utf8"),
+    readFile(homeUrl, "utf8"),
+    readFile(new URL("../app/tickets/ticket-wallet.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.doesNotMatch(events, /after-dark-osu|noir-room-labone|sun-chasers-labadi|longitude-spintex/u);
+  assert.match(events, /FROM curated_event_records/u);
+  assert.match(events, /FROM event_ticket_tiers/u);
+  assert.match(eventPage, /if \(!event\) notFound\(\)/u);
+  assert.match(eventPage, /<EventActions/u);
+  assert.match(eventPage, /event\.venueMapUrl/u);
+  assert.match(privacy, /Privacy notice/u);
+  assert.match(home, /featured\?\.image/u);
+  assert.match(wallet, /\/api\/customer\/recovery/u);
 });
