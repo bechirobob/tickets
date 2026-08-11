@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const bookingFeeRules = sqliteTable("booking_fee_rules", {
   id: text("id").primaryKey(),
@@ -151,6 +151,7 @@ export const partySubmissions = sqliteTable("party_submissions", {
   socialUrl: text("social_url"),
   posterObjectKey: text("poster_object_key"),
   posterContentType: text("poster_content_type"),
+  posterData: blob("poster_data", { mode: "buffer" }),
   status: text("status", { enum: ["submitted", "in_review", "changes_requested", "approved", "rejected", "scheduled", "published", "unpublished", "archived"] }).notNull(),
   reviewNote: text("review_note"),
   curationNote: text("curation_note"),

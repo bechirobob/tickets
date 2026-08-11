@@ -1,0 +1,1 @@
+ALTER TABLE `party_submissions` ADD `poster_data` blob;
