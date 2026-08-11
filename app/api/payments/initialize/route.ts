@@ -47,6 +47,7 @@ export async function POST(request: Request) {
   const totalAmountMinor = faceAmountMinor + bookingFeeMinor;
   const id = crypto.randomUUID();
   const reference = `BCT-${Date.now().toString(36).toUpperCase()}-${id.slice(0, 6).toUpperCase()}`;
+  const origin = new URL(request.url).origin;
   const claimToken = createSecureToken();
   const claimTokenHash = await hashToken(claimToken);
 
@@ -102,34 +103,52 @@ export async function POST(request: Request) {
     return Response.json({ error: "Those admissions were just reserved or sold. Refresh the event to see current availability." }, { status: 409 });
   }
 
-  const response = await fetch("https://api.paystack.co/charge", {
+  const paymentMetadata = {
+    orderId: id,
+    eventSlug,
+    ticketTierId: selection.tier.id,
+    ticketTierName: selection.tier.name,
+    purchaseQuantity: selection.unitQuantity,
+    ticketCount: selection.ticketCount,
+    customerName: body.fullName?.trim(),
+    phone,
+    network: body.network,
+    faceAmountMinor,
+    bookingFeeMinor,
+    reservationExpiresAt: expiresAt,
+  };
+
+  const response = await fetch(event.isTestEvent
+    ? "https://api.paystack.co/transaction/initialize"
+    : "https://api.paystack.co/charge", {
     method: "POST",
     headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
+    body: JSON.stringify(event.isTestEvent ? {
+      email,
+      amount: totalAmountMinor,
+      currency: "GHS",
+      reference,
+      channels: ["mobile_money"],
+      callback_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`,
+      metadata: JSON.stringify(paymentMetadata),
+    } : {
       email,
       amount: totalAmountMinor,
       currency: "GHS",
       reference,
       mobile_money: { phone, provider },
-      metadata: {
-        orderId: id,
-        eventSlug,
-        ticketTierId: selection.tier.id,
-        ticketTierName: selection.tier.name,
-        purchaseQuantity: selection.unitQuantity,
-        ticketCount: selection.ticketCount,
-        customerName: body.fullName?.trim(),
-        phone,
-        network: body.network,
-        faceAmountMinor,
-        bookingFeeMinor,
-        reservationExpiresAt: expiresAt,
-      },
+      metadata: paymentMetadata,
     }),
   });
-  const result = await response.json() as { status?: boolean; message?: string; data?: { reference?: string; status?: string; display_text?: string } };
-  const chargeReady = result.data?.status === "pay_offline" || result.data?.status === "success";
-  if (!response.ok || !result.status || !result.data?.reference || !chargeReady) {
+  const result = await response.json() as {
+    status?: boolean;
+    message?: string;
+    data?: { authorization_url?: string; reference?: string; status?: string; display_text?: string };
+  };
+  const paymentReady = event.isTestEvent
+    ? Boolean(result.data?.authorization_url && result.data.reference)
+    : Boolean(result.data?.reference && (result.data.status === "pay_offline" || result.data.status === "success"));
+  if (!response.ok || !result.status || !paymentReady) {
     await env.DB.batch([
       env.DB.prepare("UPDATE orders SET status = 'failed', failure_reason = ?, payment_updated_at = ? WHERE id = ?")
         .bind(result.message ?? "Paystack could not start the payment.", new Date().toISOString(), id),
@@ -140,7 +159,10 @@ export async function POST(request: Request) {
   }
 
   await env.DB.prepare("UPDATE orders SET paystack_reference = ?, paystack_status = ?, payment_updated_at = ? WHERE id = ?")
-    .bind(result.data.reference, result.data.status, new Date().toISOString(), id).run();
+    .bind(result.data?.reference ?? reference, event.isTestEvent ? "initialized" : result.data?.status, new Date().toISOString(), id).run();
+  if (event.isTestEvent) {
+    return Response.json({ authorizationUrl: result.data?.authorization_url, reference, reservationExpiresAt: expiresAt });
+  }
   const nextUrl = `/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}&prompt=1`;
-  return Response.json({ nextUrl, reference, displayText: result.data.display_text ?? "Approve the payment prompt on your phone.", reservationExpiresAt: expiresAt });
+  return Response.json({ nextUrl, reference, displayText: result.data?.display_text ?? "Approve the payment prompt on your phone.", reservationExpiresAt: expiresAt });
 }

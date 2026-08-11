@@ -41,8 +41,11 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? "{}")) as { reference?: string };
+    if (String(url).endsWith("/transaction/initialize")) {
+      return Response.json({ status: true, message: "Authorization URL created", data: { reference: body.reference, authorization_url: "https://checkout.paystack.com/test-session" } });
+    }
     return Response.json({ status: true, message: "Charge attempted", data: { reference: body.reference, status: "pay_offline", display_text: "Approve the prompt on your phone" } });
   }));
 });
@@ -58,7 +61,7 @@ describe("payment ticket validation", () => {
     }
   });
 
-  it("uses Paystack's direct Ghana MoMo provider codes without hosted checkout", async () => {
+  it("uses Paystack's direct Ghana MoMo provider codes for live events", async () => {
     for (const [network, provider] of [["mtn", "mtn"], ["telecel", "vod"], ["at", "atl"]] as const) {
       const response = await initializePayment(paymentRequest(eventSlug, "general", 1, network));
       expect(response.status).toBe(200);
@@ -68,6 +71,18 @@ describe("payment ticket validation", () => {
       expect(body).toMatchObject({ currency: "GHS", mobile_money: { phone: "233000000000", provider } });
       await expect(response.json()).resolves.toMatchObject({ nextUrl: expect.not.stringContaining("checkout.paystack") });
     }
+  });
+
+  it("uses Paystack hosted checkout so test events can complete visibly", async () => {
+    const response = await initializePayment(paymentRequest("after-dark-osu", "general", 1, "mtn"));
+    expect(response.status).toBe(200);
+    const [url, init] = vi.mocked(fetch).mock.calls.at(-1)!;
+    const body = JSON.parse(String(init?.body)) as { channels: string[]; callback_url: string; metadata: string };
+    expect(String(url)).toBe("https://api.paystack.co/transaction/initialize");
+    expect(body.channels).toEqual(["mobile_money"]);
+    expect(body.callback_url).toMatch(/^https:\/\/tickets\.becoreops\.com\/payment\/return\?/u);
+    expect(JSON.parse(body.metadata)).toMatchObject({ eventSlug: "after-dark-osu", network: "mtn" });
+    await expect(response.json()).resolves.toMatchObject({ authorizationUrl: "https://checkout.paystack.com/test-session" });
   });
 
   it("rejects unknown events and ticket tiers", async () => {
