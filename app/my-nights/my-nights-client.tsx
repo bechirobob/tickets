@@ -62,7 +62,7 @@ export default function MyNightsClient() {
   }, [now, payload, view]);
 
   return <main className="my-nights-page">
-    <header className="directory-header"><Link href="/"><ArrowLeft size={16} /> Home</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><Link href="/account/privacy"><ShieldCheck size={15} /> Privacy</Link></header>
+    <header className="directory-header"><Link href="/"><ArrowLeft size={16} /> Home</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><span className="my-nights-header-actions"><Link href="/notifications"><Bell size={15} /> The Buzz</Link><Link href="/account/privacy"><ShieldCheck size={15} /> Privacy</Link></span></header>
     <section className="my-nights-shell">
       <header><div><p className="eyebrow">Tickets, perks and the Room</p><h1>{loading ? "Gathering your evidence…" : payload ? `${payload.attendee.displayName}’s nights.` : "Been here before? Good."}</h1><p className="my-nights-intro">Everything your ticket unlocked, exactly where you left it. No password archaeology.</p></div>{payload ? <span><LockKeyhole size={13} /> The useful kind of exclusive</span> : null}</header>
       {recovered && payload ? <div className="my-nights-recovered"><CheckCircle2 size={18} /><span><b>Your nights are back.</b> Fresh passes, familiar plans. We love a clean recovery.</span></div> : null}

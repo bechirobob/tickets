@@ -109,6 +109,13 @@ export const tickets = sqliteTable("tickets", {
   index("tickets_order_idx").on(table.orderId),
 ]);
 
+export const ticketGateCredentials = sqliteTable("ticket_gate_credentials", {
+  ticketId: text("ticket_id").primaryKey(),
+  token: text("token").notNull(),
+  issuedAt: text("issued_at").notNull(),
+  rotatedAt: text("rotated_at"),
+}, (table) => [uniqueIndex("ticket_gate_credentials_token_unique").on(table.token)]);
+
 export const ticketAssignments = sqliteTable("ticket_assignments", {
   ticketId: text("ticket_id").primaryKey(),
   attendeeId: text("attendee_id").notNull(),
@@ -159,6 +166,86 @@ export const attendeeEventPreferences = sqliteTable("attendee_event_preferences"
 }, (table) => [
   uniqueIndex("attendee_event_preferences_unique").on(table.attendeeId, table.eventSlug),
   index("attendee_event_preferences_event_idx").on(table.eventSlug, table.keepPosted),
+]);
+
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  id: text("id").primaryKey(),
+  attendeeId: text("attendee_id").notNull(),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  lastSuccessAt: text("last_success_at"),
+  failureCount: integer("failure_count").notNull().default(0),
+  revokedAt: text("revoked_at"),
+}, (table) => [
+  uniqueIndex("push_subscriptions_endpoint_unique").on(table.endpoint),
+  index("push_subscriptions_attendee_idx").on(table.attendeeId, table.revokedAt),
+]);
+
+export const notificationPreferences = sqliteTable("notification_preferences", {
+  attendeeId: text("attendee_id").notNull(),
+  eventSlug: text("event_slug").notNull(),
+  roomMessages: integer("room_messages", { mode: "boolean" }).notNull().default(true),
+  hostUpdates: integer("host_updates", { mode: "boolean" }).notNull().default(true),
+  mutedUntil: text("muted_until"),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("notification_preferences_attendee_event_unique").on(table.attendeeId, table.eventSlug),
+  index("notification_preferences_event_idx").on(table.eventSlug, table.roomMessages, table.mutedUntil),
+]);
+
+export const attendeeNotifications = sqliteTable("attendee_notifications", {
+  id: text("id").primaryKey(),
+  attendeeId: text("attendee_id").notNull(),
+  eventSlug: text("event_slug"),
+  kind: text("kind", { enum: ["room_message", "host_update", "ticket_transfer", "gate_update", "event_reminder"] }).notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  url: text("url").notNull(),
+  sourceId: text("source_id"),
+  createdAt: text("created_at").notNull(),
+  readAt: text("read_at"),
+}, (table) => [
+  index("attendee_notifications_inbox_idx").on(table.attendeeId, table.readAt, table.createdAt),
+  uniqueIndex("attendee_notifications_source_unique").on(table.attendeeId, table.kind, table.sourceId),
+]);
+
+export const ticketTransfers = sqliteTable("ticket_transfers", {
+  id: text("id").primaryKey(),
+  ticketId: text("ticket_id").notNull(),
+  senderAttendeeId: text("sender_attendee_id").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  status: text("status", { enum: ["pending", "accepted", "cancelled", "expired"] }).notNull().default("pending"),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  acceptedAt: text("accepted_at"),
+  cancelledAt: text("cancelled_at"),
+  recipientAttendeeId: text("recipient_attendee_id"),
+}, (table) => [
+  uniqueIndex("ticket_transfers_token_unique").on(table.tokenHash),
+  index("ticket_transfers_ticket_status_idx").on(table.ticketId, table.status, table.expiresAt),
+  index("ticket_transfers_sender_idx").on(table.senderAttendeeId, table.status, table.createdAt),
+]);
+
+export const gateCheckinEvents = sqliteTable("gate_checkin_events", {
+  id: text("id").primaryKey(),
+  ticketId: text("ticket_id").notNull(),
+  eventSlug: text("event_slug").notNull(),
+  action: text("action", { enum: ["check_in", "undo"] }).notNull(),
+  gate: text("gate").notNull(),
+  actorAccountId: text("actor_account_id").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  deviceId: text("device_id"),
+  clientScanId: text("client_scan_id"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("gate_checkin_events_client_scan_unique").on(table.clientScanId),
+  index("gate_checkin_events_ticket_idx").on(table.ticketId, table.createdAt),
+  index("gate_checkin_events_event_idx").on(table.eventSlug, table.createdAt),
 ]);
 
 export const attendeePrivacySettings = sqliteTable("attendee_privacy_settings", {
@@ -479,7 +566,7 @@ export const deliveryEvents = sqliteTable("delivery_events", {
   id: text("id").primaryKey(),
   orderId: text("order_id"),
   recoveryGrantId: text("recovery_grant_id"),
-  kind: text("kind", { enum: ["payment_confirmation", "ticket_recovery"] }).notNull(),
+  kind: text("kind", { enum: ["payment_confirmation", "ticket_recovery", "ticket_transfer"] }).notNull(),
   recipient: text("recipient").notNull(),
   providerId: text("provider_id"),
   status: text("status", { enum: ["queued", "sent", "failed", "bounced"] }).notNull(),

@@ -16,6 +16,7 @@ type TicketRow = {
   quantity: number;
   paidAt: string | null;
   customerName: string | null;
+  customerEmail: string;
   eventTitle: string | null;
   eventStartsAt: string | null;
   eventEndsAt: string | null;
@@ -24,6 +25,7 @@ type TicketRow = {
   eventState: string | null;
   tierName: string | null;
   tierDescription: string | null;
+  gateToken: string | null;
 };
 
 export async function POST(request: Request) {
@@ -38,55 +40,58 @@ export async function POST(request: Request) {
            t.ticket_type AS ticketType, t.status AS ticketStatus, t.checked_in_at AS checkedInAt,
            o.face_amount_minor AS faceAmountMinor, o.booking_fee_minor AS bookingFeeMinor,
            o.total_amount_minor AS totalAmountMinor, o.currency, o.quantity, o.paid_at AS paidAt,
-           o.customer_name AS customerName,
+           o.customer_name AS customerName, o.customer_email AS customerEmail,
            event.title AS eventTitle, event.starts_at AS eventStartsAt,
            event.ends_at AS eventEndsAt, event.venue AS eventVenue, event.area AS eventArea,
            event.event_state AS eventState,
-           tier.name AS tierName, tier.description AS tierDescription
+           tier.name AS tierName, tier.description AS tierDescription,
+           credential.token AS gateToken
     FROM ticket_assignments a
     JOIN tickets t ON t.id = a.ticket_id
     JOIN orders o ON o.id = t.order_id
     LEFT JOIN curated_event_records event ON event.slug = t.event_slug
     LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
+    LEFT JOIN ticket_gate_credentials credential ON credential.ticket_id = t.id
     WHERE a.attendee_id = ? AND a.status = 'active' AND o.status = 'paid'
       AND t.status IN ('issued', 'checked_in', 'voided')
     ORDER BY o.paid_at DESC, t.issued_at, t.id
     LIMIT 100
   `).bind(identity.attendeeId).all<TicketRow>();
 
-  const refreshable = rows.results.filter((ticket) => ticket.ticketStatus === "issued" && ["on_sale", "rescheduled"].includes(ticket.eventState ?? "on_sale")).map((ticket) => ({
-    ticket,
-    token: createGateToken(),
-  }));
-  const resolvedUpdates = await Promise.all(refreshable.map(async ({ ticket, token }) => env.DB.prepare(`
-    UPDATE tickets SET qr_token_hash = ?
-    WHERE id = ? AND status = 'issued'
-  `).bind(await hashGateToken(token), ticket.ticketId)));
-  const results = resolvedUpdates.length ? await env.DB.batch(resolvedUpdates) : [];
   const activeCodes = new Map<string, string>();
-  refreshable.forEach(({ ticket, token }, index) => {
-    if (results[index]?.meta.changes === 1) activeCodes.set(ticket.ticketId, token);
-  });
+  const eligible = rows.results.filter((ticket) => ticket.ticketStatus === "issued" && ["on_sale", "rescheduled"].includes(ticket.eventState ?? "on_sale"));
+  for (const ticket of eligible) {
+    if (ticket.gateToken) { activeCodes.set(ticket.ticketId, ticket.gateToken); continue; }
+    const token = createGateToken();
+    const now = new Date().toISOString();
+    const [updated, inserted] = await env.DB.batch([
+      env.DB.prepare("UPDATE tickets SET qr_token_hash = ? WHERE id = ? AND status = 'issued'").bind(await hashGateToken(token), ticket.ticketId),
+      env.DB.prepare("INSERT OR IGNORE INTO ticket_gate_credentials (ticket_id, token, issued_at) VALUES (?, ?, ?)").bind(ticket.ticketId, token, now),
+    ]);
+    if (updated.meta.changes === 1 && inserted.meta.changes === 1) activeCodes.set(ticket.ticketId, token);
+  }
 
   const orderMap = new Map<string, {
     orderId: string; reference: string; eventSlug: string; faceAmountMinor: number;
     bookingFeeMinor: number; totalAmountMinor: number; currency: string; quantity: number;
     paidAt: string | null; event: { title: string; date: string; venue: string; state: string } | null; tickets: Array<Record<string, unknown>>;
-    bookedFor: string | null;
+    bookedFor: string | null; canViewPurchase: boolean;
     tierName: string | null; tierDescription: string | null;
   }>();
   for (const ticket of rows.results) {
+    const canViewPurchase = ticket.customerEmail === identity.normalizedEmail;
     const order = orderMap.get(ticket.orderId) ?? {
       orderId: ticket.orderId,
-      reference: ticket.reference,
+      reference: canViewPurchase ? ticket.reference : "Transferred ticket",
       eventSlug: ticket.eventSlug,
-      faceAmountMinor: ticket.faceAmountMinor,
-      bookingFeeMinor: ticket.bookingFeeMinor,
-      totalAmountMinor: ticket.totalAmountMinor,
+      faceAmountMinor: canViewPurchase ? ticket.faceAmountMinor : 0,
+      bookingFeeMinor: canViewPurchase ? ticket.bookingFeeMinor : 0,
+      totalAmountMinor: canViewPurchase ? ticket.totalAmountMinor : 0,
       currency: ticket.currency,
       quantity: ticket.quantity,
       paidAt: ticket.paidAt,
       bookedFor: ticket.customerName,
+      canViewPurchase,
       tierName: ticket.tierName,
       tierDescription: ticket.tierDescription,
       event: ticket.eventTitle && ticket.eventStartsAt && ticket.eventEndsAt ? {

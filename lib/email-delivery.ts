@@ -1,6 +1,6 @@
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "payment_confirmation" | "ticket_recovery";
+type DeliveryKind = "payment_confirmation" | "ticket_recovery" | "ticket_transfer";
 
 type OrderForEmail = {
   id: string;
@@ -114,6 +114,32 @@ export async function issueRecoveryGrant(input: {
   const plain = `${input.kind === "payment_confirmation" ? "Paid. Verified. Your Night is ready." : "Your Nights missed you. Slightly."}\n\n${event ? `${event.title}\n${event.venue}, ${event.area}\n\n` : ""}${input.order ? `Reference: ${input.order.reference}\nTotal paid: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}Secure one-time My Nights link: ${recoveryUrl}\n\nThis link expires at ${expiresAt}. It does not contain a QR pass.`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;
   return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId });
+}
+
+export async function sendTicketTransferEmail(input: {
+  db: D1Database;
+  transferId: string;
+  recipientEmail: string;
+  recipientName: string;
+  senderName: string;
+  eventTitle: string;
+  eventDate: string;
+  venue: string;
+  claimUrl: string;
+}) {
+  const subject = `${input.senderName} sent you a ticket for ${input.eventTitle}`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#181914"><p style="color:#f05a28;font-weight:700">BECORE TICKETS</p><h1 style="font-size:28px">A Night has changed hands.</h1><p>Hi ${escapeHtml(input.recipientName)},</p><p><strong>${escapeHtml(input.senderName)}</strong> sent you one ticket for:</p><p style="font-size:18px"><strong>${escapeHtml(input.eventTitle)}</strong><br>${escapeHtml(input.eventDate)}<br>${escapeHtml(input.venue)}</p><p>Accept it below and it will move into your own My Nights with a brand-new QR, Room access and ticket-linked perks. The sender’s old QR stops working the moment you accept.</p><p style="margin:28px 0"><a href="${escapeHtml(input.claimUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Accept my ticket</a></p><p style="color:#666;font-size:13px">This private link expires in 48 hours. If you were not expecting this, ignore it and the ticket stays where it is. Very un-dramatic.</p></div>`;
+  const text = `${input.senderName} sent you a ticket for ${input.eventTitle}.\n${input.eventDate}\n${input.venue}\n\nAccept it: ${input.claimUrl}\n\nThe private link expires in 48 hours.`;
+  return sendEmail({
+    db: input.db,
+    kind: "ticket_transfer",
+    recipient: input.recipientEmail,
+    subject,
+    html,
+    text,
+    idempotencyKey: `ticket-transfer/${input.transferId}`,
+    recoveryGrantId: input.transferId,
+  });
 }
 
 export async function sendOrderConfirmation(db: D1Database, order: OrderForEmail, origin: string) {

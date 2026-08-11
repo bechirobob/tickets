@@ -12,7 +12,8 @@
   ],
   "vars": {
     "EMAIL_FROM": "BeCore Tickets <tickets@tickets.becoreops.com>",
-    "ENVIRONMENT": "production"
+    "ENVIRONMENT": "production",
+    "VAPID_SUBJECT": "mailto:tickets@tickets.becoreops.com"
   },
   "triggers": {
     "crons": ["*/5 * * * *", "15 3 * * *"]

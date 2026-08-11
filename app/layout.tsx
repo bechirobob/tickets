@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import CustomerDock from "./customer-dock";
+import PwaRegistration from "./pwa-registration";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "BeCore Tickets — Accra's party shortlist",
   description: "A weekly edit of selected parties in Accra, with secure Mobile Money ticketing by BeCoreOps.",
+  manifest: "/manifest.webmanifest",
+  themeColor: "#0b0c0b",
   icons: {
     icon: [
       { url: "/favicon.ico?v=2", sizes: "any" },
@@ -24,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
-      <body>{children}<CustomerDock /></body>
+      <body>{children}<CustomerDock /><PwaRegistration /></body>
     </html>
   );
 }

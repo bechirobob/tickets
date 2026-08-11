@@ -1,0 +1,13 @@
+{
+  "name": "BeCore Tickets",
+  "short_name": "My Nights",
+  "description": "Accra nights, tickets, Rooms and event-day access.",
+  "start_url": "/my-nights",
+  "display": "standalone",
+  "background_color": "#0b0c0b",
+  "theme_color": "#0b0c0b",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/favicon-32x32.png", "sizes": "32x32", "type": "image/png" }
+  ]
+}

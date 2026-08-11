@@ -10,6 +10,7 @@ export type StaffPermission =
   | "orders.manage"
   | "fees.manage"
   | "gate.scan"
+  | "gate.undo"
   | "rooms.moderate"
   | "organizer.workspace";
 
@@ -38,7 +39,7 @@ type StaffAccountRecord = {
 };
 
 const permissions: Record<StaffRole, readonly StaffPermission[]> = {
-  owner: ["accounts.manage", "curation.manage", "events.manage", "orders.manage", "fees.manage", "gate.scan", "rooms.moderate", "organizer.workspace"],
+  owner: ["accounts.manage", "curation.manage", "events.manage", "orders.manage", "fees.manage", "gate.scan", "gate.undo", "rooms.moderate", "organizer.workspace"],
   curator: ["curation.manage", "events.manage"],
   finance: ["orders.manage", "fees.manage"],
   organizer: ["organizer.workspace"],
