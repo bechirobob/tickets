@@ -25,11 +25,11 @@ export default async function Home() {
         <nav aria-label="Main navigation">
           <Link href="#drop">The drop</Link>
           <Link href="#standard">Our standard</Link>
-          <Link href="/organizer">For organisers</Link>
+          <Link href="/organizer/submit">For organisers</Link>
         </nav>
         <div className="night-header__actions">
           <Link href="/tickets" className="night-ticket-link"><Ticket size={16} /> My tickets</Link>
-          <Link href="/organizer" className="night-submit">Submit a party <ArrowUpRight size={15} /></Link>
+          <Link href="/organizer/submit" className="night-submit">Submit a party <ArrowUpRight size={15} /></Link>
         </div>
       </header>
 
@@ -92,7 +92,7 @@ export default async function Home() {
         </div>
         <div className="night-pitch__copy">
           <p>Show us. “Good vibes” is not a production plan.</p>
-          <Link href="/organizer/submit">Try your luck <ArrowUpRight size={17} /></Link>
+          <Link href="/organizer/submit">Submit your party <ArrowUpRight size={17} /></Link>
         </div>
       </section>
 
@@ -101,7 +101,7 @@ export default async function Home() {
         <p>Accra&apos;s short list for a good night.</p>
         <div>
           <Link href="/tickets">My tickets</Link>
-          <Link href="/organizer">Organisers</Link>
+          <Link href="/organizer/submit">Organisers</Link>
           <Link href="/privacy">Privacy</Link>
           <span>A BeCoreOps platform</span>
         </div>

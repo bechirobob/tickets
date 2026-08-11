@@ -4,6 +4,10 @@ import test from "node:test";
 
 const cssUrl = new URL("../app/globals.css", import.meta.url);
 const roomUrl = new URL("../app/room/[slug]/room-client.tsx", import.meta.url);
+const homeUrl = new URL("../app/page.tsx", import.meta.url);
+const organizerUrl = new URL("../app/organizer/page.tsx", import.meta.url);
+const submissionUrl = new URL("../app/organizer/submit/page.tsx", import.meta.url);
+const adminSubmissionsUrl = new URL("../app/api/admin/submissions/route.ts", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -45,4 +49,33 @@ test("customer actions are editorial links and the mobile event list is a smooth
   assert.match(css, /\.vibe-filter button\.active\s*\{[^}]*background:\s*transparent/su);
   assert.match(finalMobileBlock, /\.curated-grid\s*\{[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory[^}]*scroll-behavior:\s*smooth/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
+});
+
+test("checkout conversion actions look and behave like primary controls", async () => {
+  const css = await readFile(cssUrl, "utf8");
+
+  assert.match(css, /\.event-page \.checkout-link\s*\{[^}]*background:\s*var\(--ink\)[^}]*font-weight:\s*600/su);
+  assert.match(css, /\.event-page \.checkout-link:hover\s*\{[^}]*transform:\s*translateY\(-2px\)/su);
+  assert.match(css, /\.pay-button\s*\{[^}]*min-height:\s*53px[^}]*background:\s*#f0ecdf[^}]*font-weight:\s*600/su);
+  assert.match(css, /\.pay-button:hover:not\(:disabled\)\s*\{[^}]*transform:\s*translateY\(-2px\)/su);
+  assert.match(css, /\.pay-button:focus-visible\s*\{[^}]*outline:/su);
+});
+
+test("public organiser actions converge on submission without exposing a workspace", async () => {
+  const [home, organizer, submission, adminSubmissions] = await Promise.all([
+    readFile(homeUrl, "utf8"),
+    readFile(organizerUrl, "utf8"),
+    readFile(submissionUrl, "utf8"),
+    readFile(adminSubmissionsUrl, "utf8"),
+  ]);
+
+  assert.doesNotMatch(home, /href="\/organizer"/u);
+  assert.ok(home.match(/href="\/organizer\/submit"/gu)?.length >= 4);
+  assert.match(home, />Submit your party\s*</u);
+  assert.match(organizer, /redirect\("\/organizer\/submit"\)/u);
+  assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
+  assert.match(submission, /href="\/"[^>]*>.*Back to events/su);
+  assert.doesNotMatch(submission, /Organiser workspace/u);
+  assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
+  assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
 });
