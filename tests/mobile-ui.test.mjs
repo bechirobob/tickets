@@ -79,3 +79,20 @@ test("public organiser actions converge on submission without exposing a workspa
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
 });
+
+test("ticket entry uses a protected real scanner and printable QR receipt", async () => {
+  const [scanPage, scanner, wallet, receiptCss] = await Promise.all([
+    readFile(new URL("../app/scan/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/scan/scanner.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/tickets/ticket-wallet.tsx", import.meta.url), "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(scanPage, /requireAdminSession\("\/scan"\)/u);
+  assert.match(scanner, /new QrScanner/u);
+  assert.match(scanner, /\/api\/admin\/check-in/u);
+  assert.doesNotMatch(scanner, /code\.trim\(\)\.length\s*>\s*5/u);
+  assert.match(wallet, /<QrPass/u);
+  assert.match(wallet, /Payment receipt/u);
+  assert.match(receiptCss, /@media print/u);
+});

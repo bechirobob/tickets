@@ -1,4 +1,4 @@
-import { readAdminSession } from "../../../../lib/admin-auth";
+import { readAdminSession } from "../../../../lib/admin-session";
 import { resolveRoomPolicy } from "../../../../lib/room-policy";
 
 async function admin(request: Request) {

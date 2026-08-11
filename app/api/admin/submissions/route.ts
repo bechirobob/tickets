@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { curatedEventRecords, curationAuditEvents, partySubmissions } from "../../../../db/schema";
-import { readAdminSession } from "../../../../lib/admin-auth";
+import { readAdminSession } from "../../../../lib/admin-session";
 
 export const dynamic = "force-dynamic";
 

@@ -80,7 +80,7 @@ export default function CurationDesk({ actor }: { actor: string }) {
     <main className="curation-page">
       <aside className="curation-nav">
         <Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link>
-        <nav><span>Curation</span><Link className="active" href="/admin">Submission queue</Link><Link href="/admin/rooms">Room moderation</Link><Link href="/admin/fees">Fees & charges</Link><Link href="/organizer/submit">Submission form</Link></nav>
+        <nav><span>Curation</span><Link className="active" href="/admin">Submission queue</Link><Link href="/scan">Gate scanner</Link><Link href="/admin/rooms">Room moderation</Link><Link href="/admin/fees">Fees & charges</Link><Link href="/organizer/submit">Submission form</Link></nav>
         <p><ShieldCheck size={14} /> Restricted<br /><small>{actor}</small></p>
       </aside>
       <section className="curation-main">

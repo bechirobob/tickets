@@ -157,6 +157,81 @@ button, select { cursor: pointer; }
   .settings-layout { grid-template-columns: 1fr; }.settings-layout > aside { min-height: auto; padding: 14px 20px; display: flex; overflow-x: auto; }.settings-layout > aside p { display: none; }.settings-layout > aside a { flex: 0 0 auto; }.settings-content { width: calc(100% - 40px); padding: 50px 0 75px; }.settings-card { padding: 20px; }.settings-card > label { grid-template-columns: 1fr; }.settings-card input, .settings-card select, .settings-card .percent-input { grid-column: 1; grid-row: auto; margin-top: 8px; }.audit-preview > div { grid-template-columns: 70px 1fr; }.audit-preview time { display: none; }.wallet-page h1, .payment-return h1 { font-size: 42px; }
 }
 
+/* Verified ticket passes, receipts and the private gate scanner. */
+.scanner-event { gap: 22px; }
+.scanner-event label { display: grid; gap: 5px; color: #85847d; font-size: 8px; text-transform: uppercase; }
+.scanner-event select { min-height: 42px; padding: 0 34px 0 12px; border: 1px solid #4a4943; border-radius: 0; background: #151512; color: white; font: inherit; font-size: 11px; text-transform: none; }
+.scan-frame { overflow: hidden; }
+.scan-frame video { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; background: #10110f; }
+.scan-frame i { z-index: 2; }
+.scan-frame i:nth-of-type(1) { left: 0; top: 0; border-width: 4px 0 0 4px; }
+.scan-frame i:nth-of-type(2) { right: 0; top: 0; border-width: 4px 4px 0 0; }
+.scan-frame i:nth-of-type(3) { right: 0; bottom: 0; border-width: 0 4px 4px 0; }
+.scan-frame i:nth-of-type(4) { left: 0; bottom: 0; border-width: 0 0 4px 4px; }
+.scan-frame > svg { z-index: 1; }
+.scan-surface p { line-height: 1.5; }
+.scan-surface--wrong_event > svg { color: #e65349; }
+.scan-surface--duplicate > svg { color: #e5aa31; }
+.scan-surface strong { margin-bottom: 9px; font-size: 12px; text-transform: capitalize; }
+.scan-surface button { margin-top: 27px; min-height: 42px; padding: 0 18px; border: 0; background: white; color: var(--ink); font-size: 11px; font-weight: 750; }
+.manual-entry label { min-height: 44px; }
+.manual-entry input { font-size: 16px; }
+
+.wallet-confirmed { margin: 0 0 34px; padding: 15px 0; display: flex; align-items: center; gap: 12px; border-top: 1px solid #70a484; border-bottom: 1px solid #70a484; color: #256142; }
+.wallet-confirmed b, .wallet-confirmed span { display: block; }
+.wallet-confirmed b { font-size: 12px; }
+.wallet-confirmed span { margin-top: 3px; font-size: 10px; }
+.wallet-error { color: #a22f22 !important; }
+.wallet-order { padding: 0 !important; display: block !important; border-left: 0 !important; background: transparent !important; }
+.wallet-order > header { padding: 24px 0; display: flex; align-items: center; justify-content: space-between; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+.wallet-order > header small { display: flex; align-items: center; gap: 5px; color: var(--orange); font-size: 9px; text-transform: uppercase; }
+.wallet-order > header h2 { margin: 7px 0 13px; font-size: 26px; }
+.wallet-order > header p { margin: 6px 0; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.wallet-order > header > a { min-height: 44px; padding: 0 15px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--ink); color: var(--ink); font-size: 10px; font-weight: 700; }
+.wallet-passes { padding: 22px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.wallet-pass { min-width: 0; padding: 20px; display: grid; justify-items: center; border: 1px solid #d7d3c9; background: var(--white); text-align: center; }
+.wallet-pass > div:first-child { width: 100%; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+.wallet-pass > div:first-child span { color: var(--muted); font-size: 9px; }
+.wallet-pass > div:first-child b { font-size: 10px; text-transform: capitalize; }
+.wallet-pass canvas { width: min(228px, 100%); height: auto; image-rendering: pixelated; }
+.wallet-pass code { margin-top: 13px; color: var(--ink); font-family: inherit; font-size: 11px; font-weight: 760; letter-spacing: .04em; }
+.wallet-pass > p { max-width: 240px; margin: 9px 0 0 !important; color: var(--muted); font-size: 9px !important; line-height: 1.45; }
+.wallet-pass-error { min-height: 220px; display: grid; place-content: center; color: #a22f22 !important; }
+.wallet-admitted { min-height: 240px; display: grid; place-content: center; justify-items: center; color: #28704b; }
+.wallet-admitted b { margin-top: 10px; font-size: 20px; }
+.wallet-admitted span { margin-top: 5px; color: var(--muted); font-size: 9px; }
+.wallet-receipt { padding: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.wallet-receipt > header { display: flex; justify-content: space-between; align-items: center; }
+.wallet-receipt > header > div { display: flex; align-items: center; gap: 9px; }
+.wallet-receipt > header span b, .wallet-receipt > header span small { display: block; }
+.wallet-receipt > header span b { font-size: 11px; }
+.wallet-receipt > header span small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.wallet-receipt button { min-height: 38px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 9px; }
+.wallet-receipt dl { margin: 18px 0 0; }
+.wallet-receipt dl div { padding: 7px 0; display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #ece9e1; }
+.wallet-receipt dt, .wallet-receipt dd { margin: 0; font-size: 10px; }
+.wallet-receipt dt { color: var(--muted); }
+.wallet-receipt dl div:nth-last-child(2) { font-weight: 760; }
+
+@media (max-width: 640px) {
+  .wallet-order > header { align-items: start; flex-direction: column; gap: 18px; }
+  .wallet-order > header > a { min-height: 42px; }
+  .wallet-passes { grid-template-columns: 1fr; }
+  .wallet-receipt > header { align-items: flex-start; gap: 15px; }
+  .scanner-event { align-items: stretch; flex-direction: column; }
+  .scanner-event select { width: 100%; }
+  .scanner-stats { gap: 12px; }
+  .scanner-stats span { font-size: 8px; }
+}
+
+@media print {
+  .wallet-page > header, .wallet-confirmed, .wallet-order > header > a, .wallet-receipt button { display: none !important; }
+  .wallet-page, .wallet-page > section { background: white; }
+  .wallet-page > section { width: 100%; padding: 0; }
+  .wallet-pass { break-inside: avoid; }
+  .wallet-order { break-after: page; }
+}
+
 /* Curated nightlife edition */
 .night-home {
   --night: #090a09;
