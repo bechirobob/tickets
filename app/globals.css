@@ -581,6 +581,59 @@ button, select { cursor: pointer; }
 .curated-card h3,
 .curated-card__note { display: none; }
 
+/* The Room teaser — a glimpse of the ticket-only conversation, never a public demo. */
+.night-room-tease {
+  min-height: 720px;
+  padding: 92px 6vw;
+  display: grid;
+  grid-template-columns: minmax(0, .88fr) minmax(420px, .72fr);
+  align-items: center;
+  gap: 8vw;
+  position: relative;
+  overflow: hidden;
+  background: #11120f;
+  color: var(--bone);
+}
+.night-room-tease::before { content: "ROOM"; position: absolute; left: -1.5vw; bottom: -4vw; color: rgba(255,255,255,.025); font-size: clamp(150px, 26vw, 390px); font-weight: 800; line-height: .7; letter-spacing: -.1em; pointer-events: none; }
+.night-room-tease__copy { position: relative; z-index: 1; }
+.night-room-tease__copy .night-kicker { color: #989891; }
+.night-room-tease__copy .night-kicker > span { background: var(--acid); }
+.night-room-tease h2 { max-width: 760px; margin: 0; font-size: clamp(58px, 7.1vw, 104px); font-weight: 560; line-height: .83; letter-spacing: -.07em; }
+.night-room-tease__copy > p:not(.night-kicker) { max-width: 560px; margin: 36px 0 0; color: #aaa9a2; font-size: 14px; line-height: 1.75; }
+.night-room-tease__actions { margin-top: 36px; display: flex; flex-wrap: wrap; align-items: center; gap: 20px 28px; }
+.night-room-tease__actions a { min-height: 40px; padding: 0 0 5px; display: inline-flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--acid); color: white; font-size: 11px; font-weight: 720; transition: gap .22s ease; }
+.night-room-tease__actions a:hover { gap: 14px; }
+.night-room-tease__actions span { display: inline-flex; align-items: center; gap: 8px; color: #777871; font-size: 10px; font-weight: 650; }
+.night-room-peek { min-width: 0; position: relative; z-index: 1; border-top: 1px solid #4a4b46; border-bottom: 1px solid #343530; }
+.night-room-peek > header { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #343530; }
+.night-room-peek > header > div { display: flex; align-items: center; gap: 12px; }
+.night-room-peek > header i { width: 9px; height: 9px; display: block; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 5px rgba(215,244,91,.08); }
+.night-room-peek > header span { display: grid; gap: 4px; }
+.night-room-peek > header b { font-size: 12px; }
+.night-room-peek > header small { color: #787972; font-size: 9px; }
+.night-room-peek__preview { display: inline-flex; align-items: center; gap: 6px; color: #83847d; font-size: 8px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.night-room-peek__preview > svg { color: var(--acid); }
+.night-room-peek__stream { min-height: 420px; padding: 30px 4px 28px; display: flex; flex-direction: column; justify-content: center; gap: 12px; position: relative; overflow: hidden; }
+.night-room-peek__stream::after { content: ""; height: 88px; position: absolute; inset: auto 0 0; background: linear-gradient(transparent, #11120f 88%); pointer-events: none; }
+.night-room-peek__day { margin: 0 0 5px; color: #64655f; font-size: 8px; font-weight: 750; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
+.night-room-message { width: fit-content; max-width: 78%; margin: 0; position: relative; animation: room-peek-arrive .55s cubic-bezier(.2,.72,.2,1) both; }
+.night-room-message > span { padding: 12px 15px; display: block; border-radius: 17px 17px 17px 5px; background: #2a2b27; color: #efede6; font-size: 12px; line-height: 1.45; }
+.night-room-message > small { margin: 5px 4px 0; display: block; color: #686963; font-size: 8px; }
+.night-room-message > i { padding: 4px 7px; position: absolute; right: -19px; bottom: -8px; border: 1px solid #3d3e39; border-radius: 10px; background: #171815; color: #dad8d0; font-size: 8px; font-style: normal; }
+.night-room-message--right { margin-left: auto; animation-delay: .08s; }
+.night-room-message--right > span { border-radius: 17px 17px 5px 17px; background: #f2efe8; color: #171815; }
+.night-room-message--right > small { text-align: right; }
+.night-room-update { margin: 10px 0; padding: 14px 0; display: flex; align-items: center; gap: 11px; border-top: 1px solid #343530; border-bottom: 1px solid #343530; color: #a6a59e; }
+.night-room-update > svg { flex: 0 0 auto; color: var(--signal); }
+.night-room-update span { display: grid; gap: 3px; font-size: 10px; line-height: 1.45; }
+.night-room-update b { color: #e6e3db; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
+.night-room-message--last { animation-delay: .16s; }
+.night-room-peek__lock { min-height: 68px; display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; border-top: 1px solid #343530; }
+.night-room-peek__lock > svg { color: var(--signal); }
+.night-room-peek__lock span { display: grid; gap: 3px; color: #6f706a; font-size: 9px; }
+.night-room-peek__lock b { color: #cac8c0; font-size: 10px; }
+@keyframes room-peek-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
 .night-standard {
   padding: 78px 6vw;
   grid-template-columns: 1.2fr .8fr;
@@ -613,6 +666,7 @@ button, select { cursor: pointer; }
   .curated-card__image, .curated-card--lead .curated-card__image,
   .curated-card:nth-child(1) .curated-card__image,
   .curated-card:nth-child(4) .curated-card__image { min-height: 450px; }
+  .night-room-tease { grid-template-columns: minmax(0, .85fr) minmax(360px, .7fr); gap: 6vw; }
 }
 
 @media (max-width: 700px) {
@@ -652,6 +706,13 @@ button, select { cursor: pointer; }
   .curated-card__overlay strong { font-size: 34px; }
   .curated-card__body, .curated-card--lead .curated-card__body { grid-template-columns: 1fr auto; gap: 10px 14px; }
   .curated-card__meta { grid-column: 1 / -1; grid-row: 2; }
+  .night-room-tease { min-height: 0; padding: 64px 20px 56px; grid-template-columns: 1fr; gap: 54px; }
+  .night-room-tease h2 { font-size: 53px; line-height: .86; }
+  .night-room-tease__copy > p:not(.night-kicker) { margin-top: 26px; font-size: 12px; }
+  .night-room-tease__actions { margin-top: 28px; align-items: flex-start; flex-direction: column; }
+  .night-room-peek__stream { min-height: 390px; padding-top: 24px; }
+  .night-room-message { max-width: 86%; }
+  .night-room-message > span { font-size: 11px; }
   .night-standard { padding: 58px 20px; grid-template-columns: 1fr; gap: 38px; }
   .night-pitch { min-height: 430px; padding: 58px 20px; gap: 38px; }
   .event-hero__overlay h1 { font-size: 52px; }
@@ -668,8 +729,8 @@ button, select { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .curated-grid { scroll-behavior: auto; }
-  .curated-card { animation: none; }
-  .curated-card__image img, .night-submit, .night-featured i, .night-pitch__copy a, .curated-card__link { transition: none; }
+  .curated-card, .night-room-message { animation: none; }
+  .curated-card__image img, .night-submit, .night-featured i, .night-pitch__copy a, .night-room-tease__actions a, .curated-card__link { transition: none; }
 }
 
 .admin-login { min-height: 100vh; padding: 8vh 6vw; display: grid; place-items: center; background: #0d0e0d; color: #f2f0e8; }

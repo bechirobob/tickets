@@ -51,6 +51,23 @@ test("customer actions are editorial links and the mobile event list is a smooth
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
 });
 
+test("The Room is promoted as a ticket-locked preview without exposing a public chat", async () => {
+  const [css, home] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(homeUrl, "utf8"),
+  ]);
+  const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
+
+  assert.match(home, /id="the-room"/u);
+  assert.match(home, /The chat your.*ticket gets.*you into\./su);
+  assert.match(home, /No ticket\. No lurking\./u);
+  assert.match(home, /aria-label="A preview of The Room conversation"/u);
+  assert.doesNotMatch(home, /href="\/room\//u);
+  assert.match(css, /\.night-room-peek__stream::after\s*\{[^}]*linear-gradient/su);
+  assert.match(finalMobileBlock, /\.night-room-tease\s*\{[^}]*grid-template-columns:\s*1fr/su);
+  assert.match(css, /\.curated-card, \.night-room-message\s*\{\s*animation:\s*none/su);
+});
+
 test("checkout conversion actions look and behave like primary controls", async () => {
   const css = await readFile(cssUrl, "utf8");
 
