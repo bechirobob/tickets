@@ -37,10 +37,11 @@ export default function PaymentReturn() {
         const result = await response.json() as { pending?: boolean; signedIn?: boolean; eventSlug?: string; error?: string };
         if (cancelled) return;
         if (response.ok && result.signedIn) {
-          setEventSlug(result.eventSlug ?? "");
+          const purchasedEvent = result.eventSlug ?? "";
+          setEventSlug(purchasedEvent);
           setState("ready");
-          setMessage("Your night survived the group chat. QR pass, receipt and Room access are ready.");
-          window.setTimeout(() => window.location.replace("/tickets?confirmed=1"), 700);
+          setMessage("Your night survived the group chat. Ticket, perks, receipt and Room access are ready.");
+          window.setTimeout(() => window.location.replace(purchasedEvent ? `/my-nights/${encodeURIComponent(purchasedEvent)}?welcome=1` : "/my-nights?welcome=1"), 700);
           return;
         }
         if (response.status === 202 && attempt < 72) {
@@ -67,7 +68,7 @@ export default function PaymentReturn() {
       <p className="eyebrow">{state === "ready" ? "Payment confirmed" : "Secure confirmation"}</p>
       <h1>{state === "ready" ? "Paid. Verified. Plans officially harder to cancel." : "We’re making sure the money really arrived."}</h1>
       <p>{message}</p>
-      {state === "ready" && eventSlug ? <Link href="/tickets?confirmed=1">Open ticket &amp; receipt</Link> : <Link href="/tickets">Open ticket wallet</Link>}
+      {state === "ready" && eventSlug ? <Link href={`/my-nights/${eventSlug}?welcome=1`}>Open My Night</Link> : <Link href="/my-nights">Open My Nights</Link>}
       <span><ShieldCheck size={15} /> No confirmed payment, no mysterious QR. Fair is fair.</span>
     </div></main>
   );
