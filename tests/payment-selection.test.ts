@@ -4,11 +4,11 @@ import { POST as initializePayment } from "../app/api/payments/initialize/route"
 
 const eventSlug = "inventory-payment-test";
 
-function paymentRequest(slug: string, ticketTierId: string, quantity = 1) {
+function paymentRequest(slug: string, ticketTierId: string, quantity = 1, network = "mtn") {
   return new Request("https://tickets.becoreops.com/api/payments/initialize", {
     method: "POST",
     headers: { "content-type": "application/json", origin: "https://tickets.becoreops.com" },
-    body: JSON.stringify({ eventSlug: slug, ticketTierId, quantity, email: "buyer@example.com", phone: "233000000000", fullName: "Ticket Buyer", network: "mtn" }),
+    body: JSON.stringify({ eventSlug: slug, ticketTierId, quantity, email: "buyer@example.com", phone: "233000000000", fullName: "Ticket Buyer", network }),
   });
 }
 
@@ -43,7 +43,7 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? "{}")) as { reference?: string };
-    return Response.json({ status: true, data: { authorization_url: "https://checkout.paystack.test/secure", reference: body.reference } });
+    return Response.json({ status: true, message: "Charge attempted", data: { reference: body.reference, status: "pay_offline", display_text: "Approve the prompt on your phone" } });
   }));
 });
 
@@ -54,7 +54,19 @@ describe("payment ticket validation", () => {
     for (const tier of ["general", "vip", "table-for-5"]) {
       const response = await initializePayment(paymentRequest(eventSlug, tier));
       expect(response.status, tier).toBe(200);
-      await expect(response.json()).resolves.toMatchObject({ authorizationUrl: "https://checkout.paystack.test/secure" });
+      await expect(response.json()).resolves.toMatchObject({ nextUrl: expect.stringMatching(/^\/payment\/return\?/u), displayText: "Approve the prompt on your phone" });
+    }
+  });
+
+  it("uses Paystack's direct Ghana MoMo provider codes without hosted checkout", async () => {
+    for (const [network, provider] of [["mtn", "mtn"], ["telecel", "vod"], ["at", "atl"]] as const) {
+      const response = await initializePayment(paymentRequest(eventSlug, "general", 1, network));
+      expect(response.status).toBe(200);
+      const [url, init] = vi.mocked(fetch).mock.calls.at(-1)!;
+      const body = JSON.parse(String(init?.body)) as { mobile_money: { phone: string; provider: string }; currency: string };
+      expect(String(url)).toBe("https://api.paystack.co/charge");
+      expect(body).toMatchObject({ currency: "GHS", mobile_money: { phone: "233000000000", provider } });
+      await expect(response.json()).resolves.toMatchObject({ nextUrl: expect.not.stringContaining("checkout.paystack") });
     }
   });
 

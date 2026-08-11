@@ -48,7 +48,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       return;
     }
     setIsPaying(true);
-    setMessage("Getting Paystack and your night on speaking terms…");
+    setMessage("Sending the MoMo prompt to your phone…");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
@@ -58,9 +58,9 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
         body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName }),
         signal: controller.signal,
       });
-      const data = await response.json() as { authorizationUrl?: string; error?: string };
-      if (!response.ok || !data.authorizationUrl) throw new Error(data.error || "Payment refused to leave the house. Try again.");
-      window.location.href = data.authorizationUrl;
+      const data = await response.json() as { nextUrl?: string; error?: string };
+      if (!response.ok || !data.nextUrl) throw new Error(data.error || "Payment refused to leave the house. Try again.");
+      window.location.href = data.nextUrl;
     } catch (error) {
       setMessage(error instanceof DOMException && error.name === "AbortError"
         ? "Paystack took too long to answer. Nothing was charged—give it another go."
