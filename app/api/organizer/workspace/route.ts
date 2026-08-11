@@ -35,10 +35,10 @@ export async function GET(request: Request) {
   `);
   const events = session.role === "owner" ? await statement.all<Record<string, unknown>>() : await statement.bind(session.accountId).all<Record<string, unknown>>();
   const slugs = events.results.map((event) => String(event.slug));
-  if (!slugs.length) return Response.json({ events: [], tiers: [], settlements: [], requests: [], gateStaff: [] }, { headers: { "cache-control": "no-store" } });
+  if (!slugs.length) return Response.json({ events: [], tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [] }, { headers: { "cache-control": "no-store" } });
   const placeholders = slugs.map(() => "?").join(",");
   const now = new Date().toISOString();
-  const [tiers, settlements, requests, gateStaff] = await Promise.all([
+  const [tiers, settlements, requests, gateStaff, attendeeAnswers] = await Promise.all([
     env.DB.prepare(`SELECT tier.id, tier.event_slug AS eventSlug, tier.name, tier.price_minor AS priceMinor, tier.capacity_admissions AS capacityAdmissions,
       tier.status, COALESCE(SUM(CASE WHEN reservation.status = 'consumed' OR (reservation.status = 'held' AND reservation.expires_at > ?) THEN reservation.admission_count ELSE 0 END), 0) AS allocatedAdmissions
       FROM event_ticket_tiers tier LEFT JOIN inventory_reservations reservation ON reservation.ticket_tier_id = tier.id
@@ -51,8 +51,15 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT assignment.event_slug AS eventSlug, account.id, account.display_name AS displayName, account.normalized_email AS email, account.status
       FROM staff_event_assignments assignment JOIN staff_accounts account ON account.id = assignment.account_id
       WHERE assignment.event_slug IN (${placeholders}) AND account.role = 'gate' ORDER BY account.display_name`).bind(...slugs).all<Record<string, unknown>>(),
+    env.DB.prepare(`SELECT question.event_slug AS eventSlug, question.id AS questionId, question.prompt,
+      answer.answer, answer.updated_at AS updatedAt, profile.display_name AS displayName
+      FROM event_questions question
+      JOIN attendee_question_answers answer ON answer.question_id = question.id
+      JOIN attendee_profiles profile ON profile.id = answer.attendee_id
+      WHERE question.event_slug IN (${placeholders}) AND answer.answer <> ''
+      ORDER BY question.event_slug, answer.updated_at DESC LIMIT 500`).bind(...slugs).all<Record<string, unknown>>(),
   ]);
-  return Response.json({ events: events.results, tiers: tiers.results, settlements: settlements.results, requests: requests.results, gateStaff: gateStaff.results }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ events: events.results, tiers: tiers.results, settlements: settlements.results, requests: requests.results, gateStaff: gateStaff.results, attendeeAnswers: attendeeAnswers.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function PATCH(request: Request) {
@@ -95,8 +102,12 @@ export async function POST(request: Request) {
       const policy = await resolveRoomPolicy(env.DB, eventSlug);
       if (!policy) throw new Error("This Room is not available.");
       const message = await env.THE_ROOM.getByName(eventSlug).publishAnnouncement(session.actor, content, Boolean(body.pinned), policy);
-      await env.DB.prepare(`INSERT INTO room_moderation_actions (id, event_slug, actor, action, message_id, note, created_at) VALUES (?, ?, ?, 'announcement', ?, ?, ?)`)
-        .bind(crypto.randomUUID(), eventSlug, `${session.email} (${session.role})`, message.id, content, now).run();
+      await env.DB.batch([
+        env.DB.prepare(`INSERT INTO room_moderation_actions (id, event_slug, actor, action, message_id, note, created_at) VALUES (?, ?, ?, 'announcement', ?, ?, ?)`)
+          .bind(crypto.randomUUID(), eventSlug, `${session.email} (${session.role})`, message.id, content, now),
+        env.DB.prepare(`INSERT INTO event_updates (id, event_slug, title, body, pinned, published_at, published_by) VALUES (?, ?, 'Night Update', ?, ?, ?, ?)`)
+          .bind(crypto.randomUUID(), eventSlug, content, Boolean(body.pinned), now, session.actor),
+      ]);
       await recordAudit(env.DB, { session, action: "organizer.room_announcement", targetType: "event", targetId: eventSlug, outcome: "success", requestId });
       return Response.json({ announced: true, messageId: message.id });
     }

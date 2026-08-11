@@ -8,6 +8,8 @@ const homeUrl = new URL("../app/page.tsx", import.meta.url);
 const organizerUrl = new URL("../app/organizer/page.tsx", import.meta.url);
 const submissionUrl = new URL("../app/organizer/submit/page.tsx", import.meta.url);
 const adminSubmissionsUrl = new URL("../app/api/admin/submissions/route.ts", import.meta.url);
+const organizerWorkspaceUrl = new URL("../app/organizer/workspace/organizer-workspace.tsx", import.meta.url);
+const organizerWorkspaceApiUrl = new URL("../app/api/organizer/workspace/route.ts", import.meta.url);
 const scrollRevealUrl = new URL("../app/scroll-reveal.tsx", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
@@ -32,23 +34,22 @@ test("Room text controls keep iOS at the existing page scale", async () => {
   assert.doesNotMatch(css, /maximum-scale\s*=\s*1|user-scalable\s*=\s*no/u);
 });
 
-test("the final mobile cascade keeps the homepage hero inside the viewport", async () => {
+test("the compact homepage hero stays within a deliberate desktop and mobile height", async () => {
   const css = await readFile(cssUrl, "utf8");
-  const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
-
-  assert.match(finalMobileBlock, /\.night-featured\s*\{[^}]*width:\s*calc\(100% - 32px\)/su);
-  assert.match(finalMobileBlock, /\.night-hero__copy\s*\{[^}]*top:\s*178px/su);
-  assert.match(finalMobileBlock, /\.night-ticker\s*\{[^}]*overflow:\s*hidden/su);
+  assert.match(css, /\.compact-hero\s*\{[^}]*height:\s*min\(64vh, 640px\)[^}]*min-height:\s*520px/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*560px[^}]*min-height:\s*560px/su);
+  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(55px, 7\.4vw, 104px\)/su);
 });
 
-test("customer actions are editorial links and the mobile event list is a smooth snap rail", async () => {
-  const css = await readFile(cssUrl, "utf8");
-  const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
-
-  assert.match(css, /\.night-submit\s*\{[^}]*border-bottom:[^}]*color:\s*white/su);
-  assert.match(css, /\.night-shuffle\s*\{[^}]*background:\s*transparent[^}]*color:\s*var\(--signal\)/su);
-  assert.match(css, /\.vibe-filter button\.active\s*\{[^}]*background:\s*transparent/su);
-  assert.match(finalMobileBlock, /\.curated-grid\s*\{[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory[^}]*scroll-behavior:\s*smooth/su);
+test("The Drop uses compact filters, bounded cards and a dedicated full page", async () => {
+  const [css, explorer, home] = await Promise.all([readFile(cssUrl, "utf8"), readFile(new URL("../app/event-explorer.tsx", import.meta.url), "utf8"), readFile(homeUrl, "utf8")]);
+  assert.match(explorer, />Tonight</u);
+  assert.match(explorer, />This weekend</u);
+  assert.match(explorer, />Next up</u);
+  assert.match(explorer, /const pageSize = full \? 9 : 6/u);
+  assert.match(home, /events\.slice\(0, 6\)/u);
+  assert.match(home, /href="\/events"/u);
+  assert.match(css, /\.drop-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
 });
 
@@ -57,28 +58,15 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
     readFile(cssUrl, "utf8"),
     readFile(homeUrl, "utf8"),
   ]);
-  const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
-
   assert.match(home, /id="the-room"/u);
-  assert.match(home, /Say it in.*The Room\..*Leave it in.*Flashes\./su);
-  assert.match(home, /One ticket\. Two private sides\./u);
-  assert.match(home, /No ticket\. No lurking\./u);
-  assert.match(home, /No downloads\. Nothing follows you home\./u);
-  assert.match(home, /Ticket-holder Room \+ Flashes preview/u);
-  assert.match(home, /aria-label="A preview of The Room and Flashes inside a mobile device"/u);
-  assert.match(home, /ticket holders only/u);
-  assert.match(home, /Organiser update/u);
-  assert.match(home, /Main entrance · Gate 2/u);
-  assert.match(home, /Message The Room/u);
-  assert.match(home, /One ticket opens Chat \+ Flashes/u);
+  assert.match(home, /The Room meets Flashes\./u);
+  assert.match(home, /Both stay ticket-only/u);
+  assert.match(home, /the pictures disappear when the Room closes/u);
+  assert.match(home, /No ticket\. No access\./u);
+  assert.match(home, /Night Updates from the Host/u);
   assert.doesNotMatch(home, /href="\/room\//u);
-  assert.match(css, /\.night-room-device\s*\{[^}]*border-radius:\s*43px[^}]*linear-gradient/su);
-  assert.match(css, /\.night-room-device__status\s*\{[^}]*display:\s*grid/su);
-  assert.match(css, /\.night-room-peek__stream::after\s*\{[^}]*linear-gradient/su);
-  assert.match(css, /\.night-room-peek__composer\s*\{[^}]*grid-template-columns:/su);
-  assert.match(finalMobileBlock, /\.night-room-tease\s*\{[^}]*grid-template-columns:\s*1fr/su);
-  assert.match(finalMobileBlock, /\.night-room-duo\s*\{[^}]*grid-template-columns:\s*1fr/su);
-  assert.match(css, /\.night-room-message\s*\{\s*animation:\s*none/su);
+  assert.match(css, /\.room-flashes-strip\s*\{[^}]*min-height:\s*315px[^}]*grid-template-columns:\s*1fr 1fr/su);
+  assert.doesNotMatch(home, /night-room-device/u);
 });
 
 test("The Room reconnects when a ticket holder returns to the page", async () => {
@@ -119,7 +107,7 @@ test("mobile customers retain wallet access and form controls do not trigger iOS
   const finalMobileBlock = css.slice(css.lastIndexOf("@media (max-width: 700px)"));
 
   assert.match(finalMobileBlock, /\.night-ticket-link\s*\{[^}]*display:\s*flex[^}]*font-size:\s*0/su);
-  assert.match(finalMobileBlock, /input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
 });
 
 test("checkout conversion actions look and behave like primary controls", async () => {
@@ -141,14 +129,32 @@ test("public organiser actions keep submission public and named workspaces prote
   ]);
 
   assert.doesNotMatch(home, /href="\/organizer"/u);
-  assert.ok(home.match(/href="\/organizer\/submit"/gu)?.length >= 4);
-  assert.match(home, />Submit your party\s*</u);
+  assert.ok(home.match(/href="\/organizer\/submit"/gu)?.length >= 2);
+  assert.match(home, />Submit a night\s*</u);
   assert.match(organizer, /redirect\("\/organizer\/workspace"\)/u);
   assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
   assert.match(submission, /href="\/"[^>]*>.*Back to events/su);
   assert.match(submission, /Organiser sign in/u);
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
+});
+
+test("approved Hosts and ticket-holder preparation reach only the assigned organiser workspace", async () => {
+  const [adminSubmissions, organizerWorkspace, organizerWorkspaceApi, css] = await Promise.all([
+    readFile(adminSubmissionsUrl, "utf8"),
+    readFile(organizerWorkspaceUrl, "utf8"),
+    readFile(organizerWorkspaceApiUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(adminSubmissions, /db\.select\(\{ id: hosts\.id \}\).*eq\(hosts\.slug, hostSlug\)/su);
+  assert.match(adminSubmissions, /db\.insert\(hosts\)/u);
+  assert.match(adminSubmissions, /db\.insert\(eventHosts\)/u);
+  assert.match(organizerWorkspaceApi, /WHERE question\.event_slug IN \(\$\{placeholders\}\)/u);
+  assert.match(organizerWorkspaceApi, /INSERT INTO event_updates/u);
+  assert.match(organizerWorkspace, />Before the Night</u);
+  assert.match(organizerWorkspace, /data\.attendeeAnswers\.filter\(\(item\) => item\.eventSlug === selectedSlug\)/u);
+  assert.match(css, /\.organizer-answers\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
 });
 
 test("ticket entry uses a protected real scanner and printable QR receipt", async () => {

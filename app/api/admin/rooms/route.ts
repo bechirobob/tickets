@@ -52,10 +52,17 @@ export async function POST(request: Request) {
   const policy = await resolveRoomPolicy(env.DB, eventSlug);
   if (!policy) return Response.json({ error: "Event not found." }, { status: 404 });
   const message = await env.THE_ROOM.getByName(eventSlug).publishAnnouncement(session.actor, content, Boolean(body.pinned), policy);
-  await env.DB.prepare(`
-    INSERT INTO room_moderation_actions (id, event_slug, actor, action, message_id, note, created_at)
-    VALUES (?, ?, ?, 'announcement', ?, ?, ?)
-  `).bind(crypto.randomUUID(), eventSlug, session.actor, message.id, content, new Date().toISOString()).run();
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(`
+      INSERT INTO room_moderation_actions (id, event_slug, actor, action, message_id, note, created_at)
+      VALUES (?, ?, ?, 'announcement', ?, ?, ?)
+    `).bind(crypto.randomUUID(), eventSlug, session.actor, message.id, content, now),
+    env.DB.prepare(`
+      INSERT INTO event_updates (id, event_slug, title, body, pinned, published_at, published_by)
+      VALUES (?, ?, 'Night Update', ?, ?, ?, ?)
+    `).bind(crypto.randomUUID(), eventSlug, content, Boolean(body.pinned), now, session.actor),
+  ]);
   await recordAudit(env.DB, { session, action: "room.announcement", targetType: "event", targetId: eventSlug, outcome: "success", requestId: requestMetadata(request).requestId });
   return Response.json({ message });
 }

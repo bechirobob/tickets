@@ -13,7 +13,7 @@ type Message = {
 };
 type Policy = { eventSlug: string; eventTitle: string; readOnlyAt: string; readOnly: boolean };
 
-export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug: string; fallbackTitle: string; fallbackDate: string }) {
+export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialMode = "chat" }: { slug: string; fallbackTitle: string; fallbackDate: string; initialMode?: "chat" | "flashes" }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [selfId, setSelfId] = useState("");
@@ -25,7 +25,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
   const [reporting, setReporting] = useState<Message | null>(null);
   const [reportReason, setReportReason] = useState("harassment");
   const [reportDetails, setReportDetails] = useState("");
-  const [mode, setMode] = useState<"chat" | "flashes">("chat");
+  const [mode, setMode] = useState<"chat" | "flashes">(initialMode);
   const [flashVersion, setFlashVersion] = useState(0);
   const [flashCount, setFlashCount] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);

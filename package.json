@@ -13,7 +13,7 @@
     "test:ui": "node --test tests/mobile-ui.test.mjs",
     "test:rendered": "npm run build && node scripts/prepare-deploy.mjs && node --test tests/rendered-html.test.mjs",
     "test:worker": "vitest run",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern worker-configuration.d.ts",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vinext --ignore-pattern .wrangler --ignore-pattern .release-dry-run --ignore-pattern 'live-audit.*' --ignore-pattern 'workers-types-latest.*' --ignore-pattern '.tmp-*' --ignore-pattern worker-configuration.d.ts",
     "typecheck": "tsc --noEmit",
     "cf:types": "wrangler types worker-configuration.d.ts",
     "deploy:built": "node scripts/prepare-deploy.mjs && wrangler deploy --config dist/server/wrangler.json",

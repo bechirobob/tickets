@@ -111,6 +111,88 @@ export const ticketAssignments = sqliteTable("ticket_assignments", {
   revokedAt: text("revoked_at"),
 }, (table) => [index("ticket_assignments_attendee_idx").on(table.attendeeId, table.status)]);
 
+export const hosts = sqliteTable("hosts", {
+  id: text("id").primaryKey(),
+  slug: text("slug").notNull(),
+  name: text("name").notNull(),
+  bio: text("bio").notNull(),
+  city: text("city").notNull().default("Accra"),
+  verificationStatus: text("verification_status", { enum: ["verified", "reviewed", "unverified"] }).notNull().default("reviewed"),
+  profileImageUrl: text("profile_image_url"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [uniqueIndex("hosts_slug_unique").on(table.slug)]);
+
+export const eventHosts = sqliteTable("event_hosts", {
+  eventSlug: text("event_slug").notNull(),
+  hostId: text("host_id").notNull(),
+  role: text("role").notNull().default("Host"),
+  isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("event_hosts_unique").on(table.eventSlug, table.hostId),
+  index("event_hosts_host_idx").on(table.hostId, table.eventSlug),
+]);
+
+export const attendeeHostFollows = sqliteTable("attendee_host_follows", {
+  attendeeId: text("attendee_id").notNull(),
+  hostId: text("host_id").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("attendee_host_follows_unique").on(table.attendeeId, table.hostId),
+  index("attendee_host_follows_host_idx").on(table.hostId, table.createdAt),
+]);
+
+export const attendeeEventPreferences = sqliteTable("attendee_event_preferences", {
+  attendeeId: text("attendee_id").notNull(),
+  eventSlug: text("event_slug").notNull(),
+  attendeeVisible: integer("attendee_visible", { mode: "boolean" }).notNull().default(false),
+  keepPosted: integer("keep_posted", { mode: "boolean" }).notNull().default(false),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("attendee_event_preferences_unique").on(table.attendeeId, table.eventSlug),
+  index("attendee_event_preferences_event_idx").on(table.eventSlug, table.keepPosted),
+]);
+
+export const attendeePrivacySettings = sqliteTable("attendee_privacy_settings", {
+  attendeeId: text("attendee_id").primaryKey(),
+  defaultAttendeeVisible: integer("default_attendee_visible", { mode: "boolean" }).notNull().default(false),
+  allowHostUpdates: integer("allow_host_updates", { mode: "boolean" }).notNull().default(true),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const eventQuestions = sqliteTable("event_questions", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  prompt: text("prompt").notNull(),
+  kind: text("kind", { enum: ["text", "choice"] }).notNull().default("text"),
+  optionsJson: text("options_json"),
+  required: integer("required", { mode: "boolean" }).notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  status: text("status", { enum: ["active", "closed"] }).notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("event_questions_event_idx").on(table.eventSlug, table.status, table.sortOrder)]);
+
+export const attendeeQuestionAnswers = sqliteTable("attendee_question_answers", {
+  questionId: text("question_id").notNull(),
+  attendeeId: text("attendee_id").notNull(),
+  answer: text("answer").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("attendee_question_answers_unique").on(table.questionId, table.attendeeId),
+  index("attendee_question_answers_attendee_idx").on(table.attendeeId, table.updatedAt),
+]);
+
+export const eventUpdates = sqliteTable("event_updates", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
+  publishedAt: text("published_at").notNull(),
+  publishedBy: text("published_by").notNull(),
+}, (table) => [index("event_updates_event_idx").on(table.eventSlug, table.publishedAt)]);
+
 export const roomReports = sqliteTable("room_reports", {
   id: text("id").primaryKey(),
   eventSlug: text("event_slug").notNull(),
