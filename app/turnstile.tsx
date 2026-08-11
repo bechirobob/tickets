@@ -45,16 +45,21 @@ export default function Turnstile({ action, onToken }: { action: string; onToken
         "retry-interval": 5000,
         "refresh-expired": "auto",
         "refresh-timeout": "auto",
-        callback: (token: string) => { onToken(token); setCanRetry(false); setMessage(""); },
+        callback: (token: string) => {
+          if (cancelled || failed) return;
+          if (loadTimeout) {
+            clearTimeout(loadTimeout);
+            loadTimeout = null;
+          }
+          onToken(token);
+          setCanRetry(false);
+          setMessage("");
+        },
         "expired-callback": () => { onToken(""); setMessage("Security check refreshed. One quick moment."); },
         "timeout-callback": () => { onToken(""); setMessage("Security check timed out and is trying again…"); },
         "unsupported-callback": () => fail("This browser could not run the security check."),
         "error-callback": () => fail("Security check lost the signal."),
       });
-      if (loadTimeout) {
-        clearTimeout(loadTimeout);
-        loadTimeout = null;
-      }
     }
 
     async function setup() {
