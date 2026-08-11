@@ -69,5 +69,5 @@ export async function GET(request: Request) {
     `).bind(sessionId, attendeeId, sessionHash, attendeeSessionExpiry(), now, now, grant.id, now),
   ]);
   if (claim.meta.changes !== 1) return Response.redirect(`${origin}/tickets?recovery=invalid`, 303);
-  return new Response(null, { status: 303, headers: { location: `${origin}/tickets?recovered=1`, "set-cookie": attendeeCookieHeader(sessionToken), "cache-control": "no-store" } });
+  return new Response(null, { status: 303, headers: { location: `${origin}/my-nights?recovered=1`, "set-cookie": attendeeCookieHeader(sessionToken), "cache-control": "no-store" } });
 }
