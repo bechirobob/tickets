@@ -11,8 +11,11 @@ describe("ticket email delivery and recovery", () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const email = `recover-${suffix}@example.com`;
     const orderId = `recover-order-${suffix}`;
+    const secondOrderId = `recover-order-second-${suffix}`;
     const ticketId = `recover-ticket-${suffix}`;
+    const secondTicketId = `recover-ticket-second-${suffix}`;
     const now = new Date().toISOString();
+    const later = new Date(Date.now() + 1_000).toISOString();
     await env.DB.batch([
       env.DB.prepare(`
         INSERT INTO orders (
@@ -23,9 +26,21 @@ describe("ticket email delivery and recovery", () => {
           '233000000000', 'Recovery Guest', 'mobile_money:mtn', 'paid', ?, ?)
       `).bind(orderId, `BCT-RECOVER-${suffix}`, email, now, now),
       env.DB.prepare(`
+        INSERT INTO orders (
+          id, reference, event_slug, ticket_type, quantity, face_amount_minor,
+          booking_fee_minor, total_amount_minor, currency, customer_email,
+          customer_phone, customer_name, payment_channel, status, created_at, paid_at
+        ) VALUES (?, ?, 'second-recovery-event', 'general', 1, 9000, 500, 9500, 'GHS', ?,
+          '233999999999', 'Second Checkout Name', 'mobile_money:mtn', 'paid', ?, ?)
+      `).bind(secondOrderId, `BCT-RECOVER-SECOND-${suffix}`, email, later, later),
+      env.DB.prepare(`
         INSERT INTO tickets (id, order_id, event_slug, ticket_type, admission_number, qr_token_hash, status, issued_at)
         VALUES (?, ?, 'recovery-event', 'general', 1, ?, 'issued', ?)
       `).bind(ticketId, orderId, `placeholder-${suffix}`, now),
+      env.DB.prepare(`
+        INSERT INTO tickets (id, order_id, event_slug, ticket_type, admission_number, qr_token_hash, status, issued_at)
+        VALUES (?, ?, 'second-recovery-event', 'general', 1, ?, 'issued', ?)
+      `).bind(secondTicketId, secondOrderId, `placeholder-second-${suffix}`, later),
     ]);
 
     let emailBody = "";
@@ -53,7 +68,9 @@ describe("ticket email delivery and recovery", () => {
 
     const walletResponse = await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: cookie! } }));
     expect(walletResponse.status).toBe(200);
-    const wallet = await walletResponse.json() as { orders: Array<{ tickets: Array<{ qrPayload: string; gateCode: string }> }> };
+    const wallet = await walletResponse.json() as { attendee: { displayName: string; emailVerified: boolean }; orders: Array<{ tickets: Array<{ qrPayload: string; gateCode: string }> }> };
+    expect(wallet.attendee).toMatchObject({ displayName: "Second Checkout Name", emailVerified: true });
+    expect(wallet.orders).toHaveLength(2);
     expect(wallet.orders[0].tickets[0].qrPayload).toMatch(/^BCT:/u);
     expect(wallet.orders[0].tickets[0].gateCode).toMatch(/^BCT-/u);
 

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const bookingFeeRules = sqliteTable("booking_fee_rules", {
@@ -49,10 +50,16 @@ export const attendeeProfiles = sqliteTable("attendee_profiles", {
   normalizedEmail: text("normalized_email").notNull(),
   phone: text("phone"),
   displayName: text("display_name").notNull(),
+  emailVerifiedAt: text("email_verified_at"),
   status: text("status", { enum: ["active", "suspended"] }).notNull().default("active"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-}, (table) => [uniqueIndex("attendee_profiles_email_unique").on(table.normalizedEmail)]);
+}, (table) => [
+  uniqueIndex("attendee_profiles_verified_email_unique")
+    .on(table.normalizedEmail)
+    .where(sql`${table.emailVerifiedAt} IS NOT NULL`),
+  index("attendee_profiles_email_idx").on(table.normalizedEmail, table.emailVerifiedAt),
+]);
 
 export const attendeeSessions = sqliteTable("attendee_sessions", {
   id: text("id").primaryKey(),

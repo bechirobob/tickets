@@ -15,6 +15,7 @@ type TicketRow = {
   currency: string;
   quantity: number;
   paidAt: string | null;
+  customerName: string | null;
   eventTitle: string | null;
   eventStartsAt: string | null;
   eventEndsAt: string | null;
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
            t.ticket_type AS ticketType, t.status AS ticketStatus, t.checked_in_at AS checkedInAt,
            o.face_amount_minor AS faceAmountMinor, o.booking_fee_minor AS bookingFeeMinor,
            o.total_amount_minor AS totalAmountMinor, o.currency, o.quantity, o.paid_at AS paidAt,
+           o.customer_name AS customerName,
            event.title AS eventTitle, event.starts_at AS eventStartsAt,
            event.ends_at AS eventEndsAt, event.venue AS eventVenue, event.area AS eventArea,
            event.event_state AS eventState
@@ -66,6 +68,7 @@ export async function POST(request: Request) {
     orderId: string; reference: string; eventSlug: string; faceAmountMinor: number;
     bookingFeeMinor: number; totalAmountMinor: number; currency: string; quantity: number;
     paidAt: string | null; event: { title: string; date: string; venue: string; state: string } | null; tickets: Array<Record<string, unknown>>;
+    bookedFor: string | null;
   }>();
   for (const ticket of rows.results) {
     const order = orderMap.get(ticket.orderId) ?? {
@@ -78,6 +81,7 @@ export async function POST(request: Request) {
       currency: ticket.currency,
       quantity: ticket.quantity,
       paidAt: ticket.paidAt,
+      bookedFor: ticket.customerName,
       event: ticket.eventTitle && ticket.eventStartsAt && ticket.eventEndsAt ? {
         title: ticket.eventTitle,
         date: `${new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} · ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} — ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventEndsAt))}`,

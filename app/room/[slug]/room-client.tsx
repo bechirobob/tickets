@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Camera, Flag, MessageCircle, Reply, Send, ShieldCheck, UserRoundX, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import FlashesPanel from "./flashes-panel";
+import FlashesPanel, { type RoomFlash } from "./flashes-panel";
 
 type Reaction = { emoji: string; count: number; mine: boolean };
 type Message = {
@@ -13,7 +13,7 @@ type Message = {
 };
 type Policy = { eventSlug: string; eventTitle: string; readOnlyAt: string; readOnly: boolean };
 
-export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialMode = "chat" }: { slug: string; fallbackTitle: string; fallbackDate: string; initialMode?: "chat" | "flashes" }) {
+export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug: string; fallbackTitle: string; fallbackDate: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [selfId, setSelfId] = useState("");
@@ -25,9 +25,12 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialM
   const [reporting, setReporting] = useState<Message | null>(null);
   const [reportReason, setReportReason] = useState("harassment");
   const [reportDetails, setReportDetails] = useState("");
-  const [mode, setMode] = useState<"chat" | "flashes">(initialMode);
   const [flashVersion, setFlashVersion] = useState(0);
   const [flashCount, setFlashCount] = useState(0);
+  const [flashes, setFlashes] = useState<RoomFlash[]>([]);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [selectedFlashId, setSelectedFlashId] = useState<string | null>(null);
+  const [captureRequest, setCaptureRequest] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);
   const connectRef = useRef<(attendeeId: string) => void>(() => undefined);
   const attendeeIdRef = useRef("");
@@ -89,6 +92,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialM
       } else if (payload.type === "room_closed") {
         setPolicy((current) => current ? { ...current, readOnly: true } : current);
         setFlashCount(0);
+        setFlashes([]);
       } else if (payload.type === "error") {
         setNotice(String(payload.error ?? "The Room could not complete that action."));
       }
@@ -165,7 +169,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialM
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, mode]);
+  }, [flashes.length, messages.length]);
 
   useEffect(() => {
     if (!policy || policy.readOnly) return;
@@ -173,6 +177,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialM
       if (Date.now() >= Date.parse(policy.readOnlyAt)) {
         setPolicy((current) => current ? { ...current, readOnly: true } : current);
         setFlashCount(0);
+        setFlashes([]);
       }
     }, 30_000);
     return () => window.clearInterval(timer);
@@ -223,20 +228,37 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialM
   }
 
   const pinned = messages.filter((message) => message.pinned && !message.deletedAt).slice(-1)[0];
+  const timeline = [
+    ...messages.map((message) => ({ type: "message" as const, createdAt: message.createdAt, value: message })),
+    ...flashes.map((flash) => ({ type: "flash" as const, createdAt: flash.createdAt, value: flash })),
+  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   return (
     <main className="room-page">
       <header className="room-header">
         <Link href="/tickets"><ArrowLeft size={17} /> Tickets</Link>
         <div><small>The Room</small><strong>{policy?.eventTitle ?? fallbackTitle}</strong><span>{fallbackDate}</span></div>
-        <p><Users size={15} /> {online} online</p>
+        <div className="room-header__activity"><span><Users size={15} /> {online} online</span><button type="button" onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera size={14} /> Flashes · {flashCount}</button></div>
       </header>
-      <section className="room-trust"><BadgeCheck size={16} /><b>Verified attendees only</b><span>Every person here entered through an active BeCore ticket.</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Reconnecting"}</i></section>
-      <nav className="room-modes" aria-label="Room views"><button className={mode === "chat" ? "active" : ""} onClick={() => setMode("chat")}><MessageCircle size={15} /> Chat</button><button className={mode === "flashes" ? "active" : ""} onClick={() => setMode("flashes")}><Camera size={15} /> Flashes{flashCount > 0 && <span>{flashCount}</span>}</button><p>No ticket. No lurking. Nothing follows you home.</p></nav>
-      {mode === "chat" && pinned && <aside className="room-pinned"><ShieldCheck size={17} /><div><small>Pinned by the organiser</small><p>{pinned.content}</p></div></aside>}
+      <section className="room-trust"><BadgeCheck size={16} /><b>Ticket holders only</b><span>No ticket, no lurking. Very civilised.</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Finding the signal"}</i></section>
+      {pinned && <aside className="room-pinned"><ShieldCheck size={17} /><div><small>The Host has spoken</small><p>{pinned.content}</p></div></aside>}
       {notice && <button className="room-notice" onClick={() => setNotice("")}>{notice}<span>Dismiss</span></button>}
-      {mode === "chat" ? <><section className="room-stream" aria-live="polite">
-        {messages.length === 0 && <div className="room-empty"><MessageCircle /><h2>The room is open.</h2><p>Ask about entry, organise the meetup, or say something better than “who’s coming?”</p></div>}
-        {messages.map((message) => {
+      <section className="room-stream" aria-live="polite">
+        {timeline.length === 0 && <div className="room-empty"><MessageCircle /><h2>The Room is suspiciously quiet.</h2><p>Ask about entry, find the meetup, or say something better than “who&apos;s coming?”</p></div>}
+        {timeline.map((item) => {
+          if (item.type === "flash") {
+            const flash = item.value;
+            return <article key={`flash:${flash.id}`} className={`room-message room-flash-message ${flash.mine ? "own" : ""}`}>
+              {!flash.mine && <div className="room-avatar" aria-hidden="true">{flash.displayName.slice(0, 1).toUpperCase()}</div>}
+              <button type="button" onClick={() => setSelectedFlashId(flash.id)} aria-label={`Open Flash from ${flash.mine ? "you" : flash.displayName}`}>
+                {/* Private, cookie-authorised media bypasses the public image pipeline. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/rooms/${encodeURIComponent(slug)}/flashes/${encodeURIComponent(flash.id)}`} alt={`Flash shared by ${flash.mine ? "you" : flash.displayName}`} draggable={false} />
+                <span><b>{flash.mine ? "You" : flash.displayName}</b><time>{new Date(flash.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span>
+                <small><Camera size={11} /> Gone when the Room closes</small>
+              </button>
+            </article>;
+          }
+          const message = item.value;
           const parent = message.parentId ? messages.find((candidate) => candidate.id === message.parentId) : null;
           const own = message.attendeeId === selfId;
           return <article key={message.id} className={`room-message ${own ? "own" : ""} ${message.kind === "announcement" ? "announcement" : ""}`}>
@@ -258,15 +280,18 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, initialM
             </div>
           </article>;
         })}
+        {policy?.readOnly ? <div className="room-flashes-expired"><Camera size={16} /><span><b>The Flashes left with the night.</b> Chat kept the memories it could spell.</span></div> : null}
         <div ref={bottomRef} />
       </section>
       <section className="room-composer">
         {replyingTo && <div><Reply size={13} /> Replying to <b>{replyingTo.displayName}</b><button onClick={() => setReplyingTo(null)}>Cancel</button></div>}
-        {policy?.readOnly ? <p><ShieldCheck size={15} /> This event Room is now read-only. The conversation remains available as an archive.</p> : <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
+        {policy?.readOnly ? <p><ShieldCheck size={15} /> The Room is read-only now. Even the best afterparty eventually gets lights-on.</p> : <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
+          <button type="button" className="room-camera" onClick={() => setCaptureRequest((value) => value + 1)} aria-label="Share a Flash"><Camera size={18} /></button>
           <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} placeholder="Message The Room" rows={1} />
           <span className={draft.length > 450 ? "near-limit" : ""}>{draft.length ? `${draft.length}/500` : ""}</span><button aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><Send size={18} /></button>
         </form>}
-      </section></> : <FlashesPanel slug={slug} readOnly={Boolean(policy?.readOnly)} expiresAt={policy?.readOnlyAt ?? new Date().toISOString()} refreshKey={flashVersion} onCount={setFlashCount} />}
+      </section>
+      <FlashesPanel slug={slug} readOnly={Boolean(policy?.readOnly)} expiresAt={policy?.readOnlyAt ?? new Date().toISOString()} refreshKey={flashVersion} onCount={setFlashCount} onFlashes={setFlashes} galleryOpen={galleryOpen} onGalleryClose={() => setGalleryOpen(false)} selectedFlashId={selectedFlashId} onSelectedFlashClose={() => setSelectedFlashId(null)} captureRequest={captureRequest} />
       {reporting && <div className="room-modal" role="dialog" aria-modal="true"><section><Flag /><p className="eyebrow">Private report</p><h2>Tell the moderation team what happened.</h2><label>Reason<select value={reportReason} onChange={(event) => setReportReason(event.target.value)}><option value="harassment">Harassment</option><option value="spam">Spam</option><option value="impersonation">Impersonation</option><option value="unsafe">Unsafe behaviour</option><option value="other">Other</option></select></label><label>Details<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value.slice(0, 500))} placeholder="Optional context for the moderator" /></label><div><button onClick={() => setReporting(null)}>Cancel</button><button onClick={submitReport}>Send report</button></div></section></div>}
     </main>
   );

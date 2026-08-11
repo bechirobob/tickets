@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, Camera, LockKeyhole, MessageCircle, Ticket } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, LockKeyhole, Send, Ticket } from "lucide-react";
 import EventExplorer from "./event-explorer";
+import { eventImageSrcSet, eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
 import ScrollReveal from "./scroll-reveal";
 
@@ -24,12 +25,12 @@ export default async function Home() {
     </header>
 
     <section className="compact-hero">
-      <img src={heroImage} alt={featured ? `Atmosphere for ${featured.title}` : "A crowd under warm stage lights at night"} />
+      <img src={eventImageUrl(heroImage, 1600, 78)} srcSet={eventImageSrcSet(heroImage, [960, 1280, 1600])} sizes="100vw" alt={featured ? `Atmosphere for ${featured.title}` : "A crowd under warm stage lights at night"} fetchPriority="high" decoding="async" />
       <div className="compact-hero__shade" />
       <div className="compact-hero__copy">
         <p className="night-kicker"><span /> Accra&apos;s edited night out</p>
         <h1>{featured?.title ?? "Plans, sorted."}</h1>
-        <p>{featured ? `${featured.fullDate} · ${featured.venue}, ${featured.area}` : "The next verified Drop is being prepared."}</p>
+        <p>{featured ? `${featured.vibe} · ${featured.fullDate} · ${featured.venue}, ${featured.area}` : "The next verified Drop is getting dressed."}</p>
         {featured ? <div><Link href={`/event/${featured.slug}`}>See the night <ArrowRight size={16} /></Link><Link href={`/checkout/${featured.slug}`}>Get tickets <Ticket size={15} /></Link></div> : <Link href="/organizer/submit" className="compact-hero__single">Submit a night <ArrowUpRight size={15} /></Link>}
       </div>
       {featured ? <p className="compact-hero__price">From <b>GH₵{featured.price}</b></p> : null}
@@ -40,12 +41,18 @@ export default async function Home() {
       <EventExplorer events={events.slice(0, 6)} />
     </section>
 
-    <section className="room-flashes-strip" id="the-room" data-scroll-reveal>
-      <div><p className="night-kicker"><span /> Included with your ticket</p><h2>The Room meets Flashes.</h2><p>Make the plan in Chat. Catch the moment in Flashes. Both stay ticket-only; the pictures disappear when the Room closes.</p></div>
-      <div className="room-flashes-strip__features">
-        <article><MessageCircle size={19} /><div><b>The Room</b><span>Live chat and Night Updates from the Host.</span></div></article>
-        <article><Camera size={19} /><div><b>Flashes</b><span>Temporary event photos with no BeCore download control.</span></div></article>
-        <p><LockKeyhole size={13} /> No ticket. No access.</p>
+    <section className="room-product-scene" id="the-room" data-scroll-reveal>
+      <div className="room-product-scene__copy"><p className="night-kicker"><span /> Included with your ticket</p><h2>The night has a Room.</h2><p>Plan together, hear it straight from the Host and drop Flashes into the same conversation. The chat remembers. The photos know when to leave.</p><span><LockKeyhole size={13} /> No ticket, no lurking. Very civilised.</span></div>
+      <div className="room-product-scene__crop" aria-label="Preview of The Room conversation">
+        <div className="room-product-scene__header"><div><small>The Room</small><b>{featured?.title ?? "After Dark"}</b></div><span>18 online</span></div>
+        <div className="room-product-scene__stream">
+          <article className="scene-host"><BadgeCheck size={14} /><div><small>HOST UPDATE · 9:14 PM</small><p>Doors are open. Main set at 11:30. Pace yourselves; we know you won&apos;t.</p></div></article>
+          <article className="scene-message"><span>KM</span><div><small>Kofi · 9:18 PM</small><p>Who is actually in Osu already?</p></div></article>
+          <article className="scene-message scene-message--own"><div><small>You · 9:19 PM</small><p>“Five minutes away” in the spiritual sense.</p></div></article>
+          <article className="scene-flash"><img src={eventImageUrl(heroImage, 520)} alt="Flash shared inside The Room" loading="lazy" decoding="async" /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
+          <article className="scene-message"><span>YA</span><div><small>Yaw · 9:22 PM</small><p>Okay fine. Leaving now.</p></div></article>
+        </div>
+        <div className="room-product-scene__composer"><Camera size={17} /><span>Message The Room</span><Send size={16} /></div>
       </div>
     </section>
 

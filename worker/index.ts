@@ -9,6 +9,26 @@ import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
 import { purgeExpiredFlashes } from "../lib/flashes";
 export { TheRoom } from "./the-room";
 
+const PUBLIC_PAGE_CACHE_SECONDS = 45;
+const edgeCache = (caches as CacheStorage & { readonly default: Cache }).default;
+
+function publicPageCacheKey(request: Request, url: URL): Request | null {
+  if (request.method !== "GET" || url.search || !request.headers.get("accept")?.includes("text/html")) return null;
+  const path = url.pathname;
+  const eligible = path === "/" || path === "/events" || path === "/hosts"
+    || /^\/event\/[a-z0-9-]{1,80}$/u.test(path)
+    || /^\/hosts\/[a-z0-9-]{1,80}$/u.test(path);
+  return eligible ? new Request(`${url.origin}${path}`, { method: "GET", headers: { accept: "text/html" } }) : null;
+}
+
+function publicCacheResponse(response: Response, state: "HIT" | "MISS"): Response {
+  const headers = new Headers(response.headers);
+  headers.delete("set-cookie");
+  headers.set("cache-control", `public, max-age=15, s-maxage=${PUBLIC_PAGE_CACHE_SECONDS}`);
+  headers.set("x-becore-edge-cache", state);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 function supportedImageFormat(format: string): "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif" {
   if (format === "image/jpeg" || format === "image/png" || format === "image/gif" || format === "image/avif") return format;
   return "image/webp";
@@ -60,6 +80,11 @@ const worker = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     try {
+      const cacheKey = publicPageCacheKey(request, url);
+      if (cacheKey) {
+        const cached = await edgeCache.match(cacheKey);
+        if (cached) return securityResponse(publicCacheResponse(cached, "HIT"));
+      }
       let response: Response;
       if (url.pathname === "/api/room/socket") {
         response = await handleRoomSocket(request, env);
@@ -75,7 +100,13 @@ const worker = {
       } else {
         response = await handler.fetch(request, env, ctx);
       }
-      return response.status === 101 ? response : securityResponse(response);
+      if (response.status === 101) return response;
+      let secured = securityResponse(response);
+      if (cacheKey && secured.status === 200 && secured.headers.get("content-type")?.includes("text/html")) {
+        secured = publicCacheResponse(secured, "MISS");
+        ctx.waitUntil(edgeCache.put(cacheKey, secured.clone()));
+      }
+      return secured;
     } catch (error) {
       const metadata = requestMetadata(request);
       const detail = error instanceof Error ? error.message : String(error);

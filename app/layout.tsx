@@ -22,6 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-GB">
+      <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
       <body>{children}</body>
     </html>
   );

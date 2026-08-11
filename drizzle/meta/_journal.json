@@ -85,6 +85,13 @@
       "when": 1786448740914,
       "tag": "0011_unique_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1786452739179,
+      "tag": "0012_salty_champions",
+      "breakpoints": true
     }
   ]
 }
