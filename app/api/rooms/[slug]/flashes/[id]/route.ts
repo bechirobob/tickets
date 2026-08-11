@@ -11,8 +11,8 @@ async function authorisedFlash(request: Request, slug: string, id: string) {
   const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug);
   if (!access) return { access: null, flash: null };
   const flash = await env.DB.prepare(`
-    SELECT flash.id, flash.attendee_id AS attendeeId, flash.object_key AS objectKey,
-           flash.expires_at AS expiresAt, flash.status
+    SELECT flash.id, flash.attendee_id AS attendeeId, flash.image_data AS imageData,
+           flash.content_type AS contentType, flash.expires_at AS expiresAt, flash.status
     FROM room_flashes flash
     WHERE flash.id = ? AND flash.event_slug = ? AND flash.status = 'active' AND flash.expires_at > ?
       AND NOT EXISTS (
@@ -25,7 +25,7 @@ async function authorisedFlash(request: Request, slug: string, id: string) {
         WHERE report.flash_id = flash.id AND report.reporter_attendee_id = ?
       )
     LIMIT 1
-  `).bind(id, slug, new Date().toISOString(), access.attendeeId, access.attendeeId).first<{ id: string; attendeeId: string; objectKey: string; expiresAt: string; status: string }>();
+  `).bind(id, slug, new Date().toISOString(), access.attendeeId, access.attendeeId).first<{ id: string; attendeeId: string; imageData: number[] | null; contentType: string; expiresAt: string; status: string }>();
   return { access, flash };
 }
 
@@ -35,13 +35,12 @@ export async function GET(request: Request, context: Context) {
   if (!policy || policy.readOnly) return new Response("Gone", { status: 410, headers: { "cache-control": "no-store" } });
   const { access, flash } = await authorisedFlash(request, slug, id);
   if (!access) return new Response("A valid ticket is required", { status: 401, headers: { "cache-control": "no-store" } });
-  if (!flash) return new Response("Not found", { status: 404, headers: { "cache-control": "no-store" } });
-  const object = await env.FLASHES_BUCKET.get(flash.objectKey);
-  if (!object) return new Response("Not found", { status: 404, headers: { "cache-control": "no-store" } });
-  return new Response(object.body, {
+  if (!flash?.imageData) return new Response("Not found", { status: 404, headers: { "cache-control": "no-store" } });
+  const image = Uint8Array.from(flash.imageData);
+  return new Response(image, {
     headers: {
-      "content-type": "image/webp",
-      "content-length": String(object.size),
+      "content-type": flash.contentType,
+      "content-length": String(image.byteLength),
       "content-disposition": "inline; filename=flash.webp",
       "cache-control": "private, no-store, max-age=0, must-revalidate",
       pragma: "no-cache",
@@ -59,10 +58,9 @@ export async function DELETE(request: Request, context: Context) {
   if (!flash || flash.attendeeId !== access.attendeeId) return Response.json({ error: "Flash not found." }, { status: 404 });
   const now = new Date().toISOString();
   await env.DB.prepare(`
-    UPDATE room_flashes SET status = 'deleted', moderation_result = 'owner_removed', deleted_at = ?
+    UPDATE room_flashes SET image_data = NULL, status = 'deleted', moderation_result = 'owner_removed', deleted_at = ?
     WHERE id = ? AND attendee_id = ? AND status = 'active'
   `).bind(now, id, access.attendeeId).run();
-  await env.FLASHES_BUCKET.delete(flash.objectKey);
   await env.THE_ROOM.getByName(slug).removeFlash(id);
   return Response.json({ removed: true }, { headers: { "cache-control": "no-store" } });
 }

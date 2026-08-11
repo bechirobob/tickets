@@ -2,7 +2,10 @@ import { env } from "cloudflare:workers";
 import { mutationHasValidOrigin, recordSecurityEvent, requestMetadata } from "../../../../../lib/admin-session";
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
 import {
+  FLASH_MAX_ACTIVE_PER_EVENT,
   FLASH_MAX_ACTIVE_PER_ATTENDEE,
+  FLASH_MAX_ACTIVE_STORAGE_BYTES,
+  FLASH_MAX_STORED_BYTES,
   FLASH_MAX_UPLOAD_BYTES,
   FLASH_OUTPUT_CONTENT_TYPE,
   hasAcceptedFlashType,
@@ -87,7 +90,20 @@ export async function POST(request: Request, context: Context) {
     WHERE event_slug = ? AND attendee_id = ? AND status = 'active' AND expires_at > ?
   `).bind(slug, access.attendeeId, new Date().toISOString()).first<{ count: number }>();
   if ((active?.count ?? 0) >= FLASH_MAX_ACTIVE_PER_ATTENDEE) {
-    return Response.json({ error: "You have 20 live Flashes in this Room. Remove one before sharing another." }, { status: 409 });
+    return Response.json({ error: "You have 8 live Flashes in this Room. Remove one before sharing another." }, { status: 409 });
+  }
+
+  const capacity = await env.DB.prepare(`
+    SELECT COUNT(CASE WHEN event_slug = ? THEN 1 END) AS eventCount,
+           COALESCE(SUM(byte_size), 0) AS storedBytes
+    FROM room_flashes
+    WHERE status = 'active' AND expires_at > ? AND image_data IS NOT NULL
+  `).bind(slug, new Date().toISOString()).first<{ eventCount: number; storedBytes: number }>();
+  if ((capacity?.eventCount ?? 0) >= FLASH_MAX_ACTIVE_PER_EVENT) {
+    return Response.json({ error: "This Room's Flashes are full for the moment." }, { status: 409 });
+  }
+  if ((capacity?.storedBytes ?? 0) >= FLASH_MAX_ACTIVE_STORAGE_BYTES) {
+    return Response.json({ error: "Flashes are at their temporary storage limit. Try again after older moments clear." }, { status: 507 });
   }
 
   const form = await request.formData();
@@ -130,30 +146,25 @@ export async function POST(request: Request, context: Context) {
   if (moderation === "unavailable") return Response.json({ error: "The safety check is taking a break. Try this Flash again shortly." }, { status: 503 });
 
   const id = crypto.randomUUID();
-  const objectKey = `events/${slug}/${id}.webp`;
-  const dimensions = scaledFlashDimensions(info.width, info.height);
+  const dimensions = scaledFlashDimensions(info.width, info.height, 1280);
   const transformed = await env.IMAGES.input(photo.stream())
-    .transform({ width: 1600, height: 1600, fit: "scale-down" })
-    .output({ format: FLASH_OUTPUT_CONTENT_TYPE, quality: 82, anim: false });
+    .transform({ width: 1280, height: 1280, fit: "scale-down" })
+    .output({ format: FLASH_OUTPUT_CONTENT_TYPE, quality: 72, anim: false });
   const transformedResponse = transformed.response();
-  if (!transformedResponse.body) return Response.json({ error: "The Flash could not be prepared." }, { status: 500 });
-  const stored = await env.FLASHES_BUCKET.put(objectKey, transformedResponse.body, {
-    httpMetadata: { contentType: FLASH_OUTPUT_CONTENT_TYPE, contentDisposition: "inline", cacheControl: "private, no-store" },
-    customMetadata: { eventSlug: slug, flashId: id, expiresAt: policy.readOnlyAt },
-  });
-  if (!stored) return Response.json({ error: "The Flash could not be stored." }, { status: 500 });
+  const imageBytes = new Uint8Array(await transformedResponse.arrayBuffer());
+  if (imageBytes.length === 0 || imageBytes.length > FLASH_MAX_STORED_BYTES) {
+    return Response.json({ error: "That photo stays too large after preparation. Try a closer crop or a simpler image." }, { status: 413 });
+  }
+  if ((capacity?.storedBytes ?? 0) + imageBytes.length > FLASH_MAX_ACTIVE_STORAGE_BYTES) {
+    return Response.json({ error: "Flashes are at their temporary storage limit. Try again after older moments clear." }, { status: 507 });
+  }
 
   const now = new Date().toISOString();
-  try {
-    await env.DB.prepare(`
-      INSERT INTO room_flashes
-        (id, event_slug, attendee_id, object_key, width, height, byte_size, status, moderation_result, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'allowed', ?, ?)
-    `).bind(id, slug, access.attendeeId, objectKey, dimensions.width, dimensions.height, stored.size, now, policy.readOnlyAt).run();
-  } catch (error) {
-    await env.FLASHES_BUCKET.delete(objectKey);
-    throw error;
-  }
+  await env.DB.prepare(`
+    INSERT INTO room_flashes
+      (id, event_slug, attendee_id, image_data, content_type, width, height, byte_size, status, moderation_result, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'allowed', ?, ?)
+  `).bind(id, slug, access.attendeeId, imageBytes, FLASH_OUTPUT_CONTENT_TYPE, dimensions.width, dimensions.height, imageBytes.length, now, policy.readOnlyAt).run();
   const flash: FlashRecord = { id, eventSlug: slug, attendeeId: access.attendeeId, displayName: access.displayName, ...dimensions, createdAt: now, expiresAt: policy.readOnlyAt, mine: true };
   await env.THE_ROOM.getByName(slug).publishFlash(flash, policy);
   return Response.json({ flash }, { status: 201, headers: flashHeaders() });

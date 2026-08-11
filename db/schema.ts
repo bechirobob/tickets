@@ -150,7 +150,8 @@ export const roomFlashes = sqliteTable("room_flashes", {
   id: text("id").primaryKey(),
   eventSlug: text("event_slug").notNull(),
   attendeeId: text("attendee_id").notNull(),
-  objectKey: text("object_key").notNull(),
+  imageData: blob("image_data", { mode: "buffer" }),
+  contentType: text("content_type").notNull().default("image/webp"),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
   byteSize: integer("byte_size").notNull(),
@@ -160,7 +161,6 @@ export const roomFlashes = sqliteTable("room_flashes", {
   expiresAt: text("expires_at").notNull(),
   deletedAt: text("deleted_at"),
 }, (table) => [
-  uniqueIndex("room_flashes_object_unique").on(table.objectKey),
   index("room_flashes_event_status_idx").on(table.eventSlug, table.status, table.createdAt),
   index("room_flashes_expiry_idx").on(table.status, table.expiresAt),
   index("room_flashes_attendee_idx").on(table.attendeeId, table.eventSlug, table.status),

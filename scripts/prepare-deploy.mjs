@@ -20,7 +20,7 @@ generatedConfig.ratelimits = sourceConfig.ratelimits;
 generatedConfig.observability = sourceConfig.observability;
 generatedConfig.images = sourceConfig.images;
 generatedConfig.ai = sourceConfig.ai;
-generatedConfig.r2_buckets = sourceConfig.r2_buckets;
+delete generatedConfig.r2_buckets;
 generatedConfig.durable_objects = sourceConfig.durable_objects;
 generatedConfig.migrations = sourceConfig.migrations;
 
