@@ -1133,6 +1133,18 @@
 .scene-host--compact { max-width: 76%; }
 .scene-host p { font-size: 11px; line-height: 1.38; }
 
+/* In the landing preview, bubbles belong to attendee messages only. */
+.scene-flash {
+  border-radius: 0;
+}
+
+.room-product-phone__composer {
+  border: 0;
+  border-bottom: 1px solid #b8b4aa;
+  border-radius: 0;
+  background: transparent;
+}
+
 .scene-message {
   width: fit-content;
   max-width: 66%;

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, BadgeCheck, CalendarDays, Clock3, MapPin, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BadgeCheck, CalendarDays, Clock3, Gem, MapPin, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
 import { notFound } from "next/navigation";
 import { eventImageSrcSet, eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
@@ -34,7 +34,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       </article>
 
       <aside className="compact-ticket-panel">
-        <div><p className="eyebrow">Choose your access</p>{event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => <section key={tier.id}><div><b>{tier.name}</b><span>{tier.description}{tier.status === "available" && tier.remainingAdmissions <= Math.max(5, Math.ceil(tier.capacityAdmissions * 0.1)) ? ` · Only ${tier.remainingAdmissions} left` : ""}</span></div><strong>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</strong></section>)}</div>
+        <div><p className="eyebrow">Choose your access</p>{event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => <section key={tier.id}><div><b>{tier.name}</b><span>{tier.description}{tier.status === "available" && tier.remainingAdmissions <= Math.max(5, Math.ceil(tier.capacityAdmissions * 0.1)) ? ` · Only ${tier.remainingAdmissions} left` : ""}</span>{tier.roomBadge === "VIP" ? <small className="tier-vip-note"><Gem size={11} /> VIP identity in The Room · private Host concierge when enabled</small> : null}</div><strong>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</strong></section>)}</div>
         {event.eventState === "cancelled" ? <p className="event-state-notice">This event has been cancelled. Existing customers will receive refund instructions.</p> : event.eventState === "postponed" ? <p className="event-state-notice">This event has been postponed. A new date will be published after confirmation.</p> : available ? <Link href={`/checkout/${slug}${promoterCode ? `?ref=${encodeURIComponent(promoterCode)}` : ""}`} className="checkout-link">Get tickets <Ticket size={17} /></Link> : <span className="checkout-link checkout-link--disabled">Tickets are not currently available</span>}
         <p className="secure-note"><ShieldCheck size={14} /> Secure checkout · Fresh QR · Screenshot confidence discouraged</p>
         <div className="ticket-unlocks"><MessageCircle size={17} /><span><b>Your ticket unlocks the night</b>My Nights, Before the Night, updates, The Room and Flashes.</span></div>

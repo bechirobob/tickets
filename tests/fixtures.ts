@@ -28,8 +28,8 @@ export const ticketSelectionEvent: CuratedEvent = {
   quip: "Small room. Big decisions.",
   sequence: "01",
   ticketTiers: [
-    { id: "general", recordId: "test:general", name: "General admission", description: "One admission", priceMinor: 12_000, admissionsPerUnit: 1, maxUnitsPerOrder: 10, capacityAdmissions: 100, remainingAdmissions: 100, status: "available" },
-    { id: "vip", recordId: "test:vip", name: "VIP", description: "Priority admission", priceMinor: 25_000, admissionsPerUnit: 1, maxUnitsPerOrder: 10, capacityAdmissions: 50, remainingAdmissions: 50, status: "available" },
-    { id: "table-for-5", recordId: "test:table", name: "Table for 5", description: "Five admissions", priceMinor: 180_000, admissionsPerUnit: 5, maxUnitsPerOrder: 2, capacityAdmissions: 50, remainingAdmissions: 50, status: "available" },
+    { id: "general", recordId: "test:general", name: "General admission", description: "One admission", priceMinor: 12_000, admissionsPerUnit: 1, maxUnitsPerOrder: 10, capacityAdmissions: 100, remainingAdmissions: 100, status: "available", roomBadge: null },
+    { id: "vip", recordId: "test:vip", name: "VIP", description: "Priority admission", priceMinor: 25_000, admissionsPerUnit: 1, maxUnitsPerOrder: 10, capacityAdmissions: 50, remainingAdmissions: 50, status: "available", roomBadge: "VIP" },
+    { id: "table-for-5", recordId: "test:table", name: "Table for 5", description: "Five admissions", priceMinor: 180_000, admissionsPerUnit: 5, maxUnitsPerOrder: 2, capacityAdmissions: 50, remainingAdmissions: 50, status: "available", roomBadge: null },
   ],
 };

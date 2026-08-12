@@ -67,6 +67,7 @@ type TierRecord = {
   configuredStatus: "available" | "sold_out" | "hidden";
   salesOpenAt: string | null;
   salesCloseAt: string | null;
+  roomBadge: "VIP" | null;
   reservedAdmissions: number;
 };
 
@@ -163,6 +164,7 @@ async function loadTiers(eventSlugs: string[], now: string): Promise<TierRecord[
            tier.max_units_per_order AS maxUnitsPerOrder,
            tier.status AS configuredStatus,
            tier.sales_open_at AS salesOpenAt, tier.sales_close_at AS salesCloseAt,
+           tier.room_badge AS roomBadge,
            COALESCE(SUM(CASE
              WHEN reservation.status = 'consumed' THEN reservation.admission_count
              WHEN reservation.status = 'held' AND reservation.expires_at > ? THEN reservation.admission_count
@@ -194,6 +196,7 @@ export async function getPublicEvents(): Promise<CuratedEvent[]> {
         capacityAdmissions: tier.capacityAdmissions,
         remainingAdmissions: Math.max(0, tier.capacityAdmissions - tier.reservedAdmissions),
         status: resolveTierStatus(record, tier, now),
+        roomBadge: tier.roomBadge === "VIP" ? "VIP" : null,
       })),
       index,
     ));
@@ -222,6 +225,7 @@ export async function findCuratedEvent(slug: string): Promise<CuratedEvent | nul
       capacityAdmissions: tier.capacityAdmissions,
       remainingAdmissions: Math.max(0, tier.capacityAdmissions - tier.reservedAdmissions),
       status: resolveTierStatus(record, tier, now),
+      roomBadge: tier.roomBadge === "VIP" ? "VIP" : null,
     })), 0);
   } catch (error) {
     console.error(JSON.stringify({ message: "event lookup unavailable", slug, error: error instanceof Error ? error.message : String(error) }));

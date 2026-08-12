@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, Gem, LockKeyhole, Send, Ticket } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, ConciergeBell, Gem, LockKeyhole, Send, Ticket } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { eventImageSrcSet, eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
@@ -28,7 +28,7 @@ function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string
           <article className="scene-host scene-host--compact"><BadgeCheck size={14} /><div><small>HOST UPDATE · 10:47 PM</small><p>Last entry moves to Gate 2.</p></div></article>
         </>}
       </div>
-      <div className="room-product-phone__composer"><Camera size={17} /><span>Message The Room</span><Send size={16} /></div>
+      <div className="room-product-phone__composer">{conversation === "inside" ? <i className="scene-concierge" aria-label="VIP concierge"><ConciergeBell size={13} aria-hidden="true" /><small>VIP</small></i> : <Camera size={17} />}<span>Message The Room</span><Send size={16} /></div>
     </div>
     <span className="room-product-phone__home" aria-hidden="true" />
   </article>;
