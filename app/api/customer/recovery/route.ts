@@ -2,6 +2,7 @@ import { hashToken } from "../../../../lib/attendee-auth";
 import { issueRecoveryGrant } from "../../../../lib/email-delivery";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
+import { recordProductMetric } from "../../../../lib/product-analytics";
 
 const GENERIC_MESSAGE = "If that email has active paid tickets, a secure access link is on the way.";
 
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: normalizedEmail || metadata.ip, path: "/api/customer/recovery", requestId: metadata.requestId });
     return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
   }
+  await recordProductMetric(env.DB, "recovery_requested");
   const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   const ipHash = ip ? await hashToken(ip) : null;
   const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();

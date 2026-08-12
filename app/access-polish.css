@@ -1049,6 +1049,55 @@
   appearance: none;
 }
 
+/* The install invitation stays compact and appears only after ticket ownership. */
+.pwa-install {
+  position: fixed;
+  z-index: 90;
+  right: 18px;
+  bottom: 18px;
+  width: min(430px, calc(100vw - 36px));
+  padding: 14px 42px 14px 14px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #343530;
+  border-radius: 8px;
+  background: #171713;
+  color: #fffdf8;
+}
+.pwa-install__mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px; background: var(--orange); color: white; font-weight: 850; }
+.pwa-install b { font-size: 14px; }
+.pwa-install p { margin: 4px 0 0; color: #aaa99f; font-size: 12px; line-height: 1.45; }
+.pwa-install p svg { vertical-align: -2px; }
+.pwa-install > button:not(.pwa-install__close) { min-height: 36px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #77786f; border-radius: 4px; background: transparent; color: white; font-size: 12px; font-weight: 750; }
+.pwa-install__close { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 4px; background: transparent; color: #85867f; }
+
+@media (max-width: 560px) {
+  .pwa-install { right: 10px; bottom: 80px; left: 10px; width: auto; grid-template-columns: 36px minmax(0, 1fr); padding: 12px 38px 12px 12px; }
+  .pwa-install > button:not(.pwa-install__close) { grid-column: 2; width: max-content; }
+}
+
+.operations-journey { margin: 18px 0; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.operations-journey > header { display: flex; justify-content: space-between; align-items: start; gap: 18px; }
+.operations-journey > header > div { display: flex; align-items: start; gap: 9px; }
+.operations-journey > header span b, .operations-journey > header span small { display: block; }
+.operations-journey > header span b { font-size: 14px; }
+.operations-journey > header span small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.operations-journey > header p { margin: 0; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
+.operations-journey > div { margin-top: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr) auto) minmax(0, 1fr); align-items: center; }
+.operations-journey > div span b, .operations-journey > div span { display: block; }
+.operations-journey > div span { color: var(--muted); font-size: 11px; }
+.operations-journey > div span b { margin-bottom: 2px; color: var(--ink); font-size: 21px; }
+.operations-journey > div i { padding: 0 8px; color: #aaa79e; font-style: normal; }
+
+@media (max-width: 700px) {
+  .operations-journey > header { display: grid; }
+  .operations-journey > div { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+  .operations-journey > div i { display: none; }
+  .operations-journey > div span b { font-size: 18px; }
+}
+
 .drop-vibes {
   gap: 24px;
 }

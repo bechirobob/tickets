@@ -1,4 +1,5 @@
 import { sendOrderConfirmation } from "./email-delivery";
+import { recordProductMetric } from "./product-analytics";
 
 export type PaystackVerification = {
   id: number | string;
@@ -111,15 +112,17 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
       UPDATE orders SET paystack_status = ?, payment_updated_at = ?, failure_reason = ?
       WHERE id = ?
     `).bind(verification.status, now, "Provider amount, currency or reference did not match the order.", order.id).run();
+    await recordProductMetric(db, "payment_failed", order.eventSlug);
     return { result: "mismatch" as const, order };
   }
   if (verification.status !== "success") {
     if (["abandoned", "failed", "reversed"].includes(verification.status)) {
-      await db.batch([
+      const [failedOrder] = await db.batch([
         db.prepare(`UPDATE orders SET status = 'failed', paystack_status = ?, payment_updated_at = ?, failure_reason = ? WHERE id = ? AND status = 'payment_pending'`)
           .bind(verification.status, now, verification.gatewayResponse ?? `Payment ${verification.status}.`, order.id),
         db.prepare(`UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ? AND status = 'held'`).bind(now, order.id),
       ]);
+      if (failedOrder.meta.changes === 1) await recordProductMetric(db, "payment_failed", order.eventSlug);
     } else {
       await db.prepare("UPDATE orders SET paystack_status = ?, payment_updated_at = ? WHERE id = ?")
         .bind(verification.status, now, order.id).run();
@@ -127,6 +130,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
     return { result: "pending" as const, providerStatus: verification.status, order };
   }
 
+  let newlyPaid = false;
   if (order.status !== "paid") {
     await db.prepare(`
       UPDATE inventory_reservations
@@ -158,18 +162,20 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
       `).bind(String(verification.id), now, now, order.id).run();
       return { result: "requires_refund" as const, order };
     }
-    await db.prepare(`
+    const paidUpdate = await db.prepare(`
       UPDATE orders SET status = 'paid', paystack_status = 'success', paystack_reference = ?,
         paystack_transaction_id = ?, payment_verified_at = ?, payment_updated_at = ?,
         paid_at = COALESCE(paid_at, ?), failure_reason = NULL
       WHERE id = ? AND status IN ('payment_pending', 'expired', 'failed')
     `).bind(verification.reference, String(verification.id), now, now, verification.paidAt ?? now, order.id).run();
+    newlyPaid = paidUpdate.meta.changes === 1;
   }
 
   const paidOrder = await readOrder(db, verification.reference);
   if (!paidOrder || paidOrder.status !== "paid") return { result: "not_fulfilled" as const, order };
   await ensureIssuedTickets(db, paidOrder, verification.paidAt ?? now);
-  return { result: "paid" as const, order: paidOrder };
+  if (newlyPaid) await recordProductMetric(db, "payment_confirmed", paidOrder.eventSlug);
+  return { result: "paid" as const, order: paidOrder, newlyPaid };
 }
 
 export async function verifyAndFulfill(db: D1Database, reference: string, secret: string) {

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "About us — BeCore Tickets",
+  title: "About us",
   description: "Why BeCore Tickets is building a sharper, more accountable way to find and run nights in Accra.",
 };
 

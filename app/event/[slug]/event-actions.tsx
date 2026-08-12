@@ -2,11 +2,13 @@
 
 import { Share2 } from "lucide-react";
 import { useState } from "react";
+import { trackProductMetric } from "../../../lib/client-analytics";
 
-export default function EventActions({ title }: { title: string }) {
+export default function EventActions({ title, eventSlug }: { title: string; eventSlug: string }) {
   const [copied, setCopied] = useState(false);
 
   async function share() {
+    trackProductMetric("share_started", eventSlug);
     const data = { title: `${title} · BeCore Tickets`, text: `See ${title} on BeCore Tickets.`, url: window.location.href };
     if (navigator.share) {
       await navigator.share(data).catch(() => undefined);

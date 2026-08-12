@@ -926,6 +926,30 @@ export const eventReadinessChecks = sqliteTable("event_readiness_checks", {
   checkedAt: text("checked_at"),
 }, (table) => [uniqueIndex("event_readiness_checks_unique").on(table.eventSlug, table.checkKey)]);
 
+export const productMetricsDaily = sqliteTable("product_metrics_daily", {
+  day: text("day").notNull(),
+  eventSlug: text("event_slug").notNull().default(""),
+  metric: text("metric", { enum: [
+    "event_view",
+    "checkout_view",
+    "checkout_started",
+    "payment_attempted",
+    "payment_confirmed",
+    "payment_failed",
+    "recovery_requested",
+    "share_started",
+    "pwa_prompt_shown",
+    "pwa_install_accepted",
+    "pwa_ios_guide_opened",
+    "pwa_installed",
+  ] }).notNull(),
+  count: integer("count").notNull().default(0),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("product_metrics_daily_unique").on(table.day, table.eventSlug, table.metric),
+  index("product_metrics_daily_event_idx").on(table.eventSlug, table.day),
+]);
+
 export const guestEntries = sqliteTable("guest_entries", {
   id: text("id").primaryKey(),
   eventSlug: text("event_slug").notNull(),

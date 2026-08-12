@@ -6,6 +6,7 @@ import { findCuratedEvent } from "../../../events";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
 import { purchasePolicyKeys, recordPolicyConsents } from "../../../../lib/policies";
+import { recordProductMetric } from "../../../../lib/product-analytics";
 
 const RESERVATION_MINUTES = 15;
 const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
@@ -182,11 +183,13 @@ export async function POST(request: Request) {
       env.DB.prepare("UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ?")
         .bind(new Date().toISOString(), id),
     ]);
+    await recordProductMetric(env.DB, "payment_failed", eventSlug);
     return Response.json({ error: result.message ?? "Paystack could not start the payment." }, { status: 502 });
   }
 
   await env.DB.prepare("UPDATE orders SET paystack_reference = ?, paystack_status = ?, payment_updated_at = ? WHERE id = ?")
     .bind(result.data?.reference ?? reference, event.isTestEvent ? "initialized" : result.data?.status, new Date().toISOString(), id).run();
+  await recordProductMetric(env.DB, "payment_attempted", eventSlug);
   if (event.isTestEvent) {
     return Response.json({ authorizationUrl: result.data?.authorization_url, reference, reservationExpiresAt: expiresAt });
   }

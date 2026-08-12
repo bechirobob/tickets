@@ -1,0 +1,60 @@
+name: D1 recovery rehearsal
+
+on:
+  schedule:
+    - cron: "15 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+      D1_EXPORT_FILE: /tmp/becore-tickets-recovery-export.sql
+      D1_BOOKMARK_FILE: d1-recovery-bookmark.json
+      RECOVERY_REPORT_FILE: d1-recovery-rehearsal-report.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install isolated restore engine
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+      - name: Resolve D1 database binding
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          const endpoint = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database?name=becore-tickets-db`;
+          const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` } });
+          const payload = await response.json();
+          const database = payload.result?.find((candidate) => candidate.name === "becore-tickets-db");
+          if (!response.ok || !database?.uuid) throw new Error("Production D1 database could not be resolved.");
+          const config = JSON.parse(await readFile("wrangler.jsonc", "utf8"));
+          config.d1_databases[0].database_id = database.uuid;
+          await writeFile("wrangler.jsonc", `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+      - name: Capture source bookmark
+        run: npx wrangler d1 time-travel info DB --json > "$D1_BOOKMARK_FILE"
+      - name: Export production for isolated restore
+        run: npx wrangler d1 export DB --remote --output "$D1_EXPORT_FILE" --skip-confirmation
+      - name: Restore and verify away from production
+        run: npm run recovery:rehearse
+      - name: Remove customer-data export
+        if: always()
+        run: rm -f -- /tmp/becore-tickets-recovery-export.sql
+      - name: Preserve non-sensitive recovery proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-recovery-rehearsal-${{ github.run_id }}
+          path: |
+            d1-recovery-bookmark.json
+            d1-recovery-rehearsal-report.json
+          if-no-files-found: error
+          retention-days: 30

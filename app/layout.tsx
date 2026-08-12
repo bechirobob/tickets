@@ -1,12 +1,33 @@
 import type { Metadata } from "next";
 import CustomerDock from "./customer-dock";
 import PwaRegistration from "./pwa-registration";
+import AnalyticsBeacon from "./analytics-beacon";
 import "./globals.css";
 import "./access-polish.css";
 
 export const metadata: Metadata = {
-  title: "BeCore Tickets — Accra's party shortlist",
+  metadataBase: new URL("https://tickets.becoreops.com"),
+  title: {
+    default: "BeCore Tickets — Accra's party shortlist",
+    template: "%s · BeCore Tickets",
+  },
   description: "A weekly edit of selected parties in Accra, with secure Mobile Money ticketing by BeCoreOps.",
+  applicationName: "BeCore Tickets",
+  openGraph: {
+    type: "website",
+    locale: "en_GH",
+    siteName: "BeCore Tickets",
+    title: "BeCore Tickets — Accra's party shortlist",
+    description: "Selected Accra nights, secure Mobile Money tickets and private event Rooms.",
+    url: "/",
+    images: [{ url: "/social-card.png", width: 1200, height: 630, alt: "BeCore Tickets — Accra's edited night out" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BeCore Tickets — Accra's party shortlist",
+    description: "Selected Accra nights, secure Mobile Money tickets and private event Rooms.",
+    images: ["/social-card.png"],
+  },
   manifest: "/manifest.webmanifest",
   themeColor: "#0b0c0b",
   icons: {
@@ -28,7 +49,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
-      <body>{children}<CustomerDock /><PwaRegistration /></body>
+      <body>{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
     </html>
   );
 }

@@ -14,6 +14,9 @@
     "test:password-client": "node --test tests/staff-password-client.test.mjs",
     "test:rendered": "npm run build && node scripts/prepare-deploy.mjs && node --test tests/rendered-html.test.mjs",
     "test:worker": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:production": "E2E_BASE_URL=https://tickets.becoreops.com playwright test",
+    "recovery:rehearse": "bash scripts/rehearse-d1-recovery.sh",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vinext --ignore-pattern .wrangler --ignore-pattern '.release-dry-run*' --ignore-pattern 'rbac-dry-run*' --ignore-pattern 'live-audit.*' --ignore-pattern 'workers-types-latest.*' --ignore-pattern '.tmp-*' --ignore-pattern worker-configuration.d.ts",
     "typecheck": "tsc --noEmit",
     "cf:types": "wrangler types worker-configuration.d.ts",
@@ -36,9 +39,11 @@
     "web-push-neo": "0.1.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@cloudflare/vite-plugin": "1.51.2",
     "@cloudflare/vitest-pool-workers": "0.21.0",
     "@cloudflare/workers-types": "5.20260811.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/qrcode": "1.5.6",

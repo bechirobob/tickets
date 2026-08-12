@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, BadgeCheck, CalendarDays, Clock3, Gem, MapPin, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -11,6 +12,33 @@ import WaitlistControl from "./waitlist-control";
 
 export const dynamic = "force-dynamic";
 
+const origin = "https://tickets.becoreops.com";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const event = await findCuratedEvent(slug);
+  if (!event) return { title: "Night not found", robots: { index: false, follow: false } };
+  const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}. Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`;
+  const canonical = `/event/${event.slug}`;
+  const image = eventImageUrl(event.image, 1440, 82);
+  return {
+    title: event.title,
+    description,
+    alternates: { canonical },
+    robots: event.isTestEvent ? { index: false, follow: false } : { index: true, follow: true },
+    openGraph: {
+      type: "website",
+      locale: "en_GH",
+      siteName: "BeCore Tickets",
+      title: `${event.title} · BeCore Tickets`,
+      description,
+      url: canonical,
+      images: [{ url: image, width: 1440, height: 960, alt: `Atmosphere for ${event.title}` }],
+    },
+    twitter: { card: "summary_large_image", title: `${event.title} · BeCore Tickets`, description, images: [image] },
+  };
+}
+
 export default async function EventPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ ref?: string }> }) {
   const { slug } = await params;
   const query = await searchParams;
@@ -19,9 +47,32 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
   if (!event) notFound();
   const available = event.ticketTiers.some((tier) => tier.status === "available");
+  const structuredEvent = event.isTestEvent ? null : {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: event.title,
+    description: `${event.quip} ${event.note}`,
+    startDate: event.startsAt,
+    endDate: event.endsAt,
+    eventStatus: event.eventState === "cancelled" ? "https://schema.org/EventCancelled" : event.eventState === "postponed" ? "https://schema.org/EventPostponed" : event.eventState === "rescheduled" ? "https://schema.org/EventRescheduled" : "https://schema.org/EventScheduled",
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    image: [eventImageUrl(event.image, 1440, 82)],
+    location: { "@type": "Place", name: event.venue, address: { "@type": "PostalAddress", addressLocality: event.area, addressRegion: "Greater Accra", addressCountry: "GH" } },
+    organizer: host ? { "@type": "Organization", name: host.name, url: `${origin}/hosts/${host.slug}` } : { "@type": "Organization", name: "BeCore Tickets", url: origin },
+    offers: event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => ({
+      "@type": "Offer",
+      name: tier.name,
+      price: (tier.priceMinor / 100).toFixed(2),
+      priceCurrency: "GHS",
+      url: `${origin}/checkout/${event.slug}?tier=${encodeURIComponent(tier.id)}`,
+      availability: tier.status === "available" ? "https://schema.org/InStock" : tier.status === "sold_out" ? "https://schema.org/SoldOut" : "https://schema.org/PreOrder",
+      validFrom: event.salesOpenAt ?? undefined,
+    })),
+  };
 
   return <main className="event-page compact-event-page">
-    <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><EventActions title={event.title} /></header>
+    {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
+    <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><EventActions title={event.title} eventSlug={event.slug} /></header>
 
     <section className="compact-event-hero"><img src={eventImageUrl(event.image, 1440, 78)} srcSet={eventImageSrcSet(event.image, [720, 1080, 1440])} sizes="100vw" alt={`Atmosphere for ${event.title}`} fetchPriority="high" decoding="async" /><div /><article><p className="eyebrow">{event.isTestEvent ? "Working preview" : "BeCore pick"} · {event.vibe}</p><h1>{event.title}</h1><span>{event.fullDate} · {event.venue}, {event.area}</span></article></section>
 

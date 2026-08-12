@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
+import { trackProductMetric } from "../../../lib/client-analytics";
 
 const paymentNetworks = [
   { id: "mtn", label: "MTN MoMo", icon: "/payment-providers/mtn-momo.svg" },
@@ -58,6 +59,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       return;
     }
     setIsPaying(true);
+    trackProductMetric("checkout_started", slug);
     setMessage("Sending the MoMo prompt to your phone…");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);

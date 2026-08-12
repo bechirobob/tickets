@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   const events = await env.DB.prepare("SELECT slug, title, venue, starts_at AS startsAt, event_state AS eventState FROM curated_event_records ORDER BY starts_at DESC LIMIT 100")
     .all<{ slug: string; title: string; venue: string; startsAt: string; eventState: string }>();
   if (canEvents) await seedReadiness(env.DB, events.results.map((event) => event.slug));
-  const [metrics, checks, devices, incidents, alerts, approvals] = await Promise.all([
+  const [metrics, checks, devices, incidents, alerts, approvals, journey, acquisition] = await Promise.all([
     env.DB.prepare(`
       SELECT event.slug, event.title, event.event_state AS eventState,
         (SELECT COUNT(*) FROM orders WHERE event_slug = event.slug AND status IN ('paid','refund_pending','refunded','disputed')) AS paidOrders,
@@ -51,6 +51,24 @@ export async function GET(request: Request) {
     env.DB.prepare("SELECT * FROM operational_incidents WHERE status != 'resolved' ORDER BY created_at DESC LIMIT 100").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM system_alerts WHERE status != 'resolved' ORDER BY created_at DESC LIMIT 100").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM approval_requests WHERE status IN ('pending','executing','failed') ORDER BY requested_at DESC LIMIT 100").all<Record<string, unknown>>(),
+    env.DB.prepare(`
+      SELECT event.slug,
+        COALESCE(SUM(CASE WHEN product.metric = 'event_view' THEN product.count ELSE 0 END), 0) AS eventViews,
+        COALESCE(SUM(CASE WHEN product.metric = 'checkout_view' THEN product.count ELSE 0 END), 0) AS checkoutViews,
+        COALESCE(SUM(CASE WHEN product.metric = 'checkout_started' THEN product.count ELSE 0 END), 0) AS checkoutStarts,
+        COALESCE(SUM(CASE WHEN product.metric = 'payment_attempted' THEN product.count ELSE 0 END), 0) AS paymentAttempts,
+        COALESCE(SUM(CASE WHEN product.metric = 'payment_confirmed' THEN product.count ELSE 0 END), 0) AS paymentsConfirmed,
+        COALESCE(SUM(CASE WHEN product.metric = 'share_started' THEN product.count ELSE 0 END), 0) AS shares
+      FROM curated_event_records event
+      LEFT JOIN product_metrics_daily product ON product.event_slug = event.slug AND product.day >= date('now', '-30 days')
+      GROUP BY event.slug
+    `).all<Record<string, unknown>>(),
+    env.DB.prepare(`
+      SELECT metric, COALESCE(SUM(count), 0) AS count
+      FROM product_metrics_daily
+      WHERE event_slug = '' AND day >= date('now', '-30 days')
+      GROUP BY metric
+    `).all<{ metric: string; count: number }>(),
   ]);
   const scopedMetrics = metrics.results.map((metric) => ({
     slug: metric.slug,
@@ -79,6 +97,8 @@ export async function GET(request: Request) {
     incidents: canEvents ? incidents.results : [],
     alerts: isOwner ? alerts.results : [],
     approvals: scopedApprovals,
+    journey: journey.results,
+    acquisition: Object.fromEntries(acquisition.results.map((item) => [item.metric, Number(item.count)])),
     role: session.role,
   }, { headers: { "cache-control": "no-store" } });
 }

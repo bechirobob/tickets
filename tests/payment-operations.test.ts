@@ -59,6 +59,7 @@ describe("payment fulfilment operations", () => {
     expect(await env.DB.prepare("SELECT status FROM orders WHERE id = ?").bind(seeded.orderId).first()).toMatchObject({ status: "paid" });
     expect(await env.DB.prepare("SELECT status FROM inventory_reservations WHERE order_id = ?").bind(seeded.orderId).first()).toMatchObject({ status: "consumed" });
     expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM tickets WHERE order_id = ?").bind(seeded.orderId).first<{ count: number }>())?.count).toBe(2);
+    expect(await env.DB.prepare("SELECT count FROM product_metrics_daily WHERE event_slug = ? AND metric = 'payment_confirmed'").bind(seeded.eventSlug).first()).toMatchObject({ count: 1 });
   });
 
   it("never fulfils a provider amount mismatch", async () => {
@@ -67,6 +68,7 @@ describe("payment fulfilment operations", () => {
     expect(result.result).toBe("mismatch");
     expect(await env.DB.prepare("SELECT status FROM orders WHERE id = ?").bind(seeded.orderId).first()).toMatchObject({ status: "payment_pending" });
     expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM tickets WHERE order_id = ?").bind(seeded.orderId).first<{ count: number }>())?.count).toBe(0);
+    expect(await env.DB.prepare("SELECT count FROM product_metrics_daily WHERE event_slug = ? AND metric = 'payment_failed'").bind(seeded.eventSlug).first()).toMatchObject({ count: 1 });
   });
 
   it("expires abandoned orders and releases their admission holds", async () => {

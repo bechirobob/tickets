@@ -194,6 +194,13 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
       await recordSystemAlert(env, "preview-event-rollover", error);
     }
   }
+  if (controller.cron === "15 3 * * *") {
+    try {
+      await env.DB.prepare("DELETE FROM product_metrics_daily WHERE day < date('now', '-180 days')").run();
+    } catch (error) {
+      await recordSystemAlert(env, "analytics-retention", error);
+    }
+  }
   if (controller.cron === "15 3 * * *" && env.PAYSTACK_SECRET_KEY) {
     try {
       const periodEnd = new Date();

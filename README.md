@@ -34,6 +34,8 @@ Cloudflare credentials.
 - `npm run typecheck`
 - `npm test`
 - `npx wrangler deploy --dry-run`
+- `npm run test:e2e:production` after deployment
+- `D1_EXPORT_FILE=/path/to/export.sql npm run recovery:rehearse`
 
 ## Deployment
 
@@ -43,6 +45,14 @@ Wrangler dry-run, captures the current D1 time-travel bookmark, applies pending
 versioned D1 migrations, and only then deploys the Worker. This order keeps the
 currently deployed code compatible while the additive schema update is applied
 and gives operators a precise pre-migration recovery point.
+
+Every successful deployment triggers a real-browser production audit in desktop
+Chromium, mobile Chromium and mobile WebKit. A weekly recovery workflow exports
+D1, restores it into an isolated temporary SQLite database, verifies integrity
+and required tables, uploads only a non-sensitive proof report, and deletes the
+customer-data export. The production restore procedure is documented in
+`docs/runbooks/d1-recovery.md`; destructive restoration is intentionally never
+automated.
 
 Production requires the following encrypted Worker secrets:
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, CircleDollarSign, ClipboardCheck, Loader2, Radio, RefreshCw, ShieldAlert, TicketCheck, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, Check, CircleDollarSign, ClipboardCheck, Download, Loader2, Radio, RefreshCw, Share2, ShieldAlert, TicketCheck, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { StaffRole } from "../../../lib/admin-session";
 import OperationsNav from "../operations-nav";
@@ -12,11 +12,12 @@ type Device = { id: string; eventSlug: string; gate: string; accountEmail: strin
 type Incident = { id: string; event_slug: string; severity: string; title: string; detail: string; status: string; created_at: string };
 type Alert = { id: string; source: string; severity: string; message: string; detail: string | null; status: string; created_at: string };
 type Approval = { id: string; kind: string; event_slug: string | null; status: string; requested_by_email: string; requested_at: string; failure_reason: string | null };
+type Journey = { slug: string; eventViews: number; checkoutViews: number; checkoutStarts: number; paymentAttempts: number; paymentsConfirmed: number; shares: number };
 
 const money = (minor: number) => new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 }).format(minor / 100);
 
 export default function EventOperationsHub({ actor, role }: { actor: string; role: StaffRole }) {
-  const [data, setData] = useState<{ events: Event[]; metrics: Metric[]; checks: CheckItem[]; devices: Device[]; incidents: Incident[]; alerts: Alert[]; approvals: Approval[] }>({ events: [], metrics: [], checks: [], devices: [], incidents: [], alerts: [], approvals: [] });
+  const [data, setData] = useState<{ events: Event[]; metrics: Metric[]; checks: CheckItem[]; devices: Device[]; incidents: Incident[]; alerts: Alert[]; approvals: Approval[]; journey: Journey[]; acquisition: Record<string, number> }>({ events: [], metrics: [], checks: [], devices: [], incidents: [], alerts: [], approvals: [], journey: [], acquisition: {} });
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -27,6 +28,7 @@ export default function EventOperationsHub({ actor, role }: { actor: string; rol
   const checks = data.checks.filter((item) => item.eventSlug === selected);
   const devices = data.devices.filter((item) => item.eventSlug === selected);
   const incidents = data.incidents.filter((item) => item.event_slug === selected);
+  const journey = data.journey.find((item) => item.slug === selected);
   const readiness = checks.length ? Math.round(checks.filter((item) => item.status === "passed").length / checks.length * 100) : 0;
   const canFinance = role === "owner" || role === "finance";
   const canEvents = role === "owner" || role === "curator";
@@ -39,6 +41,7 @@ export default function EventOperationsHub({ actor, role }: { actor: string; rol
     {loading ? <div className="curation-empty"><Loader2 className="spin" /> Checking every moving part…</div> : <><div className="workspace-event-picker"><label htmlFor="operations-event">Night</label><select id="operations-event" value={selected} onChange={(input) => setSelected(input.target.value)}>{data.events.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select><span>{event ? `${new Date(event.startsAt).toLocaleDateString("en-GH", { dateStyle: "medium" })} · ${event.eventState.replaceAll("_", " ")}` : "Choose a Night to inspect."}</span></div>
     {event && metric ? <><section className="operations-title"><div><p>{event.venue}</p><h2>{event.title}</h2></div>{canEvents ? <strong className={readiness === 100 ? "ready" : ""}>{readiness}% ready</strong> : null}</section>
       <div className="operations-metrics">{canFinance ? <article><CircleDollarSign /><b>{money(Number(metric.grossMinor ?? 0))}</b><span>{metric.paidOrders ?? 0} paid orders</span></article> : null}{canEvents ? <article><TicketCheck /><b>{metric.checkedIn ?? 0}/{metric.activeTickets ?? 0}</b><span>checked in</span></article> : null}{canEvents ? <article><Radio /><b>{metric.activeDevices ?? 0}</b><span>live gate devices · {metric.pendingOffline ?? 0} offline queued</span></article> : null}<article><ShieldAlert /><b>{role === "owner" ? (metric.openSupport ?? 0) + (metric.roomReports ?? 0) + (metric.openIncidents ?? 0) : canFinance ? metric.openSupport ?? 0 : (metric.roomReports ?? 0) + (metric.openIncidents ?? 0)}</b><span>{role === "owner" ? "open human issues" : canFinance ? "open support cases" : "open Room reports & incidents"}</span></article></div>
+      {journey ? <section className="operations-journey"><header><div><BarChart3 size={18} /><span><b>30-day ticket journey</b><small>First-party counts only—no customer tracking profile.</small></span></div><p><Download size={13} /> {data.acquisition.pwa_installed ?? 0} app installs · <Share2 size={13} /> {journey.shares} shares</p></header><div><span><b>{journey.eventViews}</b> event views</span><i>→</i><span><b>{journey.checkoutViews}</b> checkout views</span><i>→</i><span><b>{journey.checkoutStarts}</b> checkout starts</span><i>→</i><span><b>{journey.paymentAttempts}</b> payment attempts</span><i>→</i><span><b>{journey.paymentsConfirmed}</b> paid</span></div></section> : null}
       <div className="operations-grid">{canEvents ? <section><header><ClipboardCheck /><div><b>Readiness</b><span>Tap a check to move pending → passed → blocked.</span></div><button onClick={() => void act({ action: "run_rehearsal", eventSlug: selected })}>Run rehearsal</button></header>{checks.map((item) => <button key={item.checkKey} className={item.status} title={item.note ?? undefined} onClick={() => void act({ action: "readiness", eventSlug: selected, checkKey: item.checkKey, status: item.status === "pending" ? "passed" : item.status === "passed" ? "blocked" : "pending" })}><i>{item.status === "passed" ? <Check size={13} /> : item.status === "blocked" ? <AlertTriangle size={13} /> : null}</i><span>{item.label}</span><small>{item.status}</small></button>)}</section> : null}
       {canEvents ? <section><header><Radio /><div><b>Doors & devices</b><span>Only devices seen in the last two minutes count live.</span></div></header>{devices.length ? devices.map((item) => <article key={item.id}><span><b>{item.gate}</b><small>{item.accountEmail} · seen {new Date(item.lastSeenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></span><i>{item.pendingOfflineScans ? `${item.pendingOfflineScans} queued` : "Synced"}</i></article>) : <p>No gate device has checked in yet.</p>}</section> : null}
       {canEvents ? <section><header><AlertTriangle /><div><b>Incidents</b><span>What happened, who owns it, and whether it is over.</span></div><button onClick={incident}>Log</button></header>{incidents.length ? incidents.map((item) => <article key={item.id}><span><b>{item.title}</b><small>{item.detail}</small></span><button onClick={() => void act({ action: "incident_status", id: item.id, status: "resolved" })}>Resolve</button></article>) : <p>No open incident. Keep it boring.</p>}</section> : null}
