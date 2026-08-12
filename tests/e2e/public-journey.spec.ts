@@ -1,6 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+});
+
 const publicPages = ["/", "/events", "/help", "/privacy"];
 
 test("public navigation is usable without horizontal overflow", async ({ page }) => {

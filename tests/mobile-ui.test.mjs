@@ -80,7 +80,7 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
   assert.match(explorer, /event\.quip/u);
   assert.match(explorer, /event\.note/u);
   assert.match(explorer, /event\.lineup/u);
-  assert.match(css, /:root\s*\{[^}]*--night:\s*#090a09[^}]*--signal:\s*#ff4d24[^}]*--acid:\s*#d7f45b/su);
+  assert.match(css, /:root\s*\{[^}]*--night:\s*#090a09[^}]*--signal:\s*#bd3f11[^}]*--acid:\s*#d7f45b/su);
   assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*transparent[^}]*color:\s*#090a09/su);
   assert.match(css, /\.drop-card__image > span\s*\{[^}]*background:\s*#090a09[^}]*color:\s*#d7f45b/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
