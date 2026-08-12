@@ -1,6 +1,6 @@
 /* Compact owner setup and organiser access refinements. */
 .submission-header__actions { height: 100%; display: flex; align-items: center; }
-.submission-header__actions a { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; color: #aaa9a2; font-size: 9px; font-weight: 720; }
+.submission-header__actions a { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; color: #aaa9a2; font-size: 13px; font-weight: 720; }
 .submission-header__actions a + a { border-left: 1px solid #363733; }
 .submission-header__actions a:hover, .submission-header__actions a:focus-visible { color: white; }
 .submission-header__signin { color: #f2f0e8 !important; }
@@ -8,17 +8,17 @@
 
 .admin-bootstrap > section { width: min(620px, 100%); }
 .admin-bootstrap__back { display: flex; align-items: baseline; justify-content: space-between; }
-.admin-bootstrap__back span { color: #777870; font-size: 8px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.admin-bootstrap__back span { color: #777870; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .admin-bootstrap .admin-login__eyebrow { margin-top: 44px; }
 .admin-bootstrap h1 + p { margin-bottom: 28px; }
 .admin-bootstrap__form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 22px; border-top: 1px solid #343531; }
 .admin-form-field { min-width: 0; display: grid; align-content: start; gap: 7px; }
 .admin-form-field--wide, .admin-bootstrap__form > p, .admin-bootstrap__form > button { grid-column: 1 / -1; }
-.admin-form-field small { color: #85867f; font-size: 8px; line-height: 1.5; }
+.admin-form-field small { color: #85867f; font-size: 12px; line-height: 1.5; }
 .admin-form-field code { color: #bbbcb5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .95em; }
 .admin-bootstrap__key-help { margin-top: 2px; padding-top: 10px; border-top: 1px solid #2b2c29; }
-.admin-bootstrap__key-help summary { width: max-content; cursor: pointer; color: #ff7459; font-size: 8px; font-weight: 740; }
-.admin-bootstrap__key-help p { margin: 10px 0 0; color: #9b9b94; font-size: 9px; line-height: 1.6; }
+.admin-bootstrap__key-help summary { width: max-content; cursor: pointer; color: #ff7459; font-size: 12px; font-weight: 740; }
+.admin-bootstrap__key-help p { margin: 10px 0 0; color: #9b9b94; font-size: 13px; line-height: 1.6; }
 .admin-bootstrap__key-help b { color: #d0cfc8; font-weight: 650; }
 .admin-bootstrap__form > button { width: 100%; justify-self: stretch; }
 
@@ -93,29 +93,29 @@
 /* Soft project pickers: styled where supported, safely native everywhere else. */
 :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls) select {
   border-radius: 11px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 4px 14px rgba(0,0,0,.045);
-  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+  box-shadow: none;
+  transition: border-color .16s ease, background-color .16s ease;
 }
 :where(.workspace-event-picker, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist) select:hover {
   border-color: #8f8b82;
   background-color: #fffefa;
 }
 :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls) select:focus-visible {
-  border-color: #c95637;
-  outline: 3px solid rgba(211,85,49,.14);
+  border-color: #696963;
+  outline: 2px solid #696963;
   outline-offset: 2px;
-  box-shadow: 0 7px 20px rgba(0,0,0,.08);
+  box-shadow: none;
 }
 .workspace-jump select {
   border-color: #4d4d47;
   border-radius: 10px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, 0 7px 18px rgba(0,0,0,.13);
+  box-shadow: none;
 }
 .workspace-jump select:hover { border-color: #6c6c64; background-color: #20211e; }
 .room-notifications__controls select {
   border-color: #4d4d47;
   border-radius: 9px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 5px 14px rgba(0,0,0,.14);
+  box-shadow: none;
 }
 .room-notifications__controls select:hover { border-color: #696a62; background-color: #232420; }
 
@@ -151,7 +151,7 @@
     margin: 2px 0;
     padding: 9px 11px;
     border-radius: 9px;
-    font-size: 11px;
+    font-size: 15px;
     line-height: 1.25;
   }
   :where(.workspace-event-picker, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) option:hover,
@@ -159,13 +159,13 @@
     background: #f2eee6;
   }
   :where(.workspace-event-picker, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) option:checked {
-    background: #fff0e8;
-    color: #8d321d;
+    background: #e9e7e0;
+    color: #171713;
     font-weight: 760;
   }
   :where(.workspace-jump, .room-notifications__controls) option:hover,
   :where(.workspace-jump, .room-notifications__controls) option:focus { background: #2b2c28; }
-  :where(.workspace-jump, .room-notifications__controls) option:checked { background: #35302b; color: #ff876d; font-weight: 760; }
+  :where(.workspace-jump, .room-notifications__controls) option:checked { background: #343531; color: #f2efe7; font-weight: 760; }
   :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) option::checkmark {
     color: var(--orange);
   }
@@ -191,4 +191,113 @@
   select,
   textarea,
   [contenteditable="true"] { font-size: 16px !important; }
+}
+
+/* Flat-surface contract: persistent content never floats or uses tinted selection fills. */
+:where(
+  .pay-button,
+  .event-page .checkout-link,
+  .room-product-scene__crop,
+  .night-room-device,
+  .night-room-message > span
+) {
+  box-shadow: none;
+}
+
+:where(.pay-button, .event-page .checkout-link):hover,
+:where(.pay-button, .event-page .checkout-link):active {
+  box-shadow: none;
+  transform: none;
+}
+
+:where(
+  .category-tabs button.active,
+  .drop-vibes button[aria-selected="true"],
+  .status,
+  .status.draft,
+  .curation-list > button.active,
+  .staff-list > button.active,
+  .support-ops__layout > nav > button.active,
+  .room-message__actions button.active
+) {
+  background: transparent;
+}
+
+.category-tabs button.active,
+.drop-vibes button[aria-selected="true"] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.ops-record-list button.active {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+}
+
+.status,
+.status.draft {
+  border: 1px solid #b9b6ad;
+}
+
+.support-ops__layout > nav > button.active {
+  position: relative;
+  color: var(--ink);
+}
+
+.support-ops__layout > nav > button.active::before {
+  content: "";
+  width: 2px;
+  position: absolute;
+  inset: 12px auto 12px 0;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+:where(
+  .night-hub__notice,
+  .notification-page__notice,
+  .wallet-confirmed--verify,
+  .submission-error,
+  .curation-error,
+  .my-nights-recovered,
+  .night-support__state,
+  .night-support__notice
+) {
+  border: 1px solid #bbb7ad;
+  background: transparent !important;
+}
+
+.room-notifications__notice {
+  border: 1px solid #55564f;
+  background: transparent;
+  color: #e7e4dc;
+}
+
+:where(
+  .wallet-page article,
+  .night-passes article,
+  .scene-host,
+  .preview-event-notice,
+  .preview-checkout-note,
+  .room-pinned,
+  .room-message.announcement,
+  .night-perks__tiers article
+) {
+  border-color: #aaa79f;
+}
+
+.form-grid input:focus,
+.settings-card input:focus,
+.settings-card select:focus,
+.wallet-recovery input:focus,
+.ops-grid input:focus,
+.ops-grid select:focus,
+.ops-grid textarea:focus,
+.tier-editor input:focus,
+.tier-editor select:focus,
+.submission-fields input:focus,
+.submission-fields select:focus,
+.submission-fields textarea:focus,
+.admin-login__form input:focus {
+  border-color: #696963;
 }
