@@ -77,7 +77,7 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
   assert.match(explorer, /event\.note/u);
   assert.match(explorer, /event\.lineup/u);
   assert.match(css, /:root\s*\{[^}]*--night:\s*#090a09[^}]*--signal:\s*#ff4d24[^}]*--acid:\s*#d7f45b/su);
-  assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*#090a09[^}]*color:\s*#fffdfa/su);
+  assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*transparent[^}]*color:\s*#090a09/su);
   assert.match(css, /\.drop-card__image > span\s*\{[^}]*background:\s*#090a09[^}]*color:\s*#d7f45b/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
 });
@@ -163,6 +163,24 @@ test("mobile customers retain wallet access and form controls do not trigger iOS
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
 });
 
+test("the program-wide type scale never returns to ant-sized visible text", async () => {
+  const [css, accessPolish] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+  ]);
+  const declarations = `${css}\n${accessPolish}`.matchAll(/font-size:\s*([0-9.]+)px/gu);
+  const undersized = [...declarations]
+    .map((match) => Number(match[1]))
+    .filter((size) => size > 0 && size < 10);
+
+  assert.deepEqual(undersized, []);
+  assert.match(css, /\.main-nav\s*\{[^}]*font-size:\s*16px/su);
+  assert.match(css, /\.drop-controls button\s*\{[^}]*font-size:\s*14px/su);
+  assert.match(css, /\.drop-card__note\s*\{[^}]*font-size:\s*14px/su);
+  assert.match(css, /\.room-message__body > header span\s*\{[^}]*font-size:\s*10px/su);
+  assert.match(css, /\.room-bubble > p\s*\{[^}]*font-size:\s*16px/su);
+});
+
 test("returning buyers recover and manage the whole purchase through My Nights", async () => {
   const [myNights, hub, recoveryClaim, paymentReturn] = await Promise.all([
     readFile(myNightsUrl, "utf8"),
@@ -238,9 +256,9 @@ test("checkout conversion actions look and behave like primary controls", async 
   ]);
 
   assert.match(css, /\.event-page \.checkout-link\s*\{[^}]*background:\s*var\(--ink\)[^}]*font-weight:\s*600/su);
-  assert.match(css, /\.event-page \.checkout-link:hover\s*\{[^}]*transform:\s*translateY\(-2px\)/su);
+  assert.doesNotMatch(css, /\.event-page \.checkout-link(?::hover|:active)?\s*\{[^}]*box-shadow/su);
   assert.match(css, /\.pay-button\s*\{[^}]*min-height:\s*53px[^}]*background:\s*#f0ecdf[^}]*font-weight:\s*600/su);
-  assert.match(css, /\.pay-button:hover:not\(:disabled\)\s*\{[^}]*transform:\s*translateY\(-2px\)/su);
+  assert.doesNotMatch(css, /\.pay-button(?::hover:not\(:disabled\)|:active:not\(:disabled\))?\s*\{[^}]*box-shadow/su);
   assert.match(css, /\.pay-button:focus-visible\s*\{[^}]*outline:/su);
   assert.match(checkout, /payment-providers\/mtn-momo\.svg/u);
   assert.match(checkout, /payment-providers\/telecel-cash\.svg/u);
@@ -381,7 +399,7 @@ test("project dropdowns use a soft progressively enhanced picker", async () => {
   assert.match(css, /@supports \(appearance:\s*base-select\)/u);
   assert.match(css, /select::picker\(select\)\s*\{[^}]*border-radius:\s*14px[^}]*box-shadow:/su);
   assert.match(css, /:where\(\.workspace-jump, \.room-notifications__controls\) select::picker\(select\)\s*\{[^}]*border-radius:\s*13px/su);
-  assert.match(css, /option:checked\s*\{[^}]*background:\s*#fff0e8/su);
+  assert.match(css, /option:checked\s*\{[^}]*background:\s*#e9e7e0/su);
   assert.match(css, /select:open::picker-icon\s*\{[^}]*rotate:\s*180deg/su);
   assert.match(css, /\.curation-page[^}]*\.before-night[^}]*\.room-modal[^}]*\.event-waitlist/su);
   assert.match(css, /\.room-notifications__controls\) select::picker\(select\)/u);
@@ -406,7 +424,7 @@ test("the program-wide corner contract prevents square UI boxes", async () => {
   assert.match(polish, /\.operations-metrics,[^}]*\.curation-workspace,[^}]*\.room-modal > section,[^}]*border-radius:\s*var\(--radius-surface\)/su);
 });
 
-test("decorative surfaces never use coloured shadows or glow halos", async () => {
+test("persistent surfaces stay flat without coloured shadows, tinted fills or curved selection arcs", async () => {
   const [css, polish] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(accessPolishUrl, "utf8"),
@@ -432,9 +450,18 @@ test("decorative surfaces never use coloured shadows or glow halos", async () =>
     }
   }
 
-  assert.match(css, /\.curation-list > button\.active\s*\{[^}]*border-left:\s*4px solid #ff4d24/u);
+  assert.match(css, /\.drop-controls button\[aria-selected="true"\]::after\s*\{[^}]*background:\s*var\(--night\)/su);
+  assert.doesNotMatch(css, /\.drop-controls button\[aria-selected="true"\]\s*\{[^}]*border-color:\s*var\(--signal\)/su);
+  assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*transparent/su);
+  assert.match(css, /\.curation-list > button\.active\s*\{[^}]*background:\s*transparent/u);
+  assert.match(css, /\.curation-list > button\.active::before\s*\{[^}]*background:\s*#171713/su);
   assert.doesNotMatch(css, /\.curation-list > button\.active\s*\{[^}]*box-shadow/su);
   assert.doesNotMatch(css, /\.curated-card\.is-picked \.curated-card__image\s*\{[^}]*box-shadow/su);
+  assert.doesNotMatch(css, /\.room-product-scene__crop\s*\{[^}]*box-shadow/su);
+  assert.doesNotMatch(css, /\.night-room-device\s*\{[^}]*box-shadow/su);
+  assert.doesNotMatch(css, /\.night-room-message(?:--right)? > span\s*\{[^}]*box-shadow/su);
+  assert.match(polish, /Flat-surface contract:[\s\S]*?\.submission-error,[\s\S]*?\.curation-error,[\s\S]*?background:\s*transparent !important/su);
+  assert.match(polish, /:where\(\s*\.pay-button,[\s\S]*?\.night-room-message > span[\s\S]*?box-shadow:\s*none/su);
   assert.match(css, /\.night-room-showcase::before\s*\{\s*display:\s*none/u);
   assert.doesNotMatch(css, /\.night-room-peek__stream\s*\{[^}]*radial-gradient/su);
 });
