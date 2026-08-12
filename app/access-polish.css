@@ -1,0 +1,37 @@
+/* Compact owner setup and organiser access refinements. */
+.submission-header__actions { height: 100%; display: flex; align-items: center; }
+.submission-header__actions a { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; color: #aaa9a2; font-size: 9px; font-weight: 720; }
+.submission-header__actions a + a { border-left: 1px solid #363733; }
+.submission-header__actions a:hover, .submission-header__actions a:focus-visible { color: white; }
+.submission-header__signin { color: #f2f0e8 !important; }
+.submission-header__signin svg { color: var(--orange); }
+
+.admin-bootstrap > section { width: min(620px, 100%); }
+.admin-bootstrap__back { display: flex; align-items: baseline; justify-content: space-between; }
+.admin-bootstrap__back span { color: #777870; font-size: 8px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.admin-bootstrap .admin-login__eyebrow { margin-top: 44px; }
+.admin-bootstrap h1 + p { margin-bottom: 28px; }
+.admin-bootstrap__form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 22px; border-top: 1px solid #343531; }
+.admin-form-field { min-width: 0; display: grid; align-content: start; gap: 7px; }
+.admin-form-field--wide, .admin-bootstrap__form > p, .admin-bootstrap__form > button { grid-column: 1 / -1; }
+.admin-form-field small { color: #85867f; font-size: 8px; line-height: 1.5; }
+.admin-form-field code { color: #bbbcb5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .95em; }
+.admin-bootstrap__key-help { margin-top: 2px; padding-top: 10px; border-top: 1px solid #2b2c29; }
+.admin-bootstrap__key-help summary { width: max-content; cursor: pointer; color: #ff7459; font-size: 8px; font-weight: 740; }
+.admin-bootstrap__key-help p { margin: 10px 0 0; color: #9b9b94; font-size: 9px; line-height: 1.6; }
+.admin-bootstrap__key-help b { color: #d0cfc8; font-weight: 650; }
+.admin-bootstrap__form > button { width: 100%; justify-self: stretch; }
+
+@media (max-width: 640px) {
+  .submission-header { height: 68px; padding: 0 14px; }
+  .submission-header__actions a { padding: 0 9px; }
+  .submission-header__back span { display: none; }
+}
+
+@media (max-width: 600px) {
+  .admin-login { padding: 34px 20px 55px; place-items: start center; }
+  .admin-bootstrap__form { grid-template-columns: 1fr; }
+  .admin-form-field--wide, .admin-bootstrap__form > p, .admin-bootstrap__form > button { grid-column: auto; }
+  .admin-bootstrap .admin-login__eyebrow { margin-top: 36px; }
+  .admin-bootstrap h1 { font-size: 44px; }
+}

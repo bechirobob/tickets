@@ -1,3 +1,5 @@
+import { pbkdf2 as nodePbkdf2 } from "node:crypto";
+
 const COOKIE_NAME = "bct_staff";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 export const PASSWORD_ITERATIONS = 600_000;
@@ -75,9 +77,12 @@ export function validateStaffPassword(value: string): void {
 }
 
 async function derivePassword(password: string, salt: Uint8Array<ArrayBuffer>, iterations: number): Promise<Uint8Array<ArrayBuffer>> {
-  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, material, 256);
-  return new Uint8Array(bits);
+  return new Promise((resolve, reject) => {
+    nodePbkdf2(password, salt, iterations, 32, "sha256", (error, derivedKey) => {
+      if (error) reject(error);
+      else resolve(Uint8Array.from(derivedKey));
+    });
+  });
 }
 
 export async function createPasswordRecord(password: string, iterations = PASSWORD_ITERATIONS): Promise<{ hash: string; salt: string; iterations: number }> {

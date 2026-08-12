@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const cssUrl = new URL("../app/globals.css", import.meta.url);
+const accessPolishUrl = new URL("../app/access-polish.css", import.meta.url);
 const roomUrl = new URL("../app/room/[slug]/room-client.tsx", import.meta.url);
 const homeUrl = new URL("../app/page.tsx", import.meta.url);
 const organizerUrl = new URL("../app/organizer/page.tsx", import.meta.url);
@@ -21,6 +22,8 @@ const roomNotificationsUrl = new URL("../app/room/[slug]/room-notifications.tsx"
 const supportCentreUrl = new URL("../app/my-nights/[slug]/support-centre.tsx", import.meta.url);
 const waitlistUrl = new URL("../app/event/[slug]/waitlist-control.tsx", import.meta.url);
 const roomOperationsUrl = new URL("../app/admin/rooms/room-operations.tsx", import.meta.url);
+const ownerBootstrapUrl = new URL("../app/admin/bootstrap/page.tsx", import.meta.url);
+const ownerBootstrapFormUrl = new URL("../app/admin/bootstrap/bootstrap-form.tsx", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -278,9 +281,29 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.match(organizer, /redirect\("\/organizer\/workspace"\)/u);
   assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
   assert.match(submission, /href="\/"[^>]*>.*Back to events/su);
+  assert.match(submission, /className="submission-header__signin"/u);
+  assert.match(submission, /aria-label="Organiser access"/u);
   assert.match(submission, /Organiser sign in/u);
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
+});
+
+test("first-owner setup explains its one-use key without exposing a credential", async () => {
+  const [page, form, css] = await Promise.all([
+    readFile(ownerBootstrapUrl, "utf8"),
+    readFile(ownerBootstrapFormUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+  ]);
+
+  assert.match(page, /Create the first owner\./u);
+  assert.match(page, /closes as soon as the account is created/u);
+  assert.match(form, /One-time setup key/u);
+  assert.match(form, /ADMIN_ACCESS_KEY/u);
+  assert.match(form, /Secrets cannot be viewed again/u);
+  assert.match(form, /id="owner-name"/u);
+  assert.match(form, /id="owner-email"/u);
+  assert.match(css, /\.admin-bootstrap__form\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
+  assert.doesNotMatch(`${page}\n${form}`, /ADMIN_ACCESS_KEY\s*=|sk_(?:live|test)_/u);
 });
 
 test("approved Hosts and ticket-holder preparation reach only the assigned organiser workspace", async () => {
