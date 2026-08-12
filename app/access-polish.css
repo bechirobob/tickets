@@ -36,6 +36,60 @@
   .admin-bootstrap h1 { font-size: 44px; }
 }
 
+/* Program-wide corner contract: interfaces are compact and soft, never square. */
+:where(button, input, select, textarea) {
+  border-radius: var(--radius-control);
+}
+:where(input[type="checkbox"]) { border-radius: 4px; }
+:where(input[type="radio"]) { border-radius: 50%; }
+:where(
+  a[class$="-action"],
+  a[class*="-action "],
+  a[class$="-link"],
+  a[class*="-link "]
+) {
+  border-radius: var(--radius-control);
+}
+:where(
+  [class*="-card"],
+  [class*="-panel"],
+  [class*="-surface"],
+  [class*="-notice"],
+  [class*="-alert"],
+  [class*="-message"],
+  [class*="-editor"],
+  [class*="-table"],
+  [class*="-sheet"],
+  [class*="-pass"],
+  [class*="-state"]
+) {
+  border-radius: var(--radius-surface);
+}
+:where(
+  .operations-metrics,
+  .operations-grid > section,
+  .operations-alerts,
+  .finance-panels > section,
+  .curation-workspace,
+  .support-ops__layout,
+  .door-desk,
+  .passkey-security,
+  .recovery-codes,
+  .role-boundary,
+  .admin-login > section,
+  .room-modal > section,
+  .organizer-answers article,
+  .night-perks__tiers article,
+  .night-purchase > article,
+  .my-nights-list article,
+  .order-search label
+) {
+  border-radius: var(--radius-surface);
+}
+:where(.brand-mark__box, .date-stamp, .operations-title > strong, .operations-grid section > button i) {
+  border-radius: var(--radius-compact);
+}
+
 /* Soft project pickers: styled where supported, safely native everywhere else. */
 :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls) select {
   border-radius: 11px;
