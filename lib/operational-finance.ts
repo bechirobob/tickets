@@ -1,16 +1,23 @@
 import { initiatePaystackRefund } from "./payment-operations";
 import { notifyEventAttendees } from "./notifications";
-import type { AdminSession } from "./admin-session";
+import { hasPermission, type AdminSession } from "./admin-session";
+
+export type ApprovalKind = "event_cancellation" | "mass_refund" | "organizer_payout";
 
 type ApprovalRow = {
   id: string;
-  kind: "event_cancellation" | "mass_refund" | "organizer_payout";
+  kind: ApprovalKind;
   eventSlug: string | null;
   targetId: string | null;
   payloadJson: string;
   requestedBy: string;
   status: string;
 };
+
+export function canDecideApproval(session: AdminSession, kind: ApprovalKind): boolean {
+  if (kind === "event_cancellation") return hasPermission(session, "events.manage");
+  return hasPermission(session, "orders.manage");
+}
 
 function maskAccount(value: string): string {
   const clean = value.replace(/\s+/gu, "");
@@ -98,6 +105,7 @@ export async function decideApproval(env: Cloudflare.Env, session: AdminSession,
     FROM approval_requests WHERE id = ? LIMIT 1
   `).bind(input.approvalId).first<ApprovalRow>();
   if (!approval || approval.status !== "pending") throw new Error("This approval is no longer pending.");
+  if (!canDecideApproval(session, approval.kind)) throw new Error("This approval belongs to a different role.");
   if (approval.requestedBy === session.accountId) throw new Error("The person who requested this cannot approve it. Two people means two people.");
   const now = new Date().toISOString();
   if (input.decision === "reject") {
@@ -215,4 +223,3 @@ export async function resolvePaystackDispute(secret: string, input: { providerDi
   if (input.evidenceId) body.evidence = input.evidenceId;
   return paystack<Record<string, unknown>>(secret, `/dispute/${encodeURIComponent(input.providerDisputeId)}/resolve`, { method: "PUT", body: JSON.stringify(body) });
 }
-

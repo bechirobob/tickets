@@ -7,6 +7,9 @@ import {
   validateStaffPassword,
   type StaffPasswordPayload,
 } from "./staff-password-policy";
+import { isWorkspacePathAllowed, type StaffRole } from "./staff-roles";
+
+export type { StaffRole } from "./staff-roles";
 
 const COOKIE_NAME = "bct_staff";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
@@ -15,12 +18,12 @@ const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const PASSWORD_HASH_PREFIX = "client-pbkdf2-sha256-v1.";
 export { PASSWORD_ITERATIONS };
 
-export type StaffRole = "owner" | "curator" | "finance" | "organizer" | "gate" | "moderator";
 export type StaffPermission =
   | "accounts.manage"
   | "curation.manage"
   | "events.manage"
   | "orders.manage"
+  | "support.manage"
   | "fees.manage"
   | "gate.scan"
   | "gate.undo"
@@ -54,9 +57,10 @@ type StaffAccountRecord = {
 };
 
 const permissions: Record<StaffRole, readonly StaffPermission[]> = {
-  owner: ["accounts.manage", "curation.manage", "events.manage", "orders.manage", "fees.manage", "gate.scan", "gate.undo", "rooms.moderate", "organizer.workspace", "operations.view"],
+  owner: ["accounts.manage", "curation.manage", "events.manage", "orders.manage", "support.manage", "fees.manage", "gate.scan", "gate.undo", "rooms.moderate", "organizer.workspace", "operations.view"],
   curator: ["curation.manage", "events.manage", "operations.view"],
   finance: ["orders.manage", "fees.manage", "operations.view"],
+  support: ["support.manage"],
   organizer: ["organizer.workspace"],
   gate: ["gate.scan"],
   moderator: ["rooms.moderate"],
@@ -220,8 +224,13 @@ export function defaultWorkspace(role: StaffRole): string {
   if (role === "organizer") return "/organizer/workspace";
   if (role === "gate") return "/scan";
   if (role === "moderator") return "/admin/rooms";
+  if (role === "support") return "/admin/support";
   if (role === "finance") return "/admin/orders";
   return "/admin";
+}
+
+export function allowedWorkspaceReturn(role: StaffRole, requested: string): string {
+  return isWorkspacePathAllowed(role, requested) ? requested : defaultWorkspace(role);
 }
 
 export function adminCookieHeader(value: string): string {

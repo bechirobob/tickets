@@ -673,7 +673,7 @@ export const staffAccounts = sqliteTable("staff_accounts", {
   id: text("id").primaryKey(),
   normalizedEmail: text("normalized_email").notNull(),
   displayName: text("display_name").notNull(),
-  role: text("role", { enum: ["owner", "curator", "finance", "organizer", "gate", "moderator"] }).notNull(),
+  role: text("role", { enum: ["owner", "curator", "finance", "support", "organizer", "gate", "moderator"] }).notNull(),
   passwordHash: text("password_hash").notNull(),
   passwordSalt: text("password_salt").notNull(),
   passwordIterations: integer("password_iterations").notNull(),

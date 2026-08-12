@@ -9,9 +9,7 @@ import {
   type StaffRole,
 } from "../../../../lib/admin-session";
 import type { StaffPasswordPayload } from "../../../../lib/staff-password-policy";
-
-const roles: StaffRole[] = ["owner", "curator", "finance", "organizer", "gate", "moderator"];
-const scopedRoles = new Set<StaffRole>(["organizer", "gate", "moderator"]);
+import { isEventScopedRole, STAFF_ROLES } from "../../../../lib/staff-roles";
 
 async function owner(request: Request) {
   const { env } = await import("cloudflare:workers");
@@ -40,11 +38,11 @@ function accountInput(body: Record<string, unknown>) {
   const role = String(body.role ?? "") as StaffRole;
   const email = normalizeStaffEmail(String(body.email ?? ""));
   const displayName = String(body.displayName ?? "").trim();
-  if (!roles.includes(role) || !/^\S+@\S+\.\S+$/u.test(email) || displayName.length < 2 || displayName.length > 100) {
+  if (!(STAFF_ROLES as readonly string[]).includes(role) || !/^\S+@\S+\.\S+$/u.test(email) || displayName.length < 2 || displayName.length > 100) {
     throw new Error("Add a valid name, email and role.");
   }
   const eventSlugs = Array.isArray(body.eventSlugs) ? [...new Set(body.eventSlugs.map(String).filter((value) => /^[a-z0-9-]{1,80}$/u.test(value)))] : [];
-  return { role, email, displayName, eventSlugs: scopedRoles.has(role) ? eventSlugs : [] };
+  return { role, email, displayName, eventSlugs: isEventScopedRole(role) ? eventSlugs : [] };
 }
 
 export async function POST(request: Request) {
