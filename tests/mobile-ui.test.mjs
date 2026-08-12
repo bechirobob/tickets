@@ -112,7 +112,11 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /🔥 3/u);
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
-  assert.match(css, /\.room-product-scene__crop\s*\{[^}]*overflow:\s*hidden/su);
+  assert.equal(home.match(/<RoomPhone /gu)?.length, 2);
+  assert.match(css, /\.room-product-scene__phones\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
+  assert.match(css, /\.room-product-phone\s*\{[^}]*height:\s*560px[^}]*border-radius:\s*38px/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.room-product-scene__phones\s*\{[^}]*grid-auto-flow:\s*column[^}]*overflow-x:\s*auto/su);
+  assert.match(css, /\.room-product-phone__stream > article:nth-child\(4\)\s*\{[^}]*animation-delay:\s*\.3s/su);
   assert.match(css, /\.scene-message\s*\{[^}]*max-width:\s*62%/su);
   assert.match(css, /\.room-bubble\s*\{[^}]*padding:\s*8px 11px/su);
   assert.match(css, /\.room-message__actions\s*\{[^}]*min-height:\s*29px/su);
@@ -316,6 +320,18 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
 });
 
+test("organiser consent stays aligned with the submission content on desktop and mobile", async () => {
+  const [css, form] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(new URL("../app/organizer/submit/submission-form.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(form, /className="submission-consent submission-consent--check"/u);
+  assert.match(css, /\.submission-form > section > \.submission-consent--check\s*\{[^}]*grid-column:\s*2 \/ -1[^}]*grid-template-columns:\s*18px minmax\(0, 1fr\)[^}]*align-items:\s*start[^}]*text-transform:\s*none/su);
+  assert.match(css, /\.submission-consent--check input\s*\{[^}]*width:\s*16px[^}]*height:\s*16px[^}]*margin:\s*4px 0 0/su);
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.submission-fields label\.wide, \.submission-form > section > \.submission-consent--check\s*\{[^}]*grid-column:\s*auto/su);
+});
+
 test("first-owner setup explains its one-use key without exposing a credential", async () => {
   const [page, form, css] = await Promise.all([
     readFile(ownerBootstrapUrl, "utf8"),
@@ -398,7 +414,7 @@ test("project dropdowns use a soft progressively enhanced picker", async () => {
 
   assert.match(css, /:where\(\.workspace-event-picker,[^}]*select\s*\{[^}]*border-radius:\s*11px/su);
   assert.match(css, /@supports \(appearance:\s*base-select\)/u);
-  assert.match(css, /select::picker\(select\)\s*\{[^}]*border-radius:\s*14px[^}]*box-shadow:/su);
+  assert.match(css, /select::picker\(select\)\s*\{[^}]*border-radius:\s*14px/su);
   assert.match(css, /:where\(\.workspace-jump, \.room-notifications__controls\) select::picker\(select\)\s*\{[^}]*border-radius:\s*13px/su);
   assert.match(css, /option:checked\s*\{[^}]*background:\s*#e9e7e0/su);
   assert.match(css, /select:open::picker-icon\s*\{[^}]*rotate:\s*180deg/su);
@@ -421,48 +437,34 @@ test("the program-wide corner contract prevents square UI boxes", async () => {
   }
   assert.match(css, /--radius-control:\s*10px[^}]*--radius-picker:\s*11px[^}]*--radius-surface:\s*14px/su);
   assert.match(css, /\.workspace-event-picker select\s*\{[^}]*border-radius:\s*var\(--radius-picker\)/su);
-  assert.match(polish, /:where\(button, input, select, textarea\)\s*\{[^}]*border-radius:\s*var\(--radius-control\)/su);
+  assert.match(polish, /:where\(a, button, input, select, textarea, summary\)\s*\{[^}]*border-radius:\s*var\(--radius-control\)/su);
+  assert.match(css, /\.compact-hero__copy > div a, \.compact-hero__single\s*\{[^}]*border:\s*1px solid/su);
   assert.match(polish, /\.operations-metrics,[^}]*\.curation-workspace,[^}]*\.room-modal > section,[^}]*border-radius:\s*var\(--radius-surface\)/su);
 });
 
-test("persistent surfaces stay flat without coloured shadows, tinted fills or curved selection arcs", async () => {
+test("the interface has no effective shadows, tinted fills or curved text-edge controls", async () => {
   const [css, polish] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(accessPolishUrl, "utf8"),
   ]);
-  const combined = `${css}\n${polish}`;
-  const shadowValues = [...combined.matchAll(/box-shadow\s*:\s*([^;}]+)/gu)].map((match) => match[1].trim());
+  assert.match(polish, /Absolute flatness contract:[\s\S]*?\*,\s*\*::before,\s*\*::after\s*\{[^}]*box-shadow:\s*none !important[^}]*text-shadow:\s*none !important/su);
+  assert.doesNotMatch(`${css}\n${polish}`, /filter\s*:\s*drop-shadow/iu);
 
-  for (const value of shadowValues) {
-    assert.doesNotMatch(value, /var\(--(?:orange|yellow|signal|acid)\)/u, `brand-coloured shadow found: ${value}`);
-
-    for (const match of value.matchAll(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/gu)) {
-      const [, red, green, blue] = match;
-      assert.equal(red, green, `non-neutral rgb shadow found: ${value}`);
-      assert.equal(green, blue, `non-neutral rgb shadow found: ${value}`);
-    }
-
-    for (const match of value.matchAll(/#([0-9a-f]{3}|[0-9a-f]{6})(?![0-9a-f])/giu)) {
-      const digits = match[1].length === 3
-        ? [...match[1]].map((digit) => `${digit}${digit}`).join("")
-        : match[1];
-      const channels = digits.match(/.{2}/gu);
-      assert.deepEqual(new Set(channels).size, 1, `non-neutral hex shadow found: ${value}`);
-    }
-  }
-
-  assert.match(css, /\.drop-controls button\[aria-selected="true"\]::after\s*\{[^}]*background:\s*var\(--night\)/su);
+  assert.match(polish, /\.drop-controls button\[aria-selected="true"\]::after,[\s\S]*?\.room-modes > button\.active::after\s*\{[^}]*display:\s*none/su);
   assert.doesNotMatch(css, /\.drop-controls button\[aria-selected="true"\]\s*\{[^}]*border-color:\s*var\(--signal\)/su);
   assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*transparent/su);
   assert.match(css, /\.curation-list > button\.active\s*\{[^}]*background:\s*transparent/u);
   assert.match(css, /\.curation-list > button\.active::before\s*\{[^}]*background:\s*#171713/su);
   assert.doesNotMatch(css, /\.curation-list > button\.active\s*\{[^}]*box-shadow/su);
   assert.doesNotMatch(css, /\.curated-card\.is-picked \.curated-card__image\s*\{[^}]*box-shadow/su);
-  assert.doesNotMatch(css, /\.room-product-scene__crop\s*\{[^}]*box-shadow/su);
+  assert.doesNotMatch(css, /\.room-product-phone\s*\{[^}]*box-shadow/su);
   assert.doesNotMatch(css, /\.night-room-device\s*\{[^}]*box-shadow/su);
   assert.doesNotMatch(css, /\.night-room-message(?:--right)? > span\s*\{[^}]*box-shadow/su);
   assert.match(polish, /Flat-surface contract:[\s\S]*?\.submission-error,[\s\S]*?\.curation-error,[\s\S]*?background:\s*transparent !important/su);
-  assert.match(polish, /:where\(\s*\.pay-button,[\s\S]*?\.night-room-message > span[\s\S]*?box-shadow:\s*none/su);
+  assert.match(polish, /\.quantity-control button\s*\{[^}]*border:\s*0[^}]*border-radius:\s*50%[^}]*background:\s*#e8e4da/su);
+  assert.match(polish, /\.network-list button\.selected\s*\{[^}]*border-color:\s*var\(--ink\)/su);
+  assert.match(polish, /\.ops-record-list button,[\s\S]*?\.ops-record-list button\.active\s*\{[^}]*border:\s*1px solid #cbc7bd/su);
+  assert.match(polish, /\.support-ops__layout\s*\{[^}]*border:\s*1px solid #aaa79f/su);
   assert.match(css, /\.night-room-showcase::before\s*\{\s*display:\s*none/u);
   assert.doesNotMatch(css, /\.night-room-peek__stream\s*\{[^}]*radial-gradient/su);
 });
