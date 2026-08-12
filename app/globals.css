@@ -1292,6 +1292,71 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .room-composer > form > textarea { grid-column: 2; }
 .room-composer > form > span { grid-column: 3; }
 .room-composer > form > button:last-child { grid-column: 4; }
+
+/* Compact VIP identity and concierge. */
+.room-message__body > header .room-vip-badge,
+.scene-vip-badge { padding: 1px 4px; border: 1px solid #a78337; border-radius: 2px; background: transparent; color: #8a671e; font-size: 10px; font-weight: 850; line-height: 1.2; letter-spacing: .08em; }
+.scene-message__bubble small .scene-vip-badge { display: inline-block; margin: 0 2px; color: #d2b566; }
+.room-composer > form { grid-template-columns: auto auto minmax(0, 1fr) auto 40px; }
+.room-composer form > .room-concierge { width: 38px; height: 38px; grid-column: 1; display: grid; place-items: center; border: 0; border-radius: 50%; background: #1d1e1a; color: #d5b45d; }
+.room-composer form > .room-camera { grid-column: 2; }
+.room-composer > form > textarea { grid-column: 3; }
+.room-composer > form > span { grid-column: 4; }
+.room-composer > form > button:last-child { grid-column: 5; }
+.room-vip-modal { padding: 14px; display: grid; place-items: end center; position: fixed; z-index: 130; inset: 0; background: rgba(10,10,8,.58); }
+.room-vip-modal > section { width: min(540px, 100%); max-height: min(680px, 88dvh); padding: 20px; overflow-y: auto; border-radius: 8px 8px 0 0; background: #f7f4ed; color: var(--ink); box-shadow: none; }
+.room-vip-modal > section > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.room-vip-modal header small { color: #8a671e; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.room-vip-modal h2 { margin: 3px 0 0; font-size: 25px; letter-spacing: -.045em; }
+.room-vip-modal header button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: transparent; }
+.room-vip-modal nav { margin: 16px 0; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid #c9c4b8; }
+.room-vip-modal nav button { min-height: 37px; padding: 0 10px; flex: 0 0 auto; display: flex; align-items: center; gap: 6px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #747068; font: inherit; font-size: 12px; }
+.room-vip-modal nav button.active { border-bottom-color: #8a671e; color: #1d1e1a; font-weight: 780; }
+.room-vip-modal label { margin-top: 11px; display: grid; gap: 6px; color: #65625b; font-size: 12px; font-weight: 750; }
+.room-vip-modal textarea, .room-vip-modal input { width: 100%; min-height: 43px; padding: 10px; resize: vertical; border: 1px solid #bdb7aa; border-radius: 4px; background: white; color: var(--ink); font: inherit; font-size: 16px; }
+.room-vip-modal textarea { min-height: 68px; }
+.room-vip-menu { max-height: 96px; margin: 0; padding: 9px 0; overflow-y: auto; border-top: 1px solid #d4cfc4; border-bottom: 1px solid #d4cfc4; color: #58554e; font-size: 12px; line-height: 1.45; white-space: pre-line; }
+.room-vip-modal > section > small { margin-top: 7px; display: block; color: #817d74; font-size: 11px; line-height: 1.45; }
+.room-vip-send { width: 100%; min-height: 42px; margin-top: 14px; border: 0; border-radius: 4px; background: #1d1e1a; color: white; font: inherit; font-size: 13px; font-weight: 780; }
+.room-vip-send:disabled { opacity: .45; }
+.room-vip-modal details { margin-top: 13px; border-top: 1px solid #d2cdc1; }
+.room-vip-modal summary { padding: 11px 0; color: #6c6961; font-size: 12px; cursor: pointer; }
+.room-vip-modal details article { min-height: 45px; padding: 7px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #e0dcd2; }
+.room-vip-modal details b, .room-vip-modal details small { display: block; }.room-vip-modal details b { font-size: 11px; text-transform: capitalize; }.room-vip-modal details small { max-width: 340px; margin-top: 2px; overflow: hidden; color: #747168; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.room-vip-modal details i { color: #8a671e; font-size: 10px; font-style: normal; font-weight: 780; text-transform: uppercase; }
+
+/* Dense notification rows remain readable during busy Rooms. */
+.notification-page > section { margin-top: 18px; }
+.notification-page > section > a { min-height: 68px; padding: 9px 0; grid-template-columns: 30px minmax(0, 1fr) 8px; gap: 10px; align-items: center; }
+.notification-page > section > a > span { width: 30px; height: 30px; }
+.notification-page > section > a > span svg { width: 15px; height: 15px; }
+.notification-page h2 { margin: 1px 0 2px; font-size: 14px; }
+.notification-page section p { overflow: hidden; font-size: 12px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.notification-page section small { font-size: 10px; letter-spacing: .07em; }
+.notification-page time { margin-top: 2px; font-size: 10px; }
+.notification-page section i { width: 7px; height: 7px; padding: 0; overflow: hidden; border-radius: 50%; background: var(--orange); color: transparent; font-size: 0; }
+
+.organizer-vip__layout { display: grid; grid-template-columns: minmax(220px, .72fr) minmax(0, 1.28fr); gap: 22px; }
+.organizer-vip__layout > form { display: grid; align-content: start; gap: 9px; }
+.organizer-vip__layout > form > label:not(.organizer-check) { display: grid; gap: 6px; color: #76736b; font-size: 12px; }
+.organizer-vip__layout textarea { min-height: 92px; padding: 9px; resize: vertical; border: 1px solid #c5c0b5; background: white; font: inherit; font-size: 14px; }
+.organizer-vip__layout > form > button { min-height: 38px; border: 0; background: var(--ink); color: white; font: inherit; font-size: 12px; font-weight: 760; }
+.organizer-vip__queue { max-height: 330px; overflow-y: auto; border-top: 1px solid #d1ccc1; }
+.organizer-vip__queue > p { color: #87837a; font-size: 13px; }
+.organizer-vip__queue article { min-height: 62px; padding: 9px 0; display: grid; grid-template-columns: minmax(0, 1fr) 126px; align-items: center; gap: 12px; border-bottom: 1px solid #d9d4ca; }
+.organizer-vip__queue b, .organizer-vip__queue small { display: block; }.organizer-vip__queue b { font-size: 13px; }.organizer-vip__queue small { margin-top: 2px; color: #89857d; font-size: 10px; text-transform: capitalize; }.organizer-vip__queue p { margin: 4px 0 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.organizer-vip__queue select { min-height: 34px; padding: 0 7px; border: 1px solid #bdb8ad; background: white; font: inherit; font-size: 12px; }
+
+@media (max-width: 700px) {
+  .room-composer > form { grid-template-columns: auto auto minmax(0, 1fr) 40px; gap: 3px; }
+  .room-composer > form > span { display: none; }
+  .room-composer > form > button:last-child { grid-column: 4; }
+  .room-vip-modal { padding: 0; }
+  .room-vip-modal > section { max-height: 86dvh; padding: 17px 16px max(17px, env(safe-area-inset-bottom)); }
+  .notification-page > section > a { grid-template-columns: 28px minmax(0, 1fr) 7px; }
+  .notification-page > section > a > span { width: 28px; height: 28px; }
+  .notification-page section i { grid-column: 3; width: 7px; }
+  .organizer-vip__layout { grid-template-columns: 1fr; }
+  .organizer-vip__queue { max-height: 260px; }
+}
 .flash-modal.flash-gallery-modal { align-items: end; padding-bottom: 0; }
 .flash-gallery-modal > section.flash-gallery-sheet { width: min(1120px, 100%); max-height: 88dvh; padding-bottom: 22px; border-radius: var(--radius-overlay); }
 .flash-gallery-sheet > header > div:last-child button:first-child { width: auto; padding: 0 12px; display: flex; gap: 6px; background: var(--orange); color: white; }

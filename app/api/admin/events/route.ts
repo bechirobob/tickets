@@ -16,6 +16,7 @@ type TierInput = {
   status?: "available" | "sold_out" | "hidden";
   salesOpenAt?: string | null;
   salesCloseAt?: string | null;
+  roomBadge?: "VIP" | null;
 };
 
 function validDate(value: unknown, optional = false): string | null {
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
              tier.capacity_admissions AS capacityAdmissions,
              tier.max_units_per_order AS maxUnitsPerOrder, tier.status,
              tier.sales_open_at AS salesOpenAt, tier.sales_close_at AS salesCloseAt,
-             tier.sort_order AS sortOrder,
+             tier.sort_order AS sortOrder, tier.room_badge AS roomBadge,
              COALESCE(SUM(CASE
                WHEN reservation.status = 'consumed' THEN reservation.admission_count
                WHEN reservation.status = 'held' AND reservation.expires_at > ? THEN reservation.admission_count
@@ -128,6 +129,7 @@ export async function PATCH(request: Request) {
         description: text(tier.description, "ticket tier description", 240),
         priceMinor, admissionsPerUnit, capacityAdmissions, maxUnitsPerOrder, status,
         salesOpenAt: validDate(tier.salesOpenAt, true), salesCloseAt: validDate(tier.salesCloseAt, true),
+        roomBadge: tier.roomBadge === "VIP" ? "VIP" : null,
         sortOrder: index,
       });
     }
@@ -156,19 +158,19 @@ export async function PATCH(request: Request) {
         INSERT INTO event_ticket_tiers (
           id, event_slug, code, name, description, price_minor, admissions_per_unit,
           capacity_admissions, max_units_per_order, status, sales_open_at, sales_close_at,
-          sort_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          room_badge, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET code = excluded.code, name = excluded.name,
           description = excluded.description, price_minor = excluded.price_minor,
           admissions_per_unit = excluded.admissions_per_unit,
           capacity_admissions = excluded.capacity_admissions,
           max_units_per_order = excluded.max_units_per_order, status = excluded.status,
           sales_open_at = excluded.sales_open_at, sales_close_at = excluded.sales_close_at,
-          sort_order = excluded.sort_order, updated_at = excluded.updated_at
+          room_badge = excluded.room_badge, sort_order = excluded.sort_order, updated_at = excluded.updated_at
       `).bind(
         tier.id, slug, tier.code, tier.name, tier.description, tier.priceMinor,
         tier.admissionsPerUnit, tier.capacityAdmissions, tier.maxUnitsPerOrder, tier.status,
-        tier.salesOpenAt, tier.salesCloseAt, tier.sortOrder, now, now,
+        tier.salesOpenAt, tier.salesCloseAt, tier.roomBadge, tier.sortOrder, now, now,
       )),
       ...existing.results.filter((tier) => !activeIds.has(tier.id)).map((tier) => env.DB.prepare("UPDATE event_ticket_tiers SET status = 'hidden', updated_at = ? WHERE id = ? AND event_slug = ?").bind(now, tier.id, slug)),
       ...(["cancelled", "postponed"].includes(eventState) ? [

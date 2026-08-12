@@ -18,7 +18,7 @@ export default function CustomerDock() {
   ];
 
   return <>
-    <MobileNavigation />
+    {!pathname.startsWith("/my-nights") && pathname !== "/notifications" ? <MobileNavigation /> : null}
     <nav className="customer-dock" aria-label="Customer navigation">
       {items.map((item) => {
         const Icon = item.icon;

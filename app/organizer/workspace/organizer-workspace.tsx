@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   BadgeCheck,
+  ConciergeBell,
   CalendarRange,
   CheckCircle2,
   CircleDollarSign,
@@ -20,6 +21,7 @@ import {
   ShieldCheck,
   TicketCheck,
   UsersRound,
+  Wine,
 } from "lucide-react";
 import type { StaffRole } from "../../../lib/admin-session";
 import WorkspaceJump from "../../admin/workspace-jump";
@@ -49,9 +51,11 @@ type Settlement = { id: string; eventSlug: string; periodEnd: string; grossMinor
 type RequestItem = { id: string; eventSlug: string; kind: string; detail: string; status: string; reviewNote: string | null; createdAt: string };
 type GateStaff = { eventSlug: string; id: string; displayName: string; email: string; status: string };
 type AttendeeAnswer = { eventSlug: string; questionId: string; prompt: string; answer: string; updatedAt: string; displayName: string };
-type WorkspaceData = { events: EventItem[]; submissions: Submission[]; tiers: Tier[]; settlements: Settlement[]; requests: RequestItem[]; gateStaff: GateStaff[]; attendeeAnswers: AttendeeAnswer[] };
+type VipSetting = { eventSlug: string; bottleServiceEnabled: number; bottleMenu: string | null; songSuggestionsEnabled: number; assistanceEnabled: number; updatedAt: string };
+type VipRequest = { id: string; eventSlug: string; kind: string; detail: string; location: string | null; status: string; organizerNote: string | null; createdAt: string; displayName: string };
+type WorkspaceData = { events: EventItem[]; submissions: Submission[]; tiers: Tier[]; settlements: Settlement[]; requests: RequestItem[]; gateStaff: GateStaff[]; attendeeAnswers: AttendeeAnswer[]; vipSettings: VipSetting[]; vipRequests: VipRequest[] };
 
-const empty: WorkspaceData = { events: [], submissions: [], tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [] };
+const empty: WorkspaceData = { events: [], submissions: [], tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [], vipSettings: [], vipRequests: [] };
 const money = (value: number) => new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 }).format(value / 100);
 const date = (value: string) => new Date(value).toLocaleDateString("en-GH", { dateStyle: "medium" });
 const readable = (value: string) => value.replaceAll("_", " ");
@@ -103,6 +107,8 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
   const requests = data.requests.filter((item) => item.eventSlug === selectedSlug);
   const gateStaff = data.gateStaff.filter((item) => item.eventSlug === selectedSlug);
   const attendeeAnswers = data.attendeeAnswers.filter((item) => item.eventSlug === selectedSlug);
+  const vipSetting = data.vipSettings.find((item) => item.eventSlug === selectedSlug);
+  const vipRequests = data.vipRequests.filter((item) => item.eventSlug === selectedSlug);
 
   async function request(action: string, body: Record<string, unknown>, method = "POST"): Promise<boolean> {
     setBusy(true);
@@ -129,6 +135,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
   async function submitAnnouncement(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const element = event.currentTarget; const form = new FormData(element); if (await request("announcement", { content: form.get("content"), pinned: form.get("pinned") === "on" })) element.reset(); }
   async function submitRequest(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const element = event.currentTarget; const form = new FormData(element); if (await request("request", { kind: form.get("kind"), orderId: form.get("orderId"), detail: form.get("detail") })) element.reset(); }
   async function assignGate(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const element = event.currentTarget; const form = new FormData(element); if (await request("assign_gate", { email: form.get("email") })) element.reset(); }
+  async function saveVip(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await request("vip_settings", { bottleServiceEnabled: form.get("bottleServiceEnabled") === "on", songSuggestionsEnabled: form.get("songSuggestionsEnabled") === "on", assistanceEnabled: form.get("assistanceEnabled") === "on", bottleMenu: form.get("bottleMenu") }); }
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); router.push("/"); router.refresh(); }
 
   return (
@@ -180,6 +187,10 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
               <section className="organizer-panel organizer-panel--wide"><header><div><small>Live inventory</small><h3>Ticket tiers</h3></div><ShieldCheck size={18} /></header><div className="organizer-tier-table">{tiers.map((tier) => <div key={tier.id}><span><b>{tier.name}</b><small>{money(tier.priceMinor)} · {tier.status}</small></span><strong>{tier.allocatedAdmissions} / {tier.capacityAdmissions}</strong><i><b style={{ width: `${Math.min(100, (tier.allocatedAdmissions / Math.max(1, tier.capacityAdmissions)) * 100)}%` }} /></i></div>)}</div></section>
               <form key={`details-${selected.slug}`} className="organizer-panel" onSubmit={saveDetails}><header><div><small>Authorised details</small><h3>Venue & line-up</h3></div><Save size={18} /></header><label>Venue<input name="venue" defaultValue={selected.venue} required /></label><label>Exact map URL<input name="venueMapUrl" type="url" defaultValue={selected.venueMapUrl} required /></label><label>Line-up<textarea name="lineup" defaultValue={selected.lineup} required /></label><button disabled={busy}>Save public details</button></form>
               <form className="organizer-panel" onSubmit={submitAnnouncement}><header><div><small>The Room</small><h3>Post an update</h3></div><Megaphone size={18} /></header><label>Announcement<textarea name="content" minLength={2} maxLength={1000} placeholder="Doors, timing, entry or venue update…" required /></label><label className="organizer-check"><input name="pinned" type="checkbox" /> Pin this update</label><button disabled={busy}>Publish to ticket holders</button></form>
+              <section className="organizer-panel organizer-panel--wide organizer-vip"><header><div><small>The Room · VIP</small><h3>Concierge</h3></div><ConciergeBell size={18} /></header><div className="organizer-vip__layout">
+                <form key={`vip-${selected.slug}-${vipSetting?.updatedAt ?? "new"}`} onSubmit={saveVip}><label className="organizer-check"><input name="bottleServiceEnabled" type="checkbox" defaultChecked={Boolean(vipSetting?.bottleServiceEnabled)} /> Bottle service requests</label><label className="organizer-check"><input name="songSuggestionsEnabled" type="checkbox" defaultChecked={Boolean(vipSetting?.songSuggestionsEnabled)} /> Song suggestions</label><label className="organizer-check"><input name="assistanceEnabled" type="checkbox" defaultChecked={Boolean(vipSetting?.assistanceEnabled)} /> Host assistance</label><label><Wine size={14} /> Bottle menu<textarea name="bottleMenu" maxLength={1200} defaultValue={vipSetting?.bottleMenu ?? ""} placeholder="One bottle or package per line, with the current price" /></label><button disabled={busy}>Save VIP services</button></form>
+                <div className="organizer-vip__queue">{vipRequests.length ? vipRequests.map((item) => <article key={item.id}><div><b>{item.displayName}</b><small>{readable(item.kind)}{item.location ? ` · ${item.location}` : ""}</small><p>{item.detail}</p></div><select aria-label={`Update ${item.displayName}'s request`} value={item.status} onChange={(event) => void request("vip_request", { id: item.id, status: event.target.value })}>{item.kind === "song_suggestion" ? <><option value="requested">Requested</option><option value="considering">Considering</option><option value="played">Played</option><option value="not_tonight">Not tonight</option></> : item.kind === "bottle_service" ? <><option value="requested">Requested</option><option value="confirmed">Confirmed</option><option value="on_the_way">On the way</option><option value="delivered">Delivered</option><option value="declined">Declined</option></> : <><option value="requested">Requested</option><option value="confirmed">Confirmed</option><option value="delivered">Resolved</option><option value="declined">Declined</option></>}</select></article>) : <p>No VIP requests waiting.</p>}</div>
+              </div></section>
               <form className="organizer-panel" onSubmit={assignGate}><header><div><small>Entry team</small><h3>Gate staff</h3></div><ScanLine size={18} /></header>{gateStaff.map((person) => <div className="organizer-person" key={person.id}><span>{person.displayName}<small>{person.email}</small></span><button type="button" disabled={busy} onClick={() => void request("assign_gate", { email: person.email, remove: true })}>Remove</button></div>)}<label>Existing gate-staff email<input name="email" type="email" required /></label><button disabled={busy}>Authorise for this event</button></form>
               <section className="organizer-panel organizer-panel--wide"><header><div><small>Guest preparation</small><h3>Before the Night</h3></div><UsersRound size={18} /></header>{attendeeAnswers.length ? <div className="organizer-answers">{attendeeAnswers.map((item) => <article key={`${item.questionId}:${item.displayName}:${item.updatedAt}`}><div><b>{item.displayName}</b><time>{new Date(item.updatedAt).toLocaleString("en-GH")}</time></div><span>{item.prompt}</span><p>{item.answer}</p></article>)}</div> : <p>No attendee answers yet.</p>}</section>
               <form className="organizer-panel" onSubmit={submitRequest}><header><div><small>BeCore operations</small><h3>Make a request</h3></div><ArrowUpRight size={18} /></header><label>Request<select name="kind"><option value="cancel_event">Cancel event</option><option value="reschedule_event">Reschedule event</option><option value="refund_order">Refund an order</option><option value="inventory_change">Change inventory</option><option value="other">Other</option></select></label><label>Order ID <small>refund only</small><input name="orderId" /></label><label>Detail<textarea name="detail" minLength={10} maxLength={1200} required /></label><button disabled={busy}>Send to BeCore</button></form>

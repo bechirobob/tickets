@@ -22,7 +22,7 @@ function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string
           <article className="scene-message scene-message--own"><div className="scene-message__body"><div className="scene-message__bubble"><small>You · 9:19 PM</small><p>“Five minutes away” in the spiritual sense.</p></div><div className="scene-message__reactions" aria-label="2 crying reactions"><i>😭</i><b>2</b></div></div></article>
           <article className="scene-message"><span>YA</span><div className="scene-message__body"><div className="scene-message__bubble"><small>Yaw · 9:22 PM</small><p>Okay fine. Leaving now.</p></div><div className="scene-message__reactions" aria-label="3 fire reactions"><i>🔥</i><b>3</b></div></div></article>
         </> : <>
-          <article className="scene-message"><span>AM</span><div className="scene-message__body"><div className="scene-message__bubble"><small>Ama · 10:42 PM</small><p>Front left is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
+          <article className="scene-message"><span>AM</span><div className="scene-message__body"><div className="scene-message__bubble"><small>Ama <b className="scene-vip-badge">VIP</b> · 10:42 PM</small><p>Front left is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
           <article className="scene-flash"><img src={eventImageUrl(heroImage, 520)} alt="Flash shared inside The Room" loading="lazy" decoding="async" /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><div className="scene-message__bubble"><small>You · 10:44 PM</small><p>Found you. This set is ridiculous.</p></div><div className="scene-message__reactions" aria-label="5 fire reactions"><i>🔥</i><b>5</b></div></div></article>
           <article className="scene-host scene-host--compact"><BadgeCheck size={14} /><div><small>HOST UPDATE · 10:47 PM</small><p>Last entry moves to Gate 2.</p></div></article>
@@ -67,7 +67,7 @@ export default async function Home() {
     </section>
 
     <section className="room-product-scene" id="the-room" data-scroll-reveal>
-      <div className="room-product-scene__copy"><p className="night-kicker"><span /> Included with your ticket</p><h2>The night has a Room.</h2><p>Plan together, hear it straight from the Host and drop Flashes into the same conversation. The chat remembers. The photos know when to leave.</p><span><LockKeyhole size={13} /> No ticket, no lurking. Very civilised.</span></div>
+      <div className="room-product-scene__copy"><p className="night-kicker"><span /> Included with your ticket</p><h2>The night has a Room.</h2><p>Plan together, hear it straight from the Host and drop Flashes into the same conversation. The chat remembers. The photos know when to leave. VIP guests carry a discreet badge and can reach the Host privately for enabled concierge perks such as bottle service and song suggestions.</p><span><LockKeyhole size={13} /> No ticket, no lurking. Very civilised.</span></div>
       <RoomPreviewCarousel>
         <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="arrival" />
         <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="inside" />

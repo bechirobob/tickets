@@ -11,6 +11,7 @@ export type AttendeeIdentity = {
 export type AttendeeRoomAccess = AttendeeIdentity & {
   eventSlug: string;
   ticketId: string;
+  roomBadge: "VIP" | null;
 };
 
 export async function readAttendeeNightAccess(db: D1Database, cookieHeader: string | null, eventSlug: string): Promise<AttendeeRoomAccess | null> {
@@ -19,15 +20,18 @@ export async function readAttendeeNightAccess(db: D1Database, cookieHeader: stri
   const tokenHash = await hashToken(token);
   const access = await db.prepare(`
     SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
-      p.email_verified_at IS NOT NULL AS emailVerified, ticket.event_slug AS eventSlug, ticket.id AS ticketId
+      p.email_verified_at IS NOT NULL AS emailVerified, ticket.event_slug AS eventSlug, ticket.id AS ticketId,
+      tier.room_badge AS roomBadge
     FROM attendee_sessions session JOIN attendee_profiles p ON p.id = session.attendee_id
     JOIN ticket_assignments assignment ON assignment.attendee_id = p.id AND assignment.status = 'active'
     JOIN tickets ticket ON ticket.id = assignment.ticket_id
     JOIN orders orders ON orders.id = ticket.order_id
+    LEFT JOIN event_ticket_tiers tier ON tier.id = orders.ticket_tier_id
     WHERE session.token_hash = ? AND session.revoked_at IS NULL AND session.expires_at > ?
       AND p.status = 'active' AND ticket.event_slug = ?
       AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded')
       AND orders.status IN ('paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
+    ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
     LIMIT 1
   `).bind(tokenHash, new Date().toISOString(), eventSlug).first<AttendeeRoomAccess>();
   return access ? { ...access, emailVerified: Boolean(access.emailVerified) } : null;
@@ -105,13 +109,16 @@ export async function readAttendeeRoomAccess(
   const access = await db.prepare(`
     SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
            p.email_verified_at IS NOT NULL AS emailVerified,
-           t.event_slug AS eventSlug, t.id AS ticketId
+           t.event_slug AS eventSlug, t.id AS ticketId, tier.room_badge AS roomBadge
     FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id = s.attendee_id
     JOIN ticket_assignments a ON a.attendee_id = p.id AND a.status = 'active'
     JOIN tickets t ON t.id = a.ticket_id
+    JOIN orders o ON o.id = t.order_id
+    LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
       AND t.event_slug = ? AND t.status IN ('issued', 'checked_in')
+    ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
     LIMIT 1
   `).bind(tokenHash, now, eventSlug).first<AttendeeRoomAccess>();
   if (!access) return null;

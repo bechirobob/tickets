@@ -15,7 +15,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     );
   }
   return Response.json(
-    { allowed: true, attendee: { id: access.attendeeId, displayName: access.displayName }, room: policy },
+    { allowed: true, attendee: { id: access.attendeeId, displayName: access.displayName, roomBadge: access.roomBadge }, room: policy },
     { headers: { "cache-control": "no-store" } },
   );
 }

@@ -8,6 +8,7 @@ type ConnectionState = {
   attendeeId: string;
   displayName: string;
   role: RoomRole;
+  roomBadge: "VIP" | null;
   blockedAttendeeIds: string[];
   readOnly: boolean;
   readOnlyAt: string;
@@ -24,6 +25,7 @@ type RoomMessage = {
   attendeeId: string;
   displayName: string;
   role: RoomRole;
+  roomBadge: "VIP" | null;
   kind: "message" | "announcement";
   content: string;
   parentId: string | null;
@@ -78,6 +80,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
           attendee_id TEXT NOT NULL,
           display_name TEXT NOT NULL,
           role TEXT NOT NULL,
+          room_badge TEXT,
           kind TEXT NOT NULL,
           content TEXT NOT NULL,
           parent_id TEXT,
@@ -96,6 +99,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         );
         CREATE INDEX IF NOT EXISTS reactions_message_idx ON reactions(message_id);
       `);
+      const messageColumns = this.ctx.storage.sql.exec<{ name: string }>("PRAGMA table_info(messages)").toArray();
+      if (!messageColumns.some((column) => column.name === "room_badge")) {
+        this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN room_badge TEXT");
+      }
     });
   }
 
@@ -110,6 +117,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     try {
       const attendeeId = requiredHeader(request, "x-bct-attendee-id");
       const displayName = decodeURIComponent(requiredHeader(request, "x-bct-display-name"));
+      const roomBadge = request.headers.get("x-bct-room-badge") === "VIP" ? "VIP" : null;
       const blocked = request.headers.get("x-bct-blocked-attendees")?.split(",").filter(Boolean) ?? [];
       const policy: RoomPolicyInput = {
         eventSlug: requiredHeader(request, "x-bct-event-slug"),
@@ -131,6 +139,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         attendeeId,
         displayName: displayName.slice(0, 50),
         role: "attendee",
+        roomBadge,
         blockedAttendeeIds: blocked,
         readOnly: policy.readOnly,
         readOnlyAt: policy.readOnlyAt,
@@ -209,10 +218,17 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         socket.send(JSON.stringify({ type: "error", error: "That reply target is no longer available." }));
         return;
       }
+      const currentBadge = await this.currentRoomBadge(state.attendeeId);
+      if (currentBadge === undefined) {
+        socket.close(4003, "Ticket access changed");
+        return;
+      }
+      state.roomBadge = currentBadge;
       const message = this.insertMessage({
         attendeeId: state.attendeeId,
         displayName: state.displayName,
         role: state.role,
+        roomBadge: state.roomBadge,
         kind: "message",
         content,
         parentId,
@@ -282,6 +298,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       attendeeId: `admin:${actor}`,
       displayName: "BeCore Host",
       role: "organizer",
+      roomBadge: null,
       kind: "announcement",
       content: cleaned,
       parentId: null,
@@ -401,24 +418,40 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     ).toArray()[0]?.eventSlug ?? "";
   }
 
+  private async currentRoomBadge(attendeeId: string): Promise<"VIP" | null | undefined> {
+    const row = await this.env.DB.prepare(`
+      SELECT tier.room_badge AS roomBadge
+      FROM ticket_assignments assignment
+      JOIN tickets ticket ON ticket.id = assignment.ticket_id
+      JOIN orders orders ON orders.id = ticket.order_id
+      LEFT JOIN event_ticket_tiers tier ON tier.id = orders.ticket_tier_id
+      WHERE assignment.attendee_id = ? AND assignment.status = 'active'
+        AND ticket.event_slug = ? AND ticket.status IN ('issued', 'checked_in')
+      ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
+      LIMIT 1
+    `).bind(attendeeId, this.eventSlug()).first<{ roomBadge: string | null }>();
+    if (!row) return undefined;
+    return row.roomBadge === "VIP" ? "VIP" : null;
+  }
+
   private insertMessage(input: Omit<RoomMessage, "id" | "sequence" | "createdAt" | "deletedAt" | "reactions">): RoomMessage {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const row = this.ctx.storage.sql.exec<{ sequence: number }>(`
-      INSERT INTO messages (id, attendee_id, display_name, role, kind, content, parent_id, pinned, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (id, attendee_id, display_name, role, room_badge, kind, content, parent_id, pinned, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING sequence
-    `, id, input.attendeeId, input.displayName, input.role, input.kind, input.content, input.parentId, input.pinned ? 1 : 0, createdAt).one();
+    `, id, input.attendeeId, input.displayName, input.role, input.roomBadge, input.kind, input.content, input.parentId, input.pinned ? 1 : 0, createdAt).one();
     return { ...input, id, sequence: row.sequence, createdAt, deletedAt: null, reactions: [] };
   }
 
   private readMessages(viewer: ConnectionState): RoomMessage[] {
     const rows = this.ctx.storage.sql.exec<{
-      id: string; sequence: number; attendeeId: string; displayName: string; role: RoomRole;
+      id: string; sequence: number; attendeeId: string; displayName: string; role: RoomRole; roomBadge: "VIP" | null;
       kind: "message" | "announcement"; content: string; parentId: string | null;
       pinned: number; createdAt: string; deletedAt: string | null;
     }>(`
-      SELECT id, sequence, attendee_id AS attendeeId, display_name AS displayName, role, kind,
+      SELECT id, sequence, attendee_id AS attendeeId, display_name AS displayName, role, room_badge AS roomBadge, kind,
              content, parent_id AS parentId, pinned, created_at AS createdAt, deleted_at AS deletedAt
       FROM messages ORDER BY sequence DESC LIMIT 100
     `).toArray().reverse();
