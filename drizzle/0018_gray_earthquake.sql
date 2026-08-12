@@ -1,0 +1,1 @@
+CREATE INDEX `party_submissions_contact_email_idx` ON `party_submissions` (`contact_email`,`created_at`);

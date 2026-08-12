@@ -46,9 +46,9 @@ export const STAFF_ROLE_DEFINITIONS: Record<StaffRole, StaffRoleDefinition> = {
   },
   organizer: {
     label: "Organiser",
-    workspace: "Assigned Nights",
-    summary: "Runs only the approved Nights explicitly connected to their account.",
-    can: ["See aggregate sales, attendance, inventory and settlement statements", "Update venue and line-up, post announcements and assign gate staff", "Send cancellation, reschedule, refund and inventory requests"],
+    workspace: "Verified organiser record",
+    summary: "Keeps the organiser's submission history and approved Nights together under their verified account email.",
+    can: ["See their complete submission trail and all-time event record", "See aggregate sales, attendance, inventory and settlement statements", "Update venue and line-up, post announcements, assign gate staff and send operational requests"],
     cannot: ["See unassigned Nights or customer payment details", "Directly issue refunds, payouts or fee changes", "Enter BeCore curation, finance or staff workspaces"],
     eventScoped: true,
   },

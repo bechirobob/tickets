@@ -1,5 +1,4 @@
 import {
-  hasEventAssignment,
   hasPermission,
   mutationHasValidOrigin,
   normalizeStaffEmail,
@@ -16,26 +15,61 @@ async function organizer(request: Request) {
 }
 
 async function assigned(db: D1Database, session: NonNullable<Awaited<ReturnType<typeof organizer>>["session"]>, slug: string) {
-  return /^[a-z0-9-]{1,80}$/u.test(slug) && await hasEventAssignment(db, session, slug);
+  if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return false;
+  if (session.role === "owner") return true;
+  const access = await db.prepare(`
+    SELECT 1 AS allowed
+    FROM curated_event_records event
+    LEFT JOIN party_submissions submission ON submission.id = event.submission_id
+    WHERE event.slug = ? AND (
+      EXISTS (
+        SELECT 1 FROM staff_event_assignments assignment
+        WHERE assignment.account_id = ? AND assignment.event_slug = event.slug
+      )
+      OR submission.contact_email = ?
+    )
+    LIMIT 1
+  `).bind(slug, session.accountId, session.email).first<{ allowed: number }>();
+  return Boolean(access?.allowed);
 }
 
 export async function GET(request: Request) {
   const { env, session } = await organizer(request);
   if (!session) return Response.json({ error: "Organiser access is required." }, { status: 403 });
-  const scope = session.role === "owner" ? "" : "WHERE EXISTS (SELECT 1 FROM staff_event_assignments assignment WHERE assignment.account_id = ? AND assignment.event_slug = event.slug)";
+  const scope = session.role === "owner" ? "" : `WHERE (
+    EXISTS (
+      SELECT 1 FROM staff_event_assignments assignment
+      WHERE assignment.account_id = ? AND assignment.event_slug = event.slug
+    )
+    OR submission.contact_email = ?
+  )`;
   const statement = env.DB.prepare(`
     SELECT event.slug, event.title, event.venue, event.venue_map_url AS venueMapUrl, event.area,
            event.starts_at AS startsAt, event.ends_at AS endsAt, event.lineup, event.event_state AS eventState,
-           event.capacity, event.status,
+           event.capacity, event.status, submission.status AS submissionStatus, submission.created_at AS submittedAt,
            COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid'), 0) AS paidOrders,
            COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid'), 0) AS grossMinor,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status IN ('issued','checked_in')), 0) AS issuedAdmissions,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status = 'checked_in'), 0) AS checkedInAdmissions
-    FROM curated_event_records event ${scope} ORDER BY event.starts_at DESC
+    FROM curated_event_records event
+    LEFT JOIN party_submissions submission ON submission.id = event.submission_id
+    ${scope}
+    ORDER BY event.starts_at DESC
   `);
-  const events = session.role === "owner" ? await statement.all<Record<string, unknown>>() : await statement.bind(session.accountId).all<Record<string, unknown>>();
+  const submissionStatement = env.DB.prepare(`
+    SELECT id, organizer_name AS organizerName, title, status, review_note AS reviewNote,
+           event_slug AS eventSlug, starts_at AS startsAt, created_at AS createdAt, updated_at AS updatedAt
+    FROM party_submissions
+    ${session.role === "owner" ? "" : "WHERE contact_email = ?"}
+    ORDER BY created_at DESC
+    LIMIT 250
+  `);
+  const [events, submissions] = await Promise.all([
+    session.role === "owner" ? statement.all<Record<string, unknown>>() : statement.bind(session.accountId, session.email).all<Record<string, unknown>>(),
+    session.role === "owner" ? submissionStatement.all<Record<string, unknown>>() : submissionStatement.bind(session.email).all<Record<string, unknown>>(),
+  ]);
   const slugs = events.results.map((event) => String(event.slug));
-  if (!slugs.length) return Response.json({ events: [], tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [] }, { headers: { "cache-control": "no-store" } });
+  if (!slugs.length) return Response.json({ events: [], submissions: submissions.results, tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [] }, { headers: { "cache-control": "no-store" } });
   const placeholders = slugs.map(() => "?").join(",");
   const now = new Date().toISOString();
   const [tiers, settlements, requests, gateStaff, attendeeAnswers] = await Promise.all([
@@ -59,7 +93,7 @@ export async function GET(request: Request) {
       WHERE question.event_slug IN (${placeholders}) AND answer.answer <> ''
       ORDER BY question.event_slug, answer.updated_at DESC LIMIT 500`).bind(...slugs).all<Record<string, unknown>>(),
   ]);
-  return Response.json({ events: events.results, tiers: tiers.results, settlements: settlements.results, requests: requests.results, gateStaff: gateStaff.results, attendeeAnswers: attendeeAnswers.results }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ events: events.results, submissions: submissions.results, tiers: tiers.results, settlements: settlements.results, requests: requests.results, gateStaff: gateStaff.results, attendeeAnswers: attendeeAnswers.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function PATCH(request: Request) {
