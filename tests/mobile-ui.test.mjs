@@ -427,7 +427,7 @@ test("project dropdowns use a soft progressively enhanced picker", async () => {
   assert.match(css, /\.submission-fields\) select::picker\(select\)/u);
 });
 
-test("surfaces keep soft corners while text selection lines stay straight", async () => {
+test("controls keep soft corners while information flows in open straight-edged sections", async () => {
   const [css, polish] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(accessPolishUrl, "utf8"),
@@ -438,7 +438,9 @@ test("surfaces keep soft corners while text selection lines stay straight", asyn
   assert.match(polish, /Straight selection markers[\s\S]*?\.night-hub__tabs button[^}]*\)\s*\{[^}]*border-radius:\s*0/su);
   assert.match(polish, /\.scene-host\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(css, /\.compact-hero__copy > div a, \.compact-hero__single\s*\{[^}]*border:\s*1px solid/su);
-  assert.match(polish, /\.operations-metrics,[^}]*\.curation-workspace,[^}]*\.room-modal > section,[^}]*border-radius:\s*var\(--radius-surface\)/su);
+  assert.doesNotMatch(polish, /\[class\*="-(?:card|panel|surface|notice|alert|message|editor|table|pass|state)"\][\s\S]*?border-radius:\s*var\(--radius-surface\)/su);
+  assert.match(polish, /Open-flow interface contract[\s\S]*?\.operations-metrics,[\s\S]*?\.organizer-portfolio > div\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.operations-grid > section,[\s\S]*?\.organizer-answers article\s*\{[^}]*border-top:\s*1px solid var\(--flow-strong\)[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
 });
 
 test("the interface has no effective shadows, tinted fills or curved text-edge controls", async () => {
@@ -468,9 +470,12 @@ test("the interface has no effective shadows, tinted fills or curved text-edge c
   assert.match(polish, /\.room-message__actions button\.active\s*\{[^}]*background:\s*transparent[^}]*text-decoration:\s*underline/su);
   assert.match(polish, /Flat-surface contract:[\s\S]*?\.submission-error,[\s\S]*?\.curation-error,[\s\S]*?background:\s*transparent !important/su);
   assert.match(polish, /\.quantity-control button\s*\{[^}]*border:\s*0[^}]*border-radius:\s*50%[^}]*background:\s*#e8e4da/su);
-  assert.match(polish, /\.network-list button\.selected\s*\{[^}]*border-color:\s*var\(--ink\)/su);
-  assert.match(polish, /\.ops-record-list button,[\s\S]*?\.ops-record-list button\.active\s*\{[^}]*border:\s*1px solid #cbc7bd/su);
-  assert.match(polish, /\.support-ops__layout\s*\{[^}]*border:\s*1px solid #aaa79f/su);
+  assert.match(polish, /\.network-list button\.selected\s*\{[^}]*border-bottom-color:\s*var\(--ink\)/su);
+  assert.match(polish, /\.ops-record-list button,[\s\S]*?\.ops-record-list button\.active\s*\{[^}]*border:\s*0[^}]*border-bottom:\s*1px solid #c8c4ba[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.support-ops__layout\s*\{[^}]*border:\s*0[^}]*border-top:\s*1px solid #aaa79f[^}]*border-radius:\s*0/su);
+  assert.match(polish, /\.status,[\s\S]*?\.order-status\s*\{[^}]*border:\s*0 !important[^}]*background:\s*transparent !important/su);
+  assert.match(polish, /\.help-audiences button\.active::after\s*\{[^}]*transform:\s*scaleX\(1\)/su);
+  assert.match(polish, /\.room-ops__panel,[\s\S]*?\.organizer-answers article\s*\{[^}]*background:\s*transparent/su);
   assert.match(css, /\.night-room-showcase::before\s*\{\s*display:\s*none/u);
   assert.doesNotMatch(css, /\.night-room-peek__stream\s*\{[^}]*radial-gradient/su);
 });

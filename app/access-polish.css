@@ -50,42 +50,6 @@
 ) {
   border-radius: var(--radius-control);
 }
-:where(
-  [class*="-card"],
-  [class*="-panel"],
-  [class*="-surface"],
-  [class*="-notice"],
-  [class*="-alert"],
-  [class*="-message"],
-  [class*="-editor"],
-  [class*="-table"],
-  [class*="-sheet"],
-  [class*="-pass"],
-  [class*="-state"]
-) {
-  border-radius: var(--radius-surface);
-}
-:where(
-  .operations-metrics,
-  .operations-grid > section,
-  .operations-alerts,
-  .finance-panels > section,
-  .curation-workspace,
-  .support-ops__layout,
-  .door-desk,
-  .passkey-security,
-  .recovery-codes,
-  .role-boundary,
-  .admin-login > section,
-  .room-modal > section,
-  .organizer-answers article,
-  .night-perks__tiers article,
-  .night-purchase > article,
-  .my-nights-list article,
-  .order-search label
-) {
-  border-radius: var(--radius-surface);
-}
 :where(.brand-mark__box, .date-stamp, .operations-title > strong, .operations-grid section > button i) {
   border-radius: var(--radius-compact);
 }
@@ -310,7 +274,7 @@
   text-shadow: none !important;
 }
 
-/* Interactive rows use complete controls or straight structural edges, never curved underlines. */
+/* Interactive controls stay tactile; information rows stay open to the page. */
 .quantity-control button {
   border: 0;
   border-radius: 50%;
@@ -318,52 +282,61 @@
 }
 
 .network-list {
-  gap: 8px;
-  border: 0;
+  gap: 0;
+  border-top: 1px solid #c8c4ba;
 }
 
 .network-list button,
 .network-list button.selected {
-  padding: 13px 14px;
-  border: 1px solid transparent;
+  padding: 13px 2px;
+  border: 0;
+  border-bottom: 1px solid #c8c4ba;
+  border-radius: 0;
   background: transparent;
 }
 
 .network-list button.selected {
-  border-color: var(--ink);
+  border-bottom-color: var(--ink);
+  color: var(--ink);
 }
 
 .ops-record-list {
-  gap: 8px;
-  border: 0;
+  gap: 0;
+  border-top: 1px solid #c8c4ba;
 }
 
 .ops-record-list button,
 .ops-record-list button.active {
-  padding: 14px;
-  border: 1px solid #cbc7bd;
+  padding: 14px 2px;
+  border: 0;
+  border-bottom: 1px solid #c8c4ba;
+  border-radius: 0;
   background: transparent;
   color: var(--ink);
 }
 
 .ops-record-list button.active {
-  border-color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 
 .support-ops__layout {
-  overflow: hidden;
-  border: 1px solid #aaa79f;
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid #aaa79f;
+  border-radius: 0;
 }
 
 .support-ops__layout > nav {
-  padding: 8px;
+  padding: 0 22px 0 0;
   display: grid;
-  gap: 8px;
+  gap: 0;
 }
 
 .support-ops__layout > nav > button,
 .support-ops__layout > nav > button.active {
-  border: 1px solid #d1cdc3;
+  border: 0;
+  border-bottom: 1px solid #d1cdc3;
+  border-radius: 0;
   background: transparent;
   color: var(--ink);
 }
@@ -373,7 +346,7 @@
 }
 
 .support-ops__layout > nav > button.active::before {
-  display: none;
+  display: block;
 }
 
 :where(
@@ -417,24 +390,28 @@
   .night-details dd a,
   .night-purchase__support a
 ) {
-  border-bottom: 0;
+  border-radius: 0;
 }
 
 .help-frequent > div {
-  border: 1px solid #c8c4ba;
+  border: 0;
+  border-top: 1px solid #c8c4ba;
+  border-radius: 0;
 }
 
 .notification-page > section,
 .staff-list,
 .curation-list {
   display: grid;
-  gap: 8px;
+  gap: 0;
 }
 
 .notification-page > section > a,
 .staff-list > button,
 .curation-list > button {
-  border: 1px solid #cbc7bd;
+  border: 0;
+  border-bottom: 1px solid #cbc7bd;
+  border-radius: 0;
   background: transparent;
 }
 
@@ -447,6 +424,577 @@
 @media (prefers-reduced-motion: reduce) {
   .room-product-phone__stream > article {
     animation: none;
+  }
+}
+
+/*
+ * Open-flow interface contract.
+ * Information belongs to the page canvas. Boundaries are reserved for inputs,
+ * transactional artefacts, media, dialogs and actions that need a clear hit area.
+ */
+.ops-page,
+.curation-page,
+.organizer-workspace,
+.room-ops,
+.settings-page,
+.notification-page,
+.help-page,
+.my-nights-page,
+.night-hub {
+  --flow-line: #c8c4ba;
+  --flow-strong: #8f8b82;
+}
+
+.ops-sidebar nav a,
+.curation-nav nav a,
+.room-ops > aside nav a,
+.settings-layout > aside a {
+  position: relative;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ops-sidebar nav a.active,
+.curation-nav nav a.active,
+.room-ops > aside nav a.active,
+.settings-layout > aside a.active {
+  background: transparent;
+  color: inherit;
+}
+
+.ops-sidebar nav a.active::after,
+.curation-nav nav a.active::after,
+.room-ops > aside nav a.active::after,
+.settings-layout > aside a.active::after {
+  content: "";
+  height: 1px;
+  position: absolute;
+  inset: auto 11px 5px;
+  background: currentColor;
+}
+
+.status,
+.review-status,
+.order-status {
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+.status::before,
+.review-status::before,
+.order-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.operations-title > strong,
+.curation-main > header > span {
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+}
+
+.operations-metrics,
+.ops-stats,
+.organizer-metrics,
+.organizer-portfolio > div {
+  gap: 0;
+  border: 0;
+  border-top: 1px solid var(--flow-strong);
+  border-bottom: 1px solid var(--flow-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.operations-metrics article,
+.ops-stats article,
+.organizer-metrics article,
+.organizer-portfolio article {
+  min-height: 118px;
+  padding: 18px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.operations-metrics article + article,
+.ops-stats article + article,
+.organizer-metrics article + article,
+.organizer-portfolio article + article {
+  padding-left: 20px;
+  border-left: 1px solid var(--flow-line);
+}
+
+.operations-grid,
+.finance-panels,
+.organizer-grid,
+.room-ops__control-grid,
+.room-ops__moderation > div {
+  gap: 42px 5vw;
+}
+
+.operations-grid > section,
+.operations-alerts,
+.finance-panels > section,
+.ops-panel,
+.organizer-panel,
+.room-ops__panel,
+.room-ops__grid > article,
+.room-ops__moderation .room-ops__reports,
+.settings-card,
+.role-boundary,
+.passkey-security,
+.recovery-codes,
+.night-perks__tiers article,
+.night-purchase > article,
+.organizer-answers article {
+  padding: 22px 0;
+  border: 0;
+  border-top: 1px solid var(--flow-strong);
+  border-radius: 0;
+  background: transparent;
+}
+
+.operations-alerts {
+  margin-top: 40px;
+}
+
+.finance-panels {
+  margin-top: 42px;
+}
+
+.finance-panels > section,
+.organizer-panel,
+.room-ops__panel {
+  min-width: 0;
+}
+
+.ops-panel {
+  margin-top: 38px;
+}
+
+.ops-panel__head button,
+.ops-panel__head a {
+  border-radius: 0;
+  background: transparent;
+}
+
+.workspace-event-picker,
+.organizer-event-picker,
+.room-ops__event {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  border: 0;
+  border-top: 1px solid var(--flow-line);
+  border-bottom: 1px solid var(--flow-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.organizer-event-picker select {
+  background: transparent;
+}
+
+.ops-workspace,
+.staff-workspace,
+.curation-workspace,
+.support-ops__layout {
+  border: 0;
+  border-top: 1px solid var(--flow-strong);
+  border-radius: 0;
+  background: transparent;
+}
+
+.ops-workspace,
+.staff-workspace {
+  gap: 0 36px;
+}
+
+.ops-record-list,
+.staff-list,
+.curation-list {
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ops-record-list,
+.staff-list {
+  padding-right: 28px;
+  border-right: 1px solid var(--flow-line);
+}
+
+.ops-record-list button,
+.ops-record-list button.active,
+.staff-list > button,
+.curation-list > button,
+.notification-page > section > a {
+  border: 0;
+  border-bottom: 1px solid var(--flow-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.ops-record-list button.active,
+.staff-list > button.active,
+.curation-list > button.active {
+  border-bottom-color: var(--ink);
+  background: transparent;
+}
+
+.ops-editor,
+.staff-editor,
+.curation-detail {
+  padding: 34px 0 60px 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.curation-workspace {
+  grid-template-columns: minmax(270px, .64fr) minmax(520px, 1.36fr);
+}
+
+.curation-list {
+  padding-right: 24px;
+  border-right: 1px solid var(--flow-line);
+}
+
+.curation-detail > section,
+.curation-facts,
+.staff-events,
+.organizer-tier-table,
+.organizer-settlements,
+.promoter-ops__list,
+.night-details > dl,
+.night-support__threads,
+.wallet-receipt {
+  border-radius: 0;
+  background: transparent;
+}
+
+.organizer-workspace__intro,
+.organizer-event-picker,
+.organizer-dashboard,
+.organizer-portfolio,
+.organizer-history {
+  border-radius: 0;
+}
+
+.organizer-metrics,
+.organizer-portfolio > div {
+  border-top-width: 1px;
+}
+
+.organizer-panel > header {
+  margin-bottom: 18px;
+}
+
+.organizer-answers {
+  gap: 0 30px;
+}
+
+.organizer-answers article {
+  border-top-color: var(--flow-line);
+}
+
+.organizer-answers article:nth-child(-n + 2) {
+  border-top-color: var(--flow-strong);
+}
+
+.settings-card {
+  gap: 25px;
+}
+
+.role-boundary {
+  margin-top: 30px;
+}
+
+.passkey-security,
+.recovery-codes {
+  margin-bottom: 28px;
+}
+
+.order-table {
+  border: 0;
+  border-top: 1px solid var(--flow-strong);
+  border-radius: 0;
+  background: transparent;
+}
+
+.order-table th,
+.order-table td {
+  padding-right: 16px;
+  padding-left: 0;
+  background: transparent;
+}
+
+.support-ops__layout > article {
+  padding: 22px 0 22px 30px;
+}
+
+.support-ops__layout > nav {
+  border-right: 1px solid var(--flow-line);
+}
+
+.support-ops__layout > nav > button,
+.support-ops__layout > nav > button.active {
+  padding-right: 2px;
+  padding-left: 2px;
+}
+
+.support-ops__layout > nav > button.active::before {
+  width: 2px;
+  inset: 14px auto 14px -1px;
+  background: var(--ink);
+}
+
+.room-ops__panel,
+.room-ops__moderation .room-ops__reports,
+.room-ops__grid > article {
+  border-top-width: 1px;
+}
+
+.room-ops__reports > header {
+  min-height: 56px;
+  padding: 0 0 13px;
+}
+
+.room-ops__reports > section,
+.room-ops__moderation .room-ops__reports > section {
+  padding: 16px 0;
+}
+
+.room-ops__notice,
+.ops-message,
+.organizer-message,
+.event-state-notice,
+.preview-event-notice,
+.preview-checkout-note,
+.night-hub__notice,
+.notification-page__notice,
+.wallet-confirmed--verify,
+.submission-error,
+.curation-error,
+.my-nights-recovered,
+.night-support__state,
+.night-support__notice {
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent !important;
+  color: inherit;
+}
+
+.organizer-message {
+  right: 20px;
+  bottom: 20px;
+  padding-right: 16px;
+  padding-left: 16px;
+  border-color: #65665f;
+  background: #20211d !important;
+  color: white;
+}
+
+.help-audiences {
+  gap: 24px;
+}
+
+.help-audiences button,
+.help-audiences button.active {
+  min-width: max-content;
+  padding: 7px 0 9px;
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #5f5c55;
+}
+
+.help-audiences button::after {
+  content: "";
+  height: 2px;
+  position: absolute;
+  inset: auto 0 0;
+  background: currentColor;
+  opacity: .45;
+  transform: scaleX(0);
+  transition: transform .18s ease, opacity .18s ease;
+}
+
+.help-audiences button:hover::after,
+.help-audiences button:focus-visible::after {
+  transform: scaleX(.48);
+}
+
+.help-audiences button.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.help-contact {
+  padding: 40px 0;
+  border-top: 1px solid var(--flow-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.help-contact > div:last-child,
+.help-page .help-contact article {
+  border-color: var(--flow-line);
+}
+
+.help-contact > div:first-child p,
+.help-page .help-contact article p,
+.help-contact article > svg {
+  color: #6c6961;
+}
+
+.help-page .help-contact article > a,
+.help-contact article p a {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.night-perks__tiers {
+  gap: 0 5vw;
+}
+
+.night-perks__tiers article,
+.night-purchase > article {
+  border-top-color: var(--flow-strong);
+}
+
+.door-desk {
+  padding-right: 0;
+  padding-left: 0;
+  border: 0;
+  border-top: 1px solid #4a4c46;
+  border-bottom: 1px solid #4a4c46;
+  border-radius: 0;
+}
+
+@media (max-width: 900px) {
+  .ops-record-list,
+  .staff-list,
+  .curation-list {
+    padding-right: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--flow-line);
+  }
+
+  .ops-record-list {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .ops-editor,
+  .staff-editor,
+  .curation-detail {
+    padding: 30px 0 50px;
+  }
+
+  .support-ops__layout > nav {
+    padding-right: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--flow-line);
+  }
+
+  .support-ops__layout > article {
+    padding: 24px 0;
+  }
+
+  .room-ops__control-grid,
+  .room-ops__moderation > div {
+    gap: 34px;
+  }
+}
+
+@media (max-width: 700px) {
+  .operations-metrics,
+  .ops-stats,
+  .organizer-metrics,
+  .organizer-portfolio > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .operations-metrics article,
+  .ops-stats article,
+  .organizer-metrics article,
+  .organizer-portfolio article,
+  .organizer-portfolio article:last-child {
+    min-height: 104px;
+    padding: 15px 0;
+    border: 0;
+    border-bottom: 1px solid var(--flow-line);
+  }
+
+  .operations-metrics article:nth-child(even),
+  .ops-stats article:nth-child(even),
+  .organizer-metrics article:nth-child(even),
+  .organizer-portfolio article:nth-child(even) {
+    padding-left: 15px;
+    border-left: 1px solid var(--flow-line);
+  }
+
+  .operations-metrics article:nth-child(odd),
+  .ops-stats article:nth-child(odd),
+  .organizer-metrics article:nth-child(odd),
+  .organizer-portfolio article:nth-child(odd) {
+    padding-right: 15px;
+  }
+
+  .organizer-portfolio article:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .operations-grid,
+  .finance-panels,
+  .organizer-grid,
+  .night-perks__tiers {
+    gap: 34px;
+  }
+
+  .organizer-answers {
+    gap: 0;
+  }
+
+  .organizer-answers article:nth-child(2) {
+    border-top-color: var(--flow-line);
+  }
+
+  .help-audiences {
+    gap: 20px;
+  }
+
+  .help-contact {
+    padding: 32px 0;
+  }
+
+  .organizer-message {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-audiences button::after {
+    transition: none;
   }
 }
 
