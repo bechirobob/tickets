@@ -149,6 +149,14 @@
   :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select::picker-icon { transition: none; }
 }
 
+/* The secondary customer menu is a disclosure, not a stack of pills. */
+.night-mobile-menu__trigger,
+.night-mobile-menu__panel,
+.night-mobile-menu__panel a {
+  border-radius: 0;
+  box-shadow: none;
+}
+
 /* Organiser submissions use one honest baseline, never a curved partial outline. */
 .submission-fields :is(input, select, textarea) {
   border-radius: 0;
