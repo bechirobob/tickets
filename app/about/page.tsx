@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 const reasons = [
   ["01", "The good stuff, edited.", "Fewer random listings. More nights worth leaving the house for, presented clearly enough to choose without opening fifteen tabs."],
-  ["02", "The Room comes with the ticket.", "Plans, verified Host updates, live conversation and disappearing Flashes stay with the people who are actually going."],
+  ["02", "The Room comes with the ticket.", "Plans, verified Host updates, live conversation and disappearing Flashes stay with the people who are actually going. VIP tickets can add a discreet Room identity and a private line to Host-enabled bottle service, song suggestions or assistance."],
   ["03", "Organisers keep the full story.", "Every submission, decision, event, attendee and operational request belongs to one accountable record—not a trail of screenshots and DMs."],
   ["04", "Made for how Accra moves.", "Mobile-first tickets, locally familiar checkout, gate-ready access and human help when a real night needs a real answer."],
 ];

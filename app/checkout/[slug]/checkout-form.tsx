@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Check, LockKeyhole, Minus, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, Gem, LockKeyhole, Minus, Plus, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { CuratedEvent } from "../../events";
@@ -116,7 +116,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
                     onClick={() => chooseTier(tier.id)}
                   >
                     <i aria-hidden="true" />
-                    <span><strong>{tier.name}</strong><small>{tier.description}{tier.admissionsPerUnit > 1 ? ` · Admits ${tier.admissionsPerUnit}` : ""}</small></span>
+                    <span><strong>{tier.name}</strong><small>{tier.description}{tier.admissionsPerUnit > 1 ? ` · Admits ${tier.admissionsPerUnit}` : ""}</small>{tier.roomBadge === "VIP" ? <em className="checkout-tier__vip"><Gem size={11} /> VIP Room identity + private Host concierge when enabled</em> : null}</span>
                     <b>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</b>
                   </button>
                   {selected && !soldOut && (

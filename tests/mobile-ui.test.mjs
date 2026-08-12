@@ -137,6 +137,9 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-message__reactions"/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
   assert.match(polish, /\.scene-message__reactions\s*\{[^}]*margin:\s*2px 3px 0[^}]*display:\s*flex/su);
+  assert.match(polish, /\.scene-host\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.scene-flash\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /\.room-product-phone__composer\s*\{[^}]*border-bottom:\s*1px solid[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(css, /\.room-bubble\s*\{[^}]*padding:\s*8px 11px/su);
   assert.match(css, /\.room-message__actions\s*\{[^}]*min-height:\s*29px/su);
   assert.doesNotMatch(home, /device|phone mock/iu);
@@ -159,6 +162,34 @@ test("The Room reconnects when a ticket holder returns to the page", async () =>
   assert.match(room, /className="room-camera"/u);
   assert.match(durableObject, /input\.type === "ping"/u);
   assert.match(durableObject, /type: "pong"/u);
+});
+
+test("VIP value is visible at decision points without duplicating the interface", async () => {
+  const [home, eventPage, checkout, about, help, organizerWorkspace, nightHub, ticketsApi, events, css] = await Promise.all([
+    readFile(homeUrl, "utf8"),
+    readFile(new URL("../app/event/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/checkout/[slug]/checkout-form.tsx", import.meta.url), "utf8"),
+    readFile(aboutUrl, "utf8"),
+    readFile(helpCentreUrl, "utf8"),
+    readFile(organizerWorkspaceUrl, "utf8"),
+    readFile(nightHubUrl, "utf8"),
+    readFile(new URL("../app/api/customer/tickets/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/events.ts", import.meta.url), "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(home, /className="scene-concierge" aria-label="VIP concierge"/u);
+  assert.match(home, /reach the Host privately/u);
+  assert.match(eventPage, /tier\.roomBadge === "VIP"/u);
+  assert.match(eventPage, /private Host concierge when enabled/u);
+  assert.match(checkout, /checkout-tier__vip/u);
+  assert.match(about, /Host-enabled bottle service, song suggestions or assistance/u);
+  assert.match(help, /How VIP works inside The Room/u);
+  assert.match(organizerWorkspace, /everything stays off by default/u);
+  assert.match(nightHub, /order\.roomBadge === "VIP"/u);
+  assert.match(ticketsApi, /tier\.room_badge AS roomBadge/u);
+  assert.match(events, /tier\.room_badge AS roomBadge/u);
+  assert.match(css, /\.scene-concierge\s*\{[^}]*display:\s*inline-flex[^}]*font-style:\s*normal/su);
 });
 
 test("homepage sections reveal once without overriding reduced-motion preferences", async () => {

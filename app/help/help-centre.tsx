@@ -134,6 +134,15 @@ const guides: Guide[] = [
     steps: ["Open the Night and enter its Room notification controls.", "Choose the mute window that suits you.", "Important ticket, gate and support updates remain available in the quiet in-app inbox."],
     action: { href: "/my-nights", label: "Open My Nights" },
   },
+  {
+    id: "room-vip",
+    audience: "The Room",
+    category: "VIP",
+    title: "How VIP works inside The Room",
+    summary: "The badge proves an eligible ticket; private services appear only when the Host has opened them.",
+    steps: ["A small VIP mark appears automatically beside eligible ticket holders; General Admission remains unlabelled.", "Open the concierge bell to see the services available for that Night, such as bottle service, a song suggestion or Host assistance.", "Requests are private, service availability is controlled by the Host, and a song suggestion is never a promise that the DJ will play it."],
+    action: { href: "/my-nights", label: "Open My Nights" },
+  },
 ];
 
 const frequent = guides.filter((guide) => guide.popular);

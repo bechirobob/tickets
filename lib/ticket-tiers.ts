@@ -11,6 +11,7 @@ export type TicketTier = {
   capacityAdmissions: number;
   remainingAdmissions: number;
   status: TicketTierStatus;
+  roomBadge: "VIP" | null;
 };
 
 export function formatGhanaCedis(amountMinor: number) {
