@@ -554,8 +554,11 @@ export const paymentRefunds = sqliteTable("payment_refunds", {
   requestedAt: text("requested_at").notNull(),
   updatedAt: text("updated_at").notNull(),
   failureReason: text("failure_reason"),
+  ticketIdsJson: text("ticket_ids_json"),
+  batchId: text("batch_id"),
 }, (table) => [
   index("payment_refunds_order_idx").on(table.orderId, table.status),
+  index("payment_refunds_batch_idx").on(table.batchId, table.status),
 ]);
 
 export const paymentDisputes = sqliteTable("payment_disputes", {
@@ -639,11 +642,15 @@ export const deliveryEvents = sqliteTable("delivery_events", {
   id: text("id").primaryKey(),
   orderId: text("order_id"),
   recoveryGrantId: text("recovery_grant_id"),
-  kind: text("kind", { enum: ["payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update"] }).notNull(),
+  kind: text("kind", { enum: ["payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update", "operational_alert"] }).notNull(),
   recipient: text("recipient").notNull(),
   providerId: text("provider_id"),
-  status: text("status", { enum: ["queued", "sent", "failed", "bounced"] }).notNull(),
+  status: text("status", { enum: ["queued", "sent", "delivered", "delayed", "failed", "bounced", "complained", "suppressed"] }).notNull(),
   failureReason: text("failure_reason"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at"),
+  providerEventAt: text("provider_event_at"),
+  payloadJson: text("payload_json"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [
@@ -676,6 +683,7 @@ export const staffAccounts = sqliteTable("staff_accounts", {
   lockedUntil: text("locked_until"),
   lastLoginAt: text("last_login_at"),
   passwordChangedAt: text("password_changed_at").notNull(),
+  mfaRequired: integer("mfa_required", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull(),
   createdBy: text("created_by").notNull(),
   updatedAt: text("updated_at").notNull(),
@@ -694,6 +702,8 @@ export const staffSessions = sqliteTable("staff_sessions", {
   revokedAt: text("revoked_at"),
   ipHash: text("ip_hash"),
   userAgentHash: text("user_agent_hash"),
+  deviceLabel: text("device_label"),
+  mfaVerifiedAt: text("mfa_verified_at"),
 }, (table) => [
   uniqueIndex("staff_sessions_token_unique").on(table.tokenHash),
   index("staff_sessions_account_idx").on(table.accountId, table.expiresAt),
@@ -796,3 +806,188 @@ export const systemAlerts = sqliteTable("system_alerts", {
   resolvedAt: text("resolved_at"),
   resolvedBy: text("resolved_by"),
 }, (table) => [index("system_alerts_status_idx").on(table.status, table.createdAt)]);
+
+export const staffPasskeys = sqliteTable("staff_passkeys", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  credentialId: text("credential_id").notNull(),
+  publicKey: blob("public_key", { mode: "buffer" }).notNull(),
+  counter: integer("counter").notNull().default(0),
+  deviceType: text("device_type").notNull(),
+  backedUp: integer("backed_up", { mode: "boolean" }).notNull().default(false),
+  transportsJson: text("transports_json"),
+  label: text("label").notNull().default("Passkey"),
+  createdAt: text("created_at").notNull(),
+  lastUsedAt: text("last_used_at"),
+}, (table) => [
+  uniqueIndex("staff_passkeys_credential_unique").on(table.credentialId),
+  index("staff_passkeys_account_idx").on(table.accountId, table.createdAt),
+]);
+
+export const staffAuthChallenges = sqliteTable("staff_auth_challenges", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  purpose: text("purpose", { enum: ["registration", "authentication"] }).notNull(),
+  challenge: text("challenge").notNull(),
+  exchangeTokenHash: text("exchange_token_hash").notNull(),
+  returnTo: text("return_to"),
+  expiresAt: text("expires_at").notNull(),
+  usedAt: text("used_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("staff_auth_challenges_exchange_unique").on(table.exchangeTokenHash),
+  index("staff_auth_challenges_account_idx").on(table.accountId, table.purpose, table.expiresAt),
+]);
+
+export const staffRecoveryCodes = sqliteTable("staff_recovery_codes", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  codeHash: text("code_hash").notNull(),
+  createdAt: text("created_at").notNull(),
+  usedAt: text("used_at"),
+}, (table) => [index("staff_recovery_codes_account_idx").on(table.accountId, table.usedAt)]);
+
+export const policyVersions = sqliteTable("policy_versions", {
+  id: text("id").primaryKey(),
+  policy: text("policy", { enum: ["purchase", "refund", "privacy", "community", "organizer"] }).notNull(),
+  version: text("version").notNull(),
+  title: text("title").notNull(),
+  contentHash: text("content_hash").notNull(),
+  effectiveAt: text("effective_at").notNull(),
+  retiredAt: text("retired_at"),
+}, (table) => [uniqueIndex("policy_versions_policy_version_unique").on(table.policy, table.version)]);
+
+export const consentRecords = sqliteTable("consent_records", {
+  id: text("id").primaryKey(),
+  subjectType: text("subject_type", { enum: ["order", "organizer_submission", "attendee"] }).notNull(),
+  subjectId: text("subject_id").notNull(),
+  policy: text("policy").notNull(),
+  version: text("version").notNull(),
+  actorEmail: text("actor_email"),
+  ipHash: text("ip_hash"),
+  userAgentHash: text("user_agent_hash"),
+  acceptedAt: text("accepted_at").notNull(),
+}, (table) => [
+  uniqueIndex("consent_records_subject_policy_unique").on(table.subjectType, table.subjectId, table.policy, table.version),
+  index("consent_records_subject_idx").on(table.subjectType, table.subjectId, table.acceptedAt),
+]);
+
+export const approvalRequests = sqliteTable("approval_requests", {
+  id: text("id").primaryKey(),
+  kind: text("kind", { enum: ["event_cancellation", "mass_refund", "organizer_payout"] }).notNull(),
+  eventSlug: text("event_slug"),
+  targetId: text("target_id"),
+  payloadJson: text("payload_json").notNull(),
+  status: text("status", { enum: ["pending", "approved", "rejected", "executing", "completed", "failed"] }).notNull().default("pending"),
+  requestedBy: text("requested_by").notNull(),
+  requestedByEmail: text("requested_by_email").notNull(),
+  requestedAt: text("requested_at").notNull(),
+  decidedBy: text("decided_by"),
+  decidedByEmail: text("decided_by_email"),
+  decidedAt: text("decided_at"),
+  decisionNote: text("decision_note"),
+  completedAt: text("completed_at"),
+  failureReason: text("failure_reason"),
+}, (table) => [index("approval_requests_status_idx").on(table.status, table.requestedAt)]);
+
+export const gateDevices = sqliteTable("gate_devices", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  gate: text("gate").notNull(),
+  accountId: text("account_id").notNull(),
+  accountEmail: text("account_email").notNull(),
+  pendingOfflineScans: integer("pending_offline_scans").notNull().default(0),
+  manifestGeneratedAt: text("manifest_generated_at"),
+  lastSyncAt: text("last_sync_at"),
+  lastSeenAt: text("last_seen_at").notNull(),
+}, (table) => [index("gate_devices_event_idx").on(table.eventSlug, table.lastSeenAt)]);
+
+export const operationalIncidents = sqliteTable("operational_incidents", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  severity: text("severity", { enum: ["info", "warning", "critical"] }).notNull(),
+  title: text("title").notNull(),
+  detail: text("detail").notNull(),
+  status: text("status", { enum: ["open", "monitoring", "resolved"] }).notNull().default("open"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  resolvedAt: text("resolved_at"),
+  resolvedBy: text("resolved_by"),
+}, (table) => [index("operational_incidents_event_idx").on(table.eventSlug, table.status, table.createdAt)]);
+
+export const eventReadinessChecks = sqliteTable("event_readiness_checks", {
+  eventSlug: text("event_slug").notNull(),
+  checkKey: text("check_key").notNull(),
+  label: text("label").notNull(),
+  status: text("status", { enum: ["pending", "passed", "blocked"] }).notNull().default("pending"),
+  note: text("note"),
+  checkedBy: text("checked_by"),
+  checkedAt: text("checked_at"),
+}, (table) => [uniqueIndex("event_readiness_checks_unique").on(table.eventSlug, table.checkKey)]);
+
+export const guestEntries = sqliteTable("guest_entries", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  guestName: text("guest_name").notNull(),
+  guestEmail: text("guest_email"),
+  guestPhone: text("guest_phone"),
+  admissionCount: integer("admission_count").notNull().default(1),
+  kind: text("kind", { enum: ["complimentary", "guest_list", "will_call"] }).notNull(),
+  note: text("note"),
+  status: text("status", { enum: ["expected", "checked_in", "cancelled"] }).notNull().default("expected"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  checkedInAt: text("checked_in_at"),
+  checkedInBy: text("checked_in_by"),
+}, (table) => [index("guest_entries_event_idx").on(table.eventSlug, table.status, table.guestName)]);
+
+export const organizerPayoutAccounts = sqliteTable("organizer_payout_accounts", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  accountName: text("account_name").notNull(),
+  recipientType: text("recipient_type", { enum: ["ghipss", "mobile_money"] }).notNull(),
+  bankCode: text("bank_code").notNull(),
+  accountNumberMasked: text("account_number_masked").notNull(),
+  recipientCode: text("recipient_code").notNull(),
+  status: text("status", { enum: ["active", "disabled"] }).notNull().default("active"),
+  verifiedAt: text("verified_at").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("organizer_payout_accounts_event_idx").on(table.eventSlug, table.status)]);
+
+export const payoutTransfers = sqliteTable("payout_transfers", {
+  id: text("id").primaryKey(),
+  settlementId: text("settlement_id").notNull(),
+  eventSlug: text("event_slug").notNull(),
+  payoutAccountId: text("payout_account_id").notNull(),
+  approvalRequestId: text("approval_request_id"),
+  reference: text("reference").notNull(),
+  amountMinor: integer("amount_minor").notNull(),
+  currency: text("currency").notNull().default("GHS"),
+  status: text("status", { enum: ["pending_approval", "queued", "otp", "pending", "success", "failed", "reversed"] }).notNull(),
+  providerTransferCode: text("provider_transfer_code"),
+  failureReason: text("failure_reason"),
+  initiatedBy: text("initiated_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  paidAt: text("paid_at"),
+}, (table) => [
+  uniqueIndex("payout_transfers_reference_unique").on(table.reference),
+  uniqueIndex("payout_transfers_settlement_unique").on(table.settlementId),
+  index("payout_transfers_event_idx").on(table.eventSlug, table.status),
+]);
+
+export const refundBatches = sqliteTable("refund_batches", {
+  id: text("id").primaryKey(),
+  eventSlug: text("event_slug").notNull(),
+  approvalRequestId: text("approval_request_id"),
+  reason: text("reason").notNull(),
+  status: text("status", { enum: ["pending_approval", "queued", "processing", "completed", "completed_with_errors", "failed"] }).notNull(),
+  totalOrders: integer("total_orders").notNull().default(0),
+  processedOrders: integer("processed_orders").notNull().default(0),
+  failedOrders: integer("failed_orders").notNull().default(0),
+  requestedBy: text("requested_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  completedAt: text("completed_at"),
+}, (table) => [index("refund_batches_status_idx").on(table.status, table.updatedAt)]);

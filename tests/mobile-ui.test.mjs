@@ -357,3 +357,24 @@ test("public browsing is edge-cached without caching private customer journeys",
   assert.match(worker, /x-becore-edge-cache/u);
   assert.doesNotMatch(worker, /eligible[^;]+(?:checkout|payment|tickets|my-nights|room)/su);
 });
+
+test("homepage footer stays useful without duplicating the customer dock", async () => {
+  const home = await readFile(homeUrl, "utf8");
+  assert.match(home, /href="\/admin\/login">Event staff/u);
+  assert.match(home, /href="\/organizer\/submit">Organisers/u);
+  assert.match(home, /href="\/help">Help/u);
+  assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/events">The Drop/u);
+  assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/my-nights">My Nights/u);
+});
+
+test("Flashes are camera-first and stay closed until tapped", async () => {
+  const [panel, room] = await Promise.all([
+    readFile(new URL("../app/room/[slug]/flashes-panel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/room/[slug]/room-client.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(panel, /navigator\.mediaDevices\.getUserMedia/u);
+  assert.match(panel, /canvas\.toBlob/u);
+  assert.doesNotMatch(panel, /type="file"/u);
+  assert.match(panel, /className="flash-card__closed"/u);
+  assert.match(room, /className="room-flash-message__closed"/u);
+});

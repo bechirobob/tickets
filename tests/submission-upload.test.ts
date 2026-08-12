@@ -21,6 +21,7 @@ function validSubmission(includeFlyer = true) {
   form.set("capacity", "500");
   form.set("priceFrom", "120");
   form.set("lineup", "DJ Test and friends");
+  form.set("acceptedPolicies", "yes");
   if (includeFlyer) {
     form.set("poster", new File([
       new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 69, 66, 80]),

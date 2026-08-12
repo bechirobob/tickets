@@ -5,13 +5,15 @@ import { resolveTicketSelection } from "../../../../lib/ticket-selection";
 import { findCuratedEvent } from "../../../events";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
+import { purchasePolicyKeys, recordPolicyConsents } from "../../../../lib/policies";
 
 const RESERVATION_MINUTES = 15;
 const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string; offer?: string | null; promoterCode?: string | null };
+  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; offer?: string | null; promoterCode?: string | null };
+  if (body.acceptedPolicies !== true) return Response.json({ error: "Accept the ticket, refund and privacy terms before payment." }, { status: 400 });
   const eventSlug = body.eventSlug?.trim() ?? "";
   const { env } = await import("cloudflare:workers");
   const event = await findCuratedEvent(eventSlug);
@@ -113,6 +115,16 @@ export async function POST(request: Request) {
   if (reservation.meta.changes !== 1) {
     return Response.json({ error: "Those admissions were just reserved or sold. Refresh the event to see current availability." }, { status: 409 });
   }
+  await recordPolicyConsents({
+    db: env.DB,
+    subjectType: "order",
+    subjectId: id,
+    policyKeys: purchasePolicyKeys,
+    actorEmail: email,
+    ip: metadata.ip,
+    userAgent: metadata.userAgent,
+    acceptedAt: createdAt,
+  });
   if (offer) {
     await env.DB.prepare("UPDATE event_waitlist_entries SET status = 'claimed', updated_at = ? WHERE id = ? AND status = 'offered'")
       .bind(new Date().toISOString(), offer.id).run();

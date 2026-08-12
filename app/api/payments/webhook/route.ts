@@ -5,6 +5,7 @@ import {
   initiatePaystackRefund,
   recordDisputeWebhook,
 } from "../../../../lib/payment-operations";
+import { applyTransferWebhook } from "../../../../lib/operational-finance";
 
 function toHex(bytes: ArrayBuffer) {
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -81,6 +82,13 @@ export async function POST(request: Request) {
       eventType,
       reference,
       payload: { event: eventType, data: payload.data ?? {} },
+    });
+  } else if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(eventType)) {
+    await applyTransferWebhook(env.DB, {
+      reference,
+      status: eventType === "transfer.success" ? "success" : eventType === "transfer.reversed" ? "reversed" : "failed",
+      transferCode: payload.data?.transfer_code ? String(payload.data.transfer_code) : null,
+      failureReason: payload.data?.reason ? String(payload.data.reason) : null,
     });
   }
   return new Response("OK");

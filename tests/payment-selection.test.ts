@@ -8,7 +8,7 @@ function paymentRequest(slug: string, ticketTierId: string, quantity = 1, networ
   return new Request("https://tickets.becoreops.com/api/payments/initialize", {
     method: "POST",
     headers: { "content-type": "application/json", origin: "https://tickets.becoreops.com" },
-    body: JSON.stringify({ eventSlug: slug, ticketTierId, quantity, email: "buyer@example.com", phone: "233000000000", fullName: "Ticket Buyer", network }),
+    body: JSON.stringify({ eventSlug: slug, ticketTierId, quantity, email: "buyer@example.com", phone: "233000000000", fullName: "Ticket Buyer", network, acceptedPolicies: true }),
   });
 }
 

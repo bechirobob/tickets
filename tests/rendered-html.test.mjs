@@ -11,6 +11,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
   assert.deepEqual(config.routes, [{ pattern: "tickets.becoreops.com", custom_domain: true }]);
   assert.deepEqual(config.triggers, { crons: ["*/5 * * * *", "15 3 * * *"] });
   assert.equal(config.vars.EMAIL_FROM, "BeCore Tickets <tickets@tickets.becoreops.com>");
+  assert.equal(config.vars.OPS_ALERT_EMAIL, "tickets@becoreops.com");
   assert.equal(config.vars.ENVIRONMENT, "production");
   assert.deepEqual(config.ratelimits.map(({ name, simple }) => ({ name, simple })), [
     { name: "LOGIN_RATE_LIMITER", simple: { limit: 10, period: 60 } },
@@ -39,7 +40,7 @@ test("the Worker applies the production browser security baseline", async () => 
   assert.match(worker, /Cross-Origin-Opener-Policy/u);
   assert.match(worker, /display-capture=\(\)/u);
   assert.match(worker, /recordSecurityEvent/u);
-  assert.match(worker, /system_alerts/u);
+  assert.match(worker, /sendOperationalAlert/u);
 });
 
 test("does not ship editor preview metadata or workspace paths in customer assets", async () => {

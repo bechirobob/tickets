@@ -4,6 +4,7 @@ import Link from "next/link";
 import QrScanner from "qr-scanner";
 import { AlertTriangle, CheckCircle2, CloudOff, Keyboard, Loader2, RefreshCw, RotateCcw, ScanLine, Search, Users, Wifi, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import DoorDesk from "./door-desk";
 
 type EventOption = { slug: string; title: string; fullDate: string; venue: string };
 type GateTicket = { ticketId?: string; ticketType?: string; attendeeName?: string; checkedInAt?: string; checkedInGate?: string; eventSlug?: string; status?: string };
@@ -61,6 +62,11 @@ export default function Scanner({ events }: { events: EventOption[] }) {
 
   const saveQueue = useCallback((next: QueuedScan[]) => { setQueued(next); window.localStorage.setItem(QUEUE_KEY, JSON.stringify(next)); }, []);
 
+  const heartbeat = useCallback(async (pendingOfflineScans: number, manifestGeneratedAt?: string | null) => {
+    if (!navigator.onLine || !eventSlug) return;
+    try { await fetch("/api/admin/check-in", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "heartbeat", eventSlug, gate: "Main gate", deviceId, pendingOfflineScans, manifestGeneratedAt: manifestGeneratedAt ?? null }) }); } catch { /* The next refresh tries again. */ }
+  }, [deviceId, eventSlug]);
+
   const loadEventState = useCallback(async () => {
     if (!eventSlug) return;
     try {
@@ -71,11 +77,12 @@ export default function Scanner({ events }: { events: EventOption[] }) {
       const nextManifest = { eventSlug, generatedAt: data.generatedAt ?? new Date().toISOString(), tickets: data.manifest ?? [] };
       setManifest(nextManifest);
       const all = readJson<Record<string, Manifest>>(MANIFEST_KEY, {}); all[eventSlug] = nextManifest; window.localStorage.setItem(MANIFEST_KEY, JSON.stringify(all));
+      await heartbeat(readJson<QueuedScan[]>(QUEUE_KEY, []).length, nextManifest.generatedAt);
     } catch {
       const cached = readJson<Record<string, Manifest>>(MANIFEST_KEY, {})[eventSlug] ?? null;
       setManifest(cached);
     }
-  }, [eventSlug]);
+  }, [eventSlug, heartbeat]);
 
   const syncQueue = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -93,8 +100,9 @@ export default function Scanner({ events }: { events: EventOption[] }) {
       } catch { remaining.push(scan); }
     }
     saveQueue(remaining);
+    await heartbeat(remaining.length, manifest?.generatedAt ?? null);
     if (synchronized) { setMessage(`${synchronized} offline ${synchronized === 1 ? "entry" : "entries"} synchronized. The doors agree again.`); await loadEventState(); }
-  }, [loadEventState, saveQueue]);
+  }, [heartbeat, loadEventState, manifest?.generatedAt, saveQueue]);
 
   useEffect(() => {
     const onOnline = () => { setOnline(true); void syncQueue(); };
@@ -175,6 +183,7 @@ export default function Scanner({ events }: { events: EventOption[] }) {
     </section>
     <section className="manual-entry"><div><Keyboard size={19} /><span><strong>Enter ticket code</strong><small>Use when the camera cannot read the QR</small></span></div><label><Search size={17} /><input value={code} onChange={(event) => setCode(event.target.value)} placeholder="BCT-XXXX-XXXX-XXXX-XXXX" /><button onClick={() => void checkTicket(code)}>Check</button></label></section>
     <section className="gate-search"><header><Search size={18} /><span><strong>Find a guest or purchase</strong><small>Name, email, phone or payment reference</small></span></header><form onSubmit={(event) => { event.preventDefault(); void search(); }}><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search the door list" disabled={!online} /><button disabled={!online || searching || searchQuery.trim().length < 2}>{searching ? <Loader2 className="spin" size={14} /> : "Find"}</button></form>{matches.length ? <div>{matches.map((match) => <article key={match.ticketId}><span><b>{match.attendeeName ?? match.customerName ?? "Guest"}</b><small>{match.reference} · {match.ticketType?.replaceAll("-", " ")}</small><small>{match.customerEmail} · {match.customerPhone}</small></span><i className={match.status}>{match.status?.replaceAll("_", " ")}</i></article>)}</div> : null}</section>
+    <DoorDesk eventSlug={eventSlug} />
     <footer className="scanner-stats"><span><Users size={17} /><b>{stats.checkedIn}</b> admitted</span><span><b>{Math.max(0, stats.issued - stats.checkedIn)}</b> remaining</span><span><b>{stats.issued}</b> active tickets</span><button type="button" onClick={() => { void loadEventState(); void syncQueue(); }}><RefreshCw size={14} /> Refresh</button>{stats.tiers.map((tier) => <span key={tier.ticketType}><b>{tier.checkedIn ?? 0}/{tier.issued}</b> {tier.ticketType.replaceAll("-", " ")}</span>)}</footer>
   </main>;
 }

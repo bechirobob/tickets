@@ -1,6 +1,6 @@
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update";
+type DeliveryKind = "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
   id: string;
@@ -24,7 +24,7 @@ function money(minor: number, currency: string) {
   return new Intl.NumberFormat("en-GH", { style: "currency", currency, minimumFractionDigits: 2 }).format(minor / 100);
 }
 
-async function sendEmail(input: {
+export async function sendEmail(input: {
   db: D1Database;
   kind: DeliveryKind;
   recipient: string;
@@ -40,12 +40,16 @@ async function sendEmail(input: {
   const now = new Date().toISOString();
   await input.db.prepare(`
     INSERT INTO delivery_events (
-      id, order_id, recovery_grant_id, kind, recipient, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
-  `).bind(deliveryId, input.orderId ?? null, input.recoveryGrantId ?? null, input.kind, input.recipient, now, now).run();
+      id, order_id, recovery_grant_id, kind, recipient, status, attempt_count,
+      payload_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)
+  `).bind(
+    deliveryId, input.orderId ?? null, input.recoveryGrantId ?? null, input.kind, input.recipient,
+    JSON.stringify({ subject: input.subject, html: input.html, text: input.text, idempotencyKey: input.idempotencyKey }), now, now,
+  ).run();
 
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
-    await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, updated_at = ? WHERE id = ?")
+    await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, attempt_count = 1, updated_at = ? WHERE id = ?")
       .bind("Transactional email is not configured.", now, deliveryId).run();
     return { sent: false, reason: "not_configured" as const };
   }
@@ -62,14 +66,103 @@ async function sendEmail(input: {
     });
     const result = await response.json() as { id?: string; message?: string; error?: { message?: string } };
     if (!response.ok || !result.id) throw new Error(result.message ?? result.error?.message ?? "Email provider rejected the message.");
-    await input.db.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, updated_at = ? WHERE id = ?")
+    await input.db.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = 1, next_attempt_at = NULL, updated_at = ? WHERE id = ?")
       .bind(result.id, new Date().toISOString(), deliveryId).run();
     return { sent: true, providerId: result.id };
   } catch (error) {
-    await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, updated_at = ? WHERE id = ?")
-      .bind((error instanceof Error ? error.message : String(error)).slice(0, 500), new Date().toISOString(), deliveryId).run();
+    const failedAt = new Date();
+    await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, attempt_count = 1, next_attempt_at = ?, updated_at = ? WHERE id = ?")
+      .bind((error instanceof Error ? error.message : String(error)).slice(0, 500), new Date(failedAt.getTime() + 5 * 60 * 1000).toISOString(), failedAt.toISOString(), deliveryId).run();
     return { sent: false, reason: "provider_error" as const };
   }
+}
+
+export async function applyDeliveryWebhook(db: D1Database, input: {
+  providerId: string;
+  type: string;
+  eventAt?: string | null;
+  detail?: string | null;
+}) {
+  const statusByType: Record<string, string> = {
+    "email.sent": "sent",
+    "email.delivered": "delivered",
+    "email.delivery_delayed": "delayed",
+    "email.bounced": "bounced",
+    "email.complained": "complained",
+    "email.suppressed": "suppressed",
+    "email.failed": "failed",
+  };
+  const status = statusByType[input.type];
+  if (!status) return { updated: false };
+  const now = new Date().toISOString();
+  const result = await db.prepare(`
+    UPDATE delivery_events SET status = ?, failure_reason = ?, provider_event_at = ?,
+      next_attempt_at = CASE WHEN ? IN ('failed', 'delayed') AND attempt_count < 3
+        THEN datetime('now', '+' || (attempt_count * 5) || ' minutes') ELSE NULL END,
+      updated_at = ?
+    WHERE provider_id = ?
+  `).bind(status, input.detail?.slice(0, 500) ?? null, input.eventAt ?? now, status, now, input.providerId).run();
+  return { updated: result.meta.changes === 1, status };
+}
+
+export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20) {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return { attempted: 0, delivered: 0 };
+  const due = await env.DB.prepare(`
+    SELECT id, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
+    FROM delivery_events
+    WHERE status IN ('failed', 'delayed') AND attempt_count < 3
+      AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?
+    ORDER BY next_attempt_at LIMIT ?
+  `).bind(new Date().toISOString(), limit).all<{ id: string; recipient: string; payloadJson: string | null; attemptCount: number }>();
+  let delivered = 0;
+  for (const item of due.results) {
+    try {
+      const payload = JSON.parse(item.payloadJson ?? "{}") as { subject?: string; html?: string; text?: string; idempotencyKey?: string };
+      if (!payload.subject || !payload.html || !payload.text || !payload.idempotencyKey) throw new Error("Saved delivery payload is incomplete.");
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": `${payload.idempotencyKey}/retry-${item.attemptCount}`.slice(0, 256) },
+        body: JSON.stringify({ from: env.EMAIL_FROM, to: [item.recipient], subject: payload.subject, html: payload.html, text: payload.text }),
+      });
+      const result = await response.json() as { id?: string; message?: string };
+      if (!response.ok || !result.id) throw new Error(result.message ?? "Email retry was rejected.");
+      await env.DB.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = attempt_count + 1, failure_reason = NULL, next_attempt_at = NULL, updated_at = ? WHERE id = ?")
+        .bind(result.id, new Date().toISOString(), item.id).run();
+      delivered += 1;
+    } catch (error) {
+      const nextAttempts = item.attemptCount + 1;
+      const nextAt = nextAttempts < 3 ? new Date(Date.now() + nextAttempts * 5 * 60 * 1000).toISOString() : null;
+      await env.DB.prepare("UPDATE delivery_events SET status = 'failed', attempt_count = ?, failure_reason = ?, next_attempt_at = ?, updated_at = ? WHERE id = ?")
+        .bind(nextAttempts, (error instanceof Error ? error.message : String(error)).slice(0, 500), nextAt, new Date().toISOString(), item.id).run();
+    }
+  }
+  return { attempted: due.results.length, delivered };
+}
+
+export async function sendOperationalAlert(env: Cloudflare.Env, input: { source: string; severity: "warning" | "critical"; message: string; detail?: string | null }) {
+  const duplicate = await env.DB.prepare(`
+    SELECT id FROM system_alerts
+    WHERE source = ? AND message = ? AND status != 'resolved' AND created_at >= datetime('now', '-60 minutes')
+    LIMIT 1
+  `).bind(input.source, input.message.slice(0, 240)).first<{ id: string }>();
+  if (duplicate) return { id: duplicate.id, notified: false, duplicate: true };
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO system_alerts (id, source, severity, message, detail, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)`)
+    .bind(id, input.source, input.severity, input.message.slice(0, 240), input.detail?.slice(0, 2000) ?? null, now).run();
+  if (!env.OPS_ALERT_EMAIL) return { id, notified: false };
+  const subject = `${input.severity === "critical" ? "Action needed" : "Heads up"}: ${input.message}`;
+  const text = `${input.message}\n\nSource: ${input.source}\n${input.detail ?? "No extra detail."}\n\nOpen operations: https://tickets.becoreops.com/admin/operations`;
+  const result = await sendEmail({
+    db: env.DB,
+    kind: "operational_alert",
+    recipient: env.OPS_ALERT_EMAIL,
+    subject,
+    text,
+    html: `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#181914"><p style="color:#f05a28;font-weight:700">BECORE TICKETS · OPERATIONS</p><h1 style="font-size:25px">${escapeHtml(input.message)}</h1><p><b>${escapeHtml(input.source)}</b></p><p>${escapeHtml(input.detail ?? "No extra detail.")}</p><p><a href="https://tickets.becoreops.com/admin/operations">Open event operations</a></p></div>`,
+    idempotencyKey: `ops-alert/${id}`,
+  });
+  return { id, notified: result.sent };
 }
 
 export async function issueRecoveryGrant(input: {

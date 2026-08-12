@@ -88,12 +88,29 @@ export async function POST(request: Request) {
     return Response.json({ error: "Gate staff access required." }, { status: 401, headers: { "cache-control": "no-store" } });
   }
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This scan request was not accepted." }, { status: 403 });
-  const body = await request.json() as { code?: string; eventSlug?: string; gate?: string; deviceId?: string; clientScanId?: string };
+  const body = await request.json() as { action?: string; code?: string; eventSlug?: string; gate?: string; deviceId?: string; clientScanId?: string; pendingOfflineScans?: number; manifestGeneratedAt?: string | null };
   const token = normalizeGateToken(body.code ?? "");
   const eventSlug = body.eventSlug?.trim() ?? "";
   const gate = (body.gate?.trim() || "Main gate").slice(0, 50);
   const deviceId = body.deviceId?.trim().slice(0, 100) || null;
   const clientScanId = body.clientScanId?.trim().slice(0, 100) || null;
+  if (body.action === "heartbeat") {
+    if (!deviceId || !/^[a-z0-9-]{1,80}$/u.test(eventSlug)) return Response.json({ error: "Device and event are required." }, { status: 400 });
+    if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
+    const now = new Date().toISOString();
+    const pending = Math.max(0, Math.min(10_000, Math.floor(Number(body.pendingOfflineScans) || 0)));
+    await env.DB.prepare(`
+      INSERT INTO gate_devices (id, event_slug, gate, account_id, account_email, pending_offline_scans, manifest_generated_at, last_sync_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET event_slug = excluded.event_slug, gate = excluded.gate,
+        account_id = excluded.account_id, account_email = excluded.account_email,
+        pending_offline_scans = excluded.pending_offline_scans,
+        manifest_generated_at = excluded.manifest_generated_at,
+        last_sync_at = CASE WHEN excluded.pending_offline_scans = 0 THEN excluded.last_seen_at ELSE gate_devices.last_sync_at END,
+        last_seen_at = excluded.last_seen_at
+    `).bind(deviceId, eventSlug, gate, session.accountId, session.email, pending, body.manifestGeneratedAt ?? null, pending === 0 ? now : null, now).run();
+    return Response.json({ online: true, pendingOfflineScans: pending, seenAt: now });
+  }
   if (!token || !/^[a-z0-9-]{1,80}$/u.test(eventSlug)) {
     return Response.json({ error: "That QR or ticket code is not valid." }, { status: 400, headers: { "cache-control": "no-store" } });
   }

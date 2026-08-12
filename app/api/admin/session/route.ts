@@ -15,6 +15,8 @@ import {
   verifyStaffPassword,
 } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
+import { beginPasskeyAuthentication, consumeRecoveryCode, finishPasskeyAuthentication } from "../../../../lib/staff-passkeys";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 function allowedReturnTo(role: string, requested: string): string {
   if (role === "owner") return requested;
@@ -56,9 +58,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const token = await createStaffSession(env.DB, authentication.account, metadata);
   const requested = safeReturnTo(body.returnTo);
   const returnTo = authentication.account.mustChangePassword ? "/admin/account" : allowedReturnTo(authentication.account.role, requested || defaultWorkspace(authentication.account.role));
+  const passkeys = await env.DB.prepare("SELECT COUNT(*) AS count FROM staff_passkeys WHERE account_id = ?").bind(authentication.account.id).first<{ count: number }>();
+  if (authentication.account.mfaRequired || (passkeys?.count ?? 0) > 0) {
+    const challenge = await beginPasskeyAuthentication(env.DB, authentication.account.id, new URL(request.url).origin, returnTo);
+    return Response.json({ mfaRequired: true, ...challenge }, { status: 202, headers: { "cache-control": "no-store" } });
+  }
+  const token = await createStaffSession(env.DB, authentication.account, metadata);
   await recordAudit(env.DB, {
     session: { sessionId: "new", accountId: authentication.account.id, actor: authentication.account.displayName, email: authentication.account.normalizedEmail, role: authentication.account.role, expiresAt: 0, mustChangePassword: Boolean(authentication.account.mustChangePassword) },
     action: "staff.login",
@@ -68,6 +75,32 @@ export async function POST(request: Request) {
     requestId: metadata.requestId,
   });
   return Response.json({ returnTo }, { headers: { "cache-control": "no-store", "set-cookie": adminCookieHeader(token) } });
+}
+
+export async function PUT(request: Request) {
+  const { env } = await import("cloudflare:workers");
+  if (!mutationHasValidOrigin(request)) return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
+  const metadata = requestMetadata(request);
+  const body = await request.json() as { mode?: "passkey" | "recovery"; exchangeToken?: string; response?: AuthenticationResponseJSON; recoveryCode?: string };
+  try {
+    const verified = body.mode === "recovery"
+      ? await consumeRecoveryCode(env.DB, String(body.exchangeToken ?? ""), String(body.recoveryCode ?? ""))
+      : await finishPasskeyAuthentication(env.DB, new URL(request.url).origin, { exchangeToken: String(body.exchangeToken ?? ""), response: body.response! });
+    const account = await env.DB.prepare(`SELECT id, display_name AS displayName, normalized_email AS email, role, must_change_password AS mustChangePassword FROM staff_accounts WHERE id = ? AND status = 'active' LIMIT 1`)
+      .bind(verified.accountId).first<{ id: string; displayName: string; email: string; role: import("../../../../lib/admin-session").StaffRole; mustChangePassword: number }>();
+    if (!account) return Response.json({ error: "This staff account is unavailable." }, { status: 403 });
+    const returnTo = account.mustChangePassword ? "/admin/account" : allowedReturnTo(account.role, safeReturnTo(verified.returnTo));
+    const token = await createStaffSession(env.DB, account, { ...metadata, mfaVerified: true, deviceLabel: metadata.userAgent?.slice(0, 120) });
+    await recordAudit(env.DB, {
+      session: { sessionId: "new", accountId: account.id, actor: account.displayName, email: account.email, role: account.role, expiresAt: 0, mustChangePassword: Boolean(account.mustChangePassword) },
+      action: body.mode === "recovery" ? "staff.recovery_code_login" : "staff.passkey_login",
+      targetType: "staff_account", targetId: account.id, outcome: "success", requestId: metadata.requestId,
+    });
+    return Response.json({ returnTo }, { headers: { "cache-control": "no-store", "set-cookie": adminCookieHeader(token) } });
+  } catch (error) {
+    await recordSecurityEvent(env.DB, { kind: "login_failed", subject: metadata.ip, path: "/api/admin/session", requestId: metadata.requestId, detail: "mfa_failed" });
+    return Response.json({ error: error instanceof Error ? error.message : "Secure sign-in failed." }, { status: 401 });
+  }
 }
 
 export async function PATCH(request: Request) {

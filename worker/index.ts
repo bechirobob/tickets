@@ -4,6 +4,8 @@ import handler from "vinext/server/app-router-entry";
 import { readAttendeeRoomAccess } from "../lib/attendee-auth";
 import { resolveRoomPolicy } from "../lib/room-policy";
 import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
+import { retryFailedDeliveries, sendOperationalAlert } from "../lib/email-delivery";
+import { processRefundBatches } from "../lib/operational-finance";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
 import { purgeExpiredFlashes } from "../lib/flashes";
@@ -146,8 +148,7 @@ function securityResponse(response: Response): Response {
 async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unknown): Promise<void> {
   const detail = error instanceof Error ? error.message : String(error);
   console.error(JSON.stringify({ message: "scheduled operation failed", source, error: detail }));
-  await env.DB.prepare(`INSERT INTO system_alerts (id, source, severity, message, detail, status, created_at) VALUES (?, ?, 'critical', ?, ?, 'open', ?)`)
-    .bind(crypto.randomUUID(), source, `${source} failed`, detail.slice(0, 2000), new Date().toISOString()).run();
+  await sendOperationalAlert(env, { source, severity: "critical", message: `${source} failed`, detail });
 }
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
@@ -165,6 +166,18 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
     await releaseWaitlistOffers(env, "https://tickets.becoreops.com");
   } catch (error) {
     await recordSystemAlert(env, "waitlist-offers", error);
+  }
+  try {
+    await retryFailedDeliveries(env);
+  } catch (error) {
+    await recordSystemAlert(env, "email-delivery-retry", error);
+  }
+  if (env.PAYSTACK_SECRET_KEY) {
+    try {
+      await processRefundBatches(env);
+    } catch (error) {
+      await recordSystemAlert(env, "approved-refund-batch", error);
+    }
   }
   if (env.PAYSTACK_SECRET_KEY) {
     try {
