@@ -87,11 +87,12 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
 });
 
 test("notification history stays behind the verified My Nights entrance", async () => {
-  const [home, dock, myNights, hub] = await Promise.all([
+  const [home, dock, myNights, hub, polish] = await Promise.all([
     readFile(homeUrl, "utf8"),
     readFile(customerDockUrl, "utf8"),
     readFile(myNightsUrl, "utf8"),
     readFile(nightHubUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
   ]);
   assert.doesNotMatch(home, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /href="\/notifications"/u);
@@ -99,6 +100,9 @@ test("notification history stays behind the verified My Nights entrance", async 
   assert.match(myNights, /<Link className="notification-bell" href="\/notifications"/u);
   assert.doesNotMatch(myNights, /payload \? <Link className="notification-bell"/u);
   assert.match(hub, /className="notification-bell" href="\/notifications"/u);
+  assert.match(polish, /\.my-nights-header-actions,[\s\S]*?\.night-hub__header-actions\s*\{[^}]*justify-self:\s*end/su);
+  assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.my-nights-page \.directory-header\s*\{[^}]*padding-right:\s*16px/su);
+  assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.night-hub__header\s*\{[^}]*padding-right:\s*13px/su);
 });
 
 test("The Room is promoted as a ticket-locked preview without exposing a public chat", async () => {
@@ -586,6 +590,8 @@ test("the interface has no effective shadows, tinted fills or curved text-edge c
   assert.match(polish, /\.status,[\s\S]*?\.order-status\s*\{[^}]*border:\s*0 !important[^}]*background:\s*transparent !important/su);
   assert.match(polish, /\.help-audiences button\.active::after\s*\{[^}]*transform:\s*scaleX\(1\)/su);
   assert.match(polish, /\.room-ops__panel,[\s\S]*?\.organizer-answers article\s*\{[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.help-contact article p a,[\s\S]*?\.drop-rail-status button,[\s\S]*?\.night-purchase__support a\s*\)\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /\.room-vip-modal nav button\s*\{[^}]*border-radius:\s*0/su);
   assert.match(css, /\.night-room-showcase::before\s*\{\s*display:\s*none/u);
   assert.doesNotMatch(css, /\.night-room-peek__stream\s*\{[^}]*radial-gradient/su);
 });

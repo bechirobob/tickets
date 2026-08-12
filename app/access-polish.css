@@ -378,10 +378,12 @@
   .help-frequent a,
   .help-guide > div > a,
   .help-contact article > a,
+  .help-contact article p a,
   .venue-block > a,
   .compact-section-head > a,
   .drop-card__body > a,
   .drop-pagination button,
+  .drop-rail-status button,
   .hosts-list a,
   .event-host a,
   .host-events a,
@@ -414,6 +416,10 @@
   .night-details dd a,
   .night-purchase__support a
 ) {
+  border-radius: 0;
+}
+
+.room-vip-modal nav button {
   border-radius: 0;
 }
 
@@ -1251,10 +1257,24 @@
   text-underline-offset: 3px;
 }
 
+.my-nights-header-actions,
+.night-hub__header-actions {
+  justify-self: end;
+}
+
 @media (max-width: 700px) {
   .drop-vibes { gap: 20px; }
   .drop-vibes button { min-width: max-content; }
   .scene-message { max-width: 72%; }
+
+  /* My Nights has no secondary-menu trigger, so its private actions own the right edge. */
+  .my-nights-page .directory-header {
+    padding-right: 16px;
+  }
+
+  .night-hub__header {
+    padding-right: 13px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
