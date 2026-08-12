@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  allowedWorkspaceReturn,
   defaultWorkspace,
   hasPermission,
   readAdminSession,
@@ -15,6 +16,7 @@ export async function requireAdminSession(returnTo: string, permission?: StaffPe
   const requestHeaders = await headers();
   const session = await readAdminSession(requestHeaders.get("cookie"));
   if (session?.mustChangePassword && returnTo !== "/admin/account") redirect("/admin/account");
+  if (session && allowedWorkspaceReturn(session.role, returnTo) !== returnTo) redirect(defaultWorkspace(session.role));
   if (session && (!permission || hasPermission(session, permission))) return session;
   if (session) redirect(defaultWorkspace(session.role));
   redirect(`/admin/login?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`);

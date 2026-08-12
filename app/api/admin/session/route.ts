@@ -1,4 +1,5 @@
 import {
+  allowedWorkspaceReturn,
   adminCookieHeader,
   authenticateStaff,
   createPasswordRecord,
@@ -18,16 +19,6 @@ import { enforceRateLimit } from "../../../../lib/security-controls";
 import { beginPasskeyAuthentication, consumeRecoveryCode, finishPasskeyAuthentication } from "../../../../lib/staff-passkeys";
 import { bytesToBase64Url, PASSWORD_ITERATIONS, type StaffPasswordPayload } from "../../../../lib/staff-password-policy";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
-
-function allowedReturnTo(role: string, requested: string): string {
-  if (role === "owner") return requested;
-  if (role === "organizer") return requested.startsWith("/organizer/workspace") ? requested : "/organizer/workspace";
-  if (role === "gate") return requested === "/scan" ? requested : "/scan";
-  if (role === "moderator") return requested.startsWith("/admin/rooms") ? requested : "/admin/rooms";
-  if (role === "finance") return requested.startsWith("/admin/orders") || requested.startsWith("/admin/fees") ? requested : "/admin/orders";
-  if (role === "curator") return requested === "/admin" || requested.startsWith("/admin/events") ? requested : "/admin";
-  return "/admin";
-}
 
 export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
@@ -90,7 +81,7 @@ export async function POST(request: Request) {
   }
 
   const requested = safeReturnTo(body.returnTo);
-  const returnTo = authentication.account.mustChangePassword ? "/admin/account" : allowedReturnTo(authentication.account.role, requested || defaultWorkspace(authentication.account.role));
+  const returnTo = authentication.account.mustChangePassword ? "/admin/account" : allowedWorkspaceReturn(authentication.account.role, requested || defaultWorkspace(authentication.account.role));
   const passkeys = await env.DB.prepare("SELECT COUNT(*) AS count FROM staff_passkeys WHERE account_id = ?").bind(authentication.account.id).first<{ count: number }>();
   if (authentication.account.mfaRequired || (passkeys?.count ?? 0) > 0) {
     const challenge = await beginPasskeyAuthentication(env.DB, authentication.account.id, new URL(request.url).origin, returnTo);
@@ -120,7 +111,7 @@ export async function PUT(request: Request) {
     const account = await env.DB.prepare(`SELECT id, display_name AS displayName, normalized_email AS email, role, must_change_password AS mustChangePassword FROM staff_accounts WHERE id = ? AND status = 'active' LIMIT 1`)
       .bind(verified.accountId).first<{ id: string; displayName: string; email: string; role: import("../../../../lib/admin-session").StaffRole; mustChangePassword: number }>();
     if (!account) return Response.json({ error: "This staff account is unavailable." }, { status: 403 });
-    const returnTo = account.mustChangePassword ? "/admin/account" : allowedReturnTo(account.role, safeReturnTo(verified.returnTo));
+    const returnTo = account.mustChangePassword ? "/admin/account" : allowedWorkspaceReturn(account.role, safeReturnTo(verified.returnTo));
     const token = await createStaffSession(env.DB, account, { ...metadata, mfaVerified: true, deviceLabel: metadata.userAgent?.slice(0, 120) });
     await recordAudit(env.DB, {
       session: { sessionId: "new", accountId: account.id, actor: account.displayName, email: account.email, role: account.role, expiresAt: 0, mustChangePassword: Boolean(account.mustChangePassword) },

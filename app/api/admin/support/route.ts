@@ -5,7 +5,7 @@ import { notifyAttendee } from "../../../../lib/notifications";
 async function access(request: Request) {
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
-  return { env, session: session && hasPermission(session, "orders.manage") ? session : null };
+  return { env, session: session && hasPermission(session, "support.manage") ? session : null };
 }
 
 export async function GET(request: Request) {

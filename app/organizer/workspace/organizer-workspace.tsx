@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, BadgeCheck, CalendarRange, CheckCircle2, Loader2, LogOut, Megaphone, Save, ScanLine, ShieldCheck, TicketCheck, UsersRound } from "lucide-react";
+import type { StaffRole } from "../../../lib/admin-session";
+import WorkspaceJump from "../../admin/workspace-jump";
 
 type EventItem = { slug: string; title: string; venue: string; venueMapUrl: string; area: string; startsAt: string; endsAt: string; lineup: string; eventState: string; capacity: number; status: string; paidOrders: number; grossMinor: number; issuedAdmissions: number; checkedInAdmissions: number };
 type Tier = { id: string; eventSlug: string; name: string; priceMinor: number; capacityAdmissions: number; allocatedAdmissions: number; status: string };
@@ -16,7 +18,7 @@ type WorkspaceData = { events: EventItem[]; tiers: Tier[]; settlements: Settleme
 const empty: WorkspaceData = { events: [], tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [] };
 const money = (value: number) => new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 }).format(value / 100);
 
-export default function OrganizerWorkspace({ actor }: { actor: string }) {
+export default function OrganizerWorkspace({ actor, role }: { actor: string; role: StaffRole }) {
   const router = useRouter();
   const [data, setData] = useState<WorkspaceData>(empty);
   const [selectedSlug, setSelectedSlug] = useState("");
@@ -73,7 +75,7 @@ export default function OrganizerWorkspace({ actor }: { actor: string }) {
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); router.push("/"); router.refresh(); }
 
   return <main className="organizer-workspace">
-    <header className="organizer-workspace__header"><Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link><div><span><BadgeCheck size={15} /> {actor}</span><Link href="/admin/account">Account</Link><button onClick={signOut}><LogOut size={15} /> Sign out</button></div></header>
+    <header className="organizer-workspace__header"><Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link><WorkspaceJump active="/organizer/workspace" role={role} compact /><div><span><BadgeCheck size={15} /> {actor}</span><button onClick={signOut}><LogOut size={15} /> Sign out</button></div></header>
     <section className="organizer-workspace__intro"><div><p className="night-kicker"><span /> Organiser workspace</p><h1>Your night,<br />without the noise.</h1></div><p>Sales, attendance, updates and requests for only the events assigned to your account.</p></section>
     {loading ? <div className="organizer-empty"><Loader2 className="spin" /> Loading your events…</div> : data.events.length === 0 ? <div className="organizer-empty"><CalendarRange /><h2>No assigned events yet.</h2><p>Ask a BeCore owner to connect your approved event to this account.</p><Link href="/organizer/submit">Submit an event</Link></div> : <>
       <nav className="organizer-event-tabs" aria-label="Assigned events">{data.events.map((item) => <button key={item.slug} className={selectedSlug === item.slug ? "active" : ""} onClick={() => { setSelectedSlug(item.slug); setMessage(""); }}><b>{item.title}</b><small>{new Date(item.startsAt).toLocaleDateString("en-GH", { dateStyle: "medium" })} · {item.eventState.replaceAll("_", " ")}</small></button>)}</nav>

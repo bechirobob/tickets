@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { GET as readWorkspace, PATCH as updateWorkspace } from "../app/api/organizer/workspace/route";
 import { GET as readFeeConfig } from "../app/api/config/booking-fee/route";
 import { POST as bootstrapOwner } from "../app/api/admin/bootstrap/route";
+import { GET as readOperations, POST as updateOperations } from "../app/api/admin/operations/route";
+import { GET as readSupport } from "../app/api/admin/support/route";
 import {
   adminCookieHeader,
   authenticateStaff,
@@ -14,6 +16,7 @@ import {
   type StaffRole,
 } from "../lib/admin-session";
 import { PASSWORD_ITERATIONS } from "../lib/staff-password-policy";
+import { isWorkspacePathAllowed } from "../lib/staff-roles";
 
 const password = "CorrectHorse9Battery";
 const passwordProof = "XTlKa_gLf3KD0M8mv-ZrlYn-p7YiT-JYfq52B4UNCVI";
@@ -92,8 +95,18 @@ describe("named staff access", () => {
     expect(hasPermission({ role: "owner" }, "accounts.manage")).toBe(true);
     expect(hasPermission({ role: "finance" }, "orders.manage")).toBe(true);
     expect(hasPermission({ role: "finance" }, "curation.manage")).toBe(false);
+    expect(hasPermission({ role: "finance" }, "support.manage")).toBe(false);
+    expect(hasPermission({ role: "support" }, "support.manage")).toBe(true);
+    expect(hasPermission({ role: "support" }, "orders.manage")).toBe(false);
     expect(hasPermission({ role: "gate" }, "gate.scan")).toBe(true);
     expect(hasPermission({ role: "gate" }, "orders.manage")).toBe(false);
+    expect(isWorkspacePathAllowed("finance", "/admin/fees")).toBe(true);
+    expect(isWorkspacePathAllowed("finance", "/admin/support")).toBe(false);
+    expect(isWorkspacePathAllowed("support", "/admin/support")).toBe(true);
+    expect(isWorkspacePathAllowed("support", "/admin/orders")).toBe(false);
+    expect(isWorkspacePathAllowed("moderator", "/admin/rooms")).toBe(true);
+    expect(isWorkspacePathAllowed("moderator", "/admin/fees")).toBe(false);
+    expect(isWorkspacePathAllowed("owner", "/organizer/workspace")).toBe(true);
 
     const account = await staff("curator", crypto.randomUUID().slice(0, 8));
     const authenticated = await authenticateStaff(env.DB, account.email.toUpperCase(), passwordProof);
@@ -141,6 +154,58 @@ describe("named staff access", () => {
     expect(await env.DB.prepare("SELECT venue FROM curated_event_records WHERE slug = ?").bind(assignedSlug).first()).toMatchObject({ venue: "Updated Venue" });
     expect(await env.DB.prepare("SELECT actor_account_id AS actorId, action, target_id AS targetId FROM operational_audit_events WHERE request_id = ?")
       .bind(`test-${suffix}`).first()).toMatchObject({ actorId: organizer.id, action: "organizer.event_details_updated", targetId: assignedSlug });
+  });
+
+  it("keeps event, finance and support workspaces separated on the server", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const curator = await staff("curator", `curator-${suffix}`);
+    const finance = await staff("finance", `finance-${suffix}`);
+    const support = await staff("support", `support-${suffix}`);
+    const slug = `boundary-${suffix}`;
+    await event(slug, "Boundary Night");
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO approval_requests (id, kind, event_slug, payload_json, status, requested_by, requested_by_email, requested_at) VALUES (?, 'event_cancellation', ?, '{}', 'pending', 'requester-a', 'curation@example.com', ?)")
+        .bind(`cancel-${suffix}`, slug, now),
+      env.DB.prepare("INSERT INTO approval_requests (id, kind, event_slug, payload_json, status, requested_by, requested_by_email, requested_at) VALUES (?, 'mass_refund', ?, '{}', 'pending', 'requester-b', 'finance@example.com', ?)")
+        .bind(`refund-${suffix}`, slug, now),
+    ]);
+
+    const curatorResponse = await readOperations(new Request("https://tickets.becoreops.com/api/admin/operations", { headers: { cookie: curator.cookie } }));
+    expect(curatorResponse.status).toBe(200);
+    const curatorData = await curatorResponse.json() as { metrics: Array<Record<string, unknown>>; checks: unknown[]; approvals: Array<{ kind: string }> };
+    expect(curatorData.metrics[0]).not.toHaveProperty("grossMinor");
+    expect(curatorData.metrics[0]).toHaveProperty("activeTickets");
+    expect(curatorData.checks.length).toBeGreaterThan(0);
+    expect(curatorData.approvals.map((item) => item.kind)).toContain("event_cancellation");
+    expect(curatorData.approvals.map((item) => item.kind)).not.toContain("mass_refund");
+
+    const financeResponse = await readOperations(new Request("https://tickets.becoreops.com/api/admin/operations", { headers: { cookie: finance.cookie } }));
+    expect(financeResponse.status).toBe(200);
+    const financeData = await financeResponse.json() as { metrics: Array<Record<string, unknown>>; checks: unknown[]; devices: unknown[]; incidents: unknown[]; approvals: Array<{ kind: string }> };
+    expect(financeData.metrics[0]).toHaveProperty("grossMinor");
+    expect(financeData.metrics[0]).not.toHaveProperty("activeTickets");
+    expect(financeData.checks).toEqual([]);
+    expect(financeData.devices).toEqual([]);
+    expect(financeData.incidents).toEqual([]);
+    expect(financeData.approvals.map((item) => item.kind)).toContain("mass_refund");
+    expect(financeData.approvals.map((item) => item.kind)).not.toContain("event_cancellation");
+
+    const deniedReadiness = await updateOperations(new Request("https://tickets.becoreops.com/api/admin/operations", {
+      method: "POST",
+      headers: { cookie: finance.cookie, origin: "https://tickets.becoreops.com", "content-type": "application/json" },
+      body: JSON.stringify({ action: "readiness", eventSlug: slug, checkKey: "venue", status: "passed" }),
+    }));
+    expect(deniedReadiness.status).toBe(403);
+    const deniedFinanceApproval = await updateOperations(new Request("https://tickets.becoreops.com/api/admin/operations", {
+      method: "POST",
+      headers: { cookie: curator.cookie, origin: "https://tickets.becoreops.com", "content-type": "application/json" },
+      body: JSON.stringify({ action: "approval", approvalId: `refund-${suffix}`, decision: "approve" }),
+    }));
+    expect(deniedFinanceApproval.status).toBe(403);
+
+    expect((await readSupport(new Request("https://tickets.becoreops.com/api/admin/support", { headers: { cookie: finance.cookie } }))).status).toBe(403);
+    expect((await readSupport(new Request("https://tickets.becoreops.com/api/admin/support", { headers: { cookie: support.cookie } }))).status).toBe(200);
   });
 
   it("keeps fee audit identities out of the public configuration response", async () => {

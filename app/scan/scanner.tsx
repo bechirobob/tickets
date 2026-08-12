@@ -4,6 +4,8 @@ import Link from "next/link";
 import QrScanner from "qr-scanner";
 import { AlertTriangle, CheckCircle2, CloudOff, Keyboard, Loader2, RefreshCw, RotateCcw, ScanLine, Search, Users, Wifi, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { StaffRole } from "../../lib/admin-session";
+import WorkspaceJump from "../admin/workspace-jump";
 import DoorDesk from "./door-desk";
 
 type EventOption = { slug: string; title: string; fullDate: string; venue: string };
@@ -35,7 +37,7 @@ async function tokenHash(token: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function Scanner({ events }: { events: EventOption[] }) {
+export default function Scanner({ actor, role, events }: { actor: string; role: StaffRole; events: EventOption[] }) {
   const [eventSlug, setEventSlug] = useState(events[0]?.slug ?? "");
   const [mode, setMode] = useState<"ready" | "scanning" | "checking" | "valid" | "offline_saved" | "invalid" | "duplicate" | "wrong_event">("ready");
   const [code, setCode] = useState("");
@@ -173,7 +175,7 @@ export default function Scanner({ events }: { events: EventOption[] }) {
   }
 
   return <main className="scanner-page">
-    <header className="scanner-header"><Link href="/admin" className="brand-mark"><span className="brand-mark__box">B</span><span>Gate</span></Link><div className={online ? "online" : "offline"}>{online ? <Wifi size={15} /> : <CloudOff size={15} />}{online ? "Doors synchronized" : `Offline · ${queued.length} queued`}</div></header>
+    <header className="scanner-header"><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Gate</span></Link><WorkspaceJump active="/scan" role={role} compact /><span className="scanner-actor">{actor}</span><div className={online ? "online" : "offline"}>{online ? <Wifi size={15} /> : <CloudOff size={15} />}{online ? "Doors synchronized" : `Offline · ${queued.length} queued`}</div></header>
     <div className="scanner-event"><div><small>Now scanning</small><h1>{selectedEvent?.title ?? "Choose an event"}</h1><p>{selectedEvent ? `${selectedEvent.fullDate} · ${selectedEvent.venue}` : "No published events"}</p>{manifest ? <span>Door list saved {new Date(manifest.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : <span>No offline door list yet</span>}</div><label><span>Event</span><select value={eventSlug} onChange={(event) => { scannerRef.current?.pause(); setEventSlug(event.target.value); setMode("ready"); setMatches([]); }}>{events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label></div>
     <section className={`scan-surface scan-surface--${mode}`}>
       {(mode === "ready" || mode === "scanning" || mode === "checking") && <><div className="scan-frame"><video ref={videoRef} muted playsInline /><i /><i /><i /><i />{mode === "ready" ? <ScanLine size={76} /> : null}</div><h2>{mode === "checking" ? "Checking ticket…" : mode === "scanning" ? "Position the QR inside the frame" : "Ready for the next guest"}</h2><p>{message || (mode === "ready" ? "Online verifies live. Offline checks the saved door list and queues the entry." : "The ticket scans automatically.")}</p>{mode === "ready" ? <button onClick={startCamera}>Start camera</button> : null}</>}

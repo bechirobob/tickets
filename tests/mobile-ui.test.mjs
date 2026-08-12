@@ -26,6 +26,12 @@ const ownerBootstrapUrl = new URL("../app/admin/bootstrap/page.tsx", import.meta
 const ownerBootstrapFormUrl = new URL("../app/admin/bootstrap/bootstrap-form.tsx", import.meta.url);
 const staffPasswordClientUrl = new URL("../lib/staff-password-client.ts", import.meta.url);
 const adminSessionUrl = new URL("../app/api/admin/session/route.ts", import.meta.url);
+const feeSettingsUrl = new URL("../app/admin/fee-settings.tsx", import.meta.url);
+const staffAccountsUrl = new URL("../app/admin/accounts/staff-accounts.tsx", import.meta.url);
+const staffRolesUrl = new URL("../lib/staff-roles.ts", import.meta.url);
+const workspaceJumpUrl = new URL("../app/admin/workspace-jump.tsx", import.meta.url);
+const operationsNavUrl = new URL("../app/admin/operations-nav.tsx", import.meta.url);
+const accountPageUrl = new URL("../app/admin/account/page.tsx", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -306,6 +312,47 @@ test("first-owner setup explains its one-use key without exposing a credential",
   assert.match(form, /id="owner-email"/u);
   assert.match(css, /\.admin-bootstrap__form\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
   assert.doesNotMatch(`${page}\n${form}`, /ADMIN_ACCESS_KEY\s*=|sk_(?:live|test)_/u);
+});
+
+test("fees and named staff stay inside one compact, role-bound operations system", async () => {
+  const [fees, accounts, roles, css] = await Promise.all([
+    readFile(feeSettingsUrl, "utf8"),
+    readFile(staffAccountsUrl, "utf8"),
+    readFile(staffRolesUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(fees, /<main className="ops-page">/u);
+  assert.match(fees, /<OperationsNav actor=\{actor\} role=\{role\} active="\/admin\/fees"/u);
+  assert.doesNotMatch(fees, /settings-page|const links =|Platform configuration/u);
+  assert.match(accounts, /className="role-boundary"/u);
+  assert.match(accounts, /> Can</u);
+  assert.match(accounts, /> Cannot</u);
+  assert.match(accounts, /roleDefinition\.eventScoped/u);
+  assert.match(roles, /support:\s*\{/u);
+  assert.match(roles, /isWorkspacePathAllowed/u);
+  assert.match(css, /\.role-boundary\s*\{/u);
+});
+
+test("every private workspace has one compact role-scoped navigator", async () => {
+  const [jump, navigation, account, scanner, organiser, css] = await Promise.all([
+    readFile(workspaceJumpUrl, "utf8"),
+    readFile(operationsNavUrl, "utf8"),
+    readFile(accountPageUrl, "utf8"),
+    readFile(scannerUrl, "utf8"),
+    readFile(organizerWorkspaceUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(jump, /STAFF_WORKSPACE_LINKS\s*\n\s*\.filter/u);
+  assert.match(jump, /Open an authorised workspace/u);
+  assert.match(navigation, /aria-label="Workspace navigation"/u);
+  assert.match(navigation, /aria-current=\{active === item\.href \? "page"/u);
+  assert.match(account, /<WorkspaceJump active="\/admin\/account" role=\{session\.role\}/u);
+  assert.match(scanner, /<WorkspaceJump active="\/scan" role=\{role\}/u);
+  assert.match(organiser, /<WorkspaceJump active="\/organizer\/workspace" role=\{role\}/u);
+  assert.match(css, /\.curation-nav > \.workspace-jump\s*\{\s*display:\s*none/u);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.curation-nav > \.workspace-jump[^}]*display:\s*grid/su);
 });
 
 test("staff passwords derive in the browser and never ask the Worker to exceed its PBKDF2 cap", async () => {
