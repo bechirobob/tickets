@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
+import { deriveStaffPasswordProof, prepareStaffPassword } from "../../../lib/staff-password-client";
 
 type RegistrationOptions = Parameters<typeof startRegistration>[0]["optionsJSON"];
 type Passkey = { id: string; label: string; deviceType: string; backedUp: number; createdAt: string; lastUsedAt: string | null };
@@ -52,19 +53,25 @@ export default function AccountSecurity({ mustChangePassword }: { mustChangePass
     event.preventDefault();
     setBusy(true);
     setMessage("");
-    const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/admin/session", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ currentPassword: form.get("currentPassword"), newPassword: form.get("newPassword") }),
-    });
-    const result = await response.json() as { error?: string; returnTo?: string };
-    if (!response.ok || !result.returnTo) {
-      setMessage(result.error ?? "The password could not be changed.");
+    try {
+      const form = new FormData(event.currentTarget);
+      const parametersResponse = await fetch("/api/admin/session", { cache: "no-store" });
+      const parameters = await parametersResponse.json() as { passwordSalt?: string; passwordIterations?: number; error?: string };
+      if (!parametersResponse.ok || !parameters.passwordSalt || !parameters.passwordIterations) throw new Error(parameters.error ?? "The password check could not start.");
+      const currentPasswordProof = await deriveStaffPasswordProof(String(form.get("currentPassword") ?? ""), parameters.passwordSalt, parameters.passwordIterations);
+      const newPassword = await prepareStaffPassword(String(form.get("newPassword") ?? ""));
+      const response = await fetch("/api/admin/session", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currentPasswordProof, ...newPassword }),
+      });
+      const result = await response.json() as { error?: string; returnTo?: string };
+      if (!response.ok || !result.returnTo) throw new Error(result.error ?? "The password could not be changed.");
+      window.location.assign(result.returnTo);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The password could not be changed.");
       setBusy(false);
-      return;
     }
-    window.location.assign(result.returnTo);
   }
 
   return <div className="account-security-stack"><section className="passkey-security"><header><div><b>Passkeys & devices</b><small>{passkeys.length ? "Phishing-resistant sign-in is active." : "Add a passkey before the clipboard bandits get ideas."}</small></div><button type="button" onClick={() => void addPasskey()} disabled={busy}>{busy ? "Opening device…" : passkeys.length ? "Add another" : "Add passkey"}</button></header>

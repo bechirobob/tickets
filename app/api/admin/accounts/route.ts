@@ -8,6 +8,7 @@ import {
   requestMetadata,
   type StaffRole,
 } from "../../../../lib/admin-session";
+import type { StaffPasswordPayload } from "../../../../lib/staff-password-policy";
 
 const roles: StaffRole[] = ["owner", "curator", "finance", "organizer", "gate", "moderator"];
 const scopedRoles = new Set<StaffRole>(["organizer", "gate", "moderator"]);
@@ -53,7 +54,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const input = accountInput(body);
-    const password = await createPasswordRecord(String(body.temporaryPassword ?? ""));
+    const password = await createPasswordRecord({
+      password: String(body.temporaryPassword ?? ""),
+      passwordProof: String(body.passwordProof ?? ""),
+      passwordSalt: String(body.passwordSalt ?? ""),
+      passwordIterations: Number(body.passwordIterations ?? 0),
+    });
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     await env.DB.batch([
@@ -98,7 +104,12 @@ export async function PATCH(request: Request) {
     ];
     if (status === "disabled") statements.push(env.DB.prepare("UPDATE staff_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL").bind(now, id));
     if (typeof body.temporaryPassword === "string" && body.temporaryPassword.length > 0) {
-      const password = await createPasswordRecord(body.temporaryPassword);
+      const password = await createPasswordRecord({
+        password: body.temporaryPassword,
+        passwordProof: String(body.passwordProof ?? ""),
+        passwordSalt: String(body.passwordSalt ?? ""),
+        passwordIterations: Number(body.passwordIterations ?? 0),
+      } satisfies StaffPasswordPayload);
       statements.push(env.DB.prepare("UPDATE staff_accounts SET password_hash = ?, password_salt = ?, password_iterations = ?, must_change_password = 1, password_changed_at = ?, updated_at = ? WHERE id = ?")
         .bind(password.hash, password.salt, password.iterations, now, now, id));
       statements.push(env.DB.prepare("UPDATE staff_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL").bind(now, id));

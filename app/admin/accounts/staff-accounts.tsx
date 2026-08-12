@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { KeyRound, Loader2, Save, UserPlus } from "lucide-react";
 import OperationsNav from "../operations-nav";
+import { prepareStaffPassword } from "../../../lib/staff-password-client";
 
 type Role = "owner" | "curator" | "finance" | "organizer" | "gate" | "moderator";
 type StaffAccount = { id: string; email: string; displayName: string; role: Role; status: "active" | "disabled"; mustChangePassword: number; lastLoginAt: string | null; eventSlugs: string[] };
@@ -40,17 +41,24 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: Ro
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setMessage("");
-    const form = new FormData(event.currentTarget);
-    const body = {
-      id: selected?.id,
-      displayName: form.get("displayName"), email: form.get("email"), role: form.get("role"), status: form.get("status"),
-      temporaryPassword: form.get("temporaryPassword"), eventSlugs: form.getAll("eventSlugs"),
-    };
-    const response = await fetch("/api/admin/accounts", { method: selected ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const result = await response.json() as { error?: string; id?: string };
-    if (!response.ok) setMessage(result.error ?? "The account could not be saved.");
-    else { setMessage(selected ? "Account updated." : "Account created. Share the temporary password through a secure channel."); await load(); if (result.id) setSelectedId(result.id); }
-    setBusy(false);
+    try {
+      const form = new FormData(event.currentTarget);
+      const temporaryPassword = String(form.get("temporaryPassword") ?? "");
+      const password = temporaryPassword ? await prepareStaffPassword(temporaryPassword) : {};
+      const body = {
+        id: selected?.id,
+        displayName: form.get("displayName"), email: form.get("email"), role: form.get("role"), status: form.get("status"),
+        temporaryPassword, ...password, eventSlugs: form.getAll("eventSlugs"),
+      };
+      const response = await fetch("/api/admin/accounts", { method: selected ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const result = await response.json() as { error?: string; id?: string };
+      if (!response.ok) setMessage(result.error ?? "The account could not be saved.");
+      else { setMessage(selected ? "Account updated." : "Account created. Share the temporary password through a secure channel."); await load(); if (result.id) setSelectedId(result.id); }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The account could not be saved.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return <main className="curation-page staff-page">

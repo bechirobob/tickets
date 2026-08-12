@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
+import { deriveStaffPasswordProof } from "../../../lib/staff-password-client";
 
 type AuthenticationOptions = Parameters<typeof startAuthentication>[0]["optionsJSON"];
 
@@ -45,10 +46,16 @@ export default function AdminLoginForm() {
     setBusy(true);
     setError("");
     try {
+      const parametersResponse = await fetch(`/api/admin/session?email=${encodeURIComponent(email)}`, { cache: "no-store" });
+      const parameters = await parametersResponse.json() as { passwordSalt?: string; passwordIterations?: number; error?: string };
+      if (!parametersResponse.ok || !parameters.passwordSalt || !parameters.passwordIterations) {
+        throw new Error(parameters.error ?? "Secure access could not start.");
+      }
+      const passwordProof = await deriveStaffPasswordProof(password, parameters.passwordSalt, parameters.passwordIterations);
       const response = await fetch("/api/admin/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, returnTo: searchParams.get("returnTo") ?? "/admin" }),
+        body: JSON.stringify({ email, passwordProof, returnTo: searchParams.get("returnTo") ?? "/admin" }),
       });
       const result = (await response.json()) as { error?: string; returnTo?: string; mfaRequired?: boolean; options?: AuthenticationOptions; exchangeToken?: string };
       if (response.status === 202 && result.mfaRequired && result.options && result.exchangeToken) {

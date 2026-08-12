@@ -2,25 +2,32 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { GET as readWorkspace, PATCH as updateWorkspace } from "../app/api/organizer/workspace/route";
 import { GET as readFeeConfig } from "../app/api/config/booking-fee/route";
+import { POST as bootstrapOwner } from "../app/api/admin/bootstrap/route";
 import {
   adminCookieHeader,
   authenticateStaff,
   createPasswordRecord,
   createStaffSession,
   hasPermission,
-  PASSWORD_ITERATIONS,
   readAdminSession,
   verifyStaffPassword,
   type StaffRole,
 } from "../lib/admin-session";
+import { PASSWORD_ITERATIONS } from "../lib/staff-password-policy";
 
-const password = "TemporaryPass9";
+const password = "CorrectHorse9Battery";
+const passwordProof = "XTlKa_gLf3KD0M8mv-ZrlYn-p7YiT-JYfq52B4UNCVI";
+const passwordSalt = "AAECAwQFBgcICQoLDA0ODw";
+
+async function passwordRecord() {
+  return createPasswordRecord({ password, passwordProof, passwordSalt, passwordIterations: PASSWORD_ITERATIONS });
+}
 
 async function staff(role: StaffRole, suffix: string) {
   const id = `${role}-${suffix}`;
   const email = `${id}@example.com`;
   const now = new Date().toISOString();
-  const record = await createPasswordRecord(password, 2);
+  const record = await passwordRecord();
   await env.DB.prepare(`INSERT INTO staff_accounts (
     id, normalized_email, display_name, role, password_hash, password_salt, password_iterations,
     must_change_password, status, failed_login_count, password_changed_at, created_at, created_by, updated_at
@@ -46,18 +53,39 @@ async function event(slug: string, title: string) {
 
 describe("named staff access", () => {
   it("creates and verifies the production-strength password record in the Workers runtime", async () => {
-    const record = await createPasswordRecord(password);
+    const record = await passwordRecord();
     expect(record.iterations).toBe(PASSWORD_ITERATIONS);
-    await expect(verifyStaffPassword(password, {
+    expect(record.hash).toBe("client-pbkdf2-sha256-v1.8Pvq8lsNWJGWQ-cR8vPdPCDZCpAHW4s3R_BI3DnBDcI");
+    await expect(verifyStaffPassword(passwordProof, {
       passwordHash: record.hash,
       passwordSalt: record.salt,
       passwordIterations: record.iterations,
     })).resolves.toBe(true);
-    await expect(verifyStaffPassword("WrongPassword9", {
+    await expect(verifyStaffPassword("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", {
       passwordHash: record.hash,
       passwordSalt: record.salt,
       passwordIterations: record.iterations,
     })).resolves.toBe(false);
+  });
+
+  it("bootstraps the first owner without running PBKDF2 inside the Worker", async () => {
+    const response = await bootstrapOwner(new Request("https://tickets.becoreops.com/api/admin/bootstrap", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://tickets.becoreops.com" },
+      body: JSON.stringify({
+        accessKey: "bootstrap-test-key",
+        displayName: "Test Owner",
+        email: "owner-bootstrap@example.com",
+        password,
+        passwordProof,
+        passwordSalt,
+        passwordIterations: PASSWORD_ITERATIONS,
+      }),
+    }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ returnTo: "/admin/accounts", removeLegacySecret: true });
+    await expect(env.DB.prepare("SELECT role, password_iterations AS iterations FROM staff_accounts WHERE normalized_email = ?")
+      .bind("owner-bootstrap@example.com").first()).resolves.toMatchObject({ role: "owner", iterations: PASSWORD_ITERATIONS });
   });
 
   it("uses role permissions and opaque, revocable server-side sessions", async () => {
@@ -68,7 +96,7 @@ describe("named staff access", () => {
     expect(hasPermission({ role: "gate" }, "orders.manage")).toBe(false);
 
     const account = await staff("curator", crypto.randomUUID().slice(0, 8));
-    const authenticated = await authenticateStaff(env.DB, account.email.toUpperCase(), password);
+    const authenticated = await authenticateStaff(env.DB, account.email.toUpperCase(), passwordProof);
     expect(authenticated.account).toMatchObject({ id: account.id, role: "curator" });
     const session = await readAdminSession(account.cookie, env.DB);
     expect(session).toMatchObject({ accountId: account.id, email: account.email, role: "curator" });

@@ -1,8 +1,19 @@
-import { pbkdf2 as nodePbkdf2 } from "node:crypto";
+import {
+  base64UrlToBytes,
+  bytesToBase64Url,
+  PASSWORD_ITERATIONS,
+  PASSWORD_PROOF_BYTES,
+  PASSWORD_SALT_BYTES,
+  validateStaffPassword,
+  type StaffPasswordPayload,
+} from "./staff-password-policy";
 
 const COOKIE_NAME = "bct_staff";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
-export const PASSWORD_ITERATIONS = 600_000;
+// The extra digest prevents a leaked database value from being replayed as the
+// client-derived password proof while keeping Worker verification inexpensive.
+const PASSWORD_HASH_PREFIX = "client-pbkdf2-sha256-v1.";
+export { PASSWORD_ITERATIONS };
 
 export type StaffRole = "owner" | "curator" | "finance" | "organizer" | "gate" | "moderator";
 export type StaffPermission =
@@ -51,55 +62,33 @@ const permissions: Record<StaffRole, readonly StaffPermission[]> = {
   moderator: ["rooms.moderate"],
 };
 
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
-}
-
-function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
-  const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
-
 export function normalizeStaffEmail(value: string): string {
   return value.trim().toLowerCase();
 }
 
-export function validateStaffPassword(value: string): void {
-  if (value.length < 12 || value.length > 256) throw new Error("Use a password between 12 and 256 characters.");
-  if (!/[a-z]/u.test(value) || !/[A-Z]/u.test(value) || !/[0-9]/u.test(value)) {
-    throw new Error("Use upper-case, lower-case and number characters in the password.");
+export async function createPasswordRecord(payload: StaffPasswordPayload): Promise<{ hash: string; salt: string; iterations: number }> {
+  validateStaffPassword(payload.password);
+  if (payload.passwordIterations !== PASSWORD_ITERATIONS) throw new Error("The password work factor is invalid.");
+  const salt = base64UrlToBytes(payload.passwordSalt);
+  const proof = base64UrlToBytes(payload.passwordProof);
+  if (salt.length !== PASSWORD_SALT_BYTES || proof.length !== PASSWORD_PROOF_BYTES) throw new Error("The password record is invalid.");
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", proof));
+  return { hash: `${PASSWORD_HASH_PREFIX}${bytesToBase64Url(digest)}`, salt: payload.passwordSalt, iterations: payload.passwordIterations };
+}
+
+export async function verifyStaffPassword(passwordProof: string, record: Pick<StaffAccountRecord, "passwordHash" | "passwordSalt" | "passwordIterations">): Promise<boolean> {
+  if (record.passwordIterations !== PASSWORD_ITERATIONS || !record.passwordHash.startsWith(PASSWORD_HASH_PREFIX)) return false;
+  try {
+    const proof = base64UrlToBytes(passwordProof);
+    const expected = base64UrlToBytes(record.passwordHash.slice(PASSWORD_HASH_PREFIX.length));
+    if (proof.length !== PASSWORD_PROOF_BYTES || expected.length !== 32) return false;
+    const actual = new Uint8Array(await crypto.subtle.digest("SHA-256", proof));
+    let difference = 0;
+    for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ expected[index];
+    return difference === 0;
+  } catch {
+    return false;
   }
-}
-
-async function derivePassword(password: string, salt: Uint8Array<ArrayBuffer>, iterations: number): Promise<Uint8Array<ArrayBuffer>> {
-  return new Promise((resolve, reject) => {
-    nodePbkdf2(password, salt, iterations, 32, "sha256", (error, derivedKey) => {
-      if (error) reject(error);
-      else resolve(Uint8Array.from(derivedKey));
-    });
-  });
-}
-
-export async function createPasswordRecord(password: string, iterations = PASSWORD_ITERATIONS): Promise<{ hash: string; salt: string; iterations: number }> {
-  validateStaffPassword(password);
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await derivePassword(password, salt, iterations);
-  return { hash: bytesToBase64Url(hash), salt: bytesToBase64Url(salt), iterations };
-}
-
-export async function verifyStaffPassword(password: string, record: Pick<StaffAccountRecord, "passwordHash" | "passwordSalt" | "passwordIterations">): Promise<boolean> {
-  if (!password || password.length > 256) return false;
-  const actual = await derivePassword(password, base64UrlToBytes(record.passwordSalt), record.passwordIterations);
-  const expected = base64UrlToBytes(record.passwordHash);
-  if (actual.length !== expected.length) return false;
-  let difference = 0;
-  for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ expected[index];
-  return difference === 0;
 }
 
 export async function hashToken(value: string): Promise<string> {
@@ -193,7 +182,7 @@ export async function readAdminSession(cookieHeader: string | null, database?: D
   };
 }
 
-export async function authenticateStaff(db: D1Database, email: string, password: string): Promise<{ account: StaffAccountRecord | null; reason: "invalid" | "locked" | "disabled" | null }> {
+export async function authenticateStaff(db: D1Database, email: string, passwordProof: string): Promise<{ account: StaffAccountRecord | null; reason: "invalid" | "locked" | "disabled" | null }> {
   const normalizedEmail = normalizeStaffEmail(email);
   const account = await db.prepare(`
     SELECT id, normalized_email AS normalizedEmail, display_name AS displayName, role,
@@ -207,7 +196,7 @@ export async function authenticateStaff(db: D1Database, email: string, password:
   if (account.status !== "active") return { account: null, reason: "disabled" };
   if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) return { account: null, reason: "locked" };
 
-  const valid = await verifyStaffPassword(password, account);
+  const valid = await verifyStaffPassword(passwordProof, account);
   const now = new Date().toISOString();
   if (!valid) {
     const failures = account.failedLoginCount + 1;
