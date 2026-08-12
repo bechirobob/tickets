@@ -1043,6 +1043,12 @@
   border-radius: 0;
 }
 
+/* My Nights overview actions are ruled rows, not rounded text controls. */
+.night-overview article > div > :is(button, a) {
+  border-radius: 0;
+  appearance: none;
+}
+
 .drop-vibes {
   gap: 24px;
 }

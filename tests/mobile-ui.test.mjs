@@ -550,6 +550,7 @@ test("controls keep soft corners while information flows in open straight-edged 
   assert.match(css, /\.workspace-event-picker select\s*\{[^}]*border-radius:\s*var\(--radius-picker\)/su);
   assert.match(polish, /:where\(a, button, input, select, textarea, summary\)\s*\{[^}]*border-radius:\s*var\(--radius-control\)/su);
   assert.match(polish, /Straight selection markers[\s\S]*?\.night-hub__tabs button[^}]*\)\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /My Nights overview actions are ruled rows[\s\S]*?\.night-overview article > div > :is\(button, a\)\s*\{[^}]*border-radius:\s*0[^}]*appearance:\s*none/su);
   assert.match(polish, /\.scene-host\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(css, /\.compact-hero__copy > div a, \.compact-hero__single\s*\{[^}]*border:\s*1px solid/su);
   assert.doesNotMatch(polish, /\[class\*="-(?:card|panel|surface|notice|alert|message|editor|table|pass|state)"\][\s\S]*?border-radius:\s*var\(--radius-surface\)/su);
