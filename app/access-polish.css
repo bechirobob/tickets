@@ -1175,6 +1175,13 @@
   background: white;
 }
 
+.scene-message__meta {
+  margin: 0 3px 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .scene-message p {
   margin-top: 2px;
   font-size: 11px;
