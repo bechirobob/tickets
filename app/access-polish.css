@@ -132,7 +132,7 @@
     border: 1px solid #d2cec4;
     border-radius: 14px;
     background: #fffdf8;
-    box-shadow: 0 18px 44px rgba(0,0,0,.18), 0 3px 10px rgba(0,0,0,.08);
+    box-shadow: none;
   }
   :where(.workspace-jump, .room-notifications__controls) select::picker(select) {
     min-inline-size: anchor-size(width);
@@ -143,7 +143,7 @@
     border-radius: 13px;
     background: #1d1e1b;
     color: #f2efe7;
-    box-shadow: 0 20px 46px rgba(0,0,0,.34), 0 4px 12px rgba(0,0,0,.2);
+    box-shadow: none;
   }
   :where(.workspace-event-picker, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) option,
   :where(.workspace-jump, .room-notifications__controls) option {
@@ -249,7 +249,7 @@
   width: 2px;
   position: absolute;
   inset: 12px auto 12px 0;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--ink);
 }
 
@@ -444,16 +444,235 @@
   background: #e8e4da;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .room-product-phone__stream > article {
+    animation: none;
+  }
+}
+
+/* Straight selection markers and compact Room conversations. */
+:where(
+  .drop-controls button,
+  .drop-vibes button,
+  .date-line a,
+  .vibe-filter button,
+  .night-room-peek__tabs > span,
+  .room-modes > button,
+  .my-nights-tabs button,
+  .night-hub__tabs button
+) {
+  position: relative;
+  border-radius: 0;
+}
+
+.drop-vibes {
+  gap: 24px;
+}
+
+.drop-vibes button,
+.drop-vibes button[aria-selected="true"] {
+  min-width: max-content;
+  padding: 6px 0 9px;
+  border: 0;
+  background: transparent;
+}
+
+.drop-controls button::after,
+.drop-vibes button::after,
+.vibe-filter button::after,
+.night-room-peek__tabs > span::after,
+.room-modes > button::after,
+.date-line a::before {
+  content: "";
+  height: 2px;
+  display: block;
+  position: absolute;
+  inset: auto 0 0;
+  border-radius: 0;
+  background: currentColor;
+  opacity: .5;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .18s ease, opacity .18s ease;
+}
+
+.date-line a::before { inset-inline: 22px; }
+.room-modes > button::after { inset-inline: 16px; }
+.night-room-peek__tabs > span::after { bottom: -1px; }
+
+.drop-controls button:hover::after,
+.drop-controls button:focus-visible::after,
+.drop-vibes button:hover::after,
+.drop-vibes button:focus-visible::after,
+.date-line a:hover::before,
+.date-line a:focus-visible::before,
+.vibe-filter button:hover::after,
+.vibe-filter button:focus-visible::after,
+.night-room-peek__tabs > span:hover::after,
+.room-modes > button:hover::after,
+.room-modes > button:focus-visible::after {
+  transform: scaleX(.48);
+}
+
 .drop-controls button[aria-selected="true"]::after,
+.drop-vibes button[aria-selected="true"]::after,
 .date-line a.active::before,
 .vibe-filter button.active::after,
 .night-room-peek__tabs > span.active::after,
 .room-modes > button.active::after {
-  display: none;
+  display: block;
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+:where(
+  .drop-controls button,
+  .drop-vibes button,
+  .date-line a,
+  .vibe-filter button,
+  .room-modes > button
+):focus-visible {
+  outline: 1px solid #77766f;
+  outline-offset: 3px;
+}
+
+:where(
+  .compact-section-head > a,
+  .drop-card__body > a,
+  .drop-pagination button
+) {
+  border-radius: 0;
+}
+
+.room-product-phone__stream {
+  gap: 6px;
+}
+
+.scene-host {
+  max-width: 84%;
+  padding: 6px 0 7px;
+  grid-template-columns: 16px 1fr;
+  border: 0;
+  border-bottom: 1px solid #c8c4ba;
+  border-radius: 0;
+  background: transparent;
+}
+
+.scene-host--compact { max-width: 76%; }
+.scene-host p { font-size: 11px; line-height: 1.38; }
+
+.scene-message {
+  width: fit-content;
+  max-width: 66%;
+  gap: 5px;
+}
+
+.scene-message > span {
+  width: 20px;
+  height: 20px;
+}
+
+.scene-message > .scene-message__body,
+.scene-message--own > .scene-message__body {
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.scene-message__bubble {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 8px 8px 8px 3px;
+  background: white;
+}
+
+.scene-message p {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.32;
+}
+
+.scene-message__reactions {
+  min-height: 15px;
+  margin: 2px 3px 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #68665f;
+}
+
+.scene-message__reactions i,
+.scene-message__reactions b {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.scene-message__reactions b { font-weight: 650; }
+.scene-message--own > .scene-message__body { align-items: flex-end; }
+.scene-message--own .scene-message__bubble {
+  border: 1px solid #cfcbc1;
+  border-radius: 8px 8px 3px 8px;
+  background: #e9e6de;
+}
+.scene-message--own .scene-message__reactions { color: #55534d; }
+
+.room-message.announcement {
+  margin: 7px 0;
+  padding: 8px 0;
+  border: 0;
+  border-top: 1px solid #d5d1c7;
+  border-bottom: 1px solid #d5d1c7;
+  border-radius: 0;
+  background: transparent;
+}
+
+.room-message.announcement .room-avatar {
+  background: transparent;
+  color: var(--orange);
+}
+
+.room-message.announcement .room-bubble {
+  width: auto;
+  padding: 2px 6px 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.room-message__actions button.active {
+  background: transparent;
+  color: #42381f;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 700px) {
+  .drop-vibes { gap: 20px; }
+  .drop-vibes button { min-width: max-content; }
+  .scene-message { max-width: 72%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .room-product-phone__stream > article {
-    animation: none;
+  .drop-controls button::after,
+  .drop-vibes button::after,
+  .date-line a::before,
+  .vibe-filter button::after,
+  .night-room-peek__tabs > span::after,
+  .room-modes > button::after {
+    transition: none;
   }
 }
