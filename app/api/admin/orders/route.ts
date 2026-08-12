@@ -26,8 +26,20 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim().slice(0, 120) ?? "";
   const status = url.searchParams.get("status")?.trim() ?? "";
+  const requestedPage = Math.max(1, Math.min(10_000, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1));
+  const pageSize = 10;
   const wildcard = `%${query}%`;
-  const orders = await env.DB.prepare(`
+  const totalRow = await env.DB.prepare(`
+    SELECT COUNT(*) AS total
+    FROM orders
+    WHERE (? = '' OR orders.reference LIKE ? OR orders.customer_email LIKE ? OR orders.customer_phone LIKE ? OR orders.customer_name LIKE ?)
+      AND (? = '' OR orders.status = ?)
+  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status).first<{ total: number }>();
+  const total = Number(totalRow?.total ?? 0);
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize)));
+  const offset = (page - 1) * pageSize;
+  const [orders, runs, disputes, settlements] = await Promise.all([
+    env.DB.prepare(`
     SELECT orders.id, orders.reference, orders.event_slug AS eventSlug,
            COALESCE(event.title, orders.event_slug) AS eventTitle,
            orders.ticket_type AS ticketType, orders.unit_quantity AS unitQuantity,
@@ -43,14 +55,13 @@ export async function GET(request: Request) {
     FROM orders LEFT JOIN curated_event_records event ON event.slug = orders.event_slug
     WHERE (? = '' OR orders.reference LIKE ? OR orders.customer_email LIKE ? OR orders.customer_phone LIKE ? OR orders.customer_name LIKE ?)
       AND (? = '' OR orders.status = ?)
-    ORDER BY orders.created_at DESC LIMIT 200
-  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status).all<Record<string, unknown>>();
-  const [runs, disputes, settlements] = await Promise.all([
+    ORDER BY orders.created_at DESC LIMIT ? OFFSET ?
+  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status, pageSize, offset).all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM reconciliation_runs ORDER BY created_at DESC LIMIT 20").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM payment_disputes WHERE status NOT IN ('resolved', 'accepted') ORDER BY updated_at DESC LIMIT 50").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM event_settlements ORDER BY period_end DESC, event_slug LIMIT 100").all<Record<string, unknown>>(),
   ]);
-  return Response.json({ orders: orders.results, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ orders: orders.results, total, page, pageSize, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {

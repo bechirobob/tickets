@@ -337,19 +337,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .ticket-transfer-close svg { width: 18px; }
 .night-purchase__transferred { max-width: 650px; margin: 24px 0; padding: 20px 0; border-top: 1px solid #c9c5bb; border-bottom: 1px solid #c9c5bb; color: #68655e; font-size: 14px; line-height: 1.7; }
 
-.room-notifications { background: #131411; color: white; }
-.room-notifications__invite { min-height: 64px; padding: 10px 3vw; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid #30312d; }
-.room-notifications__invite > svg { flex: 0 0 auto; color: var(--acid, #d7f45b); }
-.room-notifications__invite span { min-width: 0; flex: 1; }
-.room-notifications__invite b, .room-notifications__invite small { display: block; }
-.room-notifications__invite b { font-size: 14px; }
-.room-notifications__invite small { margin-top: 3px; color: #92938c; font-size: 12px; line-height: 1.45; }
-.room-notifications__invite button { min-height: 34px; padding: 0 10px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--acid, #d7f45b); background: transparent; color: var(--acid, #d7f45b); font: inherit; font-size: 12px; font-weight: 780; }
-.room-notifications__controls { min-height: 40px; padding: 0 3vw; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #30312d; color: #a3a49c; font-size: 12px; }
-.room-notifications__controls span { display: flex; align-items: center; gap: 6px; }
-.room-notifications__controls select { min-height: 30px; padding: 0 8px; border: 1px solid #454640; background: #1c1d1a; color: white; font: inherit; font-size: 12px; }
-.room-notifications__controls button { min-height: 28px; margin-left: auto; padding: 0 8px; border: 1px solid #5d5e56; background: transparent; color: #d7f45b; font: inherit; font-size: 12px; font-weight: 760; }
-.room-notifications__notice { width: 100%; min-height: 36px; padding: 0 3vw; border: 0; border-bottom: 1px solid #34352f; background: #e5efb5; color: #303522; font: inherit; font-size: 12px; text-align: left; }
+.room-notification-toggle { position: relative; }
+.room-notification-toggle i { width: 6px; height: 6px; position: absolute; top: 6px; right: 5px; border: 1px solid #141511; border-radius: 50%; background: var(--acid, #d7f45b); }
+.room-notification-toggle:not(.is-on) { color: #777871; }
 
 .notification-page { min-height: 100vh; padding: 35px 5vw 90px; background: #efede6; color: var(--ink); }
 .notification-page > header { min-height: 110px; display: grid; grid-template-columns: 170px 1fr auto; align-items: end; gap: 24px; border-bottom: 1px solid #bdb9ae; }
@@ -395,9 +385,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .my-nights-header-actions a:last-child { display: none; }
   .night-hub__header-actions { gap: 0; }
   .night-hub__header-actions > a:last-child { width: 40px; justify-content: center; font-size: 0; }
-  .room-notifications__invite { padding: 10px 14px; }
-  .room-notifications__invite small { max-width: 220px; }
-  .room-notifications__controls { padding: 0 14px; }
   .notification-page { padding: 25px 18px 90px; }
   .notification-page > header { min-height: 130px; grid-template-columns: 1fr auto; align-items: start; }
   .notification-page > header > div { grid-column: 1 / -1; grid-row: 2; }
@@ -1285,9 +1272,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* Final cascade for the unified Room controls. */
-.room-header > .room-header__activity { justify-self: end; display: flex; align-items: center; gap: 14px; text-align: left; }
-.room-header > .room-header__activity span { display: flex; align-items: center; gap: 6px; }
-.room-header > .room-header__activity button { display: flex; align-items: center; gap: 6px; }
+.room-header > .room-header__activity { justify-self: end; display: flex; align-items: center; gap: 5px; text-align: left; }
+.room-header > .room-header__activity > span,
+.room-header > .room-header__activity > button { width: 38px; height: 38px; padding: 0; display: grid; grid-template-columns: auto auto; place-content: center; align-items: center; gap: 3px; border: 1px solid #464740; border-radius: 50%; background: transparent; color: #d8d6ce; }
+.room-header > .room-header__activity > span { color: #96978f; }
+.room-header > .room-header__activity b { font-size: 10px; line-height: 1; }
+.room-header > .room-header__activity button:disabled { opacity: .35; }
 .room-composer > form { grid-template-columns: auto minmax(0, 1fr) auto 40px; }
 .room-composer form > .room-camera { width: 38px; height: 38px; grid-column: 1; border-radius: 50%; background: transparent; color: var(--orange); }
 .room-composer form > .room-camera:disabled { background: transparent; }
@@ -1372,8 +1362,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .wallet-confirmed.wallet-confirmed--verify { border-color: #d4b95f; background: #fff8d9; color: #5d4b17; }
 @media (max-width: 640px) {
   .room-header > .room-header__activity > span { display: none; }
-  .room-header > .room-header__activity { gap: 0; }
-  .room-header > .room-header__activity button { padding: 0 7px; }
+  .room-header > .room-header__activity { gap: 4px; }
+  .room-header > a > span { display: none; }
   .flash-gallery-modal > section.flash-gallery-sheet { max-height: 94dvh; }
 }
 

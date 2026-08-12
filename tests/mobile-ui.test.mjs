@@ -37,6 +37,8 @@ const staffRolesUrl = new URL("../lib/staff-roles.ts", import.meta.url);
 const workspaceJumpUrl = new URL("../app/admin/workspace-jump.tsx", import.meta.url);
 const operationsNavUrl = new URL("../app/admin/operations-nav.tsx", import.meta.url);
 const accountPageUrl = new URL("../app/admin/account/page.tsx", import.meta.url);
+const orderOperationsUrl = new URL("../app/admin/orders/order-operations.tsx", import.meta.url);
+const orderOperationsApiUrl = new URL("../app/api/admin/orders/route.ts", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -307,9 +309,9 @@ test("event-day journeys remain available beyond the open browser tab", async ()
   assert.match(hub, /Open offline door pass/u);
   assert.match(hub, /TicketTransfer/u);
   assert.match(roomNotifications, /Notification\.requestPermission\(\)/u);
-  assert.match(roomNotifications, /Mute for tonight/u);
-  assert.match(roomNotifications, />Send me a test notification</u);
-  assert.match(roomNotifications, /api\/customer\/notifications\/test/u);
+  assert.match(roomNotifications, /aria-pressed=\{enabled\}/u);
+  assert.match(roomNotifications, /JSON\.stringify\(\{ enabled: next \}\)/u);
+  assert.doesNotMatch(roomNotifications, /<select|Mute for|Send me a test notification|notifications\/test/u);
   assert.match(serviceWorker, /addEventListener\("push"/u);
   assert.match(serviceWorker, /showNotification/u);
   assert.match(serviceWorker, /notificationclick/u);
@@ -542,17 +544,45 @@ test("workplace dashboards choose one event without horizontal event rails", asy
 });
 
 test("project dropdowns use a soft progressively enhanced picker", async () => {
-  const css = await readFile(accessPolishUrl, "utf8");
+  const [css, roomNotifications] = await Promise.all([
+    readFile(accessPolishUrl, "utf8"),
+    readFile(roomNotificationsUrl, "utf8"),
+  ]);
 
   assert.match(css, /:where\(\.workspace-event-picker,[^}]*select\s*\{[^}]*border-radius:\s*11px/su);
   assert.match(css, /@supports \(appearance:\s*base-select\)/u);
   assert.match(css, /select::picker\(select\)\s*\{[^}]*border-radius:\s*14px/su);
-  assert.match(css, /:where\(\.workspace-jump, \.room-notifications__controls\) select::picker\(select\)\s*\{[^}]*border-radius:\s*13px/su);
+  assert.match(css, /\.workspace-jump select::picker\(select\)\s*\{[^}]*border-radius:\s*13px/su);
   assert.match(css, /option:checked\s*\{[^}]*background:\s*#e9e7e0/su);
   assert.match(css, /select:open::picker-icon\s*\{[^}]*rotate:\s*180deg/su);
   assert.match(css, /\.curation-page[^}]*\.before-night[^}]*\.room-modal[^}]*\.event-waitlist/su);
-  assert.match(css, /\.room-notifications__controls\) select::picker\(select\)/u);
+  assert.doesNotMatch(`${css}\n${roomNotifications}`, /room-notifications__controls|<select/u);
   assert.match(css, /\.submission-fields\) select::picker\(select\)/u);
+});
+
+test("operations lists stay bounded and dashboard selections use straight markers", async () => {
+  const [polish, orders, ordersApi, staff, room] = await Promise.all([
+    readFile(accessPolishUrl, "utf8"),
+    readFile(orderOperationsUrl, "utf8"),
+    readFile(orderOperationsApiUrl, "utf8"),
+    readFile(staffAccountsUrl, "utf8"),
+    readFile(roomUrl, "utf8"),
+  ]);
+
+  assert.match(ordersApi, /const pageSize = 10/u);
+  assert.match(ordersApi, /LIMIT \? OFFSET \?/u);
+  assert.match(ordersApi, /orders: orders\.results, total, page, pageSize/u);
+  assert.match(orders, /className="order-pagination"/u);
+  assert.match(orders, /Showing \{firstVisible\}–\{lastVisible\} of \{total\}/u);
+  assert.match(staff, /className=\{`staff-list__new/u);
+  assert.match(staff, />New person</u);
+  assert.doesNotMatch(staff, /<header><div><p>Named access only<\/p><h1>People &amp; permissions<\/h1><\/div><button/u);
+  assert.match(polish, /Operational navigation uses a side marker/u);
+  assert.match(polish, /\.ops-page \.curation-nav nav a\.active::after,[\s\S]*?display:\s*none/su);
+  assert.match(polish, /\.ops-page \.curation-nav nav a\.active::before,[\s\S]*?width:\s*2px/su);
+  assert.match(polish, /\.ops-page \.ops-main :where\(button, input, select, textarea\)[\s\S]*?border-radius:\s*0/su);
+  assert.match(room, /className="room-flash-toggle"/u);
+  assert.match(room, /<RoomNotifications slug=\{slug\} onNotice=\{setNotice\} \/>/u);
 });
 
 test("controls keep soft corners while information flows in open straight-edged sections", async () => {

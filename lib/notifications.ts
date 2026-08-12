@@ -93,6 +93,7 @@ export async function notifyRoomMessage(env: Cloudflare.Env, input: {
   announcement?: boolean;
 }): Promise<void> {
   const now = new Date().toISOString();
+  const preferenceColumn = input.announcement ? "host_updates" : "room_messages";
   const rows = await env.DB.prepare(`
     SELECT DISTINCT assignment.attendee_id AS attendeeId,
            subscription.id AS subscriptionId, subscription.endpoint,
@@ -106,7 +107,7 @@ export async function notifyRoomMessage(env: Cloudflare.Env, input: {
     WHERE ticket.event_slug = ? AND assignment.status = 'active'
       AND ticket.status IN ('issued', 'checked_in')
       AND assignment.attendee_id <> ?
-      AND COALESCE(preference.room_messages, 1) = 1
+      AND COALESCE(preference.${preferenceColumn}, 1) = 1
       AND (preference.muted_until IS NULL OR preference.muted_until <= ?)
     LIMIT 2500
   `).bind(input.eventSlug, input.senderAttendeeId, now).all<PushRow>();

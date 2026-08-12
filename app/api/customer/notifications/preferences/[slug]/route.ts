@@ -21,19 +21,20 @@ export async function PATCH(request: Request, context: Context) {
   const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug);
   if (!access) return Response.json({ error: "A valid ticket is required." }, { status: 401 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This notification request was not accepted." }, { status: 403 });
-  const body = await request.json() as { roomMessages?: boolean; mute?: "off" | "1h" | "tonight" };
-  const current = await env.DB.prepare(`SELECT room_messages AS roomMessages FROM notification_preferences WHERE attendee_id = ? AND event_slug = ?`)
-    .bind(access.attendeeId, slug).first<{ roomMessages: number }>();
-  const roomMessages = typeof body.roomMessages === "boolean" ? body.roomMessages : current ? Boolean(current.roomMessages) : true;
+  const body = await request.json() as { enabled?: boolean; roomMessages?: boolean; hostUpdates?: boolean; mute?: "off" | "1h" | "tonight" };
+  const current = await env.DB.prepare(`SELECT room_messages AS roomMessages, host_updates AS hostUpdates FROM notification_preferences WHERE attendee_id = ? AND event_slug = ?`)
+    .bind(access.attendeeId, slug).first<{ roomMessages: number; hostUpdates: number }>();
+  const roomMessages = typeof body.enabled === "boolean" ? body.enabled : typeof body.roomMessages === "boolean" ? body.roomMessages : current ? Boolean(current.roomMessages) : true;
+  const hostUpdates = typeof body.enabled === "boolean" ? body.enabled : typeof body.hostUpdates === "boolean" ? body.hostUpdates : current ? Boolean(current.hostUpdates) : true;
   let mutedUntil: string | null = null;
   if (body.mute === "1h") mutedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   if (body.mute === "tonight") mutedUntil = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
   const now = new Date().toISOString();
   await env.DB.prepare(`
     INSERT INTO notification_preferences (attendee_id, event_slug, room_messages, host_updates, muted_until, updated_at)
-    VALUES (?, ?, ?, 1, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(attendee_id, event_slug) DO UPDATE SET room_messages = excluded.room_messages,
-      muted_until = excluded.muted_until, updated_at = excluded.updated_at
-  `).bind(access.attendeeId, slug, roomMessages ? 1 : 0, mutedUntil, now).run();
-  return Response.json({ roomMessages, mutedUntil }, { headers: { "cache-control": "no-store" } });
+      host_updates = excluded.host_updates, muted_until = excluded.muted_until, updated_at = excluded.updated_at
+  `).bind(access.attendeeId, slug, roomMessages ? 1 : 0, hostUpdates ? 1 : 0, mutedUntil, now).run();
+  return Response.json({ roomMessages, hostUpdates, mutedUntil }, { headers: { "cache-control": "no-store" } });
 }

@@ -55,7 +55,7 @@
 }
 
 /* Soft project pickers: styled where supported, safely native everywhere else. */
-:where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls) select {
+:where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist) select {
   border-radius: 11px;
   box-shadow: none;
   transition: border-color .16s ease, background-color .16s ease;
@@ -64,7 +64,7 @@
   border-color: #8f8b82;
   background-color: #fffefa;
 }
-:where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls) select:focus-visible {
+:where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist) select:focus-visible {
   border-color: #696963;
   outline: 2px solid #696963;
   outline-offset: 2px;
@@ -76,16 +76,9 @@
   box-shadow: none;
 }
 .workspace-jump select:hover { border-color: #6c6c64; background-color: #20211e; }
-.room-notifications__controls select {
-  border-color: #4d4d47;
-  border-radius: 9px;
-  box-shadow: none;
-}
-.room-notifications__controls select:hover { border-color: #696a62; background-color: #232420; }
-
 @supports (appearance: base-select) {
-  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select,
-  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select::picker(select) {
+  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) select,
+  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) select::picker(select) {
     appearance: base-select;
   }
   :where(.workspace-event-picker, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) select::picker(select) {
@@ -98,7 +91,7 @@
     background: #fffdf8;
     box-shadow: none;
   }
-  :where(.workspace-jump, .room-notifications__controls) select::picker(select) {
+  .workspace-jump select::picker(select) {
     min-inline-size: anchor-size(width);
     max-inline-size: min(320px, calc(100vw - 24px));
     margin-block: 5px;
@@ -110,7 +103,7 @@
     box-shadow: none;
   }
   :where(.workspace-event-picker, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) option,
-  :where(.workspace-jump, .room-notifications__controls) option {
+  .workspace-jump option {
     min-height: 38px;
     margin: 2px 0;
     padding: 9px 11px;
@@ -127,26 +120,26 @@
     color: #171713;
     font-weight: 760;
   }
-  :where(.workspace-jump, .room-notifications__controls) option:hover,
-  :where(.workspace-jump, .room-notifications__controls) option:focus { background: #2b2c28; }
-  :where(.workspace-jump, .room-notifications__controls) option:checked { background: #343531; color: #f2efe7; font-weight: 760; }
-  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) option::checkmark {
+  .workspace-jump option:hover,
+  .workspace-jump option:focus { background: #2b2c28; }
+  .workspace-jump option:checked { background: #343531; color: #f2efe7; font-weight: 760; }
+  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) option::checkmark {
     color: var(--orange);
   }
-  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select::picker-icon {
+  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) select::picker-icon {
     color: #79766e;
     transition: rotate .16s ease, color .16s ease;
   }
-  :where(.workspace-jump, .room-notifications__controls) select::picker-icon { color: #aaa9a2; }
-  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select:open::picker-icon {
+  .workspace-jump select::picker-icon { color: #aaa9a2; }
+  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) select:open::picker-icon {
     color: var(--orange);
     rotate: 180deg;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select,
-  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select::picker-icon { transition: none; }
+  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) select,
+  :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .submission-fields) select::picker-icon { transition: none; }
 }
 
 /* The secondary customer menu is a disclosure, not a stack of pills. */
@@ -503,6 +496,20 @@
   background: currentColor;
 }
 
+/* Operational navigation uses a side marker, never a line beneath the words. */
+.ops-page .curation-nav nav a.active::after,
+.curation-page .curation-nav nav a.active::after,
+.room-ops > aside nav a.active::after { display: none; }
+.ops-page .curation-nav nav a.active::before,
+.curation-page .curation-nav nav a.active::before,
+.room-ops > aside nav a.active::before {
+  content: "";
+  width: 2px;
+  position: absolute;
+  inset: 9px auto 9px 0;
+  background: currentColor;
+}
+
 .status,
 .review-status,
 .order-status {
@@ -682,6 +689,36 @@
   border-bottom-color: var(--ink);
   background: transparent;
 }
+
+.ops-record-list button { position: relative; }
+.ops-record-list button.active::before {
+  content: "";
+  width: 2px;
+  position: absolute;
+  inset: 11px auto 11px 0;
+  background: var(--ink);
+}
+
+.ops-page .ops-main :where(button, input, select, textarea),
+.staff-page .curation-main :where(button, input, select, textarea) {
+  border-radius: 0;
+}
+
+.order-pagination {
+  min-height: 52px;
+  padding: 9px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--flow-line);
+  color: #69675f;
+  font-size: 12px;
+}
+.order-pagination > div { display: flex; align-items: center; gap: 10px; }
+.order-pagination button { min-height: 34px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid #aaa79f; background: transparent; color: var(--ink); font: inherit; font-weight: 700; }
+.order-pagination button:disabled { opacity: .35; }
+.order-pagination b { min-width: 42px; text-align: center; }
 
 .ops-editor,
 .staff-editor,
@@ -1020,6 +1057,9 @@
     bottom: 12px;
     left: 12px;
   }
+
+  .order-pagination { align-items: flex-start; flex-direction: column; }
+  .order-pagination > div { width: 100%; justify-content: space-between; }
 }
 
 @media (prefers-reduced-motion: reduce) {

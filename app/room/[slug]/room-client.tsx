@@ -283,11 +283,10 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
   return (
     <main className="room-page">
       <header className="room-header">
-        <Link href="/my-nights"><ArrowLeft size={17} /> My Nights</Link>
+        <Link href="/my-nights" aria-label="Back to My Nights"><ArrowLeft size={17} /><span>My Nights</span></Link>
         <div><small>The Room</small><strong>{policy?.eventTitle ?? fallbackTitle}</strong><span>{fallbackDate}</span></div>
-        <div className="room-header__activity"><span><Users size={15} /> {online} online</span><button type="button" onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera size={14} /> Flashes · {flashCount}</button></div>
+        <div className="room-header__activity"><span aria-label={`${online} people online`} title={`${online} people online`}><Users size={16} /><b>{online}</b></span><button type="button" className="room-flash-toggle" aria-label={`Open Flashes; ${flashCount} available`} title={`Flashes · ${flashCount}`} onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera size={17} /><b>{flashCount}</b></button><RoomNotifications slug={slug} onNotice={setNotice} /></div>
       </header>
-      <RoomNotifications slug={slug} />
       <section className="room-trust"><BadgeCheck size={16} /><b>Ticket holders only</b><span>{policy?.emergencyReadOnly ? "Host pause active." : policy?.slowModeSeconds ? `Slow mode · ${policy.slowModeSeconds}s` : "No ticket, no lurking. Very civilised."}</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Finding the signal"}</i></section>
       {pinned && <aside className="room-pinned"><ShieldCheck size={17} /><div><small>The Host has spoken</small><p>{pinned.content}</p></div></aside>}
       {notice && <button className="room-notice" onClick={() => setNotice("")}>{notice}<span>Dismiss</span></button>}
