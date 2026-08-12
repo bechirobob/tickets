@@ -8,7 +8,9 @@ import {
   createPasswordRecord,
   createStaffSession,
   hasPermission,
+  PASSWORD_ITERATIONS,
   readAdminSession,
+  verifyStaffPassword,
   type StaffRole,
 } from "../lib/admin-session";
 
@@ -43,6 +45,21 @@ async function event(slug: string, title: string) {
 }
 
 describe("named staff access", () => {
+  it("creates and verifies the production-strength password record in the Workers runtime", async () => {
+    const record = await createPasswordRecord(password);
+    expect(record.iterations).toBe(PASSWORD_ITERATIONS);
+    await expect(verifyStaffPassword(password, {
+      passwordHash: record.hash,
+      passwordSalt: record.salt,
+      passwordIterations: record.iterations,
+    })).resolves.toBe(true);
+    await expect(verifyStaffPassword("WrongPassword9", {
+      passwordHash: record.hash,
+      passwordSalt: record.salt,
+      passwordIterations: record.iterations,
+    })).resolves.toBe(false);
+  });
+
   it("uses role permissions and opaque, revocable server-side sessions", async () => {
     expect(hasPermission({ role: "owner" }, "accounts.manage")).toBe(true);
     expect(hasPermission({ role: "finance" }, "orders.manage")).toBe(true);

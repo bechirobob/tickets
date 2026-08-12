@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import CustomerDock from "./customer-dock";
 import PwaRegistration from "./pwa-registration";
 import "./globals.css";
+import "./access-polish.css";
 
 export const metadata: Metadata = {
   title: "BeCore Tickets — Accra's party shortlist",

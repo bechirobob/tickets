@@ -29,11 +29,29 @@ export default function BootstrapForm() {
     }
   }
 
-  return <form className="admin-login__form" onSubmit={submit}>
-    <label>Current BeCore access key<input name="accessKey" type="password" autoComplete="off" required /></label>
-    <label>Your name<input name="displayName" autoComplete="name" required minLength={2} maxLength={100} /></label>
-    <label>Owner email<input name="email" type="email" autoComplete="username" required /></label>
-    <label>New owner password<input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={256} /></label>
+  return <form className="admin-login__form admin-bootstrap__form" onSubmit={submit}>
+    <div className="admin-form-field admin-form-field--wide">
+      <label htmlFor="owner-setup-key">One-time setup key</label>
+      <input id="owner-setup-key" name="accessKey" type="password" autoComplete="off" required />
+      <small>This is the hidden Cloudflare secret named <code>ADMIN_ACCESS_KEY</code>, not an account password.</small>
+      <details className="admin-bootstrap__key-help">
+        <summary>Where do I get this?</summary>
+        <p>In Cloudflare, open <b>Workers &amp; Pages → becore-tickets → Settings → Variables and Secrets</b>. Secrets cannot be viewed again; if nobody saved this one, replace <code>ADMIN_ACCESS_KEY</code> with a fresh private value and enter that value here.</p>
+      </details>
+    </div>
+    <div className="admin-form-field">
+      <label htmlFor="owner-name">Your name</label>
+      <input id="owner-name" name="displayName" autoComplete="name" required minLength={2} maxLength={100} />
+    </div>
+    <div className="admin-form-field">
+      <label htmlFor="owner-email">Owner email</label>
+      <input id="owner-email" name="email" type="email" autoComplete="username" required />
+    </div>
+    <div className="admin-form-field admin-form-field--wide">
+      <label htmlFor="owner-password">New owner password</label>
+      <input id="owner-password" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={256} />
+      <small>Use 12 or more characters with upper-case, lower-case and a number.</small>
+    </div>
     {error ? <p role="alert">{error}</p> : null}
     <button disabled={busy}>{busy ? "Creating owner…" : "Create owner account"}</button>
   </form>;

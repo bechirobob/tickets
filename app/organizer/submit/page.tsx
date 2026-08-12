@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LogIn } from "lucide-react";
 import PartySubmissionForm from "./submission-form";
 
 export default function SubmitPartyPage() {
@@ -7,7 +7,10 @@ export default function SubmitPartyPage() {
     <main className="submission-page">
       <header className="submission-header">
         <Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link>
-        <div><Link href="/organizer/workspace">Organiser sign in</Link><Link href="/"><ArrowLeft size={15} /> Back to events</Link></div>
+        <nav className="submission-header__actions" aria-label="Organiser access">
+          <Link href="/" className="submission-header__back"><ArrowLeft size={14} /> <span>Back to events</span></Link>
+          <Link href="/organizer/workspace" className="submission-header__signin"><LogIn size={14} /> <span>Organiser sign in</span></Link>
+        </nav>
       </header>
       <section className="submission-intro">
         <p className="night-kicker"><span /> Party submissions</p>
