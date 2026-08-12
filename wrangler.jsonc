@@ -12,6 +12,7 @@
   ],
   "vars": {
     "EMAIL_FROM": "BeCore Tickets <tickets@tickets.becoreops.com>",
+    "OPS_ALERT_EMAIL": "tickets@becoreops.com",
     "ENVIRONMENT": "production",
     "VAPID_SUBJECT": "mailto:tickets@tickets.becoreops.com"
   },

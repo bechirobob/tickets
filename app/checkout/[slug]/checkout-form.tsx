@@ -17,7 +17,10 @@ const paymentNetworks = [
 export default function CheckoutForm({ slug, event }: { slug: string; event: CuratedEvent }) {
   const params = useSearchParams();
   const [quantity, setQuantity] = useState(1);
-  const [selectedTierId, setSelectedTierId] = useState(() => event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id);
+  const [selectedTierId, setSelectedTierId] = useState(() => {
+    const requested = params.get("tier");
+    return event.ticketTiers.find((tier) => tier.status === "available" && (!requested || tier.id === requested))?.id ?? event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id;
+  });
   const [network, setNetwork] = useState("mtn");
   const [message, setMessage] = useState("");
   const [fullName, setFullName] = useState("");
@@ -25,6 +28,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
   const [phone, setPhone] = useState("");
   const [feePercent, setFeePercent] = useState(7.5);
   const [isPaying, setIsPaying] = useState(false);
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false);
   const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
   const ticketTotalMinor = quantity * selectedTier.priceMinor;
   const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
@@ -49,6 +53,10 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       setMessage("We need the boring three before the fun one: your name, a valid email and a reachable phone number.");
       return;
     }
+    if (!acceptedPolicies) {
+      setMessage("One tiny grown-up moment: accept the ticket and refund terms before we send the MoMo prompt.");
+      return;
+    }
     setIsPaying(true);
     setMessage("Sending the MoMo prompt to your phone…");
     const controller = new AbortController();
@@ -57,7 +65,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, offer: params.get("offer"), promoterCode: params.get("ref") }),
+        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref") }),
         signal: controller.signal,
       });
       const data = await response.json() as { authorizationUrl?: string; nextUrl?: string; error?: string };
@@ -145,6 +153,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
               </button>
             ))}
           </div>
+          <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>. The accepted versions stay attached to this order.</span></label>
         </section>
 
         <aside className="order-summary">
@@ -157,7 +166,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying}>{isPaying ? "Making it official…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
+          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying || !acceptedPolicies}>{isPaying ? "Making it official…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
         </aside>

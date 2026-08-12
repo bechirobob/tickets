@@ -140,7 +140,7 @@ export default function PartySubmissionForm() {
       <section>
         <div className="submission-step"><b>03</b><span>The proof</span></div>
         <label className="poster-upload"><Upload size={20} /><span><b>Upload the poster or key visual</b><small>JPG, PNG or WebP · up to 8 MB · prepared automatically</small></span><input name="poster" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
-        <p className="submission-consent">Submitting does not guarantee placement. If approved, BeCore may edit customer-facing copy for clarity and tone; the organiser remains responsible for accurate event, venue and refund information.</p>
+        <label className="submission-consent submission-consent--check"><input name="acceptedPolicies" value="yes" type="checkbox" required /><span>I accept the <a href="/terms#organizer" target="_blank">organiser agreement</a> and <a href="/privacy" target="_blank">privacy notice</a>. Submitting does not guarantee placement; the organiser remains responsible for accurate event, venue and refund information.</span></label>
       </section>
 
       <div className="submission-submit">

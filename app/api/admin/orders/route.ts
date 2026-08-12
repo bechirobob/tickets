@@ -1,6 +1,7 @@
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { issueRecoveryGrant } from "../../../../lib/email-delivery";
 import { deliverConfirmedOrder, expireReservations, initiatePaystackRefund, runDailyReconciliation, verifyAndFulfill } from "../../../../lib/payment-operations";
+import { buildDisputeEvidence, resolvePaystackDispute } from "../../../../lib/operational-finance";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     SELECT orders.id, orders.reference, orders.event_slug AS eventSlug,
            COALESCE(event.title, orders.event_slug) AS eventTitle,
            orders.ticket_type AS ticketType, orders.unit_quantity AS unitQuantity,
-           orders.quantity, orders.total_amount_minor AS totalAmountMinor,
+           orders.quantity, orders.total_amount_minor AS totalAmountMinor, orders.refunded_amount_minor AS refundedAmountMinor,
            orders.currency, orders.customer_email AS customerEmail,
            orders.customer_phone AS customerPhone, orders.customer_name AS customerName,
            orders.status, orders.paystack_status AS paystackStatus,
@@ -57,8 +58,8 @@ export async function POST(request: Request) {
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session || !hasPermission(session, "orders.manage")) return Response.json({ error: "Finance access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
-  const body = await request.json() as { action?: string; orderId?: string; reason?: string; periodStart?: string; periodEnd?: string };
-  if (!env.PAYSTACK_SECRET_KEY && ["verify", "refund", "reconcile"].includes(body.action ?? "")) return Response.json({ error: "Paystack credentials are not configured." }, { status: 503 });
+  const body = await request.json() as { action?: string; orderId?: string; reason?: string; periodStart?: string; periodEnd?: string; amountMinor?: number; ticketIds?: string[]; disputeId?: string; resolution?: "merchant-accepted" | "declined" };
+  if (!env.PAYSTACK_SECRET_KEY && ["verify", "refund", "reconcile", "dispute_resolve"].includes(body.action ?? "")) return Response.json({ error: "Paystack credentials are not configured." }, { status: 503 });
   try {
     if (body.action === "expire") {
       const result = await expireReservations(env.DB);
@@ -75,9 +76,21 @@ export async function POST(request: Request) {
     }
     if (body.action === "refund") {
       if (!body.orderId) return Response.json({ error: "Choose an order." }, { status: 400 });
-      const result = await initiatePaystackRefund(env.DB, { orderId: body.orderId, actor: `${session.actor} <${session.email}>`, reason: body.reason ?? "", secret: env.PAYSTACK_SECRET_KEY });
+      const result = await initiatePaystackRefund(env.DB, { orderId: body.orderId, actor: `${session.actor} <${session.email}>`, reason: body.reason ?? "", secret: env.PAYSTACK_SECRET_KEY, amountMinor: body.amountMinor, ticketIds: body.ticketIds });
       await recordAudit(env.DB, { session, action: "payments.refund_requested", targetType: "order", targetId: body.orderId, outcome: "success", requestId: requestMetadata(request).requestId });
       return Response.json(result);
+    }
+    if (body.action === "dispute_evidence") {
+      const evidence = await buildDisputeEvidence(env.DB, body.disputeId ?? "");
+      await recordAudit(env.DB, { session, action: "payments.dispute_evidence", targetType: "dispute", targetId: body.disputeId, outcome: "success", requestId: requestMetadata(request).requestId });
+      return Response.json({ evidence });
+    }
+    if (body.action === "dispute_resolve") {
+      const dispute = await env.DB.prepare("SELECT paystack_dispute_id AS providerId FROM payment_disputes WHERE id = ? LIMIT 1").bind(body.disputeId ?? "").first<{ providerId: string | null }>();
+      if (!dispute?.providerId) throw new Error("The provider dispute reference is missing.");
+      const result = await resolvePaystackDispute(env.PAYSTACK_SECRET_KEY, { providerDisputeId: dispute.providerId, resolution: body.resolution === "merchant-accepted" ? "merchant-accepted" : "declined" });
+      await recordAudit(env.DB, { session, action: "payments.dispute_resolved", targetType: "dispute", targetId: body.disputeId, outcome: "success", detail: body.resolution, requestId: requestMetadata(request).requestId });
+      return Response.json({ result });
     }
     if (body.action === "resend") {
       const order = await orderForDelivery(env.DB, body.orderId ?? "");

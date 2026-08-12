@@ -2,6 +2,7 @@ import { getDb } from "../../../db";
 import { partySubmissions } from "../../../db/schema";
 import { hashToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../lib/admin-session";
 import { enforceRateLimit } from "../../../lib/security-controls";
+import { organizerPolicyKeys, recordPolicyConsents } from "../../../lib/policies";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
     if (String(form.get("website") ?? "").trim()) {
       return Response.json({ accepted: true }, { status: 202 });
     }
+    if (form.get("acceptedPolicies") !== "yes") return Response.json({ error: "Accept the organiser agreement before submitting." }, { status: 400 });
     const { env } = await import("cloudflare:workers");
     const contactEmail = String(form.get("contactEmail") ?? "").trim().toLowerCase();
     const metadata = requestMetadata(request);
@@ -133,6 +135,7 @@ export async function POST(request: Request) {
     try {
       const db = await getDb();
       await db.insert(partySubmissions).values(record);
+      await recordPolicyConsents({ db: env.DB, subjectType: "organizer_submission", subjectId: id, policyKeys: organizerPolicyKeys, actorEmail: contactEmail, ip: metadata.ip, userAgent: metadata.userAgent, acceptedAt: now });
     } catch (error) {
       console.error(JSON.stringify({ message: "party submission save failed", error: error instanceof Error ? error.message : String(error) }));
       return Response.json({ error: "The submission could not be saved. Please try again." }, { status: 500 });

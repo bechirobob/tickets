@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Clock3, Flag, ImagePlus, ShieldCheck, Trash2, X } from "lucide-react";
+import { Camera, CameraIcon, Clock3, Flag, RefreshCw, ShieldCheck, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type RoomFlash = {
@@ -42,7 +42,11 @@ export default function FlashesPanel({
   const [reporting, setReporting] = useState<RoomFlash | null>(null);
   const [reportReason, setReportReason] = useState("nonconsensual");
   const [reportDetails, setReportDetails] = useState("");
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraNotice, setCameraNotice] = useState("");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const load = useCallback(async () => {
     if (readOnly) {
@@ -72,14 +76,68 @@ export default function FlashesPanel({
     return () => window.clearTimeout(timer);
   }, [load, refreshKey]);
   useEffect(() => () => { if (prepared) URL.revokeObjectURL(prepared.previewUrl); }, [prepared]);
-  useEffect(() => { if (captureRequest > 0 && !readOnly) inputRef.current?.click(); }, [captureRequest, readOnly]);
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOpen(false);
+  }, []);
+
+  const openCamera = useCallback(async (nextFacing: "user" | "environment" = facingMode) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setNotice("This browser cannot open a live camera. Try the installed app or a current phone browser.");
+      return;
+    }
+    stopCamera();
+    setCameraNotice("");
+    setCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: nextFacing }, width: { ideal: 1280 }, height: { ideal: 1920 } } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch {
+      setCameraNotice("Camera access was blocked. Allow it in browser settings, then try again.");
+    }
+  }, [facingMode, stopCamera]);
+
+  useEffect(() => { if (captureRequest < 1 || readOnly) return; const timer = window.setTimeout(() => void openCamera(), 0); return () => window.clearTimeout(timer); }, [captureRequest, openCamera, readOnly]);
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
+  async function flipCamera() {
+    const next = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(next);
+    await openCamera(next);
+  }
+
+  async function capturePhoto() {
+    const video = videoRef.current;
+    if (!video || video.videoWidth < 1 || video.videoHeight < 1) return;
+    const maximum = 1600;
+    const scale = Math.min(1, maximum / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    if (facingMode === "user") {
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+    if (!blob) { setCameraNotice("The camera missed that one. Take it again."); return; }
+    stopCamera();
+    choosePhoto(new File([blob], "flash.jpg", { type: "image/jpeg" }));
+  }
 
   function choosePhoto(file: File | undefined) {
     if (!file) return;
     if (prepared) URL.revokeObjectURL(prepared.previewUrl);
     setPrepared({ file, previewUrl: URL.createObjectURL(file) });
     setConsent(false);
-    if (inputRef.current) inputRef.current.value = "";
   }
 
   function closePrepared() {
@@ -100,7 +158,7 @@ export default function FlashesPanel({
       if (!response.ok || !result.flash) throw new Error(result.error ?? "This Flash could not be shared.");
       closePrepared();
       setFlashes((current) => current.some((item) => item.id === result.flash?.id) ? current : [result.flash as RoomFlash, ...current]);
-      setNotice("Your Flash is live. It leaves when this Room closes.");
+      setNotice("Sent. The Room gets a closed Flash until someone taps it.");
       void load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "This Flash could not be shared.");
@@ -141,17 +199,22 @@ export default function FlashesPanel({
   const activeViewing = viewing ?? flashes.find((flash) => flash.id === selectedFlashId) ?? null;
 
   return <>
-    <input ref={inputRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} />
     {notice && <button className="flashes-notice room-flash-notice" onClick={() => setNotice("")}>{notice}<span>Dismiss</span></button>}
+
+    {cameraOpen && <div className="flash-modal flash-camera-modal" role="dialog" aria-modal="true" aria-label="Take a Flash">
+      <section className="flash-camera">
+        <header><span><Camera size={15} /> Take a Flash</span><button type="button" onClick={stopCamera} aria-label="Close camera"><X /></button></header>
+        <div className="flash-camera__view"><video ref={videoRef} muted playsInline autoPlay />{cameraNotice ? <p>{cameraNotice}</p> : null}</div>
+        <footer><button type="button" onClick={() => void flipCamera()} aria-label="Flip camera"><RefreshCw size={18} /></button><button type="button" className="flash-shutter" onClick={() => void capturePhoto()} aria-label="Take picture"><span /></button><i>Tap once. Regret nothing.</i></footer>
+      </section>
+    </div>}
 
     {galleryOpen && !readOnly && <div className="flash-modal flash-gallery-modal" role="dialog" aria-modal="true" aria-label="Flashes from this Room">
       <section className="flash-gallery-sheet">
-        <header><div><p className="eyebrow">Only here. Only now.</p><h2>Flashes · {flashes.length}</h2><span><Clock3 size={13} /> Clears {new Date(expiresAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span></div><div><button type="button" onClick={() => inputRef.current?.click()}><ImagePlus size={16} /> Add yours</button><button type="button" onClick={onGalleryClose} aria-label="Close Flashes"><X /></button></div></header>
-        {loading ? <div className="flashes-empty"><Camera /><p>Collecting the evidence…</p></div> : flashes.length === 0 ? <div className="flashes-empty"><Camera /><h3>The camera roll is behaving.</h3><p>Be the first to change that. Tastefully, please.</p><button type="button" onClick={() => inputRef.current?.click()}>Share the first Flash</button></div> : <div className="flashes-grid">
+        <header><div><p className="eyebrow">Only here. Only now.</p><h2>Flashes · {flashes.length}</h2><span><Clock3 size={13} /> Clears {new Date(expiresAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span></div><div><button type="button" onClick={() => void openCamera()}><CameraIcon size={16} /> Take one</button><button type="button" onClick={onGalleryClose} aria-label="Close Flashes"><X /></button></div></header>
+        {loading ? <div className="flashes-empty"><Camera /><p>Collecting the evidence…</p></div> : flashes.length === 0 ? <div className="flashes-empty"><Camera /><h3>The camera is suspiciously quiet.</h3><p>Be the first to change that. Tastefully, please.</p><button type="button" onClick={() => void openCamera()}>Take the first Flash</button></div> : <div className="flashes-grid">
           {flashes.map((flash) => <button type="button" className="flash-card" key={flash.id} onClick={() => setViewing(flash)} aria-label={`Open Flash from ${flash.mine ? "you" : flash.displayName}`}>
-            {/* Private, cookie-authorised media must bypass the public image optimizer. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/rooms/${encodeURIComponent(slug)}/flashes/${encodeURIComponent(flash.id)}`} alt={`Flash shared by ${flash.mine ? "you" : flash.displayName}`} {...guardImage} />
+            <span className="flash-card__closed"><Camera size={24} /><i>Tap to open</i></span>
             <span><b>{flash.mine ? "You" : flash.displayName}</b><time>{new Date(flash.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span>
           </button>)}
         </div>}
@@ -165,9 +228,9 @@ export default function FlashesPanel({
         {/* Local preview never leaves this device until Share is pressed. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={prepared.previewUrl} alt="Your Flash preview" {...guardImage} />
-        <p>We resize it, remove camera and location metadata, and run a safety check. The photo gets in; the coordinates do not.</p>
+        <p>Captured now. We resize it, remove camera metadata and run a safety check. The photo gets in; the coordinates do not.</p>
         <label><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>Everyone pictured is comfortable with this being shared in the Room.</span></label>
-        <button onClick={upload} disabled={!consent || uploading}>{uploading ? "Checking the evidence…" : "Put it in The Room"}</button>
+        <button onClick={upload} disabled={!consent || uploading}>{uploading ? "Checking the evidence…" : "Send Flash"}</button>
       </section>
     </div>}
 

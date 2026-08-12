@@ -181,68 +181,96 @@ export async function deliverConfirmedOrder(db: D1Database, order: OrderRecord, 
   return sendOrderConfirmation(db, order, origin);
 }
 
-export async function initiatePaystackRefund(db: D1Database, input: { orderId: string; actor: string; reason: string; secret: string }) {
+export async function initiatePaystackRefund(db: D1Database, input: { orderId: string; actor: string; reason: string; secret: string; amountMinor?: number; ticketIds?: string[]; batchId?: string }) {
   const order = await db.prepare(`
-    SELECT id, reference, total_amount_minor AS totalAmountMinor, status
+    SELECT id, reference, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor, status
     FROM orders WHERE id = ? LIMIT 1
-  `).bind(input.orderId).first<{ id: string; reference: string; totalAmountMinor: number; status: string }>();
+  `).bind(input.orderId).first<{ id: string; reference: string; totalAmountMinor: number; refundedAmountMinor: number; status: string }>();
   if (!order) throw new Error("Order not found.");
-  if (order.status !== "paid" && order.status !== "requires_refund") throw new Error("Only a paid order can be refunded.");
-  const checkedIn = await db.prepare("SELECT COUNT(*) AS count FROM tickets WHERE order_id = ? AND status = 'checked_in'")
-    .bind(order.id).first<{ count: number }>();
+  if (!["paid", "requires_refund", "refund_pending"].includes(order.status)) throw new Error("Only a paid order can be refunded.");
+  const ticketIds = [...new Set((input.ticketIds ?? []).filter((value) => typeof value === "string" && value.length > 0))];
+  const ticketFilter = ticketIds.length ? `AND id IN (${ticketIds.map(() => "?").join(",")})` : "";
+  const checkedIn = await db.prepare(`SELECT COUNT(*) AS count FROM tickets WHERE order_id = ? AND status = 'checked_in' ${ticketFilter}`)
+    .bind(order.id, ...ticketIds).first<{ count: number }>();
   if ((checkedIn?.count ?? 0) > 0 && order.status !== "requires_refund") throw new Error("A checked-in order needs finance review before refunding.");
+  if (ticketIds.length) {
+    const matched = await db.prepare(`SELECT COUNT(*) AS count FROM tickets WHERE order_id = ? AND id IN (${ticketIds.map(() => "?").join(",")}) AND status IN ('issued', 'voided')`)
+      .bind(order.id, ...ticketIds).first<{ count: number }>();
+    if ((matched?.count ?? 0) !== ticketIds.length) throw new Error("One of the selected tickets cannot be refunded.");
+  }
   const reason = input.reason.trim().slice(0, 500);
   if (reason.length < 8) throw new Error("Add a clear refund reason.");
+  const remaining = Math.max(0, order.totalAmountMinor - order.refundedAmountMinor);
+  const amountMinor = input.amountMinor ?? remaining;
+  if (!Number.isInteger(amountMinor) || amountMinor < 1 || amountMinor > remaining) throw new Error("Choose a refund amount within the remaining paid balance.");
+  const fullRemainingRefund = amountMinor === remaining;
   const refundId = crypto.randomUUID();
   const now = new Date().toISOString();
   const response = await fetch("https://api.paystack.co/refund", {
     method: "POST",
     headers: { authorization: `Bearer ${input.secret}`, "content-type": "application/json" },
-    body: JSON.stringify({ transaction: order.reference, amount: order.totalAmountMinor, currency: "GHS", customer_note: reason, merchant_note: `${input.actor}: ${reason}` }),
+    body: JSON.stringify({ transaction: order.reference, amount: amountMinor, currency: "GHS", customer_note: reason, merchant_note: `${input.actor}: ${reason}` }),
   });
   const payload = await response.json() as { status?: boolean; message?: string; data?: { id?: number | string; status?: string } };
   if (!response.ok || !payload.status) {
     await db.prepare(`
-      INSERT INTO payment_refunds (id, order_id, amount_minor, status, reason, requested_by, requested_at, updated_at, failure_reason)
-      VALUES (?, ?, ?, 'failed', ?, ?, ?, ?, ?)
-    `).bind(refundId, order.id, order.totalAmountMinor, reason, input.actor, now, now, payload.message ?? "Paystack rejected the refund.").run();
+      INSERT INTO payment_refunds (id, order_id, amount_minor, status, reason, requested_by, requested_at, updated_at, failure_reason, ticket_ids_json, batch_id)
+      VALUES (?, ?, ?, 'failed', ?, ?, ?, ?, ?, ?, ?)
+    `).bind(refundId, order.id, amountMinor, reason, input.actor, now, now, payload.message ?? "Paystack rejected the refund.", ticketIds.length ? JSON.stringify(ticketIds) : null, input.batchId ?? null).run();
     throw new Error(payload.message ?? "Paystack rejected the refund.");
   }
   const providerStatus = payload.data?.status === "processed" ? "processed" : payload.data?.status === "processing" ? "processing" : "pending";
   await db.batch([
     db.prepare(`
-      INSERT INTO payment_refunds (id, order_id, paystack_refund_id, amount_minor, status, reason, requested_by, requested_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(refundId, order.id, payload.data?.id ? String(payload.data.id) : null, order.totalAmountMinor, providerStatus, reason, input.actor, now, now),
-    db.prepare("UPDATE orders SET status = 'refund_pending', refund_status = ?, payment_updated_at = ? WHERE id = ?")
-      .bind(providerStatus, now, order.id),
-    db.prepare("UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'").bind(order.id),
+      INSERT INTO payment_refunds (id, order_id, paystack_refund_id, amount_minor, status, reason, requested_by, requested_at, updated_at, ticket_ids_json, batch_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(refundId, order.id, payload.data?.id ? String(payload.data.id) : null, amountMinor, providerStatus, reason, input.actor, now, now, ticketIds.length ? JSON.stringify(ticketIds) : null, input.batchId ?? null),
+    db.prepare("UPDATE orders SET status = CASE WHEN ? THEN 'refund_pending' ELSE status END, refund_status = ?, payment_updated_at = ? WHERE id = ?")
+      .bind(fullRemainingRefund ? 1 : 0, providerStatus, now, order.id),
+    ticketIds.length
+      ? db.prepare(`UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued' AND id IN (${ticketIds.map(() => "?").join(",")})`).bind(order.id, ...ticketIds)
+      : fullRemainingRefund ? db.prepare("UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'").bind(order.id) : db.prepare("SELECT 1"),
   ]);
-  return { refundId, status: providerStatus };
+  return { refundId, status: providerStatus, amountMinor, full: fullRemainingRefund };
 }
 
 export async function applyRefundWebhook(db: D1Database, input: { eventType: string; reference: string; amountMinor: number; providerRefundId?: string | null; failureReason?: string | null }) {
   const now = new Date().toISOString();
-  const order = await db.prepare("SELECT id, total_amount_minor AS totalAmountMinor FROM orders WHERE reference = ? LIMIT 1")
-    .bind(input.reference).first<{ id: string; totalAmountMinor: number }>();
+  const order = await db.prepare("SELECT id, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor FROM orders WHERE reference = ? LIMIT 1")
+    .bind(input.reference).first<{ id: string; totalAmountMinor: number; refundedAmountMinor: number }>();
   if (!order) return;
+  const refund = await db.prepare(`
+    SELECT id, amount_minor AS amountMinor, ticket_ids_json AS ticketIdsJson
+    FROM payment_refunds WHERE order_id = ?
+      AND (? IS NULL OR paystack_refund_id = ?)
+      AND status IN ('pending', 'processing')
+    ORDER BY requested_at DESC LIMIT 1
+  `).bind(order.id, input.providerRefundId ?? null, input.providerRefundId ?? null).first<{ id: string; amountMinor: number; ticketIdsJson: string | null }>();
+  const appliedAmount = Math.min(input.amountMinor || refund?.amountMinor || order.totalAmountMinor, order.totalAmountMinor - order.refundedAmountMinor);
+  const ticketIds = refund?.ticketIdsJson ? JSON.parse(refund.ticketIdsJson) as string[] : [];
   const next = input.eventType === "refund.processed" ? "processed" : input.eventType === "refund.failed" ? "failed" : input.eventType === "refund.processing" ? "processing" : "pending";
   const statements: D1PreparedStatement[] = [
-    db.prepare(`UPDATE payment_refunds SET status = ?, failure_reason = ?, updated_at = ? WHERE order_id = ? AND status IN ('pending', 'processing')`)
-      .bind(next, input.failureReason ?? null, now, order.id),
+    db.prepare(`UPDATE payment_refunds SET status = ?, failure_reason = ?, updated_at = ? WHERE id = COALESCE(?, id) AND order_id = ? AND status IN ('pending', 'processing')`)
+      .bind(next, input.failureReason ?? null, now, refund?.id ?? null, order.id),
     db.prepare("UPDATE orders SET refund_status = ?, payment_updated_at = ? WHERE id = ?").bind(next, now, order.id),
   ];
   if (next === "processed") {
     statements.push(
-      db.prepare("UPDATE orders SET status = 'refunded', refunded_amount_minor = ?, refund_status = 'processed' WHERE id = ?")
-        .bind(Math.min(input.amountMinor || order.totalAmountMinor, order.totalAmountMinor), order.id),
-      db.prepare("UPDATE tickets SET status = 'refunded' WHERE order_id = ? AND status <> 'checked_in'").bind(order.id),
-      db.prepare("UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ?").bind(now, order.id),
+      db.prepare("UPDATE orders SET status = CASE WHEN refunded_amount_minor + ? >= total_amount_minor THEN 'refunded' ELSE 'paid' END, refunded_amount_minor = MIN(total_amount_minor, refunded_amount_minor + ?), refund_status = 'processed' WHERE id = ?")
+        .bind(appliedAmount, appliedAmount, order.id),
+      ticketIds.length
+        ? db.prepare(`UPDATE tickets SET status = 'refunded' WHERE order_id = ? AND id IN (${ticketIds.map(() => "?").join(",")}) AND status <> 'checked_in'`).bind(order.id, ...ticketIds)
+        : appliedAmount + order.refundedAmountMinor >= order.totalAmountMinor ? db.prepare("UPDATE tickets SET status = 'refunded' WHERE order_id = ? AND status <> 'checked_in'").bind(order.id) : db.prepare("SELECT 1"),
+      appliedAmount + order.refundedAmountMinor >= order.totalAmountMinor
+        ? db.prepare("UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ?").bind(now, order.id)
+        : db.prepare("SELECT 1"),
     );
   } else if (next === "failed") {
     statements.push(
       db.prepare("UPDATE orders SET status = 'paid', refund_status = 'failed' WHERE id = ?").bind(order.id),
-      db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided'").bind(order.id),
+      ticketIds.length
+        ? db.prepare(`UPDATE tickets SET status = 'issued' WHERE order_id = ? AND id IN (${ticketIds.map(() => "?").join(",")}) AND status = 'voided'`).bind(order.id, ...ticketIds)
+        : db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided'").bind(order.id),
     );
   }
   await db.batch(statements);

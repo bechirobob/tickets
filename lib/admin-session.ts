@@ -12,7 +12,8 @@ export type StaffPermission =
   | "gate.scan"
   | "gate.undo"
   | "rooms.moderate"
-  | "organizer.workspace";
+  | "organizer.workspace"
+  | "operations.view";
 
 export type AdminSession = {
   sessionId: string;
@@ -36,12 +37,13 @@ type StaffAccountRecord = {
   status: "active" | "disabled";
   failedLoginCount: number;
   lockedUntil: string | null;
+  mfaRequired: number;
 };
 
 const permissions: Record<StaffRole, readonly StaffPermission[]> = {
-  owner: ["accounts.manage", "curation.manage", "events.manage", "orders.manage", "fees.manage", "gate.scan", "gate.undo", "rooms.moderate", "organizer.workspace"],
-  curator: ["curation.manage", "events.manage"],
-  finance: ["orders.manage", "fees.manage"],
+  owner: ["accounts.manage", "curation.manage", "events.manage", "orders.manage", "fees.manage", "gate.scan", "gate.undo", "rooms.moderate", "organizer.workspace", "operations.view"],
+  curator: ["curation.manage", "events.manage", "operations.view"],
+  finance: ["orders.manage", "fees.manage", "operations.view"],
   organizer: ["organizer.workspace"],
   gate: ["gate.scan"],
   moderator: ["rooms.moderate"],
@@ -136,18 +138,20 @@ export async function hasEventAssignment(db: D1Database, session: AdminSession, 
 export async function createStaffSession(
   db: D1Database,
   account: Pick<StaffAccountRecord, "id">,
-  metadata: { ip?: string | null; userAgent?: string | null } = {},
+  metadata: { ip?: string | null; userAgent?: string | null; deviceLabel?: string | null; mfaVerified?: boolean } = {},
 ): Promise<string> {
   const token = secureToken();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
   await db.prepare(`
-    INSERT INTO staff_sessions (id, account_id, token_hash, expires_at, created_at, last_seen_at, ip_hash, user_agent_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO staff_sessions (id, account_id, token_hash, expires_at, created_at, last_seen_at, ip_hash, user_agent_hash, device_label, mfa_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     crypto.randomUUID(), account.id, await hashToken(token), expiresAt, now.toISOString(), now.toISOString(),
     metadata.ip ? await hashToken(metadata.ip) : null,
     metadata.userAgent ? await hashToken(metadata.userAgent) : null,
+    metadata.deviceLabel?.slice(0, 120) ?? null,
+    metadata.mfaVerified ? now.toISOString() : null,
   ).run();
   return token;
 }
@@ -190,7 +194,8 @@ export async function authenticateStaff(db: D1Database, email: string, password:
     SELECT id, normalized_email AS normalizedEmail, display_name AS displayName, role,
            password_hash AS passwordHash, password_salt AS passwordSalt,
            password_iterations AS passwordIterations, must_change_password AS mustChangePassword,
-           status, failed_login_count AS failedLoginCount, locked_until AS lockedUntil
+           status, failed_login_count AS failedLoginCount, locked_until AS lockedUntil,
+           mfa_required AS mfaRequired
     FROM staff_accounts WHERE normalized_email = ? LIMIT 1
   `).bind(normalizedEmail).first<StaffAccountRecord>();
   if (!account) return { account: null, reason: "invalid" };

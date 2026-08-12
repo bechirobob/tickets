@@ -256,9 +256,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
             return <article key={`flash:${flash.id}`} className={`room-message room-flash-message ${flash.mine ? "own" : ""}`}>
               {!flash.mine && <div className="room-avatar" aria-hidden="true">{flash.displayName.slice(0, 1).toUpperCase()}</div>}
               <button type="button" onClick={() => setSelectedFlashId(flash.id)} aria-label={`Open Flash from ${flash.mine ? "you" : flash.displayName}`}>
-                {/* Private, cookie-authorised media bypasses the public image pipeline. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/rooms/${encodeURIComponent(slug)}/flashes/${encodeURIComponent(flash.id)}`} alt={`Flash shared by ${flash.mine ? "you" : flash.displayName}`} draggable={false} />
+                <span className="room-flash-message__closed"><Camera size={22} /><b>Flash</b><i>Tap to open</i></span>
                 <span><b>{flash.mine ? "You" : flash.displayName}</b><time>{new Date(flash.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span>
                 <small><Camera size={11} /> Gone when the Room closes</small>
               </button>

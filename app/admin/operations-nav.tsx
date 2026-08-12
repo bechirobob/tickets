@@ -6,6 +6,7 @@ import { LogOut, ShieldCheck } from "lucide-react";
 import type { StaffRole } from "../../lib/admin-session";
 
 const links = [
+  { href: "/admin/operations", label: "Event operations", roles: ["owner", "curator", "finance"] },
   { href: "/admin", label: "Submission queue", roles: ["owner", "curator"] },
   { href: "/admin/events", label: "Events & inventory", roles: ["owner", "curator"] },
   { href: "/admin/promoters", label: "Promoter links", roles: ["owner", "curator"] },

@@ -56,6 +56,6 @@ export default async function Home() {
       </div>
     </section>
 
-    <footer className="night-footer compact-footer"><BrandMark /><p>Editorial nightlife outside. Private event access inside.</p><div><Link href="/events">The Drop</Link><Link href="/my-nights">My Nights</Link><Link href="/organizer/submit">Organisers</Link><Link href="/privacy">Privacy</Link></div></footer>
+    <footer className="night-footer compact-footer"><BrandMark /><p>Editorial nightlife outside. Private event access inside.</p><div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link></div></footer>
   </main>;
 }
