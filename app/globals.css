@@ -1177,7 +1177,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .preview-event-notice,
 .preview-checkout-note { margin-bottom: 34px; padding: 15px 0; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 18px; border-top: 1px solid #d4a42b; border-bottom: 1px solid #d4a42b; color: #56534c; }
 .preview-event-notice strong,
-.preview-checkout-note strong { color: #9b6512; font-size: 13px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.preview-checkout-note strong { color: #7b4f0e; font-size: 13px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
 .preview-event-notice span,
 .preview-checkout-note span { font-size: 15px; line-height: 1.55; }
 .preview-checkout-note b { color: var(--ink); }

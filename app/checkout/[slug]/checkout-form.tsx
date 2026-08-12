@@ -166,7 +166,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
               ))}
             </div> : <div className="card-payment-detail">
               <CreditCard size={24} aria-hidden="true" />
-              <div><strong>Visa or Mastercard</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
+              <div><strong>Visa or Mastercard</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
             </div>}
           </div>
           <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>. The accepted versions stay attached to this order.</span></label>
