@@ -1,6 +1,13 @@
 name: D1 recovery rehearsal
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "drizzle/**"
+      - "scripts/rehearse-d1-recovery.sh"
+      - ".github/workflows/d1-recovery-rehearsal.yml"
   schedule:
     - cron: "15 4 * * 0"
   workflow_dispatch:
