@@ -1,6 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { curatedEventRecords, curationAuditEvents, eventHosts, eventTicketTiers, hosts, partySubmissions } from "../../../../db/schema";
+import { curatedEventRecords, curationAuditEvents, eventHosts, eventTicketTiers, hosts, partySubmissions, staffAccounts, staffEventAssignments } from "../../../../db/schema";
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 
 export const dynamic = "force-dynamic";
@@ -159,7 +159,19 @@ export async function PATCH(request: Request) {
     const connectHost = db.insert(eventHosts).values({
       eventSlug, hostId, role: "Host", isPrimary: true, createdAt: now,
     }).onConflictDoNothing({ target: [eventHosts.eventSlug, eventHosts.hostId] });
-    await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, publishHost, connectHost]);
+    const [linkedOrganizer] = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+      eq(staffAccounts.normalizedEmail, current.contactEmail.trim().toLowerCase()),
+      eq(staffAccounts.role, "organizer"),
+      eq(staffAccounts.status, "active"),
+    )).limit(1);
+    if (linkedOrganizer) {
+      const connectOrganizer = db.insert(staffEventAssignments).values({
+        accountId: linkedOrganizer.id, eventSlug, assignedBy: actor.accountId, assignedAt: now,
+      }).onConflictDoNothing({ target: [staffEventAssignments.accountId, staffEventAssignments.eventSlug] });
+      await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, publishHost, connectHost, connectOrganizer]);
+    } else {
+      await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, publishHost, connectHost]);
+    }
   } else {
     await db.batch([updateSubmission, addAuditEvent]);
   }

@@ -156,6 +156,52 @@ describe("named staff access", () => {
       .bind(`test-${suffix}`).first()).toMatchObject({ actorId: organizer.id, action: "organizer.event_details_updated", targetId: assignedSlug });
   });
 
+  it("links an organiser's complete submission record by the verified account email", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const organizer = await staff("organizer", `identity-${suffix}`);
+    const outsider = await staff("organizer", `outsider-${suffix}`);
+    const submissionId = `identity-submission-${suffix}`;
+    const slug = `identity-night-${suffix}`;
+    const now = new Date().toISOString();
+    const startsAt = new Date(Date.now() + 20 * 86_400_000).toISOString();
+    const endsAt = new Date(Date.parse(startsAt) + 5 * 60 * 60 * 1000).toISOString();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO party_submissions (
+        id, organizer_name, contact_name, contact_email, contact_phone, title, concept,
+        venue_name, venue_map_url, area, starts_at, ends_at, vibe, lineup, capacity,
+        price_from_minor, age_restriction, status, event_slug, created_at, updated_at
+      ) VALUES (?, 'Identity Collective', 'Verified Organiser', ?, '+233240000000', 'Identity Night',
+        'A complete event concept long enough to represent a real organiser submission in the test suite.',
+        'Identity Venue', 'https://maps.google.com/identity', 'Accra', ?, ?, 'Alté',
+        'Verified line-up', 400, 15000, '18+', 'published', ?, ?, ?)`)
+        .bind(submissionId, organizer.email, startsAt, endsAt, slug, now, now),
+      env.DB.prepare(`INSERT INTO curated_event_records (
+        id, submission_id, slug, title, venue, venue_map_url, area, starts_at, ends_at, vibe,
+        price_from_minor, capacity, sales_open_at, sales_close_at, age_restriction, lineup,
+        event_state, image_url, curation_note, status, published_at, created_at, updated_at
+      ) VALUES (?, ?, ?, 'Identity Night', 'Identity Venue', 'https://maps.google.com/identity', 'Accra', ?, ?,
+        'Alté', 15000, 400, ?, ?, '18+', 'Verified line-up', 'on_sale',
+        'https://example.com/identity.jpg', 'A complete curation note for the verified organiser identity test.', 'published', ?, ?, ?)`)
+        .bind(`identity-event-${suffix}`, submissionId, slug, startsAt, endsAt, now, startsAt, now, now, now),
+    ]);
+
+    const response = await readWorkspace(new Request("https://tickets.becoreops.com/api/organizer/workspace", { headers: { cookie: organizer.cookie } }));
+    expect(response.status).toBe(200);
+    const workspace = await response.json() as { events: Array<{ slug: string }>; submissions: Array<{ id: string; status: string }> };
+    expect(workspace.events).toContainEqual(expect.objectContaining({ slug }));
+    expect(workspace.submissions).toContainEqual(expect.objectContaining({ id: submissionId, status: "published" }));
+
+    const outsiderResponse = await readWorkspace(new Request("https://tickets.becoreops.com/api/organizer/workspace", { headers: { cookie: outsider.cookie } }));
+    expect(JSON.stringify(await outsiderResponse.json())).not.toContain(slug);
+
+    const update = await updateWorkspace(new Request("https://tickets.becoreops.com/api/organizer/workspace", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: organizer.cookie, origin: "https://tickets.becoreops.com" },
+      body: JSON.stringify({ eventSlug: slug, venue: "Identity Venue Updated", venueMapUrl: "https://maps.google.com/identity-updated", lineup: "Verified line-up updated" }),
+    }));
+    expect(update.status).toBe(200);
+  });
+
   it("keeps event, finance and support workspaces separated on the server", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const curator = await staff("curator", `curator-${suffix}`);

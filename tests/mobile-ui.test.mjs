@@ -11,6 +11,7 @@ const submissionUrl = new URL("../app/organizer/submit/page.tsx", import.meta.ur
 const adminSubmissionsUrl = new URL("../app/api/admin/submissions/route.ts", import.meta.url);
 const organizerWorkspaceUrl = new URL("../app/organizer/workspace/organizer-workspace.tsx", import.meta.url);
 const organizerWorkspaceApiUrl = new URL("../app/api/organizer/workspace/route.ts", import.meta.url);
+const helpCentreUrl = new URL("../app/help/help-centre.tsx", import.meta.url);
 const scrollRevealUrl = new URL("../app/scroll-reveal.tsx", import.meta.url);
 const workerUrl = new URL("../worker/index.ts", import.meta.url);
 const customerDockUrl = new URL("../app/customer-dock.tsx", import.meta.url);
@@ -515,6 +516,30 @@ test("approved Hosts and ticket-holder preparation reach only the assigned organ
   assert.match(organizerWorkspace, />Before the Night</u);
   assert.match(organizerWorkspace, /data\.attendeeAnswers\.filter\(\(item\) => item\.eventSlug === selectedSlug\)/u);
   assert.match(css, /\.organizer-answers\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
+});
+
+test("help is searchable by role and organiser records follow the verified submission identity", async () => {
+  const [help, organizerWorkspace, organizerWorkspaceApi, adminSubmissions, css] = await Promise.all([
+    readFile(helpCentreUrl, "utf8"),
+    readFile(organizerWorkspaceUrl, "utf8"),
+    readFile(organizerWorkspaceApiUrl, "utf8"),
+    readFile(adminSubmissionsUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(help, /Search BeCore Help/u);
+  assert.match(help, /"Going out", "Organising", "At the door", "The Room"/u);
+  assert.match(help, /Frequently needed/u);
+  assert.match(help, /verified organiser email used on the submission/u);
+  assert.match(organizerWorkspace, /Your organiser record/u);
+  assert.match(organizerWorkspace, /Submission trail/u);
+  assert.match(organizerWorkspace, /data\.events\.reduce/u);
+  assert.match(organizerWorkspaceApi, /submission\.contact_email = \?/u);
+  assert.match(organizerWorkspaceApi, /WHERE contact_email = \?/u);
+  assert.match(adminSubmissions, /db\.insert\(staffEventAssignments\)/u);
+  assert.match(css, /\.help-page > \.help-centre > \.help-guides\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.help-page > \.help-centre > \.help-guides\s*\{[^}]*grid-template-columns:\s*1fr/su);
+  assert.match(css, /\.organizer-portfolio > div\s*\{[^}]*grid-template-columns:\s*repeat\(5/su);
 });
 
 test("ticket entry uses a protected real scanner and printable QR receipt", async () => {

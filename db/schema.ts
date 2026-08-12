@@ -433,6 +433,7 @@ export const partySubmissions = sqliteTable("party_submissions", {
   updatedAt: text("updated_at").notNull(),
 }, (table) => [
   index("party_submissions_status_idx").on(table.status, table.createdAt),
+  index("party_submissions_contact_email_idx").on(table.contactEmail, table.createdAt),
   uniqueIndex("party_submissions_event_slug_unique").on(table.eventSlug),
 ]);
 
