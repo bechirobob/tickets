@@ -35,3 +35,11 @@
   .admin-bootstrap .admin-login__eyebrow { margin-top: 36px; }
   .admin-bootstrap h1 { font-size: 44px; }
 }
+
+/* Keep iOS from changing the visual viewport when any late-loaded workspace control receives focus. */
+@media (max-width: 700px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  [contenteditable="true"] { font-size: 16px !important; }
+}
