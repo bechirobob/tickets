@@ -132,6 +132,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(carousel, /setInterval|setTimeout/u);
   assert.match(css, /\.room-product-phone__stream > article:nth-child\(4\)\s*\{[^}]*animation-delay:\s*\.3s/su);
   assert.match(home, /className="scene-message__bubble"/u);
+  assert.match(home, /aria-label="VIP ticket holder"/u);
+  assert.match(home, /<Gem size=\{10\}/u);
   assert.match(home, /className="scene-message__reactions"/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
   assert.match(polish, /\.scene-message__reactions\s*\{[^}]*margin:\s*2px 3px 0[^}]*display:\s*flex/su);

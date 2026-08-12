@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, LockKeyhole, Send, Ticket } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, Gem, LockKeyhole, Send, Ticket } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { eventImageSrcSet, eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
@@ -22,7 +22,7 @@ function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string
           <article className="scene-message scene-message--own"><div className="scene-message__body"><div className="scene-message__bubble"><small>You · 9:19 PM</small><p>“Five minutes away” in the spiritual sense.</p></div><div className="scene-message__reactions" aria-label="2 crying reactions"><i>😭</i><b>2</b></div></div></article>
           <article className="scene-message"><span>YA</span><div className="scene-message__body"><div className="scene-message__bubble"><small>Yaw · 9:22 PM</small><p>Okay fine. Leaving now.</p></div><div className="scene-message__reactions" aria-label="3 fire reactions"><i>🔥</i><b>3</b></div></div></article>
         </> : <>
-          <article className="scene-message"><span>AM</span><div className="scene-message__body"><div className="scene-message__bubble"><small>Ama <b className="scene-vip-badge">VIP</b> · 10:42 PM</small><p>Front left is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
+          <article className="scene-message"><span>AM</span><div className="scene-message__body"><div className="scene-message__bubble"><small>Ama <b className="scene-vip-badge" aria-label="VIP ticket holder" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /></b> · 10:42 PM</small><p>Front left is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
           <article className="scene-flash"><img src={eventImageUrl(heroImage, 520)} alt="Flash shared inside The Room" loading="lazy" decoding="async" /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><div className="scene-message__bubble"><small>You · 10:44 PM</small><p>Found you. This set is ridiculous.</p></div><div className="scene-message__reactions" aria-label="5 fire reactions"><i>🔥</i><b>5</b></div></div></article>
           <article className="scene-host scene-host--compact"><BadgeCheck size={14} /><div><small>HOST UPDATE · 10:47 PM</small><p>Last entry moves to Gate 2.</p></div></article>
