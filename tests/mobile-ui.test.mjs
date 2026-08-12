@@ -96,7 +96,8 @@ test("notification history stays behind the verified My Nights entrance", async 
   assert.doesNotMatch(home, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /href="\/notifications"/u);
   assert.match(dock, /!pathname\.startsWith\("\/my-nights"\)[\s\S]*?<MobileNavigation/u);
-  assert.match(myNights, /payload \? <Link className="notification-bell" href="\/notifications"/u);
+  assert.match(myNights, /<Link className="notification-bell" href="\/notifications"/u);
+  assert.doesNotMatch(myNights, /payload \? <Link className="notification-bell"/u);
   assert.match(hub, /className="notification-bell" href="\/notifications"/u);
 });
 
@@ -132,6 +133,9 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(carousel, /setInterval|setTimeout/u);
   assert.match(css, /\.room-product-phone__stream > article:nth-child\(4\)\s*\{[^}]*animation-delay:\s*\.3s/su);
   assert.match(home, /className="scene-message__bubble"/u);
+  assert.match(home, /className="scene-message__meta"/u);
+  assert.doesNotMatch(home, /className="scene-message__bubble"><small/u);
+  assert.equal(home.match(/className="scene-message__bubble"><p>/gu)?.length, 5);
   assert.match(home, /aria-label="VIP ticket holder"/u);
   assert.match(home, /<Gem size=\{10\}/u);
   assert.match(home, /className="scene-message__reactions"/u);
