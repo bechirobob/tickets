@@ -8,6 +8,7 @@ const roomUrl = new URL("../app/room/[slug]/room-client.tsx", import.meta.url);
 const homeUrl = new URL("../app/page.tsx", import.meta.url);
 const aboutUrl = new URL("../app/about/page.tsx", import.meta.url);
 const mobileNavigationUrl = new URL("../app/mobile-navigation.tsx", import.meta.url);
+const roomPreviewCarouselUrl = new URL("../app/room-preview-carousel.tsx", import.meta.url);
 const organizerUrl = new URL("../app/organizer/page.tsx", import.meta.url);
 const submissionUrl = new URL("../app/organizer/submit/page.tsx", import.meta.url);
 const adminSubmissionsUrl = new URL("../app/api/admin/submissions/route.ts", import.meta.url);
@@ -99,10 +100,11 @@ test("notification history stays behind the verified My Nights entrance", async 
 });
 
 test("The Room is promoted as a ticket-locked preview without exposing a public chat", async () => {
-  const [css, home, polish] = await Promise.all([
+  const [css, home, polish, carousel] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(homeUrl, "utf8"),
     readFile(accessPolishUrl, "utf8"),
+    readFile(roomPreviewCarouselUrl, "utf8"),
   ]);
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The night has a Room\./u);
@@ -116,9 +118,17 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
   assert.equal(home.match(/<RoomPhone /gu)?.length, 2);
+  assert.match(home, /<RoomPreviewCarousel>/u);
+  assert.match(home, /aria-roledescription="slide"/u);
   assert.match(css, /\.room-product-scene__phones\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
   assert.match(css, /\.room-product-phone\s*\{[^}]*height:\s*560px[^}]*border-radius:\s*38px/su);
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.room-product-scene__phones\s*\{[^}]*grid-auto-flow:\s*column[^}]*overflow-x:\s*auto/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.room-product-scene__phones\s*\{[^}]*grid-auto-flow:\s*column[^}]*grid-auto-columns:\s*calc\(100vw - 40px\)[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory/su);
+  assert.match(css, /\.room-product-phone\s*\{[^}]*scroll-snap-align:\s*start[^}]*scroll-snap-stop:\s*always/su);
+  assert.match(carousel, /aria-roledescription="carousel"/u);
+  assert.match(carousel, /Swipe to see both sides of the night/u);
+  assert.match(carousel, /Show previous Room preview/u);
+  assert.match(carousel, /Show next Room preview/u);
+  assert.doesNotMatch(carousel, /setInterval|setTimeout/u);
   assert.match(css, /\.room-product-phone__stream > article:nth-child\(4\)\s*\{[^}]*animation-delay:\s*\.3s/su);
   assert.match(home, /className="scene-message__bubble"/u);
   assert.match(home, /className="scene-message__reactions"/u);
