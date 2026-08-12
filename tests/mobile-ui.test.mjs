@@ -732,13 +732,14 @@ test("public browsing is edge-cached without caching private customer journeys",
 });
 
 test("homepage footer stays useful without duplicating the customer dock", async () => {
-  const home = await readFile(homeUrl, "utf8");
+  const [home, css] = await Promise.all([readFile(homeUrl, "utf8"), readFile(cssUrl, "utf8")]);
   assert.match(home, /href="\/admin\/login">Event staff/u);
   assert.match(home, /href="\/organizer\/submit">Organisers/u);
   assert.match(home, /href="\/about">About us/u);
   assert.match(home, /href="\/help">Help/u);
   assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/events">The Drop/u);
   assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/my-nights">My Nights/u);
+  assert.match(css, /\.night-footer > p\s*\{[^}]*color:\s*#898a83/su);
 });
 
 test("Flashes are camera-first and stay closed until tapped", async () => {

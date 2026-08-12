@@ -749,7 +749,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .night-pitch__copy a { min-height: 38px; padding: 0 0 5px; display: inline-flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.75); color: white; font-size: 15px; font-weight: 760; transition: gap .25s ease; }
 .night-pitch__copy a:hover { gap: 14px; }
 .night-footer { min-height: 155px; padding: 38px 4vw; display: grid; grid-template-columns: 1fr 1fr 2fr; align-items: center; gap: 30px; background: var(--night); color: white; }
-.night-footer > p { color: #75766f; font-size: 15px; }
+.night-footer > p { color: #898a83; font-size: 15px; }
 .night-footer > div { display: flex; justify-content: flex-end; gap: 23px; color: #96968f; font-size: 14px; }
 .night-footer > div span { padding-left: 23px; border-left: 1px solid #343531; }
 
