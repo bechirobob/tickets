@@ -388,6 +388,24 @@ test("project dropdowns use a soft progressively enhanced picker", async () => {
   assert.match(css, /\.submission-fields\) select::picker\(select\)/u);
 });
 
+test("the program-wide corner contract prevents square UI boxes", async () => {
+  const [css, polish] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+  ]);
+  const combined = `${css}\n${polish}`;
+  const radiusValues = [...combined.matchAll(/border-radius\s*:\s*([^;}]+)/gu)].map((match) => match[1].trim());
+
+  assert.ok(radiusValues.length > 50, "expected the interface to declare its radius system");
+  for (const value of radiusValues) {
+    assert.doesNotMatch(value, /(?:^|\s)0(?:\.0+)?(?:px|rem|em|%)?(?=\s|$)/u, `square corner found in border-radius: ${value}`);
+  }
+  assert.match(css, /--radius-control:\s*10px[^}]*--radius-picker:\s*11px[^}]*--radius-surface:\s*14px/su);
+  assert.match(css, /\.workspace-event-picker select\s*\{[^}]*border-radius:\s*var\(--radius-picker\)/su);
+  assert.match(polish, /:where\(button, input, select, textarea\)\s*\{[^}]*border-radius:\s*var\(--radius-control\)/su);
+  assert.match(polish, /\.operations-metrics,[^}]*\.curation-workspace,[^}]*\.room-modal > section,[^}]*border-radius:\s*var\(--radius-surface\)/su);
+});
+
 test("Room moderation stays scoped and the last mobile cascade prevents focus zoom", async () => {
   const [roomOperations, css, finalCascade] = await Promise.all([
     readFile(roomOperationsUrl, "utf8"),
