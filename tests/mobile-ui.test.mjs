@@ -22,6 +22,7 @@ const roomNotificationsUrl = new URL("../app/room/[slug]/room-notifications.tsx"
 const supportCentreUrl = new URL("../app/my-nights/[slug]/support-centre.tsx", import.meta.url);
 const waitlistUrl = new URL("../app/event/[slug]/waitlist-control.tsx", import.meta.url);
 const roomOperationsUrl = new URL("../app/admin/rooms/room-operations.tsx", import.meta.url);
+const eventOperationsUrl = new URL("../app/admin/operations/event-operations-hub.tsx", import.meta.url);
 const ownerBootstrapUrl = new URL("../app/admin/bootstrap/page.tsx", import.meta.url);
 const ownerBootstrapFormUrl = new URL("../app/admin/bootstrap/bootstrap-form.tsx", import.meta.url);
 const staffPasswordClientUrl = new URL("../lib/staff-password-client.ts", import.meta.url);
@@ -353,6 +354,41 @@ test("every private workspace has one compact role-scoped navigator", async () =
   assert.match(organiser, /<WorkspaceJump active="\/organizer\/workspace" role=\{role\}/u);
   assert.match(css, /\.curation-nav > \.workspace-jump\s*\{\s*display:\s*none/u);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.curation-nav > \.workspace-jump[^}]*display:\s*grid/su);
+});
+
+test("workplace dashboards choose one event without horizontal event rails", async () => {
+  const [operations, roomOperations, organiser, css] = await Promise.all([
+    readFile(eventOperationsUrl, "utf8"),
+    readFile(roomOperationsUrl, "utf8"),
+    readFile(organizerWorkspaceUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(operations, /className="workspace-event-picker"/u);
+  assert.match(operations, /id="operations-event"/u);
+  assert.match(roomOperations, /className="workspace-event-picker room-ops__event"/u);
+  assert.match(roomOperations, /id="room-event"/u);
+  assert.match(organiser, /className="workspace-event-picker organizer-event-picker"/u);
+  assert.match(organiser, /id="organizer-event"/u);
+  assert.doesNotMatch(`${operations}\n${organiser}`, /operations-event-strip|organizer-event-tabs/u);
+  assert.match(css, /\.workspace-event-picker\s*\{[^}]*grid-template-columns:/su);
+});
+
+test("Room moderation stays scoped and the last mobile cascade prevents focus zoom", async () => {
+  const [roomOperations, css, finalCascade] = await Promise.all([
+    readFile(roomOperationsUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+  ]);
+
+  assert.match(roomOperations, /selectedReports = reports\.filter\(\(report\) => report\.eventSlug === eventSlug\)/u);
+  assert.match(roomOperations, /selectedFlashReports = flashReports\.filter\(\(report\) => report\.eventSlug === eventSlug\)/u);
+  assert.match(roomOperations, /selectedSuspensions = suspensions\.filter\(\(item\) => item\.eventSlug === eventSlug\)/u);
+  assert.match(roomOperations, />Conversation</u);
+  assert.match(roomOperations, />Host update</u);
+  assert.match(roomOperations, />Official memory</u);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.curation-workspace\s*\{[^}]*grid-template-columns:\s*1fr[^}]*overflow:\s*visible/su);
+  assert.match(finalCascade, /@media \(max-width: 700px\)[\s\S]*?input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\),[\s\S]*?font-size:\s*16px !important/su);
 });
 
 test("staff passwords derive in the browser and never ask the Worker to exceed its PBKDF2 cap", async () => {
