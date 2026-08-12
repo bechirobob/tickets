@@ -374,6 +374,20 @@ test("workplace dashboards choose one event without horizontal event rails", asy
   assert.match(css, /\.workspace-event-picker\s*\{[^}]*grid-template-columns:/su);
 });
 
+test("project dropdowns use a soft progressively enhanced picker", async () => {
+  const css = await readFile(accessPolishUrl, "utf8");
+
+  assert.match(css, /:where\(\.workspace-event-picker,[^}]*select\s*\{[^}]*border-radius:\s*11px/su);
+  assert.match(css, /@supports \(appearance:\s*base-select\)/u);
+  assert.match(css, /select::picker\(select\)\s*\{[^}]*border-radius:\s*14px[^}]*box-shadow:/su);
+  assert.match(css, /:where\(\.workspace-jump, \.room-notifications__controls\) select::picker\(select\)\s*\{[^}]*border-radius:\s*13px/su);
+  assert.match(css, /option:checked\s*\{[^}]*background:\s*#fff0e8/su);
+  assert.match(css, /select:open::picker-icon\s*\{[^}]*rotate:\s*180deg/su);
+  assert.match(css, /\.curation-page[^}]*\.before-night[^}]*\.room-modal[^}]*\.event-waitlist/su);
+  assert.match(css, /\.room-notifications__controls\) select::picker\(select\)/u);
+  assert.match(css, /\.submission-fields\) select::picker\(select\)/u);
+});
+
 test("Room moderation stays scoped and the last mobile cascade prevents focus zoom", async () => {
   const [roomOperations, css, finalCascade] = await Promise.all([
     readFile(roomOperationsUrl, "utf8"),
