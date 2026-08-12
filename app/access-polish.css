@@ -93,7 +93,7 @@
 /* Soft project pickers: styled where supported, safely native everywhere else. */
 :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls) select {
   border-radius: 11px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 4px 14px rgba(24,24,20,.045);
+  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 4px 14px rgba(0,0,0,.045);
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
 :where(.workspace-event-picker, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist) select:hover {
@@ -104,7 +104,7 @@
   border-color: #c95637;
   outline: 3px solid rgba(211,85,49,.14);
   outline-offset: 2px;
-  box-shadow: 0 7px 20px rgba(40,34,27,.08);
+  box-shadow: 0 7px 20px rgba(0,0,0,.08);
 }
 .workspace-jump select {
   border-color: #4d4d47;
@@ -132,7 +132,7 @@
     border: 1px solid #d2cec4;
     border-radius: 14px;
     background: #fffdf8;
-    box-shadow: 0 18px 44px rgba(31,29,24,.18), 0 3px 10px rgba(31,29,24,.08);
+    box-shadow: 0 18px 44px rgba(0,0,0,.18), 0 3px 10px rgba(0,0,0,.08);
   }
   :where(.workspace-jump, .room-notifications__controls) select::picker(select) {
     min-inline-size: anchor-size(width);

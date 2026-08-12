@@ -406,6 +406,39 @@ test("the program-wide corner contract prevents square UI boxes", async () => {
   assert.match(polish, /\.operations-metrics,[^}]*\.curation-workspace,[^}]*\.room-modal > section,[^}]*border-radius:\s*var\(--radius-surface\)/su);
 });
 
+test("decorative surfaces never use coloured shadows or glow halos", async () => {
+  const [css, polish] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+  ]);
+  const combined = `${css}\n${polish}`;
+  const shadowValues = [...combined.matchAll(/box-shadow\s*:\s*([^;}]+)/gu)].map((match) => match[1].trim());
+
+  for (const value of shadowValues) {
+    assert.doesNotMatch(value, /var\(--(?:orange|yellow|signal|acid)\)/u, `brand-coloured shadow found: ${value}`);
+
+    for (const match of value.matchAll(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/gu)) {
+      const [, red, green, blue] = match;
+      assert.equal(red, green, `non-neutral rgb shadow found: ${value}`);
+      assert.equal(green, blue, `non-neutral rgb shadow found: ${value}`);
+    }
+
+    for (const match of value.matchAll(/#([0-9a-f]{3}|[0-9a-f]{6})(?![0-9a-f])/giu)) {
+      const digits = match[1].length === 3
+        ? [...match[1]].map((digit) => `${digit}${digit}`).join("")
+        : match[1];
+      const channels = digits.match(/.{2}/gu);
+      assert.deepEqual(new Set(channels).size, 1, `non-neutral hex shadow found: ${value}`);
+    }
+  }
+
+  assert.match(css, /\.curation-list > button\.active\s*\{[^}]*border-left:\s*4px solid #ff4d24/u);
+  assert.doesNotMatch(css, /\.curation-list > button\.active\s*\{[^}]*box-shadow/su);
+  assert.doesNotMatch(css, /\.curated-card\.is-picked \.curated-card__image\s*\{[^}]*box-shadow/su);
+  assert.match(css, /\.night-room-showcase::before\s*\{\s*display:\s*none/u);
+  assert.doesNotMatch(css, /\.night-room-peek__stream\s*\{[^}]*radial-gradient/su);
+});
+
 test("Room moderation stays scoped and the last mobile cascade prevents focus zoom", async () => {
   const [roomOperations, css, finalCascade] = await Promise.all([
     readFile(roomOperationsUrl, "utf8"),
