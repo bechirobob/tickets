@@ -4,11 +4,11 @@ import { POST as initializePayment } from "../app/api/payments/initialize/route"
 
 const eventSlug = "inventory-payment-test";
 
-function paymentRequest(slug: string, ticketTierId: string, quantity = 1, network = "mtn") {
+function paymentRequest(slug: string, ticketTierId: string, quantity = 1, network = "mtn", paymentMethod: "mobile_money" | "card" = "mobile_money") {
   return new Request("https://tickets.becoreops.com/api/payments/initialize", {
     method: "POST",
     headers: { "content-type": "application/json", origin: "https://tickets.becoreops.com" },
-    body: JSON.stringify({ eventSlug: slug, ticketTierId, quantity, email: "buyer@example.com", phone: "233000000000", fullName: "Ticket Buyer", network, acceptedPolicies: true }),
+    body: JSON.stringify({ eventSlug: slug, ticketTierId, quantity, email: "buyer@example.com", phone: "233000000000", fullName: "Ticket Buyer", paymentMethod, network: paymentMethod === "mobile_money" ? network : undefined, acceptedPolicies: true }),
   });
 }
 
@@ -73,6 +73,22 @@ describe("payment ticket validation", () => {
     }
   });
 
+  it("uses Paystack hosted checkout for card payments without collecting card details", async () => {
+    const response = await initializePayment(paymentRequest(eventSlug, "general", 1, "mtn", "card"));
+    expect(response.status).toBe(200);
+    const [url, init] = vi.mocked(fetch).mock.calls.at(-1)!;
+    const body = JSON.parse(String(init?.body)) as { reference: string; channels: string[]; callback_url: string; metadata: string; mobile_money?: unknown };
+    expect(String(url)).toBe("https://api.paystack.co/transaction/initialize");
+    expect(body.channels).toEqual(["card"]);
+    expect(body.mobile_money).toBeUndefined();
+    expect(body.callback_url).toMatch(/^https:\/\/tickets\.becoreops\.com\/payment\/return\?/u);
+    expect(JSON.parse(body.metadata)).toMatchObject({ eventSlug, paymentMethod: "card" });
+    await expect(response.json()).resolves.toMatchObject({ authorizationUrl: "https://checkout.paystack.com/test-session" });
+    const order = await env.DB.prepare("SELECT payment_channel AS paymentChannel FROM orders WHERE reference = ?")
+      .bind(body.reference).first<{ paymentChannel: string }>();
+    expect(order?.paymentChannel).toBe("card");
+  });
+
   it("uses Paystack hosted checkout so test events can complete visibly", async () => {
     const response = await initializePayment(paymentRequest("after-dark-osu", "general", 1, "mtn"));
     expect(response.status).toBe(200);
@@ -88,6 +104,15 @@ describe("payment ticket validation", () => {
   it("rejects unknown events and ticket tiers", async () => {
     expect((await initializePayment(paymentRequest("not-a-real-event", "general"))).status).toBe(400);
     expect((await initializePayment(paymentRequest(eventSlug, "backstage"))).status).toBe(400);
+  });
+
+  it("rejects unknown payment methods", async () => {
+    const request = paymentRequest(eventSlug, "general");
+    const body = await request.json() as Record<string, unknown>;
+    body.paymentMethod = "cash";
+    const response = await initializePayment(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify(body) }));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "Choose mobile money or card payment." });
   });
 
   it("keeps already-open General Admission checkouts compatible during deployment", async () => {

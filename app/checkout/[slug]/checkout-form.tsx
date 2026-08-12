@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Check, Gem, LockKeyhole, Minus, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { CuratedEvent } from "../../events";
@@ -23,6 +23,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
     return event.ticketTiers.find((tier) => tier.status === "available" && (!requested || tier.id === requested))?.id ?? event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id;
   });
   const [network, setNetwork] = useState("mtn");
+  const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card">("mobile_money");
   const [message, setMessage] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -55,19 +56,19 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
       return;
     }
     if (!acceptedPolicies) {
-      setMessage("One tiny grown-up moment: accept the ticket and refund terms before we send the MoMo prompt.");
+      setMessage("One tiny grown-up moment: accept the ticket and refund terms before payment.");
       return;
     }
     setIsPaying(true);
     trackProductMetric("checkout_started", slug);
-    setMessage("Sending the MoMo prompt to your phone…");
+    setMessage(paymentMethod === "mobile_money" ? "Sending the MoMo prompt to your phone…" : "Opening Paystack's secure card checkout…");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, network, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref") }),
+        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, network: paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref") }),
         signal: controller.signal,
       });
       const data = await response.json() as { authorizationUrl?: string; nextUrl?: string; error?: string };
@@ -144,16 +145,29 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
           </div>
 
           <div className="checkout-step checkout-step--second">
-            <span>3</span><div><small>Payment</small><h2>MoMo. Prompt. Approve. Done.</h2></div>
+            <span>3</span><div><small>Payment</small><h2>Choose how you want to pay.</h2></div>
           </div>
-          <div className="network-list">
-            {paymentNetworks.map((item) => (
-              <button type="button" key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
-                <span className="network-logo" aria-hidden="true"><Image src={item.icon} alt="" width={38} height={38} /></span>
-                <span className="network-copy">{item.label}<small>Your phone gets the final say</small></span>
-                {network === item.id && <Check size={18} />}
-              </button>
-            ))}
+          <div className="payment-methods" role="radiogroup" aria-label="Choose payment method">
+            <button type="button" role="radio" aria-checked={paymentMethod === "mobile_money"} className={paymentMethod === "mobile_money" ? "selected" : ""} onClick={() => { setPaymentMethod("mobile_money"); setMessage(""); }}>
+              <Smartphone size={19} /><span>Mobile money<small>MTN, Telecel or AT Money</small></span>{paymentMethod === "mobile_money" && <Check size={18} />}
+            </button>
+            <button type="button" role="radio" aria-checked={paymentMethod === "card"} className={paymentMethod === "card" ? "selected" : ""} onClick={() => { setPaymentMethod("card"); setMessage(""); }}>
+              <CreditCard size={19} /><span>Card<small>Visa or Mastercard</small></span>{paymentMethod === "card" && <Check size={18} />}
+            </button>
+          </div>
+          <div className="payment-method-detail">
+            {paymentMethod === "mobile_money" ? <div className="network-list" role="radiogroup" aria-label="Choose mobile money service">
+              {paymentNetworks.map((item) => (
+                <button type="button" role="radio" aria-checked={network === item.id} key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
+                  <span className="network-logo" aria-hidden="true"><Image src={item.icon} alt="" width={38} height={38} /></span>
+                  <span className="network-copy">{item.label}<small>Your phone gets the final say</small></span>
+                  {network === item.id && <Check size={18} />}
+                </button>
+              ))}
+            </div> : <div className="card-payment-detail">
+              <CreditCard size={24} aria-hidden="true" />
+              <div><strong>Visa or Mastercard</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
+            </div>}
           </div>
           <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>. The accepted versions stay attached to this order.</span></label>
         </section>
@@ -168,7 +182,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying || !acceptedPolicies}>{isPaying ? "Making it official…" : `Pay ${formatGhanaCedis(totalMinor)} · secure the plan`}</button>
+          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying || !acceptedPolicies}>{isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : `Pay with MoMo · ${formatGhanaCedis(totalMinor)}`}</button>
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
         </aside>

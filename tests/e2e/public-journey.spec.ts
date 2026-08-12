@@ -29,6 +29,21 @@ test("preview events remain excluded from search while sharing metadata stays co
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/u);
 });
 
+test("checkout groups mobile money providers separately from secure card payment", async ({ page }) => {
+  await page.goto("/checkout/after-dark-osu");
+  const mobileMoney = page.getByRole("radio", { name: /Mobile money/u });
+  const card = page.getByRole("radio", { name: /^Card/u });
+  await expect(mobileMoney).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toBeVisible();
+  await card.click();
+  await expect(card).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText("BeCore never receives or stores your card number.")).toBeVisible();
+  await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toHaveCount(0);
+  const serious = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze())
+    .violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
+  expect(serious, serious.map((violation) => `${violation.id}: ${violation.help}`).join("\n")).toEqual([]);
+});
+
 test("the install manifest has complete app identity and adaptive icons", async ({ request }) => {
   const response = await request.get("/manifest.webmanifest");
   expect(response.ok()).toBeTruthy();

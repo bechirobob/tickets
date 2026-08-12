@@ -13,7 +13,7 @@ const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; offer?: string | null; promoterCode?: string | null };
+  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; offer?: string | null; promoterCode?: string | null };
   if (body.acceptedPolicies !== true) return Response.json({ error: "Accept the ticket, refund and privacy terms before payment." }, { status: 400 });
   const eventSlug = body.eventSlug?.trim() ?? "";
   const { env } = await import("cloudflare:workers");
@@ -31,8 +31,10 @@ export async function POST(request: Request) {
   const email = body.email?.trim().toLowerCase() ?? "";
   const phone = body.phone?.replace(/[^\d+]/gu, "") ?? "";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) || phone.length < 7 || phone.length > 40) return Response.json({ error: "A valid email and phone number are required." }, { status: 400 });
+  const paymentMethod = body.paymentMethod ?? "mobile_money";
+  if (paymentMethod !== "mobile_money" && paymentMethod !== "card") return Response.json({ error: "Choose mobile money or card payment." }, { status: 400 });
   const provider = paystackProviders[body.network as keyof typeof paystackProviders];
-  if (!provider) return Response.json({ error: "Choose a supported mobile money network." }, { status: 400 });
+  if (paymentMethod === "mobile_money" && !provider) return Response.json({ error: "Choose a supported mobile money network." }, { status: 400 });
 
   const requestedPromoterCode = body.promoterCode?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const promoter = requestedPromoterCode ? await env.DB.prepare(`SELECT code FROM event_promoter_codes WHERE event_slug = ? AND code = ? AND status = 'active' LIMIT 1`)
@@ -105,7 +107,7 @@ export async function POST(request: Request) {
       id, reference, eventSlug, selection.tier.id, selection.tier.recordId,
       selection.unitQuantity, selection.ticketCount, faceAmountMinor, bookingFeeMinor,
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
-      `mobile_money:${body.network}`, expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
+      paymentMethod === "card" ? "card" : `mobile_money:${body.network}`, expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
     ),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
@@ -140,23 +142,25 @@ export async function POST(request: Request) {
     ticketCount: selection.ticketCount,
     customerName: body.fullName?.trim(),
     phone,
-    network: body.network,
+    paymentMethod,
+    network: paymentMethod === "mobile_money" ? body.network : undefined,
     faceAmountMinor,
     bookingFeeMinor,
     reservationExpiresAt: expiresAt,
   };
 
-  const response = await fetch(event.isTestEvent
+  const usesHostedCheckout = event.isTestEvent || paymentMethod === "card";
+  const response = await fetch(usesHostedCheckout
     ? "https://api.paystack.co/transaction/initialize"
     : "https://api.paystack.co/charge", {
     method: "POST",
     headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify(event.isTestEvent ? {
+    body: JSON.stringify(usesHostedCheckout ? {
       email,
       amount: totalAmountMinor,
       currency: "GHS",
       reference,
-      channels: ["mobile_money"],
+      channels: [paymentMethod],
       callback_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`,
       metadata: JSON.stringify(paymentMetadata),
     } : {
@@ -164,7 +168,7 @@ export async function POST(request: Request) {
       amount: totalAmountMinor,
       currency: "GHS",
       reference,
-      mobile_money: { phone, provider },
+      mobile_money: { phone, provider: provider! },
       metadata: paymentMetadata,
     }),
   });
@@ -173,7 +177,7 @@ export async function POST(request: Request) {
     message?: string;
     data?: { authorization_url?: string; reference?: string; status?: string; display_text?: string };
   };
-  const paymentReady = event.isTestEvent
+  const paymentReady = usesHostedCheckout
     ? Boolean(result.data?.authorization_url && result.data.reference)
     : Boolean(result.data?.reference && (result.data.status === "pay_offline" || result.data.status === "success"));
   if (!response.ok || !result.status || !paymentReady) {
@@ -188,9 +192,9 @@ export async function POST(request: Request) {
   }
 
   await env.DB.prepare("UPDATE orders SET paystack_reference = ?, paystack_status = ?, payment_updated_at = ? WHERE id = ?")
-    .bind(result.data?.reference ?? reference, event.isTestEvent ? "initialized" : result.data?.status, new Date().toISOString(), id).run();
+    .bind(result.data?.reference ?? reference, usesHostedCheckout ? "initialized" : result.data?.status, new Date().toISOString(), id).run();
   await recordProductMetric(env.DB, "payment_attempted", eventSlug);
-  if (event.isTestEvent) {
+  if (usesHostedCheckout) {
     return Response.json({ authorizationUrl: result.data?.authorization_url, reference, reservationExpiresAt: expiresAt });
   }
   const nextUrl = `/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}&prompt=1`;
