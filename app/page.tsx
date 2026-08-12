@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, LockKeyhole, Send, Ticket
 import EventExplorer from "./event-explorer";
 import { eventImageSrcSet, eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
+import MobileNavigation from "./mobile-navigation";
 import ScrollReveal from "./scroll-reveal";
 
 function BrandMark() {
@@ -44,8 +45,8 @@ export default async function Home() {
     <ScrollReveal />
     <header className="night-header">
       <Link href="/" className="night-brand-link"><BrandMark /></Link>
-      <nav aria-label="Main navigation"><Link href="/events">The Drop</Link><Link href="/hosts">Hosts</Link><Link href="/organizer/submit">Organisers</Link></nav>
-      <div className="night-header__actions"><Link href="/my-nights" className="night-ticket-link"><Ticket size={16} /> My Nights</Link></div>
+      <nav aria-label="Main navigation"><Link href="/events">The Drop</Link><Link href="#about">About us</Link><Link href="/organizer/submit">Organisers</Link></nav>
+      <div className="night-header__actions"><Link href="/my-nights" className="night-ticket-link"><Ticket size={16} /> My Nights</Link><MobileNavigation /></div>
     </header>
 
     <section className="compact-hero">
@@ -63,6 +64,25 @@ export default async function Home() {
     <section className="night-drop night-drop--compact" id="drop">
       <div className="compact-section-head" data-scroll-reveal><div><p className="night-kicker"><span /> The Drop</p><h2>Find your night.</h2></div><Link href="/events">See all nights <ArrowUpRight size={15} /></Link></div>
       <EventExplorer events={events.slice(0, 6)} />
+    </section>
+
+    <section className="becore-about" id="about" data-scroll-reveal>
+      <div className="becore-about__intro">
+        <p className="night-kicker"><span /> About BeCore Tickets</p>
+        <h2>Accra plans differently.<br />So do we.</h2>
+      </div>
+      <div className="becore-about__story">
+        <p>BeCore Tickets is not a listings dump with a payment button. We are building the place Accra checks before deciding where the night is going.</p>
+        <p>For guests, that means a sharper edit, a familiar way to pay, tickets that stay easy to find and a private Room that carries the plan into the party. For organisers, it means one proper record from submission and approval through sales, entry, updates and support.</p>
+        <Link href="/events">See what is dropping <ArrowUpRight size={15} /></Link>
+      </div>
+      <div className="becore-about__reasons" aria-label="Why BeCore Tickets">
+        <article><span>01</span><div><h3>The good stuff, edited.</h3><p>Fewer random listings. More nights worth leaving the house for, presented clearly enough to choose without opening fifteen tabs.</p></div></article>
+        <article><span>02</span><div><h3>The Room comes with the ticket.</h3><p>Plans, verified Host updates, live conversation and disappearing Flashes stay with the people who are actually going.</p></div></article>
+        <article><span>03</span><div><h3>Organisers keep the full story.</h3><p>Every submission, decision, event, attendee and operational request belongs to one accountable record—not a trail of screenshots and DMs.</p></div></article>
+        <article><span>04</span><div><h3>Made for how Accra moves.</h3><p>Mobile-first tickets, locally familiar checkout, gate-ready access and human help when a real night needs a real answer.</p></div></article>
+      </div>
+      <p className="becore-about__close">We want to become Accra&apos;s first call for events and parties by making every part of the night feel better—not by simply calling ourselves the biggest.</p>
     </section>
 
     <section className="room-product-scene" id="the-room" data-scroll-reveal>

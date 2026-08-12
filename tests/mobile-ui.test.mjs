@@ -6,6 +6,7 @@ const cssUrl = new URL("../app/globals.css", import.meta.url);
 const accessPolishUrl = new URL("../app/access-polish.css", import.meta.url);
 const roomUrl = new URL("../app/room/[slug]/room-client.tsx", import.meta.url);
 const homeUrl = new URL("../app/page.tsx", import.meta.url);
+const mobileNavigationUrl = new URL("../app/mobile-navigation.tsx", import.meta.url);
 const organizerUrl = new URL("../app/organizer/page.tsx", import.meta.url);
 const submissionUrl = new URL("../app/organizer/submit/page.tsx", import.meta.url);
 const adminSubmissionsUrl = new URL("../app/api/admin/submissions/route.ts", import.meta.url);
@@ -172,6 +173,27 @@ test("mobile customers retain wallet access and form controls do not trigger iOS
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
 });
 
+test("mobile landing navigation preserves every primary destination behind one flat menu", async () => {
+  const [css, home, mobileNavigation] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(homeUrl, "utf8"),
+    readFile(mobileNavigationUrl, "utf8"),
+  ]);
+
+  assert.match(home, /<MobileNavigation \/>/u);
+  assert.match(mobileNavigation, /href: "\/events", label: "The Drop"/u);
+  assert.match(mobileNavigation, /href: "\/organizer\/submit", label: "Organisers"/u);
+  assert.match(mobileNavigation, /href: "#about", label: "About us"/u);
+  assert.match(mobileNavigation, /href: "\/help", label: "Help"/u);
+  assert.match(mobileNavigation, /href="\/my-nights"/u);
+  assert.match(mobileNavigation, /aria-expanded=\{open\}/u);
+  assert.match(mobileNavigation, /event\.key === "Escape"/u);
+  assert.match(css, /\.night-mobile-menu\s*\{[^}]*display:\s*none/su);
+  assert.match(css, /@media \(max-width: 1000px\)[\s\S]*?\.night-header > nav\s*\{[^}]*display:\s*none[^}]*\}[\s\S]*?\.night-mobile-menu\s*\{[^}]*display:\s*block/su);
+  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
+  assert.match(css, /\.night-mobile-menu__panel a\s*\{[^}]*border-bottom:\s*1px solid/su);
+});
+
 test("the program-wide type scale never returns to ant-sized visible text", async () => {
   const [css, accessPolish] = await Promise.all([
     readFile(cssUrl, "utf8"),
@@ -334,6 +356,37 @@ test("organiser consent stays aligned with the submission content on desktop and
   assert.match(css, /\.submission-form > section > \.submission-consent--check\s*\{[^}]*grid-column:\s*2 \/ -1[^}]*grid-template-columns:\s*18px minmax\(0, 1fr\)[^}]*align-items:\s*start[^}]*text-transform:\s*none/su);
   assert.match(css, /\.submission-consent--check input\s*\{[^}]*width:\s*16px[^}]*height:\s*16px[^}]*margin:\s*4px 0 0/su);
   assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.submission-fields label\.wide, \.submission-form > section > \.submission-consent--check\s*\{[^}]*grid-column:\s*auto/su);
+});
+
+test("organiser submission controls end in straight baselines", async () => {
+  const [css, polish] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+  ]);
+
+  assert.match(css, /\.submission-fields input, \.submission-fields select, \.submission-fields textarea[^}]*border-bottom:\s*1px solid #8d8b84[^}]*border-radius:\s*0/su);
+  assert.match(polish, /Organiser submissions use one honest baseline[\s\S]*?\.submission-fields :is\(input, select, textarea\)\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /\.submission-fields :is\(input, select, textarea\):focus,[\s\S]*?border-bottom-color:\s*var\(--signal\)[^}]*outline:\s*0/su);
+  assert.match(polish, /\.submission-consent--check input\s*\{[^}]*border-radius:\s*0/su);
+});
+
+test("homepage replaces Hosts promotion with an open BeCore About section", async () => {
+  const [home, css] = await Promise.all([
+    readFile(homeUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(home, /<Link href="#about">About us<\/Link>/u);
+  assert.doesNotMatch(home, /<nav aria-label="Main navigation">[^<]*(?:<[^>]+>[^<]*)*<Link href="\/hosts">/u);
+  assert.match(home, /<section className="becore-about" id="about" data-scroll-reveal>/u);
+  assert.match(home, /Accra plans differently/u);
+  assert.match(home, /The Room comes with the ticket/u);
+  assert.match(home, /Organisers keep the full story/u);
+  assert.match(home, /Made for how Accra moves/u);
+  assert.match(css, /\.becore-about\s*\{[^}]*display:\s*grid[^}]*border-top:\s*1px solid #c9c6bd[^}]*background:\s*var\(--bone\)/su);
+  assert.match(css, /\.becore-about__reasons article\s*\{[^}]*border-bottom:\s*1px solid #c9c6bd/su);
+  assert.doesNotMatch(css, /\.becore-about(?:__reasons)?[^}]*box-shadow/su);
+  assert.match(css, /@media \(max-width: 800px\)[\s\S]*?\.becore-about\s*\{[^}]*grid-template-columns:\s*1fr/su);
 });
 
 test("first-owner setup explains its one-use key without exposing a credential", async () => {

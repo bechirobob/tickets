@@ -149,6 +149,22 @@
   :where(.workspace-event-picker, .workspace-jump, .room-ops__panel, .scanner-event, .organizer-panel, .ops-main, .curation-page, .before-night, .room-modal, .event-waitlist, .room-notifications__controls, .submission-fields) select::picker-icon { transition: none; }
 }
 
+/* Organiser submissions use one honest baseline, never a curved partial outline. */
+.submission-fields :is(input, select, textarea) {
+  border-radius: 0;
+  transition: border-color .16s ease;
+}
+
+.submission-fields :is(input, select, textarea):focus,
+.submission-fields :is(input, select, textarea):focus-visible {
+  border-bottom-color: var(--signal);
+  outline: 0;
+}
+
+.submission-consent--check input {
+  border-radius: 0;
+}
+
 /* Keep iOS from changing the visual viewport when any late-loaded workspace control receives focus. */
 @media (max-width: 700px) {
   input:not([type="checkbox"]):not([type="radio"]),
