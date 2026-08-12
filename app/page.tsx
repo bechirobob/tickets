@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, LockKeyhole, Send, Ticket
 import EventExplorer from "./event-explorer";
 import { eventImageSrcSet, eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
+import RoomPreviewCarousel from "./room-preview-carousel";
 import ScrollReveal from "./scroll-reveal";
 
 function BrandMark() {
@@ -10,7 +11,7 @@ function BrandMark() {
 }
 
 function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string; heroImage: string; conversation: "arrival" | "inside" }) {
-  return <article className={`room-product-phone room-product-phone--${conversation}`}>
+  return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
     <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b>5G</b></div>
     <div className="room-product-phone__screen">
       <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>{conversation === "arrival" ? "18" : "24"} online</span></header>
@@ -67,10 +68,10 @@ export default async function Home() {
 
     <section className="room-product-scene" id="the-room" data-scroll-reveal>
       <div className="room-product-scene__copy"><p className="night-kicker"><span /> Included with your ticket</p><h2>The night has a Room.</h2><p>Plan together, hear it straight from the Host and drop Flashes into the same conversation. The chat remembers. The photos know when to leave.</p><span><LockKeyhole size={13} /> No ticket, no lurking. Very civilised.</span></div>
-      <div className="room-product-scene__phones" aria-label="Two previews of ticket-holder conversations in The Room">
+      <RoomPreviewCarousel>
         <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="arrival" />
         <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="inside" />
-      </div>
+      </RoomPreviewCarousel>
     </section>
 
     <footer className="night-footer compact-footer"><BrandMark /><p>Editorial nightlife outside. Private event access inside.</p><div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link></div></footer>
