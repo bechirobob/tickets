@@ -1295,8 +1295,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* Compact VIP identity and concierge. */
 .room-message__body > header .room-vip-badge,
-.scene-vip-badge { padding: 1px 4px; border: 1px solid #a78337; border-radius: 2px; background: transparent; color: #8a671e; font-size: 10px; font-weight: 850; line-height: 1.2; letter-spacing: .08em; }
-.scene-message__bubble small .scene-vip-badge { display: inline-block; margin: 0 2px; color: #d2b566; }
+.scene-vip-badge { width: 16px; height: 16px; display: inline-grid; place-items: center; flex: 0 0 auto; border: 1px solid #a78337; border-radius: 50%; background: transparent; color: #8a671e; line-height: 1; vertical-align: -3px; }
+.scene-message__bubble small .scene-vip-badge { margin: 0 2px; color: #d2b566; }
 .room-composer > form { grid-template-columns: auto auto minmax(0, 1fr) auto 40px; }
 .room-composer form > .room-concierge { width: 38px; height: 38px; grid-column: 1; display: grid; place-items: center; border: 0; border-radius: 50%; background: #1d1e1a; color: #d5b45d; }
 .room-composer form > .room-camera { grid-column: 2; }
@@ -1312,6 +1312,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .room-vip-modal nav { margin: 16px 0; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid #c9c4b8; }
 .room-vip-modal nav button { min-height: 37px; padding: 0 10px; flex: 0 0 auto; display: flex; align-items: center; gap: 6px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #747068; font: inherit; font-size: 12px; }
 .room-vip-modal nav button.active { border-bottom-color: #8a671e; color: #1d1e1a; font-weight: 780; }
+.room-vip-unavailable { min-height: 88px; margin-top: 16px; padding: 14px 0; display: flex; align-items: flex-start; gap: 11px; border-top: 1px solid #d4cfc4; border-bottom: 1px solid #d4cfc4; color: #6f6b63; }.room-vip-unavailable > svg { margin-top: 1px; flex: 0 0 auto; color: #8a671e; }.room-vip-unavailable b { color: #2d2c28; font-size: 13px; }.room-vip-unavailable p { margin: 4px 0 0; font-size: 12px; line-height: 1.45; }
 .room-vip-modal label { margin-top: 11px; display: grid; gap: 6px; color: #65625b; font-size: 12px; font-weight: 750; }
 .room-vip-modal textarea, .room-vip-modal input { width: 100%; min-height: 43px; padding: 10px; resize: vertical; border: 1px solid #bdb7aa; border-radius: 4px; background: white; color: var(--ink); font: inherit; font-size: 16px; }
 .room-vip-modal textarea { min-height: 68px; }
