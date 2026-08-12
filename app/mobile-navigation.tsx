@@ -1,13 +1,12 @@
 "use client";
 
-import { Menu, Ticket, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const links = [
-  { href: "/events", label: "The Drop" },
   { href: "/organizer/submit", label: "Organisers" },
-  { href: "#about", label: "About us" },
+  { href: "/about", label: "About us" },
   { href: "/help", label: "Help" },
 ];
 
@@ -36,7 +35,6 @@ export default function MobileNavigation() {
     </button>
     {open ? <nav id="mobile-main-navigation" className="night-mobile-menu__panel" aria-label="Mobile navigation">
       {links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)}>{link.label}</Link>)}
-      <Link href="/my-nights" className="night-mobile-menu__wallet" onClick={() => setOpen(false)}><Ticket size={17} /> My Nights</Link>
     </nav> : null}
   </div>;
 }

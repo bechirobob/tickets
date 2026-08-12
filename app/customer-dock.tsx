@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { CalendarDays, House, Ticket } from "lucide-react";
 import { usePathname } from "next/navigation";
+import MobileNavigation from "./mobile-navigation";
 
 const hiddenPrefixes = ["/admin", "/checkout", "/organizer", "/payment", "/room", "/scan"];
 
@@ -16,13 +17,16 @@ export default function CustomerDock() {
     { href: "/my-nights", label: "My Nights", icon: Ticket, active: pathname.startsWith("/my-nights") || pathname.startsWith("/tickets") || pathname.startsWith("/account/") },
   ];
 
-  return <nav className="customer-dock" aria-label="Customer navigation">
-    {items.map((item) => {
-      const Icon = item.icon;
-      return <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>
-        <Icon size={17} />
-        <span>{item.label}</span>
-      </Link>;
-    })}
-  </nav>;
+  return <>
+    <MobileNavigation />
+    <nav className="customer-dock" aria-label="Customer navigation">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined}>
+          <Icon size={17} />
+          <span>{item.label}</span>
+        </Link>;
+      })}
+    </nav>
+  </>;
 }

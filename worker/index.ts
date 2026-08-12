@@ -18,7 +18,7 @@ const edgeCache = (caches as CacheStorage & { readonly default: Cache }).default
 function publicPageCacheKey(request: Request, url: URL): Request | null {
   if (request.method !== "GET" || url.search || !request.headers.get("accept")?.includes("text/html")) return null;
   const path = url.pathname;
-  const eligible = path === "/" || path === "/events" || path === "/hosts"
+  const eligible = path === "/" || path === "/about" || path === "/events" || path === "/hosts"
     || /^\/event\/[a-z0-9-]{1,80}$/u.test(path)
     || /^\/hosts\/[a-z0-9-]{1,80}$/u.test(path);
   return eligible ? new Request(`${url.origin}${path}`, { method: "GET", headers: { accept: "text/html" } }) : null;

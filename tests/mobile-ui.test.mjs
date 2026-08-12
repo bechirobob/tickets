@@ -6,6 +6,7 @@ const cssUrl = new URL("../app/globals.css", import.meta.url);
 const accessPolishUrl = new URL("../app/access-polish.css", import.meta.url);
 const roomUrl = new URL("../app/room/[slug]/room-client.tsx", import.meta.url);
 const homeUrl = new URL("../app/page.tsx", import.meta.url);
+const aboutUrl = new URL("../app/about/page.tsx", import.meta.url);
 const mobileNavigationUrl = new URL("../app/mobile-navigation.tsx", import.meta.url);
 const organizerUrl = new URL("../app/organizer/page.tsx", import.meta.url);
 const submissionUrl = new URL("../app/organizer/submit/page.tsx", import.meta.url);
@@ -173,25 +174,31 @@ test("mobile customers retain wallet access and form controls do not trigger iOS
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
 });
 
-test("mobile landing navigation preserves every primary destination behind one flat menu", async () => {
-  const [css, home, mobileNavigation] = await Promise.all([
+test("mobile customer navigation keeps secondary links straight and leaves dock destinations in the dock", async () => {
+  const [css, polish, home, mobileNavigation, dock] = await Promise.all([
     readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
     readFile(homeUrl, "utf8"),
     readFile(mobileNavigationUrl, "utf8"),
+    readFile(customerDockUrl, "utf8"),
   ]);
 
-  assert.match(home, /<MobileNavigation \/>/u);
-  assert.match(mobileNavigation, /href: "\/events", label: "The Drop"/u);
+  assert.doesNotMatch(home, /<MobileNavigation \/>/u);
+  assert.match(dock, /<MobileNavigation \/>/u);
   assert.match(mobileNavigation, /href: "\/organizer\/submit", label: "Organisers"/u);
-  assert.match(mobileNavigation, /href: "#about", label: "About us"/u);
+  assert.match(mobileNavigation, /href: "\/about", label: "About us"/u);
   assert.match(mobileNavigation, /href: "\/help", label: "Help"/u);
-  assert.match(mobileNavigation, /href="\/my-nights"/u);
+  assert.doesNotMatch(mobileNavigation, /\/events|\/my-nights/u);
+  assert.match(dock, /href: "\/events", label: "The Drop"/u);
+  assert.match(dock, /href: "\/my-nights", label: "My Nights"/u);
   assert.match(mobileNavigation, /aria-expanded=\{open\}/u);
   assert.match(mobileNavigation, /event\.key === "Escape"/u);
   assert.match(css, /\.night-mobile-menu\s*\{[^}]*display:\s*none/su);
-  assert.match(css, /@media \(max-width: 1000px\)[\s\S]*?\.night-header > nav\s*\{[^}]*display:\s*none[^}]*\}[\s\S]*?\.night-mobile-menu\s*\{[^}]*display:\s*block/su);
+  assert.match(css, /@media \(max-width: 1000px\)[\s\S]*?\.night-mobile-menu\s*\{[^}]*display:\s*block/su);
   assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
-  assert.match(css, /\.night-mobile-menu__panel a\s*\{[^}]*border-bottom:\s*1px solid/su);
+  assert.match(css, /\.night-mobile-menu__panel a\s*\{[^}]*border-bottom:\s*1px solid[^}]*border-radius:\s*0/su);
+  assert.match(polish, /secondary customer menu[\s\S]*?\.night-mobile-menu__panel a\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
+  assert.match(css, /\.customer-dock-duplicate\s*\{[^}]*display:\s*none\s*!important/su);
 });
 
 test("the program-wide type scale never returns to ant-sized visible text", async () => {
@@ -370,23 +377,25 @@ test("organiser submission controls end in straight baselines", async () => {
   assert.match(polish, /\.submission-consent--check input\s*\{[^}]*border-radius:\s*0/su);
 });
 
-test("homepage replaces Hosts promotion with an open BeCore About section", async () => {
-  const [home, css] = await Promise.all([
+test("About us has its own open page and no longer interrupts the landing page", async () => {
+  const [home, about, css] = await Promise.all([
     readFile(homeUrl, "utf8"),
+    readFile(aboutUrl, "utf8"),
     readFile(cssUrl, "utf8"),
   ]);
 
-  assert.match(home, /<Link href="#about">About us<\/Link>/u);
+  assert.match(home, /<Link href="\/about">About us<\/Link>/u);
   assert.doesNotMatch(home, /<nav aria-label="Main navigation">[^<]*(?:<[^>]+>[^<]*)*<Link href="\/hosts">/u);
-  assert.match(home, /<section className="becore-about" id="about" data-scroll-reveal>/u);
-  assert.match(home, /Accra plans differently/u);
-  assert.match(home, /The Room comes with the ticket/u);
-  assert.match(home, /Organisers keep the full story/u);
-  assert.match(home, /Made for how Accra moves/u);
-  assert.match(css, /\.becore-about\s*\{[^}]*display:\s*grid[^}]*border-top:\s*1px solid #c9c6bd[^}]*background:\s*var\(--bone\)/su);
-  assert.match(css, /\.becore-about__reasons article\s*\{[^}]*border-bottom:\s*1px solid #c9c6bd/su);
-  assert.doesNotMatch(css, /\.becore-about(?:__reasons)?[^}]*box-shadow/su);
-  assert.match(css, /@media \(max-width: 800px\)[\s\S]*?\.becore-about\s*\{[^}]*grid-template-columns:\s*1fr/su);
+  assert.doesNotMatch(home, /id="about"|className="becore-about"|Accra plans differently/u);
+  assert.match(about, /className="about-page"/u);
+  assert.match(about, /Accra plans differently/u);
+  assert.match(about, /The Room comes with the ticket/u);
+  assert.match(about, /Organisers keep the full story/u);
+  assert.match(about, /Made for how Accra moves/u);
+  assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);
+  assert.match(css, /\.about-reasons article\s*\{[^}]*border-bottom:\s*1px solid #cbc7bd/su);
+  assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);
+  assert.match(css, /@media \(max-width: 800px\)[\s\S]*?\.about-hero\s*\{[^}]*grid-template-columns:\s*1fr/su);
 });
 
 test("first-owner setup explains its one-use key without exposing a credential", async () => {
@@ -657,7 +666,7 @@ test("launch inventory is database-backed and public defects stay closed", async
 
 test("public browsing is edge-cached without caching private customer journeys", async () => {
   const worker = await readFile(workerUrl, "utf8");
-  assert.match(worker, /path === "\/" \|\| path === "\/events" \|\| path === "\/hosts"/u);
+  assert.match(worker, /path === "\/" \|\| path === "\/about" \|\| path === "\/events" \|\| path === "\/hosts"/u);
   assert.match(worker, /\^\\\/event\\\//u);
   assert.match(worker, /headers\.delete\("set-cookie"\)/u);
   assert.match(worker, /ctx\.waitUntil\(edgeCache\.put\(cacheKey, secured\.clone\(\)\)\)/u);
@@ -669,6 +678,7 @@ test("homepage footer stays useful without duplicating the customer dock", async
   const home = await readFile(homeUrl, "utf8");
   assert.match(home, /href="\/admin\/login">Event staff/u);
   assert.match(home, /href="\/organizer\/submit">Organisers/u);
+  assert.match(home, /href="\/about">About us/u);
   assert.match(home, /href="\/help">Help/u);
   assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/events">The Drop/u);
   assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/my-nights">My Nights/u);
