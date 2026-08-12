@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import PublicNavigation from "../mobile-navigation";
 
 export const metadata: Metadata = {
   title: "About us",
@@ -19,7 +20,7 @@ export default function AboutPage() {
     <header className="directory-header">
       <Link href="/"><ArrowLeft size={16} /> Home</Link>
       <Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link>
-      <Link href="/events" className="customer-dock-duplicate">The Drop</Link>
+      <PublicNavigation />
     </header>
 
     <section className="about-hero">

@@ -5,6 +5,7 @@ import { eventImageSrcSet, eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
 import RoomPreviewCarousel from "./room-preview-carousel";
 import ScrollReveal from "./scroll-reveal";
+import PublicNavigation from "./mobile-navigation";
 
 function BrandMark() {
   return <span className="night-brand" aria-label="BeCore Tickets"><b>B</b><span>BeCore<br />Tickets</span></span>;
@@ -45,8 +46,7 @@ export default async function Home() {
     <ScrollReveal />
     <header className="night-header">
       <Link href="/" className="night-brand-link"><BrandMark /></Link>
-      <nav aria-label="Main navigation"><Link href="/events">The Drop</Link><Link href="/about">About us</Link><Link href="/organizer/submit">Organisers</Link></nav>
-      <div className="night-header__actions"><Link href="/my-nights" className="night-ticket-link"><Ticket size={16} /> My Nights</Link></div>
+      <PublicNavigation />
     </header>
 
     <section className="compact-hero">

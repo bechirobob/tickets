@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
+import PublicNavigation from "../mobile-navigation";
 
 export const metadata = { title: "Privacy" };
 
 export default function PrivacyPage() {
   return <main className="legal-page">
-    <header><Link href="/"><ArrowLeft size={16} /> Back to events</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></span></header>
+    <header><Link href="/"><ArrowLeft size={16} /> Back to events</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></span><PublicNavigation /></header>
     <article>
       <p className="eyebrow"><ShieldCheck size={14} /> Privacy notice</p>
       <h1>Your ticket needs some information. The crowd does not.</h1>

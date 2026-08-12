@@ -98,7 +98,8 @@ test("notification history stays behind the verified My Nights entrance", async 
   ]);
   assert.doesNotMatch(home, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /href="\/notifications"/u);
-  assert.match(dock, /!pathname\.startsWith\("\/my-nights"\)[\s\S]*?<MobileNavigation/u);
+  assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
+  assert.match(home, /<PublicNavigation \/>/u);
   assert.match(myNights, /<Link className="notification-bell" href="\/notifications"/u);
   assert.doesNotMatch(myNights, /payload \? <Link className="notification-bell"/u);
   assert.match(hub, /className="notification-bell" href="\/notifications"/u);
@@ -230,31 +231,37 @@ test("mobile customers retain wallet access and form controls do not trigger iOS
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?input,\s*select,\s*textarea\s*\{[^}]*font-size:\s*16px/su);
 });
 
-test("mobile customer navigation keeps secondary links straight and leaves dock destinations in the dock", async () => {
-  const [css, polish, home, mobileNavigation, dock] = await Promise.all([
+test("public navigation belongs to each header on mobile and desktop", async () => {
+  const [css, polish, home, about, events, help, privacy, mobileNavigation, dock] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(accessPolishUrl, "utf8"),
     readFile(homeUrl, "utf8"),
+    readFile(aboutUrl, "utf8"),
+    readFile(new URL("../app/events/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/help/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/privacy/page.tsx", import.meta.url), "utf8"),
     readFile(mobileNavigationUrl, "utf8"),
     readFile(customerDockUrl, "utf8"),
   ]);
 
-  assert.doesNotMatch(home, /<MobileNavigation \/>/u);
-  assert.match(dock, /<MobileNavigation \/>/u);
+  for (const page of [home, about, events, help, privacy]) assert.match(page, /<PublicNavigation \/>/u);
+  assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
+  assert.match(mobileNavigation, /href: "\/events", label: "The Drop"/u);
+  assert.match(mobileNavigation, /href: "\/my-nights", label: "My Nights"/u);
   assert.match(mobileNavigation, /href: "\/organizer\/submit", label: "Organisers"/u);
   assert.match(mobileNavigation, /href: "\/about", label: "About us"/u);
   assert.match(mobileNavigation, /href: "\/help", label: "Help"/u);
-  assert.doesNotMatch(mobileNavigation, /\/events|\/my-nights/u);
   assert.match(dock, /href: "\/events", label: "The Drop"/u);
   assert.match(dock, /href: "\/my-nights", label: "My Nights"/u);
   assert.match(mobileNavigation, /aria-expanded=\{open\}/u);
   assert.match(mobileNavigation, /event\.key === "Escape"/u);
-  assert.match(css, /\.night-mobile-menu\s*\{[^}]*display:\s*none/su);
-  assert.match(css, /@media \(max-width: 1000px\)[\s\S]*?\.night-mobile-menu\s*\{[^}]*display:\s*block/su);
-  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
+  for (const icon of ["CalendarDays", "Ticket", "UsersRound", "CalendarPlus", "Info", "LifeBuoy"]) assert.match(mobileNavigation, new RegExp(icon, "u"));
+  assert.match(css, /\.night-mobile-menu\s*\{[^}]*position:\s*relative[^}]*display:\s*block/su);
+  assert.match(css, /\.night-mobile-menu__trigger\s*\{[^}]*position:\s*static/su);
+  assert.doesNotMatch(css, /\.night-mobile-menu__trigger\s*\{[^}]*position:\s*fixed/su);
+  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*position:\s*absolute[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
   assert.match(css, /\.night-mobile-menu__panel a\s*\{[^}]*border-bottom:\s*1px solid[^}]*border-radius:\s*0/su);
   assert.match(polish, /secondary customer menu[\s\S]*?\.night-mobile-menu__panel a\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
-  assert.match(css, /\.customer-dock-duplicate\s*\{[^}]*display:\s*none\s*!important/su);
 });
 
 test("the program-wide type scale never returns to ant-sized visible text", async () => {
@@ -358,9 +365,12 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(checkout, /payment-providers\/telecel-cash\.svg/u);
   assert.match(checkout, /payment-providers\/at-money\.svg/u);
   assert.match(checkout, /Choose how you want to pay\./u);
-  assert.match(checkout, /Mobile money<small>MTN, Telecel or AT Money/u);
-  assert.match(checkout, /Card<small>Visa or Mastercard/u);
-  assert.match(checkout, /paymentMethod === "mobile_money" \? <div className="network-list"/u);
+  assert.match(checkout, /Mobile Money<small>MTN MoMo, Telecel Cash or AT Money/u);
+  assert.match(checkout, /Card<small>Visa or Mastercard through Paystack/u);
+  assert.match(checkout, /useState<"mobile_money" \| "card" \| null>\(null\)/u);
+  assert.match(checkout, /<fieldset className="payment-methods">/u);
+  assert.match(checkout, /type="radio" name="paymentMethod"/u);
+  assert.match(checkout, /paymentMethod === "mobile_money" \? <div className="payment-method-detail">/u);
   assert.match(checkout, /Paystack to enter your card details securely/u);
   assert.match(checkout, /payment-providers\/visa\.svg/u);
   assert.match(checkout, /payment-providers\/mastercard\.svg/u);
@@ -375,7 +385,9 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(paymentRoute, /mtn: "mtn", telecel: "vod", at: "atl"/u);
   assert.match(paymentRoute, /channels: \[paymentMethod\]/u);
   assert.match(paymentRoute, /paymentMethod === "card" \? "card" : `mobile_money:/u);
-  assert.match(css, /\.payment-methods\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
+  assert.match(css, /\.payment-methods\s*\{[^}]*border:\s*0/su);
+  assert.match(css, /\.payment-option\s*\{[^}]*border-top:\s*1px solid/su);
+  assert.match(css, /\.card-payment-detail\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/su);
   assert.match(checkout, /authorizationUrl \?\? data\.nextUrl/u);
   assert.doesNotMatch(layout, /challenges\.cloudflare\.com/u);
 });

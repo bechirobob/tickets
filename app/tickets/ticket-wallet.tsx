@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, Loader2, LogOut, Mail, MapPin, MessageCircle, ReceiptText, Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 import QrPass from "./qr-pass";
+import PublicNavigation from "../mobile-navigation";
 
 type GateTicket = {
   id: string;
@@ -74,7 +75,7 @@ export default function TicketWallet() {
   }
 
   return <main className="wallet-page wallet-page--real">
-    <header><Link href="/"><ArrowLeft size={17} /> Back to the shortlist</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></span>{wallet ? <button onClick={signOut}><LogOut size={14} /> Sign out</button> : <span />}</header>
+    <header><Link href="/"><ArrowLeft size={17} /> Back to the shortlist</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></span><span className="public-header-actions">{wallet ? <button onClick={signOut}><LogOut size={14} /> Sign out</button> : null}<PublicNavigation /></span></header>
     <section>
       {confirmed ? <div className="wallet-confirmed"><CheckCircle2 size={21} /><div><b>Payment confirmed</b><span>Your night survived the group chat. Passes and receipt are below.</span></div></div> : null}
       {recovered ? <div className="wallet-confirmed"><CheckCircle2 size={21} /><div><b>Wallet recovered</b><span>Fresh QR passes, because screenshots deserve trust issues.</span></div></div> : null}

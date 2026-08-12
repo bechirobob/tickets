@@ -10,7 +10,14 @@ const publicPages = ["/", "/events", "/help", "/privacy"];
 test("public navigation is usable without horizontal overflow", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByRole("link", { name: /My Nights/u }).first()).toBeVisible();
+  const menu = page.getByRole("button", { name: "Open navigation" });
+  await expect(menu).toBeVisible();
+  await menu.click();
+  await expect(page.getByRole("link", { name: "My Nights", exact: true }).first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeFocused();
+  await page.evaluate(() => window.scrollTo(0, 700));
+  await expect(menu).not.toBeInViewport();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
@@ -31,12 +38,16 @@ test("preview events remain excluded from search while sharing metadata stays co
 
 test("checkout groups mobile money providers separately from secure card payment", async ({ page }) => {
   await page.goto("/checkout/after-dark-osu");
-  const mobileMoney = page.getByRole("radio", { name: /Mobile money/u });
+  const mobileMoney = page.getByRole("radio", { name: /Mobile Money/u });
   const card = page.getByRole("radio", { name: /^Card/u });
-  await expect(mobileMoney).toHaveAttribute("aria-checked", "true");
+  await expect(mobileMoney).not.toBeChecked();
+  await expect(card).not.toBeChecked();
+  await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toHaveCount(0);
+  await mobileMoney.click();
+  await expect(mobileMoney).toBeChecked();
   await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toBeVisible();
   await card.click();
-  await expect(card).toHaveAttribute("aria-checked", "true");
+  await expect(card).toBeChecked();
   await expect(page.getByText("BeCore never receives or stores your card number.")).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toHaveCount(0);
   const serious = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze())

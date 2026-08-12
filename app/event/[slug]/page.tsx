@@ -9,6 +9,7 @@ import { findPrimaryHost } from "../../../lib/event-experience";
 import EventActions from "./event-actions";
 import MemberActions from "../../member-actions";
 import WaitlistControl from "./waitlist-control";
+import PublicNavigation from "../../mobile-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
   return <main className="event-page compact-event-page">
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
-    <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><EventActions title={event.title} eventSlug={event.slug} /></header>
+    <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><span className="public-header-actions"><EventActions title={event.title} eventSlug={event.slug} /><PublicNavigation /></span></header>
 
     <section className="compact-event-hero"><img src={eventImageUrl(event.image, 1440, 78)} srcSet={eventImageSrcSet(event.image, [720, 1080, 1440])} sizes="100vw" alt={`Atmosphere for ${event.title}`} fetchPriority="high" decoding="async" /><div /><article><p className="eyebrow">{event.isTestEvent ? "Working preview" : "BeCore pick"} · {event.vibe}</p><h1>{event.title}</h1><span>{event.fullDate} · {event.venue}, {event.area}</span></article></section>
 

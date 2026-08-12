@@ -23,7 +23,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
     return event.ticketTiers.find((tier) => tier.status === "available" && (!requested || tier.id === requested))?.id ?? event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id;
   });
   const [network, setNetwork] = useState("mtn");
-  const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card">("mobile_money");
+  const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | null>(null);
   const [message, setMessage] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -51,6 +51,10 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
 
   async function continueToPay() {
     if (isPaying) return;
+    if (!paymentMethod) {
+      setMessage("Choose Mobile Money or card before continuing.");
+      return;
+    }
     if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim()) || phone.trim().length < 7) {
       setMessage("We need the boring three before the fun one: your name, a valid email and a reachable phone number.");
       return;
@@ -147,28 +151,33 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
           <div className="checkout-step checkout-step--second">
             <span>3</span><div><small>Payment</small><h2>Choose how you want to pay.</h2></div>
           </div>
-          <div className="payment-methods" role="radiogroup" aria-label="Choose payment method">
-            <button type="button" role="radio" aria-checked={paymentMethod === "mobile_money"} className={paymentMethod === "mobile_money" ? "selected" : ""} onClick={() => { setPaymentMethod("mobile_money"); setMessage(""); }}>
-              <Smartphone size={19} /><span>Mobile money<small>MTN, Telecel or AT Money</small></span>{paymentMethod === "mobile_money" && <Check size={18} />}
-            </button>
-            <button type="button" role="radio" aria-checked={paymentMethod === "card"} className={paymentMethod === "card" ? "selected" : ""} onClick={() => { setPaymentMethod("card"); setMessage(""); }}>
-              <CreditCard size={19} /><span>Card<small>Visa or Mastercard</small></span>{paymentMethod === "card" && <Check size={18} />}
-            </button>
-          </div>
-          <div className="payment-method-detail">
-            {paymentMethod === "mobile_money" ? <div className="network-list" role="radiogroup" aria-label="Choose mobile money service">
-              {paymentNetworks.map((item) => (
-                <button type="button" role="radio" aria-checked={network === item.id} key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
-                  <span className="network-logo" aria-hidden="true"><Image src={item.icon} alt="" width={38} height={38} /></span>
-                  <span className="network-copy">{item.label}<small>Your phone gets the final say</small></span>
-                  {network === item.id && <Check size={18} />}
-                </button>
-              ))}
-            </div> : <div className="card-payment-detail">
-              <CreditCard size={24} aria-hidden="true" />
-              <div><strong>Visa or Mastercard</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
-            </div>}
-          </div>
+          <fieldset className="payment-methods">
+            <legend className="sr-only">Choose payment method</legend>
+            <section className={`payment-option${paymentMethod === "mobile_money" ? " selected" : ""}`}>
+              <label className="payment-method-choice">
+                <input type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={() => { setPaymentMethod("mobile_money"); setMessage(""); }} />
+                <Smartphone size={20} aria-hidden="true" /><span>Mobile Money<small>MTN MoMo, Telecel Cash or AT Money</small></span>
+              </label>
+              {paymentMethod === "mobile_money" ? <div className="payment-method-detail"><div className="network-list" role="radiogroup" aria-label="Choose mobile money service">
+                {paymentNetworks.map((item) => (
+                  <button type="button" role="radio" aria-checked={network === item.id} key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
+                    <span className="network-logo" aria-hidden="true"><Image src={item.icon} alt="" width={38} height={38} /></span>
+                    <span className="network-copy">{item.label}<small>Your phone gets the final say</small></span>
+                    {network === item.id && <Check size={18} aria-hidden="true" />}
+                  </button>
+                ))}
+              </div></div> : null}
+            </section>
+            <section className={`payment-option${paymentMethod === "card" ? " selected" : ""}`}>
+              <label className="payment-method-choice">
+                <input type="radio" name="paymentMethod" value="card" checked={paymentMethod === "card"} onChange={() => { setPaymentMethod("card"); setMessage(""); }} />
+                <CreditCard size={20} aria-hidden="true" /><span>Card<small>Visa or Mastercard through Paystack</small></span>
+              </label>
+              {paymentMethod === "card" ? <div className="payment-method-detail"><div className="card-payment-detail">
+                <div><strong>Secure card checkout</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
+              </div></div> : null}
+            </section>
+          </fieldset>
           <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>. The accepted versions stay attached to this order.</span></label>
         </section>
 
@@ -182,7 +191,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying || !acceptedPolicies}>{isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : `Pay with MoMo · ${formatGhanaCedis(totalMinor)}`}</button>
+          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying || !acceptedPolicies || !paymentMethod}>{isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</button>
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
         </aside>
