@@ -37,7 +37,7 @@
 }
 
 /* Program-wide corner contract: interfaces are compact and soft, never square. */
-:where(button, input, select, textarea) {
+:where(a, button, input, select, textarea, summary) {
   border-radius: var(--radius-control);
 }
 :where(input[type="checkbox"]) { border-radius: 4px; }
@@ -300,4 +300,160 @@
 .submission-fields textarea:focus,
 .admin-login__form input:focus {
   border-color: #696963;
+}
+
+/* Absolute flatness contract: no visual shadow is allowed anywhere in the product. */
+*,
+*::before,
+*::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Interactive rows use complete controls or straight structural edges, never curved underlines. */
+.quantity-control button {
+  border: 0;
+  border-radius: 50%;
+  background: #e8e4da;
+}
+
+.network-list {
+  gap: 8px;
+  border: 0;
+}
+
+.network-list button,
+.network-list button.selected {
+  padding: 13px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.network-list button.selected {
+  border-color: var(--ink);
+}
+
+.ops-record-list {
+  gap: 8px;
+  border: 0;
+}
+
+.ops-record-list button,
+.ops-record-list button.active {
+  padding: 14px;
+  border: 1px solid #cbc7bd;
+  background: transparent;
+  color: var(--ink);
+}
+
+.ops-record-list button.active {
+  border-color: var(--ink);
+}
+
+.support-ops__layout {
+  overflow: hidden;
+  border: 1px solid #aaa79f;
+}
+
+.support-ops__layout > nav {
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.support-ops__layout > nav > button,
+.support-ops__layout > nav > button.active {
+  border: 1px solid #d1cdc3;
+  background: transparent;
+  color: var(--ink);
+}
+
+.support-ops__layout > nav > button.active {
+  border-color: var(--ink);
+}
+
+.support-ops__layout > nav > button.active::before {
+  display: none;
+}
+
+:where(
+  .help-page article > a,
+  .help-frequent a,
+  .help-guide > div > a,
+  .help-contact article > a,
+  .venue-block > a,
+  .compact-section-head > a,
+  .drop-card__body > a,
+  .drop-pagination button,
+  .hosts-list a,
+  .event-host a,
+  .host-events a,
+  .my-nights-tabs button,
+  .my-nights-list aside > a,
+  .my-nights-empty a,
+  .my-nights-locked a,
+  .night-hub__tabs button,
+  .night-hub--locked a,
+  .notification-page > section > a,
+  .organizer-portfolio > header a,
+  .organizer-history > header a,
+  .organizer-dashboard > header a,
+  .organizer-person button,
+  .organizer-empty a,
+  .settings-layout > aside button,
+  .event-empty a,
+  .legal-page section a,
+  .night-shuffle,
+  .curated-card__link,
+  .night-pitch__copy a,
+  .curation-list > button,
+  .curation-empty a,
+  .night-room-tease__actions a,
+  .event-rail-status button,
+  .room-gate a,
+  .wallet-locked a,
+  .compact-event-facts a,
+  .my-nights-list .my-nights-actions > a:last-child,
+  .night-details dd a,
+  .night-purchase__support a
+) {
+  border-bottom: 0;
+}
+
+.help-frequent > div {
+  border: 1px solid #c8c4ba;
+}
+
+.notification-page > section,
+.staff-list,
+.curation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.notification-page > section > a,
+.staff-list > button,
+.curation-list > button {
+  border: 1px solid #cbc7bd;
+  background: transparent;
+}
+
+.event-rail-status button {
+  border: 0;
+  border-radius: 50%;
+  background: #e8e4da;
+}
+
+.drop-controls button[aria-selected="true"]::after,
+.date-line a.active::before,
+.vibe-filter button.active::after,
+.night-room-peek__tabs > span.active::after,
+.room-modes > button.active::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-product-phone__stream > article {
+    animation: none;
+  }
 }

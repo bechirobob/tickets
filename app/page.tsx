@@ -9,6 +9,30 @@ function BrandMark() {
   return <span className="night-brand" aria-label="BeCore Tickets"><b>B</b><span>BeCore<br />Tickets</span></span>;
 }
 
+function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string; heroImage: string; conversation: "arrival" | "inside" }) {
+  return <article className={`room-product-phone room-product-phone--${conversation}`}>
+    <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b>5G</b></div>
+    <div className="room-product-phone__screen">
+      <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>{conversation === "arrival" ? "18" : "24"} online</span></header>
+      <div className="room-product-phone__stream">
+        {conversation === "arrival" ? <>
+          <article className="scene-host"><BadgeCheck size={14} /><div><small>HOST UPDATE · 9:14 PM</small><p>Doors are open. Main set at 11:30. Pace yourselves; we know you won&apos;t.</p></div></article>
+          <article className="scene-message"><span>KM</span><div><small>Kofi · 9:18 PM</small><p>Who is actually in Osu already?</p><i>😂 4</i></div></article>
+          <article className="scene-message scene-message--own"><div><small>You · 9:19 PM</small><p>“Five minutes away” in the spiritual sense.</p><i>😭 2</i></div></article>
+          <article className="scene-message"><span>YA</span><div><small>Yaw · 9:22 PM</small><p>Okay fine. Leaving now.</p><i>🔥 3</i></div></article>
+        </> : <>
+          <article className="scene-message"><span>AM</span><div><small>Ama · 10:42 PM</small><p>Front left is the move tonight.</p><i>👀 6</i></div></article>
+          <article className="scene-flash"><img src={eventImageUrl(heroImage, 520)} alt="Flash shared inside The Room" loading="lazy" decoding="async" /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
+          <article className="scene-message scene-message--own"><div><small>You · 10:44 PM</small><p>Found you. This set is ridiculous.</p><i>🔥 5</i></div></article>
+          <article className="scene-host scene-host--compact"><BadgeCheck size={14} /><div><small>HOST UPDATE · 10:47 PM</small><p>Last entry moves to Gate 2.</p></div></article>
+        </>}
+      </div>
+      <div className="room-product-phone__composer"><Camera size={17} /><span>Message The Room</span><Send size={16} /></div>
+    </div>
+    <span className="room-product-phone__home" aria-hidden="true" />
+  </article>;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
@@ -43,16 +67,9 @@ export default async function Home() {
 
     <section className="room-product-scene" id="the-room" data-scroll-reveal>
       <div className="room-product-scene__copy"><p className="night-kicker"><span /> Included with your ticket</p><h2>The night has a Room.</h2><p>Plan together, hear it straight from the Host and drop Flashes into the same conversation. The chat remembers. The photos know when to leave.</p><span><LockKeyhole size={13} /> No ticket, no lurking. Very civilised.</span></div>
-      <div className="room-product-scene__crop" aria-label="Preview of The Room conversation">
-        <div className="room-product-scene__header"><div><small>The Room</small><b>{featured?.title ?? "After Dark"}</b></div><span>18 online</span></div>
-        <div className="room-product-scene__stream">
-          <article className="scene-host"><BadgeCheck size={14} /><div><small>HOST UPDATE · 9:14 PM</small><p>Doors are open. Main set at 11:30. Pace yourselves; we know you won&apos;t.</p></div></article>
-          <article className="scene-message"><span>KM</span><div><small>Kofi · 9:18 PM</small><p>Who is actually in Osu already?</p><i>😂 4</i></div></article>
-          <article className="scene-message scene-message--own"><div><small>You · 9:19 PM</small><p>“Five minutes away” in the spiritual sense.</p><i>😭 2</i></div></article>
-          <article className="scene-flash"><img src={eventImageUrl(heroImage, 520)} alt="Flash shared inside The Room" loading="lazy" decoding="async" /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
-          <article className="scene-message"><span>YA</span><div><small>Yaw · 9:22 PM</small><p>Okay fine. Leaving now.</p><i>🔥 3</i></div></article>
-        </div>
-        <div className="room-product-scene__composer"><Camera size={17} /><span>Message The Room</span><Send size={16} /></div>
+      <div className="room-product-scene__phones" aria-label="Two previews of ticket-holder conversations in The Room">
+        <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="arrival" />
+        <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="inside" />
       </div>
     </section>
 
