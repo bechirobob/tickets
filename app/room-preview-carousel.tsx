@@ -30,7 +30,7 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
   };
 
   return <div className="room-product-preview" role="region" aria-roledescription="carousel" aria-label="The Room preview">
-    <div ref={trackRef} className="room-product-scene__phones" onScroll={trackPosition} aria-live="polite">
+    <div ref={trackRef} className="room-product-scene__phones" onScroll={trackPosition} aria-live="polite" tabIndex={0}>
       {children}
     </div>
     <div className="room-product-preview__controls">

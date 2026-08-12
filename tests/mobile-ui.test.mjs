@@ -121,6 +121,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /aria-label="4 laughing reactions"/u);
   assert.match(home, /aria-label="2 crying reactions"/u);
   assert.match(home, /aria-label="3 fire reactions"/u);
+  assert.match(home, /className="sr-only">VIP ticket holder/u);
+  assert.doesNotMatch(home, /scene-vip-badge" aria-label=/u);
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
   assert.equal(home.match(/<RoomPhone /gu)?.length, 2);
@@ -131,6 +133,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.room-product-scene__phones\s*\{[^}]*grid-auto-flow:\s*column[^}]*grid-auto-columns:\s*calc\(100vw - 40px\)[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory/su);
   assert.match(css, /\.room-product-phone\s*\{[^}]*scroll-snap-align:\s*start[^}]*scroll-snap-stop:\s*always/su);
   assert.match(carousel, /aria-roledescription="carousel"/u);
+  assert.match(carousel, /className="room-product-scene__phones"[^>]*tabIndex=\{0\}/u);
   assert.match(carousel, /Swipe to see both sides of the night/u);
   assert.match(carousel, /Show previous Room preview/u);
   assert.match(carousel, /Show next Room preview/u);
@@ -140,7 +143,6 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-message__meta"/u);
   assert.doesNotMatch(home, /className="scene-message__bubble"><small/u);
   assert.equal(home.match(/className="scene-message__bubble"><p>/gu)?.length, 5);
-  assert.match(home, /aria-label="VIP ticket holder"/u);
   assert.match(home, /<Gem size=\{10\}/u);
   assert.match(home, /className="scene-message__reactions"/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
