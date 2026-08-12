@@ -7,6 +7,7 @@ import {
   requestMetadata,
 } from "../../../../lib/admin-session";
 import { resolveRoomPolicy } from "../../../../lib/room-policy";
+import { notifyAttendee } from "../../../../lib/notifications";
 
 async function organizer(request: Request) {
   const { env } = await import("cloudflare:workers");
@@ -69,10 +70,10 @@ export async function GET(request: Request) {
     session.role === "owner" ? submissionStatement.all<Record<string, unknown>>() : submissionStatement.bind(session.email).all<Record<string, unknown>>(),
   ]);
   const slugs = events.results.map((event) => String(event.slug));
-  if (!slugs.length) return Response.json({ events: [], submissions: submissions.results, tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [] }, { headers: { "cache-control": "no-store" } });
+  if (!slugs.length) return Response.json({ events: [], submissions: submissions.results, tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [], vipSettings: [], vipRequests: [] }, { headers: { "cache-control": "no-store" } });
   const placeholders = slugs.map(() => "?").join(",");
   const now = new Date().toISOString();
-  const [tiers, settlements, requests, gateStaff, attendeeAnswers] = await Promise.all([
+  const [tiers, settlements, requests, gateStaff, attendeeAnswers, vipSettings, vipRequests] = await Promise.all([
     env.DB.prepare(`SELECT tier.id, tier.event_slug AS eventSlug, tier.name, tier.price_minor AS priceMinor, tier.capacity_admissions AS capacityAdmissions,
       tier.status, COALESCE(SUM(CASE WHEN reservation.status = 'consumed' OR (reservation.status = 'held' AND reservation.expires_at > ?) THEN reservation.admission_count ELSE 0 END), 0) AS allocatedAdmissions
       FROM event_ticket_tiers tier LEFT JOIN inventory_reservations reservation ON reservation.ticket_tier_id = tier.id
@@ -92,8 +93,16 @@ export async function GET(request: Request) {
       JOIN attendee_profiles profile ON profile.id = answer.attendee_id
       WHERE question.event_slug IN (${placeholders}) AND answer.answer <> ''
       ORDER BY question.event_slug, answer.updated_at DESC LIMIT 500`).bind(...slugs).all<Record<string, unknown>>(),
+    env.DB.prepare(`SELECT event_slug AS eventSlug, bottle_service_enabled AS bottleServiceEnabled, bottle_menu AS bottleMenu,
+      song_suggestions_enabled AS songSuggestionsEnabled, assistance_enabled AS assistanceEnabled, updated_at AS updatedAt
+      FROM event_vip_settings WHERE event_slug IN (${placeholders})`).bind(...slugs).all<Record<string, unknown>>(),
+    env.DB.prepare(`SELECT request.id, request.event_slug AS eventSlug, request.attendee_id AS attendeeId,
+      request.kind, request.detail, request.location, request.status, request.organizer_note AS organizerNote,
+      request.created_at AS createdAt, profile.display_name AS displayName
+      FROM vip_concierge_requests request JOIN attendee_profiles profile ON profile.id = request.attendee_id
+      WHERE request.event_slug IN (${placeholders}) ORDER BY request.created_at DESC LIMIT 250`).bind(...slugs).all<Record<string, unknown>>(),
   ]);
-  return Response.json({ events: events.results, submissions: submissions.results, tiers: tiers.results, settlements: settlements.results, requests: requests.results, gateStaff: gateStaff.results, attendeeAnswers: attendeeAnswers.results }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ events: events.results, submissions: submissions.results, tiers: tiers.results, settlements: settlements.results, requests: requests.results, gateStaff: gateStaff.results, attendeeAnswers: attendeeAnswers.results, vipSettings: vipSettings.results, vipRequests: vipRequests.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function PATCH(request: Request) {
@@ -171,6 +180,45 @@ export async function POST(request: Request) {
       else await env.DB.prepare("INSERT OR IGNORE INTO staff_event_assignments (account_id, event_slug, assigned_by, assigned_at) VALUES (?, ?, ?, ?)").bind(gate.id, eventSlug, session.accountId, now).run();
       await recordAudit(env.DB, { session, action: body.remove === true ? "organizer.gate_unassigned" : "organizer.gate_assigned", targetType: "staff_account", targetId: gate.id, outcome: "success", detail: eventSlug, requestId });
       return Response.json({ assigned: body.remove !== true });
+    }
+    if (action === "vip_settings") {
+      const bottleMenu = String(body.bottleMenu ?? "").trim().slice(0, 1200) || null;
+      const bottleServiceEnabled = body.bottleServiceEnabled === true;
+      const songSuggestionsEnabled = body.songSuggestionsEnabled === true;
+      const assistanceEnabled = body.assistanceEnabled === true;
+      if (bottleServiceEnabled && !bottleMenu) throw new Error("Add a short bottle menu before opening bottle service.");
+      await env.DB.prepare(`
+        INSERT INTO event_vip_settings
+          (event_slug, bottle_service_enabled, bottle_menu, song_suggestions_enabled, assistance_enabled, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(event_slug) DO UPDATE SET
+          bottle_service_enabled = excluded.bottle_service_enabled, bottle_menu = excluded.bottle_menu,
+          song_suggestions_enabled = excluded.song_suggestions_enabled, assistance_enabled = excluded.assistance_enabled,
+          updated_by = excluded.updated_by, updated_at = excluded.updated_at
+      `).bind(eventSlug, bottleServiceEnabled, bottleMenu, songSuggestionsEnabled, assistanceEnabled, session.accountId, now).run();
+      await recordAudit(env.DB, { session, action: "organizer.vip_settings_updated", targetType: "event", targetId: eventSlug, outcome: "success", requestId });
+      return Response.json({ saved: true });
+    }
+    if (action === "vip_request") {
+      const id = String(body.id ?? "");
+      const status = String(body.status ?? "");
+      const organizerNote = String(body.organizerNote ?? "").trim().slice(0, 300) || null;
+      const item = await env.DB.prepare(`SELECT attendee_id AS attendeeId, kind FROM vip_concierge_requests WHERE id = ? AND event_slug = ? LIMIT 1`)
+        .bind(id, eventSlug).first<{ attendeeId: string; kind: string }>();
+      if (!item) throw new Error("That VIP request is no longer available.");
+      const allowed = item.kind === "song_suggestion" ? ["considering", "played", "not_tonight"]
+        : item.kind === "bottle_service" ? ["confirmed", "on_the_way", "delivered", "declined"]
+          : ["confirmed", "delivered", "declined"];
+      if (!allowed.includes(status)) throw new Error("Choose a valid concierge status.");
+      await env.DB.prepare("UPDATE vip_concierge_requests SET status = ?, organizer_note = ?, updated_at = ? WHERE id = ? AND event_slug = ?")
+        .bind(status, organizerNote, now, id, eventSlug).run();
+      await notifyAttendee(env, item.attendeeId, {
+        eventSlug, kind: "support_update", title: "VIP concierge update",
+        body: organizerNote ?? `Your ${item.kind.replaceAll("_", " ")} request is now ${status.replaceAll("_", " ")}.`,
+        url: `/room/${encodeURIComponent(eventSlug)}`, sourceId: `vip-${id}-${status}`, tag: `vip-${eventSlug}`,
+      });
+      await recordAudit(env.DB, { session, action: `organizer.vip_request.${status}`, targetType: "vip_concierge_request", targetId: id, outcome: "success", requestId });
+      return Response.json({ updated: true });
     }
     return Response.json({ error: "Choose a valid organiser action." }, { status: 400 });
   } catch (error) {

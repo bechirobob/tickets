@@ -68,6 +68,7 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
   headers.set("x-bct-room-authorized", "1");
   headers.set("x-bct-attendee-id", access.attendeeId);
   headers.set("x-bct-display-name", encodeURIComponent(access.displayName));
+  headers.set("x-bct-room-badge", access.roomBadge ?? "");
   headers.set("x-bct-blocked-attendees", blocked.results.map((item) => item.attendeeId).join(","));
   headers.set("x-bct-event-slug", policy.eventSlug);
   headers.set("x-bct-event-title", encodeURIComponent(policy.eventTitle));

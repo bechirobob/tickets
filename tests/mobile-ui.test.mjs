@@ -94,7 +94,8 @@ test("notification history stays behind the verified My Nights entrance", async 
     readFile(nightHubUrl, "utf8"),
   ]);
   assert.doesNotMatch(home, /href="\/notifications"/u);
-  assert.doesNotMatch(dock, /\/notifications/u);
+  assert.doesNotMatch(dock, /href="\/notifications"/u);
+  assert.match(dock, /!pathname\.startsWith\("\/my-nights"\)[\s\S]*?<MobileNavigation/u);
   assert.match(myNights, /payload \? <Link className="notification-bell" href="\/notifications"/u);
   assert.match(hub, /className="notification-bell" href="\/notifications"/u);
 });
@@ -258,7 +259,7 @@ test("event-day journeys remain available beyond the open browser tab", async ()
     readFile(serviceWorkerUrl, "utf8"),
     readFile(scannerUrl, "utf8"),
   ]);
-  assert.doesNotMatch(dock, /\/notifications/u);
+  assert.doesNotMatch(dock, /href="\/notifications"/u);
   assert.match(hub, /notification-bell/u);
   assert.match(hub, /Open offline door pass/u);
   assert.match(hub, /TicketTransfer/u);

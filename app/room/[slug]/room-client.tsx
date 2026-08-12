@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Camera, Flag, MessageCircle, Reply, Send, ShieldCheck, UserRoundX, Users } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Camera, ConciergeBell, Flag, HandHelping, MessageCircle, Music2, Reply, Send, ShieldCheck, UserRoundX, Users, Wine, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import FlashesPanel, { type RoomFlash } from "./flashes-panel";
 import RoomNotifications from "./room-notifications";
@@ -9,10 +9,13 @@ import RoomNotifications from "./room-notifications";
 type Reaction = { emoji: string; count: number; mine: boolean };
 type Message = {
   id: string; sequence: number; attendeeId: string; displayName: string; role: "attendee" | "organizer" | "moderator";
+  roomBadge: "VIP" | null;
   kind: "message" | "announcement"; content: string; parentId: string | null; pinned: boolean;
   createdAt: string; deletedAt: string | null; reactions: Reaction[];
 };
 type Policy = { eventSlug: string; eventTitle: string; readOnlyAt: string; readOnly: boolean; emergencyReadOnly?: boolean; slowModeSeconds?: number; archived?: boolean };
+type VipSettings = { bottleServiceEnabled: boolean; bottleMenu: string | null; songSuggestionsEnabled: boolean; assistanceEnabled: boolean };
+type VipRequest = { id: string; kind: string; detail: string; location: string | null; status: string; organizerNote: string | null; createdAt: string };
 
 export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug: string; fallbackTitle: string; fallbackDate: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -32,6 +35,13 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [selectedFlashId, setSelectedFlashId] = useState<string | null>(null);
   const [captureRequest, setCaptureRequest] = useState(0);
+  const [vipSettings, setVipSettings] = useState<VipSettings | null>(null);
+  const [vipRequests, setVipRequests] = useState<VipRequest[]>([]);
+  const [vipOpen, setVipOpen] = useState(false);
+  const [vipKind, setVipKind] = useState<"bottle_service" | "song_suggestion" | "assistance">("bottle_service");
+  const [vipDetail, setVipDetail] = useState("");
+  const [vipLocation, setVipLocation] = useState("");
+  const [vipBusy, setVipBusy] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const connectRef = useRef<(attendeeId: string) => void>(() => undefined);
   const attendeeIdRef = useRef("");
@@ -122,7 +132,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
     let cancelled = false;
     leavingRef.current = false;
     fetch(`/api/rooms/${encodeURIComponent(slug)}/access`, { cache: "no-store" })
-      .then(async (response) => ({ response, data: await response.json() as { allowed?: boolean; attendee?: { id: string }; room?: Policy; error?: string } }))
+      .then(async (response) => ({ response, data: await response.json() as { allowed?: boolean; attendee?: { id: string; roomBadge?: "VIP" | null }; room?: Policy; error?: string } }))
       .then(({ response, data }) => {
         if (cancelled) return;
         if (!response.ok || !data.allowed || !data.attendee) {
@@ -133,6 +143,17 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
         attendeeIdRef.current = data.attendee.id;
         setSelfId(data.attendee.id);
         setPolicy(data.room ?? null);
+        if (data.attendee.roomBadge === "VIP") {
+          void fetch(`/api/rooms/${encodeURIComponent(slug)}/vip`, { cache: "no-store" }).then(async (vipResponse) => {
+            const vip = await vipResponse.json() as { settings?: VipSettings; requests?: VipRequest[] };
+            if (vipResponse.ok) {
+              const configuration = vip.settings ?? null;
+              setVipSettings(configuration);
+              setVipRequests(vip.requests ?? []);
+              if (configuration && !configuration.bottleServiceEnabled) setVipKind(configuration.songSuggestionsEnabled ? "song_suggestion" : "assistance");
+            }
+          });
+        }
         connect(data.attendee.id);
       })
       .catch(() => { setNotice("The Room is temporarily unavailable."); setStatus("offline"); });
@@ -225,6 +246,25 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
     } else setNotice("That attendee could not be blocked.");
   }
 
+  async function submitVipRequest() {
+    if (!vipDetail.trim() || (vipKind === "bottle_service" && !vipLocation.trim())) return;
+    setVipBusy(true);
+    const response = await fetch(`/api/rooms/${encodeURIComponent(slug)}/vip`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: vipKind, detail: vipDetail, location: vipLocation }),
+    });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) setNotice(result.error ?? "The concierge request could not be sent.");
+    else {
+      setNotice(vipKind === "song_suggestion" ? "Your suggestion is with the Host. It is not a promise to play it." : "VIP concierge request sent privately to the Host.");
+      setVipDetail(""); setVipLocation(""); setVipOpen(false);
+      const refreshed = await fetch(`/api/rooms/${encodeURIComponent(slug)}/vip`, { cache: "no-store" });
+      const data = await refreshed.json() as { requests?: VipRequest[] };
+      if (refreshed.ok) setVipRequests(data.requests ?? []);
+    }
+    setVipBusy(false);
+  }
+
   if (status === "loading" || (status === "connecting" && !policy)) {
     return <main className="room-gate"><MessageCircle /><p>Opening your verified attendee Room…</p></main>;
   }
@@ -233,6 +273,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
   }
 
   const pinned = messages.filter((message) => message.pinned && !message.deletedAt).slice(-1)[0];
+  const vipEnabled = Boolean(vipSettings && (vipSettings.bottleServiceEnabled || vipSettings.songSuggestionsEnabled || vipSettings.assistanceEnabled));
   const timeline = [
     ...messages.map((message) => ({ type: "message" as const, createdAt: message.createdAt, value: message })),
     ...flashes.map((flash) => ({ type: "flash" as const, createdAt: flash.createdAt, value: flash })),
@@ -268,7 +309,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
           return <article key={message.id} className={`room-message ${own ? "own" : ""} ${message.kind === "announcement" ? "announcement" : ""}`}>
             {!own && <div className="room-avatar" aria-hidden="true">{message.displayName.slice(0, 1).toUpperCase()}</div>}
             <div className="room-message__body">
-              <header><b>{own ? "You" : message.displayName}</b>{message.role !== "attendee" && <span><BadgeCheck size={12} /> Organiser</span>}<time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
+              <header><b>{own ? "You" : message.displayName}</b>{message.role !== "attendee" ? <span><BadgeCheck size={12} /> Organiser</span> : message.roomBadge === "VIP" ? <span className="room-vip-badge">VIP</span> : null}<time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
               <div className="room-bubble">
                 {parent && <div className="room-reply-preview"><Reply size={12} /><b>{parent.attendeeId === selfId ? "You" : parent.displayName}</b><span>{parent.content.slice(0, 90)}</span></div>}
                 <p className={message.deletedAt ? "removed" : ""}>{message.content}</p>
@@ -290,12 +331,27 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
       <section className="room-composer">
         {replyingTo && <div><Reply size={13} /> Replying to <b>{replyingTo.displayName}</b><button onClick={() => setReplyingTo(null)}>Cancel</button></div>}
         {policy?.readOnly ? <p><ShieldCheck size={15} /> {policy.emergencyReadOnly ? "The Host paused messages. Updates still land here." : "The Room is read-only now. Even the best afterparty eventually gets lights-on."}</p> : <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
+          {vipEnabled ? <button type="button" className="room-concierge" onClick={() => setVipOpen(true)} aria-label="Open VIP concierge"><ConciergeBell size={18} /></button> : null}
           <button type="button" className="room-camera" onClick={() => setCaptureRequest((value) => value + 1)} aria-label="Share a Flash"><Camera size={18} /></button>
           <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} placeholder="Message The Room" rows={1} />
           <span className={draft.length > 450 ? "near-limit" : ""}>{draft.length ? `${draft.length}/500` : ""}</span><button aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><Send size={18} /></button>
         </form>}
       </section>
       <FlashesPanel slug={slug} readOnly={Boolean(policy?.readOnly)} expiresAt={policy?.readOnlyAt ?? new Date().toISOString()} refreshKey={flashVersion} onCount={setFlashCount} onFlashes={setFlashes} galleryOpen={galleryOpen} onGalleryClose={() => setGalleryOpen(false)} selectedFlashId={selectedFlashId} onSelectedFlashClose={() => setSelectedFlashId(null)} captureRequest={captureRequest} />
+      {vipOpen && vipSettings ? <div className="room-vip-modal" role="dialog" aria-modal="true" aria-label="VIP concierge"><section>
+        <header><div><small>Connected to the Host</small><h2>VIP concierge</h2></div><button type="button" onClick={() => setVipOpen(false)} aria-label="Close VIP concierge"><X size={18} /></button></header>
+        <nav aria-label="VIP services">
+          {vipSettings.bottleServiceEnabled ? <button type="button" className={vipKind === "bottle_service" ? "active" : ""} onClick={() => setVipKind("bottle_service")}><Wine size={15} /> Bottle service</button> : null}
+          {vipSettings.songSuggestionsEnabled ? <button type="button" className={vipKind === "song_suggestion" ? "active" : ""} onClick={() => setVipKind("song_suggestion")}><Music2 size={15} /> Suggest a song</button> : null}
+          {vipSettings.assistanceEnabled ? <button type="button" className={vipKind === "assistance" ? "active" : ""} onClick={() => setVipKind("assistance")}><HandHelping size={15} /> Assistance</button> : null}
+        </nav>
+        {vipKind === "bottle_service" && vipSettings.bottleMenu ? <p className="room-vip-menu">{vipSettings.bottleMenu}</p> : null}
+        <label>{vipKind === "song_suggestion" ? "Song and artist" : vipKind === "bottle_service" ? "Bottle or package" : "What do you need?"}<textarea value={vipDetail} onChange={(event) => setVipDetail(event.target.value.slice(0, 500))} placeholder={vipKind === "song_suggestion" ? "Song — Artist" : vipKind === "bottle_service" ? "Choose from the Host menu above" : "Keep it short and specific"} /></label>
+        {vipKind === "bottle_service" ? <label>Find me at<input value={vipLocation} onChange={(event) => setVipLocation(event.target.value.slice(0, 120))} placeholder="Table, section or nearby landmark" /></label> : null}
+        {vipKind === "song_suggestion" ? <small>Suggestions go privately to the Host or DJ. Playing the song is never guaranteed.</small> : null}
+        <button className="room-vip-send" type="button" disabled={vipBusy || !vipDetail.trim() || (vipKind === "bottle_service" && !vipLocation.trim())} onClick={() => void submitVipRequest()}>{vipBusy ? "Sending…" : "Send privately"}</button>
+        {vipRequests.length ? <details><summary>Recent requests · {vipRequests.length}</summary>{vipRequests.slice(0, 5).map((item) => <article key={item.id}><span><b>{item.kind.replaceAll("_", " ")}</b><small>{item.detail}</small></span><i>{item.status.replaceAll("_", " ")}</i></article>)}</details> : null}
+      </section></div> : null}
       {reporting && <div className="room-modal" role="dialog" aria-modal="true"><section><Flag /><p className="eyebrow">Private report</p><h2>Tell the moderation team what happened.</h2><label>Reason<select value={reportReason} onChange={(event) => setReportReason(event.target.value)}><option value="harassment">Harassment</option><option value="spam">Spam</option><option value="impersonation">Impersonation</option><option value="unsafe">Unsafe behaviour</option><option value="other">Other</option></select></label><label>Details<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value.slice(0, 500))} placeholder="Optional context for the moderator" /></label><div><button onClick={() => setReporting(null)}>Cancel</button><button onClick={submitReport}>Send report</button></div></section></div>}
     </main>
   );
