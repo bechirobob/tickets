@@ -141,6 +141,13 @@
       "when": 1786536000000,
       "tag": "0019_vip_room_concierge",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1786569600000,
+      "tag": "0020_flash_owner_cleanup",
+      "breakpoints": true
     }
   ]
 }

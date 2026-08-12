@@ -748,4 +748,9 @@ test("Flashes are camera-first and stay closed until tapped", async () => {
   assert.doesNotMatch(panel, /type="file"/u);
   assert.match(panel, /className="flash-card__closed"/u);
   assert.match(room, /className="room-flash-message__closed"/u);
+  assert.match(panel, /Delete this Flash for good\?/u);
+  assert.doesNotMatch(panel, /window\.confirm/u);
+  const css = await readFile(cssUrl, "utf8");
+  assert.match(css, /\.room-flash-message__closed\s*\{[^}]*min-height:\s*50px[^}]*display:\s*flex/su);
+  assert.doesNotMatch(css, /\.room-flash-message__closed\s*\{[^}]*min-height:\s*145px/su);
 });

@@ -57,10 +57,15 @@ export async function DELETE(request: Request, context: Context) {
   if (!access) return Response.json({ error: "A valid ticket is required." }, { status: 401 });
   if (!flash || flash.attendeeId !== access.attendeeId) return Response.json({ error: "Flash not found." }, { status: 404 });
   const now = new Date().toISOString();
-  await env.DB.prepare(`
+  const removed = await env.DB.prepare(`
     UPDATE room_flashes SET image_data = NULL, status = 'deleted', moderation_result = 'owner_removed', deleted_at = ?
     WHERE id = ? AND attendee_id = ? AND status = 'active'
   `).bind(now, id, access.attendeeId).run();
-  await env.THE_ROOM.getByName(slug).removeFlash(id);
+  if ((removed.meta.changes ?? 0) !== 1) return Response.json({ error: "Flash not found." }, { status: 404 });
+  try {
+    await env.THE_ROOM.getByName(slug).removeFlash(id);
+  } catch (error) {
+    console.error(JSON.stringify({ message: "flash removal broadcast failed", flashId: id, eventSlug: slug, error: error instanceof Error ? error.message : String(error) }));
+  }
   return Response.json({ removed: true }, { headers: { "cache-control": "no-store" } });
 }

@@ -298,11 +298,12 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
             const flash = item.value;
             return <article key={`flash:${flash.id}`} className={`room-message room-flash-message ${flash.mine ? "own" : ""}`}>
               {!flash.mine && <div className="room-avatar" aria-hidden="true">{flash.displayName.slice(0, 1).toUpperCase()}</div>}
-              <button type="button" onClick={() => setSelectedFlashId(flash.id)} aria-label={`Open Flash from ${flash.mine ? "you" : flash.displayName}`}>
-                <span className="room-flash-message__closed"><Camera size={22} /><b>Flash</b><i>Tap to open</i></span>
-                <span><b>{flash.mine ? "You" : flash.displayName}</b><time>{new Date(flash.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span>
-                <small><Camera size={11} /> Gone when the Room closes</small>
-              </button>
+              <div className="room-flash-message__body">
+                <span className="room-flash-message__meta"><b>{flash.mine ? "You" : flash.displayName}</b><time>{new Date(flash.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span>
+                <button type="button" onClick={() => setSelectedFlashId(flash.id)} aria-label={`Open Flash from ${flash.mine ? "you" : flash.displayName}`}>
+                  <span className="room-flash-message__closed"><Camera size={18} /><span><b>Flash</b><i>Tap to open</i></span></span>
+                </button>
+              </div>
             </article>;
           }
           const message = item.value;

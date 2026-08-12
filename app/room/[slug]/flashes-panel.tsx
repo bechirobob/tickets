@@ -39,6 +39,8 @@ export default function FlashesPanel({
   const [consent, setConsent] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewing, setViewing] = useState<RoomFlash | null>(null);
+  const [confirmingRemoval, setConfirmingRemoval] = useState<RoomFlash | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [reporting, setReporting] = useState<RoomFlash | null>(null);
   const [reportReason, setReportReason] = useState("nonconsensual");
   const [reportDetails, setReportDetails] = useState("");
@@ -168,14 +170,30 @@ export default function FlashesPanel({
   }
 
   async function remove(flash: RoomFlash) {
-    if (!window.confirm("Remove your Flash now? It cannot be recovered.")) return;
-    const response = await fetch(`/api/rooms/${encodeURIComponent(slug)}/flashes/${encodeURIComponent(flash.id)}`, { method: "DELETE" });
-    const result = await response.json() as { error?: string };
-    if (!response.ok) { setNotice(result.error ?? "The Flash could not be removed."); return; }
-    setViewing(null);
-    setFlashes((current) => current.filter((item) => item.id !== flash.id));
-    setNotice("Flash removed for good.");
-    void load();
+    if (removingId) return;
+    setRemovingId(flash.id);
+    try {
+      const response = await fetch(`/api/rooms/${encodeURIComponent(slug)}/flashes/${encodeURIComponent(flash.id)}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "The Flash could not be removed.");
+      const remaining = flashes.filter((item) => item.id !== flash.id);
+      setViewing(null);
+      setConfirmingRemoval(null);
+      onSelectedFlashClose();
+      setFlashes(remaining);
+      onFlashes(remaining);
+      onCount(remaining.length);
+      setNotice("Flash removed for good.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The Flash could not be removed.");
+    } finally {
+      setRemovingId(null);
+    }
   }
 
   async function report() {
@@ -239,8 +257,12 @@ export default function FlashesPanel({
         <header><div><b>{activeViewing.mine ? "Your Flash" : activeViewing.displayName}</b><time>{new Date(activeViewing.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div><button onClick={() => { setViewing(null); onSelectedFlashClose(); }} aria-label="Close"><X /></button></header>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/rooms/${encodeURIComponent(slug)}/flashes/${encodeURIComponent(activeViewing.id)}`} alt={`Flash shared by ${activeViewing.mine ? "you" : activeViewing.displayName}`} {...guardImage} />
-        <footer><span><Clock3 size={13} /> Gone when the Room closes</span>{activeViewing.mine ? <button onClick={() => remove(activeViewing)}><Trash2 size={14} /> Remove now</button> : <button onClick={() => { setReporting(activeViewing); setViewing(null); onSelectedFlashClose(); }}><Flag size={14} /> Report privately</button>}</footer>
+        <footer><span><Clock3 size={13} /> Gone when the Room closes</span>{activeViewing.mine ? <button onClick={() => { setConfirmingRemoval(activeViewing); setViewing(null); onSelectedFlashClose(); }}><Trash2 size={14} /> Remove now</button> : <button onClick={() => { setReporting(activeViewing); setViewing(null); onSelectedFlashClose(); }}><Flag size={14} /> Report privately</button>}</footer>
       </section>
+    </div>}
+
+    {confirmingRemoval && <div className="room-modal room-flash-remove" role="dialog" aria-modal="true" aria-labelledby="remove-flash-title">
+      <section><Trash2 /><p className="eyebrow">Remove Flash</p><h2 id="remove-flash-title">Delete this Flash for good?</h2><p>The photo will disappear from the Room and cannot be recovered.</p><div><button type="button" onClick={() => setConfirmingRemoval(null)} disabled={Boolean(removingId)}>Keep it</button><button type="button" onClick={() => void remove(confirmingRemoval)} disabled={Boolean(removingId)}>{removingId ? "Removing…" : "Delete Flash"}</button></div></section>
     </div>}
 
     {reporting && <div className="room-modal" role="dialog" aria-modal="true"><section><Flag /><p className="eyebrow">Private report</p><h2>What&apos;s wrong with this Flash?</h2><label>Reason<select value={reportReason} onChange={(event) => setReportReason(event.target.value)}><option value="nonconsensual">Shared without consent</option><option value="explicit">Explicit content</option><option value="unsafe">Unsafe or violent</option><option value="spam">Spam</option><option value="other">Other</option></select></label><label>Details<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value.slice(0, 500))} placeholder="Optional context for the moderator" /></label><div><button onClick={() => setReporting(null)}>Cancel</button><button onClick={report}>Send report</button></div></section></div>}
