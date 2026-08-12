@@ -14,6 +14,7 @@ export default defineConfig({
           ENVIRONMENT: "test",
           PAYSTACK_SECRET_KEY: "sk_test_payment-operations",
           RESEND_API_KEY: "re_test_delivery",
+          ADMIN_ACCESS_KEY: "bootstrap-test-key",
         },
       },
     }),

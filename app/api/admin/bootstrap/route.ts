@@ -10,6 +10,7 @@ import {
   requestMetadata,
 } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
+import type { StaffPasswordPayload } from "../../../../lib/staff-password-policy";
 
 async function equalSecret(left: string, right: string): Promise<boolean> {
   const [leftHash, rightHash] = await Promise.all([hashToken(left), hashToken(right)]);
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This setup request was not accepted." }, { status: 403 });
   const existing = await env.DB.prepare("SELECT COUNT(*) AS count FROM staff_accounts").first<{ count: number }>();
   if ((existing?.count ?? 0) > 0) return Response.json({ error: "Owner setup is already complete." }, { status: 409 });
-  const body = await request.json() as { accessKey?: string; displayName?: string; email?: string; password?: string };
+  const body = await request.json() as Partial<StaffPasswordPayload> & { accessKey?: string; displayName?: string; email?: string };
   const metadata = requestMetadata(request);
   const normalizedEmail = normalizeStaffEmail(String(body.email ?? ""));
   if (!(await enforceRateLimit(env.LOGIN_RATE_LIMITER, `bootstrap:${await hashToken(metadata.ip ?? normalizedEmail)}`))) {
@@ -39,7 +40,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Add a valid owner name and email." }, { status: 400 });
   }
   try {
-    const password = await createPasswordRecord(String(body.password ?? ""));
+    const password = await createPasswordRecord({
+      password: String(body.password ?? ""),
+      passwordProof: String(body.passwordProof ?? ""),
+      passwordSalt: String(body.passwordSalt ?? ""),
+      passwordIterations: Number(body.passwordIterations ?? 0),
+    });
     const accountId = crypto.randomUUID();
     const now = new Date().toISOString();
     await env.DB.prepare(`

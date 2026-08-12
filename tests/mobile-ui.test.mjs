@@ -24,6 +24,8 @@ const waitlistUrl = new URL("../app/event/[slug]/waitlist-control.tsx", import.m
 const roomOperationsUrl = new URL("../app/admin/rooms/room-operations.tsx", import.meta.url);
 const ownerBootstrapUrl = new URL("../app/admin/bootstrap/page.tsx", import.meta.url);
 const ownerBootstrapFormUrl = new URL("../app/admin/bootstrap/bootstrap-form.tsx", import.meta.url);
+const staffPasswordClientUrl = new URL("../lib/staff-password-client.ts", import.meta.url);
+const adminSessionUrl = new URL("../app/api/admin/session/route.ts", import.meta.url);
 
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
@@ -304,6 +306,22 @@ test("first-owner setup explains its one-use key without exposing a credential",
   assert.match(form, /id="owner-email"/u);
   assert.match(css, /\.admin-bootstrap__form\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
   assert.doesNotMatch(`${page}\n${form}`, /ADMIN_ACCESS_KEY\s*=|sk_(?:live|test)_/u);
+});
+
+test("staff passwords derive in the browser and never ask the Worker to exceed its PBKDF2 cap", async () => {
+  const [form, client, session, adminSession] = await Promise.all([
+    readFile(ownerBootstrapFormUrl, "utf8"),
+    readFile(staffPasswordClientUrl, "utf8"),
+    readFile(new URL("../lib/admin-session.ts", import.meta.url), "utf8"),
+    readFile(adminSessionUrl, "utf8"),
+  ]);
+  assert.match(form, /prepareStaffPassword/u);
+  assert.match(client, /iterations:\s*passwordIterations/u);
+  assert.match(client, /PASSWORD_ITERATIONS/u);
+  assert.match(adminSession, /passwordSalt/u);
+  assert.doesNotMatch(session, /node:crypto|deriveBits|nodePbkdf2/u);
+  const loginPost = adminSession.split("export async function POST")[1].split("export async function PUT")[0];
+  assert.doesNotMatch(loginPost, /body\.password\b/u);
 });
 
 test("approved Hosts and ticket-holder preparation reach only the assigned organiser workspace", async () => {

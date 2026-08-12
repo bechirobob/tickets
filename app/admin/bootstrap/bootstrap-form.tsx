@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { prepareStaffPassword } from "../../../lib/staff-password-client";
 
 export default function BootstrapForm() {
   const [busy, setBusy] = useState(false);
@@ -12,12 +13,13 @@ export default function BootstrapForm() {
     setError("");
     const form = new FormData(event.currentTarget);
     try {
+      const password = await prepareStaffPassword(String(form.get("password") ?? ""));
       const response = await fetch("/api/admin/bootstrap", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           accessKey: form.get("accessKey"), displayName: form.get("displayName"),
-          email: form.get("email"), password: form.get("password"),
+          email: form.get("email"), ...password,
         }),
       });
       const result = await response.json() as { error?: string; returnTo?: string };

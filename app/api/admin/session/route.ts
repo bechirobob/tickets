@@ -16,6 +16,7 @@ import {
 } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
 import { beginPasskeyAuthentication, consumeRecoveryCode, finishPasskeyAuthentication } from "../../../../lib/staff-passkeys";
+import { bytesToBase64Url, PASSWORD_ITERATIONS, type StaffPasswordPayload } from "../../../../lib/staff-password-policy";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 function allowedReturnTo(role: string, requested: string): string {
@@ -28,11 +29,41 @@ function allowedReturnTo(role: string, requested: string): string {
   return "/admin";
 }
 
+export async function GET(request: Request) {
+  const { env } = await import("cloudflare:workers");
+  const url = new URL(request.url);
+  const requestedEmail = url.searchParams.get("email");
+  if (requestedEmail !== null) {
+    const metadata = requestMetadata(request);
+    if (!(await enforceRateLimit(env.LOGIN_RATE_LIMITER, `login-prepare:${await hashToken(metadata.ip || "unknown")}`))) {
+      return Response.json({ error: "Too many sign-in attempts. Wait a minute and try again." }, { status: 429 });
+    }
+    const email = requestedEmail.trim().toLowerCase();
+    const account = await env.DB.prepare(`
+      SELECT password_salt AS passwordSalt, password_iterations AS passwordIterations
+      FROM staff_accounts WHERE normalized_email = ? AND status = 'active' LIMIT 1
+    `).bind(email).first<{ passwordSalt: string; passwordIterations: number }>();
+    if (account) return Response.json(account, { headers: { "cache-control": "no-store" } });
+    // Return a stable fake salt so this preparation call does not reveal whether an account exists.
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`missing-staff:${email}`)));
+    return Response.json({ passwordSalt: bytesToBase64Url(digest.slice(0, 16)), passwordIterations: PASSWORD_ITERATIONS }, { headers: { "cache-control": "no-store" } });
+  }
+
+  const session = await readAdminSession(request.headers.get("cookie"), env.DB);
+  if (!session) return Response.json({ error: "Sign in is required." }, { status: 401 });
+  const account = await env.DB.prepare(`
+    SELECT password_salt AS passwordSalt, password_iterations AS passwordIterations
+    FROM staff_accounts WHERE id = ? AND status = 'active' LIMIT 1
+  `).bind(session.accountId).first<{ passwordSalt: string; passwordIterations: number }>();
+  if (!account) return Response.json({ error: "This staff account is unavailable." }, { status: 404 });
+  return Response.json(account, { headers: { "cache-control": "no-store" } });
+}
+
 export async function POST(request: Request) {
   const { env } = await import("cloudflare:workers");
   const metadata = requestMetadata(request);
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
-  const body = (await request.json()) as { email?: string; password?: string; returnTo?: string };
+  const body = (await request.json()) as { email?: string; passwordProof?: string; returnTo?: string };
   const email = String(body.email ?? "").trim().toLowerCase();
   const [ipRateAllowed, accountRateAllowed] = await Promise.all([
     enforceRateLimit(env.LOGIN_RATE_LIMITER, `login-ip:${await hashToken(metadata.ip || "unknown")}`),
@@ -43,7 +74,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Too many sign-in attempts. Wait a minute and try again." }, { status: 429 });
   }
 
-  const authentication = await authenticateStaff(env.DB, email, String(body.password ?? ""));
+  const authentication = await authenticateStaff(env.DB, email, String(body.passwordProof ?? ""));
   if (!authentication.account) {
     await recordSecurityEvent(env.DB, {
       kind: authentication.reason === "locked" ? "login_locked" : "login_failed",
@@ -108,16 +139,21 @@ export async function PATCH(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session) return Response.json({ error: "Sign in is required." }, { status: 401 });
-  const body = await request.json() as { currentPassword?: string; newPassword?: string };
+  const body = await request.json() as Partial<StaffPasswordPayload> & { currentPasswordProof?: string };
   const account = await env.DB.prepare(`
     SELECT password_hash AS passwordHash, password_salt AS passwordSalt, password_iterations AS passwordIterations
     FROM staff_accounts WHERE id = ? AND status = 'active' LIMIT 1
   `).bind(session.accountId).first<{ passwordHash: string; passwordSalt: string; passwordIterations: number }>();
-  if (!account || !(await verifyStaffPassword(String(body.currentPassword ?? ""), account))) {
+  if (!account || !(await verifyStaffPassword(String(body.currentPasswordProof ?? ""), account))) {
     return Response.json({ error: "The current password is incorrect." }, { status: 400 });
   }
   try {
-    const password = await createPasswordRecord(String(body.newPassword ?? ""));
+    const password = await createPasswordRecord({
+      password: String(body.password ?? ""),
+      passwordProof: String(body.passwordProof ?? ""),
+      passwordSalt: String(body.passwordSalt ?? ""),
+      passwordIterations: Number(body.passwordIterations ?? 0),
+    });
     const now = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare(`UPDATE staff_accounts SET password_hash = ?, password_salt = ?, password_iterations = ?, must_change_password = 0, password_changed_at = ?, updated_at = ? WHERE id = ?`)
