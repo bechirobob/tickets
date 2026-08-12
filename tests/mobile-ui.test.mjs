@@ -97,9 +97,10 @@ test("notification history stays behind the verified My Nights entrance", async 
 });
 
 test("The Room is promoted as a ticket-locked preview without exposing a public chat", async () => {
-  const [css, home] = await Promise.all([
+  const [css, home, polish] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(homeUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
   ]);
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The night has a Room\./u);
@@ -107,9 +108,9 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /The chat remembers\. The photos know when to leave\./u);
   assert.match(home, /No ticket, no lurking\. Very civilised\./u);
   assert.match(home, /HOST UPDATE/u);
-  assert.match(home, /😂 4/u);
-  assert.match(home, /😭 2/u);
-  assert.match(home, /🔥 3/u);
+  assert.match(home, /aria-label="4 laughing reactions"/u);
+  assert.match(home, /aria-label="2 crying reactions"/u);
+  assert.match(home, /aria-label="3 fire reactions"/u);
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
   assert.equal(home.match(/<RoomPhone /gu)?.length, 2);
@@ -117,7 +118,10 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(css, /\.room-product-phone\s*\{[^}]*height:\s*560px[^}]*border-radius:\s*38px/su);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.room-product-scene__phones\s*\{[^}]*grid-auto-flow:\s*column[^}]*overflow-x:\s*auto/su);
   assert.match(css, /\.room-product-phone__stream > article:nth-child\(4\)\s*\{[^}]*animation-delay:\s*\.3s/su);
-  assert.match(css, /\.scene-message\s*\{[^}]*max-width:\s*62%/su);
+  assert.match(home, /className="scene-message__bubble"/u);
+  assert.match(home, /className="scene-message__reactions"/u);
+  assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
+  assert.match(polish, /\.scene-message__reactions\s*\{[^}]*margin:\s*2px 3px 0[^}]*display:\s*flex/su);
   assert.match(css, /\.room-bubble\s*\{[^}]*padding:\s*8px 11px/su);
   assert.match(css, /\.room-message__actions\s*\{[^}]*min-height:\s*29px/su);
   assert.doesNotMatch(home, /device|phone mock/iu);
@@ -423,21 +427,16 @@ test("project dropdowns use a soft progressively enhanced picker", async () => {
   assert.match(css, /\.submission-fields\) select::picker\(select\)/u);
 });
 
-test("the program-wide corner contract prevents square UI boxes", async () => {
+test("surfaces keep soft corners while text selection lines stay straight", async () => {
   const [css, polish] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(accessPolishUrl, "utf8"),
   ]);
-  const combined = `${css}\n${polish}`;
-  const radiusValues = [...combined.matchAll(/border-radius\s*:\s*([^;}]+)/gu)].map((match) => match[1].trim());
-
-  assert.ok(radiusValues.length > 50, "expected the interface to declare its radius system");
-  for (const value of radiusValues) {
-    assert.doesNotMatch(value, /(?:^|\s)0(?:\.0+)?(?:px|rem|em|%)?(?=\s|$)/u, `square corner found in border-radius: ${value}`);
-  }
   assert.match(css, /--radius-control:\s*10px[^}]*--radius-picker:\s*11px[^}]*--radius-surface:\s*14px/su);
   assert.match(css, /\.workspace-event-picker select\s*\{[^}]*border-radius:\s*var\(--radius-picker\)/su);
   assert.match(polish, /:where\(a, button, input, select, textarea, summary\)\s*\{[^}]*border-radius:\s*var\(--radius-control\)/su);
+  assert.match(polish, /Straight selection markers[\s\S]*?\.night-hub__tabs button[^}]*\)\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /\.scene-host\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(css, /\.compact-hero__copy > div a, \.compact-hero__single\s*\{[^}]*border:\s*1px solid/su);
   assert.match(polish, /\.operations-metrics,[^}]*\.curation-workspace,[^}]*\.room-modal > section,[^}]*border-radius:\s*var\(--radius-surface\)/su);
 });
@@ -449,10 +448,14 @@ test("the interface has no effective shadows, tinted fills or curved text-edge c
   ]);
   assert.match(polish, /Absolute flatness contract:[\s\S]*?\*,\s*\*::before,\s*\*::after\s*\{[^}]*box-shadow:\s*none !important[^}]*text-shadow:\s*none !important/su);
   assert.doesNotMatch(`${css}\n${polish}`, /filter\s*:\s*drop-shadow/iu);
+  const shadowValues = [...`${css}\n${polish}`.matchAll(/box-shadow:\s*([^;}]+)/gu)].map((match) => match[1].trim());
+  assert.ok(shadowValues.length > 0);
+  assert.ok(shadowValues.every((value) => value.startsWith("none")), `non-flat shadow declarations: ${shadowValues.filter((value) => !value.startsWith("none")).join(", ")}`);
 
-  assert.match(polish, /\.drop-controls button\[aria-selected="true"\]::after,[\s\S]*?\.room-modes > button\.active::after\s*\{[^}]*display:\s*none/su);
+  assert.match(polish, /Straight selection markers[\s\S]*?\.drop-controls button\[aria-selected="true"\]::after,[\s\S]*?\.room-modes > button\.active::after\s*\{[^}]*display:\s*block[^}]*transform:\s*scaleX\(1\)/su);
   assert.doesNotMatch(css, /\.drop-controls button\[aria-selected="true"\]\s*\{[^}]*border-color:\s*var\(--signal\)/su);
   assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.drop-vibes button,[\s\S]*?\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/su);
   assert.match(css, /\.curation-list > button\.active\s*\{[^}]*background:\s*transparent/u);
   assert.match(css, /\.curation-list > button\.active::before\s*\{[^}]*background:\s*#171713/su);
   assert.doesNotMatch(css, /\.curation-list > button\.active\s*\{[^}]*box-shadow/su);
@@ -460,6 +463,9 @@ test("the interface has no effective shadows, tinted fills or curved text-edge c
   assert.doesNotMatch(css, /\.room-product-phone\s*\{[^}]*box-shadow/su);
   assert.doesNotMatch(css, /\.night-room-device\s*\{[^}]*box-shadow/su);
   assert.doesNotMatch(css, /\.night-room-message(?:--right)? > span\s*\{[^}]*box-shadow/su);
+  assert.match(polish, /\.room-message\.announcement\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.room-message\.announcement \.room-bubble\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.room-message__actions button\.active\s*\{[^}]*background:\s*transparent[^}]*text-decoration:\s*underline/su);
   assert.match(polish, /Flat-surface contract:[\s\S]*?\.submission-error,[\s\S]*?\.curation-error,[\s\S]*?background:\s*transparent !important/su);
   assert.match(polish, /\.quantity-control button\s*\{[^}]*border:\s*0[^}]*border-radius:\s*50%[^}]*background:\s*#e8e4da/su);
   assert.match(polish, /\.network-list button\.selected\s*\{[^}]*border-color:\s*var\(--ink\)/su);
