@@ -17,7 +17,7 @@
   --radius-picker: 11px;
   --radius-surface: 14px;
   --radius-overlay: 18px;
-  --font-geist-sans: Inter, Aptos, "Segoe UI", Arial, sans-serif;
+  --font-geist-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -77,7 +77,7 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-geist-sans), Arial, sans-serif; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-geist-sans); }
 a { color: inherit; text-decoration: none; }
 button, input, select { font: inherit; }
 button, select { cursor: pointer; }
