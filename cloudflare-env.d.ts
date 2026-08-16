@@ -19,6 +19,12 @@ declare namespace Cloudflare {
     VAPID_PUBLIC_KEY?: string;
     VAPID_PRIVATE_KEY?: string;
     VAPID_SUBJECT?: string;
+    GOOGLE_WALLET_ISSUER_ID?: string;
+    GOOGLE_WALLET_CLASS_ID?: string;
+    GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL?: string;
+    GOOGLE_WALLET_PRIVATE_KEY?: string;
+    APPLE_WALLET_SIGNER_URL?: string;
+    APPLE_WALLET_SIGNER_TOKEN?: string;
     THE_ROOM: DurableObjectNamespace<import("./worker/index").TheRoom>;
   }
 }

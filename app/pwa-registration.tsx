@@ -30,7 +30,7 @@ export default function PwaRegistration() {
   const [eligibleAttendee, setEligibleAttendee] = useState(false);
   const installed = typeof window !== "undefined" && (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true);
   const isIos = typeof navigator !== "undefined" && /iphone|ipad|ipod/iu.test(navigator.userAgent);
-  const usefulPath = pathname === "/my-nights" || pathname === "/tickets";
+  const usefulPath = pathname === "/my-nights" || pathname.startsWith("/my-nights/") || pathname === "/tickets";
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;

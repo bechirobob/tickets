@@ -1635,3 +1635,32 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .night-support__state.cancelled { background: var(--status-danger-bg); color: var(--status-danger); }
 .night-support__state.rescheduled { background: var(--status-info-bg); color: var(--status-info); }
 .wallet-confirmed, .my-nights-recovered { color: var(--status-success); }
+
+/* My Nights utilities stay compact, useful and visually part of the existing hub. */
+.night-tonight { display: grid; grid-template-columns: minmax(0, .8fr) minmax(260px, .55fr); gap: 24px; align-items: start; }
+.night-tonight > header { grid-column: 1 / -1; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.night-tonight > header h2 { margin: 5px 0 7px; font-size: clamp(32px, 5vw, 58px); letter-spacing: -.055em; }
+.night-tonight > header > p:last-child, .night-tonight > article p { color: var(--muted); line-height: 1.55; }
+.night-tonight > article { padding: 20px 0; border-top: 3px solid var(--ink); }
+.night-tonight > article span { color: var(--orange); font-size: 11px; font-weight: 780; letter-spacing: .08em; text-transform: uppercase; }
+.night-tonight > article h3 { margin: 9px 0 4px; font-size: 23px; letter-spacing: -.035em; }
+.night-tonight__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.night-tonight__actions > * { min-height: 72px; padding: 13px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; text-decoration: none; }
+.night-tonight__actions span { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+.night-tonight__actions b { color: var(--ink); font-size: 14px; }
+.ticket-wallet-actions, .night-calendar-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.ticket-wallet-actions a, .night-calendar-actions a { min-height: 36px; padding: 0 11px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--ink); color: var(--ink); font-size: 12px; font-weight: 760; text-decoration: none; }
+.night-calendar-actions { margin-top: 16px; }
+.ticket-return-trigger { margin-top: 7px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 730; text-decoration: underline; text-underline-offset: 3px; }
+.ticket-return-card { width: min(440px, 100%); padding: 30px; position: relative; background: #fffdf8; color: var(--ink); text-align: left; }
+.ticket-return-card > svg { color: var(--orange); }
+.ticket-return-card h3 { margin: 10px 0; font-size: 28px; line-height: 1; letter-spacing: -.045em; }
+.ticket-return-card p:not(.eyebrow), .ticket-return-card > small { display: block; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.ticket-return-card > button:not(.ticket-transfer-close) { width: 100%; min-height: 45px; margin-top: 18px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 0; background: var(--ink); color: white; font: inherit; font-size: 13px; font-weight: 780; }
+
+@media (max-width: 700px) {
+  .night-tonight { grid-template-columns: 1fr; }
+  .night-tonight > header { grid-column: 1; }
+  .night-tonight__actions { grid-template-columns: 1fr; }
+  .ticket-return-card { padding: 25px 20px; }
+}
