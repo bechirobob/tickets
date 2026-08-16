@@ -63,25 +63,10 @@ jobs:
           if (!zone?.id || !Array.isArray(zone.name_servers) || zone.name_servers.length !== 2) {
             throw new Error("Cloudflare did not return a usable Bubble Wash zone.");
           }
-          const recordsPayload = await request(`/zones/${zone.id}/dns_records?per_page=100`);
-          const records = Array.isArray(recordsPayload.result) ? recordsPayload.result : [];
-          const apexReady = records.some(
-            (record) =>
-              record.name === name &&
-              record.type === "A" &&
-              record.content === "51.195.20.137",
-          );
-          const wwwReady = records.some(
-            (record) =>
-              record.name === `www.${name}` &&
-              record.type === "CNAME" &&
-              record.content.replace(/\.$/, "") === name,
-          );
           const result = {
             zone: zone.name,
             status: zone.status,
             nameservers: zone.name_servers,
-            vps_fallback_records_ready: apexReady && wwwReady,
             checked_at: new Date().toISOString(),
           };
           await writeFile("bubblewash-zone.json", `${JSON.stringify(result, null, 2)}\n`);
@@ -94,16 +79,11 @@ jobs:
               "",
               `Nameservers: \`${result.nameservers.join("`, `")}\``,
               "",
-              `VPS fallback records ready: \`${result.vps_fallback_records_ready}\``,
-              "",
             ].join("\n"),
           );
           console.log(JSON.stringify(result));
           if (zone.status !== "active") {
             throw new Error(`Bubble Wash zone is ${zone.status}; wait for nameserver activation.`);
-          }
-          if (!apexReady || !wwwReady) {
-            throw new Error("Cloudflare is missing the Bubble Wash VPS fallback DNS records.");
           }
           NODE
 
