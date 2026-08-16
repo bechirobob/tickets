@@ -706,6 +706,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .night-mobile-menu__trigger:hover { color: var(--orange); }
 .night-mobile-menu__trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .night-mobile-menu.is-open .night-mobile-menu__trigger { opacity: 0; pointer-events: none; transform: rotate(-12deg) scale(.82); }
+/* Public menu surface stays translucent so page context remains visible. */
 .night-mobile-menu__panel { width: min(304px, calc(100vw - 28px)); padding: 0 16px 14px; position: absolute; z-index: 81; top: -8px; right: 0; display: grid !important; gap: 0 !important; overflow: hidden; border: 1px solid rgba(20,21,18,.16); border-radius: 0; background: rgba(243,240,232,.88); color: #151613; box-shadow: none; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-10px) scale(.965); transform-origin: top right; transition: opacity .2s ease, transform .24s cubic-bezier(.18,.82,.25,1), visibility 0s linear .24s; }
 .night-mobile-menu.is-open .night-mobile-menu__panel { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); transition-delay: 0s; }
 .night-header .night-mobile-menu__panel { top: -8px; }
