@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { POST as initializePayment } from "../app/api/payments/initialize/route";
+import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 
 const eventSlug = "inventory-payment-test";
 
@@ -13,6 +14,7 @@ function paymentRequest(slug: string, ticketTierId: string, quantity = 1, networ
 }
 
 beforeAll(async () => {
+  await refreshExpiredPreviewEvents(env.DB);
   const now = new Date().toISOString();
   const startsAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
   const endsAt = new Date(new Date(startsAt).getTime() + 6 * 60 * 60 * 1000).toISOString();

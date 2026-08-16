@@ -15,10 +15,29 @@ import {
   safeReturnTo,
   verifyStaffPassword,
 } from "../../../../lib/admin-session";
-import { enforceRateLimit } from "../../../../lib/security-controls";
-import { beginPasskeyAuthentication, consumeRecoveryCode, finishPasskeyAuthentication } from "../../../../lib/staff-passkeys";
+import { enforceCompositeRateLimit, enforceRateLimit, type RateLimiter } from "../../../../lib/security-controls";
+import { beginPasskeyAuthentication, consumeRecoveryCode, finishPasskeyAuthentication, readAuthenticationChallengeAccount } from "../../../../lib/staff-passkeys";
 import { bytesToBase64Url, PASSWORD_ITERATIONS, type StaffPasswordPayload } from "../../../../lib/staff-password-policy";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+
+export async function enforcePasswordLoginLimits(limiter: RateLimiter, ip: string | null, email: string): Promise<boolean> {
+  return enforceCompositeRateLimit(limiter, [
+    `login-ip:${await hashToken(ip || "unknown")}`,
+    `login-account:${await hashToken(email || "unknown")}`,
+  ]);
+}
+
+export async function enforceMfaLoginLimits(
+  limiter: RateLimiter,
+  input: { ip: string | null; exchangeToken: string; accountId: string | null },
+): Promise<boolean> {
+  const keys = [
+    `login-mfa-ip:${await hashToken(input.ip || "unknown")}`,
+    `login-mfa-exchange:${await hashToken(input.exchangeToken || "unknown")}`,
+  ];
+  if (input.accountId) keys.push(`login-mfa-account:${await hashToken(input.accountId)}`);
+  return enforceCompositeRateLimit(limiter, keys);
+}
 
 export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
@@ -56,11 +75,7 @@ export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
   const body = (await request.json()) as { email?: string; passwordProof?: string; returnTo?: string };
   const email = String(body.email ?? "").trim().toLowerCase();
-  const [ipRateAllowed, accountRateAllowed] = await Promise.all([
-    enforceRateLimit(env.LOGIN_RATE_LIMITER, `login-ip:${await hashToken(metadata.ip || "unknown")}`),
-    enforceRateLimit(env.LOGIN_RATE_LIMITER, `login-account:${await hashToken(email || "unknown")}`),
-  ]);
-  if (!ipRateAllowed || !accountRateAllowed) {
+  if (!(await enforcePasswordLoginLimits(env.LOGIN_RATE_LIMITER, metadata.ip, email))) {
     await recordSecurityEvent(env.DB, { kind: "rate_limited", subject: email || metadata.ip, path: "/api/admin/session", requestId: metadata.requestId });
     return Response.json({ error: "Too many sign-in attempts. Wait a minute and try again." }, { status: 429 });
   }
@@ -104,10 +119,22 @@ export async function PUT(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
   const metadata = requestMetadata(request);
   const body = await request.json() as { mode?: "passkey" | "recovery"; exchangeToken?: string; response?: AuthenticationResponseJSON; recoveryCode?: string };
+  const exchangeToken = String(body.exchangeToken ?? "");
+  const accountId = await readAuthenticationChallengeAccount(env.DB, exchangeToken);
+  if (!(await enforceMfaLoginLimits(env.LOGIN_RATE_LIMITER, { ip: metadata.ip, exchangeToken, accountId }))) {
+    await recordSecurityEvent(env.DB, {
+      kind: "rate_limited",
+      subject: accountId ?? metadata.ip,
+      path: "/api/admin/session",
+      requestId: metadata.requestId,
+      detail: "mfa_rate_limited",
+    });
+    return Response.json({ error: "Too many secure sign-in attempts. Wait a minute and try again." }, { status: 429, headers: { "cache-control": "no-store" } });
+  }
   try {
     const verified = body.mode === "recovery"
-      ? await consumeRecoveryCode(env.DB, String(body.exchangeToken ?? ""), String(body.recoveryCode ?? ""))
-      : await finishPasskeyAuthentication(env.DB, new URL(request.url).origin, { exchangeToken: String(body.exchangeToken ?? ""), response: body.response! });
+      ? await consumeRecoveryCode(env.DB, exchangeToken, String(body.recoveryCode ?? ""))
+      : await finishPasskeyAuthentication(env.DB, new URL(request.url).origin, { exchangeToken, response: body.response! });
     const account = await env.DB.prepare(`SELECT id, display_name AS displayName, normalized_email AS email, role, must_change_password AS mustChangePassword FROM staff_accounts WHERE id = ? AND status = 'active' LIMIT 1`)
       .bind(verified.accountId).first<{ id: string; displayName: string; email: string; role: import("../../../../lib/admin-session").StaffRole; mustChangePassword: number }>();
     if (!account) return Response.json({ error: "This staff account is unavailable." }, { status: 403 });

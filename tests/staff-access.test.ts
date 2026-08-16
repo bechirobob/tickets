@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { GET as readWorkspace, PATCH as updateWorkspace } from "../app/api/organizer/workspace/route";
 import { GET as readFeeConfig } from "../app/api/config/booking-fee/route";
 import { POST as bootstrapOwner } from "../app/api/admin/bootstrap/route";
+import { enforceMfaLoginLimits, enforcePasswordLoginLimits } from "../app/api/admin/session/route";
 import { GET as readOperations, POST as updateOperations } from "../app/api/admin/operations/route";
 import { GET as readSupport } from "../app/api/admin/support/route";
 import {
@@ -55,6 +56,34 @@ async function event(slug: string, title: string) {
 }
 
 describe("named staff access", () => {
+  it("enforces independent password and MFA sign-in limits", async () => {
+    const attempts = new Map<string, number>();
+    const limiter = {
+      async limit({ key }: { key: string }) {
+        const count = (attempts.get(key) ?? 0) + 1;
+        attempts.set(key, count);
+        return { success: count <= 10 };
+      },
+    };
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await expect(enforcePasswordLoginLimits(limiter, "198.51.100.10", "staff@example.com")).resolves.toBe(true);
+      await expect(enforceMfaLoginLimits(limiter, {
+        ip: "203.0.113.10",
+        exchangeToken: "secure-exchange-token",
+        accountId: "staff-account-id",
+      })).resolves.toBe(true);
+    }
+    await expect(enforcePasswordLoginLimits(limiter, "198.51.100.10", "staff@example.com")).resolves.toBe(false);
+    await expect(enforceMfaLoginLimits(limiter, {
+      ip: "203.0.113.10",
+      exchangeToken: "secure-exchange-token",
+      accountId: "staff-account-id",
+    })).resolves.toBe(false);
+
+    expect([...attempts.keys()].filter((key) => key.startsWith("login-mfa-"))).toHaveLength(3);
+  });
+
   it("creates and verifies the production-strength password record in the Workers runtime", async () => {
     const record = await passwordRecord();
     expect(record.iterations).toBe(PASSWORD_ITERATIONS);

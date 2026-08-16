@@ -118,6 +118,17 @@ export async function beginPasskeyAuthentication(db: D1Database, accountId: stri
   return { options, exchangeToken };
 }
 
+export async function readAuthenticationChallengeAccount(db: D1Database, exchangeToken: string): Promise<string | null> {
+  if (!exchangeToken) return null;
+  const challenge = await db.prepare(`
+    SELECT account_id AS accountId
+    FROM staff_auth_challenges
+    WHERE purpose = 'authentication' AND exchange_token_hash = ?
+      AND used_at IS NULL AND expires_at > ? LIMIT 1
+  `).bind(await hashToken(exchangeToken), new Date().toISOString()).first<{ accountId: string }>();
+  return challenge?.accountId ?? null;
+}
+
 export async function finishPasskeyAuthentication(db: D1Database, origin: string, input: { exchangeToken: string; response: AuthenticationResponseJSON }) {
   const challenge = await db.prepare(`
     SELECT id, account_id AS accountId, challenge, return_to AS returnTo
@@ -165,4 +176,3 @@ export async function consumeRecoveryCode(db: D1Database, exchangeToken: string,
   ]);
   return { accountId: challenge.accountId, returnTo: challenge.returnTo ?? "/admin" };
 }
-
