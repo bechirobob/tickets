@@ -24,6 +24,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+      WRANGLER_SEND_METRICS: "false"
     steps:
       - name: Resolve the current Bubble Wash release
         id: target
@@ -107,6 +108,7 @@ jobs:
         working-directory: bubble-wash
         run: |
           npm run cf:types
+          npm run verify:migrations
           npm run lint
           npm test
           npm run typecheck
