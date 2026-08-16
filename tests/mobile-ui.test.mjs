@@ -263,8 +263,8 @@ test("public navigation belongs to each header on mobile and desktop", async () 
   assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*gap:\s*0\s*!important[^}]*opacity:\s*0[^}]*visibility:\s*hidden/su);
   assert.match(css, /\.night-mobile-menu\.is-open \.night-mobile-menu__panel\s*\{[^}]*opacity:\s*1[^}]*visibility:\s*visible/su);
   assert.match(css, /\.night-mobile-menu__panel-header\s*\{[^}]*display:\s*flex[^}]*border-bottom:\s*1px solid/su);
-  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*background:\s*rgba\(243,240,232,\.88\)[^}]*transform:\s*translateY\(-10px\) scale\(\.965\)/su);
-  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*-webkit-backdrop-filter:\s*blur\(10px\)[^}]*backdrop-filter:\s*blur\(10px\)/su);
+  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*background:\s*rgba\(243,240,232,\.74\)[^}]*transform:\s*translateY\(-10px\) scale\(\.965\)/su);
+  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*-webkit-backdrop-filter:\s*blur\(16px\)[^}]*backdrop-filter:\s*blur\(16px\)/su);
   assert.match(css, /\.night-mobile-menu\.is-open \.night-mobile-menu__close\s*\{[^}]*opacity:\s*1[^}]*rotate\(0\) scale\(1\)/su);
   assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*39px[^}]*border-radius:\s*0[^}]*color:\s*rgba\(21,22,19,\.76\)/su);
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?\.night-mobile-menu__panel\s*\{[^}]*width:\s*min\(304px, calc\(100vw - 24px\)\)[^}]*right:\s*0/su);
