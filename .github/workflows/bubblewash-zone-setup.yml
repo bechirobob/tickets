@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          import { writeFile } from "node:fs/promises";
+          import { appendFile, writeFile } from "node:fs/promises";
 
           const api = "https://api.cloudflare.com/client/v4";
           const headers = {
@@ -70,10 +70,25 @@ jobs:
             checked_at: new Date().toISOString(),
           };
           await writeFile("bubblewash-zone.json", `${JSON.stringify(result, null, 2)}\n`);
+          await appendFile(
+            process.env.GITHUB_STEP_SUMMARY,
+            [
+              "## Bubble Wash Cloudflare zone",
+              "",
+              `Status: \`${result.status}\``,
+              "",
+              `Nameservers: \`${result.nameservers.join("`, `")}\``,
+              "",
+            ].join("\n"),
+          );
           console.log(JSON.stringify(result));
+          if (zone.status !== "active") {
+            throw new Error(`Bubble Wash zone is ${zone.status}; wait for nameserver activation.`);
+          }
           NODE
 
       - name: Preserve zone handoff
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bubblewash-cloudflare-zone
