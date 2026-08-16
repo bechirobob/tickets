@@ -864,6 +864,25 @@ test("semantic states and route-matched skeletons stay accessible", async () => 
   assert.match(wallet, /kind="wallet" label="Preparing your entry passes"/u);
 });
 
+test("public typography keeps compact copy readable without shrinking header labels", async () => {
+  const [css, about, events, hosts, host, privacy, nights] = await Promise.all([
+    readFile(new URL("../app/access-polish.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/about/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/events/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/hosts/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/hosts/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/account/privacy/privacy-settings.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/my-nights/my-nights-client.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(css, /font-size:\s*12px\s*!important/u);
+  assert.match(css, /\.submission-intro h1\s*\{[^}]*font-size:\s*clamp\(48px,\s*5\.5vw,\s*76px\)/su);
+  assert.match(css, /\.submission-page\s*\{[^}]*--signal:\s*#bd3f11/su);
+  assert.match(css, /\.directory-header__back-label\s*\{[^}]*display:\s*none/su);
+  for (const source of [about, events, hosts, host, privacy, nights]) {
+    assert.match(source, /className="directory-header__back-label"/u);
+  }
+});
+
 test("organiser analytics has a dedicated compact responsive workspace", async () => {
   const [page, client, api, roles, css, wrangler, migration] = await Promise.all([
     readFile(new URL("../app/organizer/analytics/page.tsx", import.meta.url), "utf8"),
