@@ -15,6 +15,17 @@ export { TheRoom } from "./the-room";
 const PUBLIC_PAGE_CACHE_SECONDS = 45;
 const edgeCache = (caches as CacheStorage & { readonly default: Cache }).default;
 
+function requestNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function contentSecurityPolicy(nonce: string): string {
+  return `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; media-src 'self' blob:; worker-src 'self' blob:`;
+}
+
 function publicPageCacheKey(request: Request, url: URL): Request | null {
   if (request.method !== "GET" || url.search || !request.headers.get("accept")?.includes("text/html")) return null;
   const path = url.pathname;
@@ -91,6 +102,7 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
 const worker = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const nonce = requestNonce();
     try {
       const cacheKey = publicPageCacheKey(request, url);
       if (cacheKey) {
@@ -110,10 +122,12 @@ const worker = {
           },
         }, allowedWidths);
       } else {
-        response = await handler.fetch(request, env, ctx);
+        const headers = new Headers(request.headers);
+        headers.set("content-security-policy", contentSecurityPolicy(nonce));
+        response = await handler.fetch(new Request(request, { headers }), env, ctx);
       }
       if (response.status === 101) return response;
-      let secured = securityResponse(response);
+      let secured = securityResponse(response, nonce);
       if (cacheKey && secured.status === 200 && secured.headers.get("content-type")?.includes("text/html")) {
         secured = publicCacheResponse(secured, "MISS");
         ctx.waitUntil(edgeCache.put(cacheKey, secured.clone()));
@@ -132,9 +146,9 @@ const worker = {
   },
 };
 
-function securityResponse(response: Response): Response {
+function securityResponse(response: Response, nonce = requestNonce()): Response {
   const headers = new Headers(response.headers);
-  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; media-src 'self' blob:; worker-src 'self' blob:");
+  if (!headers.has("Content-Security-Policy")) headers.set("Content-Security-Policy", contentSecurityPolicy(nonce));
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

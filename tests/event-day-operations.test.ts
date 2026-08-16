@@ -44,7 +44,7 @@ describe("event-day operations", () => {
   it("keeps an offline ticket stable until an accepted transfer rotates ownership and QR", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const sender = await seedAttendee(suffix);
-    const walletRequest = () => new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: sender.cookie } });
+    const walletRequest = () => new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: sender.cookie, origin: "https://tickets.becoreops.com" } });
     const first = await (await prepareTickets(walletRequest())).json() as { orders: Array<{ canViewPurchase: boolean; reference: string; tickets: Array<{ qrPayload: string }> }> };
     const second = await (await prepareTickets(walletRequest())).json() as typeof first;
     expect(second.orders[0].tickets[0].qrPayload).toBe(first.orders[0].tickets[0].qrPayload);
@@ -67,7 +67,7 @@ describe("event-day operations", () => {
     expect(claim.status).toBe(303);
     const recipientCookie = claim.headers.get("set-cookie")?.split(";")[0];
     expect(recipientCookie).toMatch(/^bct_attendee=/u);
-    const recipientWallet = await (await prepareTickets(new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: recipientCookie! } }))).json() as typeof first;
+    const recipientWallet = await (await prepareTickets(new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: recipientCookie!, origin: "https://tickets.becoreops.com" } }))).json() as typeof first;
     expect(recipientWallet.orders[0].canViewPurchase).toBe(false);
     expect(recipientWallet.orders[0].reference).toBe("Transferred ticket");
     expect(recipientWallet.orders[0].tickets[0].qrPayload).not.toBe(first.orders[0].tickets[0].qrPayload);

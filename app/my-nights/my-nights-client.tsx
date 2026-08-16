@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- authenticated event artwork uses the stored responsive source and must not be fetched through a shared optimizer cache. */
 "use client";
 
 import Link from "next/link";

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, Clock3, MapPin, Ticket } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { eventImageSrcSet, eventImageUrl } from "./event-images";
+import { eventImageLoader } from "./event-images";
 import type { CuratedEvent } from "./events";
 
 type WindowFilter = "tonight" | "weekend" | "next";
@@ -91,7 +92,7 @@ export default function EventExplorer({ events, full = false }: { events: Curate
     {pageEvents.length ? <div className={`drop-grid${full ? " drop-grid--full" : " drop-grid--rail"}`} aria-live="polite" ref={railRef} onScroll={trackRail}>
       {pageEvents.map((event) => <article className="drop-card" key={event.slug}>
         <Link href={`/event/${event.slug}`} className="drop-card__image">
-          <img src={eventImageUrl(event.image, 720)} srcSet={eventImageSrcSet(event.image)} sizes={full ? "(max-width: 700px) 100vw, (max-width: 1000px) 50vw, 33vw" : "(max-width: 700px) 84vw, 31vw"} alt={`Atmosphere for ${event.title}`} loading="lazy" decoding="async" />
+          <Image loader={eventImageLoader} src={event.image} width={720} height={480} sizes={full ? "(max-width: 700px) 100vw, (max-width: 1000px) 50vw, 33vw" : "(max-width: 700px) 84vw, 31vw"} alt={`Atmosphere for ${event.title}`} />
           {event.isTestEvent ? <span>Working preview</span> : null}
           <i>{event.vibe}</i>
         </Link>

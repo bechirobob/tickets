@@ -57,7 +57,7 @@ describe("secure gate passes", () => {
     const { attendeeToken, ticketId } = await seedIssuedTicket("once");
     const passesResponse = await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
       method: "POST",
-      headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0] },
+      headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0], origin: "https://tickets.becoreops.com" },
     }));
     expect(passesResponse.status).toBe(200);
     const wallet = await passesResponse.json() as { orders: Array<{ tickets: Array<{ gateCode: string; qrPayload: string }> }> };
@@ -93,7 +93,7 @@ describe("secure gate passes", () => {
     const { attendeeToken, ticketId } = await seedIssuedTicket("wrong");
     const wallet = await (await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
       method: "POST",
-      headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0] },
+      headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0], origin: "https://tickets.becoreops.com" },
     }))).json() as { orders: Array<{ tickets: Array<{ gateCode: string }> }> };
     const cookie = await ownerCookie("wrong");
     const response = await checkIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
@@ -109,7 +109,7 @@ describe("secure gate passes", () => {
   it("replays an offline scan idempotently and limits undo to an audited supervisor", async () => {
     const { attendeeToken, ticketId } = await seedIssuedTicket("offline");
     const wallet = await (await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
-      method: "POST", headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0] },
+      method: "POST", headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0], origin: "https://tickets.becoreops.com" },
     }))).json() as { orders: Array<{ tickets: Array<{ gateCode: string }> }> };
     const cookie = await ownerCookie("offline");
     const clientScanId = crypto.randomUUID();

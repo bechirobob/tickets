@@ -35,6 +35,9 @@ test("the Worker applies the production browser security baseline", async () => 
 
   assert.match(worker, /Content-Security-Policy/u);
   assert.match(worker, /frame-ancestors 'none'/u);
+  assert.match(worker, /'nonce-\$\{nonce\}' 'strict-dynamic'/u);
+  assert.doesNotMatch(worker, /script-src[^;]*'unsafe-inline'/u);
+  assert.match(worker, /style-src-attr 'unsafe-inline'/u);
   assert.match(worker, /Strict-Transport-Security/u);
   assert.match(worker, /X-Content-Type-Options/u);
   assert.match(worker, /Cross-Origin-Opener-Policy/u);

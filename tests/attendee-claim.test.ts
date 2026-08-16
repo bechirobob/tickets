@@ -34,7 +34,7 @@ describe("attendee ticket claims", () => {
 
     const makeRequest = () => new Request("https://tickets.becoreops.com/api/customer/session", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", origin: "https://tickets.becoreops.com" },
       body: JSON.stringify({ reference, claim }),
     });
     const responses = await Promise.all([
@@ -104,7 +104,7 @@ describe("attendee ticket claims", () => {
 
     const claimed = await claimAttendeeSession(new Request("https://tickets.becoreops.com/api/customer/session", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", origin: "https://tickets.becoreops.com" },
       body: JSON.stringify({ reference, claim }),
     }));
     expect(claimed.status).toBe(200);
@@ -113,7 +113,7 @@ describe("attendee ticket claims", () => {
 
     const walletResponse = await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
       method: "POST",
-      headers: { cookie: cookie! },
+      headers: { cookie: cookie!, origin: "https://tickets.becoreops.com" },
     }));
     const wallet = await walletResponse.json() as {
       attendee: { displayName: string; emailVerified: boolean };

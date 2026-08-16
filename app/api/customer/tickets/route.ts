@@ -1,5 +1,6 @@
 import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 import { createGateToken, formatGateCode, gateQrPayload, hashGateToken } from "../../../../lib/gate-pass";
+import { mutationHasValidOrigin } from "../../../../lib/admin-session";
 
 type TicketRow = {
   ticketId: string;
@@ -30,6 +31,9 @@ type TicketRow = {
 };
 
 export async function POST(request: Request) {
+  if (!mutationHasValidOrigin(request)) {
+    return Response.json({ error: "This ticket request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
+  }
   const { env } = await import("cloudflare:workers");
   const identity = await readAttendeeIdentity(env.DB, request.headers.get("cookie"));
   if (!identity) {

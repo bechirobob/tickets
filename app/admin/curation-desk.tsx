@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- moderation images are private API responses and must bypass the public image optimizer. */
 "use client";
 
 import Link from "next/link";

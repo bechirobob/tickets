@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- event artwork already carries provider-side sizing; the public optimizer cannot safely proxy every approved host source. */
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, BadgeCheck, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";

@@ -1,0 +1,26 @@
+name: Dependency security
+
+on:
+  push:
+    branches: [main]
+    paths: [package.json, package-lock.json, .github/dependabot.yml, .github/workflows/dependency-security.yml]
+  schedule:
+    - cron: "30 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Fail on moderate or higher production advisories
+        run: npm audit --omit=dev --audit-level=moderate

@@ -9,6 +9,7 @@ import {
   readCookie,
 } from "../../../../lib/attendee-auth";
 import { deliverConfirmedOrder, verifyAndFulfill } from "../../../../lib/payment-operations";
+import { mutationHasValidOrigin } from "../../../../lib/admin-session";
 
 type ClaimRecord = {
   orderId: string;
@@ -27,6 +28,9 @@ async function runtimeDb(): Promise<D1Database> {
 }
 
 export async function POST(request: Request) {
+  if (!mutationHasValidOrigin(request)) {
+    return Response.json({ error: "This ticket request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
+  }
   const body = await request.json() as { reference?: string; claim?: string };
   const reference = body.reference?.trim() ?? "";
   const claim = body.claim?.trim() ?? "";
@@ -144,6 +148,9 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!mutationHasValidOrigin(request)) {
+    return Response.json({ error: "This sign-out request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
+  }
   const token = readCookie(request.headers.get("cookie"));
   if (token) {
     const db = await runtimeDb();

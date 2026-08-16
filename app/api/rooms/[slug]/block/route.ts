@@ -1,4 +1,6 @@
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
+import { mutationHasValidOrigin, recordSecurityEvent, requestMetadata } from "../../../../../lib/admin-session";
+import { enforceRateLimit } from "../../../../../lib/security-controls";
 
 async function authorize(request: Request, slug: string) {
   const { env } = await import("cloudflare:workers");
@@ -6,12 +8,26 @@ async function authorize(request: Request, slug: string) {
   return { env, access };
 }
 
+async function allowBlockWrite(request: Request, attendeeId: string, slug: string): Promise<boolean> {
+  const { env } = await import("cloudflare:workers");
+  const allowed = await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `room-block:${slug}:${attendeeId}`);
+  if (!allowed) {
+    await recordSecurityEvent(env.DB, {
+      kind: "rate_limited", subject: attendeeId, path: new URL(request.url).pathname,
+      requestId: requestMetadata(request).requestId, detail: "room_block_rate_limited",
+    });
+  }
+  return allowed;
+}
+
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params;
+  if (!mutationHasValidOrigin(request)) return Response.json({ error: "This block request was not accepted." }, { status: 403 });
   const body = await request.json() as { attendeeId?: string };
   const blockedAttendeeId = body.attendeeId?.trim() ?? "";
   const { env, access } = await authorize(request, slug);
   if (!access) return Response.json({ error: "Ticket access required." }, { status: 401 });
+  if (!(await allowBlockWrite(request, access.attendeeId, slug))) return Response.json({ error: "Give the Room a moment before changing blocks again." }, { status: 429 });
   if (!blockedAttendeeId || blockedAttendeeId === access.attendeeId) {
     return Response.json({ error: "That attendee cannot be blocked." }, { status: 400 });
   }
@@ -33,10 +49,12 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
 
 export async function DELETE(request: Request, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params;
+  if (!mutationHasValidOrigin(request)) return Response.json({ error: "This unblock request was not accepted." }, { status: 403 });
   const body = await request.json() as { attendeeId?: string };
   const blockedAttendeeId = body.attendeeId?.trim() ?? "";
   const { env, access } = await authorize(request, slug);
   if (!access) return Response.json({ error: "Ticket access required." }, { status: 401 });
+  if (!(await allowBlockWrite(request, access.attendeeId, slug))) return Response.json({ error: "Give the Room a moment before changing blocks again." }, { status: 429 });
   await env.DB.prepare(`
     DELETE FROM room_blocks
     WHERE event_slug = ? AND blocker_attendee_id = ? AND blocked_attendee_id = ?

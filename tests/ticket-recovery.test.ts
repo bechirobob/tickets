@@ -66,7 +66,7 @@ describe("ticket email delivery and recovery", () => {
     const cookie = claimResponse.headers.get("set-cookie")?.split(";")[0];
     expect(cookie).toMatch(/^bct_attendee=/u);
 
-    const walletResponse = await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: cookie! } }));
+    const walletResponse = await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: cookie!, origin: "https://tickets.becoreops.com" } }));
     expect(walletResponse.status).toBe(200);
     const wallet = await walletResponse.json() as { attendee: { displayName: string; emailVerified: boolean }; orders: Array<{ tickets: Array<{ qrPayload: string; gateCode: string }> }> };
     expect(wallet.attendee).toMatchObject({ displayName: "Second Checkout Name", emailVerified: true });
