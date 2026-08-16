@@ -47,6 +47,12 @@ jobs:
             staged_phase="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.deploymentPhase === "string" ? value.deploymentPhase : ""); } catch {}' "$staged")"
             if [[ "$staged_sha" != "$target_sha" || "$staged_phase" != "staging" ]]; then needs_deploy=true; fi
           fi
+          if [[ "$deployment_phase" == "production" && "$needs_deploy" == "false" ]]; then
+            production="$(curl --silent --show-error --max-time 10 https://bubblewash.co/api/health || true)"
+            production_sha="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.release === "string" ? value.release : ""); } catch {}' "$production")"
+            production_phase="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.deploymentPhase === "string" ? value.deploymentPhase : ""); } catch {}' "$production")"
+            if [[ "$production_sha" != "$target_sha" || "$production_phase" != "production" ]]; then needs_deploy=true; fi
+          fi
           printf 'sha=%s\nphase=%s\ndeployment_phase=%s\nneeds_deploy=%s\n' "$target_sha" "$phase" "$deployment_phase" "$needs_deploy" >> "$GITHUB_OUTPUT"
 
       - name: Check out Bubble Wash
