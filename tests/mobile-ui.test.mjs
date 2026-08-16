@@ -259,19 +259,21 @@ test("public navigation belongs to each header on mobile and desktop", async () 
   assert.match(css, /\.night-mobile-menu\s*\{[^}]*position:\s*relative[^}]*display:\s*block/su);
   assert.match(css, /\.night-mobile-menu__trigger\s*\{[^}]*position:\s*static/su);
   assert.doesNotMatch(css, /\.night-mobile-menu__trigger\s*\{[^}]*position:\s*fixed/su);
-  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*position:\s*absolute[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
-  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*gap:\s*0\s*!important[^}]*opacity:\s*0[^}]*visibility:\s*hidden/su);
+  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*position:\s*absolute[^}]*border-radius:\s*12px[^}]*background:\s*rgba\(18,19,17,\.68\)[^}]*box-shadow:\s*none/su);
+  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*-webkit-backdrop-filter:\s*blur\(18px\) saturate\(\.9\)[^}]*backdrop-filter:\s*blur\(18px\) saturate\(\.9\)/su);
   assert.match(css, /\.night-mobile-menu\.is-open \.night-mobile-menu__panel\s*\{[^}]*opacity:\s*1[^}]*visibility:\s*visible/su);
-  assert.match(css, /\.night-mobile-menu__panel-header\s*\{[^}]*display:\s*flex[^}]*border-bottom:\s*1px solid/su);
-  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*background:\s*rgba\(243,240,232,\.74\)[^}]*transform:\s*translateY\(-10px\) scale\(\.965\)/su);
-  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*-webkit-backdrop-filter:\s*blur\(16px\)[^}]*backdrop-filter:\s*blur\(16px\)/su);
+  assert.match(css, /\.night-mobile-menu__panel-header\s*\{[^}]*min-height:\s*40px[^}]*display:\s*flex[^}]*border-bottom:\s*1px solid/su);
+  assert.match(css, /\.night-mobile-menu__links\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)[^}]*padding-top:\s*4px/su);
   assert.match(css, /\.night-mobile-menu\.is-open \.night-mobile-menu__close\s*\{[^}]*opacity:\s*1[^}]*rotate\(0\) scale\(1\)/su);
-  assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*39px[^}]*border-radius:\s*0[^}]*color:\s*rgba\(21,22,19,\.76\)/su);
-  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?\.night-mobile-menu__panel\s*\{[^}]*width:\s*min\(304px, calc\(100vw - 24px\)\)[^}]*right:\s*0/su);
-  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.night-mobile-menu__trigger, \.night-mobile-menu__panel, \.night-mobile-menu__close, \.night-mobile-menu__group\s*\{[^}]*transition:\s*none/su);
-  assert.match(await readFile("app/mobile-navigation.tsx", "utf8"), /const groups = \[[\s\S]*?aria-hidden=\{!open\}[\s\S]*?tabIndex=\{open \? undefined : -1\}/su);
-  assert.match(await readFile("app/mobile-navigation.tsx", "utf8"), /night-mobile-menu__panel-header[\s\S]*?night-mobile-menu__close[\s\S]*?<X size=\{19\}/su);
+  assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*44px[^}]*border-radius:\s*0[^}]*color:\s*rgba\(255,255,255,\.76\)/su);
+  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?\.night-mobile-menu__panel\s*\{[^}]*width:\s*min\(276px, calc\(100vw - 24px\)\)[^}]*padding:\s*5px[^}]*right:\s*0/su);
+  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?\.night-mobile-menu \.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*42px[^}]*font-size:\s*13px/su);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.night-mobile-menu__trigger, \.night-mobile-menu__panel, \.night-mobile-menu__close, \.night-mobile-menu__links\s*\{[^}]*transition:\s*none/su);
+  assert.match(mobileNavigation, /const links = \[[\s\S]*?aria-hidden=\{!open\}[\s\S]*?tabIndex=\{open \? undefined : -1\}/su);
+  assert.doesNotMatch(mobileNavigation, /night-mobile-menu__group|night-mobile-menu__label/u);
+  assert.match(mobileNavigation, /night-mobile-menu__panel-header[\s\S]*?<span>Menu<\/span>[\s\S]*?night-mobile-menu__close[\s\S]*?<X size=\{19\}/su);
   assert.match(polish, /secondary customer menu[\s\S]*?\.night-mobile-menu__panel a\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
+  assert.match(polish, /\.night-mobile-menu__panel\s*\{[^}]*box-shadow:\s*none/su);
 });
 
 test("the program-wide type scale never returns to ant-sized visible text", async () => {

@@ -5,21 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
-const groups = [
-  { label: "Discover", links: [
-    { href: "/events", label: "The Drop", icon: CalendarDays },
-    { href: "/hosts", label: "Hosts", icon: UsersRound },
-  ] },
-  { label: "Your nights", links: [
-    { href: "/my-nights", label: "My Nights", icon: Ticket },
-  ] },
-  { label: "Work with us", links: [
-    { href: "/organizer/submit", label: "Organisers", icon: CalendarPlus },
-  ] },
-  { label: "BeCore", links: [
-    { href: "/about", label: "About us", icon: Info },
-    { href: "/help", label: "Help", icon: LifeBuoy },
-  ] },
+const links = [
+  { href: "/events", label: "The Drop", icon: CalendarDays },
+  { href: "/hosts", label: "Hosts", icon: UsersRound },
+  { href: "/my-nights", label: "My Nights", icon: Ticket },
+  { href: "/organizer/submit", label: "Organisers", icon: CalendarPlus },
+  { href: "/about", label: "About us", icon: Info },
+  { href: "/help", label: "Help", icon: LifeBuoy },
 ];
 
 export default function MobileNavigation() {
@@ -78,20 +70,19 @@ export default function MobileNavigation() {
     </button>
     <nav id={panelId} className="night-mobile-menu__panel" aria-label="Main navigation" aria-hidden={!open}>
       <header className="night-mobile-menu__panel-header">
-        <span>Explore BeCore</span>
+        <span>Menu</span>
         <button type="button" className="night-mobile-menu__close" aria-label="Close navigation" tabIndex={open ? undefined : -1} onClick={() => {
           setOpen(false);
           trigger.current?.focus();
         }}><X size={19} /></button>
       </header>
-      {groups.map((group) => <section key={group.label} className="night-mobile-menu__group" aria-labelledby={`${panelId}-${group.label.replaceAll(" ", "-").toLowerCase()}`}>
-        <span id={`${panelId}-${group.label.replaceAll(" ", "-").toLowerCase()}`} className="night-mobile-menu__label">{group.label}</span>
-        {group.links.map((link) => {
+      <div className="night-mobile-menu__links">
+        {links.map((link) => {
           const Icon = link.icon;
           const active = pathname === link.href || (link.href !== "/events" && pathname.startsWith(`${link.href}/`)) || (link.href === "/events" && pathname.startsWith("/event/"));
-          return <Link key={link.href} href={link.href} tabIndex={open ? undefined : -1} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)}><Icon size={17} aria-hidden="true" /><span>{link.label}</span></Link>;
+          return <Link key={link.href} href={link.href} tabIndex={open ? undefined : -1} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)}><Icon size={16} aria-hidden="true" /><span>{link.label}</span></Link>;
         })}
-      </section>)}
+      </div>
     </nav>
   </div>;
 }
