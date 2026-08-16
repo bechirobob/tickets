@@ -471,10 +471,11 @@ test("organiser submission controls end in straight baselines", async () => {
 });
 
 test("About us has its own open page and no longer interrupts the landing page", async () => {
-  const [home, about, css] = await Promise.all([
+  const [home, about, css, polish] = await Promise.all([
     readFile(homeUrl, "utf8"),
     readFile(aboutUrl, "utf8"),
     readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
   ]);
 
   assert.match(home, /<Link href="\/about">About us<\/Link>/u);
@@ -494,6 +495,7 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);
   assert.match(css, /@media \(max-width: 800px\)[\s\S]*?\.about-hero\s*\{[^}]*grid-template-columns:\s*1fr/su);
   assert.match(css, /\.organizer-intelligence\s*\{[^}]*grid-template-columns:/su);
+  assert.match(polish, /\.organizer-intelligence__copy > a,[\s\S]*?border-radius:\s*0/su);
   assert.doesNotMatch(css, /\.organizer-intelligence[^}]*box-shadow/su);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.organizer-intelligence\s*\{[^}]*grid-template-columns:\s*1fr/su);
 });

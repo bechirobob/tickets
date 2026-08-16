@@ -377,6 +377,7 @@
   .help-contact article p a,
   .venue-block > a,
   .compact-section-head > a,
+  .organizer-intelligence__copy > a,
   .drop-card__body > a,
   .drop-pagination button,
   .drop-rail-status button,
@@ -1214,6 +1215,7 @@
 
 :where(
   .compact-section-head > a,
+  .organizer-intelligence__copy > a,
   .drop-card__body > a,
   .drop-pagination button
 ) {
