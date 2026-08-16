@@ -41,6 +41,12 @@ jobs:
           current_phase="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.deploymentPhase === "string" ? value.deploymentPhase : ""); } catch {}' "$current")"
           needs_deploy=true
           if [[ "$current_sha" == "$target_sha" && "$current_phase" == "$deployment_phase" ]]; then needs_deploy=false; fi
+          if [[ "$deployment_phase" == "staging" && "$needs_deploy" == "false" ]]; then
+            staged="$(curl --silent --show-error --max-time 10 https://staging.bubblewash.co/api/health || true)"
+            staged_sha="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.release === "string" ? value.release : ""); } catch {}' "$staged")"
+            staged_phase="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.deploymentPhase === "string" ? value.deploymentPhase : ""); } catch {}' "$staged")"
+            if [[ "$staged_sha" != "$target_sha" || "$staged_phase" != "staging" ]]; then needs_deploy=true; fi
+          fi
           printf 'sha=%s\nphase=%s\ndeployment_phase=%s\nneeds_deploy=%s\n' "$target_sha" "$phase" "$deployment_phase" "$needs_deploy" >> "$GITHUB_OUTPUT"
 
       - name: Check out Bubble Wash
@@ -93,7 +99,9 @@ jobs:
           config.vars.BUBBLEWASH_RELEASE_SHA = process.env.TARGET_SHA;
           config.vars.BUBBLEWASH_DEPLOYMENT_PHASE = process.env.DEPLOYMENT_PHASE;
           config.vars.BUBBLEWASH_MIGRATION_ENABLED = process.env.DEPLOYMENT_PHASE === "production" ? "false" : "true";
-          if (process.env.DEPLOYMENT_PHASE !== "production") config.routes = [];
+          if (process.env.DEPLOYMENT_PHASE !== "production") {
+            config.routes = [{ pattern: "staging.bubblewash.co", custom_domain: true }];
+          }
           await writeFile("wrangler.jsonc", `${JSON.stringify(config, null, 2)}\n`);
           console.log(`Cloudflare release configured for ${process.env.DEPLOYMENT_PHASE}.`);
           NODE
@@ -165,8 +173,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl --fail --silent --show-error --retry 8 --retry-all-errors --max-time 15 https://bubble-wash.becoreops.workers.dev/api/health)"
-          node -e 'const value=JSON.parse(process.argv[1]); if(value.release!==process.argv[2] || value.deploymentPhase!=="staging") process.exit(1)' "$response" "${{ steps.target.outputs.sha }}"
+          for origin in https://bubble-wash.becoreops.workers.dev https://staging.bubblewash.co; do
+            response="$(curl --fail --silent --show-error --retry 12 --retry-all-errors --max-time 15 "$origin/api/health")"
+            node -e 'const value=JSON.parse(process.argv[1]); if(value.release!==process.argv[2] || value.deploymentPhase!=="staging") process.exit(1)' "$response" "${{ steps.target.outputs.sha }}"
+          done
 
       - name: Verify production cutover
         if: steps.target.outputs.needs_deploy == 'true' && steps.target.outputs.deployment_phase == 'production'
