@@ -265,7 +265,8 @@ test("public navigation belongs to each header on mobile and desktop", async () 
   assert.match(css, /\.night-mobile-menu__panel-header\s*\{[^}]*display:\s*flex[^}]*border-bottom:\s*1px solid/su);
   assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*background:\s*#f3f0e8[^}]*transform:\s*translateY\(-10px\) scale\(\.965\)/su);
   assert.match(css, /\.night-mobile-menu\.is-open \.night-mobile-menu__close\s*\{[^}]*opacity:\s*1[^}]*rotate\(0\) scale\(1\)/su);
-  assert.match(css, /\.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*39px[^}]*border:\s*0[^}]*border-radius:\s*0/su);
+  assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*39px[^}]*border-radius:\s*0[^}]*color:\s*rgba\(21,22,19,\.76\)/su);
+  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?\.night-mobile-menu__panel\s*\{[^}]*width:\s*min\(304px, calc\(100vw - 24px\)\)[^}]*right:\s*0/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.night-mobile-menu__trigger, \.night-mobile-menu__panel, \.night-mobile-menu__close, \.night-mobile-menu__group\s*\{[^}]*transition:\s*none/su);
   assert.match(await readFile("app/mobile-navigation.tsx", "utf8"), /const groups = \[[\s\S]*?aria-hidden=\{!open\}[\s\S]*?tabIndex=\{open \? undefined : -1\}/su);
   assert.match(await readFile("app/mobile-navigation.tsx", "utf8"), /night-mobile-menu__panel-header[\s\S]*?night-mobile-menu__close[\s\S]*?<X size=\{19\}/su);
