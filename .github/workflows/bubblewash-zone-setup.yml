@@ -1,0 +1,82 @@
+name: Prepare Bubble Wash Cloudflare Zone
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/bubblewash-zone-setup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bubblewash-cloudflare-zone
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+    steps:
+      - name: Create or inspect the Bubble Wash zone
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+
+          const api = "https://api.cloudflare.com/client/v4";
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${api}${path}`, { ...options, headers });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+              throw new Error(JSON.stringify(payload.errors ?? payload));
+            }
+            return payload;
+          };
+
+          const name = "bubblewash.co";
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          let listed = await request(`/zones?name=${encodeURIComponent(name)}&account.id=${accountId}`);
+          let zone = listed.result?.find((candidate) => candidate.name === name);
+          if (!zone?.id) {
+            const created = await request("/zones", {
+              method: "POST",
+              body: JSON.stringify({
+                name,
+                account: { id: accountId },
+                type: "full",
+                jump_start: true,
+              }),
+            });
+            zone = created.result;
+          }
+          if (!zone?.id || !Array.isArray(zone.name_servers) || zone.name_servers.length !== 2) {
+            throw new Error("Cloudflare did not return a usable Bubble Wash zone.");
+          }
+          const result = {
+            zone: zone.name,
+            status: zone.status,
+            nameservers: zone.name_servers,
+            checked_at: new Date().toISOString(),
+          };
+          await writeFile("bubblewash-zone.json", `${JSON.stringify(result, null, 2)}\n`);
+          console.log(JSON.stringify(result));
+          NODE
+
+      - name: Preserve zone handoff
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bubblewash-cloudflare-zone
+          path: bubblewash-zone.json
+          if-no-files-found: error
+          retention-days: 35
