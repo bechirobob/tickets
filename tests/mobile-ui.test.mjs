@@ -260,7 +260,11 @@ test("public navigation belongs to each header on mobile and desktop", async () 
   assert.match(css, /\.night-mobile-menu__trigger\s*\{[^}]*position:\s*static/su);
   assert.doesNotMatch(css, /\.night-mobile-menu__trigger\s*\{[^}]*position:\s*fixed/su);
   assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*position:\s*absolute[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
-  assert.match(css, /\.night-mobile-menu__panel a\s*\{[^}]*border-bottom:\s*1px solid[^}]*border-radius:\s*0/su);
+  assert.match(css, /\.night-mobile-menu__panel\s*\{[^}]*gap:\s*0\s*!important[^}]*opacity:\s*0[^}]*visibility:\s*hidden/su);
+  assert.match(css, /\.night-mobile-menu\.is-open \.night-mobile-menu__panel\s*\{[^}]*opacity:\s*1[^}]*visibility:\s*visible/su);
+  assert.match(css, /\.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*39px[^}]*border:\s*0[^}]*border-radius:\s*0/su);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.night-mobile-menu__panel\s*\{[^}]*transition:\s*none/su);
+  assert.match(await readFile("app/mobile-navigation.tsx", "utf8"), /const groups = \[[\s\S]*?aria-hidden=\{!open\}[\s\S]*?tabIndex=\{open \? undefined : -1\}/su);
   assert.match(polish, /secondary customer menu[\s\S]*?\.night-mobile-menu__panel a\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
 });
 
