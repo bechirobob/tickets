@@ -140,12 +140,26 @@ jobs:
           if-no-files-found: error
           retention-days: 35
 
-      - name: Apply D1 migrations and deploy Worker
+      - name: Apply D1 migrations
         if: steps.target.outputs.needs_deploy == 'true'
         working-directory: bubble-wash
+        run: npm run db:migrate:remote
+
+      - name: Deploy Worker
+        if: steps.target.outputs.needs_deploy == 'true'
+        working-directory: bubble-wash
+        shell: bash
         run: |
-          npm run db:migrate:remote
-          npm run deploy:built
+          set +e
+          output="$(npm run deploy:built 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [[ "$status" -ne 0 ]]; then
+            summary="$(printf '%s\n' "$output" | tail -n 35 | tr '\n' ' ' | sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e 's/\n/%0A/g')"
+            printf '::error title=Cloudflare Worker deployment failed::%.4000s\n' "$summary"
+            exit "$status"
+          fi
 
       - name: Ensure persistent Worker secrets
         if: steps.target.outputs.needs_deploy == 'true'
