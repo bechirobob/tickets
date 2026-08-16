@@ -846,12 +846,14 @@ test("semantic states and route-matched skeletons stay accessible", async () => 
 });
 
 test("organiser analytics has a dedicated compact responsive workspace", async () => {
-  const [page, client, api, roles, css] = await Promise.all([
+  const [page, client, api, roles, css, wrangler, migration] = await Promise.all([
     readFile(new URL("../app/organizer/analytics/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/organizer/analytics/organizer-analytics.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/organizer/analytics/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/staff-roles.ts", import.meta.url), "utf8"),
     readFile(cssUrl, "utf8"),
+    readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0023_organizer_analytics_hardening.sql", import.meta.url), "utf8"),
   ]);
   assert.match(page, /requireAdminSession\("\/organizer\/analytics", "organizer\.workspace"\)/u);
   assert.match(client, /Last 7 days/u);
@@ -865,6 +867,13 @@ test("organiser analytics has a dedicated compact responsive workspace", async (
   assert.match(api, /This Night is not assigned to your organiser account/u);
   assert.match(api, /no-store, private/u);
   assert.match(api, /COUNT\(DISTINCT lower\(customer_email\)\)/u);
+  assert.match(api, /ANALYTICS_RATE_LIMITER/u);
+  assert.match(api, /organizer\.analytics_exported/u);
+  assert.match(api, /\^\\s\*\[=\+\\-@\]/u);
+  assert.match(api, /GROUP BY day ORDER BY day LIMIT 400/u);
+  assert.match(wrangler, /"name": "ANALYTICS_RATE_LIMITER"/u);
+  assert.match(migration, /orders_analytics_event_status_date_idx/u);
+  assert.match(migration, /tickets_analytics_event_status_checkin_idx/u);
   assert.match(roles, /path === "\/organizer\/analytics"/u);
   assert.match(css, /\.analytics-controls \{[^}]*grid-template-columns:/su);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.analytics-layout \{[^}]*grid-template-columns: 1fr/su);

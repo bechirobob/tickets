@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { GET as readAnalytics } from "../app/api/organizer/analytics/route";
+import { enforceAnalyticsReadLimit, GET as readAnalytics } from "../app/api/organizer/analytics/route";
 import { adminCookieHeader, createPasswordRecord, createStaffSession } from "../lib/admin-session";
 import { PASSWORD_ITERATIONS } from "../lib/staff-password-policy";
 
@@ -53,8 +53,8 @@ describe("organiser analytics", () => {
     await env.DB.batch([
       env.DB.prepare("INSERT INTO staff_event_assignments (account_id, event_slug, assigned_by, assigned_at) VALUES (?, ?, 'test', ?)").bind(account.id, slug, now),
       env.DB.prepare(`INSERT INTO event_ticket_tiers (id, event_slug, code, name, description, price_minor, admissions_per_unit, capacity_admissions, max_units_per_order, status, sort_order, created_at, updated_at)
-        VALUES (?, ?, 'general', 'General Admission', 'General entry', 12000, 1, 200, 10, 'available', 0, ?, ?)`).bind(tierId, slug, now, now),
-      env.DB.prepare("INSERT INTO event_promoter_codes (id, event_slug, code, label, status, created_at, created_by) VALUES (?, ?, 'NANA', 'Nana street team', 'active', ?, 'test')").bind(`promoter-${suffix}`, slug, now),
+        VALUES (?, ?, 'general', '=General Admission', 'General entry', 12000, 1, 200, 10, 'available', 0, ?, ?)`).bind(tierId, slug, now, now),
+      env.DB.prepare("INSERT INTO event_promoter_codes (id, event_slug, code, label, status, created_at, created_by) VALUES (?, ?, 'NANA', '@Nana street team', 'active', ?, 'test')").bind(`promoter-${suffix}`, slug, now),
       env.DB.prepare(`INSERT INTO orders (id, reference, event_slug, ticket_type, quantity, face_amount_minor, booking_fee_minor, total_amount_minor, currency, customer_email, customer_phone, customer_name, payment_channel, status, ticket_tier_id, unit_quantity, promoter_code, refunded_amount_minor, created_at, paid_at)
         VALUES (?, ?, ?, 'general', 2, 24000, 2000, 26000, 'GHS', 'repeat@example.com', '233000000001', 'Repeat Guest', 'mobile_money:mtn', 'paid', ?, 2, 'NANA', 0, ?, ?)`)
         .bind(`order-a-${suffix}`, `BCT-A-${suffix}`, slug, tierId, now, now),
@@ -83,13 +83,16 @@ describe("organiser analytics", () => {
     const response = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}&range=30`, { headers: { cookie: account.cookie } }));
     expect(response.status).toBe(200);
     const data = await response.json() as {
+      events: Array<{ slug: string; title: string }>;
       overview: Record<string, number>;
+      salesTrend: Array<{ day: string }>;
       ticketTiers: Array<Record<string, unknown>>;
       promoters: Array<Record<string, unknown>>;
       vipUsage: Array<Record<string, unknown>>;
     };
     expect(data.overview).toMatchObject({ eventViews: 20, checkoutStarts: 8, paymentAttempts: 4, paymentsConfirmed: 2, paidOrders: 2, revenueMinor: 39000, refundsMinor: 3000, admissions: 3, checkedIn: 2, uniqueBuyers: 1, repeatBuyers: 1 });
-    expect(data.ticketTiers).toEqual([expect.objectContaining({ name: "General Admission", orders: 2, admissions: 3, revenueMinor: 39000 })]);
+    expect(data.events.map((event) => event.slug)).toEqual([slug]);
+    expect(data.ticketTiers).toEqual([expect.objectContaining({ name: "=General Admission", orders: 2, admissions: 3, revenueMinor: 39000 })]);
     expect(data.promoters).toEqual(expect.arrayContaining([expect.objectContaining({ code: "NANA", orders: 1 }), expect.objectContaining({ code: "direct", orders: 1 })]));
     expect(data.vipUsage).toEqual([expect.objectContaining({ kind: "bottle_service", status: "confirmed", count: 1 })]);
     expect(JSON.stringify(data)).not.toContain("Private Night");
@@ -97,12 +100,47 @@ describe("organiser analytics", () => {
 
     const denied = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}`, { headers: { cookie: outsider.cookie } }));
     expect(denied.status).toBe(403);
+    expect(denied.headers.get("cache-control")).toContain("no-store");
+    const deniedAudit = await env.DB.prepare("SELECT outcome, detail FROM operational_audit_events WHERE actor_account_id = ? AND action = 'organizer.analytics_access_denied' ORDER BY created_at DESC LIMIT 1")
+      .bind(outsider.id).first<{ outcome: string; detail: string }>();
+    expect(deniedAudit).toMatchObject({ outcome: "denied", detail: "event_not_assigned" });
+
+    const allTime = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}&range=all`, { headers: { cookie: account.cookie } }));
+    const allTimeData = await allTime.json() as { salesTrend: Array<{ day: string }>; journeyTrend: Array<{ day: string }> };
+    expect(allTimeData.salesTrend[0].day).toMatch(/^\d{4}-\d{2}-01$/u);
+    expect(allTimeData.journeyTrend[0].day).toMatch(/^\d{4}-\d{2}-01$/u);
 
     const csv = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}&range=30&format=csv`, { headers: { cookie: account.cookie } }));
     expect(csv.headers.get("content-type")).toContain("text/csv");
     const exportText = await csv.text();
     expect(exportText).toContain("Analytics Night");
-    expect(exportText).toContain("Nana street team");
+    expect(exportText).toContain('"\t=General Admission"');
+    expect(exportText).toContain('"\t@Nana street team"');
     expect(exportText).not.toContain("repeat@example.com");
+    const exportAudit = await env.DB.prepare("SELECT outcome, target_id AS targetId, detail FROM operational_audit_events WHERE actor_account_id = ? AND action = 'organizer.analytics_exported' ORDER BY created_at DESC LIMIT 1")
+      .bind(account.id).first<{ outcome: string; targetId: string; detail: string }>();
+    expect(exportAudit).toMatchObject({ outcome: "success", targetId: slug, detail: "range=30;events=1" });
+
+    await env.DB.prepare("DELETE FROM staff_event_assignments WHERE account_id = ? AND event_slug = ?").bind(account.id, slug).run();
+    const revoked = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}`, { headers: { cookie: account.cookie } }));
+    expect(revoked.status).toBe(403);
+
+    await env.DB.prepare("UPDATE staff_accounts SET status = 'disabled' WHERE id = ?").bind(outsider.id).run();
+    const disabled = await readAnalytics(new Request("https://tickets.becoreops.com/api/organizer/analytics", { headers: { cookie: outsider.cookie } }));
+    expect(disabled.status).toBe(403);
+    expect(disabled.headers.get("cache-control")).toContain("no-store");
+  });
+
+  it("uses a dedicated per-account read limit key", async () => {
+    const keys: string[] = [];
+    const allowed = await enforceAnalyticsReadLimit({
+      limit: async ({ key }) => {
+        keys.push(key);
+        return { success: false };
+      },
+    }, "organizer-123");
+
+    expect(allowed).toBe(false);
+    expect(keys).toEqual(["organizer-analytics:organizer-123"]);
   });
 });

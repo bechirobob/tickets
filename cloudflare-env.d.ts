@@ -10,6 +10,7 @@ declare namespace Cloudflare {
     LOGIN_RATE_LIMITER: RateLimit;
     PUBLIC_WRITE_RATE_LIMITER: RateLimit;
     PAYMENT_RATE_LIMITER: RateLimit;
+    ANALYTICS_RATE_LIMITER: RateLimit;
     IMAGES: ImagesBinding;
     PAYSTACK_SECRET_KEY: string;
     RESEND_API_KEY?: string;

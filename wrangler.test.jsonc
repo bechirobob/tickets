@@ -31,6 +31,11 @@
       "name": "PAYMENT_RATE_LIMITER",
       "namespace_id": "93103",
       "simple": { "limit": 1000, "period": 60 }
+    },
+    {
+      "name": "ANALYTICS_RATE_LIMITER",
+      "namespace_id": "93104",
+      "simple": { "limit": 1000, "period": 60 }
     }
   ],
   "durable_objects": {

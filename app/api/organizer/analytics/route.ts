@@ -1,4 +1,11 @@
-import { hasPermission, readAdminSession } from "../../../../lib/admin-session";
+import {
+  hasPermission,
+  readAdminSession,
+  recordAudit,
+  recordSecurityEvent,
+  requestMetadata,
+} from "../../../../lib/admin-session";
+import { enforceRateLimit, type RateLimiter } from "../../../../lib/security-controls";
 
 type RangeKey = "7" | "30" | "90" | "all";
 
@@ -24,7 +31,17 @@ function number(value: unknown) {
 
 function csvCell(value: unknown) {
   const text = String(value ?? "");
-  return /[",\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  const neutralized = /^\s*[=+\-@]/u.test(text) ? `\t${text.trimStart()}` : text;
+  return /[",\n\r\t]/u.test(neutralized) ? `"${neutralized.replaceAll('"', '""')}"` : neutralized;
+}
+
+function exportFilename(eventSlug: string, range: RangeKey) {
+  const safeSlug = eventSlug.replace(/[^a-z0-9-]/giu, "-").replace(/-+/gu, "-").slice(0, 80) || "all";
+  return `becore-organiser-${safeSlug}-${range}.csv`;
+}
+
+export async function enforceAnalyticsReadLimit(limiter: RateLimiter, accountId: string): Promise<boolean> {
+  return enforceRateLimit(limiter, `organizer-analytics:${accountId}`);
 }
 
 function analyticsCsv(data: Record<string, unknown>) {
@@ -66,13 +83,40 @@ function analyticsCsv(data: Record<string, unknown>) {
 
 async function organizerSession(request: Request) {
   const { env } = await import("cloudflare:workers");
-  const session = await readAdminSession(request.headers.get("cookie"), env.DB);
-  return { env, session: session && hasPermission(session, "organizer.workspace") ? session : null };
+  const authenticated = await readAdminSession(request.headers.get("cookie"), env.DB);
+  const session = authenticated && hasPermission(authenticated, "organizer.workspace") ? authenticated : null;
+  return { env, session, authenticated };
 }
 
 export async function GET(request: Request) {
-  const { env, session } = await organizerSession(request);
-  if (!session) return Response.json({ error: "Organiser access is required." }, { status: 403 });
+  const { env, session, authenticated } = await organizerSession(request);
+  const metadata = requestMetadata(request);
+  if (!session) {
+    if (authenticated) {
+      await recordAudit(env.DB, {
+        session: authenticated,
+        action: "organizer.analytics_access_denied",
+        targetType: "analytics",
+        outcome: "denied",
+        detail: "role_not_permitted",
+        requestId: metadata.requestId,
+      });
+    }
+    return Response.json({ error: "Organiser access is required." }, { status: 403, headers: { "cache-control": "no-store, private" } });
+  }
+  if (!(await enforceAnalyticsReadLimit(env.ANALYTICS_RATE_LIMITER, session.accountId))) {
+    await recordSecurityEvent(env.DB, {
+      kind: "rate_limited",
+      subject: session.accountId,
+      path: "/api/organizer/analytics",
+      requestId: metadata.requestId,
+      detail: "organizer_analytics_read",
+    });
+    return Response.json(
+      { error: "Analytics is being refreshed too quickly. Wait a minute and try again." },
+      { status: 429, headers: { "cache-control": "no-store, private", "retry-after": "60" } },
+    );
+  }
 
   const url = new URL(request.url);
   const window = rangeWindow(url.searchParams.get("range"));
@@ -91,7 +135,19 @@ export async function GET(request: Request) {
     : await eventStatement.bind(session.accountId, session.email).all<{ slug: string; title: string; startsAt: string; eventState: string }>();
   const requestedSlug = url.searchParams.get("eventSlug") ?? "all";
   if (requestedSlug !== "all" && !events.results.some((event) => event.slug === requestedSlug)) {
-    return Response.json({ error: "This Night is not assigned to your organiser account." }, { status: 403 });
+    await recordAudit(env.DB, {
+      session,
+      action: "organizer.analytics_access_denied",
+      targetType: "event",
+      targetId: requestedSlug,
+      outcome: "denied",
+      detail: "event_not_assigned",
+      requestId: metadata.requestId,
+    });
+    return Response.json(
+      { error: "This Night is not assigned to your organiser account." },
+      { status: 403, headers: { "cache-control": "no-store, private" } },
+    );
   }
   const slugs = requestedSlug === "all" ? events.results.map((event) => event.slug) : [requestedSlug];
   const label = requestedSlug === "all" ? "All Nights" : events.results.find((event) => event.slug === requestedSlug)?.title ?? "Night";
@@ -108,6 +164,10 @@ export async function GET(request: Request) {
   const marks = placeholders(slugs);
   const orderBindings = [...slugs, window.start];
   const metricBindings = [...slugs, window.start.slice(0, 10)];
+  const orderTrendBucket = window.range === "all"
+    ? "substr(COALESCE(paid_at, created_at), 1, 7) || '-01'"
+    : "substr(COALESCE(paid_at, created_at), 1, 10)";
+  const metricTrendBucket = window.range === "all" ? "substr(day, 1, 7) || '-01'" : "day";
   const [orders, admissions, product, salesTrend, journeyTrend, ticketTiers, paymentMethods, promoters, checkIns, vipUsage, repeatBuyers] = await Promise.all([
     env.DB.prepare(`
       SELECT COUNT(*) AS paidOrders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor,
@@ -136,18 +196,18 @@ export async function GET(request: Request) {
       FROM product_metrics_daily WHERE event_slug IN (${marks}) AND day >= ?
     `).bind(...metricBindings).first<Record<string, unknown>>(),
     env.DB.prepare(`
-      SELECT substr(COALESCE(paid_at, created_at), 1, 10) AS day, COUNT(*) AS orders,
+      SELECT ${orderTrendBucket} AS day, COUNT(*) AS orders,
         COALESCE(SUM(quantity), 0) AS admissions, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor
       FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(paid_at, created_at) >= ?
-      GROUP BY day ORDER BY day
+      GROUP BY day ORDER BY day LIMIT 400
     `).bind(...orderBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
-      SELECT day,
+      SELECT ${metricTrendBucket} AS day,
         COALESCE(SUM(CASE WHEN metric = 'event_view' THEN count ELSE 0 END), 0) AS eventViews,
         COALESCE(SUM(CASE WHEN metric = 'checkout_started' THEN count ELSE 0 END), 0) AS checkoutStarts,
         COALESCE(SUM(CASE WHEN metric = 'payment_attempted' THEN count ELSE 0 END), 0) AS paymentAttempts,
         COALESCE(SUM(CASE WHEN metric = 'payment_confirmed' THEN count ELSE 0 END), 0) AS paymentsConfirmed
-      FROM product_metrics_daily WHERE event_slug IN (${marks}) AND day >= ? GROUP BY day ORDER BY day
+      FROM product_metrics_daily WHERE event_slug IN (${marks}) AND day >= ? GROUP BY day ORDER BY day LIMIT 400
     `).bind(...metricBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT tier.id, tier.event_slug AS eventSlug, event.title AS eventTitle, tier.name, tier.price_minor AS priceMinor,
@@ -223,10 +283,19 @@ export async function GET(request: Request) {
     vipUsage: vipUsage.results,
   };
   if (url.searchParams.get("format") === "csv") {
+    await recordAudit(env.DB, {
+      session,
+      action: "organizer.analytics_exported",
+      targetType: requestedSlug === "all" ? "analytics" : "event",
+      targetId: requestedSlug === "all" ? null : requestedSlug,
+      outcome: "success",
+      detail: `range=${window.range};events=${slugs.length}`,
+      requestId: metadata.requestId,
+    });
     return new Response(analyticsCsv(data), {
       headers: {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="becore-organiser-${requestedSlug}-${window.range}.csv"`,
+        "content-disposition": `attachment; filename="${exportFilename(requestedSlug, window.range)}"`,
         "cache-control": "no-store, private",
       },
     });
