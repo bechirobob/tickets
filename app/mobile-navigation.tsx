@@ -74,9 +74,16 @@ export default function MobileNavigation() {
         setOpen((current) => !current);
       }}
     >
-      {open ? <X size={20} /> : <Menu size={20} />}
+      <Menu size={20} />
     </button>
     <nav id={panelId} className="night-mobile-menu__panel" aria-label="Main navigation" aria-hidden={!open}>
+      <header className="night-mobile-menu__panel-header">
+        <span>Explore BeCore</span>
+        <button type="button" className="night-mobile-menu__close" aria-label="Close navigation" tabIndex={open ? undefined : -1} onClick={() => {
+          setOpen(false);
+          trigger.current?.focus();
+        }}><X size={19} /></button>
+      </header>
       {groups.map((group) => <section key={group.label} className="night-mobile-menu__group" aria-labelledby={`${panelId}-${group.label.replaceAll(" ", "-").toLowerCase()}`}>
         <span id={`${panelId}-${group.label.replaceAll(" ", "-").toLowerCase()}`} className="night-mobile-menu__label">{group.label}</span>
         {group.links.map((link) => {
