@@ -18,7 +18,7 @@ const reasons = [
 export default function AboutPage() {
   return <main className="about-page">
     <header className="directory-header">
-      <Link href="/"><ArrowLeft size={16} /><span className="directory-header__back-label">Home</span></Link>
+      <Link href="/" aria-label="Back to home"><ArrowLeft size={16} /><span className="directory-header__back-label">Home</span></Link>
       <Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link>
       <PublicNavigation />
     </header>

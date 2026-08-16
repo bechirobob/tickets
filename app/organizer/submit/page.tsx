@@ -8,7 +8,7 @@ export default function SubmitPartyPage() {
       <header className="submission-header">
         <Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link>
         <nav className="submission-header__actions" aria-label="Organiser access">
-          <Link href="/" className="submission-header__back"><ArrowLeft size={14} /> <span>Back to events</span></Link>
+          <Link href="/" className="submission-header__back" aria-label="Back to events"><ArrowLeft size={14} /> <span>Back to events</span></Link>
           <Link href="/organizer/workspace" className="submission-header__signin"><LogIn size={14} /> <span>Organiser sign in</span></Link>
         </nav>
       </header>

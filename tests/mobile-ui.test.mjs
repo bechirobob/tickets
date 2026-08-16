@@ -865,7 +865,7 @@ test("semantic states and route-matched skeletons stay accessible", async () => 
 });
 
 test("public typography keeps compact copy readable without shrinking header labels", async () => {
-  const [css, about, events, hosts, host, privacy, nights] = await Promise.all([
+  const [css, about, events, hosts, host, privacy, nights, submission] = await Promise.all([
     readFile(new URL("../app/access-polish.css", import.meta.url), "utf8"),
     readFile(new URL("../app/about/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/events/page.tsx", import.meta.url), "utf8"),
@@ -873,6 +873,7 @@ test("public typography keeps compact copy readable without shrinking header lab
     readFile(new URL("../app/hosts/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/account/privacy/privacy-settings.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/my-nights/my-nights-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/organizer/submit/page.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(css, /font-size:\s*12px\s*!important/u);
   assert.match(css, /\.submission-intro h1\s*\{[^}]*font-size:\s*clamp\(48px,\s*5\.5vw,\s*76px\)/su);
@@ -880,7 +881,9 @@ test("public typography keeps compact copy readable without shrinking header lab
   assert.match(css, /\.directory-header__back-label\s*\{[^}]*display:\s*none/su);
   for (const source of [about, events, hosts, host, privacy, nights]) {
     assert.match(source, /className="directory-header__back-label"/u);
+    assert.match(source, /aria-label="Back to /u);
   }
+  assert.match(submission, /className="submission-header__back" aria-label="Back to events"/u);
 });
 
 test("organiser analytics has a dedicated compact responsive workspace", async () => {
