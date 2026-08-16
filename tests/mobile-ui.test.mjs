@@ -495,6 +495,8 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);
   assert.match(css, /@media \(max-width: 800px\)[\s\S]*?\.about-hero\s*\{[^}]*grid-template-columns:\s*1fr/su);
   assert.match(css, /\.organizer-intelligence\s*\{[^}]*grid-template-columns:/su);
+  assert.match(css, /\.organizer-intelligence \.night-kicker\s*\{[^}]*color:\s*#5f5c55/su);
+  assert.match(css, /\.about-hero h1\s*\{[^}]*font-size:\s*clamp\(58px, 6\.4vw, 92px\)[^}]*line-height:\s*\.88/su);
   assert.match(polish, /\.organizer-intelligence__copy > a,[\s\S]*?border-radius:\s*0/su);
   assert.doesNotMatch(css, /\.organizer-intelligence[^}]*box-shadow/su);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.organizer-intelligence\s*\{[^}]*grid-template-columns:\s*1fr/su);
@@ -671,6 +673,11 @@ test("the interface has no effective shadows, tinted fills or curved text-edge c
   assert.match(polish, /\.room-ops__panel,[\s\S]*?\.organizer-answers article\s*\{[^}]*background:\s*transparent/su);
   assert.match(polish, /\.help-contact article p a,[\s\S]*?\.drop-rail-status button,[\s\S]*?\.night-purchase__support a\s*\)\s*\{[^}]*border-radius:\s*0/su);
   assert.match(polish, /\.room-vip-modal nav button\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /\.submission-header__actions a\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /Interface legibility contract:[\s\S]*?\.analytics-controls label,[\s\S]*?\.analytics-table span small,[\s\S]*?font-size:\s*12px/su);
+  assert.match(css, /\.flash-card__closed\s*\{[^}]*background:\s*#181915/su);
+  assert.match(css, /\.room-flash-message__closed\s*\{[^}]*background:\s*#181915/su);
+  assert.doesNotMatch(css, /\.(?:flash-card__closed|room-flash-message__closed)[^{]*\{[^}]*gradient/su);
   assert.match(css, /\.night-room-showcase::before\s*\{\s*display:\s*none/u);
   assert.doesNotMatch(css, /\.night-room-peek__stream\s*\{[^}]*radial-gradient/su);
 });

@@ -5,7 +5,22 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
 });
 
-const publicPages = ["/", "/events", "/help", "/privacy"];
+const publicPages = [
+  "/",
+  "/events",
+  "/about",
+  "/help",
+  "/privacy",
+  "/terms",
+  "/hosts",
+  "/organizer/submit",
+  "/my-nights",
+  "/tickets",
+  "/account/privacy",
+  "/event/after-dark-osu",
+  "/checkout/after-dark-osu",
+  "/admin/login",
+];
 
 test("public navigation is usable without horizontal overflow", async ({ page }) => {
   await page.goto("/");
@@ -73,6 +88,60 @@ for (const path of publicPages) {
     const scan = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     const serious = scan.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
     expect(serious, serious.map((violation) => `${violation.id}: ${violation.help}`).join("\n")).toEqual([]);
+  });
+
+  test(`${path} follows the flat, readable public design contract`, async ({ page }) => {
+    await page.goto(path);
+    const findings = await page.evaluate(() => {
+      const visible = (element: Element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      };
+      const directText = (element: Element) => Array.from(element.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent?.trim() ?? "")
+        .join(" ")
+        .trim();
+      const elements = Array.from(document.querySelectorAll("body *")).filter(visible);
+      const shadows = elements.filter((element) => {
+        const style = getComputedStyle(element);
+        return style.boxShadow !== "none" || style.textShadow !== "none";
+      }).map((element) => element.className || element.tagName).slice(0, 10);
+      const curvedPartialBorders = elements.filter((element) => {
+        const style = getComputedStyle(element);
+        const borders = [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth]
+          .map((value) => Number.parseFloat(value));
+        const hasPartialBorder = borders.some((width) => width > 0) && borders.some((width) => width === 0);
+        const radius = Math.max(...[
+          style.borderTopLeftRadius,
+          style.borderTopRightRadius,
+          style.borderBottomRightRadius,
+          style.borderBottomLeftRadius,
+        ].map((value) => Number.parseFloat(value)));
+        return hasPartialBorder && radius > 0;
+      }).map((element) => element.className || element.tagName).slice(0, 10);
+      const tinyText = elements.filter((element) => {
+        if (!directText(element) || element.closest(".room-product-phone, .notification-bell, [aria-hidden='true']")) return false;
+        return Number.parseFloat(getComputedStyle(element).fontSize) < 12;
+      }).map((element) => `${element.className || element.tagName}: ${directText(element)}`).slice(0, 10);
+      const oversizedHeadings = Array.from(document.querySelectorAll("h1, h2"))
+        .filter(visible)
+        .filter((element) => element.getBoundingClientRect().height > window.innerHeight * .35)
+        .map((element) => `${element.tagName}: ${element.textContent?.trim()}`).slice(0, 10);
+      return {
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        shadows,
+        curvedPartialBorders,
+        tinyText,
+        oversizedHeadings,
+      };
+    });
+    expect(findings.overflow).toBeLessThanOrEqual(1);
+    expect(findings.shadows).toEqual([]);
+    expect(findings.curvedPartialBorders).toEqual([]);
+    expect(findings.tinyText).toEqual([]);
+    expect(findings.oversizedHeadings).toEqual([]);
   });
 }
 

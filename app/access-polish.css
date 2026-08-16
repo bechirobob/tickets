@@ -1,6 +1,6 @@
 /* Compact owner setup and organiser access refinements. */
 .submission-header__actions { height: 100%; display: flex; align-items: center; }
-.submission-header__actions a { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; color: #aaa9a2; font-size: 13px; font-weight: 720; }
+.submission-header__actions a { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; border-radius: 0; color: #aaa9a2; font-size: 13px; font-weight: 720; }
 .submission-header__actions a + a { border-left: 1px solid #363733; }
 .submission-header__actions a:hover, .submission-header__actions a:focus-visible { color: white; }
 .submission-header__signin { color: #f2f0e8 !important; }
@@ -452,6 +452,74 @@
   .room-product-phone__stream > article {
     animation: none;
   }
+}
+
+/* Interface legibility contract: compact layouts use spacing, never sub-12px copy. */
+:where(
+  .operations-grid header span,
+  .operations-grid article small,
+  .operations-grid article i,
+  .operations-grid section > button small,
+  .operations-alerts small,
+  .door-desk__walkup span,
+  .door-desk__list small,
+  .passkey-security article i,
+  .passkey-security > p,
+  .night-hub__header span,
+  .notification-page section small,
+  .notification-page time,
+  .notification-page section i,
+  .gate-search article i,
+  .drop-card__image > span,
+  .drop-vibes span,
+  .room-flash-message__meta time,
+  .room-flash-message__closed i,
+  .flash-gallery-sheet > header > div:first-child > span,
+  .organizer-settlements small,
+  .date-line a.active::after,
+  .review-status,
+  .curation-facts small,
+  .room-pinned small,
+  .room-message__body > header span,
+  .room-message__body > header time,
+  .room-message__actions button span,
+  .flashes-notice span,
+  .flash-card time,
+  .room-vip-modal header small,
+  .room-vip-modal > section > small,
+  .room-vip-modal details b,
+  .room-vip-modal details small,
+  .room-vip-modal details i,
+  .tier-vip-note,
+  .checkout-tier__vip,
+  .organizer-vip > header > div > p,
+  .organizer-vip__layout .organizer-check small,
+  .organizer-vip__queue small,
+  .night-hub__notice span,
+  .night-support__threads p b,
+  .night-support__threads p time,
+  .support-ops__layout nav small,
+  .support-ops__layout nav i,
+  .support-ops__messages b,
+  .support-ops__messages time,
+  .workspace-jump,
+  .night-tonight > article span,
+  .analytics-controls label,
+  .analytics-overview > header p,
+  .analytics-overview article > small:first-child,
+  .analytics-overview article > small:last-child,
+  .analytics-section > header small,
+  .analytics-section > p,
+  .analytics-trend > div,
+  .analytics-bar-list span small,
+  .analytics-facts dt,
+  .analytics-table > div:first-child,
+  .analytics-table span small,
+  .operations-journey > header span small,
+  .operations-journey > header p,
+  .operations-journey > div span
+) {
+  font-size: 12px;
 }
 
 /*
