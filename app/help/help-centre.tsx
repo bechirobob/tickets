@@ -98,6 +98,15 @@ const guides: Guide[] = [
     action: { href: "/organizer/workspace", label: "View the dashboard" },
   },
   {
+    id: "organiser-analytics",
+    audience: "Organising",
+    category: "Performance",
+    title: "Understand what moved your Night",
+    summary: "Use live first-party signals to improve promotion, ticketing and event-day decisions without opening customer payment details.",
+    steps: ["Choose one assigned Night or keep the all-Nights view, then select 7, 30, 90 days or all time.", "Read the demand funnel, sales trend, ticket tiers, promoter contribution, payment mix, check-in timing and VIP concierge activity together.", "Export the aggregate CSV when the team needs a private working report; customer names, emails, phone numbers and payment details are not included."],
+    action: { href: "/organizer/analytics", label: "Open organiser analytics" },
+  },
+  {
     id: "room-update",
     audience: "Organising",
     category: "The Room",

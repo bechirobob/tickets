@@ -441,6 +441,7 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.match(submission, /className="submission-header__signin"/u);
   assert.match(submission, /aria-label="Organiser access"/u);
   assert.match(submission, /Organiser sign in/u);
+  assert.match(submission, /live demand, sales, promoter, entry and VIP insight/u);
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
 });
@@ -482,12 +483,19 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.match(about, /className="about-page"/u);
   assert.match(about, /Accra plans differently/u);
   assert.match(about, /The Room comes with the ticket/u);
-  assert.match(about, /Organisers keep the full story/u);
+  assert.match(about, /Organisers see what moved the Night/u);
+  assert.match(about, /ticket-tier sell-through, promoter performance, payment mix, check-in timing and VIP concierge use/u);
   assert.match(about, /Made for how Accra moves/u);
+  assert.match(home, /className="organizer-intelligence"/u);
+  assert.match(home, /Your Night should leave you smarter/u);
+  assert.match(home, /Paystack-confirmed payment/u);
   assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);
   assert.match(css, /\.about-reasons article\s*\{[^}]*border-bottom:\s*1px solid #cbc7bd/su);
   assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);
   assert.match(css, /@media \(max-width: 800px\)[\s\S]*?\.about-hero\s*\{[^}]*grid-template-columns:\s*1fr/su);
+  assert.match(css, /\.organizer-intelligence\s*\{[^}]*grid-template-columns:/su);
+  assert.doesNotMatch(css, /\.organizer-intelligence[^}]*box-shadow/su);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.organizer-intelligence\s*\{[^}]*grid-template-columns:\s*1fr/su);
 });
 
 test("first-owner setup explains its one-use key without exposing a credential", async () => {
@@ -729,6 +737,8 @@ test("help is searchable by role and organiser records follow the verified submi
   assert.match(help, /"Going out", "Organising", "At the door", "The Room"/u);
   assert.match(help, /Frequently needed/u);
   assert.match(help, /verified organiser email used on the submission/u);
+  assert.match(help, /Understand what moved your Night/u);
+  assert.match(help, /href: "\/organizer\/analytics", label: "Open organiser analytics"/u);
   assert.match(organizerWorkspace, /Your organiser record/u);
   assert.match(organizerWorkspace, /Submission trail/u);
   assert.match(organizerWorkspace, /data\.events\.reduce/u);
