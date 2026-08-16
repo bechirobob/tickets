@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, ArrowUpRight, BadgeCheck, CalendarDays, Clock3, Gem, MapPin, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
 import { notFound } from "next/navigation";
-import { eventImageLoader, eventImageUrl } from "../../event-images";
+import { eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import { findPrimaryHost } from "../../../lib/event-experience";
@@ -76,7 +76,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
     <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><span className="public-header-actions"><EventActions title={event.title} eventSlug={event.slug} /><PublicNavigation /></span></header>
 
-    <section className="compact-event-hero"><Image loader={eventImageLoader} src={event.image} width={1440} height={810} sizes="100vw" quality={78} alt={`Atmosphere for ${event.title}`} priority /><div /><article><p className="eyebrow">{event.isTestEvent ? "Working preview" : "BeCore pick"} · {event.vibe}</p><h1>{event.title}</h1><span>{event.fullDate} · {event.venue}, {event.area}</span></article></section>
+    <section className="compact-event-hero"><Image src={eventImageUrl(event.image, 1440, 78)} width={1440} height={810} sizes="100vw" alt={`Atmosphere for ${event.title}`} priority unoptimized /><div /><article><p className="eyebrow">{event.isTestEvent ? "Working preview" : "BeCore pick"} · {event.vibe}</p><h1>{event.title}</h1><span>{event.fullDate} · {event.venue}, {event.area}</span></article></section>
 
     <section className="compact-event-layout">
       <article className="compact-event-main">

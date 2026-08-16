@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, ArrowUpRight, BadgeCheck, Camera, ConciergeBell, Gem, LockKeyhole, Send, Ticket } from "lucide-react";
 import EventExplorer from "./event-explorer";
-import { eventImageLoader } from "./event-images";
+import { eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
 import RoomPreviewCarousel from "./room-preview-carousel";
 import ScrollReveal from "./scroll-reveal";
@@ -25,7 +25,7 @@ function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string
           <article className="scene-message"><span>YA</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="scene-message__bubble"><p>Okay fine. Leaving now.</p></div><div className="scene-message__reactions" aria-label="3 fire reactions"><i>🔥</i><b>3</b></div></div></article>
         </> : <>
           <article className="scene-message"><span>AM</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="scene-message__bubble"><p>Front left is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
-          <article className="scene-flash"><Image loader={eventImageLoader} src={heroImage} width={520} height={320} sizes="260px" alt="Flash shared inside The Room" /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
+          <article className="scene-flash"><Image src={eventImageUrl(heroImage, 520)} width={520} height={320} sizes="260px" alt="Flash shared inside The Room" unoptimized /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 10:44 PM</small><div className="scene-message__bubble"><p>Found you. This set is ridiculous.</p></div><div className="scene-message__reactions" aria-label="5 fire reactions"><i>🔥</i><b>5</b></div></div></article>
           <article className="scene-host scene-host--compact"><BadgeCheck size={14} /><div><small>HOST UPDATE · 10:47 PM</small><p>Last entry moves to Gate 2.</p></div></article>
         </>}
@@ -51,7 +51,7 @@ export default async function Home() {
     </header>
 
     <section className="compact-hero">
-      <Image loader={eventImageLoader} src={heroImage} width={1600} height={900} sizes="100vw" quality={78} alt={featured ? `Atmosphere for ${featured.title}` : "A crowd under warm stage lights at night"} priority />
+      <Image src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={featured ? `Atmosphere for ${featured.title}` : "A crowd under warm stage lights at night"} priority unoptimized />
       <div className="compact-hero__shade" />
       <div className="compact-hero__copy">
         <p className="night-kicker"><span /> Accra&apos;s edited night out</p>
