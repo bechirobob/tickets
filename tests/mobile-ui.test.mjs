@@ -844,3 +844,29 @@ test("semantic states and route-matched skeletons stay accessible", async () => 
   assert.match(roomLoading, /kind="room"/u);
   assert.match(wallet, /kind="wallet" label="Preparing your entry passes"/u);
 });
+
+test("organiser analytics has a dedicated compact responsive workspace", async () => {
+  const [page, client, api, roles, css] = await Promise.all([
+    readFile(new URL("../app/organizer/analytics/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/organizer/analytics/organizer-analytics.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/organizer/analytics/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/staff-roles.ts", import.meta.url), "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+  assert.match(page, /requireAdminSession\("\/organizer\/analytics", "organizer\.workspace"\)/u);
+  assert.match(client, /Last 7 days/u);
+  assert.match(client, /Last 30 days/u);
+  assert.match(client, /Last 90 days/u);
+  assert.match(client, /Export CSV/u);
+  assert.match(client, /Booking funnel/u);
+  assert.match(client, /Ticket-tier performance/u);
+  assert.match(client, /Promoter performance/u);
+  assert.match(client, /Check-in timing/u);
+  assert.match(api, /This Night is not assigned to your organiser account/u);
+  assert.match(api, /no-store, private/u);
+  assert.match(api, /COUNT\(DISTINCT lower\(customer_email\)\)/u);
+  assert.match(roles, /path === "\/organizer\/analytics"/u);
+  assert.match(css, /\.analytics-controls \{[^}]*grid-template-columns:/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.analytics-layout \{[^}]*grid-template-columns: 1fr/su);
+  assert.match(css, /\.analytics-table \{[^}]*overflow-x: auto/su);
+});

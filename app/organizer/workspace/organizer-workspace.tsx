@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   BadgeCheck,
+  BarChart3,
   ConciergeBell,
   CalendarRange,
   CheckCircle2,
@@ -153,7 +154,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
 
       {loading ? <div className="organizer-empty"><Loader2 className="spin" /> Loading your record…</div> : <>
         <section className="organizer-portfolio" aria-labelledby="organizer-record-title">
-          <header><div><p>All-time on BeCore</p><h2 id="organizer-record-title">Your organiser record</h2></div><Link href="/help">How this works <LifeBuoy size={15} /></Link></header>
+          <header><div><p>All-time on BeCore</p><h2 id="organizer-record-title">Your organiser record</h2></div><div className="organizer-portfolio__actions"><Link href="/organizer/analytics">Open analytics <BarChart3 size={15} /></Link><Link href="/help">How this works <LifeBuoy size={15} /></Link></div></header>
           <div>
             <article><CalendarRange /><small>Linked Nights</small><b>{data.events.length}</b></article>
             <article><TicketCheck /><small>Paid orders</small><b>{portfolio.paidOrders}</b></article>

@@ -10,7 +10,10 @@ export default function WorkspaceJump({ active, role, compact = false }: { activ
     .filter((item) => (item.roles as readonly StaffRole[]).includes(role))
     .map((item) => ({ href: item.href, label: item.href === "/admin/operations" && role === "finance" ? "Finance overview" : item.label }));
 
-  if (role === "organizer" || role === "owner") links.push({ href: "/organizer/workspace", label: "Organiser workspace" });
+  if (role === "organizer" || role === "owner") {
+    links.push({ href: "/organizer/workspace", label: "Organiser workspace" });
+    links.push({ href: "/organizer/analytics", label: "Organiser analytics" });
+  }
   links.push({ href: "/admin/account", label: "My account" });
 
   return <label className={`workspace-jump${compact ? " workspace-jump--compact" : ""}`}>

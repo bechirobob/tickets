@@ -89,7 +89,7 @@ export function isEventScopedRole(role: StaffRole): boolean {
 
 export function isWorkspacePathAllowed(role: StaffRole, path: string): boolean {
   if (path === "/admin/account") return true;
-  if (role === "owner" && path === "/organizer/workspace") return true;
-  if (role === "organizer") return path === "/organizer/workspace";
+  if (role === "owner" && (path === "/organizer/workspace" || path === "/organizer/analytics")) return true;
+  if (role === "organizer") return path === "/organizer/workspace" || path === "/organizer/analytics";
   return STAFF_WORKSPACE_LINKS.some((item) => item.href === path && (item.roles as readonly StaffRole[]).includes(role));
 }
