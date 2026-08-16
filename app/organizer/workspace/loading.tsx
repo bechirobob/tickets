@@ -1,0 +1,2 @@
+import LoadingSkeleton from "../../loading-skeleton";
+export default function Loading() { return <LoadingSkeleton kind="operations" label="Loading organiser workspace" />; }

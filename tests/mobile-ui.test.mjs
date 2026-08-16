@@ -812,3 +812,23 @@ test("Flashes are camera-first and stay closed until tapped", async () => {
   assert.match(css, /\.room-flash-message__closed\s*\{[^}]*min-height:\s*50px[^}]*display:\s*flex/su);
   assert.doesNotMatch(css, /\.room-flash-message__closed\s*\{[^}]*min-height:\s*145px/su);
 });
+
+test("semantic states and route-matched skeletons stay accessible", async () => {
+  const [css, skeleton, eventsLoading, roomLoading, wallet] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(new URL("../app/loading-skeleton.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/events/loading.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/room/[slug]/loading.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/tickets/ticket-wallet.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(css, /--status-success:/u);
+  assert.match(css, /--status-warning:/u);
+  assert.match(css, /--status-danger:/u);
+  assert.match(css, /--status-info:/u);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*skeleton/su);
+  assert.match(skeleton, /aria-busy="true"/u);
+  assert.match(skeleton, /className="sr-only"/u);
+  assert.match(eventsLoading, /LoadingSkeleton/u);
+  assert.match(roomLoading, /kind="room"/u);
+  assert.match(wallet, /kind="wallet" label="Preparing your entry passes"/u);
+});

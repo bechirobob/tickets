@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Bell, CheckCheck, Loader2, MessageCircle, Ticket } from "lucide-react";
+import { ArrowLeft, Bell, CheckCheck, MessageCircle, Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import LoadingSkeleton from "../loading-skeleton";
 
 type Item = { id: string; eventSlug: string | null; kind: string; title: string; body: string; url: string; createdAt: string; readAt: string | null };
 
@@ -35,7 +36,7 @@ export default function NotificationsClient() {
   }
 
   if (locked) return <main className="notification-page notification-page--locked"><Bell /><h1>Your buzz is private.</h1><p>Open My Nights with the email used at checkout, then every Room ping and Host update lands here.</p><Link href="/my-nights">Bring back My Nights</Link></main>;
-  if (!items) return <main className="notification-page notification-page--locked"><Loader2 className="spin" /><p>Collecting the useful noise</p></main>;
+  if (!items) return <LoadingSkeleton kind="wallet" label="Collecting the useful noise" />;
   return <main className="notification-page">
     <header><Link href="/my-nights"><ArrowLeft size={16} /> My Nights</Link><div><p className="eyebrow">Your notification panel</p><h1>The Buzz</h1><span>Room messages, Host updates and ticket moves. All the things worth interrupting you for.</span></div><button type="button" onClick={() => void mark()} disabled={!items.some((item) => !item.readAt)}><CheckCheck size={15} /> Mark all read</button></header>
     {notice ? <button className="notification-page__notice" type="button" onClick={() => setNotice("")}>{notice}</button> : null}

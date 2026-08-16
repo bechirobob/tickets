@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Bell, CalendarDays, CheckCircle2, Loader2, LockKeyhole, Mail, MapPin, MessageCircle, QrCode, ShieldCheck, Ticket } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import LoadingSkeleton from "../loading-skeleton";
 
 type Night = {
   eventSlug: string; title: string; startsAt: string; endsAt: string; venue: string; area: string; imageUrl: string;
@@ -66,6 +67,8 @@ export default function MyNightsClient() {
       return view === "past" ? new Date(night.endsAt).getTime() < now : new Date(night.endsAt).getTime() >= now;
     });
   }, [now, payload, view]);
+
+  if (loading) return <LoadingSkeleton kind="wallet" label="Lining up your nights" />;
 
   return <main className="my-nights-page">
     <header className="directory-header"><Link href="/"><ArrowLeft size={16} /> Home</Link><Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link><span className="my-nights-header-actions"><Link className="notification-bell" href="/notifications" aria-label={unread ? `${unread} unread notifications` : "Notifications"}><Bell size={16} />{unread ? <b>{unread > 9 ? "9+" : unread}</b> : null}</Link><Link href="/account/privacy"><ShieldCheck size={15} /> Privacy</Link></span></header>

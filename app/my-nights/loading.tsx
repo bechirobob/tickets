@@ -1,0 +1,2 @@
+import LoadingSkeleton from "../loading-skeleton";
+export default function Loading() { return <LoadingSkeleton kind="wallet" label="Loading My Nights" />; }

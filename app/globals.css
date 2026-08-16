@@ -12,6 +12,19 @@
   --bone: #f1eee6;
   --signal: #bd3f11;
   --acid: #d7f45b;
+  --status-success: #256a45;
+  --status-success-bg: #e4f3ea;
+  --status-warning: #80502e;
+  --status-warning-bg: #fff1d2;
+  --status-danger: #9f3525;
+  --status-danger-bg: #ffe3da;
+  --status-info: #3f5f89;
+  --status-info-bg: #e5edf7;
+  --status-neutral: #646159;
+  --status-neutral-bg: #ecebe6;
+  --status-disabled: #817e76;
+  --skeleton-base: #ddd9cf;
+  --skeleton-highlight: #f0ede5;
   --radius-compact: 7px;
   --radius-control: 10px;
   --radius-picker: 11px;
@@ -20,6 +33,32 @@
   --font-geist-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
+
+/* Meaning-led status colours. Labels remain the primary signal. */
+.status, .review-status, .order-status, [data-status] { --status-fg: var(--status-neutral); --status-bg: var(--status-neutral-bg); color: var(--status-fg); }
+.status:not(.draft), .review-status.approved, .review-status.published, .order-status.paid,
+[data-status="paid"], [data-status="published"], [data-status="approved"], [data-status="available"], [data-status="resolved"], [data-status="checked_in"] { --status-fg: var(--status-success); --status-bg: var(--status-success-bg); }
+.review-status.submitted, .review-status.scheduled, .order-status.pending,
+[data-status="pending"], [data-status="submitted"], [data-status="scheduled"], [data-status="postponed"], [data-status="waiting_support"], [data-status="waiting_customer"] { --status-fg: var(--status-warning); --status-bg: var(--status-warning-bg); }
+.review-status.rejected, .order-status.requires_refund, .order-status.disputed,
+[data-status="failed"], [data-status="rejected"], [data-status="cancelled"], [data-status="disputed"], [data-status="requires_refund"] { --status-fg: var(--status-danger); --status-bg: var(--status-danger-bg); }
+[data-status="rescheduled"], [data-status="open"], [data-status="on_sale"] { --status-fg: var(--status-info); --status-bg: var(--status-info-bg); }
+
+/* Compact, layout-matched loading states. */
+.skeleton-shell { min-height: 100vh; padding: 0 6vw 72px; background: var(--paper); color: var(--ink); }
+.skeleton-shell > header { min-height: 68px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.skeleton-block, .skeleton-heading i, .skeleton-cards i, .skeleton-cards span, .skeleton-cards small, .skeleton-passes i, .skeleton-passes span, .skeleton-passes b, .skeleton-passes small, .skeleton-room i, .skeleton-room b, .skeleton-metrics i, .skeleton-metrics b, .skeleton-rows i, .skeleton-shell--detail section i { display: block; overflow: hidden; position: relative; border-radius: var(--radius-compact); background: var(--skeleton-base); }
+.skeleton-block::after, .skeleton-heading i::after, .skeleton-cards i::after, .skeleton-cards span::after, .skeleton-cards small::after, .skeleton-passes i::after, .skeleton-passes span::after, .skeleton-passes b::after, .skeleton-passes small::after, .skeleton-room i::after, .skeleton-room b::after, .skeleton-metrics i::after, .skeleton-metrics b::after, .skeleton-rows i::after, .skeleton-shell--detail section i::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, var(--skeleton-highlight), transparent); animation: skeleton-sweep 1.35s ease-in-out infinite; }
+.skeleton-block--brand { width: 112px; height: 28px; }.skeleton-block--action { width: 76px; height: 34px; }
+.skeleton-heading { padding: 58px 0 27px; }.skeleton-heading i:first-child { width: min(440px, 72%); height: 45px; }.skeleton-heading i:last-child { width: min(610px, 88%); height: 16px; margin-top: 13px; }
+.skeleton-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }.skeleton-cards article > i { aspect-ratio: 4 / 5; }.skeleton-cards span { width: 72%; height: 20px; margin-top: 13px; }.skeleton-cards small { width: 48%; height: 12px; margin-top: 8px; }
+.skeleton-block--hero { width: calc(100% + 12vw); height: min(58vh, 610px); margin-left: -6vw; border-radius: 0; }.skeleton-shell--detail > section { padding-top: 28px; display: grid; grid-template-columns: 1.6fr .7fr; gap: 7vw; }.skeleton-shell--detail section div i { height: 18px; margin-bottom: 13px; }.skeleton-shell--detail section div i:first-child { width: 62%; height: 34px; }.skeleton-shell--detail aside { padding: 18px; border: 1px solid var(--line); }.skeleton-shell--detail aside i { height: 42px; margin-bottom: 10px; }
+.skeleton-passes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }.skeleton-passes article { min-height: 240px; padding: 20px; border: 1px solid var(--line); }.skeleton-passes article > div { display: flex; justify-content: space-between; }.skeleton-passes i { width: 48px; height: 48px; }.skeleton-passes span { width: 90px; height: 20px; }.skeleton-passes b { width: 66%; height: 26px; margin-top: 54px; }.skeleton-passes small { width: 44%; height: 13px; margin-top: 10px; }
+.skeleton-shell--room { padding: 0; background: var(--night); }.skeleton-shell--room > header { padding: 0 20px; border-color: #33342f; }.skeleton-room { width: min(760px, 100%); height: calc(100vh - 68px); margin: auto; padding: 32px 20px 20px; display: flex; flex-direction: column; justify-content: flex-end; }.skeleton-room div { display: grid; gap: 12px; }.skeleton-room i { width: min(72%, 480px); height: 52px; background: #292a26; }.skeleton-room i:nth-child(even) { margin-left: auto; width: min(58%, 390px); }.skeleton-room b { height: 46px; margin-top: 22px; background: #292a26; }
+.skeleton-shell--operations { background: #f4f4f1; }.skeleton-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }.skeleton-metrics article { min-height: 130px; padding: 18px; border: 1px solid #e1e1dd; background: white; }.skeleton-metrics i { width: 58%; height: 14px; }.skeleton-metrics b { width: 42%; height: 30px; margin-top: 36px; }.skeleton-rows { margin-top: 14px; padding: 20px; background: white; }.skeleton-rows i { height: 48px; border-radius: 0; border-bottom: 1px solid var(--line); background: transparent; }.skeleton-rows i::after { background: linear-gradient(90deg, transparent, #ece9e1, transparent); }
+@keyframes skeleton-sweep { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skeleton-shell *::after { animation: none !important; } }
+@media (max-width: 700px) { .skeleton-shell { padding-left: 20px; padding-right: 20px; }.skeleton-cards { grid-template-columns: 1fr 1fr; gap: 10px; }.skeleton-cards article:last-child { display: none; }.skeleton-block--hero { width: calc(100% + 40px); height: 46vh; margin-left: -20px; }.skeleton-shell--detail > section, .skeleton-passes { grid-template-columns: 1fr; }.skeleton-shell--detail aside { display: none; }.skeleton-metrics { grid-template-columns: 1fr 1fr; }.skeleton-shell--room { padding: 0; } }
 
 /* Camera-first Flashes: captured now, closed until deliberately opened. */
 .flash-camera-modal { padding: 0; background: #050605; }
@@ -1586,3 +1625,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .help-guide summary b { font-size: 20px; }
   .help-contact { margin-top: 58px; padding: 27px 20px; }
 }
+
+/* Final semantic mapping overrides legacy one-off status colours. */
+.status { background: var(--status-bg); color: var(--status-fg); }
+.review-status, .order-status, [data-status] { color: var(--status-fg); }
+.settings-error, .wallet-error, .wallet-pass-error, .submission-error, .curation-error { color: var(--status-danger) !important; }
+.submission-error, .curation-error { background: var(--status-danger-bg); }
+.night-support__state { background: var(--status-warning-bg); color: var(--status-warning); }
+.night-support__state.cancelled { background: var(--status-danger-bg); color: var(--status-danger); }
+.night-support__state.rescheduled { background: var(--status-info-bg); color: var(--status-info); }
+.wallet-confirmed, .my-nights-recovered { color: var(--status-success); }

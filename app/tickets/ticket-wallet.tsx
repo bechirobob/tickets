@@ -5,6 +5,7 @@ import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, Loader2, L
 import { useEffect, useState } from "react";
 import QrPass from "./qr-pass";
 import PublicNavigation from "../mobile-navigation";
+import LoadingSkeleton from "../loading-skeleton";
 
 type GateTicket = {
   id: string;
@@ -73,6 +74,8 @@ export default function TicketWallet() {
     await fetch("/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: recoveryEmail }) }).catch(() => undefined);
     setRecoveryState("sent");
   }
+
+  if (loading) return <LoadingSkeleton kind="wallet" label="Preparing your entry passes" />;
 
   return <main className="wallet-page wallet-page--real">
     <header><Link href="/"><ArrowLeft size={17} /> Back to the shortlist</Link><span className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></span><span className="public-header-actions">{wallet ? <button onClick={signOut}><LogOut size={14} /> Sign out</button> : null}<PublicNavigation /></span></header>
