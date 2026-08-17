@@ -92,6 +92,7 @@ jobs:
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
           const api = "https://api.cloudflare.com/client/v4";
           const headers = {
             Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
@@ -188,8 +189,8 @@ jobs:
 
           const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
           const report = { database: "bubble-wash-db", cutoff, total, counts };
-          await Bun.write("bubblewash-d1-drift.json", JSON.stringify(report, null, 2) + "\n");
-          await Bun.write(
+          await writeFile("bubblewash-d1-drift.json", JSON.stringify(report, null, 2) + "\n");
+          await writeFile(
             process.env.GITHUB_STEP_SUMMARY,
             [
               "## Bubble Wash D1 drift check",
