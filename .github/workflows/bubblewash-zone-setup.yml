@@ -1,4 +1,4 @@
-name: Prepare Bubble Wash Cloudflare Zone
+name: Verify Bubble Wash Cloudflare Zone
 
 on:
   push:
@@ -16,14 +16,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  prepare:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
     steps:
-      - name: Create or inspect the Bubble Wash zone
+      - name: Verify the Bubble Wash zone and production routes
         shell: bash
         run: |
           set -euo pipefail
@@ -46,247 +46,58 @@ jobs:
 
           const name = "bubblewash.co";
           const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-          let listed = await request(`/zones?name=${encodeURIComponent(name)}&account.id=${accountId}`);
-          let zone = listed.result?.find((candidate) => candidate.name === name);
-          if (!zone?.id) {
-            const created = await request("/zones", {
-              method: "POST",
-              body: JSON.stringify({
-                name,
-                account: { id: accountId },
-                type: "full",
-                jump_start: true,
-              }),
-            });
-            zone = created.result;
-          }
+          const listed = await request(`/zones?name=${encodeURIComponent(name)}&account.id=${accountId}`);
+          const zone = listed.result?.find((candidate) => candidate.name === name);
           if (!zone?.id || !Array.isArray(zone.name_servers) || zone.name_servers.length !== 2) {
             throw new Error("Cloudflare did not return a usable Bubble Wash zone.");
           }
+          if (zone.status !== "active") throw new Error(`Bubble Wash zone is ${zone.status}.`);
+
+          await request(`/zones/${zone.id}/dns_records?per_page=1`);
+          const routes = await request(`/zones/${zone.id}/workers/routes`);
+          const expectedPatterns = ["bubblewash.co/*", "www.bubblewash.co/*"];
+          const productionRoutes = expectedPatterns.map((pattern) =>
+            (routes.result ?? []).find((route) => route.pattern === pattern && route.script === "bubble-wash"),
+          );
+          if (productionRoutes.some((route) => !route?.id)) {
+            throw new Error(`Bubble Wash production routes are incomplete: ${JSON.stringify(routes.result ?? [])}`);
+          }
+
           const result = {
             zone: zone.name,
             status: zone.status,
             nameservers: zone.name_servers,
+            routes: productionRoutes.map((route) => ({ pattern: route.pattern, script: route.script })),
             checked_at: new Date().toISOString(),
           };
           await writeFile("bubblewash-zone.json", `${JSON.stringify(result, null, 2)}\n`);
           await appendFile(
             process.env.GITHUB_STEP_SUMMARY,
             [
-              "## Bubble Wash Cloudflare zone",
+              "## Bubble Wash Cloudflare production topology",
               "",
-              `Status: \`${result.status}\``,
+              `Zone status: \`${result.status}\``,
               "",
               `Nameservers: \`${result.nameservers.join("`, `")}\``,
+              "",
+              `Worker routes: \`${result.routes.map((route) => route.pattern).join("`, `")}\``,
               "",
             ].join("\n"),
           );
           console.log(JSON.stringify(result));
-          if (zone.status !== "active") {
-            throw new Error(`Bubble Wash zone is ${zone.status}; wait for nameserver activation.`);
-          }
           NODE
 
-      - name: Verify migration deployment permissions
+      - name: Verify Bubble Wash production health
         shell: bash
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { writeFile } from "node:fs/promises";
-          const api = "https://api.cloudflare.com/client/v4";
-          const headers = {
-            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
-            "Content-Type": "application/json",
-          };
-          const request = async (path, options = {}) => {
-            const response = await fetch(`${api}${path}`, { ...options, headers });
-            const payload = await response.json();
-            if (!response.ok || payload.success === false) {
-              throw new Error(JSON.stringify(payload.errors ?? payload));
-            }
-            return payload;
-          };
+          response="$(curl --fail --silent --show-error --retry 12 --retry-all-errors --max-time 20 https://bubblewash.co/api/health)"
+          node -e 'const value=JSON.parse(process.argv[1]); if(value.ok!==true || value.deploymentPhase!=="production" || value.readiness!=="ready") process.exit(1)' "$response"
 
-          const name = "bubblewash.co";
-          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-          const listed = await request(`/zones?name=${encodeURIComponent(name)}&account.id=${accountId}`);
-          const zone = listed.result?.find((candidate) => candidate.name === name);
-          if (!zone?.id) throw new Error("Bubble Wash zone is unavailable to the deployment token.");
-
-          await request(`/zones/${zone.id}/dns_records?per_page=1`);
-
-          const pattern = `permission-check.${name}/codex-${Date.now()}/*`;
-          let routeId;
-          try {
-            const created = await request(`/zones/${zone.id}/workers/routes`, {
-              method: "POST",
-              body: JSON.stringify({ pattern, script: "bubble-wash" }),
-            });
-            routeId = created.result?.id;
-            if (!routeId) throw new Error("Cloudflare did not return the permission-probe route ID.");
-          } finally {
-            if (routeId) {
-              await request(`/zones/${zone.id}/workers/routes/${routeId}`, { method: "DELETE" });
-            }
-          }
-
-          console.log("Zone Read, DNS Read, and Workers Routes Write permissions verified.");
-          NODE
-
-      - name: Check Bubble Wash D1 writes since cutover
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { writeFile } from "node:fs/promises";
-          const api = "https://api.cloudflare.com/client/v4";
-          const headers = {
-            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
-            "Content-Type": "application/json",
-          };
-          const request = async (path, options = {}) => {
-            const response = await fetch(`${api}${path}`, { ...options, headers });
-            const payload = await response.json();
-            if (!response.ok || payload.success === false) {
-              throw new Error(JSON.stringify(payload.errors ?? payload));
-            }
-            return payload;
-          };
-
-          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-          const cutoff = "2026-08-16T21:20:00Z";
-          const databases = await request(
-            `/accounts/${accountId}/d1/database?name=${encodeURIComponent("bubble-wash-db")}`,
-          );
-          const database = databases.result?.find((candidate) => candidate.name === "bubble-wash-db");
-          const databaseId = database?.uuid ?? database?.id;
-          if (!databaseId) throw new Error("bubble-wash-db was not found.");
-
-          const checks = [
-            ["submissions", "SELECT COUNT(*) AS count FROM submissions WHERE datetime(created_at) >= datetime(?)", [cutoff]],
-            ["workflow_action_claims", "SELECT COUNT(*) AS count FROM workflow_action_claims WHERE datetime(claimed_at) >= datetime(?)", [cutoff]],
-            ["payment_verifications", "SELECT COUNT(*) AS count FROM payment_verifications WHERE datetime(verified_at) >= datetime(?)", [cutoff]],
-            ["driver_live_locations", "SELECT COUNT(*) AS count FROM driver_live_locations WHERE datetime(received_at) >= datetime(?)", [cutoff]],
-            ["early_access_signups", "SELECT COUNT(*) AS count FROM early_access_signups WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
-            ["privacy_requests", "SELECT COUNT(*) AS count FROM privacy_requests WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
-            ["notification_outbox", "SELECT COUNT(*) AS count FROM notification_outbox WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
-            ["mfa_replay_guard", "SELECT COUNT(*) AS count FROM mfa_replay_guard WHERE datetime(accepted_at) >= datetime(?)", [cutoff]],
-            ["delivery_proofs", "SELECT COUNT(*) AS count FROM delivery_proofs WHERE datetime(created_at) >= datetime(?) OR datetime(used_at) >= datetime(?)", [cutoff, cutoff]],
-            ["vendor_availability", "SELECT COUNT(*) AS count FROM vendor_availability WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
-            ["driver_availability", "SELECT COUNT(*) AS count FROM driver_availability WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
-            ["vendor_declines", "SELECT COUNT(*) AS count FROM vendor_declines WHERE datetime(created_at) >= datetime(?)", [cutoff]],
-            ["assignment_capacity_reservations", "SELECT COUNT(*) AS count FROM assignment_capacity_reservations WHERE datetime(created_at) >= datetime(?) OR datetime(vendor_released_at) >= datetime(?) OR datetime(driver_released_at) >= datetime(?)", [cutoff, cutoff, cutoff]],
-            ["staff_credentials", "SELECT COUNT(*) AS count FROM staff_credentials WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
-          ];
-
-          const counts = {};
-          for (const [table, sql, params] of checks) {
-            const payload = await request(`/accounts/${accountId}/d1/database/${databaseId}/query`, {
-              method: "POST",
-              body: JSON.stringify({ sql, params }),
-            });
-            counts[table] = Number(payload.result?.[0]?.results?.[0]?.count ?? 0);
-          }
-
-          const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
-          const report = { database: "bubble-wash-db", cutoff, total, counts };
-          await writeFile("bubblewash-d1-drift.json", JSON.stringify(report, null, 2) + "\n");
-          await writeFile(
-            process.env.GITHUB_STEP_SUMMARY,
-            [
-              "## Bubble Wash D1 drift check",
-              "",
-              `Business rows written or updated after final cutover: **${total}**`,
-              "",
-              "Only aggregate counts were inspected; no personal data was emitted.",
-              "",
-              "\`\`\`json",
-              JSON.stringify(report, null, 2),
-              "\`\`\`",
-              "",
-            ].join("\n"),
-          );
-          console.log(JSON.stringify(report));
-          NODE
-
-      - name: Return Bubble Wash custom domains to the retained VPS
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { writeFile } from "node:fs/promises";
-
-          const api = "https://api.cloudflare.com/client/v4";
-          const headers = {
-            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
-            "Content-Type": "application/json",
-          };
-          const request = async (path, options = {}) => {
-            const response = await fetch(`${api}${path}`, { ...options, headers });
-            const payload = await response.json();
-            if (!response.ok || payload.success === false) {
-              throw new Error(JSON.stringify(payload.errors ?? payload));
-            }
-            return payload;
-          };
-
-          const name = "bubblewash.co";
-          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-          const listed = await request(`/zones?name=${encodeURIComponent(name)}&account.id=${accountId}`);
-          const zone = listed.result?.find((candidate) => candidate.name === name);
-          if (!zone?.id) throw new Error("Bubble Wash zone is unavailable.");
-
-          const retiredPatterns = new Set(["bubblewash.co/*", "www.bubblewash.co/*"]);
-          const routes = await request(`/zones/${zone.id}/workers/routes`);
-          const removed = [];
-          for (const route of routes.result ?? []) {
-            if (!retiredPatterns.has(route.pattern)) continue;
-            await request(`/zones/${zone.id}/workers/routes/${route.id}`, { method: "DELETE" });
-            removed.push({ id: route.id, pattern: route.pattern, script: route.script });
-          }
-
-          const verified = await request(`/zones/${zone.id}/workers/routes`);
-          const remaining = (verified.result ?? []).filter((route) => retiredPatterns.has(route.pattern));
-          if (remaining.length > 0) throw new Error(`Production Worker routes remain: ${JSON.stringify(remaining)}`);
-
-          const report = { zone: name, removed, remaining: [] };
-          await writeFile("bubblewash-route-handoff.json", JSON.stringify(report, null, 2) + "\n");
-          console.log(JSON.stringify(report));
-          NODE
-
-      - name: Verify Bubble Wash through the restored origin
-        shell: bash
-        run: |
-          set -euo pipefail
-          for path in / /services /book /track /manage /early-access /api/health; do
-            curl --fail --silent --show-error --location --retry 12 --retry-all-errors --max-time 20 --output /dev/null "https://bubblewash.co$path"
-          done
-
-      - name: Probe Cloudflare Access API permission
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          const response = await fetch(
-            `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/access/apps?per_page=1`,
-            { headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` } },
-          );
-          if (!response.ok) {
-            throw new Error(`Cloudflare Access API permission probe returned HTTP ${response.status}.`);
-          }
-          const payload = await response.json();
-          if (payload.success === false) throw new Error("Cloudflare Access API permission probe was rejected.");
-          console.log("Cloudflare Access API permission is available.");
-          NODE
-
-      - name: Preserve zone handoff
-        if: always()
+      - name: Preserve zone verification
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bubblewash-cloudflare-zone
-          path: |
-            bubblewash-zone.json
-            bubblewash-d1-drift.json
-            bubblewash-route-handoff.json
+          path: bubblewash-zone.json
           if-no-files-found: error
           retention-days: 35
