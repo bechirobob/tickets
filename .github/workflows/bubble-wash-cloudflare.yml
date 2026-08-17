@@ -23,6 +23,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
       WRANGLER_SEND_METRICS: "false"
+      BUBBLEWASH_DEPLOYMENT_OVERRIDE: staging
     steps:
       - name: Resolve the current Bubble Wash release
         id: target
@@ -32,8 +33,15 @@ jobs:
           target_sha="$(git ls-remote https://github.com/bechirobob/bubble-wash.git refs/heads/main | awk '{print $1}')"
           [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
           phase="$(curl --fail --silent --show-error "https://raw.githubusercontent.com/bechirobob/bubble-wash/$target_sha/migration/cloudflare-phase.json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => { const phase=JSON.parse(value).phase; if(!["idle","staging","cutover","production"].includes(phase)) process.exit(1); process.stdout.write(phase); })')"
-          deployment_phase="staging"
-          if [[ "$phase" == "production" ]]; then deployment_phase="production"; fi
+          deployment_phase="${BUBBLEWASH_DEPLOYMENT_OVERRIDE:-}"
+          if [[ -z "$deployment_phase" ]]; then
+            deployment_phase="staging"
+            if [[ "$phase" == "production" ]]; then deployment_phase="production"; fi
+          fi
+          if [[ "$deployment_phase" != "staging" && "$deployment_phase" != "production" ]]; then
+            echo "Unsupported deployment override: $deployment_phase" >&2
+            exit 1
+          fi
           current="$(curl --silent --show-error --max-time 10 https://bubble-wash.becoreops.workers.dev/api/health || true)"
           current_sha="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.release === "string" ? value.release : ""); } catch {}' "$current")"
           current_phase="$(node -e 'try { const value=JSON.parse(process.argv[1]); process.stdout.write(typeof value.deploymentPhase === "string" ? value.deploymentPhase : ""); } catch {}' "$current")"
