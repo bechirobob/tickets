@@ -132,11 +132,88 @@ jobs:
           console.log("Zone Read, DNS Read, and Workers Routes Write permissions verified.");
           NODE
 
+      - name: Check Bubble Wash D1 writes since cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const api = "https://api.cloudflare.com/client/v4";
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${api}${path}`, { ...options, headers });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+              throw new Error(JSON.stringify(payload.errors ?? payload));
+            }
+            return payload;
+          };
+
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const cutoff = "2026-08-16T21:20:00Z";
+          const databases = await request(
+            `/accounts/${accountId}/d1/database?name=${encodeURIComponent("bubble-wash-db")}`,
+          );
+          const database = databases.result?.find((candidate) => candidate.name === "bubble-wash-db");
+          const databaseId = database?.uuid ?? database?.id;
+          if (!databaseId) throw new Error("bubble-wash-db was not found.");
+
+          const checks = [
+            ["submissions", "SELECT COUNT(*) AS count FROM submissions WHERE datetime(created_at) >= datetime(?)", [cutoff]],
+            ["workflow_action_claims", "SELECT COUNT(*) AS count FROM workflow_action_claims WHERE datetime(claimed_at) >= datetime(?)", [cutoff]],
+            ["payment_verifications", "SELECT COUNT(*) AS count FROM payment_verifications WHERE datetime(verified_at) >= datetime(?)", [cutoff]],
+            ["driver_live_locations", "SELECT COUNT(*) AS count FROM driver_live_locations WHERE datetime(received_at) >= datetime(?)", [cutoff]],
+            ["early_access_signups", "SELECT COUNT(*) AS count FROM early_access_signups WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
+            ["privacy_requests", "SELECT COUNT(*) AS count FROM privacy_requests WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
+            ["notification_outbox", "SELECT COUNT(*) AS count FROM notification_outbox WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
+            ["mfa_replay_guard", "SELECT COUNT(*) AS count FROM mfa_replay_guard WHERE datetime(accepted_at) >= datetime(?)", [cutoff]],
+            ["delivery_proofs", "SELECT COUNT(*) AS count FROM delivery_proofs WHERE datetime(created_at) >= datetime(?) OR datetime(used_at) >= datetime(?)", [cutoff, cutoff]],
+            ["vendor_availability", "SELECT COUNT(*) AS count FROM vendor_availability WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
+            ["driver_availability", "SELECT COUNT(*) AS count FROM driver_availability WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
+            ["vendor_declines", "SELECT COUNT(*) AS count FROM vendor_declines WHERE datetime(created_at) >= datetime(?)", [cutoff]],
+            ["assignment_capacity_reservations", "SELECT COUNT(*) AS count FROM assignment_capacity_reservations WHERE datetime(created_at) >= datetime(?) OR datetime(vendor_released_at) >= datetime(?) OR datetime(driver_released_at) >= datetime(?)", [cutoff, cutoff, cutoff]],
+            ["staff_credentials", "SELECT COUNT(*) AS count FROM staff_credentials WHERE datetime(updated_at) >= datetime(?)", [cutoff]],
+          ];
+
+          const counts = {};
+          for (const [table, sql, params] of checks) {
+            const payload = await request(`/accounts/${accountId}/d1/database/${databaseId}/query`, {
+              method: "POST",
+              body: JSON.stringify({ sql, params }),
+            });
+            counts[table] = Number(payload.result?.[0]?.results?.[0]?.count ?? 0);
+          }
+
+          const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+          const report = { database: "bubble-wash-db", cutoff, total, counts };
+          await Bun.write("bubblewash-d1-drift.json", JSON.stringify(report, null, 2) + "\n");
+          await Bun.write(
+            process.env.GITHUB_STEP_SUMMARY,
+            [
+              "## Bubble Wash D1 drift check",
+              "",
+              `Business rows written or updated after final cutover: **${total}**`,
+              "",
+              "Only aggregate counts were inspected; no personal data was emitted.",
+              "",
+              "\`\`\`json",
+              JSON.stringify(report, null, 2),
+              "\`\`\`",
+              "",
+            ].join("\n"),
+          );
+          console.log(JSON.stringify(report));
+          NODE
+
       - name: Preserve zone handoff
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bubblewash-cloudflare-zone
-          path: bubblewash-zone.json
+          path: |
+            bubblewash-zone.json
+            bubblewash-d1-drift.json
           if-no-files-found: error
           retention-days: 35
