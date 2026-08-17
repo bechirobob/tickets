@@ -209,6 +209,59 @@ jobs:
           console.log(JSON.stringify(report));
           NODE
 
+      - name: Return Bubble Wash custom domains to the retained VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+
+          const api = "https://api.cloudflare.com/client/v4";
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${api}${path}`, { ...options, headers });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+              throw new Error(JSON.stringify(payload.errors ?? payload));
+            }
+            return payload;
+          };
+
+          const name = "bubblewash.co";
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const listed = await request(`/zones?name=${encodeURIComponent(name)}&account.id=${accountId}`);
+          const zone = listed.result?.find((candidate) => candidate.name === name);
+          if (!zone?.id) throw new Error("Bubble Wash zone is unavailable.");
+
+          const retiredPatterns = new Set(["bubblewash.co/*", "www.bubblewash.co/*"]);
+          const routes = await request(`/zones/${zone.id}/workers/routes`);
+          const removed = [];
+          for (const route of routes.result ?? []) {
+            if (!retiredPatterns.has(route.pattern)) continue;
+            await request(`/zones/${zone.id}/workers/routes/${route.id}`, { method: "DELETE" });
+            removed.push({ id: route.id, pattern: route.pattern, script: route.script });
+          }
+
+          const verified = await request(`/zones/${zone.id}/workers/routes`);
+          const remaining = (verified.result ?? []).filter((route) => retiredPatterns.has(route.pattern));
+          if (remaining.length > 0) throw new Error(`Production Worker routes remain: ${JSON.stringify(remaining)}`);
+
+          const report = { zone: name, removed, remaining: [] };
+          await writeFile("bubblewash-route-handoff.json", JSON.stringify(report, null, 2) + "\n");
+          console.log(JSON.stringify(report));
+          NODE
+
+      - name: Verify Bubble Wash through the restored origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /services /book /track /manage /early-access /api/health; do
+            curl --fail --silent --show-error --location --retry 12 --retry-all-errors --max-time 20 --output /dev/null "https://bubblewash.co$path"
+          done
+
       - name: Preserve zone handoff
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -217,5 +270,6 @@ jobs:
           path: |
             bubblewash-zone.json
             bubblewash-d1-drift.json
+            bubblewash-route-handoff.json
           if-no-files-found: error
           retention-days: 35
