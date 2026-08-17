@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           target_sha="$(git ls-remote https://github.com/bechirobob/bubble-wash.git refs/heads/main | awk '{print $1}')"
           [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
-          phase="$(curl --fail --silent --show-error "https://raw.githubusercontent.com/bechirobob/bubble-wash/$target_sha/migration/cloudflare-phase.json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => { const phase=JSON.parse(value).phase; if(!["idle","staging","cutover","production"].includes(phase)) process.exit(1); process.stdout.write(phase); })')"
+          phase="$(curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 2 --max-time 30 "https://raw.githubusercontent.com/bechirobob/bubble-wash/$target_sha/migration/cloudflare-phase.json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => { const phase=JSON.parse(value).phase; if(!["idle","staging","cutover","production"].includes(phase)) process.exit(1); process.stdout.write(phase); })')"
           deployment_phase="${BUBBLEWASH_DEPLOYMENT_OVERRIDE:-}"
           if [[ -z "$deployment_phase" ]]; then
             deployment_phase="staging"
@@ -195,25 +195,47 @@ jobs:
           NODE
 
       - name: Verify the staged Worker
-        if: steps.target.outputs.needs_deploy == 'true' && steps.target.outputs.deployment_phase == 'staging'
+        if: steps.target.outputs.deployment_phase == 'staging'
         shell: bash
         run: |
           set -euo pipefail
+          verify_release() {
+            local origin="$1" expected_phase="$2" response=""
+            for attempt in {1..12}; do
+              response="$(curl --silent --show-error --max-time 15 "$origin/api/health" || true)"
+              if node -e 'try { const value=JSON.parse(process.argv[1]); if(value.release!==process.argv[2] || value.deploymentPhase!==process.argv[3]) process.exit(1); } catch { process.exit(1); }' "$response" "${{ steps.target.outputs.sha }}" "$expected_phase"; then
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Release verification failed for $origin after propagation wait." >&2
+            return 1
+          }
           for origin in https://bubble-wash.becoreops.workers.dev https://staging.bubblewash.co; do
-            response="$(curl --fail --silent --show-error --retry 12 --retry-all-errors --max-time 15 "$origin/api/health")"
-            node -e 'const value=JSON.parse(process.argv[1]); if(value.release!==process.argv[2] || value.deploymentPhase!=="staging") process.exit(1)' "$response" "${{ steps.target.outputs.sha }}"
+            verify_release "$origin" staging
           done
 
       - name: Verify production cutover
-        if: steps.target.outputs.needs_deploy == 'true' && steps.target.outputs.deployment_phase == 'production'
+        if: steps.target.outputs.deployment_phase == 'production'
         shell: bash
         run: |
           set -euo pipefail
           for path in / /services /book /track /manage /early-access /api/health /api/ready; do
             curl --fail --silent --show-error --location --retry 10 --retry-all-errors --max-time 15 --output /dev/null "https://bubblewash.co$path"
           done
-          response="$(curl --fail --silent --show-error --max-time 15 https://bubblewash.co/api/health)"
-          node -e 'const value=JSON.parse(process.argv[1]); if(value.release!==process.argv[2] || value.deploymentPhase!=="production") process.exit(1)' "$response" "${{ steps.target.outputs.sha }}"
+          verify_release() {
+            local response=""
+            for attempt in {1..12}; do
+              response="$(curl --silent --show-error --max-time 15 https://bubblewash.co/api/health || true)"
+              if node -e 'try { const value=JSON.parse(process.argv[1]); if(value.release!==process.argv[2] || value.deploymentPhase!=="production") process.exit(1); } catch { process.exit(1); }' "$response" "${{ steps.target.outputs.sha }}"; then
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Production release identity did not settle after propagation wait." >&2
+            return 1
+          }
+          verify_release
 
       - name: Report current release
         if: always()
