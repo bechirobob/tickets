@@ -1,0 +1,125 @@
+name: Bubble Wash VPS Rollback Preflight
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/bubblewash-vps-rollback-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bubblewash-vps-rollback-preflight
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+    steps:
+      - name: Check D1 writes after the retained VPS snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFile, writeFile } from "node:fs/promises";
+
+          const api = "https://api.cloudflare.com/client/v4";
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${api}${path}`, { ...options, headers });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+              throw new Error(JSON.stringify(payload.errors ?? payload));
+            }
+            return payload;
+          };
+
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const cutoff = "2026-08-17T16:23:33Z";
+          const databases = await request(
+            `/accounts/${accountId}/d1/database?name=${encodeURIComponent("bubble-wash-db")}`,
+          );
+          const database = databases.result?.find((candidate) => candidate.name === "bubble-wash-db");
+          const databaseId = database?.uuid ?? database?.id;
+          if (!databaseId) throw new Error("bubble-wash-db was not found.");
+
+          const checks = [
+            ["submissions", "SELECT COUNT(*) AS count FROM submissions WHERE datetime(created_at) > datetime(?)", [cutoff]],
+            ["workflow_action_claims", "SELECT COUNT(*) AS count FROM workflow_action_claims WHERE datetime(claimed_at) > datetime(?)", [cutoff]],
+            ["payment_verifications", "SELECT COUNT(*) AS count FROM payment_verifications WHERE datetime(verified_at) > datetime(?)", [cutoff]],
+            ["driver_live_locations", "SELECT COUNT(*) AS count FROM driver_live_locations WHERE datetime(received_at) > datetime(?)", [cutoff]],
+            ["early_access_signups", "SELECT COUNT(*) AS count FROM early_access_signups WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["privacy_requests", "SELECT COUNT(*) AS count FROM privacy_requests WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["notification_outbox", "SELECT COUNT(*) AS count FROM notification_outbox WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["mfa_replay_guard", "SELECT COUNT(*) AS count FROM mfa_replay_guard WHERE datetime(accepted_at) > datetime(?)", [cutoff]],
+            ["delivery_proofs", "SELECT COUNT(*) AS count FROM delivery_proofs WHERE datetime(created_at) > datetime(?) OR datetime(used_at) > datetime(?)", [cutoff, cutoff]],
+            ["vendor_availability", "SELECT COUNT(*) AS count FROM vendor_availability WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["driver_availability", "SELECT COUNT(*) AS count FROM driver_availability WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["vendor_declines", "SELECT COUNT(*) AS count FROM vendor_declines WHERE datetime(created_at) > datetime(?)", [cutoff]],
+            ["assignment_capacity_reservations", "SELECT COUNT(*) AS count FROM assignment_capacity_reservations WHERE datetime(created_at) > datetime(?) OR datetime(vendor_released_at) > datetime(?) OR datetime(driver_released_at) > datetime(?)", [cutoff, cutoff, cutoff]],
+            ["staff_credentials", "SELECT COUNT(*) AS count FROM staff_credentials WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+          ];
+
+          const counts = {};
+          for (const [table, sql, params] of checks) {
+            const payload = await request(`/accounts/${accountId}/d1/database/${databaseId}/query`, {
+              method: "POST",
+              body: JSON.stringify({ sql, params }),
+            });
+            counts[table] = Number(payload.result?.[0]?.results?.[0]?.count ?? 0);
+          }
+
+          const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+          const report = { database: "bubble-wash-db", cutoff, total, counts, checkedAt: new Date().toISOString() };
+          await writeFile("bubblewash-vps-rollback-preflight.json", `${JSON.stringify(report, null, 2)}\n`);
+          await appendFile(
+            process.env.GITHUB_STEP_SUMMARY,
+            [
+              "## Bubble Wash VPS rollback preflight",
+              "",
+              `Rows created or updated after the retained VPS snapshot: **${total}**`,
+              "",
+              "Only aggregate counts were inspected; no customer or staff data was emitted.",
+              "",
+            ].join("\n"),
+          );
+          console.log(JSON.stringify(report));
+          NODE
+
+      - name: Preserve the non-sensitive drift report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bubblewash-vps-rollback-preflight-${{ github.run_id }}
+          path: bubblewash-vps-rollback-preflight.json
+          if-no-files-found: error
+          retention-days: 35
+
+      - name: Connect to the retained VPS
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: hermes
+
+      - name: Inspect the retained VPS without changing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          tailscale ssh root@hermes '
+            test -s /home/ubuntu/bubblewash-runtime/data/bubblewash.sqlite
+            test -e /home/ubuntu/.config/systemd/user/bubblewash-local.service
+            app_uid="$(id -u ubuntu)"
+            runuser -u ubuntu -- env XDG_RUNTIME_DIR="/run/user/$app_uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$app_uid/bus" systemctl --user is-enabled --quiet bubblewash-local.service
+            sqlite3 /home/ubuntu/bubblewash-runtime/data/bubblewash.sqlite "PRAGMA quick_check;" | grep -Fx ok
+          '
