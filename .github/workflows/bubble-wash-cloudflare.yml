@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - .github/workflows/bubble-wash-cloudflare.yml
-  schedule:
-    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
