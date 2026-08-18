@@ -26,8 +26,8 @@ jobs:
       D1_BOOKMARK_FILE: d1-recovery-bookmark.json
       RECOVERY_REPORT_FILE: d1-recovery-rehearsal-report.json
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -57,7 +57,7 @@ jobs:
         if: always()
         run: rm -f -- /tmp/becore-tickets-recovery-export.sql
       - name: Preserve non-sensitive recovery proof
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: d1-recovery-rehearsal-${{ github.run_id }}
           path: |
