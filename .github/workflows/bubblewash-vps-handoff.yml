@@ -1,0 +1,226 @@
+name: Bubble Wash VPS Handoff
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/bubblewash-vps-handoff.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bubblewash-vps-handoff
+  cancel-in-progress: false
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+    steps:
+      - name: Require a data-safe rollback window
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+
+          const api = "https://api.cloudflare.com/client/v4";
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${api}${path}`, { ...options, headers });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+              throw new Error(JSON.stringify(payload.errors ?? payload));
+            }
+            return payload;
+          };
+
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const cutoff = "2026-08-17T16:23:33Z";
+          const databases = await request(
+            `/accounts/${accountId}/d1/database?name=${encodeURIComponent("bubble-wash-db")}`,
+          );
+          const database = databases.result?.find((candidate) => candidate.name === "bubble-wash-db");
+          const databaseId = database?.uuid ?? database?.id;
+          if (!databaseId) throw new Error("bubble-wash-db was not found.");
+
+          const checks = [
+            ["submissions", "SELECT COUNT(*) AS count FROM submissions WHERE datetime(created_at) > datetime(?)", [cutoff]],
+            ["workflow_action_claims", "SELECT COUNT(*) AS count FROM workflow_action_claims WHERE datetime(claimed_at) > datetime(?)", [cutoff]],
+            ["payment_verifications", "SELECT COUNT(*) AS count FROM payment_verifications WHERE datetime(verified_at) > datetime(?)", [cutoff]],
+            ["driver_live_locations", "SELECT COUNT(*) AS count FROM driver_live_locations WHERE datetime(received_at) > datetime(?)", [cutoff]],
+            ["early_access_signups", "SELECT COUNT(*) AS count FROM early_access_signups WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["privacy_requests", "SELECT COUNT(*) AS count FROM privacy_requests WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["notification_outbox", "SELECT COUNT(*) AS count FROM notification_outbox WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["mfa_replay_guard", "SELECT COUNT(*) AS count FROM mfa_replay_guard WHERE datetime(accepted_at) > datetime(?)", [cutoff]],
+            ["delivery_proofs", "SELECT COUNT(*) AS count FROM delivery_proofs WHERE datetime(created_at) > datetime(?) OR datetime(used_at) > datetime(?)", [cutoff, cutoff]],
+            ["vendor_availability", "SELECT COUNT(*) AS count FROM vendor_availability WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["driver_availability", "SELECT COUNT(*) AS count FROM driver_availability WHERE datetime(updated_at) > datetime(?)", [cutoff]],
+            ["vendor_declines", "SELECT COUNT(*) AS count FROM vendor_declines WHERE datetime(created_at) > datetime(?)", [cutoff]],
+            ["assignment_capacity_reservations", "SELECT COUNT(*) AS count FROM assignment_capacity_reservations WHERE datetime(created_at) > datetime(?) OR datetime(vendor_released_at) > datetime(?) OR datetime(driver_released_at) > datetime(?)", [cutoff, cutoff, cutoff]],
+          ];
+
+          const counts = {};
+          for (const [table, sql, params] of checks) {
+            const payload = await request(`/accounts/${accountId}/d1/database/${databaseId}/query`, {
+              method: "POST",
+              body: JSON.stringify({ sql, params }),
+            });
+            counts[table] = Number(payload.result?.[0]?.results?.[0]?.count ?? 0);
+          }
+
+          const businessRowsChanged = Object.values(counts).reduce((sum, count) => sum + count, 0);
+          const report = {
+            database: "bubble-wash-db",
+            cutoff,
+            businessRowsChanged,
+            counts,
+            checkedAt: new Date().toISOString(),
+          };
+          await writeFile("bubblewash-vps-data-gate.json", `${JSON.stringify(report, null, 2)}\n`);
+          if (businessRowsChanged !== 0) {
+            throw new Error(`Rollback stopped: ${businessRowsChanged} post-snapshot business rows require reverse migration.`);
+          }
+          console.log(JSON.stringify(report));
+          NODE
+
+      - name: Verify the retained origin records and remove Worker routes
+        id: route_handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+
+          const api = "https://api.cloudflare.com/client/v4";
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${api}${path}`, { ...options, headers });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+              throw new Error(JSON.stringify(payload.errors ?? payload));
+            }
+            return payload;
+          };
+
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const zoneName = "bubblewash.co";
+          const listed = await request(`/zones?name=${encodeURIComponent(zoneName)}&account.id=${accountId}`);
+          const zone = listed.result?.find((candidate) => candidate.name === zoneName);
+          if (!zone?.id || zone.status !== "active") throw new Error("The Bubble Wash zone is not active.");
+
+          const apexRecords = await request(`/zones/${zone.id}/dns_records?type=A&name=${encodeURIComponent(zoneName)}`);
+          const apex = apexRecords.result?.find((record) => record.content === "51.195.20.137" && record.proxied === true);
+          if (!apex?.id) throw new Error("The proxied Bubble Wash VPS apex record is missing.");
+
+          const wwwRecords = await request(`/zones/${zone.id}/dns_records?name=${encodeURIComponent(`www.${zoneName}`)}`);
+          const www = wwwRecords.result?.find((record) => record.content === zoneName && record.proxied === true);
+          if (!www?.id) throw new Error("The proxied Bubble Wash www origin record is missing.");
+
+          const expectedPatterns = ["bubblewash.co/*", "www.bubblewash.co/*"];
+          const routes = await request(`/zones/${zone.id}/workers/routes`);
+          const productionRoutes = expectedPatterns.map((pattern) =>
+            (routes.result ?? []).find((route) => route.pattern === pattern && route.script === "bubble-wash"),
+          );
+          if (productionRoutes.some((route) => !route?.id)) {
+            throw new Error(`The production Worker route set is incomplete: ${JSON.stringify(routes.result ?? [])}`);
+          }
+
+          const handoff = {
+            zoneId: zone.id,
+            zone: zoneName,
+            origin: { apex: apex.content, www: www.content },
+            routes: productionRoutes.map((route) => ({ id: route.id, pattern: route.pattern, script: route.script })),
+            state: "prepared",
+            preparedAt: new Date().toISOString(),
+          };
+          await writeFile("bubblewash-vps-route-handoff.json", `${JSON.stringify(handoff, null, 2)}\n`);
+
+          for (const route of productionRoutes) {
+            await request(`/zones/${zone.id}/workers/routes/${route.id}`, { method: "DELETE" });
+          }
+          const verified = await request(`/zones/${zone.id}/workers/routes`);
+          const remaining = (verified.result ?? []).filter((route) => expectedPatterns.includes(route.pattern));
+          if (remaining.length !== 0) throw new Error(`Production Worker routes remain: ${JSON.stringify(remaining)}`);
+
+          handoff.state = "routes-removed";
+          handoff.removedAt = new Date().toISOString();
+          await writeFile("bubblewash-vps-route-handoff.json", `${JSON.stringify(handoff, null, 2)}\n`);
+          console.log(JSON.stringify({ state: handoff.state, routes: handoff.routes.map((route) => route.pattern) }));
+          NODE
+
+      - name: Verify public traffic is served by the VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /services /book /track /manage /early-access /api/health /api/ready; do
+            curl --fail --silent --show-error --location --retry 12 --retry-all-errors --retry-delay 2 --max-time 20 --output /dev/null "https://bubblewash.co$path"
+          done
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          trap 'rm -f -- "$headers" "$body"' EXIT
+          curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 2 --max-time 20 --dump-header "$headers" --output "$body" https://bubblewash.co/api/health
+          if grep -qi '^x-bubblewash-render:[[:space:]]*worker' "$headers"; then
+            echo "The custom domain is still being served by the Worker." >&2
+            exit 1
+          fi
+          node -e 'const value=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(value.ok!==true || value.readiness!=="ready" || value.version!=="next-typescript" || "deploymentPhase" in value) process.exit(1)' "$body"
+
+      - name: Restore Worker routes if VPS verification fails
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s bubblewash-vps-route-handoff.json || exit 0
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const handoff = JSON.parse(await readFile("bubblewash-vps-route-handoff.json", "utf8"));
+          const api = "https://api.cloudflare.com/client/v4";
+          const headers = {
+            Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          };
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${api}${path}`, { ...options, headers });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+              throw new Error(JSON.stringify(payload.errors ?? payload));
+            }
+            return payload;
+          };
+
+          const listed = await request(`/zones/${handoff.zoneId}/workers/routes`);
+          const existing = new Set((listed.result ?? []).map((route) => `${route.pattern}\u0000${route.script ?? ""}`));
+          for (const route of handoff.routes) {
+            if (existing.has(`${route.pattern}\u0000${route.script}`)) continue;
+            await request(`/zones/${handoff.zoneId}/workers/routes`, {
+              method: "POST",
+              body: JSON.stringify({ pattern: route.pattern, script: route.script }),
+            });
+          }
+          console.log("Bubble Wash Worker routes restored after failed VPS verification.");
+          NODE
+
+      - name: Preserve the rollback evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bubblewash-vps-handoff-${{ github.run_id }}
+          path: |
+            bubblewash-vps-data-gate.json
+            bubblewash-vps-route-handoff.json
+          if-no-files-found: warn
+          retention-days: 35
