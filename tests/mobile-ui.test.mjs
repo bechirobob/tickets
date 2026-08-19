@@ -168,6 +168,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(polish, /\.scene-host__content > header\s*\{[^}]*justify-content:\s*space-between/su);
   assert.match(polish, /\.scene-host__content strong\s*\{[^}]*font-size:\s*11px/su);
   assert.match(polish, /\.scroll-reveal-ready \.room-product-scene\.is-revealed \.room-product-phone__stream > article\s*\{[^}]*animation:\s*room-phone-message-in 360ms var\(--ease-arrive\) both[^}]*animation-delay:\s*calc\(var\(--queue-order\) \* 320ms\)/su);
+  assert.match(polish, /\.room-product-preview\[data-active="0"\] \.room-product-phone:nth-child\(2\),[\s\S]*?\.room-product-preview\[data-active="1"\] \.room-product-phone:nth-child\(1\)\s*\{[^}]*opacity:\s*1[^}]*transform:\s*translateY\(12px\) scale\(\.965\)/su);
+  assert.doesNotMatch(polish, /\.room-product-preview\[data-active="[01]"\] \.room-product-phone:nth-child\([12]\)[^{]*\{[^}]*opacity:\s*\.[0-9]+/su);
   assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.scroll-reveal-ready \.room-product-scene\.is-revealed \.room-product-phone__stream > article,[\s\S]*?animation:\s*none[^}]*opacity:\s*1[^}]*transform:\s*none/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.room-product-preview\[data-active="0"\] \.room-product-phone:nth-child\(2\) \.room-product-phone__stream > article,[\s\S]*?animation-play-state:\s*paused/su);
   assert.match(polish, /\.scene-flash\s*\{[^}]*border-radius:\s*0/su);
