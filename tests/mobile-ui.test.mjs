@@ -146,7 +146,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(carousel, /Show previous Room preview/u);
   assert.match(carousel, /Show next Room preview/u);
   assert.doesNotMatch(carousel, /setInterval|setTimeout/u);
-  assert.match(css, /\.room-product-phone__stream > article\s*\{[^}]*animation:\s*room-phone-message-in 340ms[^}]*animation-delay:\s*calc\(var\(--queue-order\) \* 260ms\)/su);
+  assert.doesNotMatch(css, /\.room-product-phone__stream > article\s*\{[^}]*animation:/su);
   assert.match(css, /\.room-product-phone__stream > article:nth-child\(6\)\s*\{[^}]*--queue-order:\s*5/su);
   assert.match(home, /className="scene-message__bubble"/u);
   assert.match(home, /className="scene-message__meta"/u);
@@ -163,10 +163,11 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-message__reactions"/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
   assert.match(polish, /\.scene-message__reactions\s*\{[^}]*margin:\s*2px 3px 0[^}]*display:\s*flex/su);
-  assert.match(polish, /\.scene-host\s*\{[^}]*width:\s*100%[^}]*border:\s*1px solid #d4d0c6[^}]*border-left:\s*2px solid var\(--signal\)[^}]*border-radius:\s*8px[^}]*background:\s*#f8f5ee/su);
+  assert.match(polish, /\.scene-host\s*\{[^}]*width:\s*100%[^}]*border-top:\s*1px solid #c9c5bb[^}]*border-bottom:\s*1px solid #c9c5bb[^}]*border-radius:\s*0[^}]*background:\s*transparent[^}]*box-shadow:\s*none/su);
   assert.match(polish, /\.scene-host__content > header\s*\{[^}]*justify-content:\s*space-between/su);
   assert.match(polish, /\.scene-host__content strong\s*\{[^}]*font-size:\s*11px/su);
-  assert.match(polish, /\.room-product-phone__stream > \.scene-host\s*\{[^}]*animation-name:\s*scene-host-arrive[^}]*animation-duration:\s*360ms/su);
+  assert.match(polish, /\.scroll-reveal-ready \.room-product-scene\.is-revealed \.room-product-phone__stream > article\s*\{[^}]*animation:\s*room-phone-message-in 360ms var\(--ease-arrive\) both[^}]*animation-delay:\s*calc\(var\(--queue-order\) \* 320ms\)/su);
+  assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.scroll-reveal-ready \.room-product-scene\.is-revealed \.room-product-phone__stream > article,[\s\S]*?animation:\s*none[^}]*opacity:\s*1[^}]*transform:\s*none/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.room-product-preview\[data-active="0"\] \.room-product-phone:nth-child\(2\) \.room-product-phone__stream > article,[\s\S]*?animation-play-state:\s*paused/su);
   assert.match(polish, /\.scene-flash\s*\{[^}]*border-radius:\s*0/su);
   assert.match(polish, /\.room-product-phone__composer\s*\{[^}]*border-bottom:\s*1px solid[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
@@ -672,7 +673,7 @@ test("controls keep soft corners while information flows in open straight-edged 
   assert.match(polish, /:where\(a, button, input, select, textarea, summary\)\s*\{[^}]*border-radius:\s*var\(--radius-control\)/su);
   assert.match(polish, /Straight selection markers[\s\S]*?\.night-hub__tabs button[^}]*\)\s*\{[^}]*border-radius:\s*0/su);
   assert.match(polish, /My Nights overview actions are ruled rows[\s\S]*?\.night-overview article > div > :is\(button, a\)\s*\{[^}]*border-radius:\s*0[^}]*appearance:\s*none/su);
-  assert.match(polish, /\.scene-host\s*\{[^}]*border-radius:\s*8px[^}]*background:\s*#f8f5ee/su);
+  assert.match(polish, /\.scene-host\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent[^}]*box-shadow:\s*none/su);
   assert.match(css, /\.compact-hero__copy > div a, \.compact-hero__single\s*\{[^}]*border:\s*1px solid/su);
   assert.doesNotMatch(polish, /\[class\*="-(?:card|panel|surface|notice|alert|message|editor|table|pass|state)"\][\s\S]*?border-radius:\s*var\(--radius-surface\)/su);
   assert.match(polish, /Open-flow interface contract[\s\S]*?\.operations-metrics,[\s\S]*?\.organizer-portfolio > div\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
