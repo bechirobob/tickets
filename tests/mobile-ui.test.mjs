@@ -121,6 +121,11 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /The chat remembers\. The photos know when to leave\./u);
   assert.match(home, /No ticket, no lurking\. Very civilised\./u);
   assert.match(home, /HOST UPDATE/u);
+  assert.match(home, /ENTRY UPDATE/u);
+  assert.match(home, /title="Doors are open\."/u);
+  assert.match(home, /title="Gate change\."/u);
+  assert.match(home, /className="scene-host__mark"/u);
+  assert.match(home, /className="scene-host__content"/u);
   assert.match(home, /aria-label="4 laughing reactions"/u);
   assert.match(home, /aria-label="2 crying reactions"/u);
   assert.match(home, /aria-label="3 fire reactions"/u);
@@ -153,7 +158,10 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-message__reactions"/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
   assert.match(polish, /\.scene-message__reactions\s*\{[^}]*margin:\s*2px 3px 0[^}]*display:\s*flex/su);
-  assert.match(polish, /\.scene-host\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.scene-host\s*\{[^}]*width:\s*100%[^}]*border-left:\s*2px solid var\(--signal\)[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.scene-host__content > header\s*\{[^}]*justify-content:\s*space-between/su);
+  assert.match(polish, /\.scene-host__content strong\s*\{[^}]*font-size:\s*13px/su);
+  assert.match(polish, /\.room-product-phone__stream > \.scene-host\s*\{[^}]*animation-name:\s*scene-host-arrive[^}]*animation-duration:\s*360ms/su);
   assert.match(polish, /\.scene-flash\s*\{[^}]*border-radius:\s*0/su);
   assert.match(polish, /\.room-product-phone__composer\s*\{[^}]*border-bottom:\s*1px solid[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(css, /\.room-bubble\s*\{[^}]*padding:\s*8px 11px/su);
