@@ -257,6 +257,9 @@ test("Polished Nightlife motion stays purposeful, scoped and accessibility-aware
   assert.match(polish, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.drop-card:hover \.drop-card__image::before/su);
   assert.match(polish, /\.payment-method-detail\s*\{[^}]*animation:\s*room-item-arrive/su);
   assert.match(polish, /\.payment-option\.selected::before\s*\{[^}]*scaleY\(1\)/su);
+  assert.match(polish, /\.compact-hero__copy > div,[\s\S]*?animation-name:\s*night-actions-arrive/su);
+  assert.match(polish, /\.payment-option:not\(\.selected\) \.payment-method-choice\s*\{[^}]*opacity:\s*1/su);
+  assert.doesNotMatch(polish, /\.payment-option:not\(\.selected\) \.payment-method-choice\s*\{[^}]*opacity:\s*\.[0-9]/su);
   assert.match(polish, /\.wallet-pass\s*\{[^}]*animation:\s*pass-arrive/su);
   assert.match(polish, /\.room-message,[\s\S]*?animation:\s*room-item-arrive/su);
   assert.match(polish, /\.analytics-bar-list i b\s*\{[^}]*animation:\s*data-resolve/su);
