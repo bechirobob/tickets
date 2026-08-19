@@ -1629,6 +1629,11 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes room-stage-arrive {
+  from { opacity: .5; transform: translateY(24px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes sheet-arrive {
   from { opacity: 0; transform: translateY(24px) scale(.975); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -1769,6 +1774,10 @@
 .night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(6) { transition-delay: 155ms; }
 
 /* The Room queue starts only after the preview is visible. Content stays static without JS. */
+.scroll-reveal-ready .room-product-scene.is-revealed .room-product-scene__phones {
+  animation: room-stage-arrive 460ms var(--ease-arrive) both;
+}
+
 .scroll-reveal-ready .room-product-scene.is-revealed .room-product-phone__stream > article {
   animation: room-phone-message-in 360ms var(--ease-arrive) both;
   animation-delay: calc(var(--queue-order) * 320ms);
@@ -1791,17 +1800,26 @@
   transition: opacity var(--motion-panel) ease, left var(--motion-panel) var(--ease-productive), right var(--motion-panel) var(--ease-productive);
 }
 
-.room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
-.room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
+.room-product-preview[data-active="0"] .room-product-phone:nth-child(2) {
   opacity: 1;
-  transform: translateY(12px) scale(.965);
+  transform: translate3d(-5px, 15px, -18px) rotateY(-3.5deg) scale(.97);
 }
 
-.room-product-preview[data-active="0"] .room-product-phone:nth-child(1),
+.room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
+  opacity: 1;
+  transform: translate3d(5px, 15px, -18px) rotateY(3.5deg) scale(.97);
+}
+
+.room-product-preview[data-active="0"] .room-product-phone:nth-child(1) {
+  opacity: 1;
+  border-color: #777870;
+  transform: translate3d(0, -4px, 12px) rotateY(2deg) scale(1);
+}
+
 .room-product-preview[data-active="1"] .room-product-phone:nth-child(2) {
   opacity: 1;
   border-color: #777870;
-  transform: translateY(-3px) scale(1);
+  transform: translate3d(0, -4px, 12px) rotateY(-2deg) scale(1);
 }
 
 .room-product-preview[data-active="0"] .room-product-phone:nth-child(1)::before,
@@ -1931,7 +1949,9 @@
   .compact-hero__price { animation-duration: 460ms; }
 
   .room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
-  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
+  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1),
+  .room-product-preview[data-active="0"] .room-product-phone:nth-child(1),
+  .room-product-preview[data-active="1"] .room-product-phone:nth-child(2) {
     opacity: 1;
     transform: none;
   }
@@ -2027,6 +2047,7 @@
   .room-vip-modal,
   .room-vip-modal > section,
   .scroll-reveal-ready .room-product-scene.is-revealed .room-product-phone__stream > article,
+  .scroll-reveal-ready .room-product-scene.is-revealed .room-product-scene__phones,
   .analytics-bar-list i b,
   .analytics-overview article > b {
     animation: none;

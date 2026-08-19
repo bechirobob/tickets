@@ -45,7 +45,7 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   const firstSlug = await experience.getAttribute("data-active-night");
 
   await expect(hero.locator(".active-night-controls")).toHaveCount(0);
-  await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting", { timeout: 9_000 });
+  await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting", { timeout: 6_500 });
 
   const activeSlug = await experience.getAttribute("data-active-night");
   expect(activeSlug).toBeTruthy();
