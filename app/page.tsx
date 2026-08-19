@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ArrowUpRight, BadgeCheck, BarChart3, Camera, ConciergeBell, Gem, LockKeyhole, Send, Ticket } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, BarChart3, BatteryFull, Camera, ConciergeBell, Gem, LockKeyhole, Send, Signal, Ticket, Wifi } from "lucide-react";
 import EventExplorer from "./event-explorer";
 import { eventImageUrl } from "./event-images";
 import { getPublicEvents } from "./events";
@@ -14,7 +14,7 @@ function BrandMark() {
 
 function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string; heroImage: string; conversation: "arrival" | "inside" }) {
   return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
-    <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b>5G</b></div>
+    <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
     <div className="room-product-phone__screen">
       <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>{conversation === "arrival" ? "18" : "24"} online</span></header>
       <div className="room-product-phone__stream">
