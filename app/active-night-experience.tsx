@@ -22,7 +22,7 @@ import { eventImageUrl } from "./event-images";
 import type { CuratedEvent } from "./events";
 import RoomPreviewCarousel from "./room-preview-carousel";
 
-const sceneInterval = 7_000;
+const sceneInterval = 4_500;
 const fallbackImage = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
 
 const sceneThemes: Record<CuratedEvent["vibe"], { acid: string; signal: string; bone: string; dark: string }> = {

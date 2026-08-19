@@ -144,9 +144,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(css, /\.room-product-phone\s*\{[^}]*scroll-snap-align:\s*start[^}]*scroll-snap-stop:\s*always/su);
   assert.match(carousel, /aria-roledescription="carousel"/u);
   assert.match(carousel, /className="room-product-scene__phones"[^>]*tabIndex=\{0\}/u);
-  assert.match(carousel, /Swipe to see both sides of the night/u);
-  assert.match(carousel, /Show previous Room preview/u);
-  assert.match(carousel, /Show next Room preview/u);
+  assert.match(carousel, /Swipe or use the arrow keys to see both views/u);
+  assert.doesNotMatch(carousel, /Show previous Room preview|Show next Room preview|room-product-preview__controls/u);
   assert.doesNotMatch(carousel, /setInterval|setTimeout/u);
   assert.doesNotMatch(css, /\.room-product-phone__stream > article\s*\{[^}]*animation:/su);
   assert.match(css, /\.room-product-phone__stream > article:nth-child\(6\)\s*\{[^}]*--queue-order:\s*5/su);
@@ -169,7 +168,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(polish, /\.scene-host__content > header\s*\{[^}]*justify-content:\s*space-between/su);
   assert.match(polish, /\.scene-host__content strong\s*\{[^}]*font-size:\s*11px/su);
   assert.match(polish, /\.scroll-reveal-ready \.room-product-scene\.is-revealed \.room-product-phone__stream > article\s*\{[^}]*animation:\s*room-phone-message-in 360ms var\(--ease-arrive\) both[^}]*animation-delay:\s*calc\(var\(--queue-order\) \* 320ms\)/su);
-  assert.match(polish, /\.room-product-preview\[data-active="0"\] \.room-product-phone:nth-child\(2\),[\s\S]*?\.room-product-preview\[data-active="1"\] \.room-product-phone:nth-child\(1\)\s*\{[^}]*opacity:\s*1[^}]*transform:\s*translateY\(12px\) scale\(\.965\)/su);
+  assert.match(polish, /\.room-product-preview\[data-active="0"\] \.room-product-phone:nth-child\(2\)\s*\{[^}]*opacity:\s*1[^}]*transform:\s*translate3d\(-5px, 15px, -18px\) rotateY\(-3\.5deg\) scale\(\.97\)/su);
+  assert.match(polish, /\.room-product-preview\[data-active="1"\] \.room-product-phone:nth-child\(1\)\s*\{[^}]*opacity:\s*1[^}]*transform:\s*translate3d\(5px, 15px, -18px\) rotateY\(3\.5deg\) scale\(\.97\)/su);
   assert.doesNotMatch(polish, /\.room-product-preview\[data-active="[01]"\] \.room-product-phone:nth-child\([12]\)[^{]*\{[^}]*opacity:\s*\.[0-9]+/su);
   assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.scroll-reveal-ready \.room-product-scene\.is-revealed \.room-product-phone__stream > article,[\s\S]*?animation:\s*none[^}]*opacity:\s*1[^}]*transform:\s*none/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.room-product-preview\[data-active="0"\] \.room-product-phone:nth-child\(2\) \.room-product-phone__stream > article,[\s\S]*?animation-play-state:\s*paused/su);
@@ -278,7 +278,7 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
     readFile(accessPolishUrl, "utf8"),
   ]);
 
-  assert.match(experience, /const sceneInterval = 7_000/u);
+  assert.match(experience, /const sceneInterval = 4_500/u);
   assert.match(experience, /events\.slice\(0, 4\)/u);
   assert.match(experience, /new IntersectionObserver/u);
   assert.match(experience, /entry\.boundingClientRect\.bottom <= 0[^}]*setLeftHero\(true\)/su);
