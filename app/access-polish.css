@@ -1603,6 +1603,12 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Action copy stays fully opaque so transient entrance frames retain WCAG contrast. */
+@keyframes night-actions-arrive {
+  from { transform: translateY(22px); }
+  to { transform: translateY(0); }
+}
+
 @keyframes night-shade-arrive {
   from { opacity: .45; }
   to { opacity: 1; }
@@ -1660,6 +1666,9 @@
 .compact-hero__copy > div,
 .compact-hero__copy > .compact-hero__single { animation-delay: 190ms; }
 .compact-hero__price { animation-delay: 230ms; }
+
+.compact-hero__copy > div,
+.compact-hero__copy > .compact-hero__single { animation-name: night-actions-arrive; }
 
 .compact-hero__copy > div a,
 .compact-hero__single {
@@ -1810,7 +1819,7 @@
 }
 
 .payment-option.selected::before { transform: scaleY(1); }
-.payment-option:not(.selected) .payment-method-choice { opacity: .7; }
+.payment-option:not(.selected) .payment-method-choice { opacity: 1; }
 
 .payment-option,
 .payment-method-choice,
