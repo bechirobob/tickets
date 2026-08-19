@@ -294,11 +294,12 @@
   text-shadow: none !important;
 }
 
-/* Interactive controls stay tactile; information rows stay open to the page. */
+/* Interactive controls stay tactile without becoming filled decorative chips. */
 .quantity-control button {
   border: 0;
-  border-radius: 50%;
-  background: #e8e4da;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
 }
 
 .network-list {
@@ -444,8 +445,9 @@
 
 .event-rail-status button {
   border: 0;
-  border-radius: 50%;
-  background: #e8e4da;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1920,6 +1922,67 @@
   .room-product-preview[data-active="0"] .room-product-phone:nth-child(2) .room-product-phone__stream > article,
   .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) .room-product-phone__stream > article {
     animation-play-state: paused;
+  }
+}
+
+/* Mobile tap-target contract: the control stays visually compact while its hit area
+ * meets the 44px coarse-pointer target used across the product. */
+:root { --tap-target: 44px; }
+
+@media (pointer: coarse), (max-width: 700px) {
+  :is(
+    .notification-bell,
+    .quantity-control button,
+    .event-rail-status button,
+    .drop-rail-status button,
+    .help-search button,
+    .night-mobile-menu__close,
+    .pwa-install__close,
+    .room-message__actions button,
+    .room-header > .room-header__activity > button,
+    .room-composer form > button,
+    .room-composer form > .room-camera,
+    .room-composer form > .room-concierge,
+    .room-flash-toggle,
+    .room-notification-toggle,
+    .room-vip-modal header button,
+    .flash-camera > header button,
+    .flash-camera > footer > button:first-child,
+    .flash-modal section > header button,
+    .order-actions button
+  ) {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+  }
+
+  :is(
+    .drop-controls button,
+    .drop-vibes button,
+    .my-nights-tabs button,
+    .night-hub__tabs button,
+    .help-audiences button,
+    .pwa-install > button:not(.pwa-install__close),
+    .room-vip-modal nav button,
+    .flash-modal--viewer section > footer button,
+    .flashes-intro__actions > button,
+    .flashes-empty > button,
+    .order-pagination button,
+    .door-desk__list button,
+    .scanner-event button,
+    .scanner-stats button,
+    .scan-surface--valid button,
+    .scan-surface--invalid button,
+    .manual-entry button,
+    .promoter-ops > form button,
+    .promoter-ops__list button,
+    .night-support button,
+    .night-support__new summary,
+    .night-support__threads form button,
+    .support-ops__layout select,
+    .support-ops__layout form button,
+    .analytics-error button
+  ) {
+    min-height: var(--tap-target);
   }
 }
 
