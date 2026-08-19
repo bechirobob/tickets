@@ -79,6 +79,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
 export default function ActiveNightExperience({ events }: { events: CuratedEvent[] }) {
   const scenes = useMemo(() => events.slice(0, 4), [events]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [previousIndex, setPreviousIndex] = useState<number | null>(null);
   const [manualPause, setManualPause] = useState(false);
   const [interactionPause, setInteractionPause] = useState(false);
   const [documentHidden, setDocumentHidden] = useState(false);
@@ -86,6 +87,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
   const [reducedMotion, setReducedMotion] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
   const active = scenes[activeIndex] ?? null;
+  const previous = previousIndex === null ? null : scenes[previousIndex] ?? null;
   const heroImage = active?.image ?? fallbackImage;
   const theme = sceneThemes[active?.vibe ?? "Late night"];
   const hasScenes = scenes.length > 1;
@@ -124,9 +126,18 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
 
   useEffect(() => {
     if (!autoplayRunning) return;
-    const timer = window.setInterval(() => setActiveIndex((index) => (index + 1) % scenes.length), sceneInterval);
-    return () => window.clearInterval(timer);
-  }, [autoplayRunning, scenes.length]);
+    const timer = window.setTimeout(() => {
+      setPreviousIndex(activeIndex);
+      setActiveIndex((activeIndex + 1) % scenes.length);
+    }, sceneInterval);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, autoplayRunning, scenes.length]);
+
+  useEffect(() => {
+    if (previousIndex === null) return;
+    const timer = window.setTimeout(() => setPreviousIndex(null), 900);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, previousIndex]);
 
   useEffect(() => {
     if (!hasScenes || reducedMotion) return;
@@ -154,7 +165,8 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       onFocusCapture={() => setInteractionPause(true)}
       onBlurCapture={leaveFocus}
     >
-      <Image key={active?.slug ?? "waiting"} src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={active ? `Atmosphere for ${active.title}` : "A crowd under warm stage lights at night"} priority={activeIndex === 0} unoptimized />
+      {previous ? <Image key={`previous-${previous.slug}`} className="compact-hero__image compact-hero__image--outgoing" src={eventImageUrl(previous.image, 1600, 78)} width={1600} height={900} sizes="100vw" alt="" aria-hidden="true" unoptimized /> : null}
+      <Image key={active?.slug ?? "waiting"} className="compact-hero__image compact-hero__image--active" src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={active ? `Atmosphere for ${active.title}` : "A crowd under warm stage lights at night"} priority={activeIndex === 0} unoptimized />
       <div key={`shade-${active?.slug ?? "waiting"}`} className="compact-hero__shade" />
       <div key={`copy-${active?.slug ?? "waiting"}`} className="compact-hero__copy" aria-live={autoplayRunning ? "off" : "polite"} aria-atomic="true">
         <p className="night-kicker"><span /> Accra&apos;s edited night out</p>

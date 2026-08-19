@@ -250,8 +250,9 @@ test("Polished Nightlife motion stays purposeful, scoped and accessibility-aware
     readFile(roomPreviewCarouselUrl, "utf8"),
   ]);
 
-  assert.match(polish, /--motion-press:\s*120ms[^}]*--motion-panel:\s*320ms[^}]*--motion-scene:\s*520ms/su);
-  assert.match(polish, /\.compact-hero > img\s*\{[^}]*animation:\s*night-hero-settle/su);
+  assert.match(polish, /--motion-press:\s*120ms[^}]*--motion-panel:\s*320ms[^}]*--motion-scene:\s*520ms[^}]*--motion-scene-cycle:\s*4500ms/su);
+  assert.match(polish, /\.compact-hero__image--active\s*\{[^}]*animation:\s*night-hero-settle var\(--motion-scene-cycle\)/su);
+  assert.match(polish, /\.compact-hero__image--outgoing\s*\{[^}]*animation:\s*night-hero-exit 900ms/su);
   assert.match(polish, /\.compact-hero__shade\s*\{[^}]*animation:\s*night-shade-arrive/su);
   assert.match(polish, /\.drop-card__image::before\s*\{[^}]*opacity:\s*\.38[^}]*linear-gradient\(180deg/su);
   assert.match(polish, /\.drop-explorer\.is-revealed \.drop-card__image img\s*\{[^}]*animation:\s*card-image-arrive/su);
@@ -290,9 +291,11 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(experience, /className="active-night-autoplay-toggle"/u);
   assert.match(experience, /aria-label=\{reducedMotion \? "Featured night slideshow is static because Reduce Motion is on"/u);
   assert.doesNotMatch(experience, /active-night-controls|Previous featured night|Next featured night|Show \$\{event\.title\}/u);
+  assert.match(experience, /className="compact-hero__image compact-hero__image--outgoing"/u);
+  assert.match(experience, /className="compact-hero__image compact-hero__image--active"/u);
   assert.match(explorer, /data-featured=\{event\.slug === featuredSlug \? "true"/u);
-  assert.match(css, /\.drop-card\[data-featured="true"\] \.drop-card__body\s*\{[^}]*border-top-color:\s*var\(--signal\)/su);
-  assert.match(css, /\.drop-card__body\s*\{[^}]*border-top:\s*3px solid transparent/su);
+  assert.doesNotMatch(css, /\.drop-card\[data-featured="true"\][^{]*\{[^}]*border/su);
+  assert.match(css, /\.drop-card__body\s*\{[^}]*padding-top:\s*15px[^}]*\}/su);
   assert.match(css, /\.active-night-autoplay-toggle\s*\{[^}]*width:\s*1px[^}]*height:\s*1px[^}]*clip-path:\s*inset\(50%\)/su);
   assert.match(css, /\.active-night-autoplay-toggle:focus-visible\s*\{[^}]*height:\s*44px[^}]*clip-path:\s*none/su);
   assert.match(polish, /\.active-night-experience \.night-drop,[\s\S]*?transition:\s*background-color var\(--motion-scene\)/su);
