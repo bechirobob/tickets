@@ -1696,13 +1696,6 @@
   transition: background-color var(--motion-scene) var(--ease-productive);
 }
 
-.active-night-controls__steps button span,
-.active-night-controls__actions button {
-  transition: width var(--motion-control) var(--ease-productive), background-color var(--motion-control) ease, border-color var(--motion-control) ease, color var(--motion-control) ease, transform var(--motion-press) ease;
-}
-
-.active-night-controls__actions button:active { transform: scale(.94); }
-
 .drop-card__body { transition: border-color var(--motion-control) ease; }
 
 .drop-card__image::before {
@@ -1955,8 +1948,6 @@
 
 @media (pointer: coarse), (max-width: 700px) {
   :is(
-    .active-night-controls__actions button,
-    .active-night-controls__steps button,
     .notification-bell,
     .quantity-control button,
     .event-rail-status button,
@@ -2014,7 +2005,6 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .night-mobile-menu__panel { background: #181917; -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .active-night-controls__actions button { background: #0c0d0b; }
   .hero-ticket,
   .room-product-phone__header,
   .room-composer,
@@ -2026,7 +2016,6 @@
   .compact-hero__shade,
   .compact-hero__copy > *,
   .compact-hero__price,
-  .active-night-controls,
   .drop-card__image img,
   .payment-method-detail,
   .wallet-pass,
@@ -2047,9 +2036,7 @@
 
   .active-night-experience,
   .active-night-experience .night-drop,
-  .active-night-room,
-  .active-night-controls__steps button span,
-  .active-night-controls__actions button { transition: none; }
+  .active-night-room { transition: none; }
 
   .drop-card__image::before { background: linear-gradient(180deg, rgba(255,255,255,.24), transparent 24%); transform: none; }
   .room-product-phone,
