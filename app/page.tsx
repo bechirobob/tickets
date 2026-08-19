@@ -1,10 +1,7 @@
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowRight, ArrowUpRight, BadgeCheck, BarChart3, BatteryFull, Camera, ConciergeBell, Gem, LockKeyhole, Send, Signal, Ticket, Wifi } from "lucide-react";
-import EventExplorer from "./event-explorer";
-import { eventImageUrl } from "./event-images";
+import { ArrowUpRight, BarChart3 } from "lucide-react";
+import ActiveNightExperience from "./active-night-experience";
 import { getPublicEvents } from "./events";
-import RoomPreviewCarousel from "./room-preview-carousel";
 import ScrollReveal from "./scroll-reveal";
 import PublicNavigation from "./mobile-navigation";
 
@@ -12,50 +9,10 @@ function BrandMark() {
   return <span className="night-brand" aria-label="BeCore Tickets"><b>B</b><span>BeCore<br />Tickets</span></span>;
 }
 
-function HostUpdate({ label, time, dateTime, title, detail, compact = false }: { label: string; time: string; dateTime: string; title: string; detail: string; compact?: boolean }) {
-  return <article className={`scene-host${compact ? " scene-host--compact" : ""}`}>
-    <span className="scene-host__mark" aria-hidden="true"><BadgeCheck size={14} /></span>
-    <div className="scene-host__content">
-      <header><small>{label}</small><time dateTime={dateTime}>{time}</time></header>
-      <p><strong>{title}</strong> <span>{detail}</span></p>
-    </div>
-  </article>;
-}
-
-function RoomPhone({ eventTitle, heroImage, conversation }: { eventTitle: string; heroImage: string; conversation: "arrival" | "inside" }) {
-  return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
-    <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
-    <div className="room-product-phone__screen">
-      <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>{conversation === "arrival" ? "18" : "24"} online</span></header>
-      <div className="room-product-phone__stream">
-        {conversation === "arrival" ? <>
-          <HostUpdate label="HOST UPDATE" time="9:14 PM" dateTime="21:14" title="Doors open." detail="Main set 11:30." />
-          <article className="scene-message"><span>KM</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="scene-message__bubble"><p>Who is actually in Osu already?</p></div><div className="scene-message__reactions" aria-label="4 laughing reactions"><i>😂</i><b>4</b></div></div></article>
-          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:19 PM</small><div className="scene-message__bubble"><p>“Five minutes away” in the spiritual sense.</p></div><div className="scene-message__reactions" aria-label="2 crying reactions"><i>😭</i><b>2</b></div></div></article>
-          <article className="scene-message"><span>YA</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="scene-message__bubble"><p>Okay fine. Leaving now.</p></div><div className="scene-message__reactions" aria-label="3 fire reactions"><i>🔥</i><b>3</b></div></div></article>
-          <article className="scene-message"><span>SE</span><div className="scene-message__body"><small className="scene-message__meta">Sena · 9:24 PM</small><div className="scene-message__bubble"><p>Outside. Queue is moving fast.</p></div><div className="scene-message__reactions" aria-label="2 raised hands reactions"><i>🙌</i><b>2</b></div></div></article>
-          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:25 PM</small><div className="scene-message__bubble"><p>Save me a spot on the left.</p></div></div></article>
-        </> : <>
-          <article className="scene-message"><span>AM</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="scene-message__bubble"><p>Front left is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
-          <article className="scene-flash"><Image src={eventImageUrl(heroImage, 520)} width={520} height={320} sizes="260px" alt="Flash shared inside The Room" unoptimized /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
-          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 10:44 PM</small><div className="scene-message__bubble"><p>Found you. This set is ridiculous.</p></div><div className="scene-message__reactions" aria-label="5 fire reactions"><i>🔥</i><b>5</b></div></div></article>
-          <HostUpdate label="ENTRY UPDATE" time="10:47 PM" dateTime="22:47" title="Gate change." detail="Last entry through Gate 2." compact />
-          <article className="scene-message"><span>KM</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 10:48 PM</small><div className="scene-message__bubble"><p>Gate 2 is definitely quicker.</p></div></div></article>
-          <article className="scene-message"><span>SE</span><div className="scene-message__body"><small className="scene-message__meta">Sena · 10:50 PM</small><div className="scene-message__bubble"><p>Inside. Front left was correct.</p></div><div className="scene-message__reactions" aria-label="3 dancing reactions"><i>💃</i><b>3</b></div></div></article>
-        </>}
-      </div>
-      <div className="room-product-phone__composer">{conversation === "inside" ? <i className="scene-concierge" aria-label="VIP concierge"><ConciergeBell size={13} aria-hidden="true" /><small>VIP</small></i> : <Camera size={17} />}<span>Message The Room</span><Send size={16} /></div>
-    </div>
-    <span className="room-product-phone__home" aria-hidden="true" />
-  </article>;
-}
-
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const events = await getPublicEvents();
-  const featured = events[0];
-  const heroImage = featured?.image ?? "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
 
   return <main className="night-home compact-home">
     <ScrollReveal />
@@ -64,30 +21,7 @@ export default async function Home() {
       <PublicNavigation />
     </header>
 
-    <section className="compact-hero">
-      <Image src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={featured ? `Atmosphere for ${featured.title}` : "A crowd under warm stage lights at night"} priority unoptimized />
-      <div className="compact-hero__shade" />
-      <div className="compact-hero__copy">
-        <p className="night-kicker"><span /> Accra&apos;s edited night out</p>
-        <h1>{featured?.title ?? "Plans, sorted."}</h1>
-        <p>{featured ? `${featured.vibe} · ${featured.fullDate} · ${featured.venue}, ${featured.area}` : "The next verified Drop is getting dressed."}</p>
-        {featured ? <div><Link href={`/event/${featured.slug}`}>See the night <ArrowRight size={16} /></Link><Link href={`/checkout/${featured.slug}`}>Get tickets <Ticket size={15} /></Link></div> : <Link href="/organizer/submit" className="compact-hero__single">Submit a night <ArrowUpRight size={15} /></Link>}
-      </div>
-      {featured ? <p className="compact-hero__price">From <b>GH₵{featured.price}</b></p> : null}
-    </section>
-
-    <section className="night-drop night-drop--compact" id="drop">
-      <div className="compact-section-head" data-scroll-reveal><div><p className="night-kicker"><span /> The Drop</p><h2>Find your night.</h2></div><Link href="/events">See all nights <ArrowUpRight size={15} /></Link></div>
-      <EventExplorer events={events.slice(0, 6)} />
-    </section>
-
-    <section className="room-product-scene" id="the-room" data-scroll-reveal>
-      <div className="room-product-scene__copy"><p className="night-kicker"><span /> Included with your ticket</p><h2>The night has a Room.</h2><p>Plan together, hear it straight from the Host and drop Flashes into the same conversation. The chat remembers. The photos know when to leave. VIP guests carry a discreet badge and can reach the Host privately for enabled concierge perks such as bottle service and song suggestions.</p><span><LockKeyhole size={13} /> No ticket, no lurking. Very civilised.</span></div>
-      <RoomPreviewCarousel>
-        <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="arrival" />
-        <RoomPhone eventTitle={featured?.title ?? "After Dark"} heroImage={heroImage} conversation="inside" />
-      </RoomPreviewCarousel>
-    </section>
+    <ActiveNightExperience events={events} />
 
     <section className="organizer-intelligence" data-scroll-reveal>
       <div className="organizer-intelligence__copy">

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, Clock3, MapPin, Ticket } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { eventImageLoader } from "./event-images";
 import type { CuratedEvent } from "./events";
 
@@ -29,7 +29,7 @@ function matchesWindow(event: CuratedEvent, filter: WindowFilter, now: number) {
   return distance >= -4 * 60 * 60 * 1000;
 }
 
-export default function EventExplorer({ events, full = false }: { events: CuratedEvent[]; full?: boolean }) {
+export default function EventExplorer({ events, full = false, featuredSlug }: { events: CuratedEvent[]; full?: boolean; featuredSlug?: string }) {
   const [windowFilter, setWindowFilter] = useState<WindowFilter>("next");
   const [area, setArea] = useState("All areas");
   const [vibe, setVibe] = useState<VibeFilter>("All");
@@ -44,6 +44,17 @@ export default function EventExplorer({ events, full = false }: { events: Curate
     && (vibe === "All" || event.vibe === vibe)), [area, events, now, vibe, windowFilter]);
   const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
   const pageEvents = visible.slice(page * pageSize, page * pageSize + pageSize);
+
+  useEffect(() => {
+    const track = railRef.current;
+    if (full || !featuredSlug || !track) return;
+    const cards = Array.from(track.querySelectorAll<HTMLElement>(".drop-card"));
+    const index = cards.findIndex((card) => card.dataset.eventSlug === featuredSlug);
+    if (index < 0) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    track.scrollTo({ left: cards[index].offsetLeft - track.offsetLeft, behavior: reducedMotion ? "auto" : "smooth" });
+    setPosition(index);
+  }, [area, featuredSlug, full, page, vibe, windowFilter]);
 
   function changeWindow(value: WindowFilter) {
     setWindowFilter(value);
@@ -90,7 +101,7 @@ export default function EventExplorer({ events, full = false }: { events: Curate
     {!full && pageEvents.length ? <div className="drop-rail-status"><span><b>{String(position + 1).padStart(2, "0")}</b> / {String(pageEvents.length).padStart(2, "0")}</span><p>Swipe. Judge. Repeat.</p><div><button type="button" onClick={() => moveRail(-1)} disabled={position === 0} aria-label="Previous event"><ArrowLeft size={16} /></button><button type="button" onClick={() => moveRail(1)} disabled={position >= pageEvents.length - 1} aria-label="Next event"><ArrowRight size={16} /></button></div></div> : null}
 
     {pageEvents.length ? <div className={`drop-grid${full ? " drop-grid--full" : " drop-grid--rail"}`} aria-live="polite" ref={railRef} onScroll={trackRail}>
-      {pageEvents.map((event) => <article className="drop-card" key={event.slug}>
+      {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-event-slug={event.slug} data-featured={event.slug === featuredSlug ? "true" : undefined}>
         <Link href={`/event/${event.slug}`} className="drop-card__image">
           <Image loader={eventImageLoader} src={event.image} width={720} height={480} sizes={full ? "(max-width: 700px) 100vw, (max-width: 1000px) 50vw, 33vw" : "(max-width: 700px) 84vw, 31vw"} alt={`Atmosphere for ${event.title}`} />
           {event.isTestEvent ? <span>Working preview</span> : null}
