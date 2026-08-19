@@ -37,6 +37,26 @@ test("public navigation is usable without horizontal overflow", async ({ page })
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("featured nights keep the hero, Drop and Room synchronized", async ({ page }) => {
+  await page.goto("/");
+  const experience = page.locator(".active-night-experience");
+  const hero = page.getByRole("region", { name: "Featured nights" });
+  const firstSlug = await experience.getAttribute("data-active-night");
+
+  await hero.getByRole("button", { name: "Next featured night" }).click();
+  await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting");
+
+  const activeSlug = await experience.getAttribute("data-active-night");
+  expect(activeSlug).toBeTruthy();
+  await expect(page.locator('.drop-card[data-featured="true"]')).toHaveAttribute("data-event-slug", activeSlug!);
+
+  const heroTitle = await hero.getByRole("heading", { level: 1 }).innerText();
+  await expect(page.locator(".room-product-phone__header b").first()).toHaveText(heroTitle);
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test("My Nights exposes secure recovery to a signed-out customer", async ({ page }) => {
   await page.goto("/my-nights");
   await expect(page.getByRole("heading", { name: /Use the email you paid with/u })).toBeVisible();

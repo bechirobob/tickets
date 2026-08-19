@@ -6,6 +6,7 @@ const cssUrl = new URL("../app/globals.css", import.meta.url);
 const accessPolishUrl = new URL("../app/access-polish.css", import.meta.url);
 const roomUrl = new URL("../app/room/[slug]/room-client.tsx", import.meta.url);
 const homeUrl = new URL("../app/page.tsx", import.meta.url);
+const activeNightUrl = new URL("../app/active-night-experience.tsx", import.meta.url);
 const aboutUrl = new URL("../app/about/page.tsx", import.meta.url);
 const mobileNavigationUrl = new URL("../app/mobile-navigation.tsx", import.meta.url);
 const roomPreviewCarouselUrl = new URL("../app/room-preview-carousel.tsx", import.meta.url);
@@ -63,12 +64,12 @@ test("Room text controls keep iOS at the existing page scale", async () => {
 test("the compact homepage hero stays within a deliberate desktop and mobile height", async () => {
   const css = await readFile(cssUrl, "utf8");
   assert.match(css, /\.compact-hero\s*\{[^}]*height:\s*min\(64vh, 640px\)[^}]*min-height:\s*520px/su);
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*560px[^}]*min-height:\s*560px/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*600px[^}]*min-height:\s*600px/su);
   assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(55px, 7\.4vw, 104px\)/su);
 });
 
 test("The Drop uses compact filters, bounded cards and a dedicated full page", async () => {
-  const [css, explorer, home] = await Promise.all([readFile(cssUrl, "utf8"), readFile(new URL("../app/event-explorer.tsx", import.meta.url), "utf8"), readFile(homeUrl, "utf8")]);
+  const [css, explorer, home] = await Promise.all([readFile(cssUrl, "utf8"), readFile(new URL("../app/event-explorer.tsx", import.meta.url), "utf8"), readFile(activeNightUrl, "utf8")]);
   assert.match(explorer, />Tonight</u);
   assert.match(explorer, />This weekend</u);
   assert.match(explorer, />Next up</u);
@@ -112,7 +113,7 @@ test("notification history stays behind the verified My Nights entrance", async 
 test("The Room is promoted as a ticket-locked preview without exposing a public chat", async () => {
   const [css, home, polish, carousel] = await Promise.all([
     readFile(cssUrl, "utf8"),
-    readFile(homeUrl, "utf8"),
+    readFile(activeNightUrl, "utf8"),
     readFile(accessPolishUrl, "utf8"),
     readFile(roomPreviewCarouselUrl, "utf8"),
   ]);
@@ -135,7 +136,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
   assert.equal(home.match(/<RoomPhone /gu)?.length, 2);
-  assert.match(home, /<RoomPreviewCarousel>/u);
+  assert.match(home, /<RoomPreviewCarousel key=/u);
   assert.match(home, /aria-roledescription="slide"/u);
   assert.match(css, /\.room-product-scene__phones\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 268px\)\)[^}]*justify-content:\s*end/su);
   assert.match(css, /\.room-product-phone\s*\{[^}]*aspect-ratio:\s*71\.9 \/ 150[^}]*height:\s*auto[^}]*border-radius:\s*38px/su);
@@ -153,7 +154,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-message__meta"/u);
   assert.doesNotMatch(home, /className="scene-message__bubble"><small/u);
   assert.equal(home.match(/className="scene-message__bubble"><p>/gu)?.length, 9);
-  assert.match(home, /Outside\. Queue is moving fast\./u);
+  assert.match(home, /Outside \{venue\}\. Queue is moving\./u);
   assert.match(home, /Save me a spot on the left\./u);
   assert.match(home, /Gate 2 is definitely quicker\./u);
   assert.match(home, /Inside\. Front left was correct\./u);
@@ -200,7 +201,7 @@ test("The Room reconnects when a ticket holder returns to the page", async () =>
 
 test("VIP value is visible at decision points without duplicating the interface", async () => {
   const [home, eventPage, checkout, about, help, organizerWorkspace, nightHub, ticketsApi, events, css] = await Promise.all([
-    readFile(homeUrl, "utf8"),
+    readFile(activeNightUrl, "utf8"),
     readFile(new URL("../app/event/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/checkout/[slug]/checkout-form.tsx", import.meta.url), "utf8"),
     readFile(aboutUrl, "utf8"),
@@ -267,6 +268,32 @@ test("Polished Nightlife motion stays purposeful, scoped and accessibility-aware
   assert.match(polish, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.compact-hero > img,[\s\S]*?animation:\s*none/su);
   assert.match(carousel, /data-active=\{active\}/u);
   assert.doesNotMatch(`${css}\n${polish}`, /animation:\s*[^;]*(?:infinite)[^;]*compact-hero/iu);
+});
+
+test("featured nights coordinate the hero, Drop and Room without moving content under readers", async () => {
+  const [experience, explorer, css, polish] = await Promise.all([
+    readFile(activeNightUrl, "utf8"),
+    readFile(new URL("../app/event-explorer.tsx", import.meta.url), "utf8"),
+    readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+  ]);
+
+  assert.match(experience, /const sceneInterval = 7_000/u);
+  assert.match(experience, /events\.slice\(0, 4\)/u);
+  assert.match(experience, /new IntersectionObserver/u);
+  assert.match(experience, /entry\.boundingClientRect\.bottom <= 0[^}]*setLeftHero\(true\)/su);
+  assert.match(experience, /document\.visibilityState !== "visible"/u);
+  assert.match(experience, /prefers-reduced-motion: reduce/u);
+  assert.match(experience, /<EventExplorer events=\{events\.slice\(0, 6\)\} featuredSlug=\{active\?\.slug\}/u);
+  assert.match(experience, /<RoomPreviewCarousel key=\{active\?\.slug/u);
+  assert.match(experience, /data-active-night=\{active\?\.slug/u);
+  assert.match(experience, /aria-label=\{reducedMotion \? "Autoplay disabled by Reduce Motion"/u);
+  assert.match(explorer, /data-featured=\{event\.slug === featuredSlug \? "true"/u);
+  assert.match(css, /\.drop-card\[data-featured="true"\] \.drop-card__image\s*\{[^}]*border-bottom:\s*3px solid var\(--signal\)/su);
+  assert.match(css, /\.active-night-controls__actions button\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/su);
+  assert.match(polish, /\.active-night-experience \.night-drop,[\s\S]*?transition:\s*background-color var\(--motion-scene\)/su);
+  assert.match(polish, /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?\.active-night-controls__actions button\s*\{[^}]*background:\s*#0c0d0b/su);
+  assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.active-night-experience \.night-drop,[\s\S]*?transition:\s*none/su);
 });
 
 test("mobile customers retain wallet access and form controls do not trigger iOS zoom", async () => {
@@ -473,12 +500,14 @@ test("customer and staff journeys do not load Cloudflare challenges", async () =
 });
 
 test("public organiser actions keep submission public and named workspaces protected", async () => {
-  const [home, organizer, submission, adminSubmissions] = await Promise.all([
+  const [homeShell, activeNight, organizer, submission, adminSubmissions] = await Promise.all([
     readFile(homeUrl, "utf8"),
+    readFile(activeNightUrl, "utf8"),
     readFile(organizerUrl, "utf8"),
     readFile(submissionUrl, "utf8"),
     readFile(adminSubmissionsUrl, "utf8"),
   ]);
+  const home = `${homeShell}\n${activeNight}`;
 
   assert.doesNotMatch(home, /href="\/organizer"/u);
   assert.ok(home.match(/href="\/organizer\/submit"/gu)?.length >= 2);
@@ -833,7 +862,7 @@ test("launch inventory is database-backed and public defects stay closed", async
     readFile(new URL("../app/events.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/event/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/privacy/page.tsx", import.meta.url), "utf8"),
-    readFile(homeUrl, "utf8"),
+    readFile(activeNightUrl, "utf8"),
     readFile(new URL("../app/tickets/ticket-wallet.tsx", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0009_eminent_champions.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/initialize/route.ts", import.meta.url), "utf8"),
@@ -853,7 +882,7 @@ test("launch inventory is database-backed and public defects stay closed", async
   assert.match(eventPage, /<EventActions/u);
   assert.match(eventPage, /event\.venueMapUrl/u);
   assert.match(privacy, /Privacy notice/u);
-  assert.match(home, /featured\?\.image/u);
+  assert.match(home, /active\?\.image/u);
   assert.match(wallet, /\/api\/customer\/recovery/u);
 });
 

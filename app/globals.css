@@ -290,6 +290,22 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .compact-hero__copy > div a, .compact-hero__single { min-height: 43px; padding: 0 17px; display: inline-flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.55); color: white; font-size: 14px; font-weight: 760; }
 .compact-hero__copy > div a:last-child { border-color: var(--acid); background: var(--acid); color: var(--night); }
 .compact-hero__price { margin: 0; position: absolute; right: 5vw; bottom: 52px; color: #b2b1aa; font-size: 14px; text-transform: uppercase; letter-spacing: .1em; }.compact-hero__price b { margin-left: 7px; color: white; font-size: 18px; letter-spacing: -.02em; }
+.active-night-experience { background: var(--bone); }
+.active-night-hero { isolation: isolate; }
+.active-night-controls { width: 132px; position: absolute; z-index: 3; right: 5vw; top: 50%; translate: 0 -50%; display: grid; justify-items: end; gap: 11px; color: white; }
+.active-night-controls > p { margin: 0; display: flex; align-items: baseline; gap: 5px; color: rgba(255,255,255,.62); font-size: 11px; letter-spacing: .08em; }
+.active-night-controls > p b { color: white; font-size: 18px; letter-spacing: -.02em; }
+.active-night-controls__steps { width: 100%; display: grid; justify-items: end; }
+.active-night-controls__steps button { width: 44px; height: 25px; padding: 0; display: grid; place-items: center end; border: 0; background: transparent; }
+.active-night-controls__steps button span { width: 18px; height: 1px; display: block; background: rgba(255,255,255,.48); }
+.active-night-controls__steps button[aria-current="true"] span { width: 38px; height: 2px; background: var(--acid); }
+.active-night-controls__actions { display: grid; grid-template-columns: repeat(3, 44px); }
+.active-night-controls__actions button { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.42); border-radius: 0; background: rgba(8,9,7,.38); color: white; }
+.active-night-controls__actions button + button { margin-left: -1px; }
+.active-night-controls__actions button:disabled { color: rgba(255,255,255,.38); }
+.drop-card[data-featured="true"] .drop-card__image { border-bottom: 3px solid var(--signal); }
+.drop-card[data-featured="true"] .drop-card__body > p:first-child { color: var(--signal); }
+.active-night-room { background: var(--scene-dark); }
 .night-drop--compact { padding: 72px 5vw 80px; }
 .compact-section-head { margin-bottom: 28px; display: flex; align-items: end; justify-content: space-between; gap: 30px; }
 .compact-section-head h2 { margin: 0; font-size: clamp(38px, 4.5vw, 65px); font-weight: 580; line-height: .94; letter-spacing: -.06em; }
@@ -361,7 +377,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 700px) {
-  .compact-home .night-header nav { display: none; }.compact-hero { height: 560px; min-height: 560px; }.compact-hero__shade { background: linear-gradient(0deg, rgba(6,7,6,.92), rgba(6,7,6,.2)); }.compact-hero__copy { left: 20px; right: 20px; bottom: 72px; }.compact-hero__copy h1 { font-size: 52px; }.compact-hero__copy > p:not(.night-kicker) { line-height: 1.55; }.compact-hero__price { right: 20px; bottom: 24px; }.night-drop--compact { padding: 52px 20px 65px; }.compact-section-head { align-items: start; }.compact-section-head h2 { font-size: 39px; }.compact-section-head > a { margin-top: 8px; white-space: nowrap; }
+  .compact-home .night-header nav { display: none; }.compact-hero { height: 600px; min-height: 600px; }.compact-hero__shade { background: linear-gradient(0deg, rgba(6,7,6,.94), rgba(6,7,6,.18)); }.compact-hero__copy { left: 20px; right: 20px; bottom: 132px; }.compact-hero__copy h1 { font-size: 52px; }.compact-hero__copy > p:not(.night-kicker) { line-height: 1.55; }.compact-hero__price { right: 20px; bottom: 76px; }.active-night-controls { width: auto; left: 20px; right: 20px; top: auto; bottom: 14px; translate: none; grid-template-columns: auto 1fr auto; align-items: center; justify-items: stretch; gap: 12px; }.active-night-controls > p { justify-self: start; }.active-night-controls__steps { display: none; }.active-night-controls__actions { justify-self: end; }.night-drop--compact { padding: 52px 20px 65px; }.compact-section-head { align-items: start; }.compact-section-head h2 { font-size: 39px; }.compact-section-head > a { margin-top: 8px; white-space: nowrap; }
   .drop-controls { padding: 10px 0; align-items: stretch; flex-direction: column; }.drop-controls > div { overflow-x: auto; gap: 20px; }.drop-controls button { flex: 0 0 auto; min-height: 37px; }.drop-controls label { min-height: 38px; }.drop-grid { grid-template-columns: 1fr 1fr; gap: 28px 12px; }.drop-card__image { height: 255px; }.drop-card h3 { font-size: 22px; }.drop-card__body > div { display: grid; gap: 5px; }.room-flashes-strip { padding: 50px 20px; grid-template-columns: 1fr; gap: 30px; }.room-flashes-strip h2 { font-size: 43px; }.compact-footer { padding: 30px 20px; grid-template-columns: 1fr; }.compact-footer > div { justify-content: flex-start; }.compact-footer > div span { display: none; }
   .directory-header { padding: 0 16px; }.directory-header > a:first-child, .directory-header > a:last-child { font-size: 0; }.directory-header > a svg { width: 18px; height: 18px; }.directory-intro { padding: 50px 20px 34px; grid-template-columns: 1fr; gap: 20px; }.directory-intro .eyebrow { grid-column: auto; }.directory-intro h1 { font-size: 54px; }.directory-intro > p:last-child { font-size: 15px; }.directory-results, .hosts-list { padding-left: 20px; padding-right: 20px; }
   .hosts-list > article { grid-template-columns: 60px 1fr; gap: 16px; }.hosts-list h2 { font-size: 28px; }.host-profile { padding: 48px 20px; grid-template-columns: 1fr; gap: 25px; }.host-monogram--large { width: 90px; height: 90px; }.host-profile h1 { font-size: 48px; }.host-events { padding: 45px 20px 70px; }.host-events > div { grid-template-columns: 1fr; }
