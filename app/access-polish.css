@@ -1361,14 +1361,14 @@
 .scene-host {
   width: 100%;
   max-width: none;
-  padding: 9px 0 10px 10px;
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-  border: 0;
+  padding: 7px 8px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  border: 1px solid #d4d0c6;
   border-left: 2px solid var(--signal);
-  border-radius: 0;
-  background: transparent;
+  border-radius: 8px;
+  background: #f8f5ee;
 }
 
 .room-product-phone__stream > .scene-host {
@@ -1378,11 +1378,11 @@
   transform-origin: left top;
 }
 
-.scene-host--compact { max-width: none; padding-block: 8px; }
+.scene-host--compact { max-width: none; }
 
 .scene-host__mark {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
   border-radius: 5px;
@@ -1416,26 +1416,33 @@
 
 .scene-host__content time { color: #77746d; }
 
-.scene-host__content strong {
-  margin-top: 4px;
-  display: block;
-  color: #20211d;
-  font-size: 13px;
-  line-height: 1.2;
-  letter-spacing: -.015em;
-}
-
 .scene-host__content p {
-  margin: 3px 0 0;
+  margin: 2px 0 0;
+  overflow: hidden;
   color: #55534d;
   font-size: 11px;
-  line-height: 1.38;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.scene-host__content strong { color: #20211d; font-size: 11px; line-height: inherit; }
+
+.scene-host__content p span { color: #69675f; }
 
 /* In the landing preview, bubbles belong to attendee messages only. */
 .scene-flash {
+  min-height: 68px;
+  grid-template-columns: 70px 1fr;
   border-radius: 0;
 }
+
+.scene-flash img {
+  width: 70px;
+  height: 68px;
+}
+
+.scene-flash div { padding: 9px 8px; }
 
 .room-product-phone__composer {
   border: 0;
@@ -1916,6 +1923,11 @@
   .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
     opacity: .7;
     transform: none;
+  }
+
+  .room-product-preview[data-active="0"] .room-product-phone:nth-child(2) .room-product-phone__stream > article,
+  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) .room-product-phone__stream > article {
+    animation-play-state: paused;
   }
 }
 
