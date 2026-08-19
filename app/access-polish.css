@@ -1514,3 +1514,325 @@
     transition: none;
   }
 }
+
+/* Polished Nightlife: expressive material at event moments, productive motion everywhere else. */
+:root {
+  --motion-press: 120ms;
+  --motion-control: 180ms;
+  --motion-panel: 260ms;
+  --motion-scene: 420ms;
+  --ease-productive: cubic-bezier(.2, 0, .38, .9);
+  --ease-arrive: cubic-bezier(0, 0, .3, 1);
+  --glass-edge-light: rgba(255, 255, 255, .32);
+  --glass-edge-dark: rgba(255, 255, 255, .13);
+}
+
+@keyframes night-hero-settle {
+  from { opacity: .72; transform: scale(1.035); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes night-copy-arrive {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pass-arrive {
+  from { opacity: 0; transform: translateY(10px) scale(.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes room-item-arrive {
+  from { opacity: 0; transform: translateY(7px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes sheet-arrive {
+  from { opacity: 0; transform: translateY(18px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes material-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes data-resolve {
+  from { opacity: .35; transform: scaleX(.12); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+/* Discovery opens with one composed movement instead of several generic reveals. */
+.compact-hero > img {
+  animation: night-hero-settle 760ms var(--ease-arrive) both;
+  transform-origin: center 42%;
+}
+
+.compact-hero__copy > .night-kicker,
+.compact-hero__copy > h1,
+.compact-hero__copy > p:not(.night-kicker),
+.compact-hero__copy > div,
+.compact-hero__copy > .compact-hero__single,
+.compact-hero__price {
+  animation: night-copy-arrive var(--motion-scene) var(--ease-arrive) both;
+}
+
+.compact-hero__copy > h1 { animation-delay: 55ms; }
+.compact-hero__copy > p:not(.night-kicker) { animation-delay: 100ms; }
+.compact-hero__copy > div,
+.compact-hero__copy > .compact-hero__single { animation-delay: 145ms; }
+.compact-hero__price { animation-delay: 180ms; }
+
+.compact-hero__copy > div a,
+.compact-hero__single {
+  transition: color var(--motion-control) ease, background-color var(--motion-control) ease, border-color var(--motion-control) ease, transform var(--motion-press) ease;
+}
+
+.compact-hero__copy > div a:active,
+.compact-hero__single:active { transform: scale(.975); }
+
+.drop-card__image::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-72%);
+  background: linear-gradient(112deg, transparent 28%, rgba(255,255,255,.2) 48%, transparent 68%);
+}
+
+.drop-card__body > a,
+.drop-card__body > a svg {
+  transition: color var(--motion-control) ease, border-color var(--motion-control) ease, transform var(--motion-control) var(--ease-productive), gap var(--motion-control) var(--ease-productive);
+}
+
+/* The disclosure remains attached to the header, with material depth coming from its context. */
+.night-mobile-menu__panel { isolation: isolate; }
+
+.night-mobile-menu__panel::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  border-top: 1px solid var(--glass-edge-light);
+  border-left: 1px solid var(--glass-edge-dark);
+  border-radius: inherit;
+  opacity: .7;
+}
+
+.night-mobile-menu .night-mobile-menu__panel a {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: color var(--motion-control) ease, opacity var(--motion-control) ease, transform var(--motion-control) var(--ease-arrive);
+}
+
+.night-mobile-menu.is-open .night-mobile-menu__panel a {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(2) { transition-delay: 25ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(3) { transition-delay: 45ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(4) { transition-delay: 65ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(5) { transition-delay: 85ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(6) { transition-delay: 105ms; }
+
+/* The Room preview waits until it is actually seen and identifies the active phone. */
+.scroll-reveal-ready .room-product-scene:not(.is-revealed) .room-product-phone__stream > article {
+  animation-play-state: paused;
+}
+
+.room-product-phone {
+  isolation: isolate;
+  transition: opacity var(--motion-panel) ease, transform 320ms var(--ease-productive), border-color var(--motion-control) ease;
+}
+
+.room-product-phone::before {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  inset: 1px 18% auto;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
+  opacity: .7;
+}
+
+.room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
+.room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
+  opacity: .78;
+  transform: translateY(7px) scale(.99);
+}
+
+.room-product-preview[data-active="0"] .room-product-phone:nth-child(1),
+.room-product-preview[data-active="1"] .room-product-phone:nth-child(2) {
+  opacity: 1;
+  border-color: #777870;
+  transform: translateY(0) scale(1);
+}
+
+/* Payment choice motion explains progressive disclosure without decorating the transaction. */
+.payment-method-detail {
+  animation: room-item-arrive var(--motion-panel) var(--ease-arrive) both;
+  transform-origin: top;
+}
+
+.payment-option,
+.payment-method-choice,
+.network-list button {
+  transition: color var(--motion-control) ease, border-color var(--motion-control) ease, opacity var(--motion-control) ease, transform var(--motion-press) ease;
+}
+
+.payment-method-choice:active,
+.network-list button:active { transform: scale(.992); }
+
+/* Passes feel issued, while the scannable content itself never moves. */
+.wallet-pass {
+  position: relative;
+  overflow: hidden;
+  animation: pass-arrive 340ms var(--ease-arrive) both;
+  transition: border-color var(--motion-control) ease, transform var(--motion-control) var(--ease-productive);
+}
+
+.wallet-pass:nth-child(2) { animation-delay: 55ms; }
+.wallet-pass:nth-child(3) { animation-delay: 90ms; }
+.wallet-pass:nth-child(4) { animation-delay: 125ms; }
+
+.wallet-pass::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent);
+}
+
+.wallet-order > header > a,
+.wallet-receipt button {
+  transition: color var(--motion-control) ease, background-color var(--motion-control) ease, border-color var(--motion-control) ease, transform var(--motion-press) ease;
+}
+
+.wallet-order > header > a:active,
+.wallet-receipt button:active { transform: scale(.975); }
+
+/* Live conversation movement is short and attached to a real state change. */
+.room-message,
+.room-pinned,
+.room-notice {
+  animation: room-item-arrive var(--motion-control) var(--ease-arrive) both;
+  transform-origin: bottom;
+}
+
+.room-message__actions button,
+.room-composer form > button,
+.room-composer form > .room-camera,
+.room-composer form > .room-concierge,
+.room-flash-toggle,
+.room-notification-toggle {
+  transition: color var(--motion-control) ease, background-color var(--motion-control) ease, border-color var(--motion-control) ease, opacity var(--motion-control) ease, transform var(--motion-press) ease;
+}
+
+.room-message__actions button:active,
+.room-composer form > button:active,
+.room-composer form > .room-camera:active,
+.room-composer form > .room-concierge:active,
+.room-flash-toggle:active,
+.room-notification-toggle:active { transform: scale(.9); }
+
+.room-modal,
+.room-vip-modal { animation: material-fade var(--motion-control) ease both; }
+
+.room-modal > section,
+.room-vip-modal > section { animation: sheet-arrive var(--motion-panel) var(--ease-arrive) both; }
+
+/* Analytics remains matte; only newly resolved data communicates its arrival. */
+.analytics-bar-list i b {
+  transform-origin: left;
+  animation: data-resolve 320ms var(--ease-arrive) both;
+}
+
+.analytics-overview article > b { animation: material-fade var(--motion-panel) ease both; }
+
+@media (hover: hover) and (pointer: fine) {
+  .drop-card:hover .drop-card__image::before,
+  .drop-card:focus-within .drop-card__image::before {
+    opacity: 1;
+    transform: translateX(72%);
+    transition: opacity var(--motion-control) ease, transform 560ms var(--ease-arrive);
+  }
+
+  .drop-card:hover .drop-card__body > a,
+  .drop-card:focus-within .drop-card__body > a { gap: 10px; color: var(--signal); border-color: var(--signal); }
+  .drop-card:hover .drop-card__body > a svg,
+  .drop-card:focus-within .drop-card__body > a svg { transform: translate(2px, -2px); }
+  .wallet-pass:hover,
+  .wallet-pass:focus-within { border-color: #aaa59a; transform: translateY(-2px); }
+}
+
+@media (max-width: 700px) {
+  .compact-hero__copy > .night-kicker,
+  .compact-hero__copy > h1,
+  .compact-hero__copy > p:not(.night-kicker),
+  .compact-hero__copy > div,
+  .compact-hero__copy > .compact-hero__single,
+  .compact-hero__price { animation-duration: 340ms; }
+
+  .room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
+  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
+    opacity: .88;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .night-mobile-menu__panel { background: #181917; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .hero-ticket,
+  .room-product-phone__header,
+  .room-composer,
+  .customer-dock { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-hero > img,
+  .compact-hero__copy > *,
+  .compact-hero__price,
+  .payment-method-detail,
+  .wallet-pass,
+  .room-message,
+  .room-pinned,
+  .room-notice,
+  .room-modal,
+  .room-modal > section,
+  .room-vip-modal,
+  .room-vip-modal > section,
+  .analytics-bar-list i b,
+  .analytics-overview article > b {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .drop-card__image::before { display: none; }
+  .room-product-phone,
+  .night-mobile-menu .night-mobile-menu__panel a,
+  .payment-option,
+  .payment-method-choice,
+  .network-list button,
+  .wallet-pass,
+  .wallet-order > header > a,
+  .wallet-receipt button,
+  .room-message__actions button,
+  .room-composer form > button,
+  .room-composer form > .room-camera,
+  .room-composer form > .room-concierge,
+  .room-flash-toggle,
+  .room-notification-toggle { transition: none; }
+
+  .night-mobile-menu .night-mobile-menu__panel a,
+  .room-product-preview .room-product-phone {
+    opacity: 1;
+    transform: none;
+  }
+}
