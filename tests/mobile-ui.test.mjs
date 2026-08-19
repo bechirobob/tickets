@@ -289,7 +289,8 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(experience, /data-active-night=\{active\?\.slug/u);
   assert.match(experience, /aria-label=\{reducedMotion \? "Autoplay disabled by Reduce Motion"/u);
   assert.match(explorer, /data-featured=\{event\.slug === featuredSlug \? "true"/u);
-  assert.match(css, /\.drop-card\[data-featured="true"\] \.drop-card__image\s*\{[^}]*border-bottom:\s*3px solid var\(--signal\)/su);
+  assert.match(css, /\.drop-card\[data-featured="true"\] \.drop-card__body\s*\{[^}]*border-top-color:\s*var\(--signal\)/su);
+  assert.match(css, /\.drop-card__body\s*\{[^}]*border-top:\s*3px solid transparent/su);
   assert.match(css, /\.active-night-controls__actions button\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/su);
   assert.match(polish, /\.active-night-experience \.night-drop,[\s\S]*?transition:\s*background-color var\(--motion-scene\)/su);
   assert.match(polish, /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?\.active-night-controls__actions button\s*\{[^}]*background:\s*#0c0d0b/su);

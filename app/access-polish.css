@@ -1703,9 +1703,7 @@
 
 .active-night-controls__actions button:active { transform: scale(.94); }
 
-.drop-card[data-featured="true"] .drop-card__image {
-  transition: border-color var(--motion-control) ease, transform var(--motion-press) ease;
-}
+.drop-card__body { transition: border-color var(--motion-control) ease; }
 
 .drop-card__image::before {
   content: "";
