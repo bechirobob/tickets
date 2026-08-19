@@ -1587,6 +1587,7 @@
   --motion-control: 200ms;
   --motion-panel: 320ms;
   --motion-scene: 520ms;
+  --motion-scene-cycle: 4500ms;
   --ease-productive: cubic-bezier(.2, 0, .38, .9);
   --ease-arrive: cubic-bezier(0, 0, .3, 1);
   --glass-edge-light: rgba(255, 255, 255, .32);
@@ -1594,8 +1595,14 @@
 }
 
 @keyframes night-hero-settle {
-  from { opacity: .52; transform: scale(1.055); }
-  to { opacity: 1; transform: scale(1); }
+  0% { opacity: .28; transform: scale(1.085); }
+  16% { opacity: 1; }
+  100% { opacity: 1; transform: scale(1.025); }
+}
+
+@keyframes night-hero-exit {
+  from { opacity: 1; transform: scale(1.025); }
+  to { opacity: 0; transform: scale(1.01); }
 }
 
 @keyframes night-copy-arrive {
@@ -1630,7 +1637,7 @@
 }
 
 @keyframes room-stage-arrive {
-  from { opacity: .5; transform: translateY(24px) scale(.985); }
+  from { opacity: .35; transform: translateY(34px) scale(.975); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -1650,8 +1657,15 @@
 }
 
 /* Discovery opens with one composed movement instead of several generic reveals. */
-.compact-hero > img {
-  animation: night-hero-settle 980ms var(--ease-arrive) both;
+.compact-hero__image--active {
+  z-index: 1;
+  animation: night-hero-settle var(--motion-scene-cycle) linear both;
+  transform-origin: center 42%;
+}
+
+.compact-hero__image--outgoing {
+  z-index: 0;
+  animation: night-hero-exit 900ms var(--ease-productive) both;
   transform-origin: center 42%;
 }
 
@@ -1700,8 +1714,6 @@
 .active-night-room {
   transition: background-color var(--motion-scene) var(--ease-productive);
 }
-
-.drop-card__body { transition: border-color var(--motion-control) ease; }
 
 .drop-card__image::before {
   content: "";
@@ -1775,7 +1787,7 @@
 
 /* The Room queue starts only after the preview is visible. Content stays static without JS. */
 .scroll-reveal-ready .room-product-scene.is-revealed .room-product-scene__phones {
-  animation: room-stage-arrive 460ms var(--ease-arrive) both;
+  animation: room-stage-arrive 560ms var(--ease-arrive) both;
 }
 
 .scroll-reveal-ready .room-product-scene.is-revealed .room-product-phone__stream > article {
@@ -1949,12 +1961,13 @@
   .compact-hero__price { animation-duration: 460ms; }
 
   .room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
-  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1),
-  .room-product-preview[data-active="0"] .room-product-phone:nth-child(1),
-  .room-product-preview[data-active="1"] .room-product-phone:nth-child(2) {
+  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
     opacity: 1;
-    transform: none;
+    transform: translateY(8px) scale(.985);
   }
+
+  .room-product-preview[data-active="0"] .room-product-phone:nth-child(1) { transform: translateY(-2px) rotateY(1.5deg); }
+  .room-product-preview[data-active="1"] .room-product-phone:nth-child(2) { transform: translateY(-2px) rotateY(-1.5deg); }
 
   .room-product-preview[data-active="0"] .room-product-phone:nth-child(2) .room-product-phone__stream > article,
   .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) .room-product-phone__stream > article {
