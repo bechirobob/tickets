@@ -1353,18 +1353,84 @@
   gap: 6px;
 }
 
+@keyframes scene-host-arrive {
+  from { opacity: 0; transform: translateY(-6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .scene-host {
-  max-width: 84%;
-  padding: 6px 0 7px;
-  grid-template-columns: 16px 1fr;
+  width: 100%;
+  max-width: none;
+  padding: 9px 0 10px 10px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
   border: 0;
-  border-bottom: 1px solid #c8c4ba;
+  border-left: 2px solid var(--signal);
   border-radius: 0;
   background: transparent;
 }
 
-.scene-host--compact { max-width: 76%; }
-.scene-host p { font-size: 11px; line-height: 1.38; }
+.room-product-phone__stream > .scene-host {
+  animation-name: scene-host-arrive;
+  animation-duration: 360ms;
+  animation-timing-function: var(--ease-arrive);
+  transform-origin: left top;
+}
+
+.scene-host--compact { max-width: none; padding-block: 8px; }
+
+.scene-host__mark {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: #20211d;
+  color: var(--signal);
+}
+
+.scene-host__mark svg { color: inherit; }
+
+.scene-host__content { min-width: 0; }
+
+.scene-host__content > header {
+  min-height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scene-host__content small,
+.scene-host__content time {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.scene-host__content small {
+  color: var(--signal);
+  font-weight: 820;
+  letter-spacing: .07em;
+}
+
+.scene-host__content time { color: #77746d; }
+
+.scene-host__content strong {
+  margin-top: 4px;
+  display: block;
+  color: #20211d;
+  font-size: 13px;
+  line-height: 1.2;
+  letter-spacing: -.015em;
+}
+
+.scene-host__content p {
+  margin: 3px 0 0;
+  color: #55534d;
+  font-size: 11px;
+  line-height: 1.38;
+}
 
 /* In the landing preview, bubbles belong to attendee messages only. */
 .scene-flash {
