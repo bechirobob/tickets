@@ -13,7 +13,10 @@ jobs:
   browser-audit:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Fresh hosted runners may spend several minutes installing WebKit system
+    # dependencies before the production checks can begin. Keep enough headroom
+    # for all three browser projects and evidence upload on a slow mirror.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
