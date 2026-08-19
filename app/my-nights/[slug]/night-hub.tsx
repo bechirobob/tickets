@@ -336,6 +336,9 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </span>
         </div>
         <span className="night-hub__header-actions">
+          <Link href={`/room/${event.slug}`}>
+            <MessageCircle size={15} /> Enter The Room
+          </Link>
           <Link className="notification-bell" href="/notifications"
             aria-label={
               unread ? `${unread} unread notifications` : "Notifications"
@@ -343,9 +346,6 @@ export default function NightHub({ event }: { event: EventSummary }) {
           >
             <Bell size={16} />
             {unread ? <b>{unread > 9 ? "9+" : unread}</b> : null}
-          </Link>
-          <Link href={`/room/${event.slug}`}>
-            <MessageCircle size={15} /> Enter The Room
           </Link>
         </span>
       </header>

@@ -103,6 +103,7 @@ test("notification history stays behind the verified My Nights entrance", async 
   assert.match(myNights, /<Link className="notification-bell" href="\/notifications"/u);
   assert.doesNotMatch(myNights, /payload \? <Link className="notification-bell"/u);
   assert.match(hub, /className="notification-bell" href="\/notifications"/u);
+  assert.ok(hub.indexOf('href={`/room/${event.slug}`}') < hub.indexOf('className="notification-bell"'), "The Room action must precede the notification bell so the bell owns the far-right edge");
   assert.match(polish, /\.my-nights-header-actions,[\s\S]*?\.night-hub__header-actions\s*\{[^}]*justify-self:\s*end/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.my-nights-page \.directory-header\s*\{[^}]*padding-right:\s*16px/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.night-hub__header\s*\{[^}]*padding-right:\s*13px/su);
@@ -706,7 +707,8 @@ test("the interface has no effective shadows, tinted fills or curved text-edge c
   assert.match(polish, /\.room-message\.announcement \.room-bubble\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(polish, /\.room-message__actions button\.active\s*\{[^}]*background:\s*transparent[^}]*text-decoration:\s*underline/su);
   assert.match(polish, /Flat-surface contract:[\s\S]*?\.submission-error,[\s\S]*?\.curation-error,[\s\S]*?background:\s*transparent !important/su);
-  assert.match(polish, /\.quantity-control button\s*\{[^}]*border:\s*0[^}]*border-radius:\s*50%[^}]*background:\s*#e8e4da/su);
+  assert.match(polish, /\.quantity-control button\s*\{[^}]*border:\s*0[^}]*border-bottom:\s*1px solid currentColor[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
+  assert.match(polish, /\.event-rail-status button\s*\{[^}]*border:\s*0[^}]*border-bottom:\s*1px solid currentColor[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(polish, /\.network-list button\.selected\s*\{[^}]*border-bottom-color:\s*var\(--ink\)/su);
   assert.match(polish, /\.ops-record-list button,[\s\S]*?\.ops-record-list button\.active\s*\{[^}]*border:\s*0[^}]*border-bottom:\s*1px solid #c8c4ba[^}]*background:\s*transparent/su);
   assert.match(polish, /\.support-ops__layout\s*\{[^}]*border:\s*0[^}]*border-top:\s*1px solid #aaa79f[^}]*border-radius:\s*0/su);
@@ -715,6 +717,8 @@ test("the interface has no effective shadows, tinted fills or curved text-edge c
   assert.match(polish, /\.room-ops__panel,[\s\S]*?\.organizer-answers article\s*\{[^}]*background:\s*transparent/su);
   assert.match(polish, /\.help-contact article p a,[\s\S]*?\.drop-rail-status button,[\s\S]*?\.night-purchase__support a\s*\)\s*\{[^}]*border-radius:\s*0/su);
   assert.match(polish, /\.room-vip-modal nav button\s*\{[^}]*border-radius:\s*0/su);
+  assert.match(polish, /Mobile tap-target contract:[\s\S]*?:root\s*\{[^}]*--tap-target:\s*44px[^}]*\}[\s\S]*?@media \(pointer:\s*coarse\), \(max-width:\s*700px\)/su);
+  assert.match(polish, /@media \(pointer:\s*coarse\), \(max-width:\s*700px\)[\s\S]*?\.notification-bell,[\s\S]*?\.quantity-control button,[\s\S]*?\.room-message__actions button,[\s\S]*?min-width:\s*var\(--tap-target\)[^}]*min-height:\s*var\(--tap-target\)/su);
   assert.match(polish, /\.submission-header__actions a\s*\{[^}]*border-radius:\s*0/su);
   assert.match(polish, /Interface legibility contract:[\s\S]*?\.analytics-controls label,[\s\S]*?\.analytics-table span small,[\s\S]*?font-size:\s*12px/su);
   assert.match(css, /\.flash-card__closed\s*\{[^}]*background:\s*#181915/su);
