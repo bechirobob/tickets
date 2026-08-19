@@ -131,9 +131,9 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.equal(home.match(/<RoomPhone /gu)?.length, 2);
   assert.match(home, /<RoomPreviewCarousel>/u);
   assert.match(home, /aria-roledescription="slide"/u);
-  assert.match(css, /\.room-product-scene__phones\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
-  assert.match(css, /\.room-product-phone\s*\{[^}]*height:\s*560px[^}]*border-radius:\s*38px/su);
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.room-product-scene__phones\s*\{[^}]*grid-auto-flow:\s*column[^}]*grid-auto-columns:\s*calc\(100vw - 40px\)[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory/su);
+  assert.match(css, /\.room-product-scene__phones\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 268px\)\)[^}]*justify-content:\s*end/su);
+  assert.match(css, /\.room-product-phone\s*\{[^}]*aspect-ratio:\s*71\.9 \/ 150[^}]*height:\s*auto[^}]*border-radius:\s*38px/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.room-product-scene__phones\s*\{[^}]*grid-auto-flow:\s*column[^}]*grid-auto-columns:\s*min\(calc\(100vw - 72px\), 268px\)[^}]*overflow-x:\s*auto[^}]*scroll-snap-type:\s*x mandatory/su);
   assert.match(css, /\.room-product-phone\s*\{[^}]*scroll-snap-align:\s*start[^}]*scroll-snap-stop:\s*always/su);
   assert.match(carousel, /aria-roledescription="carousel"/u);
   assert.match(carousel, /className="room-product-scene__phones"[^>]*tabIndex=\{0\}/u);
@@ -147,6 +147,9 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(home, /className="scene-message__bubble"><small/u);
   assert.equal(home.match(/className="scene-message__bubble"><p>/gu)?.length, 5);
   assert.match(home, /<Gem size=\{10\}/u);
+  assert.match(home, /<Signal size=\{9\}/u);
+  assert.match(home, /<Wifi size=\{10\}/u);
+  assert.match(home, /<BatteryFull size=\{13\}/u);
   assert.match(home, /className="scene-message__reactions"/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
   assert.match(polish, /\.scene-message__reactions\s*\{[^}]*margin:\s*2px 3px 0[^}]*display:\s*flex/su);
