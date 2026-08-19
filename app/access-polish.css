@@ -1518,9 +1518,9 @@
 /* Polished Nightlife: expressive material at event moments, productive motion everywhere else. */
 :root {
   --motion-press: 120ms;
-  --motion-control: 180ms;
-  --motion-panel: 260ms;
-  --motion-scene: 420ms;
+  --motion-control: 200ms;
+  --motion-panel: 320ms;
+  --motion-scene: 520ms;
   --ease-productive: cubic-bezier(.2, 0, .38, .9);
   --ease-arrive: cubic-bezier(0, 0, .3, 1);
   --glass-edge-light: rgba(255, 255, 255, .32);
@@ -1528,27 +1528,37 @@
 }
 
 @keyframes night-hero-settle {
-  from { opacity: .72; transform: scale(1.035); }
+  from { opacity: .52; transform: scale(1.055); }
   to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes night-copy-arrive {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translateY(22px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes night-shade-arrive {
+  from { opacity: .45; }
+  to { opacity: 1; }
+}
+
+@keyframes card-image-arrive {
+  from { opacity: .58; transform: scale(1.04); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 @keyframes pass-arrive {
-  from { opacity: 0; transform: translateY(10px) scale(.992); }
+  from { opacity: 0; transform: translateY(16px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes room-item-arrive {
-  from { opacity: 0; transform: translateY(7px) scale(.985); }
+  from { opacity: 0; transform: translateY(14px) scale(.975); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes sheet-arrive {
-  from { opacity: 0; transform: translateY(18px) scale(.985); }
+  from { opacity: 0; transform: translateY(24px) scale(.975); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -1564,9 +1574,11 @@
 
 /* Discovery opens with one composed movement instead of several generic reveals. */
 .compact-hero > img {
-  animation: night-hero-settle 760ms var(--ease-arrive) both;
+  animation: night-hero-settle 980ms var(--ease-arrive) both;
   transform-origin: center 42%;
 }
+
+.compact-hero__shade { animation: night-shade-arrive 840ms ease both; }
 
 .compact-hero__copy > .night-kicker,
 .compact-hero__copy > h1,
@@ -1577,15 +1589,27 @@
   animation: night-copy-arrive var(--motion-scene) var(--ease-arrive) both;
 }
 
-.compact-hero__copy > h1 { animation-delay: 55ms; }
-.compact-hero__copy > p:not(.night-kicker) { animation-delay: 100ms; }
+.compact-hero__copy > h1 { animation-delay: 70ms; }
+.compact-hero__copy > p:not(.night-kicker) { animation-delay: 130ms; }
 .compact-hero__copy > div,
-.compact-hero__copy > .compact-hero__single { animation-delay: 145ms; }
-.compact-hero__price { animation-delay: 180ms; }
+.compact-hero__copy > .compact-hero__single { animation-delay: 190ms; }
+.compact-hero__price { animation-delay: 230ms; }
 
 .compact-hero__copy > div a,
 .compact-hero__single {
+  overflow: hidden;
+  position: relative;
   transition: color var(--motion-control) ease, background-color var(--motion-control) ease, border-color var(--motion-control) ease, transform var(--motion-press) ease;
+}
+
+.compact-hero__copy > div a::before,
+.compact-hero__single::before {
+  content: "";
+  position: absolute;
+  inset: 0 12% auto;
+  height: 1px;
+  background: rgba(255,255,255,.72);
+  pointer-events: none;
 }
 
 .compact-hero__copy > div a:active,
@@ -1597,10 +1621,22 @@
   z-index: 2;
   inset: 0;
   pointer-events: none;
-  opacity: 0;
-  transform: translateX(-72%);
-  background: linear-gradient(112deg, transparent 28%, rgba(255,255,255,.2) 48%, transparent 68%);
+  opacity: .38;
+  transform: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.24), transparent 24%);
+  transition: opacity var(--motion-control) ease;
 }
+
+.drop-card__image { transition: transform var(--motion-press) ease; }
+.drop-card__image:active { transform: scale(.988); }
+
+.scroll-reveal-ready .drop-explorer.is-revealed .drop-card__image img {
+  animation: card-image-arrive 620ms var(--ease-arrive) backwards;
+}
+
+.scroll-reveal-ready .drop-explorer.is-revealed .drop-card:nth-child(2) .drop-card__image img { animation-delay: 70ms; }
+.scroll-reveal-ready .drop-explorer.is-revealed .drop-card:nth-child(3) .drop-card__image img { animation-delay: 125ms; }
+.scroll-reveal-ready .drop-explorer.is-revealed .drop-card:nth-child(4) .drop-card__image img { animation-delay: 180ms; }
 
 .drop-card__body > a,
 .drop-card__body > a svg {
@@ -1608,7 +1644,16 @@
 }
 
 /* The disclosure remains attached to the header, with material depth coming from its context. */
-.night-mobile-menu__panel { isolation: isolate; }
+.night-mobile-menu__panel {
+  isolation: isolate;
+  transform: translateY(-14px) scale(.955);
+  transition: opacity var(--motion-control) ease, transform var(--motion-panel) var(--ease-arrive), visibility 0s linear var(--motion-panel);
+}
+
+.night-mobile-menu.is-open .night-mobile-menu__panel {
+  transform: translateY(0) scale(1);
+  transition-delay: 0s;
+}
 
 .night-mobile-menu__panel::before {
   content: "";
@@ -1619,12 +1664,13 @@
   border-top: 1px solid var(--glass-edge-light);
   border-left: 1px solid var(--glass-edge-dark);
   border-radius: inherit;
-  opacity: .7;
+  background: linear-gradient(135deg, rgba(255,255,255,.12), transparent 28%);
+  opacity: .95;
 }
 
 .night-mobile-menu .night-mobile-menu__panel a {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(-10px);
   transition: color var(--motion-control) ease, opacity var(--motion-control) ease, transform var(--motion-control) var(--ease-arrive);
 }
 
@@ -1633,11 +1679,11 @@
   transform: translateY(0);
 }
 
-.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(2) { transition-delay: 25ms; }
-.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(3) { transition-delay: 45ms; }
-.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(4) { transition-delay: 65ms; }
-.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(5) { transition-delay: 85ms; }
-.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(6) { transition-delay: 105ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(2) { transition-delay: 35ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(3) { transition-delay: 65ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(4) { transition-delay: 95ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(5) { transition-delay: 125ms; }
+.night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(6) { transition-delay: 155ms; }
 
 /* The Room preview waits until it is actually seen and identifies the active phone. */
 .scroll-reveal-ready .room-product-scene:not(.is-revealed) .room-product-phone__stream > article {
@@ -1657,27 +1703,47 @@
   height: 1px;
   pointer-events: none;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
-  opacity: .7;
+  opacity: .5;
+  transition: opacity var(--motion-panel) ease, left var(--motion-panel) var(--ease-productive), right var(--motion-panel) var(--ease-productive);
 }
 
 .room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
 .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
-  opacity: .78;
-  transform: translateY(7px) scale(.99);
+  opacity: .62;
+  transform: translateY(12px) scale(.965);
 }
 
 .room-product-preview[data-active="0"] .room-product-phone:nth-child(1),
 .room-product-preview[data-active="1"] .room-product-phone:nth-child(2) {
   opacity: 1;
   border-color: #777870;
-  transform: translateY(0) scale(1);
+  transform: translateY(-3px) scale(1);
 }
+
+.room-product-preview[data-active="0"] .room-product-phone:nth-child(1)::before,
+.room-product-preview[data-active="1"] .room-product-phone:nth-child(2)::before { left: 12%; right: 12%; opacity: 1; }
 
 /* Payment choice motion explains progressive disclosure without decorating the transaction. */
 .payment-method-detail {
   animation: room-item-arrive var(--motion-panel) var(--ease-arrive) both;
   transform-origin: top;
 }
+
+.payment-option { position: relative; }
+
+.payment-option::before {
+  content: "";
+  width: 2px;
+  position: absolute;
+  inset: 11px auto 11px -11px;
+  background: var(--orange);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--motion-panel) var(--ease-arrive);
+}
+
+.payment-option.selected::before { transform: scaleY(1); }
+.payment-option:not(.selected) .payment-method-choice { opacity: .7; }
 
 .payment-option,
 .payment-method-choice,
@@ -1692,7 +1758,7 @@
 .wallet-pass {
   position: relative;
   overflow: hidden;
-  animation: pass-arrive 340ms var(--ease-arrive) both;
+  animation: pass-arrive 460ms var(--ease-arrive) both;
   transition: border-color var(--motion-control) ease, transform var(--motion-control) var(--ease-productive);
 }
 
@@ -1721,7 +1787,7 @@
 .room-message,
 .room-pinned,
 .room-notice {
-  animation: room-item-arrive var(--motion-control) var(--ease-arrive) both;
+  animation: room-item-arrive 260ms var(--ease-arrive) both;
   transform-origin: bottom;
 }
 
@@ -1760,7 +1826,8 @@
   .drop-card:focus-within .drop-card__image::before {
     opacity: 1;
     transform: translateX(72%);
-    transition: opacity var(--motion-control) ease, transform 560ms var(--ease-arrive);
+    background: linear-gradient(112deg, transparent 26%, rgba(255,255,255,.3) 48%, transparent 70%);
+    transition: opacity var(--motion-control) ease, transform 640ms var(--ease-arrive);
   }
 
   .drop-card:hover .drop-card__body > a,
@@ -1777,11 +1844,11 @@
   .compact-hero__copy > p:not(.night-kicker),
   .compact-hero__copy > div,
   .compact-hero__copy > .compact-hero__single,
-  .compact-hero__price { animation-duration: 340ms; }
+  .compact-hero__price { animation-duration: 460ms; }
 
   .room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
   .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
-    opacity: .88;
+    opacity: .7;
     transform: none;
   }
 }
@@ -1796,8 +1863,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .compact-hero > img,
+  .compact-hero__shade,
   .compact-hero__copy > *,
   .compact-hero__price,
+  .drop-card__image img,
   .payment-method-detail,
   .wallet-pass,
   .room-message,
@@ -1814,9 +1883,13 @@
     transform: none;
   }
 
-  .drop-card__image::before { display: none; }
+  .drop-card__image::before { background: linear-gradient(180deg, rgba(255,255,255,.24), transparent 24%); transform: none; }
   .room-product-phone,
+  .room-product-phone::before,
+  .night-mobile-menu__panel,
   .night-mobile-menu .night-mobile-menu__panel a,
+  .drop-card__image,
+  .payment-option::before,
   .payment-option,
   .payment-method-choice,
   .network-list button,

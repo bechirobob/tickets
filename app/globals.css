@@ -1255,8 +1255,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .scroll-reveal-ready [data-scroll-reveal] {
   opacity: 0;
-  transform: translateY(18px);
-  transition: opacity .44s cubic-bezier(.2,.7,.2,1), transform .44s cubic-bezier(.2,.7,.2,1);
+  transform: translateY(26px);
+  transition: opacity .58s cubic-bezier(.2,.7,.2,1), transform .58s cubic-bezier(.2,.7,.2,1);
   will-change: opacity, transform;
 }
 .scroll-reveal-ready [data-scroll-reveal][data-reveal-delay="1"] { transition-delay: .09s; }

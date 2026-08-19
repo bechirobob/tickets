@@ -217,7 +217,7 @@ test("homepage sections reveal once without overriding reduced-motion preference
   assert.match(reveal, /observer\.unobserve\(entry\.target\)/u);
   assert.match(home, /data-scroll-reveal/u);
   assert.match(css, /\.scroll-reveal-ready \[data-scroll-reveal\]/u);
-  assert.match(css, /opacity\s+\.44s/u);
+  assert.match(css, /translateY\(26px\)[^}]*opacity\s+\.58s/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.scroll-reveal-ready \[data-scroll-reveal\][^{]*\{[^}]*opacity:\s*1[^}]*transform:\s*none[^}]*transition:\s*none/su);
 });
 
@@ -228,10 +228,14 @@ test("Polished Nightlife motion stays purposeful, scoped and accessibility-aware
     readFile(roomPreviewCarouselUrl, "utf8"),
   ]);
 
-  assert.match(polish, /--motion-press:\s*120ms[^}]*--motion-panel:\s*260ms[^}]*--motion-scene:\s*420ms/su);
+  assert.match(polish, /--motion-press:\s*120ms[^}]*--motion-panel:\s*320ms[^}]*--motion-scene:\s*520ms/su);
   assert.match(polish, /\.compact-hero > img\s*\{[^}]*animation:\s*night-hero-settle/su);
+  assert.match(polish, /\.compact-hero__shade\s*\{[^}]*animation:\s*night-shade-arrive/su);
+  assert.match(polish, /\.drop-card__image::before\s*\{[^}]*opacity:\s*\.38[^}]*linear-gradient\(180deg/su);
+  assert.match(polish, /\.drop-explorer\.is-revealed \.drop-card__image img\s*\{[^}]*animation:\s*card-image-arrive/su);
   assert.match(polish, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.drop-card:hover \.drop-card__image::before/su);
   assert.match(polish, /\.payment-method-detail\s*\{[^}]*animation:\s*room-item-arrive/su);
+  assert.match(polish, /\.payment-option\.selected::before\s*\{[^}]*scaleY\(1\)/su);
   assert.match(polish, /\.wallet-pass\s*\{[^}]*animation:\s*pass-arrive/su);
   assert.match(polish, /\.room-message,[\s\S]*?animation:\s*room-item-arrive/su);
   assert.match(polish, /\.analytics-bar-list i b\s*\{[^}]*animation:\s*data-resolve/su);
