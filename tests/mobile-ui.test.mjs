@@ -217,8 +217,28 @@ test("homepage sections reveal once without overriding reduced-motion preference
   assert.match(reveal, /observer\.unobserve\(entry\.target\)/u);
   assert.match(home, /data-scroll-reveal/u);
   assert.match(css, /\.scroll-reveal-ready \[data-scroll-reveal\]/u);
-  assert.match(css, /opacity\s+\.68s/u);
+  assert.match(css, /opacity\s+\.44s/u);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.scroll-reveal-ready \[data-scroll-reveal\][^{]*\{[^}]*opacity:\s*1[^}]*transform:\s*none[^}]*transition:\s*none/su);
+});
+
+test("Polished Nightlife motion stays purposeful, scoped and accessibility-aware", async () => {
+  const [css, polish, carousel] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(accessPolishUrl, "utf8"),
+    readFile(roomPreviewCarouselUrl, "utf8"),
+  ]);
+
+  assert.match(polish, /--motion-press:\s*120ms[^}]*--motion-panel:\s*260ms[^}]*--motion-scene:\s*420ms/su);
+  assert.match(polish, /\.compact-hero > img\s*\{[^}]*animation:\s*night-hero-settle/su);
+  assert.match(polish, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.drop-card:hover \.drop-card__image::before/su);
+  assert.match(polish, /\.payment-method-detail\s*\{[^}]*animation:\s*room-item-arrive/su);
+  assert.match(polish, /\.wallet-pass\s*\{[^}]*animation:\s*pass-arrive/su);
+  assert.match(polish, /\.room-message,[\s\S]*?animation:\s*room-item-arrive/su);
+  assert.match(polish, /\.analytics-bar-list i b\s*\{[^}]*animation:\s*data-resolve/su);
+  assert.match(polish, /@media \(prefers-reduced-transparency:\s*reduce\)[\s\S]*?\.night-mobile-menu__panel\s*\{[^}]*backdrop-filter:\s*none/su);
+  assert.match(polish, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.compact-hero > img,[\s\S]*?animation:\s*none/su);
+  assert.match(carousel, /data-active=\{active\}/u);
+  assert.doesNotMatch(`${css}\n${polish}`, /animation:\s*[^;]*(?:infinite)[^;]*compact-hero/iu);
 });
 
 test("mobile customers retain wallet access and form controls do not trigger iOS zoom", async () => {

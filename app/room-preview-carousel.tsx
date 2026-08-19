@@ -29,7 +29,7 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
     setActive(nearest.index);
   };
 
-  return <div className="room-product-preview" role="region" aria-roledescription="carousel" aria-label="The Room preview">
+  return <div className="room-product-preview" data-active={active} role="region" aria-roledescription="carousel" aria-label="The Room preview">
     <div ref={trackRef} className="room-product-scene__phones" onScroll={trackPosition} aria-live="polite" tabIndex={0}>
       {children}
     </div>
