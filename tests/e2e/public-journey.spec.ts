@@ -38,13 +38,14 @@ test("public navigation is usable without horizontal overflow", async ({ page })
 });
 
 test("featured nights keep the hero, Drop and Room synchronized", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   const experience = page.locator(".active-night-experience");
   const hero = page.getByRole("region", { name: "Featured nights" });
   const firstSlug = await experience.getAttribute("data-active-night");
 
-  await hero.getByRole("button", { name: "Next featured night" }).click();
-  await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting");
+  await expect(hero.locator(".active-night-controls")).toHaveCount(0);
+  await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting", { timeout: 9_000 });
 
   const activeSlug = await experience.getAttribute("data-active-night");
   expect(activeSlug).toBeTruthy();

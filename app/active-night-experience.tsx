@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowLeft,
   ArrowRight,
   BadgeCheck,
   BatteryFull,
@@ -11,8 +10,6 @@ import {
   ConciergeBell,
   Gem,
   LockKeyhole,
-  Pause,
-  Play,
   Send,
   Signal,
   Ticket,
@@ -138,19 +135,9 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
     preload.src = eventImageUrl(next.image, 1600, 78);
   }, [activeIndex, hasScenes, reducedMotion, scenes]);
 
-  function selectNight(index: number) {
-    setActiveIndex((index + scenes.length) % scenes.length);
-    setManualPause(true);
-  }
-
   function toggleAutoplay() {
     if (reducedMotion) return;
-    if (manualPause || leftHero) {
-      setManualPause(false);
-      setLeftHero(false);
-      return;
-    }
-    setManualPause(true);
+    setManualPause((paused) => !paused);
   }
 
   function leaveFocus(event: FocusEvent<HTMLElement>) {
@@ -164,8 +151,6 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       role="region"
       aria-roledescription={hasScenes ? "carousel" : undefined}
       aria-label="Featured nights"
-      onMouseEnter={() => setInteractionPause(true)}
-      onMouseLeave={() => setInteractionPause(false)}
       onFocusCapture={() => setInteractionPause(true)}
       onBlurCapture={leaveFocus}
     >
@@ -178,18 +163,14 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
         {active ? <div><Link href={`/event/${active.slug}`}>See the night <ArrowRight size={16} /></Link><Link href={`/checkout/${active.slug}`}>Get tickets <Ticket size={15} /></Link></div> : <Link href="/organizer/submit" className="compact-hero__single">Submit a night <ArrowRight size={15} /></Link>}
       </div>
       {active ? <p className="compact-hero__price">From <b>GH₵{active.price}</b></p> : null}
-
-      {hasScenes ? <nav className="active-night-controls" aria-label="Choose a featured night">
-        <p><b>{String(activeIndex + 1).padStart(2, "0")}</b><span>/ {String(scenes.length).padStart(2, "0")}</span></p>
-        <div className="active-night-controls__steps">
-          {scenes.map((event, index) => <button key={event.slug} type="button" aria-label={`Show ${event.title}`} aria-current={index === activeIndex ? "true" : undefined} onClick={() => selectNight(index)}><span /></button>)}
-        </div>
-        <div className="active-night-controls__actions">
-          <button type="button" aria-label="Previous featured night" onClick={() => selectNight(activeIndex - 1)}><ArrowLeft size={16} /></button>
-          <button type="button" aria-label={reducedMotion ? "Autoplay disabled by Reduce Motion" : manualPause || leftHero ? "Play featured nights" : "Pause featured nights"} disabled={reducedMotion} onClick={toggleAutoplay}>{manualPause || leftHero || reducedMotion ? <Play size={15} /> : <Pause size={15} />}</button>
-          <button type="button" aria-label="Next featured night" onClick={() => selectNight(activeIndex + 1)}><ArrowRight size={16} /></button>
-        </div>
-      </nav> : null}
+      {hasScenes ? <button
+        type="button"
+        className="active-night-autoplay-toggle"
+        aria-label={reducedMotion ? "Featured night slideshow is static because Reduce Motion is on" : manualPause ? "Play featured nights slideshow" : "Pause featured nights slideshow"}
+        aria-pressed={manualPause || reducedMotion}
+        disabled={reducedMotion}
+        onClick={toggleAutoplay}
+      >{manualPause ? "Play slideshow" : "Pause slideshow"}</button> : null}
     </section>
 
     <section className="night-drop night-drop--compact" id="drop">

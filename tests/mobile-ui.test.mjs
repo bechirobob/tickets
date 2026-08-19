@@ -64,7 +64,7 @@ test("Room text controls keep iOS at the existing page scale", async () => {
 test("the compact homepage hero stays within a deliberate desktop and mobile height", async () => {
   const css = await readFile(cssUrl, "utf8");
   assert.match(css, /\.compact-hero\s*\{[^}]*height:\s*min\(64vh, 640px\)[^}]*min-height:\s*520px/su);
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*600px[^}]*min-height:\s*600px/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*560px[^}]*min-height:\s*560px/su);
   assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(55px, 7\.4vw, 104px\)/su);
 });
 
@@ -287,13 +287,15 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(experience, /<EventExplorer events=\{events\.slice\(0, 6\)\} featuredSlug=\{active\?\.slug\}/u);
   assert.match(experience, /<RoomPreviewCarousel key=\{active\?\.slug/u);
   assert.match(experience, /data-active-night=\{active\?\.slug/u);
-  assert.match(experience, /aria-label=\{reducedMotion \? "Autoplay disabled by Reduce Motion"/u);
+  assert.match(experience, /className="active-night-autoplay-toggle"/u);
+  assert.match(experience, /aria-label=\{reducedMotion \? "Featured night slideshow is static because Reduce Motion is on"/u);
+  assert.doesNotMatch(experience, /active-night-controls|Previous featured night|Next featured night|Show \$\{event\.title\}/u);
   assert.match(explorer, /data-featured=\{event\.slug === featuredSlug \? "true"/u);
   assert.match(css, /\.drop-card\[data-featured="true"\] \.drop-card__body\s*\{[^}]*border-top-color:\s*var\(--signal\)/su);
   assert.match(css, /\.drop-card__body\s*\{[^}]*border-top:\s*3px solid transparent/su);
-  assert.match(css, /\.active-night-controls__actions button\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/su);
+  assert.match(css, /\.active-night-autoplay-toggle\s*\{[^}]*width:\s*1px[^}]*height:\s*1px[^}]*clip-path:\s*inset\(50%\)/su);
+  assert.match(css, /\.active-night-autoplay-toggle:focus-visible\s*\{[^}]*height:\s*44px[^}]*clip-path:\s*none/su);
   assert.match(polish, /\.active-night-experience \.night-drop,[\s\S]*?transition:\s*background-color var\(--motion-scene\)/su);
-  assert.match(polish, /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?\.active-night-controls__actions button\s*\{[^}]*background:\s*#0c0d0b/su);
   assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.active-night-experience \.night-drop,[\s\S]*?transition:\s*none/su);
 });
 
