@@ -174,7 +174,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       <Image key={active?.slug ?? "waiting"} className="compact-hero__image compact-hero__image--active" src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={active ? `Atmosphere for ${active.title}` : "A crowd under warm stage lights at night"} priority={activeIndex === 0} unoptimized />
       <div key={`shade-${active?.slug ?? "waiting"}`} className="compact-hero__shade" />
       <div key={`copy-${active?.slug ?? "waiting"}`} className="compact-hero__copy" aria-live={autoplayRunning ? "off" : "polite"} aria-atomic="true">
-        <p className="night-kicker"><span /> Accra / Featured night{active?.isTestEvent ? " / Preview" : ""}</p>
+        <p className="night-kicker hero-editor-note"><span /> {active?.quip ?? "Your next good excuse to go out."}{active?.isTestEvent ? <small> / Preview</small> : null}</p>
         <h1>{active?.title ?? "Plans, sorted."}</h1>
         <p>{active ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
@@ -198,7 +198,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
 
     <section ref={roomRef} className="room-product-scene active-night-room" id="the-room" data-scroll-reveal onFocusCapture={() => setInteractionPause(true)} onBlurCapture={leaveFocus}>
       <Image className="room-product-scene__atmosphere" src={eventImageUrl(heroImage, 1200, 75)} width={1200} height={800} sizes="100vw" alt="" aria-hidden="true" unoptimized />
-      <div className="room-product-scene__copy"><p className="night-kicker"><span /> More than a ticket</p><h2>The night has a Room.</h2><p>Meet the people going. Get updates from the Host. Share Flashes that disappear when the Room closes.</p><span><LockKeyhole size={13} /> Private to verified ticket holders</span></div>
+      <div className="room-product-scene__copy"><p className="night-kicker"><span /> You’re already on the inside</p><h2>The night has a Room.</h2><p>Find your people before you find the dance floor. Host updates, a little banter and Flashes that disappear when the Room closes.</p><span><LockKeyhole size={13} /> Private to verified ticket holders</span></div>
       <RoomPreviewCarousel>
         <RoomPhone event={active} heroImage={heroImage} conversation="arrival" />
         <RoomPhone event={active} heroImage={heroImage} conversation="inside" />

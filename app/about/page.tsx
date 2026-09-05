@@ -7,14 +7,14 @@ import PublicNavigation from "../mobile-navigation";
 
 export const metadata: Metadata = {
   title: "About us",
-  description: "Why BeCore Tickets is building a sharper way to find nights in Accra and a clearer way for organisers to understand what moved them.",
+  description: "Accra nights worth leaving the house for. Find your people, get your tickets and give the group chat an actual plan.",
 };
 
 const reasons = [
   ["01", "The good stuff, edited.", "Fewer random listings. More nights worth leaving the house for, presented clearly enough to choose without opening fifteen tabs."],
-  ["02", "The Room comes with the ticket.", "Plans, verified Host updates, live conversation and disappearing Flashes stay with the people who are actually going. VIP tickets can add a discreet Room identity and a private line to Host-enabled bottle service, song suggestions or assistance."],
-  ["03", "Organisers see what moved the Night.", "A sales total is only the ending. BeCore connects event views, checkout conversion, sales velocity, ticket-tier sell-through, promoter performance, payment mix, check-in timing and VIP concierge use in one private organiser view—without exposing customer payment details."],
-  ["04", "Made for how Accra moves.", "Mobile-first tickets, Mobile Money or Visa and Mastercard checkout through Paystack, gate-ready access and human help when a real night needs a real answer."],
+  ["02", "Your people are already in the Room.", "A private space for the people actually going: Host updates, conversation and Flashes that disappear when the Room closes. Eligible VIP tickets can add private requests for bottle service, song suggestions or assistance when the Host enables them. The DJ still gets the final say."],
+  ["03", "A good night deserves an encore.", "Organisers can see which tickets sold, which promoters brought people and when the crowd arrived. Useful numbers for the next party, kept in a private dashboard. Customer payment details stay private."],
+  ["04", "Made for how Accra moves.", "Pay with Mobile Money, Visa or Mastercard through Paystack. Keep your passes on your phone. And when something needs a human, ask for help. Even a very good night can misplace an email."],
 ];
 
 export default function AboutPage() {
@@ -27,10 +27,10 @@ export default function AboutPage() {
 
     <section className="about-hero">
       <p className="eyebrow">About BeCore Tickets</p>
-      <h1>Accra plans differently.<br />So do we.</h1>
+      <h1>“We should go out”<br />needed a follow-up.</h1>
       <div className="about-hero__story">
-        <p>BeCore Tickets is not a listings dump with a payment button. We are building the place Accra checks before deciding where the night is going.</p>
-        <p>For guests, that means a sharper edit, a familiar way to pay, tickets that stay easy to find and a private Room that carries the plan into the party. For organisers, it means one proper record from submission and approval through sales, entry and support—with enough live intelligence to make the next Night better.</p>
+        <p>You know the chat. Someone suggests a night out, six people say they’re in, and nobody picks a place. BeCore Tickets gives Accra an actual plan.</p>
+        <p>Find a night worth dressing for, get your tickets and meet the people going in The Room. If you’re throwing the party, we help with sales, guest updates and the door. You can get back to arguing about the line-up.</p>
       </div>
     </section>
 
@@ -46,7 +46,7 @@ export default function AboutPage() {
     </section>
 
     <section className="about-close">
-      <p>We want to become Accra&apos;s first call for events and parties by making every part of the night feel better—not by simply calling ourselves the biggest.</p>
+      <p>The outfit can wait.<br />Pick the night first.</p>
       <div><ActionLink href="/events">See what is dropping</ActionLink><ActionLink href="/organizer/submit" variant="text">Bring us your night</ActionLink></div>
     </section>
   </main>;

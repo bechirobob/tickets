@@ -85,7 +85,7 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
   assert.match(explorer, /type="search"/u);
   assert.match(explorer, /role="status"/u);
   assert.match(explorer, /aria-pressed=\{windowFilter/u);
-  assert.doesNotMatch(explorer, /drop-grid--rail|scrollIntoView|event\.quip|event\.note/u);
+  assert.doesNotMatch(explorer, /drop-grid--rail|scrollIntoView|event\.note/u);
   const discovery = await readFile(discoveryUrl, "utf8");
   assert.match(discovery, /\.discovery-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/su);
   assert.match(discovery, /@media \(max-width: 700px\)[\s\S]*?\.discovery-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
@@ -126,7 +126,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   ]);
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The night has a Room\./u);
-  assert.match(home, /Share Flashes that disappear when the Room closes/u);
+  assert.match(home, /Flashes that disappear when the Room closes/u);
   assert.match(home, /Private to verified ticket holders/u);
   assert.match(home, />Preview</u);
   assert.doesNotMatch(home, /Illustrative preview|Demo chat/u);
@@ -221,7 +221,7 @@ test("VIP value is visible at decision points without duplicating the interface"
   assert.match(eventPage, /tier\.roomBadge === "VIP"/u);
   assert.match(eventPage, /private Host concierge when enabled/u);
   assert.match(checkout, /checkout-tier__vip/u);
-  assert.match(about, /Host-enabled bottle service, song suggestions or assistance/u);
+  assert.match(about, /bottle service, song suggestions or assistance when the Host enables them/u);
   assert.match(help, /How VIP works inside The Room/u);
   assert.match(organizerWorkspace, /everything stays off by default/u);
   assert.match(nightHub, /order\.roomBadge === "VIP"/u);
@@ -387,7 +387,7 @@ test("returning buyers recover and manage the whole purchase through My Nights",
     readFile(new URL("../app/payment/return/page.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(myNights, /Bring back my Nights/u);
-  assert.match(myNights, /every confirmed purchase/u);
+  assert.match(myNights, /Same checkout email\. One private link/u);
   assert.match(myNights, /Ticket &amp; perks/u);
   assert.match(myNights, /Enter the live Room/u);
   assert.match(hub, />Ticket \(\{tickets\.length\}\)</u);
@@ -461,7 +461,7 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(checkout, /payment-providers\/mtn-momo\.svg/u);
   assert.match(checkout, /payment-providers\/telecel-cash\.svg/u);
   assert.match(checkout, /payment-providers\/at-money\.svg/u);
-  assert.match(checkout, /Choose how you want to pay\./u);
+  assert.match(checkout, /Let’s make it official\./u);
   assert.match(checkout, /Mobile Money<small>MTN MoMo, Telecel Cash or AT Money/u);
   assert.match(checkout, /Card<small>Visa or Mastercard through Paystack/u);
   assert.match(checkout, /useState<"mobile_money" \| "card" \| null>\(null\)/u);
@@ -528,7 +528,7 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.match(submission, /className="submission-header__signin"/u);
   assert.match(submission, /aria-label="Organiser access"/u);
   assert.match(submission, /Organiser sign in/u);
-  assert.match(submission, /live demand, sales, promoter, entry and VIP insight/u);
+  assert.match(submission, /private workspace for tickets, guest updates, entry and sales/u);
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
 });
@@ -569,14 +569,14 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.doesNotMatch(home, /<nav aria-label="Main navigation">[^<]*(?:<[^>]+>[^<]*)*<Link href="\/hosts">/u);
   assert.doesNotMatch(home, /id="about"|className="becore-about"|Accra plans differently/u);
   assert.match(about, /className="about-page"/u);
-  assert.match(about, /Accra plans differently/u);
-  assert.match(about, /The Room comes with the ticket/u);
-  assert.match(about, /Organisers see what moved the Night/u);
-  assert.match(about, /ticket-tier sell-through, promoter performance, payment mix, check-in timing and VIP concierge use/u);
+  assert.match(about, /needed a follow-up/u);
+  assert.match(about, /Your people are already in the Room/u);
+  assert.match(about, /A good night deserves an encore/u);
+  assert.match(about, /which tickets sold, which promoters brought people and when the crowd arrived/u);
   assert.match(about, /Made for how Accra moves/u);
   assert.match(home, /className="organizer-intelligence"/u);
-  assert.match(home, /Your next great night/u);
-  assert.match(home, /Mobile Money and card payments/u);
+  assert.match(home, /We’ll mind the details/u);
+  assert.match(home, /MoMo, cards and ticket tiers/u);
   assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);
   assert.match(css, /\.about-reasons article\s*\{[^}]*border-bottom:\s*1px solid #cbc7bd/su);
   assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);

@@ -7,6 +7,7 @@ import "./access-polish.css";
 import "./discovery.css";
 import "./room-experience.css";
 import "./interface-finish.css";
+import "./nightlife-details.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),
@@ -14,21 +15,21 @@ export const metadata: Metadata = {
     default: "BeCore Tickets — Accra's party shortlist",
     template: "%s · BeCore Tickets",
   },
-  description: "A weekly edit of selected parties in Accra, with secure Mobile Money and card ticketing by BeCoreOps.",
+  description: "Accra nights worth leaving the house for. Pick your party, pay with MoMo or card and meet your people in The Room.",
   applicationName: "BeCore Tickets",
   openGraph: {
     type: "website",
     locale: "en_GH",
     siteName: "BeCore Tickets",
     title: "BeCore Tickets — Accra's party shortlist",
-    description: "Selected Accra nights, secure Mobile Money or card checkout and private event Rooms.",
+    description: "Give the group chat an actual plan. Accra parties, MoMo or card tickets and a private Room for the people going.",
     url: "/",
     images: [{ url: "/social-card.png", width: 1200, height: 630, alt: "BeCore Tickets — Accra's edited night out" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "BeCore Tickets — Accra's party shortlist",
-    description: "Selected Accra nights, secure Mobile Money or card checkout and private event Rooms.",
+    description: "Give the group chat an actual plan. Accra parties, MoMo or card tickets and a private Room for the people going.",
     images: ["/social-card.png"],
   },
   manifest: "/manifest.webmanifest",

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { ChartNoAxesCombined, MapPin, MessageCircle, Ticket } from "lucide-react";
 import { ActionLink } from "./action";
 import ActiveNightExperience from "./active-night-experience";
 import { getPublicEvents } from "./events";
@@ -28,17 +28,17 @@ export default async function Home() {
     <section className="organizer-intelligence" data-scroll-reveal>
       <div className="organizer-intelligence__copy">
         <p className="night-kicker"><span /> For organisers</p>
-        <h2>Your crowd.<br />Your next great night.</h2>
-        <p>Ticket sales, guest updates and a smoother door. One place to run your event and understand what worked.</p>
+        <h2>You bring the crowd.<br />We’ll mind the details.</h2>
+        <p>Sell the tickets, keep guests in the loop and get the door moving. You have a party to throw.</p>
         <ActionLink href="/organizer/submit">List your event</ActionLink>
       </div>
       <dl>
-        <div><dt>01 / Sell</dt><dd>Ticket tiers, Mobile Money and card payments.</dd></div>
-        <div><dt>02 / Host</dt><dd>Private Rooms, guest updates and gate check-in.</dd></div>
-        <div><dt>03 / Learn</dt><dd>Sales, promoter performance and attendance.</dd></div>
+        <div><dt><Ticket aria-hidden="true" size={20} /> Sell tickets</dt><dd>MoMo, cards and ticket tiers. Give the group chat a deadline.</dd></div>
+        <div><dt><MessageCircle aria-hidden="true" size={20} /> Run the night</dt><dd>Guest updates, a private Room and passes ready for the door.</dd></div>
+        <div><dt><ChartNoAxesCombined aria-hidden="true" size={20} /> Plan the next</dt><dd>See what sold, who brought the crowd and when they showed up.</dd></div>
       </dl>
     </section>
 
-    <footer className="night-footer compact-footer"><BrandMark /><p>Accra nights. From the first plan to the last track.</p><div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
+    <footer className="night-footer compact-footer"><BrandMark /><p>Accra, we’re going out. Tell the group chat.</p><div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
   </main>;
 }

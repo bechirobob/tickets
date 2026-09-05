@@ -9,6 +9,7 @@ import type { CuratedEvent } from "./events";
 import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
 import { ActionLink } from "./action";
 import { discoveryPrice } from "../lib/event-pricing";
+import PosterLink from "./poster-link";
 
 type WindowFilter = EventWindow;
 type VibeFilter = CuratedEvent["vibe"] | "All";
@@ -43,7 +44,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
   }
 
   if (!events.length) {
-    return <section className="event-empty"><Ticket size={28} /><h3>New nights are on the way.</h3><p>Check back for the next selection of reviewed events in Accra.</p><Link href="/organizer/submit">Submit an event <ArrowUpRight size={16} /></Link></section>;
+    return <section className="event-empty"><Ticket size={28} /><h3>The next plan is still cooking.</h3><p>New Accra nights will land here once they’ve been reviewed. Got one worth going out for?</p><Link href="/organizer/submit">Submit an event <ArrowUpRight size={16} /></Link></section>;
   }
 
   return <div className={`drop-explorer discovery-explorer${full ? " drop-explorer--full" : ""}`}>
@@ -63,22 +64,23 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
 
     <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
 
-    {pageEvents.length ? <div className={`drop-grid discovery-grid${full ? " drop-grid--full" : ""}`} data-count={pageEvents.length}>
+    {pageEvents.length ? <div key={`${windowFilter}:${area}:${vibe}:${page}:${search}`} className={`drop-grid discovery-grid${full ? " drop-grid--full" : ""}`} data-count={pageEvents.length}>
       {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-featured={event.slug === featuredSlug ? "true" : undefined}>
-        <Link href={`/event/${event.slug}`} className="drop-card__image">
+        <PosterLink href={`/event/${event.slug}`} className="drop-card__image">
           <Image loader={eventImageLoader} src={event.image} width={720} height={900} sizes="(max-width: 700px) 50vw, (max-width: 1000px) 33vw, 25vw" alt={`${event.isTestEvent ? "Preview image" : "Artwork"} for ${event.title}`} />
           {event.isTestEvent ? <span>Preview</span> : null}
           {event.isTestEvent ? <div className="event-artwork-type" aria-hidden="true"><small>{event.area} · Accra</small><b>{event.title}</b><em>{event.vibe}</em></div> : null}
-        </Link>
+        </PosterLink>
         <div className="drop-card__body">
           <p><time dateTime={event.startsAt}>{event.day.slice(0, 3)} {event.shortDate}</time> · {event.time.split(" — ")[0]}</p>
           <h3><Link href={`/event/${event.slug}`}>{event.title}</Link></h3>
           <small>{event.venue} · {event.area}</small>
+          <p className="drop-card__quip">{event.quip}</p>
           <div><span>{event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${discoveryPrice(event)}` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span></div>
           <ActionLink href={`/event/${event.slug}`} variant="text" aria-label={`See ${event.title}`}>View event</ActionLink>
         </div>
       </article>)}
-    </div> : <div className="drop-no-match"><CalendarDays size={22} /><h3>No nights match those filters.</h3><p>Try another date, area or music style.</p><button type="button" onClick={() => { setWindowFilter("next"); setArea("All areas"); setVibe("All"); setSearch(""); setPage(0); }}>Clear filters</button></div>}
+    </div> : <div className="drop-no-match"><CalendarDays size={22} /><h3>Even Accra has a quiet corner.</h3><p>No nights match just yet. Try another date, area or music style.</p><button type="button" onClick={() => { setWindowFilter("next"); setArea("All areas"); setVibe("All"); setSearch(""); setPage(0); }}>Clear filters</button></div>}
 
     {full && pageCount > 1 ? <nav className="drop-pagination" aria-label="Event pages"><button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}><ArrowLeft size={15} /> Previous</button><span>{page + 1} of {pageCount}</span><button type="button" disabled={page >= pageCount - 1} onClick={() => setPage((value) => value + 1)}>Next <ArrowRight size={15} /></button></nav> : null}
   </div>;
