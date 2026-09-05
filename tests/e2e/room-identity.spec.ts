@@ -24,7 +24,7 @@ test("the rendered identity stays legible and Hosts connect to the guest journey
   await expect(bridge.getByRole("link", { name: "List your event" })).toHaveAttribute("href", "/organizer/submit");
 });
 
-test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page }) => {
+test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const preview = page.locator(".room-product-phone").first();
@@ -39,6 +39,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   expect(phoneFit.right).toBeGreaterThan(0);
   expect(phoneFit.bottom).toBeGreaterThanOrEqual(0);
   expect(phoneFit.bottom).toBeLessThan(10);
+  await preview.screenshot({ path: testInfo.outputPath("homepage-room-phone.png") });
   const room = { eventSlug: "after-dark-osu", eventTitle: "After Dark: Osu", readOnlyAt: new Date(Date.now() + 86_400_000).toISOString(), readOnly: false };
   const base = { sequence: 1, roomBadge: null, kind: "message", parentId: null, pinned: false, deletedAt: null, reactions: [], createdAt: new Date().toISOString() };
   const messages = [
@@ -110,6 +111,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await trigger.click();
   const activeAccessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(activeAccessibility.violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("room-reaction-tray.png") });
   await actions.getByRole("button", { name: "Reply", exact: true }).click();
   const composer = page.getByRole("textbox", { name: "Message The Room" });
   await expect(composer).toBeFocused();
@@ -133,6 +135,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   expect(layout.streamHeight).toBeGreaterThan(150);
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("room-conversation.png") });
 
   const notifications = page.getByRole("button", { name: "Room notification settings" });
   await notifications.click();
