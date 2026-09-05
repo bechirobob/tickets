@@ -47,11 +47,18 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   await expect(hero.locator(".active-night-controls")).toHaveCount(0);
   await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting", { timeout: 6_500 });
 
+  // Freeze the scene before comparing separate elements; another 4.5-second
+  // transition must not race these reads on a slower browser runner.
+  await hero.getByRole("button", { name: "Pause featured nights slideshow", exact: true }).click();
+  await expect(hero.getByRole("button", { name: "Play featured nights slideshow", exact: true })).toHaveAttribute("aria-pressed", "true");
+
   const activeSlug = await experience.getAttribute("data-active-night");
   expect(activeSlug).toBeTruthy();
   await expect(page.locator('.drop-card[data-featured="true"]')).toHaveAttribute("data-event-slug", activeSlug!);
 
-  const heroTitle = await hero.getByRole("heading", { level: 1 }).innerText();
+  // CSS uppercases the poster heading; compare its actual event text.
+  const heroTitle = (await hero.getByRole("heading", { level: 1 }).textContent())?.trim() ?? "";
+  expect(heroTitle).toBeTruthy();
   await expect(page.locator(".room-product-phone__header b").first()).toHaveText(heroTitle);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

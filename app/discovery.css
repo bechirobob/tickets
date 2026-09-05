@@ -12,6 +12,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .recovery-page nav :is(a, button) { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; }
 .recovery-page :is(a, button):focus-visible { outline: 2px solid #10110f; outline-offset: 4px; }
 .night-support__notice { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.event-page .checkout-link.checkout-link--disabled { opacity: 1; border: 0; background: transparent; color: #55534d; cursor: auto; }
 .discovery-home { --bone: #f4f1ea; }
 .discovery-home .night-header { position: relative; height: 72px; padding: 0 5vw; background: #10110f; border-bottom: 1px solid #34352e; }
 .discovery-home .night-header__actions { gap: 28px; }
