@@ -22,7 +22,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-skip { position: absolute; left: 20px; top: -80px; z-index: 100; padding: 14px 20px; background: #d7f45b; color: #10110f; }
 .discovery-skip:focus { top: 12px; }
 
-.discovery-home .compact-hero { height: 450px; min-height: 450px; background: #10110f; }
+.discovery-home .compact-hero { height: 450px; min-height: 450px; overflow: clip; background: #10110f; }
 .discovery-home .compact-hero > img { inset: 0; width: 100%; filter: saturate(1.08) contrast(1.02); }
 .discovery-home .compact-hero__shade { background: linear-gradient(90deg, #10110f 4%, rgba(16,17,15,.8) 30%, rgba(16,17,15,.18) 72%, rgba(16,17,15,.06)), linear-gradient(0deg, rgba(16,17,15,.85), transparent 55%); }
 .discovery-home .compact-hero__copy { left: 5vw; right: auto; bottom: 91px; width: min(650px, 60%); }
