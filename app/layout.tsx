@@ -6,6 +6,7 @@ import "./globals.css";
 import "./access-polish.css";
 import "./discovery.css";
 import "./room-experience.css";
+import "./interface-finish.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),

@@ -62,6 +62,13 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   // CSS uppercases the poster heading; compare its actual event text.
   const heroTitle = (await hero.getByRole("heading", { level: 1 }).textContent())?.trim() ?? "";
   expect(heroTitle).toBeTruthy();
+  await expect(hero.getByRole("heading", { level: 1 })).toHaveCSS("text-transform", "none");
+  const primaryAction = hero.locator('.ticket-action[data-variant="primary"]');
+  await expect(primaryAction).toBeVisible();
+  const actionBounds = await primaryAction.boundingBox();
+  expect(actionBounds?.height).toBeGreaterThanOrEqual(44);
+  expect(actionBounds?.width).toBeGreaterThanOrEqual(44);
+  await expect(hero.locator('.compact-hero__price')).not.toContainText(/fee/i);
   await expect(page.locator(".room-product-phone__header b").first()).toHaveText(heroTitle);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -72,6 +79,7 @@ test("My Nights exposes secure recovery to a signed-out customer", async ({ page
   await page.goto("/my-nights");
   await expect(page.getByRole("heading", { name: /Use the email you paid with/u })).toBeVisible();
   await expect(page.getByLabel("Email used at checkout")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Bring back my Nights" })).toHaveAttribute("type", "submit");
 });
 
 test("preview events remain excluded from search while sharing metadata stays complete", async ({ page }) => {

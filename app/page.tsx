@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowUpRight, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
+import { ActionLink } from "./action";
 import ActiveNightExperience from "./active-night-experience";
 import { getPublicEvents } from "./events";
 import ScrollReveal from "./scroll-reveal";
@@ -29,7 +30,7 @@ export default async function Home() {
         <p className="night-kicker"><span /> For organisers</p>
         <h2>Your crowd.<br />Your next great night.</h2>
         <p>Ticket sales, guest updates and a smoother door. One place to run your event and understand what worked.</p>
-        <Link href="/organizer/submit">List your event <ArrowUpRight size={15} /></Link>
+        <ActionLink href="/organizer/submit">List your event</ActionLink>
       </div>
       <dl>
         <div><dt>01 / Sell</dt><dd>Ticket tiers, Mobile Money and card payments.</dd></div>

@@ -1,12 +1,11 @@
 import type { CuratedEvent } from "../app/events";
 
-/** Quote one currently available ticket/package, using checkout's minor-unit rounding. */
-export function discoveryTotalMinor(event: CuratedEvent): number {
+/** Advertise the face value of an available ticket/package. Fees belong to checkout. */
+export function discoveryFaceMinor(event: CuratedEvent): number {
   const available = event.ticketTiers.filter((tier) => tier.status === "available");
-  const face = available.length ? Math.min(...available.map((tier) => tier.priceMinor)) : event.priceFromMinor;
-  return face + Math.round(face * event.bookingFeeBasisPoints / 10_000);
+  return available.length ? Math.min(...available.map((tier) => tier.priceMinor)) : event.priceFromMinor;
 }
 
 export function discoveryPrice(event: CuratedEvent): string {
-  return new Intl.NumberFormat("en-GH", { maximumFractionDigits: 2 }).format(discoveryTotalMinor(event) / 100);
+  return new Intl.NumberFormat("en-GH", { maximumFractionDigits: 2 }).format(discoveryFaceMinor(event) / 100);
 }

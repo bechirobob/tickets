@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
+import { ActionLink } from "../action";
 import PublicNavigation from "../mobile-navigation";
 
 export const metadata: Metadata = {
@@ -32,6 +34,10 @@ export default function AboutPage() {
       </div>
     </section>
 
+    <figure className="about-atmosphere">
+      <Image src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80" width={1600} height={700} sizes="100vw" alt="A concert crowd under colourful stage lighting" unoptimized />
+    </figure>
+
     <section className="about-reasons" aria-label="Why BeCore Tickets">
       {reasons.map(([number, title, copy]) => <article key={number}>
         <span>{number}</span>
@@ -41,7 +47,7 @@ export default function AboutPage() {
 
     <section className="about-close">
       <p>We want to become Accra&apos;s first call for events and parties by making every part of the night feel better—not by simply calling ourselves the biggest.</p>
-      <div><Link href="/events">See what is dropping <ArrowUpRight size={15} /></Link><Link href="/organizer/submit">Bring us your night <ArrowUpRight size={15} /></Link></div>
+      <div><ActionLink href="/events">See what is dropping</ActionLink><ActionLink href="/organizer/submit" variant="text">Bring us your night</ActionLink></div>
     </section>
   </main>;
 }

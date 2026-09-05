@@ -30,7 +30,8 @@
   --radius-picker: 11px;
   --radius-surface: 14px;
   --radius-overlay: 18px;
-  --font-geist-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-system: -apple-system, BlinkMacSystemFont, system-ui, "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+  --font-geist-sans: var(--font-system);
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 

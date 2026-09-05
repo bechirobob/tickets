@@ -24,9 +24,9 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 
 .discovery-home .compact-hero { height: 450px; min-height: 450px; overflow: clip; background: #10110f; }
 .discovery-home .compact-hero > img { inset: 0; width: 100%; filter: saturate(1.08) contrast(1.02); }
-.discovery-home .compact-hero__shade { background: linear-gradient(90deg, #10110f 4%, rgba(16,17,15,.8) 30%, rgba(16,17,15,.18) 72%, rgba(16,17,15,.06)), linear-gradient(0deg, rgba(16,17,15,.85), transparent 55%); }
+.discovery-home .compact-hero__shade { background: linear-gradient(90deg, rgba(10,12,10,.9), rgba(10,12,10,.76) 37%, rgba(10,12,10,.12) 78%), linear-gradient(0deg, rgba(10,12,10,.6), transparent 45%); }
 .discovery-home .compact-hero__copy { left: 5vw; right: auto; bottom: 91px; width: min(650px, 60%); }
-.discovery-home .compact-hero__copy h1 { max-width: 640px; font-size: clamp(46px, 6.3vw, 86px); line-height: .92; font-weight: 850; letter-spacing: -.065em; text-wrap: balance; text-transform: uppercase; }
+.discovery-home .compact-hero__copy h1 { max-width: 640px; font-size: clamp(46px, 6.3vw, 86px); line-height: 1.02; font-weight: 600; letter-spacing: -.045em; text-wrap: balance; text-transform: none; }
 .discovery-home .compact-hero__copy > .night-kicker { margin-bottom: 22px; color: #e8e5dc; font-size: 12px; letter-spacing: .1em; }
 .discovery-home .compact-hero__copy > p:not(.night-kicker) { margin-top: 20px; color: #f3f0e8; font-size: 15px; line-height: 1.45; }
 .discovery-home .compact-hero__copy > .hero-venue { margin-top: 6px; color: #c3c2b9; }
@@ -62,12 +62,12 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-explorer button:focus-visible,
 .discovery-explorer a:focus-visible { outline: 2px solid #10110f; outline-offset: 4px; }
 .discovery-result-count { margin: 8px 0 16px; font-size: 12px; color: #656259; }
-.discovery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px 20px; }
+.discovery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px 24px; }
 .discovery-grid .drop-card { --poster-ink: #d7f45b; }
 .discovery-grid .drop-card[data-vibe="Day party"] { --poster-ink: #f4ce78; }
 .discovery-grid .drop-card[data-vibe="Alté"] { --poster-ink: #c8d9f2; }
 .discovery-grid .drop-card[data-vibe="Amapiano"] { --poster-ink: #e2c9eb; }
-.discovery-grid .drop-card__image { height: auto; aspect-ratio: 1 / 1; isolation: isolate; border: 0; border-radius: 0; background: #151610; }
+.discovery-grid .drop-card__image { height: auto; aspect-ratio: 1 / 1; isolation: isolate; border: 0; border-radius: 12px; background: #151610; }
 .discovery-grid .drop-card__image img { width: 100%; height: 100%; filter: none; }
 .discovery-grid .drop-card__image::before { display: none; }
 .discovery-grid .drop-card__image::after { height: 100%; background: linear-gradient(0deg, rgba(9,10,9,.86), rgba(9,10,9,.12) 90%); }
@@ -75,11 +75,11 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-grid .drop-card__image > span { top: 12px; left: 12px; background: #10110f; color: #f4f1ea; font-size: 12px; letter-spacing: .03em; }
 .event-artwork-type { position: absolute; z-index: 2; inset: 56px 20px 20px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; color: var(--poster-ink); }
 .event-artwork-type small { font-size: 12px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
-.event-artwork-type b { max-width: 320px; font-size: clamp(28px, 3.3vw, 48px); line-height: .95; font-weight: 850; letter-spacing: -.06em; text-transform: uppercase; text-wrap: balance; }
+.event-artwork-type b { max-width: 320px; font-size: clamp(28px, 3.3vw, 48px); line-height: .95; font-weight: 650; letter-spacing: -.035em; text-transform: uppercase; text-wrap: balance; }
 .event-artwork-type em { font-size: 12px; font-style: normal; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; }
 .discovery-grid .drop-card__body { padding-top: 14px; }
 .discovery-grid .drop-card__body > p { margin: 0 0 8px; color: #94401d; font-size: 12px; letter-spacing: .025em; line-height: 1.5; }
-.discovery-grid .drop-card h3 { margin: 0; font-size: 22px; font-weight: 750; letter-spacing: -.025em; line-height: 1.2; }
+.discovery-grid .drop-card h3 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.025em; line-height: 1.2; }
 .discovery-grid .drop-card__body > small { display: block; margin-top: 7px; color: #656259; font-size: 14px; white-space: normal; line-height: 1.45; }
 .discovery-grid .drop-card__body > div { margin-top: 8px; color: #24251f; font-size: 14px; font-weight: 650; }
 .discovery-grid .drop-card__body > a { min-height: 44px; margin-top: 4px; padding: 0; border: 0; font-size: 13px; }
@@ -114,7 +114,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .night-drop--compact,
 .discovery-directory { background: #141511; color: #f4f1ea; color-scheme: dark; }
 .discovery-home .compact-section-head { border-top: 0; padding-top: 8px; }
-.discovery-home .compact-section-head h2 { font-weight: 850; text-transform: uppercase; }
+.discovery-home .compact-section-head h2 { font-weight: 600; text-transform: none; }
 .discovery-home .compact-section-head .night-kicker,
 .discovery-directory .directory-intro .eyebrow { color: var(--acid); }
 .discovery-home .compact-section-head > a,
@@ -192,7 +192,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
   .discovery-home .night-header .night-desktop-links { display: none; }
   .discovery-home .compact-hero { height: 430px; min-height: 430px; }
   .discovery-home .compact-hero > img { width: 100%; }
-  .discovery-home .compact-hero__shade { background: linear-gradient(0deg, #10110f 0%, rgba(16,17,15,.8) 42%, rgba(16,17,15,.26) 100%); }
+  .discovery-home .compact-hero__shade { background: linear-gradient(0deg, rgba(10,12,10,.97), rgba(10,12,10,.76) 48%, rgba(10,12,10,.16)); }
   .discovery-home .compact-hero__copy { left: 18px; right: 18px; bottom: 88px; width: auto; }
   .discovery-home .compact-hero__copy h1 { max-width: 520px; font-size: clamp(42px, 10vw, 58px); line-height: 1; }
   .discovery-home .compact-hero__copy > .night-kicker { margin-bottom: 16px; font-size: 12px; }

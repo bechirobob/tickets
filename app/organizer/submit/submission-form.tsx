@@ -1,5 +1,7 @@
 "use client";
 
+import { ActionButton } from "../../action";
+
 import { CheckCircle2, Loader2, Send, Upload } from "lucide-react";
 import { FormEvent, useState } from "react";
 
@@ -145,7 +147,7 @@ export default function PartySubmissionForm() {
 
       <div className="submission-submit">
         <p>Good concept? Clear venue? Real line-up? Lovely. Send it over.</p>
-        <button disabled={state === "preparing" || state === "sending"}>{state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : <Send size={17} />} {state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : "Submit for review"}</button>
+        <ActionButton type="submit" disabled={state === "preparing" || state === "sending"} aria-busy={state === "preparing" || state === "sending"} icon={state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : <Send size={17} />}>{state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : "Submit for review"}</ActionButton>
       </div>
       {state === "error" && <p className="submission-error" role="alert">{message}</p>}
     </form>
