@@ -80,6 +80,9 @@ dialog:is(.room-modal, .room-vip-modal) button { min-height: 44px; }
 .room-notification-option > span { display: grid; gap: 5px; font-size: 14px; }
 .room-notification-option small { color: #686257; font-size: 12px; }
 .room-notification-option button { min-width: 60px; font: inherit; font-size: 13px; border-radius: 4px; }
+.room-modal.room-notification-settings .room-notification-option > span { display: grid; color: #252620; font-size: 14px; }
+.room-modal.room-notification-settings .room-notification-option b { font-size: 14px; line-height: 1.4; }
+.room-modal.room-notification-settings .room-notification-option small { display: block; color: #686257; font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; }
 .room-gate > button { min-height: 44px; padding: 0 18px; border: 1px solid #55564c; background: transparent; color: inherit; font: inherit; }
 
 /* The illustrative phones use the same open Host update treatment. */
