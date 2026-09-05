@@ -7,6 +7,7 @@ import { eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import { findPrimaryHost } from "../../../lib/event-experience";
+import { ActionLink } from "../../action";
 import EventActions from "./event-actions";
 import MemberActions from "../../member-actions";
 import WaitlistControl from "./waitlist-control";
@@ -88,8 +89,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       <aside className="compact-ticket-panel">
         <div><p className="eyebrow">Choose your access</p>{event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => <section key={tier.id}><div><b>{tier.name}</b><span>{tier.description}{tier.status === "available" && tier.remainingAdmissions <= Math.max(5, Math.ceil(tier.capacityAdmissions * 0.1)) ? ` · Only ${tier.remainingAdmissions} left` : ""}</span>{tier.roomBadge === "VIP" ? <small className="tier-vip-note"><Gem size={11} /> VIP identity in The Room · private Host concierge when enabled</small> : null}</div><strong>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</strong></section>)}</div>
-        {event.eventState === "cancelled" ? <p className="event-state-notice">This event has been cancelled. Existing customers will receive refund instructions.</p> : event.eventState === "postponed" ? <p className="event-state-notice">This event has been postponed. A new date will be published after confirmation.</p> : available ? <Link href={`/checkout/${slug}${promoterCode ? `?ref=${encodeURIComponent(promoterCode)}` : ""}`} className="checkout-link">Get tickets <Ticket size={17} /></Link> : <span className="checkout-link checkout-link--disabled">Tickets are not currently available</span>}
-        <p className="secure-note"><ShieldCheck size={14} /> Secure payment · Booking fee shown before you pay</p>
+        {event.eventState === "cancelled" ? <p className="event-state-notice">This event has been cancelled. Existing customers will receive refund instructions.</p> : event.eventState === "postponed" ? <p className="event-state-notice">This event has been postponed. A new date will be published after confirmation.</p> : available ? <ActionLink href={`/checkout/${slug}${promoterCode ? `?ref=${encodeURIComponent(promoterCode)}` : ""}`} className="checkout-link" icon={<Ticket size={18} />}>Get tickets</ActionLink> : <span className="checkout-link checkout-link--disabled">Tickets are not currently available</span>}
+        <p className="secure-note"><ShieldCheck size={14} /> Secure payment with Paystack</p>
         <div className="ticket-unlocks"><MessageCircle size={17} /><span><b>Your ticket unlocks the night</b>My Nights, Before the Night, updates, The Room and Flashes.</span></div>
         <MemberActions eventSlug={event.slug} hostSlug={host?.slug} />
         <WaitlistControl eventSlug={event.slug} tiers={event.ticketTiers} />

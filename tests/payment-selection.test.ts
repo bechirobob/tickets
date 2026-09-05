@@ -4,7 +4,7 @@ import { POST as initializePayment } from "../app/api/payments/initialize/route"
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { GET as bookingFeeQuote } from "../app/api/config/booking-fee/route";
 import { findCuratedEvent, getPublicEvents } from "../app/events";
-import { discoveryTotalMinor } from "../lib/event-pricing";
+import { discoveryFaceMinor } from "../lib/event-pricing";
 
 const eventSlug = "inventory-payment-test";
 
@@ -128,7 +128,7 @@ describe("payment ticket validation", () => {
     expect(await quote.json()).toMatchObject({ percentage: 11 });
     const advertised = await findCuratedEvent(eventSlug);
     expect(advertised?.bookingFeeBasisPoints).toBe(1100);
-    expect(discoveryTotalMinor(advertised!)).toBe(13320);
+    expect(discoveryFaceMinor(advertised!)).toBe(12000);
     expect((await getPublicEvents()).find((event) => event.slug === eventSlug)?.bookingFeeBasisPoints).toBe(1100);
     const request = paymentRequest(eventSlug, "general");
     const body = await request.json() as Record<string, unknown>;

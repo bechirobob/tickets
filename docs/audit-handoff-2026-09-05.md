@@ -1,5 +1,13 @@
 # Audit/design handoff — 5 September 2026
 
+## Customer interface finish and original ticket prices
+
+The user superseded fee-inclusive discovery: advertise the original available ticket/package price, with booking fees shown only at checkout. `discoveryFaceMinor` now selects the cheapest available face value without adding any fee; checkout fee calculation and changed-total validation remain intact. Removed fee copy from the homepage, directory and event ticket panel.
+
+Added shared `ActionLink`/`ActionButton` controls to the hero, event cards, ticket purchase, checkout, About, Hosts, recovery and organiser submission. Primary actions use modest rounded corners, deliberate label/icon spacing and press feedback; secondary navigation stays open. Native button/submit/disabled/busy semantics, keyboard focus and reduced-motion support are retained. No font binaries are hosted: Apple's system font is requested on Apple devices, with native fallbacks elsewhere. Lighter heading weights, sentence case, optical sizing and less compressed tracking supply the intended change in typography. Photography is brighter, artwork has subtle corner treatment, and About includes an atmospheric concert strip.
+
+Baseline production SHA: `64727a2d953da0d1e77a278c63e8ad8db8af1488`. Rollback Worker: `4f32dd5e-7d23-4d3c-9ce4-be458302783e`. No migrations, secrets or payment-provider changes. Local checks: lint, TypeScript, 43 UI contracts, 90 Worker/D1 tests and build/artifact checks passed during development. Final exact-commit CI remains required. The cloud browser can inspect production, but local preview returned `ERR_BLOCKED_BY_CLIENT`; do not present local visual acceptance as completed. Production browser results will be recorded after release. Existing untracked `test-results/` is excluded.
+
 ## Current Room refinement candidate
 
 The earlier pre-release holds below are historical. PRs #77 and #79 were approved and deployed. Before this refinement, production revision was `7e5409df95ff54bfa47e494c5eda1ba3feb51bf8`, Worker `21e02b37-a3a3-401a-bba1-96a9b6474737`; production browser run `33959163562` passed all 105 cases across desktop Chrome, Pixel Chrome and iPhone WebKit.

@@ -21,6 +21,7 @@ import EventExplorer from "./event-explorer";
 import { eventImageUrl } from "./event-images";
 import type { CuratedEvent } from "./events";
 import RoomPreviewCarousel from "./room-preview-carousel";
+import { ActionLink } from "./action";
 import { discoveryPrice } from "../lib/event-pricing";
 
 const sceneInterval = 4_500;
@@ -179,9 +180,9 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
         <h1>{active?.title ?? "Plans, sorted."}</h1>
         <p>{active ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
-        {active ? <div><Link href={`/event/${active.slug}`}>Explore the night <ArrowRight size={16} /></Link>{active.ticketTiers.some((tier) => tier.status === "available") ? <Link href={`/checkout/${active.slug}`}>Get tickets <Ticket size={15} /></Link> : <Link href="/events">Browse events <ArrowRight size={15} /></Link>}</div> : <Link href="/events" className="compact-hero__single">Explore The Drop <ArrowRight size={15} /></Link>}
+        {active ? <div className="hero-actions">{active.ticketTiers.some((tier) => tier.status === "available") ? <ActionLink href={`/checkout/${active.slug}`} icon={<Ticket size={18} />}>Get tickets</ActionLink> : <ActionLink href="/events">Browse events</ActionLink>}<ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink></div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
       </div>
-      {active ? <p className="compact-hero__price" aria-label={`From GH₵${discoveryPrice(active)}, including booking fee`}>From <b>GH₵{discoveryPrice(active)}</b></p> : null}
+      {active ? <p className="compact-hero__price" aria-label={`Tickets from GH₵${discoveryPrice(active)}`}>From <b>GH₵{discoveryPrice(active)}</b></p> : null}
       {hasScenes ? <button
         type="button"
         className="active-night-autoplay-toggle"

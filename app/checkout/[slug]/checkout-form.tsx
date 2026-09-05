@@ -5,6 +5,7 @@ import Image from "next/image";
 import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ActionButton } from "../../action";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import { trackProductMetric } from "../../../lib/client-analytics";
@@ -208,7 +209,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <button type="button" className="pay-button" onClick={continueToPay} disabled={isPaying || !acceptedPolicies || !paymentMethod}>{isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</button>
+          <ActionButton type="button" className="pay-button" aria-busy={isPaying} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={isPaying || !acceptedPolicies || !paymentMethod}>{isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
           {message && <p className="payment-message" role="status">{message}</p>}
           <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
         </aside>
