@@ -57,7 +57,7 @@ export default function NotificationsClient() {
   }
 
   const unread = items?.filter((item) => !item.readAt).length ?? 0;
-  return <main className="notification-page buzz-page">
+  return <main className="buzz-page">
     <header className="directory-header"><Link href="/my-nights" aria-label="Back to My Nights"><ArrowLeft size={16} /><span className="directory-header__back-label">My Nights</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation /></header>
     <AccountNavigation />
     <section className="buzz-shell">
