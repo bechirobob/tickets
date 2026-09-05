@@ -1,5 +1,6 @@
 "use client";
 
+import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -142,7 +143,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
   return (
     <main className="organizer-workspace">
       <header className="organizer-workspace__header">
-        <Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link>
+        <Link href="/" className="night-brand-link"><BrandLogo /></Link>
         <WorkspaceJump active="/organizer/workspace" role={role} compact />
         <div><span><BadgeCheck size={15} /> {actor}</span><button onClick={signOut}><LogOut size={15} /> Sign out</button></div>
       </header>

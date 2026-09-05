@@ -15,6 +15,7 @@ const publicPages = [
   "/hosts",
   "/organizer/submit",
   "/my-nights",
+  "/notifications",
   "/tickets",
   "/account/privacy",
   "/event/after-dark-osu",

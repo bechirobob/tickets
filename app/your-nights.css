@@ -1,0 +1,107 @@
+/* The member area carries the same identity, with clear destinations and quiet controls. */
+.account-navigation { min-height: 54px; padding: 0 5vw; display: flex; align-items: stretch; gap: 28px; border-bottom: 1px solid #705568; background: #281b2b; color: #e1cad8; }
+.account-navigation a { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 0; border-bottom: 2px solid transparent; color: inherit; font-size: 14px; font-weight: 500; }
+.account-navigation a[aria-current='page'] { color: #e4f18b; border-bottom-color: #e4f18b; }
+.account-navigation a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.my-nights-page, .buzz-page { background: #281b2b url('/textures/print-grain.svg') repeat; color: #f8eee7; --action-surface: #e4f18b; --action-ink: #281b2b; }
+.my-nights-page .directory-header, .buzz-page > .directory-header, .account-privacy .directory-header { background: #281b2b; border-color: #705568; color: #f8eee7; }
+.my-nights-header-actions { gap: 8px; }
+.my-nights-header-actions .notification-bell, .night-hub__header-actions .notification-bell { color: #f6e5ed; border-color: #97798a; }
+.my-nights-shell { position: relative; isolation: isolate; padding-top: 44px; }
+.my-nights-shell:has(.my-nights-locked)::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, #281b2b 8%, rgba(40,27,43,.97) 47%, rgba(40,27,43,.37)), url('/atmospheres/behind-the-night.webp') right center / cover; }
+.my-nights-shell > header h1 { max-width: 850px; font-size: clamp(38px, 4.7vw, 62px); line-height: 1.04; font-weight: 600; letter-spacing: -.045em; overflow-wrap: anywhere; }
+.my-nights-shell .eyebrow { color: #e7bf9f; }
+.my-nights-intro, .my-nights-shell > header > span { color: #dbc5d3; }
+.my-nights-locked { min-height: 350px; max-width: 670px; padding: 40px 0 20px; place-content: start; justify-items: start; text-align: left; color: #e6cddc; }
+.my-nights-locked > svg { color: #efc5a3; }
+.my-nights-locked h2 { max-width: 520px; margin: 18px 0 12px; color: #fff0e4; font-size: 30px; font-weight: 550; line-height: 1.15; }
+.my-nights-locked > p { max-width: 500px; color: #ddc5d4; }
+.my-nights-recovery { width: min(600px, 100%); gap: 12px; }
+.my-nights-recovery label { color: #edd6e3; font-size: 12px; }
+.my-nights-recovery input { min-height: 48px; background: #f9eee7; color: #35232d; border: 1px solid #e3c8b7; }
+.my-nights-recovery input::placeholder { color: #71576b; opacity: 1; }
+.my-nights-recovery input:focus-visible { outline: 2px solid #e4f18b; outline-offset: 4px; }
+.my-nights-locked > div { flex-wrap: wrap; gap: 24px; }
+.my-nights-locked a, .my-nights-empty a { color: #e4f18b; border-color: #e4f18b; font-size: 14px; min-height: 44px; display: inline-flex; align-items: center; }
+.my-nights-locked > small { color: #ead1df; }
+.my-nights-locked .my-nights-recovery-error { color: #ffcbbe; }
+.my-nights-tabs { margin-top: 28px; border-color: #806177; }
+.my-nights-tabs button { color: #d7bfce; font-size: 15px; }
+.my-nights-tabs button[aria-current='page'] { color: #e4f18b; border-color: #e4f18b; }
+.my-nights-list article { padding-block: 26px; border-color: #71536a; grid-template-columns: 190px minmax(0, 1fr) auto; }
+.my-nights-list img { width: 190px; height: 150px; object-fit: cover; border-radius: 8px; }
+.my-nights-list article > div > p { color: #efc5a3; }
+.my-nights-list article > div > span, .my-nights-list small, .my-nights-list aside > span { color: #dbc5d3; }
+.my-nights-list .my-nights-actions > a:last-child { color: #e7d1df; border-color: #bb97af; min-height: 44px; display: inline-flex; align-items: center; }
+.my-nights-list aside > a { color: #e4f18b; }
+.my-nights-empty { color: #ddc5d4; }
+.my-nights-empty h2 { color: #f8eee7; }
+.my-nights-recovered { background: #344130; color: #edf2d9; border-color: #849467; }
+.customer-dock { background: #281b2b; border-color: #705568; }
+.customer-dock a { color: #dbc5d3; }
+.customer-dock a[aria-current='page'] { color: #e4f18b; }
+.night-hub__header { position: relative; z-index: 30; background: #281b2b; gap: 12px; }
+.night-hub__header > a.brand-mark { justify-self: center; color: #fff0e4; }
+.night-hub__header-actions { gap: 8px; }
+.night-hub__header .brand-logo, .night-hub__header .brand-logo__type { margin: 0; color: inherit; }
+.night-hub__hero img { filter: brightness(.64) saturate(.98); }
+.night-hub__hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(40,27,43,.8), transparent), linear-gradient(0deg, rgba(40,27,43,.65), transparent); pointer-events: none; }
+.night-hub__hero > div, .night-hub__hero .night-hub__countdown { z-index: 1; }
+.night-hub__tabs { background: #281b2b; border-color: #715569; }
+.night-hub__tabs button { color: #ddc7d5; }
+.night-hub__tabs button[aria-current='page'], .night-hub__tabs > a { color: #e4f18b; border-color: #e4f18b; }
+.night-hub__hero h1 { line-height: 1.04; font-weight: 600; }
+.buzz-page { padding: 0 0 70px; }
+.buzz-page > .directory-header { min-height: 66px; height: 66px; padding: 0 4vw; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.buzz-page > .directory-header > a { align-self: center; }
+.buzz-page > .directory-header span { color: inherit; }
+.buzz-page > .directory-header .brand-mark { color: #f8eee7; }
+.buzz-page > .directory-header .night-mobile-menu__trigger { margin: 0; border: 0; padding: 0; }
+.buzz-page > .buzz-shell { max-width: 1100px; margin: 0 auto; padding: 42px 5vw 0; }
+.buzz-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 28px; border-bottom: 1px solid #806177; }
+.buzz-intro .eyebrow { color: #efc5a3; font-size: 12px; }
+.buzz-intro h1 { margin: 0 0 14px; font-size: clamp(46px, 6vw, 70px); font-weight: 600; line-height: 1; letter-spacing: -.045em; }
+.buzz-page .buzz-intro > div > p:not(.eyebrow) { max-width: 490px; font-size: 16px; color: #dfc8d8; line-height: 1.6; }
+.buzz-tools { display: grid; justify-items: end; gap: 6px; flex: 0 0 auto; }
+.buzz-tools > span { font-size: 13px; color: #e3ccda; }
+.buzz-page .buzz-feedback, .buzz-page .buzz-error { padding: 16px; margin-top: 20px; border: 1px solid #9b786e; border-radius: 8px; color: #ffdac7; background: #402b33; font-size: 15px; line-height: 1.5; }
+.buzz-feedback button { min-height: 44px; border: 0; background: transparent; color: inherit; text-decoration: underline; margin-left: 14px; }
+.buzz-list > a { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 24px 0; border-bottom: 1px solid #705368; color: #fff0e4; }
+.buzz-list > a:focus-visible { outline: 2px solid #e4f18b; outline-offset: 5px; }
+.buzz-list .buzz-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #8e6c83; color: #f4d8e7; }
+.buzz-list .buzz-icon[data-kind='host'] { color: #f5c69f; border-color: #ad8266; }
+.buzz-page .buzz-list h2 { margin: 7px 0; font-size: 20px; font-weight: 550; letter-spacing: -.02em; }
+.buzz-page .buzz-list p { color: #e3cbda; font-size: 15px; line-height: 1.6; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.buzz-page .buzz-list small { color: #e1b99d; font-size: 12px; letter-spacing: .045em; }
+.buzz-page .buzz-list time { margin-top: 10px; color: #c9afc2; font-size: 12px; }
+.buzz-unread { color: #e4f18b; padding-top: 6px; font-size: 12px; }
+.buzz-page .buzz-state { min-height: 350px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 18px; padding-block: 35px; }
+.buzz-state > svg { color: #efc5a3; }
+.buzz-page .buzz-state h2 { margin: 0; font-size: clamp(28px, 3vw, 36px); font-weight: 550; letter-spacing: -.03em; }
+.buzz-page .buzz-state p { max-width: 530px; color: #ddc6d4; font-size: 16px; line-height: 1.65; white-space: normal; }
+@media (max-width: 700px) {
+  .account-navigation { padding-inline: 20px; gap: 24px; }
+  .account-navigation a { font-size: 13px; gap: 6px; }
+  .my-nights-shell { padding: 30px 20px 60px; }
+  .my-nights-shell:has(.my-nights-locked)::before { background-image: linear-gradient(90deg, rgba(40,27,43,.97), rgba(40,27,43,.86)), url('/atmospheres/behind-the-night.webp'); }
+  .my-nights-shell > header h1 { font-size: 38px; }
+  .my-nights-locked { padding-top: 28px; min-height: 0; }
+  .my-nights-locked h2 { font-size: 27px; }
+  .my-nights-recovery { grid-template-columns: 1fr; }
+  .my-nights-list article { grid-template-columns: 90px minmax(0, 1fr); gap: 16px; }
+  .my-nights-list img { width: 90px; height: 114px; }
+  .my-nights-list h2 { font-size: 25px; }
+  .my-nights-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+  .night-hub__header { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .night-hub__header-actions > a:first-of-type { display: none; }
+  .night-hub__header-actions > a:last-child { display: grid; }
+  .buzz-page > .directory-header { padding-inline: 16px; }
+  .buzz-page > .directory-header > a:first-child { font-size: 0; }
+  .buzz-page > .buzz-shell { padding: 32px 20px 0; }
+  .buzz-intro { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .buzz-tools { width: 100%; display: flex; align-items: center; justify-content: space-between; }
+  .buzz-list > a { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; padding-block: 22px; }
+  .buzz-list .buzz-icon { width: 36px; height: 36px; }
+  .buzz-page .buzz-list h2 { font-size: 18px; }
+  .buzz-page .buzz-list p { font-size: 14px; }
+}

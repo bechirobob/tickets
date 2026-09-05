@@ -13,7 +13,7 @@ export default function CustomerDock() {
   const items = [
     { href: "/", label: "Home", icon: House, active: pathname === "/" },
     { href: "/events", label: "The Drop", icon: CalendarDays, active: pathname === "/events" || pathname.startsWith("/event/") },
-    { href: "/my-nights", label: "My Nights", icon: Ticket, active: pathname.startsWith("/my-nights") || pathname.startsWith("/tickets") || pathname.startsWith("/account/") },
+    { href: "/my-nights", label: "My Nights", icon: Ticket, active: pathname.startsWith("/my-nights") || pathname.startsWith("/tickets") || pathname.startsWith("/account/") || pathname.startsWith("/notifications") },
   ];
 
   return <nav className="customer-dock" aria-label="Customer navigation">

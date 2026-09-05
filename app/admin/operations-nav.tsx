@@ -1,5 +1,6 @@
 "use client";
 
+import BrandLogo from "../brand-logo";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, ShieldCheck } from "lucide-react";
@@ -11,7 +12,7 @@ export default function OperationsNav({ actor, role, active }: { actor: string; 
   const router = useRouter();
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); router.push("/"); router.refresh(); }
   return <aside className="curation-nav">
-    <Link href="/" className="night-brand-link"><span className="night-brand"><b>B</b><span>BeCore<br />Tickets</span></span></Link>
+    <Link href="/" className="night-brand-link"><BrandLogo /></Link>
     <WorkspaceJump active={active} role={role} compact />
     <nav aria-label="Workspace navigation"><span>{STAFF_ROLE_DEFINITIONS[role].workspace}</span>{STAFF_WORKSPACE_LINKS.filter((item) => (item.roles as readonly StaffRole[]).includes(role)).map((item) => <Link key={item.href} aria-current={active === item.href ? "page" : undefined} className={active === item.href ? "active" : ""} href={item.href}>{item.href === "/admin/operations" && role === "finance" ? "Finance overview" : item.label}</Link>)}<Link aria-current={active === "/admin/account" ? "page" : undefined} className={active === "/admin/account" ? "active" : ""} href="/admin/account">My account</Link></nav>
     <p><ShieldCheck size={14} /> {STAFF_ROLE_DEFINITIONS[role].label}<br /><small>{actor}</small></p>

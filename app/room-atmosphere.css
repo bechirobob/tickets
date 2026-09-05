@@ -1,0 +1,115 @@
+/* A private listening lounge. Solid message surfaces protect contrast over the render. */
+.room-page, .room-gate {
+  background: #281b2b url('/atmospheres/the-room.webp') center / cover no-repeat;
+  color: #fff0e4;
+}
+.room-page { color-scheme: dark; }
+.room-page > .room-header { min-height: 86px; padding: 12px max(20px, 4vw); background: rgba(35,23,34,.94); border-bottom: 1px solid #735762; }
+.room-header > .room-header__identity { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 12px; text-align: left; }
+.room-header__identity > img { width: 42px; height: 50px; flex: 0 0 auto; object-fit: cover; border-radius: 6px; }
+.room-header__identity > div { min-width: 0; }
+.room-header > .room-header__identity small { color: #efbf99; font-size: 12px; letter-spacing: .14em; }
+.room-header > .room-header__identity strong { color: #fff1e7; font-weight: 600; }
+.room-header > .room-header__identity span, .room-header > a { color: #d8c1ce; }
+.room-header > .room-header__activity > :is(span, button), .room-header > .room-header__activity > span > b { color: #f0d9e2; }
+.room-page .room-trust { background: rgba(35,23,34,.94); padding-top: 6px; padding-bottom: 6px; gap: 8px; }
+.room-page .room-trust :is(b, span, i) { color: #ddc9d6; }
+.room-page .room-trust > svg, .room-page .room-trust i.live { color: #dcec9c; }
+.room-page .room-pinned { padding: 0 14px; border: 1px solid #806459; border-radius: 8px; background: #3b292d; margin-top: 8px; }
+.room-page .room-pinned summary, .room-page .room-pinned > p { color: #fff0df; }
+.room-page .room-pinned summary > svg { color: #edc29a; }
+.room-page .room-pinned summary span { color: #e4cdc2; }
+.room-page .room-notice { background: #5c3b48; color: #fff0e4; border: 1px solid #9a747e; border-radius: 8px; }
+.room-page .room-stream { padding: 18px 24px 30px; scrollbar-color: #947784 transparent; }
+.room-page .room-day { margin: 12px 0 20px; color: #e1ccd6; }
+.room-page .room-day time { padding: 6px 12px; border-radius: 20px; background: #32232f; }
+.room-page .room-message { padding-block: 10px; gap: 10px; }
+.room-page .room-message.grouped { padding-top: 0; }
+.room-page .room-avatar { width: 30px; height: 30px; flex-basis: 30px; background: #604347; color: #fff0df; }
+.room-page .room-message__body > header b { color: #f3dde9; }
+.room-page .room-message__body > header :is(time, span) { color: #d7bdcf; font-size: 12px; }
+.room-page .room-message__body > header span { background: transparent; }
+.room-page .room-bubble { padding: 12px 15px; background: #493340; color: #fff0e9; border: 1px solid #6e5164; border-radius: 14px; }
+.room-page .room-bubble > p { line-height: 1.55; }
+.room-page .room-message.own .room-bubble { background: #e9cbb6; color: #35232b; border-color: #f3dac6; border-radius: 14px; }
+.room-page .room-bubble > p.removed { color: inherit; opacity: .8; }
+.room-page .room-message-menu { color: #e0c4d6; }
+.room-page .room-reaction-counts > button { color: #ecd5e4; }
+.room-page .room-reaction-counts > button[aria-pressed='true'] { color: #e4f18b; }
+.room-page .room-message.announcement { max-width: 740px; margin: 20px auto; padding: 15px; background: #412e32; border: 1px solid #9a7865; border-radius: 12px; }
+.room-page .room-message.announcement > .room-avatar { color: #f1ca9e; background: transparent; margin-top: 0; }
+.room-page .room-message.announcement .room-message__body > header b { color: #f3cca1; font-size: 13px; }
+.room-page .room-message.announcement .room-message__body > header time { color: #ddc5bd; }
+.room-page .room-message.announcement .room-bubble { padding: 0; border: 0; background: transparent; color: #fff0e4; }
+.room-page .room-reply-preview, .room-page .room-message.own .room-reply-preview { color: #e2c8d7; }
+.room-page .room-composer { width: min(880px, 100%); margin: 0 auto; padding: 12px 24px max(16px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, #281b2b 40%); }
+.room-page .room-composer > form { min-height: 60px; padding: 7px; border: 1px solid #a27e88; border-radius: 16px; background: #352531; }
+.room-page .room-composer > form:focus-within { border-color: #f1c3a0; }
+.room-page .room-composer form > :is(button, .room-camera, .room-concierge) { color: #efd4bf; }
+.room-page .room-composer > form > textarea { background: transparent; color: #fff0e8; }
+.room-page .room-composer textarea::placeholder { color: #d5bcca; opacity: 1; }
+.room-page .room-composer > form > button:last-child { background: #edc19f; color: #35232b; border-radius: 11px; }
+.room-page .room-composer > form > button:last-child:disabled { background: #5b4253; color: #c4a6b8; }
+.room-page .room-composer > :is(div, p), .room-page .room-composer > div button { color: #efd8e5; }
+.room-page .room-composer > form > span { font-size: 12px; color: #f3cba8; }
+.room-page .room-latest { background: #edc19f; color: #35232b; border: 0; border-radius: 10px; }
+.room-page .room-empty { padding: 32px 12px; }
+.room-page .room-empty p, .room-gate p { color: #e3cad8; }
+.room-page .room-empty > svg, .room-gate > svg, .room-gate a { color: #f2c39d; }
+.room-page :is(button, summary, a):focus-visible { outline-color: #efc09b; }
+.room-page .room-flash-message__meta :is(b, time) { color: #dfc7d5; font-size: 12px; }
+.room-page .room-flash-message__body > button { background: #553749; border: 1px solid #a9788c; border-radius: 12px; color: #fff0e4; }
+.room-page .room-flash-message__closed :is(i, b) { color: #ffe8d8; }
+.room-page .room-flashes-expired { color: #e6cedc; }
+/* Native dialogs keep their legible light controls above the dark Room. */
+.room-page :is(.room-modal, .room-vip-modal, .flash-modal, .flash-gallery-modal) { color-scheme: light; }
+
+/* The homepage phones show the actual Room materials and message hierarchy. */
+.discovery-home .room-product-phone__display { background: #281b2b url('/atmospheres/the-room.webp') 27% center / auto 100%; color: #fff0e4; }
+.discovery-home .room-product-phone__screen { background: transparent; color: #fff0e4; }
+.discovery-home .room-product-phone__hardware { color: #fff0e4; background: #281b2b; }
+.discovery-home .room-product-phone__home { background: #f5dbcb; }
+.discovery-home .room-product-phone__header { background: #30202d; border-color: #6d5063; }
+.discovery-home .room-product-phone__header small { color: #f2c39d; }
+.discovery-home .room-product-phone__header > span { color: #e1c6d5; }
+.discovery-home .scene-message .scene-message__body { background: transparent; }
+.discovery-home .scene-message .scene-message__bubble { background: #493340; color: #fff0e9; border: 1px solid #6e5164; }
+.discovery-home .scene-message--own .scene-message__bubble { background: #e9cbb6; color: #35232b; border-color: #f3dac6; }
+.discovery-home .scene-message .scene-message__meta, .discovery-home .scene-message__reactions b { color: #ead1e1; }
+.discovery-home .scene-message > span { background: #604347; color: #fff0df; }
+.discovery-home .scene-host { max-width: 100%; padding: 9px 7px; background: #412e32; border: 1px solid #9a7865; border-radius: 8px; }
+.discovery-home .scene-host :is(svg, small, strong, .scene-host__mark) { color: #f3cca1; }
+.discovery-home .scene-host .scene-host__content > header :is(time, small) { color: #e9c4aa; }
+.discovery-home .scene-host .scene-host__content > p { color: #fff0e4; }
+.discovery-home .scene-host .scene-host__content > p span { color: #f1ddd3; }
+.discovery-home .room-product-phone__composer { background: #352531; border-color: #806070; color: #efd4bf; }
+.discovery-home .room-product-phone__composer > span { color: #dcc1d0; }
+.discovery-home .room-product-phone__composer > svg:last-child { background: #edc19f; color: #35232b; }
+.discovery-home .scene-concierge { color: #efd4bf; }
+@media (max-width: 700px) {
+  .room-page, .room-gate { background-position: 24% center; }
+  .room-page > .room-header { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 8px; padding: 10px 12px; min-height: 80px; }
+  .room-header > .room-header__identity { gap: 8px; justify-content: flex-start; }
+  .room-header__identity > img { width: 30px; height: 40px; }
+  .room-header > .room-header__identity strong { font-size: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .room-header > .room-header__identity span { display: none; }
+  .room-page .room-trust { padding-inline: 16px; font-size: 12px; }
+  .room-page .room-pinned { width: calc(100% - 24px); padding-inline: 10px; }
+  .room-page .room-pinned summary b { font-size: 12px; }
+  .room-page .room-stream { padding: 14px 12px 24px; }
+  .room-page .room-message { gap: 6px; }
+  .room-page .room-message__body { max-width: calc(100% - 74px); }
+  .room-page .room-message.own .room-message__body { max-width: calc(100% - 48px); }
+  .room-page .room-message.announcement { padding: 12px 8px; gap: 4px; }
+  .room-page .room-message.announcement .room-message__body { max-width: none; }
+  .room-page .room-message.announcement > .room-avatar { width: 24px; flex-basis: 24px; }
+  .room-page .room-bubble { padding: 10px 12px; }
+  .room-page .room-composer { padding: 10px 12px max(12px, env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .room-page .room-header, .room-page .room-trust { background: #281b2b; }
+}
+@media (forced-colors: active) {
+  .room-page, .room-gate { background: Canvas; color: CanvasText; }
+  .room-page .room-bubble, .room-page .room-message.own .room-bubble { border: 1px solid CanvasText; }
+}

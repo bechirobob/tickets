@@ -1,5 +1,6 @@
 "use client";
 
+import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } from "lucide-react";
@@ -117,7 +118,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
     <main className="checkout-page">
       <header className="checkout-header">
         <Link href={`/event/${slug}`}><ArrowLeft size={17} /> Back to event</Link>
-        <Link href="/" className="brand-mark"><span className="brand-mark__box">B</span><span>Tickets</span></Link>
+        <Link href="/" className="brand-mark"><BrandLogo /></Link>
         <span><LockKeyhole size={15} /> Secure, not dramatic</span>
       </header>
       <div className="checkout-layout">

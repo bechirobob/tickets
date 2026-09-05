@@ -574,7 +574,7 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.match(about, /A good night deserves an encore/u);
   assert.match(about, /which tickets sold, which promoters brought people and when the crowd arrived/u);
   assert.match(about, /Made for how Accra moves/u);
-  assert.match(home, /className="organizer-intelligence"/u);
+  assert.match(home, /className="organizer-intelligence backstage-bridge"/u);
   assert.match(home, /We’ll mind the details/u);
   assert.match(home, /MoMo, cards and ticket tiers/u);
   assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);

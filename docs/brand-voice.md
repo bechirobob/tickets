@@ -36,6 +36,12 @@ Avoid corporate phrasing such as “operational detail”, “first-party signal
 | [Apple AirPods Pro](https://www.apple.com/airpods-pro/) | Convincing product rendering, controlled typography and clear actions. |
 | [Shotgun](https://shotgun.live/en) | Keep event discovery and ticket actions immediately useful. |
 
-BeCore keeps its aubergine print texture, clay organiser section, event photography, native font stack and rendered phone frames. Poster reflections react gently to a mouse pointer; search/filter transitions explain the change in results. Controls have a small material highlight. No extra framework is needed.
+BeCore keeps its aubergine print texture, backstage photography shared by Hosts and organisers, event photography, native font stack and rendered phone frames. Poster reflections react gently to a mouse pointer; search/filter transitions explain the change in results. Controls have a small material highlight. No extra framework is needed.
 
 Preserve compact layouts, clear focus, reduced-motion and reduced-transparency settings, touch use and readable prices. Keep the 4.5-second automatic slideshow without a visible playback status or presentation instructions. Never use fabricated audience counts, fake scarcity, decorative coloured glows or constant shimmer.
+
+## Identity and The Room
+
+The orange ticket and ivory B are the identity. Use the shared BrandLogo component with live native type, not a typed B inside a generic square. The enamel render is 7.7 KB; transparent notches remain part of the silhouette. App icons retain safe padding and the small SVG remains a simplified version of the same mark.
+
+The Room has its own velvet, leather and smoked-glass atmosphere. Message surfaces protect readability; warm replies and a clearly marked Host announcement distinguish conversation from checkout. The iPhone previews use the same materials. Generic rendered atmosphere is decoration, never evidence of a particular Host, venue or attendee. No invented social proof.
