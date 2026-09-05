@@ -8,6 +8,7 @@
   --chat-edge: #81757b;
 }
 :is(.discovery-home, .discovery-directory, .hosts-page, .host-page, .my-nights-page, .buzz-page, .account-navigation, .night-hub__header, .room-page, .directory-header, .backstage-bridge) { --focus-ring: #eee; }
+.night-mobile-menu__panel { --focus-ring: #eee; }
 :is(dialog, .submission-fields, .submission-submit, .checkout-form, .chat-action-tray) { --focus-ring: #666; }
 .room-page { height: var(--room-height, 100dvh); }
 .room-page .room-message { padding-block: 6px; }

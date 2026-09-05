@@ -110,7 +110,18 @@ test("featured motion continues in the Room and resumes after returning to the h
     const streamBounds = notice.closest(".room-product-phone__stream")!.getBoundingClientRect();
     return { top: noticeBounds.top - streamBounds.top, bottom: streamBounds.bottom - noticeBounds.bottom };
   }));
-  expect(hostNotices).toHaveLength(2);
+  expect(hostNotices).toHaveLength(1);
+  await expect(room.locator(".room-product-phone--arrival .scene-host")).toHaveCount(0);
+  await expect(room.locator(".room-product-phone--arrival .scene-message")).toHaveCount(5);
+  const arrivalMessages = await room.locator(".room-product-phone--arrival .scene-message").evaluateAll((messages) => messages.map((message) => {
+    const bounds = message.getBoundingClientRect();
+    const stream = message.closest(".room-product-phone__stream")!.getBoundingClientRect();
+    return { top: bounds.top - stream.top, bottom: stream.bottom - bounds.bottom };
+  }));
+  for (const message of arrivalMessages) {
+    expect(message.top).toBeGreaterThanOrEqual(0);
+    expect(message.bottom).toBeGreaterThanOrEqual(0);
+  }
   for (const notice of hostNotices) {
     expect(notice.top).toBeGreaterThanOrEqual(0);
     expect(notice.bottom).toBeGreaterThanOrEqual(0);
@@ -238,16 +249,14 @@ test("customer controls use neutral keyboard focus without halos", async ({ page
   for (const path of ["/", "/my-nights", "/notifications"]) {
     await page.goto(path);
     const controls = path === "/" ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : page.locator('.account-navigation a[aria-current="page"]');
+    await page.keyboard.press("Tab");
     await controls.focus();
-    const surface = await controls.evaluate((element) => {
+    await expect(controls).toBeFocused();
+    await expect.poll(() => controls.evaluate((element) => {
       const style = getComputedStyle(element);
       const channels = style.outlineColor.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
-      return { width: parseFloat(style.outlineWidth), neutral: channels.length === 3 && Math.max(...channels) - Math.min(...channels) <= 3, shadow: style.boxShadow, text: style.textShadow };
-    });
-    expect(surface.width).toBeGreaterThanOrEqual(2);
-    expect(surface.neutral).toBe(true);
-    expect(surface.shadow).toBe("none");
-    expect(surface.text).toBe("none");
+      return { visible: element.matches(":focus-visible"), wideEnough: parseFloat(style.outlineWidth) >= 2, neutral: channels.length === 3 && Math.max(...channels) - Math.min(...channels) <= 3, shadow: style.boxShadow, text: style.textShadow };
+    }), { message: `Keyboard focus on ${path}` }).toEqual({ visible: true, wideEnough: true, neutral: true, shadow: "none", text: "none" });
   }
 });
 
