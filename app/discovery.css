@@ -10,7 +10,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .recovery-page p { font-size: 16px; line-height: 1.65; }
 .recovery-page nav { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 28px; }
 .recovery-page nav :is(a, button) { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; }
-.recovery-page :is(a, button):focus-visible { outline: 2px solid #10110f; outline-offset: 4px; }
+.recovery-page :is(a, button):focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 4px; }
 .night-support__notice { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .event-page .checkout-link.checkout-link--disabled { opacity: 1; border: 0; background: transparent; color: #55534d; cursor: auto; }
 .discovery-home { --bone: #f4f1ea; }
@@ -37,7 +37,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .compact-hero__price span { color: #c3c2b9; font-size: 13px; }
 /* Playback stays automatic. Keyboard and assistive technology users retain a stop mechanism. */
 .discovery-home .active-night-autoplay-toggle { inset: auto 5vw 18px auto; }
-.discovery-home .active-night-autoplay-toggle:focus-visible { width: auto; height: 44px; padding: 0 16px; overflow: visible; clip-path: none; border: 0; border-radius: 8px; background: #281b2b; color: #fff6ea; font-size: 14px; font-weight: 500; outline: 2px solid #d7f45b; outline-offset: 4px; }
+.discovery-home .active-night-autoplay-toggle:focus-visible { width: auto; height: 44px; padding: 0 16px; overflow: visible; clip-path: none; border: 0; border-radius: 8px; background: #281b2b; color: #fff6ea; font-size: 14px; font-weight: 500; outline: 2px solid var(--focus-ring, #666); outline-offset: 4px; }
 
 .discovery-home .night-drop--compact { padding: 36px 5vw 52px; background: #f4f1ea; color: #10110f; }
 .discovery-home .compact-section-head { margin-bottom: 18px; gap: 16px; }
@@ -57,7 +57,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-explorer .drop-vibes button::before,
 .discovery-explorer .drop-vibes button::after { display: none; }
 .discovery-explorer button:focus-visible,
-.discovery-explorer a:focus-visible { outline: 2px solid #10110f; outline-offset: 4px; }
+.discovery-explorer a:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 4px; }
 .discovery-result-count { margin: 8px 0 16px; font-size: 12px; color: #656259; }
 .discovery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px 24px; }
 .discovery-grid .drop-card { --poster-ink: #d7f45b; }
@@ -91,7 +91,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-directory .directory-results { padding: 0 5vw 70px; }
 .discovery-search { min-height: 52px; margin-bottom: 24px; padding: 0 16px; display: flex; align-items: center; gap: 10px; border: 1px solid #b7b3a7; background: #fcfaf4; color: #666359; }
 .discovery-search input { width: 100%; min-height: 50px; border: 0; background: transparent; color: #10110f; font: inherit; font-size: 16px; }
-.discovery-search:focus-within { outline: 2px solid #10110f; outline-offset: 3px; }
+.discovery-search:focus-within { outline: 2px solid var(--focus-ring, #666); outline-offset: 3px; }
 .discovery-search input:focus { outline: none; }
 
 .discovery-home .room-product-scene { min-height: 530px; padding-top: 40px; gap: 4vw; }
@@ -129,7 +129,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-grid .drop-card__body > p,
 .discovery-grid .drop-card[data-featured="true"] .drop-card__body > p { color: var(--poster-ink); }
 .discovery-grid .drop-card__body > small { color: #b8b8ac; }
-.discovery-explorer :is(button, a):focus-visible { outline-color: var(--acid); }
+.discovery-explorer :is(button, a):focus-visible { outline-color: var(--focus-ring, #666); }
 .discovery-explorer .drop-no-match button { color: #f4f1ea; border-color: #b8b8ac; }
 .discovery-explorer .drop-no-match { color: #b8b8ac; }
 .discovery-explorer .drop-no-match h3 { color: #f4f1ea; }
@@ -143,7 +143,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-search { background: #3b2a3e; border-color: #9b829f; color: #d0c5d0; }
 .discovery-search input { color: #f4f1ea; }
 .discovery-search input::placeholder { color: #b8b8ac; }
-.discovery-search:focus-within { outline-color: var(--acid); }
+.discovery-search:focus-within { outline-color: var(--focus-ring, #666); }
 .discovery-home .room-product-scene { position: relative; isolation: isolate; border-top: 0; background: #252038; }
 .room-product-scene__atmosphere { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .72; z-index: -2; pointer-events: none; }
 .discovery-home .room-product-scene::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(32,21,47,.96) 5%, rgba(32,21,47,.9) 36%, rgba(32,21,47,.38) 70%), url("/textures/print-grain.svg"); pointer-events: none; }

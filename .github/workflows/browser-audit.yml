@@ -30,8 +30,8 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Audit production in desktop Chrome, mobile Chrome and mobile WebKit
         run: npm run test:e2e:production
-      - name: Preserve failure evidence
-        if: failure()
+      - name: Preserve browser results and isolated Room renders
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-browser-audit-${{ github.run_id }}

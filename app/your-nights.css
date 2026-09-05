@@ -2,7 +2,7 @@
 .account-navigation { min-height: 54px; padding: 0 5vw; display: flex; align-items: stretch; gap: 28px; border-bottom: 1px solid #705568; background: #281b2b; color: #e1cad8; }
 .account-navigation a { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 0; border-bottom: 2px solid transparent; border-radius: 0; color: inherit; font-size: 14px; font-weight: 500; }
 .account-navigation a[aria-current='page'] { color: #e4f18b; border-bottom-color: #e4f18b; }
-.account-navigation a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.account-navigation a:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 4px; }
 .my-nights-page, .buzz-page { background: #281b2b url('/textures/print-grain.svg') repeat; color: #f8eee7; --action-surface: #e4f18b; --action-ink: #281b2b; }
 .my-nights-page .directory-header, .buzz-page > .directory-header, .account-privacy .directory-header { background: #281b2b; border-color: #705568; color: #f8eee7; }
 .my-nights-header-actions { gap: 8px; }
@@ -20,13 +20,13 @@
 .my-nights-recovery label { color: #edd6e3; font-size: 12px; }
 .my-nights-recovery input { min-height: 48px; background: #f9eee7; color: #35232d; border: 1px solid #e3c8b7; font-weight: 400; letter-spacing: 0; }
 .my-nights-recovery input::placeholder { color: #71576b; opacity: 1; }
-.my-nights-recovery input:focus-visible { outline: 2px solid #e4f18b; outline-offset: 4px; }
+.my-nights-recovery input:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 4px; }
 .my-nights-locked > div { flex-wrap: wrap; gap: 24px; }
 .my-nights-locked a, .my-nights-empty a { color: #e4f18b; border-color: #e4f18b; font-size: 14px; min-height: 44px; display: inline-flex; align-items: center; }
 .my-nights-locked > small { color: #ead1df; }
 .my-nights-locked .my-nights-recovery-error { color: #ffcbbe; }
 .my-nights-tabs { margin-top: 28px; border-color: #806177; }
-.my-nights-tabs button { color: #d7bfce; font-size: 15px; }
+.my-nights-tabs button { border-radius: 0; color: #d7bfce; font-size: 15px; }
 .my-nights-tabs button[aria-current='page'] { color: #e4f18b; border-color: #e4f18b; }
 .my-nights-list article { padding-block: 26px; border-color: #71536a; grid-template-columns: 190px minmax(0, 1fr) auto; }
 .my-nights-list img { width: 190px; height: 150px; object-fit: cover; border-radius: 8px; }
@@ -48,7 +48,7 @@
 .night-hub__hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(40,27,43,.8), transparent), linear-gradient(0deg, rgba(40,27,43,.65), transparent); pointer-events: none; }
 .night-hub__hero > div, .night-hub__hero .night-hub__countdown { z-index: 1; }
 .night-hub__tabs { background: #281b2b; border-color: #715569; }
-.night-hub__tabs button { color: #ddc7d5; }
+.night-hub__tabs button { border-radius: 0; color: #ddc7d5; }
 .night-hub__tabs button[aria-current='page'], .night-hub__tabs > a { color: #e4f18b; border-color: #e4f18b; }
 .night-hub__hero h1 { line-height: 1.04; font-weight: 600; }
 .buzz-page { min-height: 100vh; padding: 0 0 70px; }
@@ -68,7 +68,7 @@
 .buzz-page .buzz-feedback, .buzz-page .buzz-error { padding: 16px; margin-top: 20px; border: 1px solid #9b786e; border-radius: 8px; color: #ffdac7; background: #402b33; font-size: 15px; line-height: 1.5; }
 .buzz-feedback button { min-height: 44px; border: 0; background: transparent; color: inherit; text-decoration: underline; margin-left: 14px; }
 .buzz-list > a { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 24px 0; border-bottom: 1px solid #705368; border-radius: 0; color: #fff0e4; }
-.buzz-list > a:focus-visible { outline: 2px solid #e4f18b; outline-offset: 5px; }
+.buzz-list > a:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 5px; }
 .buzz-list .buzz-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #8e6c83; color: #f4d8e7; }
 .buzz-list .buzz-icon[data-kind='host'] { color: #f5c69f; border-color: #ad8266; }
 .buzz-page .buzz-list h2 { margin: 7px 0; font-size: 20px; font-weight: 550; letter-spacing: -.02em; }
