@@ -19,3 +19,5 @@ The isolated browser fixtures exercise Room replies, pinned announcements and no
 Rollback baseline: GitHub `8aa5f6c5b71e7d1ba6631710f16ac2d3fa935f15`, Worker `92e30ddb-aa6c-4a25-8c9d-e830707c7130`. No database migration or environment secret is introduced by this change.
 
 Conversation refinement: reactions use a non-modal native popover anchored to the selected bubble, available through its action button, double-click or a 450 ms touch-and-hold. Reaction counts stay attached to their message and update from the existing socket acknowledgement. Replies quote the original message above the composer. Desktop Enter sends; Shift+Enter and touch-keyboard Enter retain newlines. The live and preview composers share `RoomComposeContent`, `RoomReaction` and conversation material tokens. No CSS shadows, coloured focus halos or button sheen are permitted; keyboard focus is neutral and visible.
+
+Homepage phone direction: the arrival phone is attendee conversation only (five relatable planning messages). The second phone holds the Host update and inside-the-night features. Do not put Host announcements back into the first phone.

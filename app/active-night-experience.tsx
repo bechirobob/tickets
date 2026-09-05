@@ -48,20 +48,20 @@ function HostUpdate({ label, time, dateTime, title, detail, compact = false }: {
 function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | null; heroImage: string; conversation: "arrival" | "inside" }) {
   const eventTitle = event?.title ?? "After Dark";
   const area = event?.area ?? "Osu";
-  const startTime = event?.time.split(" — ")[0] ?? "9:00 PM";
 
   return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
     <Image className="room-product-phone__render" src="/devices/iphone-black-titanium.png" width={1024} height={1536} alt="" aria-hidden="true" unoptimized />
     <div className="room-product-phone__display">
-    <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
+    <div className="room-product-phone__hardware" aria-hidden="true"><span>{conversation === "arrival" ? "9:24" : "10:48"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
     <div className="room-product-phone__screen">
       <header className="room-product-phone__header"><Image src={eventImageUrl(heroImage, 120)} width={24} height={30} alt="" aria-hidden="true" unoptimized /><div><small>The Room</small><b>{eventTitle}</b></div><span>Preview</span></header>
       <div key={event?.slug ?? "waiting"} className="room-product-phone__stream">
         {conversation === "arrival" ? <>
-          <HostUpdate label="HOST UPDATE" time="9:14 PM" dateTime="21:14" title={`Doors at ${startTime}.`} detail="Have your ticket ready at entry." />
           <article className="scene-message"><span>K</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Who is actually in {area} already?</p></div><div className="chat-tapbacks" aria-label="4 laughing reactions"><RoomReaction emoji="😂" count={4} /></div></div></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:19 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>“Five minutes away” in the spiritual sense.</p></div><div className="chat-tapbacks" aria-label="2 laughing reactions"><RoomReaction emoji="😂" count={2} /></div></div></div></article>
-          <article className="scene-message"><span>Y</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Okay fine. Leaving now.</p></div><div className="chat-tapbacks" aria-label="3 fire reactions"><RoomReaction emoji="🔥" count={3} /></div></div></div></article>
+          <article className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama · 9:20 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Send the pin. Abena’s coming too.</p></div></div></div></article>
+          <article className="scene-message"><span>Y</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>By the entrance. Look for the loud shirt.</p></div><div className="chat-tapbacks" aria-label="3 fire reactions"><RoomReaction emoji="🔥" count={3} /></div></div></div></article>
+          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:24 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Found the car. Nobody move.</p></div></div></div></article>
         </> : <>
           <article className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>{event?.vibe ?? "Front left"} is the move tonight.</p></div><div className="chat-tapbacks" aria-label="6 watching reactions"><RoomReaction emoji="👀" count={6} /></div></div></div></article>
           <article className="scene-flash-message"><small>Ama · 10:43 PM</small><div className="scene-flash-closed"><Camera size={18} /><span><b>Flash</b><i>Tap to open</i></span></div></article>

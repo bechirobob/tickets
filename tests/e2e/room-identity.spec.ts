@@ -7,7 +7,7 @@ test.use({ serviceWorkers: "block" });
 test("the rendered identity stays legible and Hosts connect to the guest journey", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const path of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/after-dark-osu"]) {
-    await page.goto(path);
+    await page.goto(path, { waitUntil: "domcontentloaded" });
     const logo = page.locator("header .brand-logo").first();
     await expect(logo).toBeVisible();
     await expect(logo).toHaveAccessibleName("BeCore Tickets");

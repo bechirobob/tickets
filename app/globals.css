@@ -722,7 +722,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .night-mobile-menu { position: relative; z-index: 80; display: block; justify-self: end; color: inherit; }
 .night-mobile-menu__trigger { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; position: static; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; transition: color .18s ease, opacity .16s ease, transform .2s cubic-bezier(.2,.75,.25,1); }
 .night-mobile-menu__trigger:hover { color: var(--orange); }
-.night-mobile-menu__trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.night-mobile-menu__trigger:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 2px; }
 .night-mobile-menu.is-open .night-mobile-menu__trigger { opacity: 0; pointer-events: none; transform: rotate(-12deg) scale(.82); }
 /* Compact navigation material: page context stays visible without a white card. */
 .night-mobile-menu__panel { width: min(286px, calc(100vw - 28px)); padding: 6px; position: absolute; z-index: 81; top: -6px; right: 0; display: grid !important; gap: 0 !important; overflow: hidden; border: 1px solid rgba(255,255,255,.16); border-radius: 12px; background: rgba(18,19,17,.68); color: #f3f0e8; box-shadow: none; -webkit-backdrop-filter: blur(18px) saturate(.9); backdrop-filter: blur(18px) saturate(.9); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-8px) scale(.97); transform-origin: top right; transition: opacity .18s ease, transform .22s cubic-bezier(.18,.82,.25,1), visibility 0s linear .22s; }
@@ -734,7 +734,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .night-mobile-menu__close { width: 36px; height: 36px; margin: 0; display: grid; place-items: center; border: 0; border-radius: 0; background: transparent; color: rgba(255,255,255,.82); opacity: 0; transform: rotate(-55deg) scale(.78); transition: color .16s ease, opacity .16s ease .03s, transform .22s cubic-bezier(.18,.82,.25,1) .03s; }
 .night-mobile-menu.is-open .night-mobile-menu__close { opacity: 1; transform: rotate(0) scale(1); }
 .night-mobile-menu__close:hover { color: var(--acid); }
-.night-mobile-menu__close:focus-visible { outline: 2px solid var(--acid); outline-offset: -3px; }
+.night-mobile-menu__close:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: -3px; }
 .night-mobile-menu__links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 4px; opacity: 0; transform: translateY(-3px); transition: opacity .15s ease, transform .18s ease; }
 .night-mobile-menu.is-open .night-mobile-menu__links { opacity: 1; transform: translateY(0); transition-delay: .04s; }
 .night-mobile-menu .night-mobile-menu__panel a { min-width: 0; min-height: 44px; padding: 0 8px; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 7px; position: relative; border: 0; border-radius: 0; color: rgba(255,255,255,.76); font-size: 14px; font-weight: 650; letter-spacing: .005em; transition: color .16s ease; }
@@ -742,7 +742,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .night-mobile-menu .night-mobile-menu__panel a svg { color: rgba(255,255,255,.52); transition: color .16s ease; }
 .night-mobile-menu .night-mobile-menu__panel a:hover, .night-mobile-menu .night-mobile-menu__panel a:focus-visible { color: white; outline: 0; }
 .night-mobile-menu .night-mobile-menu__panel a:hover svg, .night-mobile-menu .night-mobile-menu__panel a:focus-visible svg { color: var(--acid); }
-.night-mobile-menu .night-mobile-menu__panel a:focus-visible { outline: 2px solid var(--acid); outline-offset: -2px; }
+.night-mobile-menu .night-mobile-menu__panel a:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: -2px; }
 .night-mobile-menu .night-mobile-menu__panel a[aria-current="page"], .night-mobile-menu .night-mobile-menu__panel a[aria-current="page"] svg { color: var(--acid); }
 .policy-page > header .night-mobile-menu__panel a > span, .help-page > header .night-mobile-menu__panel a > span { display: inline; color: inherit; font-size: inherit; font-weight: inherit; }
 .directory-header, .sub-header, .help-page > header, .legal-page > header, .policy-page > header, .wallet-page > header { position: relative; z-index: 30; overflow: visible; }
@@ -850,7 +850,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .event-page .checkout-link { padding: 0 18px; justify-content: space-between; border: 1px solid var(--ink); border-radius: 4px; background: var(--ink); color: white; font-weight: 600; transition: background .2s ease; }
 .event-page .checkout-link:hover { background: #20211e; }
 .event-page .checkout-link:active { background: #30312d; }
-.event-page .checkout-link:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+.event-page .checkout-link:focus-visible { outline: 3px solid var(--focus-ring, #666); outline-offset: 3px; }
 
 @media (max-width: 1000px) {
   .night-header { grid-template-columns: 1fr auto; }

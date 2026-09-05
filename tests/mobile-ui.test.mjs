@@ -133,7 +133,6 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(home, /Illustrative preview|Demo chat/u);
   assert.match(home, /HOST UPDATE/u);
   assert.match(home, /title="Gate change\."/u);
-  assert.match(home, /Have your ticket ready at entry/u);
   assert.match(home, /title="Gate change\."/u);
   assert.match(home, /className="scene-host__mark"/u);
   assert.match(home, /className="scene-host__content"/u);
