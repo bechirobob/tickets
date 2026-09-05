@@ -49,8 +49,8 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
 
   // Freeze the scene before comparing separate elements; another 4.5-second
   // transition must not race these reads on a slower browser runner.
-  await hero.getByRole("button", { name: "Pause featured nights slideshow", exact: true }).click();
-  await expect(hero.getByRole("button", { name: "Play featured nights slideshow", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await hero.getByRole("button", { name: "Motion on: pause featured nights slideshow", exact: true }).click();
+  await expect(hero.getByRole("button", { name: "Motion off: play featured nights slideshow", exact: true })).toHaveAttribute("aria-pressed", "true");
 
   const activeSlug = await experience.getAttribute("data-active-night");
   expect(activeSlug).toBeTruthy();

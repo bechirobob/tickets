@@ -297,7 +297,7 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(experience, /<RoomPreviewCarousel key=\{active\?\.slug/u);
   assert.match(experience, /data-active-night=\{active\?\.slug/u);
   assert.match(experience, /className="active-night-autoplay-toggle"/u);
-  assert.match(experience, /aria-label=\{reducedMotion \? "Featured night slideshow is static because Reduce Motion is on"/u);
+  assert.match(experience, /aria-label=\{reducedMotion \? "Motion off: featured nights respect your Reduce Motion setting"/u);
   assert.doesNotMatch(experience, /active-night-controls|Previous featured night|Next featured night|Show \$\{event\.title\}/u);
   assert.match(experience, /className="compact-hero__image compact-hero__image--outgoing"/u);
   assert.match(experience, /className="compact-hero__image compact-hero__image--active"/u);

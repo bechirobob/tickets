@@ -185,7 +185,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       {hasScenes ? <button
         type="button"
         className="active-night-autoplay-toggle"
-        aria-label={reducedMotion ? "Featured night slideshow is static because Reduce Motion is on" : manualPause ? "Play featured nights slideshow" : "Pause featured nights slideshow"}
+        aria-label={reducedMotion ? "Motion off: featured nights respect your Reduce Motion setting" : manualPause ? "Motion off: play featured nights slideshow" : "Motion on: pause featured nights slideshow"}
         aria-pressed={manualPause || reducedMotion}
         disabled={reducedMotion}
         onClick={toggleAutoplay}
