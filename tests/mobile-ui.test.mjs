@@ -128,8 +128,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /The night has a Room\./u);
   assert.match(home, /Share Flashes that disappear when the Room closes/u);
   assert.match(home, /Private to verified ticket holders/u);
-  assert.match(home, /Illustrative preview/u);
-  assert.match(home, />Demo chat</u);
+  assert.match(home, />Preview</u);
+  assert.doesNotMatch(home, /Illustrative preview|Demo chat/u);
   assert.match(home, /HOST UPDATE/u);
   assert.match(home, /title="Gate change\."/u);
   assert.match(home, /Have your ticket ready at entry/u);
@@ -144,7 +144,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(home, /href="\/room\//u);
   assert.match(css, /\.room-product-scene\s*\{[^}]*grid-template-columns:/su);
   assert.equal(home.match(/<RoomPhone /gu)?.length, 2);
-  assert.match(home, /<RoomPreviewCarousel key=/u);
+  assert.match(home, /<RoomPreviewCarousel>/u);
   assert.match(home, /aria-roledescription="slide"/u);
   assert.match(css, /\.room-product-scene__phones\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 268px\)\)[^}]*justify-content:\s*end/su);
   assert.match(css, /\.room-product-phone\s*\{[^}]*aspect-ratio:\s*71\.9 \/ 150[^}]*height:\s*auto[^}]*border-radius:\s*38px/su);
@@ -290,14 +290,14 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(experience, /const sceneInterval = 4_500/u);
   assert.match(experience, /events\.filter\([^;]+\.slice\(0, 4\)/u);
   assert.match(experience, /new IntersectionObserver/u);
-  assert.match(experience, /entry\.boundingClientRect\.bottom <= 0[^}]*setLeftHero\(true\)/su);
+  assert.match(experience, /setSceneVisible\(visible\.size > 0\)/u);
   assert.match(experience, /document\.visibilityState !== "visible"/u);
   assert.match(experience, /prefers-reduced-motion: reduce/u);
   assert.match(experience, /<EventExplorer events=\{events\} featuredSlug=\{active\?\.slug\}/u);
-  assert.match(experience, /<RoomPreviewCarousel key=\{active\?\.slug/u);
+  assert.match(experience, /<RoomPreviewCarousel>/u);
   assert.match(experience, /data-active-night=\{active\?\.slug/u);
   assert.match(experience, /className="active-night-autoplay-toggle"/u);
-  assert.match(experience, /aria-label=\{reducedMotion \? "Motion off: featured nights respect your Reduce Motion setting"/u);
+  assert.match(experience, /aria-label=\{manualPause \? "Resume featured nights" : "Pause featured nights"/u);
   assert.doesNotMatch(experience, /active-night-controls|Previous featured night|Next featured night|Show \$\{event\.title\}/u);
   assert.match(experience, /className="compact-hero__image compact-hero__image--outgoing"/u);
   assert.match(experience, /className="compact-hero__image compact-hero__image--active"/u);
@@ -306,7 +306,7 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(css, /\.drop-card__body\s*\{[^}]*padding-top:\s*15px[^}]*\}/su);
   const discovery = await readFile(discoveryUrl, "utf8");
   assert.match(discovery, /\.active-night-autoplay-toggle:focus-visible\s*\{[^}]*height:\s*44px[^}]*clip-path:\s*none/su);
-  assert.match(experience, /onMouseEnter=\{\(\) => setInteractionPause\(true\)\}/u);
+  assert.doesNotMatch(experience, /onMouseEnter|setLeftHero|Motion on|Motion off/u);
   assert.match(polish, /\.active-night-experience \.night-drop,[\s\S]*?transition:\s*background-color var\(--motion-scene\)/su);
   assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.active-night-experience \.night-drop,[\s\S]*?transition:\s*none/su);
 });

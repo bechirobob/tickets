@@ -1,5 +1,13 @@
 # Audit/design handoff — 5 September 2026
 
+## Automatic motion and nightlife atmosphere
+
+Current user direction: motion should be on without a visible playback status, and the black backgrounds need character. Removed the hero counter and Motion on/off copy. Automatic 4.5-second scenes now run while either the hero or Room is visible, resume when returning, and continue on pointer hover. Replaced the permanent scroll-away stop with visibility tracking for both surfaces. Keyboard focus, an unobtrusive keyboard/screen-reader pause control, page visibility and system Reduce Motion remain supported. Room scene changes retain the phone carousel's position, and automatic sample conversations no longer use a live announcement region. Compact Preview labels replace Demo chat and the repeated explanatory footnote.
+
+Discovery and the footer use an aubergine print texture; the Room has substantially more visible party photography with a plum overlay for text contrast; the organiser section uses warm clay. The texture is a tiny static same-origin SVG, with no animated background, added dependency, glow or shadow. Original ticket prices and checkout fees are unchanged.
+
+Starting production SHA: `de9e5800a055deb7e7c258117bff2226ab440a67`; verified Worker rollback: `0ef63cc1-08b7-4439-aeac-3f0a72e5da40`. Previous production browser run `33964294294` passed all 105 tests. This candidate adds a rendered regression for motion in the Room, returning to the hero, pointer hover, retained mobile phone position and system Reduce Motion. Candidate and live evidence will be recorded in its PR. No migration, configuration or secret changes. Preserve existing untracked `test-results/` outside the release. Local preview access remains blocked; visual verification uses production after exact-candidate checks.
+
 ## Customer interface finish and original ticket prices
 
 The user superseded fee-inclusive discovery: advertise the original available ticket/package price, with booking fees shown only at checkout. `discoveryFaceMinor` now selects the cheapest available face value without adding any fee; checkout fee calculation and changed-total validation remain intact. Removed fee copy from the homepage, directory and event ticket panel.

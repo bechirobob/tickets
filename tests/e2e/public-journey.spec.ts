@@ -49,8 +49,13 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
 
   // Freeze the scene before comparing separate elements; another 4.5-second
   // transition must not race these reads on a slower browser runner.
-  await hero.getByRole("button", { name: "Motion on: pause featured nights slideshow", exact: true }).click();
-  await expect(hero.getByRole("button", { name: "Motion off: play featured nights slideshow", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const pause = hero.getByRole("button", { name: "Pause featured nights", exact: true });
+  await expect(pause).toHaveCSS("clip-path", "inset(50%)");
+  await expect(hero).not.toContainText(/Motion on|Motion off/);
+  await pause.focus();
+  await expect(pause).toHaveCSS("clip-path", "none");
+  await pause.click();
+  await expect(hero.getByRole("button", { name: "Resume featured nights", exact: true })).toHaveAttribute("aria-pressed", "true");
   // Animated images may extend beyond the frame, but focusing the motion
   // control must never scroll the hero's own content away from its shade.
   expect(await hero.evaluate((element) => element.scrollTop)).toBe(0);
@@ -73,6 +78,29 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test("featured motion continues in the Room and resumes after returning to the hero", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const experience = page.locator(".active-night-experience");
+  const room = page.locator("#the-room");
+  const track = room.locator(".room-product-scene__phones");
+  await room.scrollIntoViewIfNeeded();
+  // Retain the selected phone when its event changes on narrow screens.
+  await track.evaluate((element) => element.scrollTo({ left: element.scrollWidth, behavior: "instant" }));
+  const offset = await track.evaluate((element) => element.scrollLeft);
+  const roomSlug = await experience.getAttribute("data-active-night");
+  await expect(experience).not.toHaveAttribute("data-active-night", roomSlug ?? "waiting", { timeout: 6_500 });
+  expect(Math.abs(await track.evaluate((element) => element.scrollLeft) - offset)).toBeLessThanOrEqual(2);
+
+  const hero = page.getByRole("region", { name: "Featured nights" });
+  await hero.scrollIntoViewIfNeeded();
+  await hero.hover();
+  const heroSlug = await experience.getAttribute("data-active-night");
+  await expect(experience).not.toHaveAttribute("data-active-night", heroSlug ?? "waiting", { timeout: 6_500 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(hero.getByRole("button", { name: "Pause featured nights", exact: true })).toBeDisabled();
 });
 
 test("My Nights exposes secure recovery to a signed-out customer", async ({ page }) => {
