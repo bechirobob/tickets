@@ -10,6 +10,8 @@ Baseline production SHA: `64727a2d953da0d1e77a278c63e8ad8db8af1488`. Rollback Wo
 
 ## Current Room refinement candidate
 
+Customer interface release: PR #82 merged to `f9189136e02b4991febc48eee8a932549951805b`; deployment `33963824472` passed and runtime reported Worker `a76681ce-c865-4e1f-be5c-b290c57a5c60`. Live homepage and checkout confirm original ticket prices and separate checkout fees; shared primary/text actions render as intended without overflow. Production browser audit `33963931100` passed 100 of 105 tests. Failures identify the About eyebrow contrast (4.33:1) and desktop About/Hosts heading height after the typography change. The corrective patch darkens that label and caps those headings at 68px; all existing accessibility/design assertions stay enabled.
+
 The earlier pre-release holds below are historical. PRs #77 and #79 were approved and deployed. Before this refinement, production revision was `7e5409df95ff54bfa47e494c5eda1ba3feb51bf8`, Worker `21e02b37-a3a3-401a-bba1-96a9b6474737`; production browser run `33959163562` passed all 105 cases across desktop Chrome, Pixel Chrome and iPhone WebKit.
 
 The user requested fee wording cleanup, a less cramped and more distinct Room, better Host updates and homepage rendering, while retaining the realistic iPhone slideshow. Discovery now quotes the cheapest available ticket including the active event/global booking fee, using checkout rounding. Checkout continues to itemize the fee. The hero photograph spans the frame, one/two-event grids use deliberate proportions, and the boxed play/pause control is replaced by a quiet counter and Motion on/off setting. Keyboard pause, reduced-motion behavior and the 4.5-second rotation remain.
