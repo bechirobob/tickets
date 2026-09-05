@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { env } from "cloudflare:test";
 import { POST as initializePayment } from "../app/api/payments/initialize/route";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
+import { GET as bookingFeeQuote } from "../app/api/config/booking-fee/route";
 
 const eventSlug = "inventory-payment-test";
 
@@ -55,6 +56,83 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("payment ticket validation", () => {
+  it("replays the original payment without a second reservation or provider call", async () => {
+    const request = paymentRequest(eventSlug, "general");
+    request.headers.set("idempotency-key", crypto.randomUUID());
+    const first = await initializePayment(request.clone() as Request);
+    const replay = await initializePayment(request.clone() as Request);
+    expect(first.status).toBe(200);
+    expect(replay.headers.get("idempotency-replayed")).toBe("true");
+    expect(await replay.json()).toEqual(await first.json());
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    const changed = await request.json() as Record<string, unknown>;
+    changed.quantity = 2;
+    expect((await initializePayment(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify(changed) }))).status).toBe(409);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("serializes simultaneous attempts sharing an idempotency key", async () => {
+    const request = paymentRequest(eventSlug, "general");
+    request.headers.set("idempotency-key", crypto.randomUUID());
+    const responses = await Promise.all([initializePayment(request.clone() as Request), initializePayment(request.clone() as Request)]);
+    expect(responses.every((response) => [200, 409].includes(response.status))).toBe(true);
+    expect(responses.some((response) => response.status === 200)).toBe(true);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an ambiguous provider outcome pending and safe to retry", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Network failure"); }));
+    const request = paymentRequest(eventSlug, "general");
+    request.headers.set("idempotency-key", crypto.randomUUID());
+    const response = await initializePayment(request.clone() as Request);
+    expect(response.status).toBe(202);
+    const data = await response.json() as { reference: string; nextUrl: string };
+    expect(data.nextUrl).toContain("pending=1");
+    expect(await env.DB.prepare("SELECT status FROM orders WHERE reference = ?").bind(data.reference).first()).toMatchObject({ status: "payment_pending" });
+    expect(await env.DB.prepare("SELECT r.status FROM inventory_reservations r JOIN orders o ON o.id = r.order_id WHERE o.reference = ?").bind(data.reference).first()).toMatchObject({ status: "held" });
+    expect((await initializePayment(request.clone() as Request)).status).toBe(202);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects malformed JSON and wrong-type fields without starting payment", async () => {
+    for (const body of ["{", "null", "[]", JSON.stringify({ acceptedPolicies: true, eventSlug: 42 }), JSON.stringify({ acceptedPolicies: true, email: {} })]) {
+      const request = paymentRequest(eventSlug, "general");
+      expect((await initializePayment(new Request(request.url, { method: "POST", headers: request.headers, body }))).status).toBe(400);
+    }
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it.each(["invalid-json", "upstream-503"])("keeps %s responses pending instead of asserting no charge", async (failure) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(failure === "invalid-json" ? "not JSON" : "Unavailable", { status: failure === "invalid-json" ? 200 : 503 })));
+    const response = await initializePayment(paymentRequest(eventSlug, "general"));
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({ pending: true });
+    expect(vi.mocked(fetch).mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("does not reopen an expired reservation when the original key is replayed", async () => {
+    const request = paymentRequest(eventSlug, "general");
+    request.headers.set("idempotency-key", crypto.randomUUID());
+    const first = await (await initializePayment(request.clone() as Request)).json() as { reference: string };
+    await env.DB.prepare("UPDATE orders SET reservation_expires_at = '2020-01-01' WHERE reference = ?").bind(first.reference).run();
+    expect((await initializePayment(request.clone() as Request)).status).toBe(410);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("quotes the event-specific fee and refuses a changed checkout total", async () => {
+    const id = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO booking_fee_rules (id, scope, scope_id, percentage_basis_points, effective_at, created_at, created_by) VALUES (?, 'event', ?, 1100, '2020-01-01', ?, 'test')").bind(id, eventSlug, new Date().toISOString()).run();
+    const quote = await bookingFeeQuote(new Request(`https://tickets.becoreops.com/api/config/booking-fee?event=${eventSlug}`));
+    expect(await quote.json()).toMatchObject({ percentage: 11 });
+    const request = paymentRequest(eventSlug, "general");
+    const body = await request.json() as Record<string, unknown>;
+    body.expectedTotalMinor = 12000;
+    const response = await initializePayment(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify(body) }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ feeBasisPoints: 1100, retryable: true });
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    await env.DB.prepare("DELETE FROM booking_fee_rules WHERE id = ?").bind(id).run();
+  });
   it("accepts every database-backed advertised tier and initializes the provider", async () => {
     for (const tier of ["general", "vip", "table-for-5"]) {
       const response = await initializePayment(paymentRequest(eventSlug, tier));

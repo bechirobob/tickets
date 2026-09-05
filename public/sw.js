@@ -1,4 +1,4 @@
-const CACHE = "becore-tickets-shell-v1";
+const CACHE = "becore-tickets-shell-v2";
 const SHELL = ["/offline-ticket.html", "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {

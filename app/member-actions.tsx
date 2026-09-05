@@ -28,12 +28,16 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
     setWorking(kind);
     setNotice("");
     const payload = kind === "event" ? { eventSlug, keepPosted: !keepPosted } : { hostSlug, followingHost: !followingHost };
-    const response = await fetch("/api/customer/preferences", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-    const data = await response.json() as { error?: string; keepPosted?: boolean; followingHost?: boolean };
-    if (response.ok) {
+    try {
+      const response = await fetch("/api/customer/preferences", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await response.json() as { error?: string; keepPosted?: boolean; followingHost?: boolean };
+      if (!response.ok) throw new Error(data.error ?? "That preference could not be saved.");
       if (kind === "event") setKeepPosted(Boolean(data.keepPosted)); else setFollowingHost(Boolean(data.followingHost));
-    } else setNotice(data.error ?? "That preference could not be saved.");
-    setWorking(null);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not save. Check your connection and try again.");
+    } finally {
+      setWorking(null);
+    }
   }
 
   if (member === null) return <div className="member-actions member-actions--loading"><Loader2 className="spin" size={15} /> Checking member access</div>;

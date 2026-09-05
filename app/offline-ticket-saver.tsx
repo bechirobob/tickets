@@ -2,19 +2,19 @@
 
 import QRCode from "qrcode";
 import { useEffect } from "react";
+import { saveOfflineNight } from "../lib/offline-tickets";
 
 type OfflineTicket = { id: string; ticketType: string; status: string; gateCode: string | null; qrPayload: string | null };
-type OfflineEvent = { slug: string; title: string; fullDate: string; time: string; venue: string; area: string };
+type OfflineEvent = { slug: string; title: string; fullDate: string; time: string; venue: string; area: string; endsAt: string };
 
-export default function OfflineTicketSaver({ event, tickets }: { event: OfflineEvent; tickets: OfflineTicket[] }) {
+export default function OfflineTicketSaver({ event, tickets, ownerId }: { event: OfflineEvent; tickets: OfflineTicket[]; ownerId: string }) {
   useEffect(() => {
     const active = tickets.filter((ticket) => ticket.status === "issued" && ticket.qrPayload && ticket.gateCode);
-    if (!active.length) return;
     let cancelled = false;
     void Promise.all(active.map(async (ticket) => ({
       id: ticket.id,
       ticketType: ticket.ticketType,
-      gateCode: ticket.gateCode,
+      gateCode: ticket.gateCode!,
       qrImage: await QRCode.toDataURL(ticket.qrPayload!, {
         width: 460,
         margin: 2,
@@ -23,13 +23,9 @@ export default function OfflineTicketSaver({ event, tickets }: { event: OfflineE
       }),
     }))).then((prepared) => {
       if (cancelled) return;
-      const key = "bct:offline-tickets:v1";
-      let saved: Array<Record<string, unknown>> = [];
-      try { saved = JSON.parse(window.localStorage.getItem(key) ?? "[]") as Array<Record<string, unknown>>; } catch { saved = []; }
-      const next = [{ ...event, savedAt: new Date().toISOString(), tickets: prepared }, ...saved.filter((item) => item.slug !== event.slug)].slice(0, 20);
-      window.localStorage.setItem(key, JSON.stringify(next));
-    });
+      saveOfflineNight(ownerId, { ...event, savedAt: new Date().toISOString(), expiresAt: new Date(Math.min(Date.parse(event.endsAt) + 86_400_000, Date.now() + 7 * 86_400_000)).toISOString(), tickets: prepared });
+    }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, [event, tickets]);
+  }, [event, tickets, ownerId]);
   return null;
 }

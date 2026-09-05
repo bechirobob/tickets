@@ -8,9 +8,9 @@ const GENERIC_MESSAGE = "If that email has active paid tickets, a secure access 
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
-  const body = await request.json().catch(() => ({})) as { email?: string };
-  const normalizedEmail = body.email?.trim().toLowerCase() ?? "";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalizedEmail)) {
+  const body: unknown = await request.json().catch(() => null);
+  const normalizedEmail = body && typeof body === "object" && "email" in body && typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalizedEmail)) {
     return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
   }
   const { env } = await import("cloudflare:workers");

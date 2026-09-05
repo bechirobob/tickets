@@ -133,8 +133,8 @@ jobs:
       - name: Verify generated Worker bindings
         run: npm run cf:types
 
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit all dependencies
+        run: npm audit --audit-level=moderate
 
       - name: Lint source
         run: npm run lint
@@ -150,6 +150,9 @@ jobs:
 
       - name: Validate Worker package
         run: npx wrangler deploy --config dist/server/wrangler.json --dry-run --outdir dist/worker-dry-run
+
+      - name: Ensure persistent staff login privacy key
+        run: node scripts/ensure-staff-login-secret.mjs
 
       - name: Accept Flash moderation model terms
         run: |

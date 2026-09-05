@@ -41,6 +41,31 @@ async function seedAttendee(suffix: string, email = `guest-${suffix}@example.com
 }
 
 describe("event-day operations", () => {
+  it("does not send private Room content to suspended, disabled or blocking attendees", async () => {
+    const suffix = crypto.randomUUID();
+    const sender = await seedAttendee(`source-${suffix}`);
+    const blocked = await seedAttendee(`block-${suffix}`);
+    const suspended = await seedAttendee(`suspend-${suffix}`);
+    const disabled = await seedAttendee(`disabled-${suffix}`);
+    const allowed = await seedAttendee(`allowed-${suffix}`);
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO room_blocks (id, event_slug, blocker_attendee_id, blocked_attendee_id, created_at) VALUES (?, 'after-dark-osu', ?, ?, ?)").bind(crypto.randomUUID(), blocked.attendeeId, sender.attendeeId, now),
+      env.DB.prepare("INSERT INTO room_suspensions (event_slug, attendee_id, reason, suspended_at, suspended_by) VALUES ('after-dark-osu', ?, 'Test suspension', ?, 'test')").bind(suspended.attendeeId, now),
+      env.DB.prepare("UPDATE attendee_profiles SET status = 'suspended' WHERE id = ?").bind(disabled.attendeeId),
+    ]);
+    for (const announcement of [false, true]) {
+      await notifyRoomMessage(env, { eventSlug: "after-dark-osu", messageId: `private-${announcement}-${suffix}`, senderAttendeeId: sender.attendeeId, senderName: "Test guest", content: "Private message", announcement });
+    }
+    for (const attendee of [blocked, suspended, disabled]) {
+      const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM attendee_notifications WHERE attendee_id = ?").bind(attendee.attendeeId).first<{ count: number }>();
+      expect(row?.count).toBe(0);
+    }
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM attendee_notifications WHERE attendee_id = ?").bind(allowed.attendeeId).first()).toMatchObject({ count: 2 });
+    await env.DB.prepare("UPDATE room_suspensions SET restored_at = ? WHERE attendee_id = ?").bind(now, suspended.attendeeId).run();
+    await notifyRoomMessage(env, { eventSlug: "after-dark-osu", messageId: `restored-${suffix}`, senderAttendeeId: sender.attendeeId, senderName: "Test guest", content: "Welcome back" });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM attendee_notifications WHERE attendee_id = ?").bind(suspended.attendeeId).first()).toMatchObject({ count: 1 });
+  });
   it("keeps an offline ticket stable until an accepted transfer rotates ownership and QR", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const sender = await seedAttendee(suffix);

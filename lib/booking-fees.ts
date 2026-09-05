@@ -6,7 +6,7 @@ export async function resolveBookingFee(eventSlug: string) {
   const db = await getDb();
   const now = new Date().toISOString();
   const [eventRule] = await db.select().from(bookingFeeRules)
-    .where(and(eq(bookingFeeRules.scopeId, eventSlug), lte(bookingFeeRules.effectiveAt, now)))
+    .where(and(eq(bookingFeeRules.scope, "event"), eq(bookingFeeRules.scopeId, eventSlug), lte(bookingFeeRules.effectiveAt, now)))
     .orderBy(desc(bookingFeeRules.effectiveAt)).limit(1);
   if (eventRule) return eventRule.percentageBasisPoints;
   const [globalRule] = await db.select().from(bookingFeeRules)

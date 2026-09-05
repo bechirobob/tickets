@@ -2,6 +2,7 @@ import { and, desc, eq, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { bookingFeeRules } from "../../../../db/schema";
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
+import { resolveBookingFee } from "../../../../lib/booking-fees";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,11 @@ export async function GET(request: Request) {
   const session = await readAdminSession(request.headers.get("cookie"));
   const authorized = Boolean(session && hasPermission(session, "fees.manage"));
   const history = authorized ? await db.select().from(bookingFeeRules).orderBy(desc(bookingFeeRules.createdAt)).limit(20) : [];
+  const eventSlug = new URL(request.url).searchParams.get("event");
+  if (eventSlug && !/^[a-z0-9-]{1,80}$/u.test(eventSlug)) return Response.json({ error: "Invalid event." }, { status: 400 });
+  const percentage = eventSlug ? (await resolveBookingFee(eventSlug)) / 100 : rule ? rule.percentageBasisPoints / 100 : 7.5;
   return Response.json(
-    { percentage: rule ? rule.percentageBasisPoints / 100 : 7.5, ...(authorized ? { history } : {}) },
+    { percentage, ...(authorized ? { history } : {}) },
     { headers: { "cache-control": "no-store" } },
   );
 }

@@ -100,6 +100,7 @@ export async function notifyRoomMessage(env: Cloudflare.Env, input: {
            subscription.p256dh, subscription.auth
     FROM ticket_assignments assignment
     JOIN tickets ticket ON ticket.id = assignment.ticket_id
+    JOIN attendee_profiles profile ON profile.id = assignment.attendee_id AND profile.status = 'active'
     LEFT JOIN notification_preferences preference
       ON preference.attendee_id = assignment.attendee_id AND preference.event_slug = ticket.event_slug
     LEFT JOIN push_subscriptions subscription
@@ -107,10 +108,20 @@ export async function notifyRoomMessage(env: Cloudflare.Env, input: {
     WHERE ticket.event_slug = ? AND assignment.status = 'active'
       AND ticket.status IN ('issued', 'checked_in')
       AND assignment.attendee_id <> ?
+      AND NOT EXISTS (
+        SELECT 1 FROM room_suspensions suspension
+        WHERE suspension.event_slug = ticket.event_slug
+          AND suspension.attendee_id = assignment.attendee_id AND suspension.restored_at IS NULL
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM room_blocks block
+        WHERE block.event_slug = ticket.event_slug
+          AND block.blocker_attendee_id = assignment.attendee_id AND block.blocked_attendee_id = ?
+      )
       AND COALESCE(preference.${preferenceColumn}, 1) = 1
       AND (preference.muted_until IS NULL OR preference.muted_until <= ?)
     LIMIT 2500
-  `).bind(input.eventSlug, input.senderAttendeeId, now).all<PushRow>();
+  `).bind(input.eventSlug, input.senderAttendeeId, input.senderAttendeeId, now).all<PushRow>();
   if (!rows.results.length) return;
   const body = input.content.length > 110 ? `${input.content.slice(0, 107)}…` : input.content;
   await persistAndPush(env, rows.results, {

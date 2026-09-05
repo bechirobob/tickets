@@ -24,3 +24,5 @@ jobs:
       - run: npm ci
       - name: Fail on moderate or higher production advisories
         run: npm audit --omit=dev --audit-level=moderate
+      - name: Include build and development dependencies in the security gate
+        run: npm audit --audit-level=moderate
