@@ -17,8 +17,9 @@ delete generatedConfig.userConfigPath;
 generatedConfig.routes = sourceConfig.routes;
 generatedConfig.vars = sourceConfig.vars;
 // Attest CI builds only; a local uncommitted build must not claim its parent's SHA.
-if (process.env.GITHUB_SHA) {
-  const revision = process.env.GITHUB_SHA;
+const releaseRevision = process.env.BECORE_RELEASE_SHA ?? process.env.GITHUB_SHA;
+if (releaseRevision) {
+  const revision = releaseRevision;
   const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   if (!/^[a-f0-9]{40}$/u.test(revision) || revision !== head) throw new Error("Release revision does not match the checked-out commit.");
   generatedConfig.vars.RELEASE_SHA = revision;

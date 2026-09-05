@@ -14,7 +14,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
   assert.equal(config.vars.OPS_ALERT_EMAIL, "tickets@becoreops.com");
   assert.equal(config.vars.ENVIRONMENT, "production");
   assert.deepEqual(config.version_metadata, { binding: "CF_VERSION_METADATA" });
-  assert.equal(config.vars.RELEASE_SHA, process.env.GITHUB_SHA);
+  assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA ?? process.env.GITHUB_SHA);
   assert.deepEqual(config.ratelimits.map(({ name, simple }) => ({ name, simple })), [
     { name: "LOGIN_RATE_LIMITER", simple: { limit: 10, period: 60 } },
     { name: "PUBLIC_WRITE_RATE_LIMITER", simple: { limit: 12, period: 60 } },
