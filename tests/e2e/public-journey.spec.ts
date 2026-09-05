@@ -69,6 +69,8 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   const heroTitle = (await hero.getByRole("heading", { level: 1 }).textContent())?.trim() ?? "";
   expect(heroTitle).toBeTruthy();
   await expect(hero.getByRole("heading", { level: 1 })).toHaveCSS("text-transform", "none");
+  await expect(hero.getByRole("heading", { level: 1 })).toHaveCSS("opacity", "1");
+  await expect(hero.locator(".compact-hero__shade")).toHaveCSS("opacity", "1");
   const primaryAction = hero.locator('.ticket-action[data-variant="primary"]');
   await expect(primaryAction).toBeVisible();
   const actionBounds = await primaryAction.boundingBox();

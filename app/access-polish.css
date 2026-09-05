@@ -1606,18 +1606,18 @@
 }
 
 @keyframes night-copy-arrive {
-  from { opacity: 0; transform: translateY(22px); }
+  from { opacity: 1; transform: translateY(22px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Action copy stays fully opaque so transient entrance frames retain WCAG contrast. */
+/* Event text and its shade stay readable throughout every entrance frame. */
 @keyframes night-actions-arrive {
   from { transform: translateY(22px); }
   to { transform: translateY(0); }
 }
 
 @keyframes night-shade-arrive {
-  from { opacity: .45; }
+  from { opacity: 1; }
   to { opacity: 1; }
 }
 

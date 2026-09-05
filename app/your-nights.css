@@ -1,6 +1,6 @@
 /* The member area carries the same identity, with clear destinations and quiet controls. */
 .account-navigation { min-height: 54px; padding: 0 5vw; display: flex; align-items: stretch; gap: 28px; border-bottom: 1px solid #705568; background: #281b2b; color: #e1cad8; }
-.account-navigation a { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 0; border-bottom: 2px solid transparent; color: inherit; font-size: 14px; font-weight: 500; }
+.account-navigation a { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 0; border-bottom: 2px solid transparent; border-radius: 0; color: inherit; font-size: 14px; font-weight: 500; }
 .account-navigation a[aria-current='page'] { color: #e4f18b; border-bottom-color: #e4f18b; }
 .account-navigation a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 .my-nights-page, .buzz-page { background: #281b2b url('/textures/print-grain.svg') repeat; color: #f8eee7; --action-surface: #e4f18b; --action-ink: #281b2b; }
@@ -18,7 +18,7 @@
 .my-nights-locked > p { max-width: 500px; color: #ddc5d4; }
 .my-nights-recovery { width: min(600px, 100%); gap: 12px; }
 .my-nights-recovery label { color: #edd6e3; font-size: 12px; }
-.my-nights-recovery input { min-height: 48px; background: #f9eee7; color: #35232d; border: 1px solid #e3c8b7; }
+.my-nights-recovery input { min-height: 48px; background: #f9eee7; color: #35232d; border: 1px solid #e3c8b7; font-weight: 400; letter-spacing: 0; }
 .my-nights-recovery input::placeholder { color: #71576b; opacity: 1; }
 .my-nights-recovery input:focus-visible { outline: 2px solid #e4f18b; outline-offset: 4px; }
 .my-nights-locked > div { flex-wrap: wrap; gap: 24px; }
@@ -51,7 +51,7 @@
 .night-hub__tabs button { color: #ddc7d5; }
 .night-hub__tabs button[aria-current='page'], .night-hub__tabs > a { color: #e4f18b; border-color: #e4f18b; }
 .night-hub__hero h1 { line-height: 1.04; font-weight: 600; }
-.buzz-page { padding: 0 0 70px; }
+.buzz-page { min-height: 100vh; padding: 0 0 70px; }
 .buzz-page > .directory-header { min-height: 66px; height: 66px; padding: 0 4vw; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .buzz-page > .directory-header > a { align-self: center; }
 .buzz-page > .directory-header span { color: inherit; }
@@ -59,14 +59,15 @@
 .buzz-page > .directory-header .night-mobile-menu__trigger { margin: 0; border: 0; padding: 0; }
 .buzz-page > .buzz-shell { max-width: 1100px; margin: 0 auto; padding: 42px 5vw 0; }
 .buzz-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 28px; border-bottom: 1px solid #806177; }
+.buzz-intro > div:first-child { min-width: 0; }
 .buzz-intro .eyebrow { color: #efc5a3; font-size: 12px; }
 .buzz-intro h1 { margin: 0 0 14px; font-size: clamp(46px, 6vw, 70px); font-weight: 600; line-height: 1; letter-spacing: -.045em; }
 .buzz-page .buzz-intro > div > p:not(.eyebrow) { max-width: 490px; font-size: 16px; color: #dfc8d8; line-height: 1.6; }
-.buzz-tools { display: grid; justify-items: end; gap: 6px; flex: 0 0 auto; }
+.buzz-tools { display: grid; justify-items: end; gap: 6px; flex: 0 0 auto; min-width: 0; }
 .buzz-tools > span { font-size: 13px; color: #e3ccda; }
 .buzz-page .buzz-feedback, .buzz-page .buzz-error { padding: 16px; margin-top: 20px; border: 1px solid #9b786e; border-radius: 8px; color: #ffdac7; background: #402b33; font-size: 15px; line-height: 1.5; }
 .buzz-feedback button { min-height: 44px; border: 0; background: transparent; color: inherit; text-decoration: underline; margin-left: 14px; }
-.buzz-list > a { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 24px 0; border-bottom: 1px solid #705368; color: #fff0e4; }
+.buzz-list > a { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 24px 0; border-bottom: 1px solid #705368; border-radius: 0; color: #fff0e4; }
 .buzz-list > a:focus-visible { outline: 2px solid #e4f18b; outline-offset: 5px; }
 .buzz-list .buzz-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #8e6c83; color: #f4d8e7; }
 .buzz-list .buzz-icon[data-kind='host'] { color: #f5c69f; border-color: #ad8266; }
