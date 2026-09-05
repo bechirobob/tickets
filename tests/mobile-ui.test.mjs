@@ -160,11 +160,6 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-message__bubble"/u);
   assert.match(home, /className="scene-message__meta"/u);
   assert.doesNotMatch(home, /className="scene-message__bubble"><small/u);
-  assert.equal(home.match(/className="scene-message__bubble"><p>/gu)?.length, 9);
-  assert.match(home, /Outside \{venue\}\. Queue is moving\./u);
-  assert.match(home, /Save me a spot on the left\./u);
-  assert.match(home, /Gate 2 is definitely quicker\./u);
-  assert.match(home, /Inside\. Front left was correct\./u);
   assert.match(home, /<Gem size=\{10\}/u);
   assert.match(home, /<Signal size=\{9\}/u);
   assert.match(home, /<Wifi size=\{10\}/u);

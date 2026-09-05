@@ -47,7 +47,6 @@ function HostUpdate({ label, time, dateTime, title, detail, compact = false }: {
 function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | null; heroImage: string; conversation: "arrival" | "inside" }) {
   const eventTitle = event?.title ?? "After Dark";
   const area = event?.area ?? "Osu";
-  const venue = event?.venue ?? "the venue";
   const startTime = event?.time.split(" — ")[0] ?? "9:00 PM";
 
   return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
@@ -62,15 +61,11 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
           <article className="scene-message"><span>KM</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="scene-message__bubble"><p>Who is actually in {area} already?</p></div><div className="scene-message__reactions" aria-label="4 laughing reactions"><i>😂</i><b>4</b></div></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:19 PM</small><div className="scene-message__bubble"><p>“Five minutes away” in the spiritual sense.</p></div><div className="scene-message__reactions" aria-label="2 crying reactions"><i>😭</i><b>2</b></div></div></article>
           <article className="scene-message"><span>YA</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="scene-message__bubble"><p>Okay fine. Leaving now.</p></div><div className="scene-message__reactions" aria-label="3 fire reactions"><i>🔥</i><b>3</b></div></div></article>
-          <article className="scene-message"><span>SE</span><div className="scene-message__body"><small className="scene-message__meta">Sena · 9:24 PM</small><div className="scene-message__bubble"><p>Outside {venue}. Queue is moving.</p></div><div className="scene-message__reactions" aria-label="2 raised hands reactions"><i>🙌</i><b>2</b></div></div></article>
-          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:25 PM</small><div className="scene-message__bubble"><p>Save me a spot on the left.</p></div></div></article>
         </> : <>
           <article className="scene-message"><span>AM</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="scene-message__bubble"><p>{event?.vibe ?? "Front left"} is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
           <article className="scene-flash"><Image src={eventImageUrl(heroImage, 520)} width={520} height={320} sizes="260px" alt={`Flash shared inside the Room for ${eventTitle}`} unoptimized /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 10:44 PM</small><div className="scene-message__bubble"><p>Found you. This set is ridiculous.</p></div><div className="scene-message__reactions" aria-label="5 fire reactions"><i>🔥</i><b>5</b></div></div></article>
           <HostUpdate label="HOST UPDATE" time="10:47 PM" dateTime="22:47" title="Gate change." detail="Use Gate 2 for last entry." compact />
-          <article className="scene-message"><span>KM</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 10:48 PM</small><div className="scene-message__bubble"><p>Gate 2 is definitely quicker.</p></div></div></article>
-          <article className="scene-message"><span>SE</span><div className="scene-message__body"><small className="scene-message__meta">Sena · 10:50 PM</small><div className="scene-message__bubble"><p>Inside. Front left was correct.</p></div><div className="scene-message__reactions" aria-label="3 dancing reactions"><i>💃</i><b>3</b></div></div></article>
         </>}
       </div>
       <div className="room-product-phone__composer">{conversation === "inside" ? <i className="scene-concierge" aria-label="VIP concierge"><ConciergeBell size={13} aria-hidden="true" /><small>VIP</small></i> : <Camera size={17} />}<span>Message The Room</span><Send size={16} /></div>

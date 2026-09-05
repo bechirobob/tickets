@@ -101,6 +101,17 @@ test("featured motion continues in the Room and resumes after returning to the h
   await expect(experience).not.toHaveAttribute("data-active-night", heroSlug ?? "waiting", { timeout: 6_500 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(hero.getByRole("button", { name: "Pause featured nights", exact: true })).toBeDisabled();
+  // Host notices must remain inside the phone's visible conversation area.
+  const hostNotices = await room.locator(".scene-host").evaluateAll((notices) => notices.map((notice) => {
+    const noticeBounds = notice.getBoundingClientRect();
+    const streamBounds = notice.closest(".room-product-phone__stream")!.getBoundingClientRect();
+    return { top: noticeBounds.top - streamBounds.top, bottom: streamBounds.bottom - noticeBounds.bottom };
+  }));
+  expect(hostNotices).toHaveLength(2);
+  for (const notice of hostNotices) {
+    expect(notice.top).toBeGreaterThanOrEqual(0);
+    expect(notice.bottom).toBeGreaterThanOrEqual(0);
+  }
 });
 
 test("My Nights exposes secure recovery to a signed-out customer", async ({ page }) => {
