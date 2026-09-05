@@ -59,7 +59,9 @@ test("ships the BeCore Tickets tab icon in modern and fallback formats", async (
   const svg = await readFile(new URL("favicon.svg", client), "utf8");
 
   assert.match(svg, /aria-label="BeCore Tickets"/u);
-  assert.match(svg, /#ff5a1f/iu);
+  const embeddedIcon = svg.match(/href="data:image\/png;base64,([^"]+)"/u)?.[1];
+  assert.ok(embeddedIcon, "SVG favicon embeds the rendered identity");
+  assert.deepEqual(Buffer.from(embeddedIcon, "base64"), await readFile(new URL("favicon-64x64.png", client)));
   assert.ok((await stat(new URL("favicon.ico", client))).size > 100);
   assert.ok((await stat(new URL("favicon-32x32.png", client))).size > 100);
   assert.ok((await stat(new URL("apple-touch-icon.png", client))).size > 100);
