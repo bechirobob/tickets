@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BeCore Tickets">
-  <rect width="64" height="64" rx="10" fill="#171713"/>
+  <rect width="64" height="64" rx="10" fill="#281b2b"/>
   <path fill="#ff5a1f" d="M13 13h38v10a7 7 0 0 0 0 14v14H13V37a7 7 0 0 0 0-14V13Z"/>
   <path fill="#fffdfa" d="M24 20h10.4c6 0 9.2 2.5 9.2 7 0 2.8-1.5 4.8-4.2 5.8 3.5.9 5.3 3.3 5.3 6.6 0 5-3.5 7.6-10 7.6H24V20Zm9.6 10.2c2.6 0 3.8-.9 3.8-2.7 0-1.7-1.2-2.6-3.8-2.6h-3.4v5.3h3.4Zm.6 11.9c2.8 0 4.2-1.1 4.2-3.3 0-2.1-1.4-3.2-4.2-3.2h-4v6.5h4Z"/>
 </svg>

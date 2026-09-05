@@ -1,11 +1,12 @@
 "use client";
 
-import { CalendarDays, CalendarPlus, Info, LifeBuoy, Menu, Ticket, UsersRound, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, House, Info, LifeBuoy, Menu, Ticket, UsersRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 const links = [
+  { href: "/", label: "Home", icon: House },
   { href: "/events", label: "The Drop", icon: CalendarDays },
   { href: "/hosts", label: "Hosts", icon: UsersRound },
   { href: "/my-nights", label: "My Nights", icon: Ticket },
@@ -79,7 +80,7 @@ export default function MobileNavigation() {
       <div className="night-mobile-menu__links">
         {links.map((link) => {
           const Icon = link.icon;
-          const active = pathname === link.href || (link.href !== "/events" && pathname.startsWith(`${link.href}/`)) || (link.href === "/events" && pathname.startsWith("/event/"));
+          const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(`${link.href}/`)) || (link.href === "/events" && pathname.startsWith("/event/")) || (link.href === "/my-nights" && ["/tickets", "/account/", "/notifications"].some((prefix) => pathname.startsWith(prefix)));
           return <Link key={link.href} href={link.href} tabIndex={open ? undefined : -1} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)}><Icon size={16} aria-hidden="true" /><span>{link.label}</span></Link>;
         })}
       </div>

@@ -8,6 +8,10 @@ import "./discovery.css";
 import "./room-experience.css";
 import "./interface-finish.css";
 import "./nightlife-details.css";
+import "./brand-identity.css";
+import "./backstage.css";
+import "./room-atmosphere.css";
+import "./your-nights.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),
@@ -33,15 +37,15 @@ export const metadata: Metadata = {
     images: ["/social-card.png"],
   },
   manifest: "/manifest.webmanifest",
-  themeColor: "#0b0c0b",
+  themeColor: "#281b2b",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=2", sizes: "any" },
-      { url: "/favicon.svg?v=2", type: "image/svg+xml" },
-      { url: "/favicon-32x32.png?v=2", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico?v=3", sizes: "any" },
+      { url: "/favicon.svg?v=3", type: "image/svg+xml" },
+      { url: "/favicon-32x32.png?v=3", sizes: "32x32", type: "image/png" },
     ],
-    shortcut: "/favicon.ico?v=2",
-    apple: [{ url: "/apple-touch-icon.png?v=2", sizes: "180x180", type: "image/png" }],
+    shortcut: "/favicon.ico?v=3",
+    apple: [{ url: "/apple-touch-icon.png?v=3", sizes: "180x180", type: "image/png" }],
   },
 };
 

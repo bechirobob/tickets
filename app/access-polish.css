@@ -1560,7 +1560,7 @@
   .drop-vibes button { min-width: max-content; }
   .scene-message { max-width: 72%; }
 
-  /* My Nights has no secondary-menu trigger, so its private actions own the right edge. */
+  /* My Nights keeps its menu and private actions together at the right edge. */
   .my-nights-page .directory-header {
     padding-right: 16px;
   }

@@ -2,6 +2,8 @@
 /* eslint-disable @next/next/no-img-element -- event artwork is already governed by the platform image source */
 
 import Link from "next/link";
+import BrandLogo from "../../brand-logo";
+import PublicNavigation from "../../mobile-navigation";
 import {
   ArrowLeft,
   Bell,
@@ -340,13 +342,9 @@ export default function NightHub({ event }: { event: EventSummary }) {
         <Link href="/my-nights">
           <ArrowLeft size={16} /> My Nights
         </Link>
-        <div>
-          <b>{event.title}</b>
-          <span>
-            {event.fullDate} · {event.venue}
-          </span>
-        </div>
+        <Link href="/" className="brand-mark"><BrandLogo /></Link>
         <span className="night-hub__header-actions">
+          <PublicNavigation />
           <Link href={`/room/${event.slug}`}>
             <MessageCircle size={15} /> Enter The Room
           </Link>

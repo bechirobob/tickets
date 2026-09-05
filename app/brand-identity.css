@@ -1,0 +1,22 @@
+/* Rendered enamel ticket; native type keeps the identity crisp at small sizes. */
+body .brand-logo,
+body .brand-mark span.brand-logo:last-child {
+  display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto;
+  color: inherit; text-transform: none; white-space: nowrap; vertical-align: middle;
+}
+body .brand-logo .brand-logo__emblem { width: 41px; height: 44px; flex: 0 0 auto; object-fit: contain; }
+body .brand-logo .brand-logo__type,
+body .brand-mark span.brand-logo__type:last-child { display: grid; gap: 3px; text-align: left; }
+body .brand-logo__type > b { font: 750 23px/.96 var(--font-system); letter-spacing: -.055em; text-transform: none; }
+body .brand-logo__type > small { font: 600 12px/1 var(--font-system); letter-spacing: .2em; text-transform: uppercase; }
+body .brand-logo--prominent .brand-logo__emblem { width: 49px; height: 52px; }
+body .brand-logo--prominent .brand-logo__type > b { font-size: 26px; }
+.night-brand-link, a.brand-mark { min-height: 44px; }
+.night-brand-link:focus-visible, a.brand-mark:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; }
+@media (max-width: 700px) {
+  body .brand-logo { gap: 7px; }
+  body .brand-logo .brand-logo__emblem { width: 35px; height: 38px; }
+  body .brand-logo__type > b, body .brand-logo--prominent .brand-logo__type > b { font-size: 21px; }
+  body .brand-logo__type > small { font-size: 12px; letter-spacing: .13em; }
+  .scanner-header .brand-logo__type { display: none !important; }
+}

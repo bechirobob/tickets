@@ -6,5 +6,5 @@ export default async function RoomPage({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const event = await findCuratedEvent(slug);
   if (!event) notFound();
-  return <RoomClient slug={slug} fallbackTitle={event.title} fallbackDate={`${event.fullDate} · ${event.time}`} />;
+  return <RoomClient slug={slug} fallbackTitle={event.title} fallbackDate={`${event.fullDate} · ${event.time}`} eventImage={event.image} />;
 }

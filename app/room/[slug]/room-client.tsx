@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import { eventImageUrl } from "../../event-images";
 import { ArrowDown, ArrowLeft, BadgeCheck, Camera, ChevronDown, ConciergeBell, Flag, Gem, HandHelping, MessageCircle, MoreHorizontal, Music2, Reply, Send, ShieldCheck, UserRoundX, Users, Wine, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import TicketDialog from "../../ticket-dialog";
@@ -19,7 +21,7 @@ type Policy = { eventSlug: string; eventTitle: string; readOnlyAt: string; readO
 type VipSettings = { bottleServiceEnabled: boolean; bottleMenu: string | null; songSuggestionsEnabled: boolean; assistanceEnabled: boolean };
 type VipRequest = { id: string; kind: string; detail: string; location: string | null; status: string; organizerNote: string | null; createdAt: string };
 
-export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug: string; fallbackTitle: string; fallbackDate: string }) {
+export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventImage }: { slug: string; fallbackTitle: string; fallbackDate: string; eventImage: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [selfId, setSelfId] = useState("");
@@ -324,7 +326,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate }: { slug
     <main className="room-page">
       <header className="room-header">
         <Link href="/my-nights" aria-label="Back to My Nights"><ArrowLeft size={17} /><span>My Nights</span></Link>
-        <div><small>The Room</small><strong>{policy?.eventTitle ?? fallbackTitle}</strong><span>{fallbackDate}</span></div>
+        <div className="room-header__identity"><Image src={eventImageUrl(eventImage, 120)} width={48} height={56} alt="" aria-hidden="true" unoptimized /><div><small>The Room</small><strong>{policy?.eventTitle ?? fallbackTitle}</strong><span>{fallbackDate}</span></div></div>
         <div className="room-header__activity"><span aria-label={`${online} people online`} title={`${online} people online`}><Users size={16} /><b>{online}</b></span><button type="button" className="room-flash-toggle" aria-label={`Open Flashes; ${flashCount} available`} title={`Flashes · ${flashCount}`} onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera size={17} /><b>{flashCount}</b></button><RoomNotifications slug={slug} onNotice={setNotice} /></div>
       </header>
       <section className="room-trust"><BadgeCheck size={16} /><b>Ticket holders only</b><span>{policy?.emergencyReadOnly ? "Host pause active" : policy?.slowModeSeconds ? `Slow mode · ${policy.slowModeSeconds}s` : "Your Night, together"}</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Reconnecting…"}</i></section>
