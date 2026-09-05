@@ -28,6 +28,10 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const preview = page.locator(".room-product-phone").first();
+  // The homepage defers offscreen sections with content-visibility. Measure the
+  // actual phone only after scrolling it into the rendered viewport.
+  await preview.scrollIntoViewIfNeeded();
+  await expect(preview.locator(".chat-compose-field")).toBeVisible();
   const previewMaterial = await preview.locator(".chat-compose-field").evaluate((element) => getComputedStyle(element).backgroundColor);
   const previewBubble = await preview.locator(".scene-message__bubble").first().evaluate((element) => getComputedStyle(element).backgroundColor);
   const phoneFit = await preview.evaluate((phone) => {
