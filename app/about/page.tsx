@@ -27,7 +27,7 @@ export default function AboutPage() {
 
     <section className="about-hero">
       <p className="eyebrow">About BeCore Tickets</p>
-      <h1>“We should go out”<br />needed a follow-up.</h1>
+      <h1>“We should go out”<br />needed a plan.</h1>
       <div className="about-hero__story">
         <p>You know the chat. Someone suggests a night out, six people say they’re in, and nobody picks a place. BeCore Tickets gives Accra an actual plan.</p>
         <p>Find a night worth dressing for, get your tickets and meet the people going in The Room. If you’re throwing the party, we help with sales, guest updates and the door. You can get back to arguing about the line-up.</p>
