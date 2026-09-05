@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+// A controlling service worker can bypass Playwright routes in WebKit.
+// These request-failure tests must always use their mocks, never a live write.
+test.use({ serviceWorkers: "block" });
+
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
 });
@@ -20,6 +24,7 @@ test("a failed recovery preserves the email and allows a successful retry", asyn
   const submit = page.getByRole("button", { name: "Bring back my Nights" });
   await submit.click();
   await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
+  expect(attempts).toBe(1);
   await expect(email).toHaveValue("recovery@example.com");
   await expect(submit).toBeEnabled();
   await expect(page.getByText("Check your email", { exact: true })).toHaveCount(0);

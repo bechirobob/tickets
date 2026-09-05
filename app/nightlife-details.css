@@ -10,7 +10,7 @@
   inset: 0;
   z-index: 2;
   border-radius: inherit;
-  background: linear-gradient(115deg, transparent 15%, rgba(255,255,255,.04) 35%, rgba(255,255,255,.18) var(--poster-light, 50%), rgba(255,255,255,.03) 65%, transparent 80%);
+  background: linear-gradient(115deg, transparent calc(var(--poster-light, 50%) - 28%), rgba(255,255,255,.03) calc(var(--poster-light, 50%) - 16%), rgba(255,255,255,.14) var(--poster-light, 50%), rgba(255,255,255,.03) calc(var(--poster-light, 50%) + 16%), transparent calc(var(--poster-light, 50%) + 28%));
   opacity: 0;
   transform: none;
   pointer-events: none;

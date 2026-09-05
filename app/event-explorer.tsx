@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, MapPin, Search, Ticket } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { eventImageLoader } from "./event-images";
 import type { CuratedEvent } from "./events";
 import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
@@ -14,6 +14,10 @@ import PosterLink from "./poster-link";
 type WindowFilter = EventWindow;
 type VibeFilter = CuratedEvent["vibe"] | "All";
 
+const subscribeToClient = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+
 const vibes: Array<{ value: VibeFilter; label: string }> = [
   { value: "All", label: "All music & moods" },
   { value: "Late night", label: "Late night" },
@@ -23,6 +27,8 @@ const vibes: Array<{ value: VibeFilter; label: string }> = [
 ];
 
 export default function EventExplorer({ events, full = false, featuredSlug }: { events: CuratedEvent[]; full?: boolean; featuredSlug?: string }) {
+  // SSR can appear before React attaches handlers. Do not accept and lose input.
+  const ready = useSyncExternalStore(subscribeToClient, clientReady, serverReady);
   const [windowFilter, setWindowFilter] = useState<WindowFilter>("next");
   const [area, setArea] = useState("All areas");
   const [vibe, setVibe] = useState<VibeFilter>("All");
@@ -48,14 +54,14 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
   }
 
   return <div className={`drop-explorer discovery-explorer${full ? " drop-explorer--full" : ""}`}>
-    {full ? <label className="discovery-search"><Search size={19} aria-hidden="true" /><span className="sr-only">Search events, artists or venues</span><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search events, artists or venues" /></label> : null}
+    {full ? <label className="discovery-search"><Search size={19} aria-hidden="true" /><span className="sr-only">Search events, artists or venues</span><input type="search" disabled={!ready} value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search events, artists or venues" /></label> : null}
     <div className="drop-controls" aria-label="Filter The Drop">
       <div role="group" aria-label="When">
-        <button type="button" aria-pressed={windowFilter === "tonight"} onClick={() => changeWindow("tonight")}>Tonight</button>
-        <button type="button" aria-pressed={windowFilter === "weekend"} onClick={() => changeWindow("weekend")}>This weekend</button>
-        <button type="button" aria-pressed={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
+        <button type="button" disabled={!ready} aria-pressed={windowFilter === "tonight"} onClick={() => changeWindow("tonight")}>Tonight</button>
+        <button type="button" disabled={!ready} aria-pressed={windowFilter === "weekend"} onClick={() => changeWindow("weekend")}>This weekend</button>
+        <button type="button" disabled={!ready} aria-pressed={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
       </div>
-      <label><MapPin size={13} /><span className="sr-only">Area</span><select value={area} onChange={(event) => { setArea(event.target.value); setPage(0); }}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label><MapPin size={13} /><span className="sr-only">Area</span><select disabled={!ready} value={area} onChange={(event) => { setArea(event.target.value); setPage(0); }}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
     </div>
 
     <div className="drop-vibes" role="group" aria-label="Music and mood">

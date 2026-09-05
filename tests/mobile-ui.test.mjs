@@ -569,7 +569,7 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.doesNotMatch(home, /<nav aria-label="Main navigation">[^<]*(?:<[^>]+>[^<]*)*<Link href="\/hosts">/u);
   assert.doesNotMatch(home, /id="about"|className="becore-about"|Accra plans differently/u);
   assert.match(about, /className="about-page"/u);
-  assert.match(about, /needed a follow-up/u);
+  assert.match(about, /needed a plan/u);
   assert.match(about, /Your people are already in the Room/u);
   assert.match(about, /A good night deserves an encore/u);
   assert.match(about, /which tickets sold, which promoters brought people and when the crowd arrived/u);
