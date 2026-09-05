@@ -23,7 +23,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-skip:focus { top: 12px; }
 
 .discovery-home .compact-hero { height: 450px; min-height: 450px; background: #10110f; }
-.discovery-home .compact-hero > img { inset: 0 0 0 auto; width: 82%; filter: saturate(1.08) contrast(1.02); }
+.discovery-home .compact-hero > img { inset: 0; width: 100%; filter: saturate(1.08) contrast(1.02); }
 .discovery-home .compact-hero__shade { background: linear-gradient(90deg, #10110f 4%, rgba(16,17,15,.8) 30%, rgba(16,17,15,.18) 72%, rgba(16,17,15,.06)), linear-gradient(0deg, rgba(16,17,15,.85), transparent 55%); }
 .discovery-home .compact-hero__copy { left: 5vw; right: auto; bottom: 91px; width: min(650px, 60%); }
 .discovery-home .compact-hero__copy h1 { max-width: 640px; font-size: clamp(46px, 6.3vw, 86px); line-height: .92; font-weight: 850; letter-spacing: -.065em; text-wrap: balance; text-transform: uppercase; }
@@ -36,7 +36,9 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .compact-hero__price b { margin: 0 4px; font-size: 20px; }
 .discovery-home .compact-hero__price span { color: #c3c2b9; font-size: 13px; }
 .discovery-home .active-night-autoplay-toggle,
-.discovery-home .active-night-autoplay-toggle:focus-visible { position: absolute; inset: auto 5vw 18px auto; width: auto; height: 44px; min-width: 88px; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; overflow: visible; clip-path: none; border: 1px solid #797b70; background: #10110f; color: #f4f1ea; font-size: 13px; font-weight: 650; }
+.discovery-home .active-night-autoplay-toggle:focus-visible { position: absolute; inset: auto 5vw 18px auto; width: auto; height: 44px; min-width: 88px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 14px; overflow: visible; clip-path: none; border: 0; background: transparent; color: #f4f1ea; font-size: 12px; font-weight: 500; }
+.discovery-home .active-night-autoplay-toggle small { color: #b8b8ac; font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+.discovery-home .active-night-autoplay-toggle span { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: #74766a; }
 .discovery-home .active-night-autoplay-toggle:disabled { opacity: .8; }
 .discovery-home .active-night-autoplay-toggle:focus-visible { outline: 2px solid #d7f45b; outline-offset: 4px; }
 
@@ -111,7 +113,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 /* A night out: dark poster wall, coloured event ink, and actual event photography. */
 .discovery-home .night-drop--compact,
 .discovery-directory { background: #141511; color: #f4f1ea; color-scheme: dark; }
-.discovery-home .compact-section-head { border-top: 3px solid var(--acid); padding-top: 22px; }
+.discovery-home .compact-section-head { border-top: 0; padding-top: 8px; }
 .discovery-home .compact-section-head h2 { font-weight: 850; text-transform: uppercase; }
 .discovery-home .compact-section-head .night-kicker,
 .discovery-directory .directory-intro .eyebrow { color: var(--acid); }
@@ -173,6 +175,13 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
   .discovery-directory .discovery-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .discovery-directory .event-artwork-type b { font-size: 36px; }
 }
+@media (min-width: 701px) {
+  .discovery-grid[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+  .discovery-grid[data-count="2"] .drop-card__image { aspect-ratio: 3 / 2; }
+  .discovery-grid[data-count="2"] .event-artwork-type { inset: 56px 26px 26px; }
+  .discovery-grid[data-count="2"] .event-artwork-type b { max-width: 380px; font-size: clamp(34px, 4vw, 54px); }
+  .discovery-grid[data-count="1"] { grid-template-columns: minmax(0, 580px); }
+}
 @media (max-width: 1000px) {
   .discovery-home .night-header__actions { gap: 14px; }
   .night-city { display: none; }
@@ -193,8 +202,8 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
   .discovery-home .compact-hero__price { left: 18px; bottom: 27px; }
   .discovery-home .compact-hero__price b { font-size: 18px; }
   .discovery-home .active-night-autoplay-toggle,
-  .discovery-home .active-night-autoplay-toggle:focus-visible { right: 18px; bottom: 17px; min-width: 44px; padding: 0 12px; }
-  .discovery-home .active-night-autoplay-toggle span { display: none; }
+  .discovery-home .active-night-autoplay-toggle:focus-visible { right: 18px; bottom: 17px; min-width: 44px; padding: 0; gap: 9px; }
+  .discovery-home .active-night-autoplay-toggle span { display: inline; }
   .discovery-home .night-drop--compact { padding: 28px 18px 38px; }
   .discovery-home .compact-section-head { align-items: flex-end; }
   .discovery-home .compact-section-head h2 { font-size: 30px; }

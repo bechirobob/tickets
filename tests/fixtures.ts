@@ -15,6 +15,7 @@ export const ticketSelectionEvent: CuratedEvent = {
   vibe: "Late night",
   price: 120,
   priceFromMinor: 12_000,
+  bookingFeeBasisPoints: 750,
   capacity: 200,
   ageRestriction: "18+",
   lineup: "Test DJ",

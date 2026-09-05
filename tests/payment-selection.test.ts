@@ -3,6 +3,8 @@ import { env } from "cloudflare:test";
 import { POST as initializePayment } from "../app/api/payments/initialize/route";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { GET as bookingFeeQuote } from "../app/api/config/booking-fee/route";
+import { findCuratedEvent, getPublicEvents } from "../app/events";
+import { discoveryTotalMinor } from "../lib/event-pricing";
 
 const eventSlug = "inventory-payment-test";
 
@@ -124,6 +126,10 @@ describe("payment ticket validation", () => {
     await env.DB.prepare("INSERT INTO booking_fee_rules (id, scope, scope_id, percentage_basis_points, effective_at, created_at, created_by) VALUES (?, 'event', ?, 1100, '2020-01-01', ?, 'test')").bind(id, eventSlug, new Date().toISOString()).run();
     const quote = await bookingFeeQuote(new Request(`https://tickets.becoreops.com/api/config/booking-fee?event=${eventSlug}`));
     expect(await quote.json()).toMatchObject({ percentage: 11 });
+    const advertised = await findCuratedEvent(eventSlug);
+    expect(advertised?.bookingFeeBasisPoints).toBe(1100);
+    expect(discoveryTotalMinor(advertised!)).toBe(13320);
+    expect((await getPublicEvents()).find((event) => event.slug === eventSlug)?.bookingFeeBasisPoints).toBe(1100);
     const request = paymentRequest(eventSlug, "general");
     const body = await request.json() as Record<string, unknown>;
     body.expectedTotalMinor = 12000;

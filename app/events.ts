@@ -17,6 +17,7 @@ export type CuratedEvent = {
   vibe: "Late night" | "Day party" | "Alté" | "Amapiano";
   price: number;
   priceFromMinor: number;
+  bookingFeeBasisPoints: number;
   capacity: number;
   ageRestriction: string;
   lineup: string;
@@ -42,6 +43,7 @@ type EventRecord = {
   endsAt: string;
   vibe: CuratedEvent["vibe"];
   priceFromMinor: number;
+  bookingFeeBasisPoints: number;
   capacity: number;
   salesOpenAt: string | null;
   salesCloseAt: string | null;
@@ -89,6 +91,7 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     vibe: record.vibe,
     price: record.priceFromMinor / 100,
     priceFromMinor: record.priceFromMinor,
+    bookingFeeBasisPoints: record.bookingFeeBasisPoints,
     capacity: record.capacity,
     ageRestriction: record.ageRestriction,
     lineup: record.lineup,
@@ -139,7 +142,15 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
            age_restriction AS ageRestriction, lineup,
            event_state AS eventState, is_test_event AS isTestEvent,
            rescheduled_from AS rescheduledFrom,
-           image_url AS imageUrl, curation_note AS curationNote
+           image_url AS imageUrl, curation_note AS curationNote,
+           COALESCE(
+             (SELECT percentage_basis_points FROM booking_fee_rules
+              WHERE scope = 'event' AND scope_id = curated_event_records.slug AND effective_at <= ?
+              ORDER BY effective_at DESC LIMIT 1),
+             (SELECT percentage_basis_points FROM booking_fee_rules
+              WHERE scope = 'global' AND effective_at <= ?
+              ORDER BY effective_at DESC LIMIT 1), 750
+           ) AS bookingFeeBasisPoints
     FROM curated_event_records
     WHERE (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
       ${slugFilter}
@@ -147,8 +158,8 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
     LIMIT 100
   `);
   const result = slug
-    ? await statement.bind(now, slug).all<EventRecord>()
-    : await statement.bind(now).all<EventRecord>();
+    ? await statement.bind(now, now, now, slug).all<EventRecord>()
+    : await statement.bind(now, now, now).all<EventRecord>();
   return result.results;
 }
 

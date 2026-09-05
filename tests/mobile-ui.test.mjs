@@ -49,7 +49,8 @@ test("message controls cannot inherit a full-page footer layout", async () => {
   ]);
 
   assert.doesNotMatch(css, /(?:^|\n)footer\s*\{/u);
-  assert.match(room, /className="room-message__actions"/u);
+  assert.match(room, /className="room-message-menu"/u);
+  assert.match(room, /label="Message actions"/u);
   assert.doesNotMatch(room, /<footer>\s*<button/u);
   assert.match(css, /\.room-bubble\s*\{[^}]*border-radius:/su);
 });
@@ -130,8 +131,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /Illustrative preview/u);
   assert.match(home, />Demo chat</u);
   assert.match(home, /HOST UPDATE/u);
-  assert.match(home, /ENTRY UPDATE/u);
-  assert.match(home, /title="Doors open\."/u);
+  assert.match(home, /title="Gate change\."/u);
+  assert.match(home, /Have your ticket ready at entry/u);
   assert.match(home, /title="Gate change\."/u);
   assert.match(home, /className="scene-host__mark"/u);
   assert.match(home, /className="scene-host__content"/u);
@@ -199,7 +200,7 @@ test("The Room reconnects when a ticket holder returns to the page", async () =>
   assert.match(room, /Math\.min\(15_000, 750 \* \(2 \*\* Math\.min\(attempt, 5\)\)\)/u);
   assert.match(room, /JSON\.stringify\(\{ type: "ping" \}\)/u);
   assert.match(room, /Date\.now\(\) - lastSocketActivityRef\.current > 60_000/u);
-  assert.match(room, /Finding the signal/u);
+  assert.match(room, /Reconnecting…/u);
   assert.match(room, /type: "flash" as const/u);
   assert.match(room, /className="room-camera"/u);
   assert.match(durableObject, /input\.type === "ping"/u);
@@ -296,7 +297,7 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(experience, /<RoomPreviewCarousel key=\{active\?\.slug/u);
   assert.match(experience, /data-active-night=\{active\?\.slug/u);
   assert.match(experience, /className="active-night-autoplay-toggle"/u);
-  assert.match(experience, /aria-label=\{reducedMotion \? "Featured night slideshow is static because Reduce Motion is on"/u);
+  assert.match(experience, /aria-label=\{reducedMotion \? "Motion off: featured nights respect your Reduce Motion setting"/u);
   assert.doesNotMatch(experience, /active-night-controls|Previous featured night|Next featured night|Show \$\{event\.title\}/u);
   assert.match(experience, /className="compact-hero__image compact-hero__image--outgoing"/u);
   assert.match(experience, /className="compact-hero__image compact-hero__image--active"/u);
@@ -417,7 +418,7 @@ test("event-day journeys remain available beyond the open browser tab", async ()
   assert.match(hub, /Open offline door pass/u);
   assert.match(hub, /TicketTransfer/u);
   assert.match(roomNotifications, /Notification\.requestPermission\(\)/u);
-  assert.match(roomNotifications, /aria-pressed=\{enabled\}/u);
+  assert.match(roomNotifications, /role="switch" aria-checked=\{enabled\}/u);
   assert.match(roomNotifications, /JSON\.stringify\(\{ enabled: next \}\)/u);
   assert.doesNotMatch(roomNotifications, /<select|Mute for|Send me a test notification|notifications\/test/u);
   assert.match(serviceWorker, /addEventListener\("push"/u);
