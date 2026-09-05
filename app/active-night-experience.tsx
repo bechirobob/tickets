@@ -55,8 +55,8 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
     <div className="room-product-phone__display">
     <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
     <div className="room-product-phone__screen">
-      <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>Demo chat</span></header>
-      <div className="room-product-phone__stream">
+      <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>Preview</span></header>
+      <div key={event?.slug ?? "waiting"} className="room-product-phone__stream">
         {conversation === "arrival" ? <>
           <HostUpdate label="HOST UPDATE" time="9:14 PM" dateTime="21:14" title={`Doors at ${startTime}.`} detail="Have your ticket ready at entry." />
           <article className="scene-message"><span>KM</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="scene-message__bubble"><p>Who is actually in {area} already?</p></div><div className="scene-message__reactions" aria-label="4 laughing reactions"><i>😂</i><b>4</b></div></div></article>
@@ -88,15 +88,16 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
   const [manualPause, setManualPause] = useState(false);
   const [interactionPause, setInteractionPause] = useState(false);
   const [documentHidden, setDocumentHidden] = useState(false);
-  const [leftHero, setLeftHero] = useState(false);
+  const [sceneVisible, setSceneVisible] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
+  const roomRef = useRef<HTMLElement>(null);
   const active = scenes[activeIndex] ?? null;
   const previous = previousIndex === null ? null : scenes[previousIndex] ?? null;
   const heroImage = active?.image ?? fallbackImage;
   const theme = sceneThemes[active?.vibe ?? "Late night"];
   const hasScenes = scenes.length > 1;
-  const autoplayRunning = hasScenes && !manualPause && !interactionPause && !documentHidden && !leftHero && !reducedMotion;
+  const autoplayRunning = hasScenes && !manualPause && !interactionPause && !documentHidden && sceneVisible && !reducedMotion;
   const sceneStyle = {
     "--acid": theme.acid,
     "--signal": theme.signal,
@@ -120,12 +121,16 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
   }, []);
 
   useEffect(() => {
-    const hero = heroRef.current;
-    if (!hero) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting && entry.boundingClientRect.bottom <= 0) setLeftHero(true);
+    const surfaces = [heroRef.current, roomRef.current].filter((surface): surface is HTMLElement => surface !== null);
+    const visible = new Set<Element>();
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) visible.add(entry.target);
+        else visible.delete(entry.target);
+      }
+      setSceneVisible(visible.size > 0);
     }, { threshold: 0.05 });
-    observer.observe(hero);
+    surfaces.forEach((surface) => observer.observe(surface));
     return () => observer.disconnect();
   }, []);
 
@@ -169,8 +174,6 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       aria-label="Featured nights"
       onFocusCapture={() => setInteractionPause(true)}
       onBlurCapture={leaveFocus}
-      onMouseEnter={() => setInteractionPause(true)}
-      onMouseLeave={(event) => setInteractionPause(event.currentTarget.contains(document.activeElement))}
     >
       {previous ? <Image key={`previous-${previous.slug}`} className="compact-hero__image compact-hero__image--outgoing" src={eventImageUrl(previous.image, 1600, 78)} width={1600} height={900} sizes="100vw" alt="" aria-hidden="true" unoptimized /> : null}
       <Image key={active?.slug ?? "waiting"} className="compact-hero__image compact-hero__image--active" src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={active ? `Atmosphere for ${active.title}` : "A crowd under warm stage lights at night"} priority={activeIndex === 0} unoptimized />
@@ -186,11 +189,11 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       {hasScenes ? <button
         type="button"
         className="active-night-autoplay-toggle"
-        aria-label={reducedMotion ? "Motion off: featured nights respect your Reduce Motion setting" : manualPause ? "Motion off: play featured nights slideshow" : "Motion on: pause featured nights slideshow"}
+        aria-label={manualPause ? "Resume featured nights" : "Pause featured nights"}
         aria-pressed={manualPause || reducedMotion}
         disabled={reducedMotion}
         onClick={toggleAutoplay}
-      ><small aria-hidden="true">{String(activeIndex + 1).padStart(2, "0")} / {String(scenes.length).padStart(2, "0")}</small><span>Motion {manualPause || reducedMotion ? "off" : "on"}</span></button> : null}
+      >{manualPause ? "Resume featured nights" : "Pause featured nights"}</button> : null}
     </section>
 
     <section className="night-drop night-drop--compact" id="drop">
@@ -198,10 +201,10 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       <EventExplorer events={events} featuredSlug={active?.slug} />
     </section>
 
-    <section className="room-product-scene active-night-room" id="the-room" data-scroll-reveal>
+    <section ref={roomRef} className="room-product-scene active-night-room" id="the-room" data-scroll-reveal onFocusCapture={() => setInteractionPause(true)} onBlurCapture={leaveFocus}>
       <Image className="room-product-scene__atmosphere" src={eventImageUrl(heroImage, 1200, 75)} width={1200} height={800} sizes="100vw" alt="" aria-hidden="true" unoptimized />
-      <div className="room-product-scene__copy"><p className="night-kicker"><span /> More than a ticket</p><h2>The night has a Room.</h2><p>Meet the people going. Get updates from the Host. Share Flashes that disappear when the Room closes.</p><span><LockKeyhole size={13} /> Private to verified ticket holders</span><p className="room-preview-disclosure">Illustrative preview · conversations shown are examples.</p></div>
-      <RoomPreviewCarousel key={active?.slug ?? "waiting"}>
+      <div className="room-product-scene__copy"><p className="night-kicker"><span /> More than a ticket</p><h2>The night has a Room.</h2><p>Meet the people going. Get updates from the Host. Share Flashes that disappear when the Room closes.</p><span><LockKeyhole size={13} /> Private to verified ticket holders</span></div>
+      <RoomPreviewCarousel>
         <RoomPhone event={active} heroImage={heroImage} conversation="arrival" />
         <RoomPhone event={active} heroImage={heroImage} conversation="inside" />
       </RoomPreviewCarousel>

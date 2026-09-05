@@ -19,7 +19,7 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
   };
 
   return <div className="room-product-preview" data-active={active} role="region" aria-roledescription="carousel" aria-label="The Room preview">
-    <div ref={trackRef} className="room-product-scene__phones" onScroll={trackPosition} aria-live="polite" tabIndex={0}>
+    <div ref={trackRef} className="room-product-scene__phones" onScroll={trackPosition} aria-live="off" tabIndex={0}>
       {children}
     </div>
     <p className="sr-only" aria-live="polite">Room preview {active + 1} of 2. Swipe or use the arrow keys to see both views.</p>

@@ -14,7 +14,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .night-support__notice { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .event-page .checkout-link.checkout-link--disabled { opacity: 1; border: 0; background: transparent; color: #55534d; cursor: auto; }
 .discovery-home { --bone: #f4f1ea; }
-.discovery-home .night-header { position: relative; height: 72px; padding: 0 5vw; background: #10110f; border-bottom: 1px solid #34352e; }
+.discovery-home .night-header { position: relative; height: 72px; padding: 0 5vw; background: #281b2b; border-bottom: 1px solid #514052; }
 .discovery-home .night-header__actions { gap: 28px; }
 .discovery-home .night-header .night-desktop-links { display: flex; gap: 28px; }
 .discovery-home .night-desktop-links a { min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; letter-spacing: 0; }
@@ -35,12 +35,9 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .compact-hero__price { left: 5vw; right: auto; bottom: 26px; color: #c3c2b9; font-size: 13px; letter-spacing: 0; text-transform: none; }
 .discovery-home .compact-hero__price b { margin: 0 4px; font-size: 20px; }
 .discovery-home .compact-hero__price span { color: #c3c2b9; font-size: 13px; }
-.discovery-home .active-night-autoplay-toggle,
-.discovery-home .active-night-autoplay-toggle:focus-visible { position: absolute; inset: auto 5vw 18px auto; width: auto; height: 44px; min-width: 88px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 14px; overflow: visible; clip-path: none; border: 0; background: transparent; color: #f4f1ea; font-size: 12px; font-weight: 500; }
-.discovery-home .active-night-autoplay-toggle small { color: #b8b8ac; font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .06em; }
-.discovery-home .active-night-autoplay-toggle span { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: #74766a; }
-.discovery-home .active-night-autoplay-toggle:disabled { opacity: .8; }
-.discovery-home .active-night-autoplay-toggle:focus-visible { outline: 2px solid #d7f45b; outline-offset: 4px; }
+/* Playback stays automatic. Keyboard and assistive technology users retain a stop mechanism. */
+.discovery-home .active-night-autoplay-toggle { inset: auto 5vw 18px auto; }
+.discovery-home .active-night-autoplay-toggle:focus-visible { width: auto; height: 44px; padding: 0 16px; overflow: visible; clip-path: none; border: 0; border-radius: 8px; background: #281b2b; color: #fff6ea; font-size: 14px; font-weight: 500; outline: 2px solid #d7f45b; outline-offset: 4px; }
 
 .discovery-home .night-drop--compact { padding: 36px 5vw 52px; background: #f4f1ea; color: #10110f; }
 .discovery-home .compact-section-head { margin-bottom: 18px; gap: 16px; }
@@ -101,7 +98,6 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .room-product-scene__copy h2 { font-size: clamp(38px, 4.6vw, 62px); font-weight: 700; line-height: .98; }
 .discovery-home .room-product-scene__copy > p:not(.night-kicker) { max-width: 400px; font-size: 16px; line-height: 1.65; color: #c1c0b7; }
 .discovery-home .room-product-scene__copy > span { font-size: 12px; letter-spacing: .03em; line-height: 1.5; }
-.discovery-home .room-product-scene__copy > .room-preview-disclosure { margin-top: 18px; font-size: 12px; color: #aaa99f; }
 .discovery-home .organizer-intelligence { padding: 44px 5vw; gap: 7vw; background: #f4f1ea; }
 .discovery-home .organizer-intelligence h2 { font-size: clamp(34px, 3.6vw, 48px); line-height: 1.06; font-weight: 700; }
 .discovery-home .organizer-intelligence__copy > p:not(.night-kicker) { max-width: 480px; font-size: 15px; line-height: 1.6; }
@@ -112,14 +108,14 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 
 /* A night out: dark poster wall, coloured event ink, and actual event photography. */
 .discovery-home .night-drop--compact,
-.discovery-directory { background: #141511; color: #f4f1ea; color-scheme: dark; }
+.discovery-directory { background: #302033 url("/textures/print-grain.svg") repeat; color: #f4f1ea; color-scheme: dark; }
 .discovery-home .compact-section-head { border-top: 0; padding-top: 8px; }
 .discovery-home .compact-section-head h2 { font-weight: 600; text-transform: none; }
 .discovery-home .compact-section-head .night-kicker,
 .discovery-directory .directory-intro .eyebrow { color: var(--acid); }
 .discovery-home .compact-section-head > a,
 .discovery-directory .directory-intro > p { color: #d2d0c6; }
-.discovery-explorer .drop-controls { border-color: #45463e; }
+.discovery-explorer .drop-controls { border-color: #645269; }
 .discovery-explorer .drop-controls button,
 .discovery-explorer .drop-vibes button,
 .discovery-result-count { color: #b8b8ac; }
@@ -144,15 +140,23 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-explorer .drop-pagination button { color: #f4f1ea; }
 .discovery-explorer .drop-pagination span { color: #b8b8ac; }
 .discovery-explorer .drop-pagination button:disabled { color: #a3a497; }
-.discovery-search { background: #20211b; border-color: #74766a; color: #b8b8ac; }
+.discovery-search { background: #3b2a3e; border-color: #9b829f; color: #d0c5d0; }
 .discovery-search input { color: #f4f1ea; }
 .discovery-search input::placeholder { color: #b8b8ac; }
 .discovery-search:focus-within { outline-color: var(--acid); }
-.discovery-home .room-product-scene { position: relative; isolation: isolate; border-top: 1px solid #414238; }
-.room-product-scene__atmosphere { position: absolute; inset: 0 0 0 auto; width: 80%; height: 100%; object-fit: cover; opacity: .3; z-index: -2; pointer-events: none; }
-.discovery-home .room-product-scene::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, #10110f 15%, rgba(16,17,15,.8) 40%, rgba(16,17,15,.25)); pointer-events: none; }
+.discovery-home .room-product-scene { position: relative; isolation: isolate; border-top: 0; background: #252038; }
+.room-product-scene__atmosphere { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .72; z-index: -2; pointer-events: none; }
+.discovery-home .room-product-scene::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(32,21,47,.96) 5%, rgba(32,21,47,.9) 36%, rgba(32,21,47,.38) 70%), url("/textures/print-grain.svg"); pointer-events: none; }
 .discovery-home .room-product-scene__copy h2 { color: var(--acid); font-weight: 800; }
 .discovery-home .room-product-scene__phones { padding-top: 16px; padding-bottom: 24px; }
+.discovery-home .room-product-scene__copy > p:not(.night-kicker) { color: #e1d6e3; }
+.discovery-home .room-product-scene__copy > span { color: #e1d6e3; }
+.discovery-home .organizer-intelligence { background: #cf957a url("/textures/print-grain.svg") repeat; color: #31202a; }
+.discovery-home .organizer-intelligence :is(.night-kicker, .organizer-intelligence__copy > p, dt, dd) { color: #442c31; }
+.discovery-home .organizer-intelligence dl > div { border-color: #92614e; }
+.discovery-home .compact-footer { background: #281b2b url("/textures/print-grain.svg") repeat; border-color: #514052; }
+.discovery-home .compact-footer :is(p, a) { color: #d9cbdc; }
+.discovery-directory .directory-header { background: #281b2b; border-color: #645269; }
 
 /* Hardware is a photographic render; all screen content remains live HTML.
  * The source image's body bounds are x178..848 / y58..1476 on a 1024x1536
@@ -201,9 +205,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
   .discovery-home .compact-hero__copy > div { margin-top: 18px; flex-wrap: wrap; }
   .discovery-home .compact-hero__price { left: 18px; bottom: 27px; }
   .discovery-home .compact-hero__price b { font-size: 18px; }
-  .discovery-home .active-night-autoplay-toggle,
-  .discovery-home .active-night-autoplay-toggle:focus-visible { right: 18px; bottom: 17px; min-width: 44px; padding: 0; gap: 9px; }
-  .discovery-home .active-night-autoplay-toggle span { display: inline; }
+  .discovery-home .active-night-autoplay-toggle { right: 18px; bottom: 17px; }
   .discovery-home .night-drop--compact { padding: 28px 18px 38px; }
   .discovery-home .compact-section-head { align-items: flex-end; }
   .discovery-home .compact-section-head h2 { font-size: 30px; }
@@ -228,6 +230,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
   .discovery-directory .directory-intro { padding: 30px 18px 22px; }
   .discovery-directory .directory-results { padding: 0 18px 50px; }
   .discovery-home .room-product-scene { padding: 34px 18px 24px; gap: 24px; }
+  .discovery-home .room-product-scene::before { background: linear-gradient(180deg, rgba(32,21,47,.94) 25%, rgba(32,21,47,.46) 70%), url("/textures/print-grain.svg"); }
   .discovery-home .room-product-scene__copy h2 { max-width: 420px; font-size: 42px; }
   .discovery-home .organizer-intelligence { padding: 34px 18px; gap: 24px; }
   .discovery-home .organizer-intelligence h2 { font-size: 36px; }
