@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { eventImageLoader } from "./event-images";
 import type { CuratedEvent } from "./events";
 import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
+import { discoveryPrice } from "../lib/event-pricing";
 
 type WindowFilter = EventWindow;
 type VibeFilter = CuratedEvent["vibe"] | "All";
@@ -59,9 +60,9 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
       {vibes.map((item) => <button key={item.value} type="button" aria-pressed={vibe === item.value} onClick={() => { setVibe(item.value); setPage(0); }}><b>{item.label}</b></button>)}
     </div>
 
-    <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
+    <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"} · Prices include fees{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
 
-    {pageEvents.length ? <div className={`drop-grid discovery-grid${full ? " drop-grid--full" : ""}`}>
+    {pageEvents.length ? <div className={`drop-grid discovery-grid${full ? " drop-grid--full" : ""}`} data-count={pageEvents.length}>
       {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-featured={event.slug === featuredSlug ? "true" : undefined}>
         <Link href={`/event/${event.slug}`} className="drop-card__image">
           <Image loader={eventImageLoader} src={event.image} width={720} height={900} sizes="(max-width: 700px) 50vw, (max-width: 1000px) 33vw, 25vw" alt={`${event.isTestEvent ? "Preview image" : "Artwork"} for ${event.title}`} />
@@ -72,7 +73,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
           <p><time dateTime={event.startsAt}>{event.day.slice(0, 3)} {event.shortDate}</time> · {event.time.split(" — ")[0]}</p>
           <h3><Link href={`/event/${event.slug}`}>{event.title}</Link></h3>
           <small>{event.venue} · {event.area}</small>
-          <div><span>{event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${event.price} + fee` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span></div>
+          <div><span>{event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${discoveryPrice(event)}` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span></div>
           <Link href={`/event/${event.slug}`} aria-label={`See ${event.title}`}>View event <ArrowUpRight size={14} /></Link>
         </div>
       </article>)}

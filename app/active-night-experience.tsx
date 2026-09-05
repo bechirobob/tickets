@@ -10,8 +10,6 @@ import {
   ConciergeBell,
   Gem,
   LockKeyhole,
-  Pause,
-  Play,
   Send,
   Signal,
   Ticket,
@@ -23,6 +21,7 @@ import EventExplorer from "./event-explorer";
 import { eventImageUrl } from "./event-images";
 import type { CuratedEvent } from "./events";
 import RoomPreviewCarousel from "./room-preview-carousel";
+import { discoveryPrice } from "../lib/event-pricing";
 
 const sceneInterval = 4_500;
 const fallbackImage = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
@@ -49,7 +48,6 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
   const area = event?.area ?? "Osu";
   const venue = event?.venue ?? "the venue";
   const startTime = event?.time.split(" — ")[0] ?? "9:00 PM";
-  const lineup = event?.lineup || "Main set later";
 
   return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
     <Image className="room-product-phone__render" src="/devices/iphone-black-titanium.png" width={1024} height={1536} alt="" aria-hidden="true" unoptimized />
@@ -59,7 +57,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
       <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>Demo chat</span></header>
       <div className="room-product-phone__stream">
         {conversation === "arrival" ? <>
-          <HostUpdate label="HOST UPDATE" time="9:14 PM" dateTime="21:14" title="Doors open." detail={`${startTime}. ${lineup}`} />
+          <HostUpdate label="HOST UPDATE" time="9:14 PM" dateTime="21:14" title={`Doors at ${startTime}.`} detail="Have your ticket ready at entry." />
           <article className="scene-message"><span>KM</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="scene-message__bubble"><p>Who is actually in {area} already?</p></div><div className="scene-message__reactions" aria-label="4 laughing reactions"><i>😂</i><b>4</b></div></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:19 PM</small><div className="scene-message__bubble"><p>“Five minutes away” in the spiritual sense.</p></div><div className="scene-message__reactions" aria-label="2 crying reactions"><i>😭</i><b>2</b></div></div></article>
           <article className="scene-message"><span>YA</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="scene-message__bubble"><p>Okay fine. Leaving now.</p></div><div className="scene-message__reactions" aria-label="3 fire reactions"><i>🔥</i><b>3</b></div></div></article>
@@ -69,7 +67,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
           <article className="scene-message"><span>AM</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="scene-message__bubble"><p>{event?.vibe ?? "Front left"} is the move tonight.</p></div><div className="scene-message__reactions" aria-label="6 watching reactions"><i>👀</i><b>6</b></div></div></article>
           <article className="scene-flash"><Image src={eventImageUrl(heroImage, 520)} width={520} height={320} sizes="260px" alt={`Flash shared inside the Room for ${eventTitle}`} unoptimized /><div><span><Camera size={12} /> Ama dropped a Flash</span><small>Gone when the Room closes</small></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 10:44 PM</small><div className="scene-message__bubble"><p>Found you. This set is ridiculous.</p></div><div className="scene-message__reactions" aria-label="5 fire reactions"><i>🔥</i><b>5</b></div></div></article>
-          <HostUpdate label="ENTRY UPDATE" time="10:47 PM" dateTime="22:47" title="Gate change." detail={`Last entry for ${eventTitle} through Gate 2.`} compact />
+          <HostUpdate label="HOST UPDATE" time="10:47 PM" dateTime="22:47" title="Gate change." detail="Use Gate 2 for last entry." compact />
           <article className="scene-message"><span>KM</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 10:48 PM</small><div className="scene-message__bubble"><p>Gate 2 is definitely quicker.</p></div></div></article>
           <article className="scene-message"><span>SE</span><div className="scene-message__body"><small className="scene-message__meta">Sena · 10:50 PM</small><div className="scene-message__bubble"><p>Inside. Front left was correct.</p></div><div className="scene-message__reactions" aria-label="3 dancing reactions"><i>💃</i><b>3</b></div></div></article>
         </>}
@@ -183,7 +181,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
         {active ? <div><Link href={`/event/${active.slug}`}>Explore the night <ArrowRight size={16} /></Link>{active.ticketTiers.some((tier) => tier.status === "available") ? <Link href={`/checkout/${active.slug}`}>Get tickets <Ticket size={15} /></Link> : <Link href="/events">Browse events <ArrowRight size={15} /></Link>}</div> : <Link href="/events" className="compact-hero__single">Explore The Drop <ArrowRight size={15} /></Link>}
       </div>
-      {active ? <p className="compact-hero__price">From <b>GH₵{active.price}</b> <span>+ booking fee</span></p> : null}
+      {active ? <p className="compact-hero__price" aria-label={`From GH₵${discoveryPrice(active)}, including booking fee`}>From <b>GH₵{discoveryPrice(active)}</b></p> : null}
       {hasScenes ? <button
         type="button"
         className="active-night-autoplay-toggle"
@@ -191,7 +189,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
         aria-pressed={manualPause || reducedMotion}
         disabled={reducedMotion}
         onClick={toggleAutoplay}
-      >{manualPause || reducedMotion ? <Play size={16} aria-hidden="true" /> : <Pause size={16} aria-hidden="true" />}<span>{manualPause || reducedMotion ? "Paused" : "Pause"}</span></button> : null}
+      ><small aria-hidden="true">{String(activeIndex + 1).padStart(2, "0")} / {String(scenes.length).padStart(2, "0")}</small><span>Motion {manualPause || reducedMotion ? "off" : "on"}</span></button> : null}
     </section>
 
     <section className="night-drop night-drop--compact" id="drop">

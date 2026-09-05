@@ -1,5 +1,17 @@
 # Audit/design handoff — 5 September 2026
 
+## Current Room refinement candidate
+
+The earlier pre-release holds below are historical. PRs #77 and #79 were approved and deployed. Before this refinement, production revision was `7e5409df95ff54bfa47e494c5eda1ba3feb51bf8`, Worker `21e02b37-a3a3-401a-bba1-96a9b6474737`; production browser run `33959163562` passed all 105 cases across desktop Chrome, Pixel Chrome and iPhone WebKit.
+
+The user requested fee wording cleanup, a less cramped and more distinct Room, better Host updates and homepage rendering, while retaining the realistic iPhone slideshow. Discovery now quotes the cheapest available ticket including the active event/global booking fee, using checkout rounding. Checkout continues to itemize the fee. The hero photograph spans the frame, one/two-event grids use deliberate proportions, and the boxed play/pause control is replaced by a quiet counter and Motion on/off setting. Keyboard pause, reduced-motion behavior and the 4.5-second rotation remain.
+
+Room changes: expandable pinned Host summary; open, distinct Host announcements; consecutive-message grouping; day markers; existing reactions inline; a native message-actions dialog for reply/reactions/report/block; reading-position preservation with a new-message jump; growing, labelled composer without an empty VIP column; explicit notification preferences separate from device permission; native report/VIP dialogs with focus containment and Escape; bounded access/report/block/VIP requests, guarded submissions, inline errors and access retry. Phone previews use the same open Host update treatment and less narrow bubbles.
+
+Candidate checks: 88 Worker/D1 tests, including discovery-vs-checkout fee integration and rounding/availability cases; 43 UI contracts; TypeScript, lint, production build and four artifact checks passed during development. Exact candidate CI must rerun after commit. Production release and browser evidence will be recorded after the deployment gate. No schema changes or new secrets are required. Preserve the previous Worker as rollback. Private Room browser acceptance remains limited by the absence of an authenticated attendee session; public phone previews and API tests are not substitutes for that acceptance. Existing untracked `test-results/` remains excluded.
+
+## Historical audit and releases
+
 Starting revision: `1b407c06665e63e3b989bb83baaabe6e01793a75` on main. Candidate branch: `audit/design-hardening-2026-09-05`. No production deployment, secret changes or remote migration. The user requested a rundown before deploying; hold production for that review.
 
 Implemented: event-led public design in `app/discovery.css`; shorter homepage; compact responsive event grids and search; clearer preview/cost labels; visible slideshow pause; tighter event/organiser copy; calendar-bound discovery filters; payment idempotency and uncertainty handling; event-correct fee quotes/total confirmation; Room notification block/suspension checks; owner/expiry-aware offline passes; temporary-password API permission enforcement; preference failure handling; targeted tooling dependency overrides and a complete-tree security gate.

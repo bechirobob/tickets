@@ -1,7 +1,16 @@
 "use client";
 
-import { Bell, BellOff, Loader2 } from "lucide-react";
+import { Bell, BellOff, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import TicketDialog from "../../ticket-dialog";
+import { requestJson } from "../../../lib/client-request";
+
+async function readyRegistration(): Promise<ServiceWorkerRegistration> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([navigator.serviceWorker.ready, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Device notifications are not ready. Refresh and try again.")), 10_000); })]);
+  } finally { clearTimeout(timer); }
+}
 
 function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
   const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
@@ -15,26 +24,34 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
   const [subscribed, setSubscribed] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [settingsReady, setSettingsReady] = useState(false);
 
   useEffect(() => {
-    const preference = fetch(`/api/customer/notifications/preferences/${encodeURIComponent(slug)}`, { cache: "no-store" })
-      .then((response) => response.json() as Promise<{ roomMessages?: boolean; hostUpdates?: boolean }>);
+    let cancelled = false;
+    const preference = requestJson<{ roomMessages?: boolean; hostUpdates?: boolean }>(`/api/customer/notifications/preferences/${encodeURIComponent(slug)}`);
     const device = supported ? Promise.all([
-      fetch("/api/customer/notifications/subscription", { cache: "no-store" }).then((response) => response.json() as Promise<{ available?: boolean }>),
-      navigator.serviceWorker.ready.then((registration) => registration.pushManager.getSubscription()),
+      requestJson<{ available?: boolean }>("/api/customer/notifications/subscription"),
+      readyRegistration().then((registration) => registration.pushManager.getSubscription()),
     ]) : Promise.resolve([{ available: false }, null] as const);
-    void Promise.all([preference, device]).then(([settings, [configuration, subscription]]) => {
+    void preference.then((settings) => {
+      if (cancelled) return;
       setEnabled(settings.roomMessages !== false && settings.hostUpdates !== false);
+      setSettingsReady(true);
+    }).catch(() => { if (!cancelled) { setFeedback("Notification preferences could not be loaded. Refresh to try again."); onNotice("Notification settings could not be checked."); } });
+    void device.then(([configuration, subscription]) => {
+      if (cancelled) return;
       setPushAvailable(Boolean(configuration.available));
       setSubscribed(Boolean(subscription));
-    }).catch(() => onNotice("Notification settings could not be checked."));
+    }).catch(() => { if (!cancelled) setPushAvailable(false); });
+    return () => { cancelled = true; };
   }, [onNotice, slug, supported]);
 
   async function savePreference(next: boolean) {
-    const response = await fetch(`/api/customer/notifications/preferences/${encodeURIComponent(slug)}`, {
+    await requestJson(`/api/customer/notifications/preferences/${encodeURIComponent(slug)}`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: next }),
     });
-    if (!response.ok) throw new Error("Notification settings could not be changed.");
     setEnabled(next);
   }
 
@@ -46,46 +63,34 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
       onNotice("In-app Room notifications remain on. Your browser did not enable lock-screen delivery.");
       return false;
     }
-    const configResponse = await fetch("/api/customer/notifications/subscription", { cache: "no-store" });
-    const config = await configResponse.json() as { publicKey?: string | null };
-    if (!configResponse.ok || !config.publicKey) throw new Error("Lock-screen delivery is temporarily unavailable.");
-    const registration = await navigator.serviceWorker.ready;
+    const config = await requestJson<{ publicKey?: string | null }>("/api/customer/notifications/subscription");
+    if (!config.publicKey) throw new Error("Lock-screen delivery is temporarily unavailable.");
+    const registration = await readyRegistration();
     const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(config.publicKey) });
-    const response = await fetch("/api/customer/notifications/subscription", {
+    await requestJson("/api/customer/notifications/subscription", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(subscription.toJSON()),
     });
-    if (!response.ok) throw new Error("Lock-screen notifications could not be enabled.");
     setSubscribed(true);
     onNotice("Room notifications are on, including lock-screen delivery.");
     return true;
   }
 
-  async function toggle() {
-    if (busy) return;
+  async function toggle(device = false) {
+    if (busy || !settingsReady) return;
     setBusy(true);
+    setFeedback("");
     try {
-      if (enabled && pushAvailable && !subscribed && permission !== "denied") {
-        await enableDevice();
-      } else if (enabled) {
-        await savePreference(false);
-        onNotice("Room notifications are off for this Night.");
-      } else {
-        if (pushAvailable && !subscribed && permission !== "denied") await enableDevice();
-        await savePreference(true);
-        onNotice("Room notifications are on for this Night.");
-      }
+      if (device) setFeedback(await enableDevice() ? "Lock-screen notifications enabled." : "Browser permission was not granted. In-app notifications are unchanged.");
+      else { await savePreference(!enabled); setFeedback(enabled ? "Notifications muted for this Night." : "Notifications on for this Night."); }
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Notification settings could not be changed.");
+      setFeedback(error instanceof Error ? error.message : "Notification settings could not be changed.");
     } finally {
       setBusy(false);
     }
   }
 
-  const label = enabled && pushAvailable && !subscribed && permission !== "denied"
-    ? "Enable lock-screen notifications; in-app Room notifications are on"
-    : enabled ? "Turn Room notifications off" : "Turn Room notifications on";
-  return <button type="button" className={`room-notification-toggle${enabled ? " is-on" : ""}${enabled && !subscribed ? " needs-device" : ""}`} aria-label={label} aria-pressed={enabled} title={label} disabled={busy} onClick={() => void toggle()}>
+  return <><button type="button" className={`room-notification-toggle${enabled ? " is-on" : ""}`} aria-label="Room notification settings" title="Room notification settings" onClick={() => { setOpen(true); }}>
     {busy ? <Loader2 className="spin" size={16} /> : enabled ? <Bell size={17} /> : <BellOff size={17} />}
     {enabled ? <i aria-hidden="true" /> : null}
-  </button>;
+  </button>{open && <TicketDialog className="room-modal room-notification-settings" label="Room notifications" onClose={() => setOpen(false)}><section><header><h2>Notifications</h2><button aria-label="Close notification settings" onClick={() => setOpen(false)}><X size={18} /></button></header><p>Choose how this Night reaches you.</p><div className="room-notification-option"><span><b>Host updates & messages</b><small>Notifications for this Night</small></span><button role="switch" aria-checked={enabled} aria-label="Host updates and Room messages" disabled={busy || !settingsReady} onClick={() => void toggle()}>{!settingsReady ? "Loading…" : enabled ? "On" : "Off"}</button></div><div className="room-notification-option"><span><b>On your lock screen</b><small>{!supported ? "Not supported in this browser" : permission === "denied" ? "Blocked in your browser settings" : subscribed ? "This device is connected" : !pushAvailable ? "Device delivery is currently unavailable" : "Deliver notifications to this device"}</small></span>{supported && pushAvailable && !subscribed && permission !== "denied" && <button disabled={busy || !enabled} onClick={() => void toggle(true)}>Enable</button>}</div>{feedback && <p role="status">{feedback}</p>}</section></TicketDialog>}</>;
 }
