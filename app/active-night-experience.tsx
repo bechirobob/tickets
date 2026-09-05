@@ -52,6 +52,8 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
   const lineup = event?.lineup || "Main set later";
 
   return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
+    <Image className="room-product-phone__render" src="/devices/iphone-black-titanium.png" width={1024} height={1536} alt="" aria-hidden="true" unoptimized />
+    <div className="room-product-phone__display">
     <div className="room-product-phone__hardware" aria-hidden="true"><span>9:2{conversation === "arrival" ? "1" : "4"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
     <div className="room-product-phone__screen">
       <header className="room-product-phone__header"><div><small>The Room</small><b>{eventTitle}</b></div><span>Demo chat</span></header>
@@ -75,6 +77,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
       <div className="room-product-phone__composer">{conversation === "inside" ? <i className="scene-concierge" aria-label="VIP concierge"><ConciergeBell size={13} aria-hidden="true" /><small>VIP</small></i> : <Camera size={17} />}<span>Message The Room</span><Send size={16} /></div>
     </div>
     <span className="room-product-phone__home" aria-hidden="true" />
+    </div>
   </article>;
 }
 
@@ -193,10 +196,11 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
 
     <section className="night-drop night-drop--compact" id="drop">
       <div className="compact-section-head"><div><p className="night-kicker"><span /> The Drop / Accra</p><h2>Where are we going?</h2></div><Link href="/events">All events <ArrowRight size={15} /></Link></div>
-      <EventExplorer events={events.slice(0, 6)} featuredSlug={active?.slug} />
+      <EventExplorer events={events} featuredSlug={active?.slug} />
     </section>
 
     <section className="room-product-scene active-night-room" id="the-room" data-scroll-reveal>
+      <Image className="room-product-scene__atmosphere" src={eventImageUrl(heroImage, 1200, 75)} width={1200} height={800} sizes="100vw" alt="" aria-hidden="true" unoptimized />
       <div className="room-product-scene__copy"><p className="night-kicker"><span /> More than a ticket</p><h2>The night has a Room.</h2><p>Meet the people going. Get updates from the Host. Share Flashes that disappear when the Room closes.</p><span><LockKeyhole size={13} /> Private to verified ticket holders</span><p className="room-preview-disclosure">Illustrative preview · conversations shown are examples.</p></div>
       <RoomPreviewCarousel key={active?.slug ?? "waiting"}>
         <RoomPhone event={active} heroImage={heroImage} conversation="arrival" />

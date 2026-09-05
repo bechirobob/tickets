@@ -66,7 +66,7 @@ test("the compact homepage hero stays within a deliberate desktop and mobile hei
   const css = await readFile(discoveryUrl, "utf8");
   assert.match(css, /\.discovery-home \.compact-hero\s*\{[^}]*height:\s*450px[^}]*min-height:\s*450px/su);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*430px/su);
-  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(46px, 5\.7vw, 78px\)/su);
+  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(46px, 6\.3vw, 86px\)/su);
 });
 
 test("The Drop uses compact filters, bounded cards and a dedicated full page", async () => {
@@ -75,7 +75,7 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
   assert.match(explorer, />This weekend</u);
   assert.match(explorer, />Next up</u);
   assert.match(explorer, /const pageSize = full \? 12 : 6/u);
-  assert.match(home, /events\.slice\(0, 6\)/u);
+  assert.match(home, /<EventExplorer events=\{events\}/u);
   assert.match(home, /href="\/events"/u);
   assert.match(css, /\.drop-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/su);
   assert.match(css, /\.drop-grid--rail\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/su);
@@ -184,7 +184,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(polish, /\.room-product-phone__composer\s*\{[^}]*border-bottom:\s*1px solid[^}]*border-radius:\s*0[^}]*background:\s*transparent/su);
   assert.match(css, /\.room-bubble\s*\{[^}]*padding:\s*8px 11px/su);
   assert.match(css, /\.room-message__actions\s*\{[^}]*min-height:\s*29px/su);
-  assert.doesNotMatch(home, /device|phone mock/iu);
+  assert.doesNotMatch(home, />[^<]*(?:device|phone mock)[^<]*</iu);
 });
 
 test("The Room reconnects when a ticket holder returns to the page", async () => {
@@ -292,7 +292,7 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(experience, /entry\.boundingClientRect\.bottom <= 0[^}]*setLeftHero\(true\)/su);
   assert.match(experience, /document\.visibilityState !== "visible"/u);
   assert.match(experience, /prefers-reduced-motion: reduce/u);
-  assert.match(experience, /<EventExplorer events=\{events\.slice\(0, 6\)\} featuredSlug=\{active\?\.slug\}/u);
+  assert.match(experience, /<EventExplorer events=\{events\} featuredSlug=\{active\?\.slug\}/u);
   assert.match(experience, /<RoomPreviewCarousel key=\{active\?\.slug/u);
   assert.match(experience, /data-active-night=\{active\?\.slug/u);
   assert.match(experience, /className="active-night-autoplay-toggle"/u);

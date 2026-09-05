@@ -22,10 +22,10 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-skip:focus { top: 12px; }
 
 .discovery-home .compact-hero { height: 450px; min-height: 450px; background: #10110f; }
-.discovery-home .compact-hero > img { inset: 0 0 0 auto; width: 66%; filter: saturate(1) contrast(1.02); }
-.discovery-home .compact-hero__shade { background: linear-gradient(90deg, #10110f 17%, rgba(16,17,15,.92) 34%, rgba(16,17,15,.3) 72%, rgba(16,17,15,.2)), linear-gradient(0deg, rgba(16,17,15,.8), transparent 42%); }
+.discovery-home .compact-hero > img { inset: 0 0 0 auto; width: 82%; filter: saturate(1.08) contrast(1.02); }
+.discovery-home .compact-hero__shade { background: linear-gradient(90deg, #10110f 4%, rgba(16,17,15,.8) 30%, rgba(16,17,15,.18) 72%, rgba(16,17,15,.06)), linear-gradient(0deg, rgba(16,17,15,.85), transparent 55%); }
 .discovery-home .compact-hero__copy { left: 5vw; right: auto; bottom: 91px; width: min(650px, 60%); }
-.discovery-home .compact-hero__copy h1 { max-width: 640px; font-size: clamp(46px, 5.7vw, 78px); line-height: .98; font-weight: 780; letter-spacing: -.06em; text-wrap: balance; }
+.discovery-home .compact-hero__copy h1 { max-width: 640px; font-size: clamp(46px, 6.3vw, 86px); line-height: .92; font-weight: 850; letter-spacing: -.065em; text-wrap: balance; text-transform: uppercase; }
 .discovery-home .compact-hero__copy > .night-kicker { margin-bottom: 22px; color: #e8e5dc; font-size: 12px; letter-spacing: .1em; }
 .discovery-home .compact-hero__copy > p:not(.night-kicker) { margin-top: 20px; color: #f3f0e8; font-size: 15px; line-height: 1.45; }
 .discovery-home .compact-hero__copy > .hero-venue { margin-top: 6px; color: #c3c2b9; }
@@ -64,7 +64,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-grid .drop-card[data-vibe="Day party"] { --poster-ink: #f4ce78; }
 .discovery-grid .drop-card[data-vibe="Alté"] { --poster-ink: #c8d9f2; }
 .discovery-grid .drop-card[data-vibe="Amapiano"] { --poster-ink: #e2c9eb; }
-.discovery-grid .drop-card__image { height: auto; aspect-ratio: 4 / 3; isolation: isolate; border: 0; border-radius: 0; background: #151610; }
+.discovery-grid .drop-card__image { height: auto; aspect-ratio: 1 / 1; isolation: isolate; border: 0; border-radius: 0; background: #151610; }
 .discovery-grid .drop-card__image img { width: 100%; height: 100%; filter: none; }
 .discovery-grid .drop-card__image::before { display: none; }
 .discovery-grid .drop-card__image::after { height: 100%; background: linear-gradient(0deg, rgba(9,10,9,.86), rgba(9,10,9,.12) 90%); }
@@ -106,6 +106,67 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .organizer-intelligence dl > div { min-height: 72px; grid-template-columns: 95px 1fr; align-items: center; }
 .discovery-home .compact-footer { padding: 30px 5vw 40px; }
 .discovery-home .compact-footer a { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* A night out: dark poster wall, coloured event ink, and actual event photography. */
+.discovery-home .night-drop--compact,
+.discovery-directory { background: #141511; color: #f4f1ea; color-scheme: dark; }
+.discovery-home .compact-section-head { border-top: 3px solid var(--acid); padding-top: 22px; }
+.discovery-home .compact-section-head h2 { font-weight: 850; text-transform: uppercase; }
+.discovery-home .compact-section-head .night-kicker,
+.discovery-directory .directory-intro .eyebrow { color: var(--acid); }
+.discovery-home .compact-section-head > a,
+.discovery-directory .directory-intro > p { color: #d2d0c6; }
+.discovery-explorer .drop-controls { border-color: #45463e; }
+.discovery-explorer .drop-controls button,
+.discovery-explorer .drop-vibes button,
+.discovery-result-count { color: #b8b8ac; }
+.discovery-explorer .drop-controls button[aria-pressed="true"],
+.discovery-explorer .drop-vibes button[aria-pressed="true"] { color: var(--acid); }
+.discovery-explorer .drop-controls button[aria-pressed="true"]::after { background: var(--acid); transform: scaleX(1); }
+.discovery-explorer .drop-controls select { color: #f4f1ea; }
+.discovery-grid .drop-card h3,
+.discovery-grid .drop-card__body > a,
+.discovery-grid .drop-card__body > div { color: #f4f1ea; }
+.discovery-grid .drop-card__body > p,
+.discovery-grid .drop-card[data-featured="true"] .drop-card__body > p { color: var(--poster-ink); }
+.discovery-grid .drop-card__body > small { color: #b8b8ac; }
+.discovery-explorer :is(button, a):focus-visible { outline-color: var(--acid); }
+.discovery-explorer .drop-no-match button { color: #f4f1ea; border-color: #b8b8ac; }
+.discovery-explorer .drop-no-match { color: #b8b8ac; }
+.discovery-explorer .drop-no-match h3 { color: #f4f1ea; }
+.discovery-home .event-empty p,
+.discovery-directory .event-empty p { color: #b8b8ac; }
+.discovery-home .event-empty a,
+.discovery-directory .event-empty a { color: var(--acid); border-color: var(--acid); }
+.discovery-explorer .drop-pagination button { color: #f4f1ea; }
+.discovery-explorer .drop-pagination span { color: #b8b8ac; }
+.discovery-explorer .drop-pagination button:disabled { color: #a3a497; }
+.discovery-search { background: #20211b; border-color: #74766a; color: #b8b8ac; }
+.discovery-search input { color: #f4f1ea; }
+.discovery-search input::placeholder { color: #b8b8ac; }
+.discovery-search:focus-within { outline-color: var(--acid); }
+.discovery-home .room-product-scene { position: relative; isolation: isolate; border-top: 1px solid #414238; }
+.room-product-scene__atmosphere { position: absolute; inset: 0 0 0 auto; width: 80%; height: 100%; object-fit: cover; opacity: .3; z-index: -2; pointer-events: none; }
+.discovery-home .room-product-scene::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, #10110f 15%, rgba(16,17,15,.8) 40%, rgba(16,17,15,.25)); pointer-events: none; }
+.discovery-home .room-product-scene__copy h2 { color: var(--acid); font-weight: 800; }
+.discovery-home .room-product-scene__phones { padding-top: 16px; padding-bottom: 24px; }
+
+/* Hardware is a photographic render; all screen content remains live HTML.
+ * The source image's body bounds are x178..848 / y58..1476 on a 1024x1536
+ * canvas. Clip the surrounding studio background at the physical rail. */
+.discovery-home .room-product-phone { aspect-ratio: 71.5 / 149.6; padding: 0; border: 0; border-radius: 18% / 8.6%; background: #050505; }
+.discovery-home .room-product-phone::before { display: none; }
+.room-product-phone__render { position: absolute; left: -26.567%; top: -4.09%; width: 152.836%; height: 108.322%; max-width: none; pointer-events: none; }
+.room-product-phone__display { position: absolute; inset: 1.5% 3%; display: grid; grid-template-rows: 33px minmax(0, 1fr) 17px; overflow: hidden; border-radius: 16% / 7.5%; background: #f8f5ee; }
+.discovery-home .room-product-phone__hardware { height: auto; padding: 4px 14px 0; color: #20211d; font-size: 10px; }
+.discovery-home .room-product-phone__hardware > i { position: relative; width: 64px; height: 18px; }
+.discovery-home .room-product-phone__hardware > i::after { content: ""; position: absolute; right: 6px; top: 6px; width: 6px; height: 6px; border-radius: 50%; background: #17252e; border: 1px solid #242c32; }
+.discovery-home .room-product-phone__hardware > b { gap: 2px; }
+.discovery-home .room-product-phone__hardware > b > span { display: none; }
+.discovery-home .room-product-phone__screen { height: auto; min-height: 0; display: grid; grid-template-rows: 58px minmax(0, 1fr) 44px; border: 0; border-radius: 0; }
+.discovery-home .room-product-phone__stream { height: auto; min-height: 0; }
+.discovery-home .room-product-phone__composer { height: 44px; }
+.discovery-home .room-product-phone__home { position: static; align-self: center; justify-self: center; translate: none; width: 30%; background: #20211d; }
 
 @media (min-width: 1250px) {
   .discovery-directory .discovery-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
