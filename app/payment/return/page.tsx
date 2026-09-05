@@ -69,7 +69,7 @@ export default function PaymentReturn() {
     <main className="payment-return"><div>
       {state === "ready" ? <CheckCircle2 size={45} /> : <Clock3 size={45} />}
       <p className="eyebrow">{state === "ready" ? "Payment confirmed" : "Secure confirmation"}</p>
-      <h1>{state === "ready" ? "Paid. Verified. Plans officially harder to cancel." : "We’re making sure the money really arrived."}</h1>
+      <h1>{state === "ready" ? "You’re going out." : state === "failed" ? "A small hold-up." : "One last money check."}</h1>
       <p>{message}</p>
       {state === "ready" && eventSlug ? <Link href={`/my-nights/${eventSlug}?welcome=1`}>Open My Night</Link> : <Link href="/my-nights">Open My Nights</Link>}
       <span><ShieldCheck size={15} /> No confirmed payment, no mysterious QR. Fair is fair.</span>

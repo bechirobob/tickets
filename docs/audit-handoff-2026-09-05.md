@@ -1,5 +1,13 @@
 # Audit/design handoff — 5 September 2026
 
+## Knowing friend voice and tactile artwork
+
+Restored the original whole-product voice after reviewing the recorded 10 August direction. Reference findings and durable copy guidance are in `docs/brand-voice.md`. The refinement adds bounded pointer-responsive poster reflections, short result transitions, a small primary-action highlight, a warmer hero blend, event quips, and clearer copy across discovery, Hosts, About, Room, checkout, confirmations, recovery and help. Original face prices, checkout fees, test-commerce disclosures, privacy, reduced motion and automatic 4.5-second scenes remain in place. No dependency, migration, secret or platform changes.
+
+Sharing now falls back from an unavailable native share sheet to clipboard and then a selectable event link. Cancelling the native share stays silent; clipboard feedback does not imply delivery. My Nights recovery now rejects failed responses, retains the email and permits retry instead of claiming success. Help describes the current Room notification settings. Added mocked browser regressions that never send recovery email or share messages. Existing copy assertions are updated for the requested wording while functional and access checks remain enabled.
+
+Base deployment: `20b12e71d44774124159e6f1e08ab9258bb6753d`; rollback Worker: `4fbb4039-7d70-43af-9b65-4895b75a2506`. That previous browser run had 107 first-pass successes and one navigation timeout that passed its retry. This pass will record its exact candidate, deployment and browser outcome in the release PR. Local preview access remains blocked; composed visual acceptance uses the live release after candidate checks. Existing untracked `test-results/` stays excluded.
+
 ## Automatic motion and nightlife atmosphere
 
 PR #84 deployed as `e1bed4c1aa21f1ab3dd422a338f73363504d6073`, Worker `f0282dd8-e94d-4cb5-9ad0-94b215fb9c57`. Candidate `33971180477`, deployment `33971319133` and all 108 production browser tests in `33971415868` passed. Live inspection confirmed the colours, hidden status and continued Room rotation, but exposed an existing preview overflow: six sample items could crop the first Host notice. The follow-up keeps four useful sample items per phone and adds actual bounds checks for both Host notices on desktop and mobile; no customer conversations are modified. Preserve this Worker as the immediate rollback for the sample-only correction.

@@ -167,7 +167,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
           </div>
 
           <div className="checkout-step checkout-step--second">
-            <span>3</span><div><small>Payment</small><h2>Choose how you want to pay.</h2></div>
+            <span>3</span><div><small>Payment</small><h2>Let’s make it official.</h2></div>
           </div>
           <fieldset className="payment-methods">
             <legend className="sr-only">Choose payment method</legend>
