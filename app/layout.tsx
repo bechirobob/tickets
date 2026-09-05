@@ -4,6 +4,7 @@ import PwaRegistration from "./pwa-registration";
 import AnalyticsBeacon from "./analytics-beacon";
 import "./globals.css";
 import "./access-polish.css";
+import "./discovery.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),

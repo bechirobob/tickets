@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 
 const generatedConfigPath = new URL("../dist/server/wrangler.json", import.meta.url);
 const generatedConfig = JSON.parse(await readFile(generatedConfigPath, "utf8"));
@@ -15,6 +16,14 @@ delete generatedConfig.userConfigPath;
 // Worker Custom Domain and Cloudflare manages its DNS record and certificate.
 generatedConfig.routes = sourceConfig.routes;
 generatedConfig.vars = sourceConfig.vars;
+// Attest CI builds only; a local uncommitted build must not claim its parent's SHA.
+if (process.env.GITHUB_SHA) {
+  const revision = process.env.GITHUB_SHA;
+  const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  if (!/^[a-f0-9]{40}$/u.test(revision) || revision !== head) throw new Error("Release revision does not match the checked-out commit.");
+  generatedConfig.vars.RELEASE_SHA = revision;
+}
+generatedConfig.version_metadata = sourceConfig.version_metadata;
 generatedConfig.triggers = sourceConfig.triggers;
 generatedConfig.ratelimits = sourceConfig.ratelimits;
 generatedConfig.observability = sourceConfig.observability;

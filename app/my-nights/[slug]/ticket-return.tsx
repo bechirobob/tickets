@@ -1,7 +1,9 @@
 "use client";
 
 import { Loader2, RotateCcw, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { requestErrorMessage, requestJson } from "../../../lib/client-request";
+import TicketDialog from "../../ticket-dialog";
 
 export default function TicketReturn({
   ticketId,
@@ -14,33 +16,33 @@ export default function TicketReturn({
   const [busy, setBusy] = useState(false);
   const [requested, setRequested] = useState(false);
   const [notice, setNotice] = useState("");
-  useEffect(() => {
-    fetch("/api/customer/returns", { cache: "no-store" })
-      .then(async (response) => await response.json() as { returns?: Array<{ ticketId: string }> })
-      .then((data) => setRequested(Boolean(data.returns?.some((item) => item.ticketId === ticketId))))
-      .catch(() => undefined);
-  }, [ticketId]);
+  const [ready, setReady] = useState(false);
+  const inFlight = useRef(false);
+  const load = useCallback(() => requestJson<{ returns: Array<{ ticketId: string }> }>("/api/customer/returns").then((data) => {
+      if (!Array.isArray(data.returns)) throw new Error("Your return status could not be loaded.");
+      setRequested(data.returns.some((item) => item.ticketId === ticketId));
+      setReady(true); setNotice("");
+    }).catch((cause) => setNotice(requestErrorMessage(cause))), [ticketId]);
+  useEffect(() => { void load(); }, [load]);
   async function update(method: "POST" | "DELETE") {
+    if (inFlight.current || !ready) return;
+    inFlight.current = true;
     setBusy(true);
     setNotice("");
-    const response = await fetch("/api/customer/returns", {
-      method,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ticketId }),
-    });
-    const result = (await response.json()) as {
-      error?: string;
-      message?: string;
-    };
-    if (response.ok) {
+    try {
+      const result = await requestJson<{ message?: string }>("/api/customer/returns", {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ticketId }),
+      });
       setRequested(method === "POST");
       setNotice(
         method === "POST"
           ? (result.message ?? "Return requested.")
           : "Return cancelled. The ticket is yours as usual.",
       );
-    } else setNotice(result.error ?? "That request refused to cooperate.");
-    setBusy(false);
+    } catch (cause) { setNotice(requestErrorMessage(cause)); setReady(false); }
+    finally { inFlight.current = false; setBusy(false); }
   }
   return (
     <>
@@ -54,12 +56,7 @@ export default function TicketReturn({
         {requested ? "Return requested" : "Return ticket"}
       </button>
       {open ? (
-        <div
-          className="ticket-transfer-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Return ticket"
-        >
+        <TicketDialog label="Return ticket" onClose={() => setOpen(false)}>
           <section className="ticket-return-card">
             <button
               type="button"
@@ -71,7 +68,7 @@ export default function TicketReturn({
             </button>
             <RotateCcw size={25} />
             <p className="eyebrow">Official return queue</p>
-            <h3>No random resale. No disappearing QR.</h3>
+            <h3>Can’t make it?</h3>
             <p>
               We first look for a verified buyer at the same ticket value. Your
               ticket remains valid—and entirely yours—until the replacement
@@ -84,18 +81,18 @@ export default function TicketReturn({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void update(requested ? "DELETE" : "POST")}
+              onClick={() => ready ? void update(requested ? "DELETE" : "POST") : void load()}
             >
               {busy ? (
                 <Loader2 className="spin" size={14} />
               ) : (
                 <RotateCcw size={14} />
               )}
-              {requested ? "Cancel return request" : "Join return queue"}
+              {!ready ? "Check return status" : requested ? "Cancel return request" : "Join return queue"}
             </button>
-            {notice ? <small>{notice}</small> : null}
+            {notice ? <small role="status">{notice}</small> : null}
           </section>
-        </div>
+        </TicketDialog>
       ) : null}
     </>
   );

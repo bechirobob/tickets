@@ -169,6 +169,13 @@
       "when": 1786924800000,
       "tag": "0023_organizer_analytics_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1788566400000,
+      "tag": "0024_payment_attempt_idempotency",
+      "breakpoints": true
     }
   ]
 }

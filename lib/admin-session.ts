@@ -118,8 +118,8 @@ async function runtimeDatabase(): Promise<D1Database> {
   return env.DB;
 }
 
-export function hasPermission(session: Pick<AdminSession, "role">, permission: StaffPermission): boolean {
-  return permissions[session.role].includes(permission);
+export function hasPermission(session: Pick<AdminSession, "role"> & Partial<Pick<AdminSession, "mustChangePassword">>, permission: StaffPermission): boolean {
+  return !session.mustChangePassword && permissions[session.role].includes(permission);
 }
 
 export function requirePermission(session: AdminSession | null, permission: StaffPermission): AdminSession | null {
@@ -127,6 +127,7 @@ export function requirePermission(session: AdminSession | null, permission: Staf
 }
 
 export async function hasEventAssignment(db: D1Database, session: AdminSession, eventSlug: string): Promise<boolean> {
+  if (session.mustChangePassword) return false;
   if (session.role === "owner") return true;
   const assignment = await db.prepare("SELECT 1 AS allowed FROM staff_event_assignments WHERE account_id = ? AND event_slug = ? LIMIT 1")
     .bind(session.accountId, eventSlug).first<{ allowed: number }>();

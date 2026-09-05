@@ -49,6 +49,8 @@ export async function expireReservations(db: D1Database, now = new Date().toISOS
         AND reservation_expires_at <= ? AND waitlist_entry_id IS NOT NULL)
         AND status = 'claimed'
     `).bind(now, now),
+    db.prepare("UPDATE payment_attempts SET response_json = NULL WHERE created_at <= ? AND response_json IS NOT NULL")
+      .bind(new Date(Date.parse(now) - 24 * 60 * 60 * 1000).toISOString()),
   ]);
   return { reservations: reservations.meta.changes, orders: orders.meta.changes };
 }
@@ -56,6 +58,7 @@ export async function expireReservations(db: D1Database, now = new Date().toISOS
 export async function verifyPaystackTransaction(reference: string, secret: string): Promise<PaystackVerification> {
   const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
     headers: { authorization: `Bearer ${secret}` },
+    signal: AbortSignal.timeout(10_000),
   });
   const payload = await response.json() as {
     status?: boolean;

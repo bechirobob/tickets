@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
@@ -15,7 +15,7 @@ const paymentNetworks = [
   { id: "at", label: "AT Money", icon: "/payment-providers/at-money.svg" },
 ] as const;
 
-export default function CheckoutForm({ slug, event }: { slug: string; event: CuratedEvent }) {
+export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: string; event: CuratedEvent; feeBasisPoints: number }) {
   const params = useSearchParams();
   const [quantity, setQuantity] = useState(1);
   const [selectedTierId, setSelectedTierId] = useState(() => {
@@ -28,9 +28,11 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [feePercent, setFeePercent] = useState(7.5);
+  const [feePercent, setFeePercent] = useState(feeBasisPoints / 100);
   const [isPaying, setIsPaying] = useState(false);
   const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+  const paying = useRef(false);
+  const paymentAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
   const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
   const ticketTotalMinor = quantity * selectedTier.priceMinor;
   const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
@@ -39,7 +41,7 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
   const maxPurchasableUnits = Math.max(1, Math.min(selectedTier.maxUnitsPerOrder, Math.floor(selectedTier.remainingAdmissions / selectedTier.admissionsPerUnit)));
 
   useEffect(() => {
-    fetch("/api/config/booking-fee")
+    fetch(`/api/config/booking-fee?event=${encodeURIComponent(slug)}`)
       .then(async (response): Promise<{ percentage?: number } | null> =>
         response.ok ? response.json() as Promise<{ percentage?: number }> : null,
       )
@@ -47,43 +49,58 @@ export default function CheckoutForm({ slug, event }: { slug: string; event: Cur
         if (typeof data?.percentage === "number") setFeePercent(data.percentage);
       })
       .catch(() => undefined);
-  }, []);
+  }, [slug]);
 
   async function continueToPay() {
-    if (isPaying) return;
+    if (paying.current) return;
     if (!paymentMethod) {
       setMessage("Choose Mobile Money or card before continuing.");
       return;
     }
     if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim()) || phone.trim().length < 7) {
-      setMessage("We need the boring three before the fun one: your name, a valid email and a reachable phone number.");
+      setMessage("Enter your name, a valid email and a reachable phone number.");
       return;
     }
     if (!acceptedPolicies) {
-      setMessage("One tiny grown-up moment: accept the ticket and refund terms before payment.");
+      setMessage("Accept the ticket and refund terms before payment.");
       return;
     }
     setIsPaying(true);
+    paying.current = true;
     trackProductMetric("checkout_started", slug);
     setMessage(paymentMethod === "mobile_money" ? "Sending the MoMo prompt to your phone…" : "Opening Paystack's secure card checkout…");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
+      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, network: paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref"), expectedTotalMinor: totalMinor });
+      const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const storageKey = `bct:payment-attempt:${slug}`;
+      if (!paymentAttempt.current) {
+        try { paymentAttempt.current = JSON.parse(sessionStorage.getItem(storageKey) ?? "null"); } catch { /* In-memory retry protection still applies. */ }
+      }
+      if (paymentAttempt.current?.fingerprint !== fingerprint) paymentAttempt.current = { fingerprint, key: crypto.randomUUID() };
+      try { sessionStorage.setItem(storageKey, JSON.stringify(paymentAttempt.current)); } catch { /* Storage is optional. */ }
       const response = await fetch("/api/payments/initialize", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, network: paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref") }),
+        headers: { "content-type": "application/json", "idempotency-key": paymentAttempt.current!.key },
+        body: payload,
         signal: controller.signal,
       });
-      const data = await response.json() as { authorizationUrl?: string; nextUrl?: string; error?: string };
+      const data = await response.json() as { authorizationUrl?: string; nextUrl?: string; error?: string; retryable?: boolean; feeBasisPoints?: number };
+      if (typeof data.feeBasisPoints === "number") setFeePercent(data.feeBasisPoints / 100);
+      if (data.retryable) {
+        paymentAttempt.current = null;
+        try { sessionStorage.removeItem(storageKey); } catch { /* Storage is optional. */ }
+      }
       const paymentUrl = data.authorizationUrl ?? data.nextUrl;
       if (!response.ok || !paymentUrl) throw new Error(data.error || "Payment refused to leave the house. Try again.");
       window.location.href = paymentUrl;
     } catch (error) {
       setMessage(error instanceof DOMException && error.name === "AbortError"
-        ? "Paystack took too long to answer. Nothing was charged—give it another go."
+        ? "Confirmation timed out. Your payment may still be processing. Check My Nights or your payment provider before starting another payment."
         : error instanceof Error ? error.message : "Payment refused to leave the house. Try again.");
       setIsPaying(false);
+      paying.current = false;
     } finally {
       clearTimeout(timeout);
     }

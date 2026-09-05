@@ -3,10 +3,13 @@
 declare namespace Cloudflare {
   interface Env {
     ADMIN_ACCESS_KEY?: string;
+    STAFF_LOGIN_DECOY_SECRET?: string;
     ASSETS: Fetcher;
     DB: D1Database;
     AI: Ai;
     ENVIRONMENT?: string;
+    RELEASE_SHA?: string;
+    CF_VERSION_METADATA?: { id: string; tag: string; timestamp: string };
     LOGIN_RATE_LIMITER: RateLimit;
     PUBLIC_WRITE_RATE_LIMITER: RateLimit;
     PAYMENT_RATE_LIMITER: RateLimit;

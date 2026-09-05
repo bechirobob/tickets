@@ -29,6 +29,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import QrPass from "../../tickets/qr-pass";
 import OfflineTicketSaver from "../../offline-ticket-saver";
+import { clearOfflineTickets, reconcileOfflineTickets } from "../../../lib/offline-tickets";
 import TicketTransfer from "./ticket-transfer";
 import TicketReturn from "./ticket-return";
 import SupportCentre from "./support-centre";
@@ -151,6 +152,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
       : "",
   );
   const [locked, setLocked] = useState(false);
+  const [offlineOwnerId, setOfflineOwnerId] = useState("");
   const [unread, setUnread] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
@@ -171,6 +173,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           walletResponse,
         ]) => {
           if (experienceResponse.status === 401) {
+            clearOfflineTickets();
             setLocked(true);
             return;
           }
@@ -178,7 +181,13 @@ export default function NightHub({ event }: { event: EventSummary }) {
             (await experienceResponse.json()) as Experience;
           const ticketsData = (await ticketsResponse.json()) as {
             orders?: TicketOrder[];
+            attendee?: { attendeeId: string };
           };
+          if (ticketsResponse.status === 401) clearOfflineTickets();
+          if (ticketsResponse.ok && ticketsData.attendee) {
+            setOfflineOwnerId(ticketsData.attendee.attendeeId);
+            reconcileOfflineTickets(ticketsData.attendee.attendeeId, (ticketsData.orders ?? []).flatMap((order) => order.tickets.filter((ticket) => ticket.status === "issued" && ticket.qrPayload).map((ticket) => ticket.id)));
+          }
           const notificationsData = notificationsResponse.ok
             ? ((await notificationsResponse.json()) as { unread?: number })
             : null;
@@ -315,6 +324,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
   return (
     <main className="night-hub">
       <OfflineTicketSaver
+        ownerId={offlineOwnerId}
         event={{
           slug: event.slug,
           title: event.title,
@@ -322,6 +332,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           time: event.time,
           venue: event.venue,
           area: event.area,
+          endsAt: event.endsAt,
         }}
         tickets={tickets}
       />

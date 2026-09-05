@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const cssUrl = new URL("../app/globals.css", import.meta.url);
+const discoveryUrl = new URL("../app/discovery.css", import.meta.url);
 const accessPolishUrl = new URL("../app/access-polish.css", import.meta.url);
 const roomUrl = new URL("../app/room/[slug]/room-client.tsx", import.meta.url);
 const homeUrl = new URL("../app/page.tsx", import.meta.url);
@@ -62,10 +63,10 @@ test("Room text controls keep iOS at the existing page scale", async () => {
 });
 
 test("the compact homepage hero stays within a deliberate desktop and mobile height", async () => {
-  const css = await readFile(cssUrl, "utf8");
-  assert.match(css, /\.compact-hero\s*\{[^}]*height:\s*min\(64vh, 640px\)[^}]*min-height:\s*520px/su);
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*560px[^}]*min-height:\s*560px/su);
-  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(55px, 7\.4vw, 104px\)/su);
+  const css = await readFile(discoveryUrl, "utf8");
+  assert.match(css, /\.discovery-home \.compact-hero\s*\{[^}]*height:\s*450px[^}]*min-height:\s*450px/su);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*430px/su);
+  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(46px, 5\.7vw, 78px\)/su);
 });
 
 test("The Drop uses compact filters, bounded cards and a dedicated full page", async () => {
@@ -73,15 +74,20 @@ test("The Drop uses compact filters, bounded cards and a dedicated full page", a
   assert.match(explorer, />Tonight</u);
   assert.match(explorer, />This weekend</u);
   assert.match(explorer, />Next up</u);
-  assert.match(explorer, /const pageSize = full \? 9 : 6/u);
+  assert.match(explorer, /const pageSize = full \? 12 : 6/u);
   assert.match(home, /events\.slice\(0, 6\)/u);
   assert.match(home, /href="\/events"/u);
   assert.match(css, /\.drop-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/su);
   assert.match(css, /\.drop-grid--rail\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/su);
   assert.match(explorer, /label: "Alté"/u);
   assert.match(explorer, /label: "Amapiano"/u);
-  assert.match(explorer, /event\.quip/u);
-  assert.match(explorer, /event\.note/u);
+  assert.match(explorer, /type="search"/u);
+  assert.match(explorer, /role="status"/u);
+  assert.match(explorer, /aria-pressed=\{windowFilter/u);
+  assert.doesNotMatch(explorer, /drop-grid--rail|scrollIntoView|event\.quip|event\.note/u);
+  const discovery = await readFile(discoveryUrl, "utf8");
+  assert.match(discovery, /\.discovery-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/su);
+  assert.match(discovery, /@media \(max-width: 700px\)[\s\S]*?\.discovery-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
   assert.match(explorer, /event\.lineup/u);
   assert.match(css, /:root\s*\{[^}]*--night:\s*#090a09[^}]*--signal:\s*#bd3f11[^}]*--acid:\s*#d7f45b/su);
   assert.match(css, /\.drop-vibes button\[aria-selected="true"\]\s*\{[^}]*background:\s*transparent[^}]*color:\s*#090a09/su);
@@ -119,9 +125,10 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   ]);
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The night has a Room\./u);
-  assert.match(home, /drop Flashes into the same conversation/u);
-  assert.match(home, /The chat remembers\. The photos know when to leave\./u);
-  assert.match(home, /No ticket, no lurking\. Very civilised\./u);
+  assert.match(home, /Share Flashes that disappear when the Room closes/u);
+  assert.match(home, /Private to verified ticket holders/u);
+  assert.match(home, /Illustrative preview/u);
+  assert.match(home, />Demo chat</u);
   assert.match(home, /HOST UPDATE/u);
   assert.match(home, /ENTRY UPDATE/u);
   assert.match(home, /title="Doors open\."/u);
@@ -214,7 +221,7 @@ test("VIP value is visible at decision points without duplicating the interface"
   ]);
 
   assert.match(home, /className="scene-concierge" aria-label="VIP concierge"/u);
-  assert.match(home, /reach the Host privately/u);
+  assert.match(home, /aria-label="VIP concierge"/u);
   assert.match(eventPage, /tier\.roomBadge === "VIP"/u);
   assert.match(eventPage, /private Host concierge when enabled/u);
   assert.match(checkout, /checkout-tier__vip/u);
@@ -280,7 +287,7 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   ]);
 
   assert.match(experience, /const sceneInterval = 4_500/u);
-  assert.match(experience, /events\.slice\(0, 4\)/u);
+  assert.match(experience, /events\.filter\([^;]+\.slice\(0, 4\)/u);
   assert.match(experience, /new IntersectionObserver/u);
   assert.match(experience, /entry\.boundingClientRect\.bottom <= 0[^}]*setLeftHero\(true\)/su);
   assert.match(experience, /document\.visibilityState !== "visible"/u);
@@ -296,8 +303,9 @@ test("featured nights coordinate the hero, Drop and Room without moving content 
   assert.match(explorer, /data-featured=\{event\.slug === featuredSlug \? "true"/u);
   assert.doesNotMatch(css, /\.drop-card\[data-featured="true"\][^{]*\{[^}]*border/su);
   assert.match(css, /\.drop-card__body\s*\{[^}]*padding-top:\s*15px[^}]*\}/su);
-  assert.match(css, /\.active-night-autoplay-toggle\s*\{[^}]*width:\s*1px[^}]*height:\s*1px[^}]*clip-path:\s*inset\(50%\)/su);
-  assert.match(css, /\.active-night-autoplay-toggle:focus-visible\s*\{[^}]*height:\s*44px[^}]*clip-path:\s*none/su);
+  const discovery = await readFile(discoveryUrl, "utf8");
+  assert.match(discovery, /\.active-night-autoplay-toggle:focus-visible\s*\{[^}]*height:\s*44px[^}]*clip-path:\s*none/su);
+  assert.match(experience, /onMouseEnter=\{\(\) => setInteractionPause\(true\)\}/u);
   assert.match(polish, /\.active-night-experience \.night-drop,[\s\S]*?transition:\s*background-color var\(--motion-scene\)/su);
   assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.active-night-experience \.night-drop,[\s\S]*?transition:\s*none/su);
 });
@@ -433,7 +441,7 @@ test("roadmap 5–7 stays inside compact existing journeys", async () => {
   assert.match(roomOperations, /Slow mode/u);
   assert.match(roomOperations, /Official memory/u);
   assert.match(waitlist, /private 30-minute offer/u);
-  assert.match(support, /Order attached\. No retelling the whole story\./u);
+  assert.match(support, /Questions, returns and event changes\./u);
   assert.match(support, /Accept new date/u);
   assert.match(support, /Request refund/u);
   assert.match(hub, /<SupportCentre slug=\{event\.slug\}/u);
@@ -517,7 +525,7 @@ test("public organiser actions keep submission public and named workspaces prote
 
   assert.doesNotMatch(home, /href="\/organizer"/u);
   assert.ok(home.match(/href="\/organizer\/submit"/gu)?.length >= 2);
-  assert.match(home, />Submit a night\s*</u);
+  assert.match(home, />List your event\s*</u);
   assert.match(organizer, /redirect\("\/organizer\/workspace"\)/u);
   assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
   assert.match(submission, /href="\/"[^>]*>.*Back to events/su);
@@ -571,8 +579,8 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.match(about, /ticket-tier sell-through, promoter performance, payment mix, check-in timing and VIP concierge use/u);
   assert.match(about, /Made for how Accra moves/u);
   assert.match(home, /className="organizer-intelligence"/u);
-  assert.match(home, /Your Night should leave you smarter/u);
-  assert.match(home, /Paystack-confirmed payment/u);
+  assert.match(home, /Your next great night/u);
+  assert.match(home, /Mobile Money and card payments/u);
   assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);
   assert.match(css, /\.about-reasons article\s*\{[^}]*border-bottom:\s*1px solid #cbc7bd/su);
   assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);

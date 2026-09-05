@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { GET as readWorkspace, PATCH as updateWorkspace } from "../app/api/organizer/workspace/route";
 import { GET as readFeeConfig } from "../app/api/config/booking-fee/route";
 import { POST as bootstrapOwner } from "../app/api/admin/bootstrap/route";
-import { enforceMfaLoginLimits, enforcePasswordLoginLimits } from "../app/api/admin/session/route";
+import { GET as prepareStaffLogin, enforceMfaLoginLimits, enforcePasswordLoginLimits } from "../app/api/admin/session/route";
+import { staffLoginDecoySalt } from "../lib/staff-login-preparation";
 import { GET as readOperations, POST as updateOperations } from "../app/api/admin/operations/route";
 import { GET as readSupport } from "../app/api/admin/support/route";
 import {
@@ -56,6 +57,22 @@ async function event(slug: string, title: string) {
 }
 
 describe("named staff access", () => {
+  it("enforces temporary-password changes at the API permission boundary", async () => {
+    const account = await staff("finance", crypto.randomUUID());
+    await env.DB.prepare("UPDATE staff_accounts SET must_change_password = 1 WHERE id = ?").bind(account.id).run();
+    const session = await readAdminSession(account.cookie);
+    expect(session?.mustChangePassword).toBe(true);
+    expect(hasPermission(session!, "operations.view")).toBe(false);
+    expect(hasPermission({ role: "owner", mustChangePassword: true }, "operations.view")).toBe(false);
+    expect((await readOperations(new Request("https://tickets.becoreops.com/api/admin/operations", { headers: { cookie: account.cookie } }))).status).toBe(403);
+    expect((await readWorkspace(new Request("https://tickets.becoreops.com/api/organizer/workspace", { headers: { cookie: account.cookie } }))).status).toBe(403);
+    await env.DB.prepare("UPDATE staff_accounts SET must_change_password = 0 WHERE id = ?").bind(account.id).run();
+    expect(hasPermission((await readAdminSession(account.cookie))!, "operations.view")).toBe(true);
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM staff_sessions WHERE account_id = ?").bind(account.id),
+      env.DB.prepare("DELETE FROM staff_accounts WHERE id = ?").bind(account.id),
+    ]);
+  });
   it("enforces independent password and MFA sign-in limits", async () => {
     const attempts = new Map<string, number>();
     const limiter = {
@@ -297,5 +314,33 @@ describe("named staff access", () => {
     const finance = await staff("finance", suffix);
     const privateResult = await (await readFeeConfig(new Request("https://tickets.becoreops.com/api/config/booking-fee", { headers: { cookie: finance.cookie } }))).json() as { history: Array<{ createdBy: string }> };
     expect(privateResult.history.map((item) => item.createdBy)).toEqual(expect.arrayContaining(["Sensitive Finance Identity", "Future Finance Identity"]));
+  });
+
+  it("uses a private stable salt for missing accounts while preserving real account login", async () => {
+    const secret = env.STAFF_LOGIN_DECOY_SECRET!;
+    const missing = `missing-${crypto.randomUUID()}@example.com`;
+    const salt = await staffLoginDecoySalt(missing, secret);
+    expect(salt).toMatch(/^[A-Za-z0-9_-]{22}$/u);
+    expect(await staffLoginDecoySalt(missing.toUpperCase(), secret)).toBe(salt);
+    expect(await staffLoginDecoySalt(missing, `${secret}-rotated`)).not.toBe(salt);
+    expect(await staffLoginDecoySalt(`other-${missing}`, secret)).not.toBe(salt);
+    const response = await prepareStaffLogin(new Request(`https://tickets.becoreops.com/api/admin/session?email=${encodeURIComponent(missing)}`));
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ passwordSalt: salt, passwordIterations: PASSWORD_ITERATIONS });
+    const account = await staff("support", crypto.randomUUID());
+    const existing = await prepareStaffLogin(new Request(`https://tickets.becoreops.com/api/admin/session?email=${encodeURIComponent(account.email)}`));
+    expect(await existing.json()).toEqual({ passwordSalt, passwordIterations: PASSWORD_ITERATIONS });
+  });
+
+  it("rejects malformed login preparation and fails closed without a private key", async () => {
+    const malformed = await prepareStaffLogin(new Request("https://tickets.becoreops.com/api/admin/session?email=invalid"));
+    expect(malformed.status).toBe(400);
+    const secret = env.STAFF_LOGIN_DECOY_SECRET;
+    try {
+      env.STAFF_LOGIN_DECOY_SECRET = undefined;
+      const response = await prepareStaffLogin(new Request("https://tickets.becoreops.com/api/admin/session?email=missing@example.com"));
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain("passwordSalt");
+    } finally { env.STAFF_LOGIN_DECOY_SECRET = secret; }
   });
 });

@@ -1002,6 +1002,15 @@ export const payoutTransfers = sqliteTable("payout_transfers", {
   index("payout_transfers_event_idx").on(table.eventSlug, table.status),
 ]);
 
+export const paymentAttempts = sqliteTable("payment_attempts", {
+  keyHash: text("key_hash").primaryKey(),
+  requestHash: text("request_hash").notNull(),
+  orderId: text("order_id").notNull(),
+  responseJson: text("response_json"),
+  responseStatus: integer("response_status"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("payment_attempts_order_idx").on(table.orderId)]);
+
 export const refundBatches = sqliteTable("refund_batches", {
   id: text("id").primaryKey(),
   eventSlug: text("event_slug").notNull(),

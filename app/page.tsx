@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, BarChart3 } from "lucide-react";
+import { ArrowUpRight, MapPin } from "lucide-react";
 import ActiveNightExperience from "./active-night-experience";
 import { getPublicEvents } from "./events";
 import ScrollReveal from "./scroll-reveal";
@@ -14,11 +14,12 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const events = await getPublicEvents();
 
-  return <main className="night-home compact-home">
+  return <main className="night-home compact-home discovery-home" id="main-content">
+    <a className="discovery-skip" href="#drop">Skip to events</a>
     <ScrollReveal />
     <header className="night-header">
       <Link href="/" className="night-brand-link"><BrandMark /></Link>
-      <PublicNavigation />
+      <div className="night-header__actions"><nav className="night-desktop-links" aria-label="Explore"><Link href="/events">The Drop</Link><Link href="/hosts">Hosts</Link><Link href="/my-nights">My Nights</Link></nav><span className="night-city"><MapPin size={14} aria-hidden="true" /> Accra, GH</span><PublicNavigation /></div>
     </header>
 
     <ActiveNightExperience events={events} />
@@ -26,18 +27,17 @@ export default async function Home() {
     <section className="organizer-intelligence" data-scroll-reveal>
       <div className="organizer-intelligence__copy">
         <p className="night-kicker"><span /> For organisers</p>
-        <BarChart3 size={25} aria-hidden="true" />
-        <h2>Your Night should leave you smarter.</h2>
-        <p>A sales total tells you how the story ended. BeCore shows what built the crowd, where buyers moved or dropped off and what happened when they reached the door.</p>
-        <Link href="/organizer/submit">Bring us your Night <ArrowUpRight size={15} /></Link>
+        <h2>Your crowd.<br />Your next great night.</h2>
+        <p>Ticket sales, guest updates and a smoother door. One place to run your event and understand what worked.</p>
+        <Link href="/organizer/submit">List your event <ArrowUpRight size={15} /></Link>
       </div>
       <dl>
-        <div><dt>Demand</dt><dd>Event views, shares and the journey from checkout to Paystack-confirmed payment.</dd></div>
-        <div><dt>Sales</dt><dd>Velocity, average order value, ticket-tier sell-through, payment mix and promoter contribution.</dd></div>
-        <div><dt>Experience</dt><dd>Check-in timing, attendance and VIP concierge demand—kept with the same organiser record.</dd></div>
+        <div><dt>01 / Sell</dt><dd>Ticket tiers, Mobile Money and card payments.</dd></div>
+        <div><dt>02 / Host</dt><dd>Private Rooms, guest updates and gate check-in.</dd></div>
+        <div><dt>03 / Learn</dt><dd>Sales, promoter performance and attendance.</dd></div>
       </dl>
     </section>
 
-    <footer className="night-footer compact-footer"><BrandMark /><p>Editorial nightlife outside. Private event access inside.</p><div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link></div></footer>
+    <footer className="night-footer compact-footer"><BrandMark /><p>Accra nights. From the first plan to the last track.</p><div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
   </main>;
 }

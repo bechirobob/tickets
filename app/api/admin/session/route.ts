@@ -17,7 +17,8 @@ import {
 } from "../../../../lib/admin-session";
 import { enforceCompositeRateLimit, enforceRateLimit, type RateLimiter } from "../../../../lib/security-controls";
 import { beginPasskeyAuthentication, consumeRecoveryCode, finishPasskeyAuthentication, readAuthenticationChallengeAccount } from "../../../../lib/staff-passkeys";
-import { bytesToBase64Url, PASSWORD_ITERATIONS, type StaffPasswordPayload } from "../../../../lib/staff-password-policy";
+import { PASSWORD_ITERATIONS, type StaffPasswordPayload } from "../../../../lib/staff-password-policy";
+import { staffLoginDecoySalt } from "../../../../lib/staff-login-preparation";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 export async function enforcePasswordLoginLimits(limiter: RateLimiter, ip: string | null, email: string): Promise<boolean> {
@@ -44,19 +45,21 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const requestedEmail = url.searchParams.get("email");
   if (requestedEmail !== null) {
+    const email = requestedEmail.trim().toLowerCase();
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) return Response.json({ error: "Enter a valid email address." }, { status: 400, headers: { "cache-control": "no-store" } });
     const metadata = requestMetadata(request);
     if (!(await enforceRateLimit(env.LOGIN_RATE_LIMITER, `login-prepare:${await hashToken(metadata.ip || "unknown")}`))) {
       return Response.json({ error: "Too many sign-in attempts. Wait a minute and try again." }, { status: 429 });
     }
-    const email = requestedEmail.trim().toLowerCase();
+    if (!env.STAFF_LOGIN_DECOY_SECRET || env.STAFF_LOGIN_DECOY_SECRET.length < 32) return Response.json({ error: "Sign-in is temporarily unavailable. Please try again later." }, { status: 503, headers: { "cache-control": "no-store" } });
+    // Do the same keyed work for both existing and absent accounts.
+    const decoySalt = await staffLoginDecoySalt(email, env.STAFF_LOGIN_DECOY_SECRET);
     const account = await env.DB.prepare(`
       SELECT password_salt AS passwordSalt, password_iterations AS passwordIterations
       FROM staff_accounts WHERE normalized_email = ? AND status = 'active' LIMIT 1
     `).bind(email).first<{ passwordSalt: string; passwordIterations: number }>();
     if (account) return Response.json(account, { headers: { "cache-control": "no-store" } });
-    // Return a stable fake salt so this preparation call does not reveal whether an account exists.
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`missing-staff:${email}`)));
-    return Response.json({ passwordSalt: bytesToBase64Url(digest.slice(0, 16)), passwordIterations: PASSWORD_ITERATIONS }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ passwordSalt: decoySalt, passwordIterations: PASSWORD_ITERATIONS }, { headers: { "cache-control": "no-store" } });
   }
 
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);

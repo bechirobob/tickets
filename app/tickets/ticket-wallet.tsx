@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, Loader2, LogOut, Mail, MapPin, MessageCircle, ReceiptText, Ticket } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QrPass from "./qr-pass";
 import PublicNavigation from "../mobile-navigation";
 import LoadingSkeleton from "../loading-skeleton";
+import { clearOfflineTickets, reconcileOfflineTickets } from "../../lib/offline-tickets";
+import { requestErrorMessage, requestJson } from "../../lib/client-request";
 
 type GateTicket = {
   id: string;
@@ -29,7 +31,7 @@ type Order = {
   tickets: GateTicket[];
   event: { title: string; date: string; venue: string; state: string } | null;
 };
-type Wallet = { attendee: { displayName: string; emailVerified: boolean }; orders: Order[] };
+type Wallet = { attendee: { attendeeId: string; displayName: string; emailVerified: boolean }; orders: Order[] };
 
 function money(minor: number, currency: string) {
   return new Intl.NumberFormat("en-GH", { style: "currency", currency, minimumFractionDigits: 2 }).format(minor / 100);
@@ -49,13 +51,15 @@ export default function TicketWallet() {
   const [recoveryInvalid] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recovery") === "invalid");
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
+  const recoveryBusy = useRef(false);
 
   useEffect(() => {
     fetch("/api/customer/tickets", { method: "POST", cache: "no-store" })
       .then(async (response) => {
-        if (response.status === 401) return null;
+        if (response.status === 401) { clearOfflineTickets(); return null; }
         const data = await response.json() as Wallet & { error?: string };
         if (!response.ok) throw new Error(data.error ?? "Your passes could not be prepared.");
+        reconcileOfflineTickets(data.attendee.attendeeId, data.orders.flatMap((order) => order.tickets.filter((ticket) => ticket.status === "issued" && ticket.qrPayload).map((ticket) => ticket.id)));
         return data;
       })
       .then((data) => { setWallet(data); setLoading(false); })
@@ -63,16 +67,26 @@ export default function TicketWallet() {
   }, []);
 
   async function signOut() {
-    await fetch("/api/customer/session", { method: "DELETE" });
-    setWallet(null);
+    clearOfflineTickets();
+    try {
+      const response = await fetch("/api/customer/session", { method: "DELETE" });
+      if (!response.ok) throw new Error("Sign-out did not complete. Please try again.");
+      setWallet(null);
+    } catch {
+      setError("Offline copies removed. Reconnect and try again to finish signing out.");
+    }
   }
 
   async function requestRecovery(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (recoveryState === "sending") return;
-    setRecoveryState("sending");
-    await fetch("/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: recoveryEmail }) }).catch(() => undefined);
-    setRecoveryState("sent");
+    if (recoveryBusy.current) return;
+    recoveryBusy.current = true;
+    setRecoveryState("sending"); setError("");
+    try {
+      await requestJson("/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: recoveryEmail }) });
+      setRecoveryState("sent");
+    } catch (cause) { setRecoveryState("idle"); setError(requestErrorMessage(cause)); }
+    finally { recoveryBusy.current = false; }
   }
 
   if (loading) return <LoadingSkeleton kind="wallet" label="Preparing your entry passes" />;

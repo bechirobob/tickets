@@ -73,7 +73,9 @@ test("preview events remain excluded from search while sharing metadata stays co
 });
 
 test("checkout groups mobile money providers separately from secure card payment", async ({ page }) => {
-  await page.goto("/checkout/after-dark-osu");
+  await page.goto("/events");
+  await page.locator(".drop-card").filter({ hasText: /From GH₵/u }).first().getByRole("link", { name: /^See /u }).click();
+  await page.getByRole("link", { name: "Get tickets", exact: true }).click();
   const mobileMoney = page.getByRole("radio", { name: /Mobile Money/u });
   const card = page.getByRole("radio", { name: /^Card/u });
   await expect(mobileMoney).not.toBeChecked();
@@ -106,6 +108,8 @@ test("the install manifest has complete app identity and adaptive icons", async 
 for (const path of publicPages) {
   test(`${path} has no automatically detectable serious accessibility violations`, async ({ page }) => {
     await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     const scan = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     const serious = scan.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
     expect(serious, serious.map((violation) => `${violation.id}: ${violation.help}`).join("\n")).toEqual([]);
@@ -113,6 +117,8 @@ for (const path of publicPages) {
 
   test(`${path} follows the flat, readable public design contract`, async ({ page }) => {
     await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     const findings = await page.evaluate(() => {
       const visible = (element: Element) => {
         const style = getComputedStyle(element);

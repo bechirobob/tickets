@@ -9,7 +9,9 @@ export default function PaymentReturn() {
   const params = useSearchParams();
   const [state, setState] = useState<"checking" | "ready" | "failed">("checking");
   const [eventSlug, setEventSlug] = useState("");
-  const [message, setMessage] = useState(() => params.get("prompt") === "1"
+  const [message, setMessage] = useState(() => params.get("pending") === "1"
+    ? "The payment provider did not return a clear result. We are checking the original payment. Do not start another payment yet."
+    : params.get("prompt") === "1"
     ? "Your MoMo prompt is on its way. Approve it on your phone; this page will update automatically."
     : "Paystack is confirming the payment. The serious little pause before the good part.");
 
@@ -38,6 +40,7 @@ export default function PaymentReturn() {
         if (cancelled) return;
         if (response.ok && result.signedIn) {
           const purchasedEvent = result.eventSlug ?? "";
+          try { sessionStorage.removeItem(`bct:payment-attempt:${purchasedEvent}`); } catch { /* Storage is optional. */ }
           setEventSlug(purchasedEvent);
           setState("ready");
           setMessage("Your night survived the group chat. Ticket, perks, receipt and Room access are ready.");
