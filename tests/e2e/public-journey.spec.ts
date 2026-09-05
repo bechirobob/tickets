@@ -51,6 +51,9 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   // transition must not race these reads on a slower browser runner.
   await hero.getByRole("button", { name: "Motion on: pause featured nights slideshow", exact: true }).click();
   await expect(hero.getByRole("button", { name: "Motion off: play featured nights slideshow", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // Animated images may extend beyond the frame, but focusing the motion
+  // control must never scroll the hero's own content away from its shade.
+  expect(await hero.evaluate((element) => element.scrollTop)).toBe(0);
 
   const activeSlug = await experience.getAttribute("data-active-night");
   expect(activeSlug).toBeTruthy();
