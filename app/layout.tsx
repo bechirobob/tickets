@@ -12,6 +12,7 @@ import "./brand-identity.css";
 import "./backstage.css";
 import "./room-atmosphere.css";
 import "./your-nights.css";
+import "./room-conversation.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),

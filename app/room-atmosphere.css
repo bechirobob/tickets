@@ -34,8 +34,6 @@
 .room-page .room-message.own .room-bubble { background: #e9cbb6; color: #35232b; border-color: #f3dac6; border-radius: 14px; }
 .room-page .room-bubble > p.removed { color: inherit; opacity: .8; }
 .room-page .room-message-menu { color: #e0c4d6; }
-.room-page .room-reaction-counts > button { color: #ecd5e4; }
-.room-page .room-reaction-counts > button[aria-pressed='true'] { color: #e4f18b; }
 .room-page .room-message.announcement { max-width: 740px; margin: 20px auto; padding: 15px; background: #412e32; border: 1px solid #9a7865; border-radius: 12px; }
 .room-page .room-message.announcement > .room-avatar { color: #f1ca9e; background: transparent; margin-top: 0; }
 .room-page .room-message.announcement .room-message__body > header b { color: #f3cca1; font-size: 13px; }
@@ -56,7 +54,7 @@
 .room-page .room-empty { padding: 32px 12px; }
 .room-page .room-empty p, .room-gate p { color: #e3cad8; }
 .room-page .room-empty > svg, .room-gate > svg, .room-gate a { color: #f2c39d; }
-.room-page :is(button, summary, a):focus-visible { outline-color: #efc09b; }
+.room-page :is(button, summary, a):focus-visible { outline-color: var(--focus-ring, #666); }
 .room-page .room-flash-message__meta :is(b, time) { color: #dfc7d5; font-size: 12px; }
 .room-page .room-flash-message__body > button { background: #553749; border: 1px solid #a9788c; border-radius: 12px; color: #fff0e4; }
 .room-page .room-flash-message__closed :is(i, b) { color: #ffe8d8; }

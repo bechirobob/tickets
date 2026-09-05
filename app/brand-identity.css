@@ -12,7 +12,7 @@ body .brand-logo__type > small { font: 600 12px/1 var(--font-system); letter-spa
 body .brand-logo--prominent .brand-logo__emblem { width: 49px; height: 52px; }
 body .brand-logo--prominent .brand-logo__type > b { font-size: 26px; }
 .night-brand-link, a.brand-mark { min-height: 44px; }
-.night-brand-link:focus-visible, a.brand-mark:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; }
+.night-brand-link:focus-visible, a.brand-mark:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 5px; }
 @media (max-width: 700px) {
   body .brand-logo { gap: 7px; }
   body .brand-logo .brand-logo__emblem { width: 35px; height: 38px; }

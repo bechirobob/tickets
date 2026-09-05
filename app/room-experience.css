@@ -34,10 +34,6 @@
 .room-message.grouped .room-message__body > header { display: none; }
 .room-message-menu { align-self: center; flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: #777269; }
 .room-message.own .room-message-menu { order: -1; }
-.room-reaction-counts { display: flex; flex-wrap: wrap; gap: 0 6px; margin-top: 1px; }
-.room-reaction-counts > button { min-width: 44px; min-height: 44px; padding: 0 3px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 0; background: transparent; color: #656056; font-size: 15px; }
-.room-reaction-counts > button span { font-size: 12px; }
-.room-reaction-counts > button[aria-pressed="true"] { color: #252620; text-decoration: underline; text-underline-offset: 5px; }
 .room-message.announcement { margin: 16px 0; padding: 8px 0; justify-content: flex-start; border: 0; background: transparent; }
 .room-message.announcement > .room-avatar { margin-top: 1px; background: transparent; color: #5d604e; }
 .room-message.announcement .room-message__body { width: auto; flex: 1; max-width: none; align-items: flex-start; }
@@ -58,20 +54,12 @@
 .room-composer > form > span { align-self: center; min-width: 0; font-size: 11px; }
 .room-composer > div { min-height: 40px; }
 .room-composer > div button { min-height: 44px; padding: 0 8px; color: #555149; }
-.room-page :is(button, summary, a):focus-visible { outline: 2px solid #747957; outline-offset: 3px; }
+.room-page :is(button, summary, a):focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 3px; }
 dialog:is(.room-modal, .room-vip-modal) { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; background: transparent; color: #252620; }
 dialog:is(.room-modal, .room-vip-modal):not([open]) { display: none; }
 dialog:is(.room-modal, .room-vip-modal)::backdrop { background: rgba(12,13,10,.62); }
 dialog:is(.room-modal, .room-vip-modal) > section { max-height: calc(100dvh - 40px); overflow-y: auto; border-radius: 12px; padding: 24px; }
 dialog:is(.room-modal, .room-vip-modal) button { min-height: 44px; }
-.room-actions-modal > section > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; }
-.room-actions-modal header button { min-width: 44px; border: 0; background: transparent; color: inherit; }
-.room-actions-modal blockquote { max-height: 110px; overflow-y: auto; margin: 8px 0 18px; color: #656056; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
-.room-actions-modal > section > .room-action-reactions { justify-content: space-between; margin: 0 0 12px; gap: 4px; }
-.room-actions-modal > section > .room-action-reactions button { flex: 1; min-width: 44px; border: 0; padding: 0; background: transparent; color: inherit; font-size: 24px; }
-.room-actions-modal nav { display: grid; }
-.room-actions-modal nav button { padding: 0; display: flex; align-items: center; gap: 12px; border: 0; background: transparent; color: #35372c; font: inherit; font-size: 15px; text-align: left; }
-.room-actions-modal button:disabled { opacity: .45; }
 .room-notification-settings > section > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .room-notification-settings h2 { margin: 0; font-size: 24px; }
 .room-notification-settings header button { min-width: 44px; border: 0; background: transparent; color: inherit; }

@@ -3,12 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { eventImageUrl } from "../../event-images";
-import { ArrowDown, ArrowLeft, BadgeCheck, Camera, ChevronDown, ConciergeBell, Flag, Gem, HandHelping, MessageCircle, MoreHorizontal, Music2, Reply, Send, ShieldCheck, UserRoundX, Users, Wine, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, BadgeCheck, Camera, ChevronDown, ConciergeBell, Flag, Gem, HandHelping, MessageCircle, Music2, Reply, ShieldCheck, Users, Wine, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import TicketDialog from "../../ticket-dialog";
 import { requestJson, requestErrorMessage, RequestError } from "../../../lib/client-request";
 import FlashesPanel, { type RoomFlash } from "./flashes-panel";
 import RoomNotifications from "./room-notifications";
+import MessageTools from "./message-tools";
+import { RoomComposeContent } from "../../room-chat-parts";
 
 type Reaction = { emoji: string; count: number; mine: boolean };
 type Message = {
@@ -49,10 +51,10 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
   const [vipBusy, setVipBusy] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [formError, setFormError] = useState("");
-  const [actionMessage, setActionMessage] = useState<Message | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
   const [accessAttempt, setAccessAttempt] = useState(0);
   const requestBusyRef = useRef(false);
+  const roomRef = useRef<HTMLElement | null>(null);
   const streamRef = useRef<HTMLElement | null>(null);
   const nearBottomRef = useRef(true);
   const itemCountRef = useRef(0);
@@ -224,6 +226,19 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     if (input) { input.style.height = "auto"; input.style.height = `${Math.min(input.scrollHeight, 112)}px`; }
   }, [draft]);
 
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const fitKeyboard = () => {
+      if (viewport.scale !== 1) return;
+      roomRef.current?.style.setProperty("--room-height", `${viewport.height}px`);
+      if (nearBottomRef.current && streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
+    };
+    fitKeyboard();
+    viewport.addEventListener("resize", fitKeyboard);
+    return () => viewport.removeEventListener("resize", fitKeyboard);
+  }, [status]);
+
   function jumpToLatest() {
     nearBottomRef.current = true;
     setHasUnread(false);
@@ -323,7 +338,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     ...flashes.map((flash) => ({ type: "flash" as const, createdAt: flash.createdAt, value: flash })),
   ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   return (
-    <main className="room-page">
+    <main ref={roomRef} className="room-page">
       <header className="room-header">
         <Link href="/my-nights" aria-label="Back to My Nights"><ArrowLeft size={17} /><span>My Nights</span></Link>
         <div className="room-header__identity"><Image src={eventImageUrl(eventImage, 120)} width={48} height={56} alt="" aria-hidden="true" unoptimized /><div><small>The Room</small><strong>{policy?.eventTitle ?? fallbackTitle}</strong><span>{fallbackDate}</span></div></div>
@@ -358,12 +373,14 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
             <div className="room-message__body">
               <header><b>{message.kind === "announcement" ? "Host update" : own ? "You" : message.displayName}</b>{message.kind !== "announcement" && message.role !== "attendee" ? <span><BadgeCheck size={12} /> {message.role === "moderator" ? "Moderator" : "Host"}</span> : message.roomBadge === "VIP" ? <span className="room-vip-badge" aria-label="VIP ticket holder" title="VIP ticket holder"><Gem size={11} aria-hidden="true" /></span> : null}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
                 {parent && <div className="room-reply-preview"><Reply size={12} /><b>{parent.attendeeId === selfId ? "You" : parent.displayName}</b><span>{parent.content.slice(0, 90)}</span></div>}
-              <div className="room-bubble">
+              <MessageTools name={message.displayName} own={own} disabled={Boolean(policy?.readOnly) || status !== "connected"} removed={Boolean(message.deletedAt)} reactions={message.reactions}
+                onReact={(emoji) => react(message.id, emoji)}
+                onReply={() => { setReplyingTo(message); window.requestAnimationFrame(() => composerRef.current?.focus()); }}
+                onReport={!own && message.role === "attendee" ? () => { setFormError(""); setReporting(message); } : undefined}
+                onBlock={!own && message.role === "attendee" ? () => { void block(message.attendeeId, message.displayName); } : undefined}>
                 <p className={message.deletedAt ? "removed" : ""}>{message.content}</p>
-              </div>
-              {!message.deletedAt && message.reactions.length > 0 && <div className="room-reaction-counts">{message.reactions.map((reaction) => <button key={reaction.emoji} type="button" aria-label={`${reaction.emoji}, ${reaction.count} reactions`} aria-pressed={reaction.mine} disabled={Boolean(policy?.readOnly) || status !== "connected"} onClick={() => react(message.id, reaction.emoji)}>{reaction.emoji}<span>{reaction.count}</span></button>)}</div>}
+              </MessageTools>
             </div>
-            {!message.deletedAt && <button type="button" className="room-message-menu" aria-label={`Actions for ${own ? "your" : message.displayName + "'s"} message`} onClick={() => setActionMessage(message)}><MoreHorizontal size={18} /></button>}
           </article></Fragment>;
         })}
         {policy?.readOnly ? <div className="room-flashes-expired"><Camera size={16} /><span><b>The Flashes left with the night.</b> Chat kept the memories it could spell.</span></div> : null}
@@ -372,12 +389,14 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       <p className="sr-only" role="status">{messages.length > 0 ? `${messages[messages.length - 1].displayName}: ${messages[messages.length - 1].content}` : ""}</p>
       {hasUnread && <button type="button" className="room-latest" onClick={jumpToLatest}><ArrowDown size={15} /> New messages</button>}
       <section className="room-composer">
-        {replyingTo && <div><Reply size={13} /> Replying to <b>{replyingTo.displayName}</b><button onClick={() => setReplyingTo(null)}>Cancel</button></div>}
-        {policy?.readOnly ? <p><ShieldCheck size={15} /> {policy.emergencyReadOnly ? "The Host paused messages. Updates still land here." : "The Room is read-only now. Even the best afterparty eventually gets lights-on."}</p> : <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
-          {selfRoomBadge === "VIP" && vipSettings ? <button type="button" className="room-concierge" onClick={() => { setFormError(""); setVipOpen(true); }} aria-label="Open VIP services" title="VIP services"><ConciergeBell size={18} /></button> : null}
-          <button type="button" className="room-camera" onClick={() => setCaptureRequest((value) => value + 1)} aria-label="Share a Flash"><Camera size={18} /></button>
-          <textarea ref={composerRef} aria-label="Message The Room" value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} placeholder={status === "connected" ? "Message The Room" : "Reconnecting… your draft stays here"} rows={1} maxLength={500} />
-          {draft.length > 450 && <span className="near-limit">{draft.length}/500</span>}<button aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><Send size={18} /></button>
+        {replyingTo && <div className="chat-compose-reply"><Reply size={15} /><span><b>Replying to {replyingTo.displayName}</b><small>{replyingTo.content}</small></span><button type="button" aria-label="Cancel reply" onClick={() => { setReplyingTo(null); composerRef.current?.focus(); }}><X size={17} /></button></div>}
+        {policy?.readOnly ? <p><ShieldCheck size={15} /> {policy.emergencyReadOnly ? "The Host paused messages. Updates still land here." : "The Room is read-only now. Even the best afterparty eventually gets lights-on."}</p> : <form className="chat-compose-bar" onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
+          <RoomComposeContent accessory={<>
+            {selfRoomBadge === "VIP" && vipSettings ? <button type="button" className="room-concierge" onClick={() => { setFormError(""); setVipOpen(true); }} aria-label="Open VIP services" title="VIP services"><ConciergeBell size={19} /></button> : null}
+            <button type="button" className="room-camera" onClick={() => setCaptureRequest((value) => value + 1)} aria-label="Share a Flash"><Camera size={21} /></button>
+          </>} field={<textarea ref={composerRef} aria-label="Message The Room" value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && window.matchMedia("(hover: hover) and (pointer: fine)").matches) { event.preventDefault(); sendMessage(); } }} placeholder={status === "connected" ? "Message The Room" : "Reconnecting…"} rows={1} maxLength={500} />}
+          detail={draft.length > 450 ? <span className="near-limit">{draft.length}/500</span> : null}
+          send={<button className="chat-send" aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><ArrowUp size={20} /></button>} />
         </form>}
       </section>
       <FlashesPanel slug={slug} readOnly={Boolean(policy?.readOnly)} expiresAt={policy?.readOnlyAt ?? new Date().toISOString()} refreshKey={flashVersion} onCount={setFlashCount} onFlashes={setFlashes} galleryOpen={galleryOpen} onGalleryClose={() => setGalleryOpen(false)} selectedFlashId={selectedFlashId} onSelectedFlashClose={() => setSelectedFlashId(null)} captureRequest={captureRequest} />
@@ -397,7 +416,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
         </> : <div className="room-vip-unavailable"><ConciergeBell size={20} /><div><b>VIP services are not open yet.</b><p>The Host will open available services here when the team is ready. Good things take a minute.</p></div></div>}
         {vipRequests.length ? <details><summary>Recent requests · {vipRequests.length}</summary>{vipRequests.slice(0, 5).map((item) => <article key={item.id}><span><b>{item.kind.replaceAll("_", " ")}</b><small>{item.detail}</small></span><i>{item.status.replaceAll("_", " ")}</i></article>)}</details> : null}
       </section></TicketDialog> : null}
-      {actionMessage && <TicketDialog className="room-modal room-actions-modal" label="Message actions" onClose={() => setActionMessage(null)}><section><header><b>{actionMessage.attendeeId === selfId ? "Your message" : actionMessage.displayName}</b><button aria-label="Close message actions" onClick={() => setActionMessage(null)}><X size={18} /></button></header><blockquote>{actionMessage.content}</blockquote><div className="room-action-reactions">{["🔥", "❤️", "😂", "👏", "👀"].map((emoji) => <button key={emoji} aria-label={`React ${emoji}`} disabled={Boolean(policy?.readOnly) || status !== "connected"} onClick={() => { react(actionMessage.id, emoji); setActionMessage(null); }}>{emoji}</button>)}</div><nav aria-label="Message actions"><button disabled={Boolean(policy?.readOnly)} onClick={() => { setReplyingTo(actionMessage); setActionMessage(null); window.setTimeout(() => composerRef.current?.focus(), 0); }}><Reply size={17} />Reply</button>{actionMessage.attendeeId !== selfId && actionMessage.role === "attendee" && <><button onClick={() => { setFormError(""); setReporting(actionMessage); setActionMessage(null); }}><Flag size={17} />Report privately</button><button onClick={() => { void block(actionMessage.attendeeId, actionMessage.displayName); setActionMessage(null); }}><UserRoundX size={17} />Block attendee</button></>}</nav></section></TicketDialog>}
+
       {reporting && <TicketDialog className="room-modal" label="Report a message privately" onClose={() => setReporting(null)}><section><Flag /><p className="eyebrow">Private report</p><h2>Tell the moderation team what happened.</h2>{formError && <p role="alert">{formError}</p>}<label>Reason<select value={reportReason} onChange={(event) => setReportReason(event.target.value)}><option value="harassment">Harassment</option><option value="spam">Spam</option><option value="impersonation">Impersonation</option><option value="unsafe">Unsafe behaviour</option><option value="other">Other</option></select></label><label>Details<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value.slice(0, 500))} placeholder="Optional context for the moderator" /></label><div><button onClick={() => setReporting(null)}>Cancel</button><button disabled={reportBusy} onClick={submitReport}>{reportBusy ? "Sending…" : "Send report"}</button></div></section></TicketDialog>}
     </main>
   );

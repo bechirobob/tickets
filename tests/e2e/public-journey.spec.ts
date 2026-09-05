@@ -192,8 +192,10 @@ for (const path of publicPages) {
         .trim();
       const elements = Array.from(document.querySelectorAll("body *")).filter(visible);
       const shadows = elements.filter((element) => {
-        const style = getComputedStyle(element);
-        return style.boxShadow !== "none" || style.textShadow !== "none";
+        return [null, "::before", "::after"].some((pseudo) => {
+          const surface = getComputedStyle(element, pseudo);
+          return surface.boxShadow !== "none" || surface.textShadow !== "none" || surface.filter.includes("drop-shadow");
+        });
       }).map((element) => element.className || element.tagName).slice(0, 10);
       const curvedPartialBorders = elements.filter((element) => {
         const style = getComputedStyle(element);
@@ -231,6 +233,23 @@ for (const path of publicPages) {
     expect(findings.oversizedHeadings).toEqual([]);
   });
 }
+
+test("customer controls use neutral keyboard focus without halos", async ({ page }) => {
+  for (const path of ["/", "/my-nights", "/notifications"]) {
+    await page.goto(path);
+    const controls = path === "/" ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : page.locator('.account-navigation a[aria-current="page"]');
+    await controls.focus();
+    const surface = await controls.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const channels = style.outlineColor.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+      return { width: parseFloat(style.outlineWidth), neutral: channels.length === 3 && Math.max(...channels) - Math.min(...channels) <= 3, shadow: style.boxShadow, text: style.textShadow };
+    });
+    expect(surface.width).toBeGreaterThanOrEqual(2);
+    expect(surface.neutral).toBe(true);
+    expect(surface.shadow).toBe("none");
+    expect(surface.text).toBe("none");
+  }
+});
 
 test("the public shell stays inside a lean transfer budget", async ({ page }) => {
   await page.goto("/");

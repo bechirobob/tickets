@@ -45,12 +45,13 @@ const orderOperationsApiUrl = new URL("../app/api/admin/orders/route.ts", import
 test("message controls cannot inherit a full-page footer layout", async () => {
   const [css, room] = await Promise.all([
     readFile(cssUrl, "utf8"),
-    readFile(roomUrl, "utf8"),
+    readFile(new URL("../app/room/[slug]/message-tools.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.doesNotMatch(css, /(?:^|\n)footer\s*\{/u);
   assert.match(room, /className="room-message-menu"/u);
-  assert.match(room, /label="Message actions"/u);
+  assert.match(room, /popover="auto" role="dialog"/u);
+  assert.doesNotMatch(room, /TicketDialog/u);
   assert.doesNotMatch(room, /<footer>\s*<button/u);
   assert.match(css, /\.room-bubble\s*\{[^}]*border-radius:/su);
 });
@@ -137,7 +138,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-host__mark"/u);
   assert.match(home, /className="scene-host__content"/u);
   assert.match(home, /aria-label="4 laughing reactions"/u);
-  assert.match(home, /aria-label="2 crying reactions"/u);
+  assert.match(home, /aria-label="2 laughing reactions"/u);
   assert.match(home, /aria-label="3 fire reactions"/u);
   assert.match(home, /className="sr-only">VIP ticket holder/u);
   assert.doesNotMatch(home, /scene-vip-badge" aria-label=/u);
@@ -164,7 +165,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /<Signal size=\{9\}/u);
   assert.match(home, /<Wifi size=\{10\}/u);
   assert.match(home, /<BatteryFull size=\{13\}/u);
-  assert.match(home, /className="scene-message__reactions"/u);
+  assert.match(home, /className="chat-tapbacks"/u);
+  assert.match(home, /<RoomReaction emoji=/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);
   assert.match(polish, /\.scene-message__reactions\s*\{[^}]*margin:\s*2px 3px 0[^}]*display:\s*flex/su);
   assert.match(polish, /\.scene-host\s*\{[^}]*width:\s*100%[^}]*border-top:\s*1px solid #c9c5bb[^}]*border-bottom:\s*1px solid #c9c5bb[^}]*border-radius:\s*0[^}]*background:\s*transparent[^}]*box-shadow:\s*none/su);

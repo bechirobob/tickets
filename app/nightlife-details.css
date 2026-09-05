@@ -16,7 +16,7 @@
   pointer-events: none;
   transition: opacity 220ms ease;
 }
-.discovery-grid .poster-link:focus-visible { outline: 2px solid var(--poster-ink, #f4f1ea); outline-offset: 5px; }
+.discovery-grid .poster-link:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 5px; }
 .discovery-grid .poster-link:focus-visible::before { opacity: .6; }
 .discovery-grid .drop-card__body > .drop-card__quip,
 .discovery-grid .drop-card[data-featured="true"] .drop-card__body > .drop-card__quip {
@@ -42,21 +42,6 @@
 .discovery-home .organizer-intelligence dl > div { grid-template-columns: minmax(130px, .8fr) 1fr; gap: 20px; }
 .organizer-intelligence dt { font-size: 14px; font-weight: 600; letter-spacing: -.015em; text-transform: none; display: flex; align-items: center; gap: 10px; }
 .organizer-intelligence dt svg { flex: 0 0 20px; stroke-width: 1.5; }
-body :is(a, button).ticket-action[data-variant="primary"] .ticket-action__icon {
-  background-image: linear-gradient(135deg, rgba(255,255,255,.17), transparent 60%);
-  overflow: hidden;
-  position: relative;
-}
-body :is(a, button).ticket-action[data-variant="primary"] .ticket-action__icon::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,.32) 50%, transparent 75%);
-  transform: translateX(-130%);
-  transition: transform 400ms ease;
-  pointer-events: none;
-}
-body :is(a, button).ticket-action[data-variant="primary"]:focus-visible .ticket-action__icon::after { transform: translateX(130%); }
 .event-share { position: relative; }
 .event-share > button { min-height: 44px; min-width: 44px; }
 .event-share__feedback {
@@ -79,7 +64,6 @@ body :is(a, button).ticket-action[data-variant="primary"]:focus-visible .ticket-
 .my-nights-locked .my-nights-recovery-error { margin-block: 14px; color: #9d301d; font-size: 14px; line-height: 1.5; }
 @media (hover: hover) and (pointer: fine) {
   .discovery-grid .poster-link:hover::before { opacity: 1; }
-  body :is(a, button).ticket-action[data-variant="primary"]:hover:not(:disabled) .ticket-action__icon::after { transform: translateX(130%); }
 }
 @media (max-width: 700px) {
   .discovery-home .compact-hero__shade { background: linear-gradient(0deg, #281b2b, rgba(25,16,28,.76) 48%, rgba(25,16,28,.16)); }
@@ -90,11 +74,8 @@ body :is(a, button).ticket-action[data-variant="primary"]:focus-visible .ticket-
 }
 @media (prefers-reduced-motion: reduce) {
   .discovery-grid, .discovery-grid .poster-link { animation: none; transition: none; transform: none; }
-  .discovery-grid .drop-card .poster-link::before,
-  body :is(a, button).ticket-action[data-variant="primary"] .ticket-action__icon::after { transition: none; }
-  body :is(a, button).ticket-action[data-variant="primary"] .ticket-action__icon::after { display: none; }
+  .discovery-grid .drop-card .poster-link::before { transition: none; }
 }
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-  .discovery-grid .drop-card .poster-link::before,
-  body :is(a, button).ticket-action[data-variant="primary"] .ticket-action__icon::after { display: none; }
+  .discovery-grid .drop-card .poster-link::before { display: none; }
 }
