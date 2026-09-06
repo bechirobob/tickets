@@ -133,6 +133,7 @@ test("Flashes stay minimal until opened, retry the same session, and stay opened
   await expect(viewer).not.toBeVisible();
   await expect.poll(() => calls.closes).toContain("ama");
   await expect(page.getByRole("button", { name: "Opened Flash from Ama" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Open Flashes; 1 unopened" })).toBeFocused();
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "Opened Flash from Ama" })).toBeDisabled();
   expect(calls.images).toBe(2);

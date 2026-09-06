@@ -29,7 +29,10 @@ export default function RoomOverlay({ label, onClose, children, className = "", 
       if (timer.current) clearTimeout(timer.current);
       element?.close();
       queueMicrotask(() => {
-        if (previousFocus instanceof HTMLElement && previousFocus.isConnected && !document.querySelector("dialog[open]")) previousFocus.focus({ preventScroll: true });
+        if (document.querySelector("dialog[open]")) return;
+        const target = previousFocus instanceof HTMLElement && previousFocus.isConnected && !previousFocus.matches(":disabled") && previousFocus.getClientRects().length
+          ? previousFocus : (document.querySelector<HTMLElement>(".room-flash-toggle:not(:disabled)") ?? document.querySelector<HTMLElement>(".room-header > a"));
+        target?.focus({ preventScroll: true });
       });
     };
   }, []);

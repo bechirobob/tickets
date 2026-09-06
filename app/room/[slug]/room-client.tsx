@@ -322,7 +322,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       void requestJson<{ requests?: VipRequest[] }>(`/api/rooms/${encodeURIComponent(slug)}/vip`)
         .then((data) => setVipRequests(data.requests ?? []))
         .catch(() => undefined);
-    } catch (error) { setFormError(requestErrorMessage(error)); setNotice(requestErrorMessage(error)); }
+    } catch (error) { setFormError(requestErrorMessage(error)); }
     finally { requestBusyRef.current = false; setVipBusy(false); }
   }
 
