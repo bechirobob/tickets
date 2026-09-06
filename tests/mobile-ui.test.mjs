@@ -925,6 +925,8 @@ test("Flashes stay camera-first with shared compact markers and private viewing 
     readFile(new URL("../app/room/[slug]/flash-camera.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/room/[slug]/flash-viewer.tsx", import.meta.url), "utf8"),
   ]);
+  const css = await readFile(cssUrl, "utf8");
+  assert.doesNotMatch(css, /\.room-composer > form > span\s*\{\s*display:\s*none/su);
   assert.match(camera, /navigator\.mediaDevices\.getUserMedia/u);
   assert.match(camera, /canvas\.toBlob/u);
   assert.doesNotMatch(camera, /type="file"/u);

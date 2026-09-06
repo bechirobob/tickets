@@ -109,17 +109,17 @@ export default function MessageTools({ children, content, name, own, disabled, r
     <div className="room-bubble" onPointerDown={startHold} onPointerUp={cancelHold} onPointerCancel={cancelHold} onPointerLeave={cancelHold} onPointerMove={(event) => { if (Math.hypot(event.clientX - origin.current.x, event.clientY - origin.current.y) > 10) cancelHold(); }} onContextMenu={(event) => { if (!removed) { event.preventDefault(); openActions(); } }} onDoubleClick={openActions}>{children}</div>
     {!removed && reactions.length > 0 && <div className="chat-tapbacks" aria-label="Message reactions">{reactions.map((reaction) => <button key={reaction.emoji} type="button" aria-label={`${reaction.emoji}, ${reaction.count} reactions`} aria-pressed={reaction.mine} disabled={disabled} onClick={() => onReact(reaction.emoji)}><RoomReaction emoji={reaction.emoji} count={reaction.count} /></button>)}</div>}
     {!removed && <>
-      <button ref={trigger} type="button" className="room-message-menu" aria-label={`Actions for ${own ? "your" : name + "'s"} message`} aria-expanded={open} aria-controls={id} onClick={() => open ? close(true) : openActions()}><MoreHorizontal size={18} /></button>
+      <button ref={trigger} type="button" className="room-message-menu" aria-label={`Actions for ${own ? "your" : name + "'s"} message`} aria-expanded={open} aria-controls={id} onClick={() => open ? close(true) : openActions()}><MoreHorizontal aria-hidden="true" size={18} /></button>
       <div ref={tray} id={id} popover="manual" role="toolbar" aria-label={`Actions for ${own ? "your" : name + "'s"} message`} className="chat-action-tray" data-phase={closing ? "closing" : "open"}>
         <div className="chat-action-reactions" role="group" aria-label="Choose a reaction">{["🔥", "❤️", "😂", "👏", "👀"].map((emoji) => <button key={emoji} type="button" aria-label={`React ${emoji}`} aria-pressed={reactions.some((reaction) => reaction.emoji === emoji && reaction.mine)} disabled={disabled || closing} onClick={() => { onReact(emoji); close(true); }}><span>{emoji}</span></button>)}</div>
         <div className="chat-action-links">{more ? <>
-          <button type="button" aria-label="Back to message actions" onClick={() => setMore(false)}><ArrowLeft size={14} /></button>
-          {onReport && <button type="button" onClick={() => close(false, onReport)}><Flag size={14} />Report</button>}
-          {onBlock && <button type="button" onClick={() => close(false, onBlock)}><UserRoundX size={14} />Block</button>}
+          <button type="button" aria-label="Back to message actions" onClick={() => setMore(false)}><ArrowLeft aria-hidden="true" size={14} /></button>
+          {onReport && <button type="button" onClick={() => close(false, onReport)}><Flag aria-hidden="true" size={14} />Report</button>}
+          {onBlock && <button type="button" onClick={() => close(false, onBlock)}><UserRoundX aria-hidden="true" size={14} />Block</button>}
         </> : <>
-          <button type="button" disabled={disabled} onClick={() => close(false, onReply)}><Reply size={14} />Reply</button>
-          <button type="button" onClick={() => void copy()}><Copy size={14} />Copy</button>
-          {(onReport || onBlock) && <button type="button" aria-label="More message actions" onClick={() => setMore(true)}><MoreHorizontal size={16} /></button>}
+          <button type="button" disabled={disabled} onClick={() => close(false, onReply)}><Reply aria-hidden="true" size={14} />Reply</button>
+          <button type="button" onClick={() => void copy()}><Copy aria-hidden="true" size={14} />Copy</button>
+          {(onReport || onBlock) && <button type="button" aria-label="More message actions" onClick={() => setMore(true)}><MoreHorizontal aria-hidden="true" size={16} /></button>}
         </>}</div>
         {copyStatus && <p className="chat-action-feedback" role="status">{copyStatus}</p>}
       </div>

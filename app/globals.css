@@ -1452,7 +1452,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 @media (max-width: 700px) {
   .room-composer > form { grid-template-columns: auto auto minmax(0, 1fr) 40px; gap: 3px; }
-  .room-composer > form > span { display: none; }
   .room-composer > form > button:last-child { grid-column: 4; }
   .room-vip-modal { padding: 0; }
   .room-vip-modal > section { max-height: 86dvh; padding: 17px 16px max(17px, env(safe-area-inset-bottom)); }
