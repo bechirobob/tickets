@@ -127,7 +127,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   ]);
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The night has a Room\./u);
-  assert.match(home, /Flashes that disappear when the Room closes/u);
+  assert.match(home, /Flashes you get one look at/u);
   assert.match(home, /Private to verified ticket holders/u);
   assert.match(home, />Preview</u);
   assert.doesNotMatch(home, /Illustrative preview|Demo chat/u);
