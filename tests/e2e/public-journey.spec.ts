@@ -247,7 +247,13 @@ for (const path of publicPages) {
 
 test("customer controls use neutral keyboard focus without halos", async ({ page }) => {
   for (const path of ["/", "/my-nights", "/notifications"]) {
-    await page.goto(path);
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+    if (path === "/") {
+      const playback = page.locator(".active-night-autoplay-toggle");
+      // Reduced motion is applied after hydration; don't focus a server node
+      // that React is still taking over on a slower runner.
+      if (await playback.count()) await expect(playback).toBeDisabled();
+    }
     const controls = path === "/" ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : page.locator('.account-navigation a[aria-current="page"]');
     await page.keyboard.press("Tab");
     await controls.focus();

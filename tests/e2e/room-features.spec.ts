@@ -148,7 +148,7 @@ test("the Flash inbox supports expiry, private reports and owner removal without
   await page.screenshot({ path: info.outputPath("room-flash-inbox.png") });
   await inbox.getByRole("button", { name: "Open Flash from Yaw", exact: true }).click();
   const viewer = page.getByRole("dialog", { name: "Flash from Yaw" });
-  await expect(viewer.getByRole("img")).toBeVisible();
+  await expect(viewer.getByRole("img", { name: "Flash shared by Yaw", exact: true })).toBeVisible();
   await expect(viewer).not.toBeVisible({ timeout: 12_000 });
   await expect(inbox).toBeVisible();
   await inbox.getByRole("button", { name: /All Flashes/u }).click();

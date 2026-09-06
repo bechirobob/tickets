@@ -75,6 +75,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await page.goto("/room/after-dark-osu");
   const setting = page.locator(".room-page");
   await expect(setting).toBeVisible();
+  await expect(page.getByRole("button", { name: "Share a Flash", exact: true })).toBeVisible();
   await expect(setting).toHaveCSS("background-image", /the-room\.webp/u);
   await expect(page.locator(".room-pinned")).toContainText("Gate 2 tonight");
   await page.locator(".room-pinned summary").click();

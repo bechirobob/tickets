@@ -133,6 +133,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
   useEffect(() => {
     if (!autoplayRunning) return;
     const timer = window.setTimeout(() => {
+      if (heroRef.current?.contains(document.activeElement) || roomRef.current?.contains(document.activeElement)) return;
       setPreviousIndex(activeIndex);
       setActiveIndex((activeIndex + 1) % scenes.length);
     }, sceneInterval);
