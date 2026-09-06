@@ -43,9 +43,10 @@ export async function GET(request: Request, context: Context) {
   const rows = await env.DB.prepare(`
     SELECT flash.id, flash.event_slug AS eventSlug, flash.attendee_id AS attendeeId,
            profile.display_name AS displayName, flash.width, flash.height,
-           flash.created_at AS createdAt, flash.expires_at AS expiresAt
+           flash.created_at AS createdAt, flash.expires_at AS expiresAt, view.opened_at AS openedAt
     FROM room_flashes flash
     JOIN attendee_profiles profile ON profile.id = flash.attendee_id
+    LEFT JOIN room_flash_views view ON view.flash_id = flash.id AND view.attendee_id = ?
     WHERE flash.event_slug = ? AND flash.status = 'active' AND flash.expires_at > ?
       AND NOT EXISTS (
         SELECT 1 FROM room_blocks block
@@ -58,7 +59,7 @@ export async function GET(request: Request, context: Context) {
       )
     ORDER BY flash.created_at DESC
     LIMIT 100
-  `).bind(slug, now, access.attendeeId, access.attendeeId).all<Omit<FlashRecord, "mine">>();
+  `).bind(access.attendeeId, slug, now, access.attendeeId, access.attendeeId).all<Omit<FlashRecord, "mine">>();
   return Response.json({
     flashes: rows.results.map((flash) => ({ ...flash, mine: flash.attendeeId === access.attendeeId })),
     expiresAt: policy.readOnlyAt,

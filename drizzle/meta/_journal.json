@@ -176,6 +176,13 @@
       "when": 1788566400000,
       "tag": "0024_payment_attempt_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1788658615728,
+      "tag": "0025_flash_view_sessions",
+      "breakpoints": true
     }
   ]
 }

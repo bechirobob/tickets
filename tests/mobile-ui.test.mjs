@@ -50,7 +50,7 @@ test("message controls cannot inherit a full-page footer layout", async () => {
 
   assert.doesNotMatch(css, /(?:^|\n)footer\s*\{/u);
   assert.match(room, /className="room-message-menu"/u);
-  assert.match(room, /popover="auto" role="dialog"/u);
+  assert.match(room, /popover="manual" role="toolbar"/u);
   assert.doesNotMatch(room, /TicketDialog/u);
   assert.doesNotMatch(room, /<footer>\s*<button/u);
   assert.match(css, /\.room-bubble\s*\{[^}]*border-radius:/su);
@@ -127,7 +127,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   ]);
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The night has a Room\./u);
-  assert.match(home, /Flashes that disappear when the Room closes/u);
+  assert.match(home, /Flashes you get one look at/u);
   assert.match(home, /Private to verified ticket holders/u);
   assert.match(home, />Preview</u);
   assert.doesNotMatch(home, /Illustrative preview|Demo chat/u);
@@ -918,21 +918,24 @@ test("homepage footer stays useful without duplicating the customer dock", async
   assert.match(css, /\.night-footer > p\s*\{[^}]*color:\s*#898a83/su);
 });
 
-test("Flashes are camera-first and stay closed until tapped", async () => {
-  const [panel, room] = await Promise.all([
+test("Flashes stay camera-first with shared compact markers and private viewing sessions", async () => {
+  const [panel, room, camera, viewer] = await Promise.all([
     readFile(new URL("../app/room/[slug]/flashes-panel.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/room/[slug]/room-client.tsx", import.meta.url), "utf8"),
+    readFile(roomUrl, "utf8"),
+    readFile(new URL("../app/room/[slug]/flash-camera.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/room/[slug]/flash-viewer.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(panel, /navigator\.mediaDevices\.getUserMedia/u);
-  assert.match(panel, /canvas\.toBlob/u);
-  assert.doesNotMatch(panel, /type="file"/u);
-  assert.match(panel, /className="flash-card__closed"/u);
-  assert.match(room, /className="room-flash-message__closed"/u);
+  assert.match(camera, /navigator\.mediaDevices\.getUserMedia/u);
+  assert.match(camera, /canvas\.toBlob/u);
+  assert.doesNotMatch(camera, /type="file"/u);
+  assert.match(panel, /<FlashMarker/u);
+  assert.match(room, /<FlashMarker/u);
   assert.match(panel, /Delete this Flash for good\?/u);
-  assert.doesNotMatch(panel, /window\.confirm/u);
-  const css = await readFile(cssUrl, "utf8");
-  assert.match(css, /\.room-flash-message__closed\s*\{[^}]*min-height:\s*50px[^}]*display:\s*flex/su);
-  assert.doesNotMatch(css, /\.room-flash-message__closed\s*\{[^}]*min-height:\s*145px/su);
+  assert.doesNotMatch(panel, /window\.confirm|className="flash-card/u);
+  assert.match(viewer, /method: "POST"/u);
+  assert.match(viewer, /method: "PATCH"/u);
+  assert.match(viewer, /URL\.revokeObjectURL/u);
+  assert.match(viewer, /visibilitychange/u);
 });
 
 test("semantic states and route-matched skeletons stay accessible", async () => {
