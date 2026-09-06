@@ -199,7 +199,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
 
     <section ref={roomRef} className="room-product-scene active-night-room" id="the-room" data-scroll-reveal onFocusCapture={() => setInteractionPause(true)} onBlurCapture={leaveFocus}>
       <Image className="room-product-scene__atmosphere" src={eventImageUrl(heroImage, 1200, 75)} width={1200} height={800} sizes="100vw" alt="" aria-hidden="true" unoptimized />
-      <div className="room-product-scene__copy"><p className="night-kicker"><span /> You’re already on the inside</p><h2>The night has a Room.</h2><p>Find your people before you find the dance floor. Host updates, a little banter and Flashes that disappear when the Room closes.</p><span><LockKeyhole size={13} /> Private to verified ticket holders</span></div>
+      <div className="room-product-scene__copy"><p className="night-kicker"><span /> You’re already on the inside</p><h2>The night has a Room.</h2><p>Find your people before you find the dance floor. Host updates, a little banter and Flashes you get one look at.</p><span><LockKeyhole size={13} /> Private to verified ticket holders</span></div>
       <RoomPreviewCarousel>
         <RoomPhone event={active} heroImage={heroImage} conversation="arrival" />
         <RoomPhone event={active} heroImage={heroImage} conversation="inside" />

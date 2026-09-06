@@ -158,7 +158,7 @@ const guides: Guide[] = [
     category: "Flashes",
     title: "Share or remove a Flash",
     summary: "The camera mark keeps a captured-now photo private until another ticket holder opens it.",
-    steps: ["Use the camera in the Room to capture and send the Flash; uploads from your photo library are not accepted.", "Your Flash stays closed until each viewer taps it, and its photo metadata is removed before publication.", "Open your own Flash and choose delete to remove it permanently. Any Flash still present is deleted automatically when the Room closes."],
+    steps: ["Use the camera in the Room to capture and send the Flash; uploads from your photo library are not accepted.", "Each guest gets one viewing session of up to ten seconds. Closing it or leaving the tab ends that look; refreshing does not reset it. Screenshots are still possible.", "You can preview your own Flash again, or remove it through its options in All Flashes. Any Flash still present is deleted automatically when the Room closes."],
     action: { href: "/my-nights", label: "Open My Nights" },
   },
   {

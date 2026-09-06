@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 const reasons = [
   ["01", "The good stuff, edited.", "Fewer random listings. More nights worth leaving the house for, presented clearly enough to choose without opening fifteen tabs."],
-  ["02", "Your people are already in the Room.", "A private space for the people actually going: Host updates, conversation and Flashes that disappear when the Room closes. Eligible VIP tickets can add private requests for bottle service, song suggestions or assistance when the Host enables them. The DJ still gets the final say."],
+  ["02", "Your people are already in the Room.", "A private space for the people actually going: Host updates, conversation and Flashes you get one look at. Eligible VIP tickets can add private requests for bottle service, song suggestions or assistance when the Host enables them. The DJ still gets the final say."],
   ["03", "A good night deserves an encore.", "Organisers can see which tickets sold, which promoters brought people and when the crowd arrived. Useful numbers for the next party, kept in a private dashboard. Customer payment details stay private."],
   ["04", "Made for how Accra moves.", "Pay with Mobile Money, Visa or Mastercard through Paystack. Keep your passes on your phone. And when something needs a human, ask for help. Even a very good night can misplace an email."],
 ];
