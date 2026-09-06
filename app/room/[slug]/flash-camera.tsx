@@ -34,8 +34,11 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
     let cancelled = false;
     async function start() {
       setReady(false); setError("");
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("This browser cannot open a camera. Try your phone’s browser.");
+        return;
+      }
       try {
-        if (!navigator.mediaDevices?.getUserMedia) throw new Error("This browser cannot open a camera. Try your phone’s browser.");
         const next = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 1920 } } });
         if (cancelled || current !== generation.current) { next.getTracks().forEach((track) => track.stop()); return; }
         stream.current = next;

@@ -165,6 +165,7 @@ test("the Flash inbox supports expiry, private reports and owner removal without
   await expect(inbox.getByRole("button", { name: "Options for Flash from Yaw" })).toHaveCount(0);
   await inbox.getByRole("button", { name: "Options for Flash from you" }).click();
   await page.getByRole("dialog", { name: "Remove Flash" }).getByRole("button", { name: "Delete Flash", exact: true }).click();
+  await expect(inbox).toBeVisible();
   expect(calls.deletes).toEqual(["mine"]);
   expect(calls.reports).toEqual([{ reason: "nonconsensual", details: "Shared without my permission." }, { reason: "nonconsensual", details: "Shared without my permission." }]);
   await expect(inbox).toBeVisible();
@@ -174,7 +175,10 @@ test("the camera closes safely when permission resolves after dismissal", async 
   await page.addInitScript(() => {
     const state = { stopped: 0, requested: 0, resolve: null as null | ((stream: MediaStream) => void) };
     Object.defineProperty(window, "__roomCamera", { value: state });
-    Object.defineProperty(navigator.mediaDevices, "getUserMedia", { configurable: true, value: () => { state.requested++; return new Promise<MediaStream>((resolve) => { state.resolve = resolve; }); } });
+    // WebKit runners may not expose MediaDevices at all. Simulate the entire
+    // camera boundary so this exercises app cancellation, not host hardware.
+    const mediaDevices = { getUserMedia: () => { state.requested++; return new Promise<MediaStream>((resolve) => { state.resolve = resolve; }); } };
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, get: () => mediaDevices });
   });
   await roomFixture(page);
   const camera = page.getByRole("button", { name: "Share a Flash", exact: true });
