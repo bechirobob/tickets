@@ -376,6 +376,14 @@ export const roomFlashes = sqliteTable("room_flashes", {
   index("room_flashes_attendee_idx").on(table.attendeeId, table.eventSlug, table.status),
 ]);
 
+export const roomFlashViews = sqliteTable("room_flash_views", {
+  flashId: text("flash_id").notNull(),
+  attendeeId: text("attendee_id").notNull(),
+  viewId: text("view_id").notNull(),
+  openedAt: text("opened_at").notNull(),
+  viewUntil: text("view_until").notNull(),
+}, (table) => [uniqueIndex("room_flash_views_guest_unique").on(table.flashId, table.attendeeId)]);
+
 export const roomFlashReports = sqliteTable("room_flash_reports", {
   id: text("id").primaryKey(),
   flashId: text("flash_id").notNull(),

@@ -1,3 +1,4 @@
+export const FLASH_VIEW_DURATION_MS = 10_000;
 export const FLASH_MAX_UPLOAD_BYTES = 6 * 1024 * 1024;
 export const FLASH_MAX_STORED_BYTES = 512 * 1024;
 export const FLASH_MAX_ACTIVE_PER_ATTENDEE = 8;
@@ -20,6 +21,7 @@ export type FlashRecord = {
   createdAt: string;
   expiresAt: string;
   mine: boolean;
+  openedAt?: string | null;
 };
 
 export function hasAcceptedFlashType(type: string): boolean {
@@ -82,6 +84,10 @@ export async function purgeExpiredFlashes(db: D1Database, eventSlug?: string): P
   const rows = eventSlug
     ? await db.prepare(query).bind(eventSlug, now).all<{ id: string }>()
     : await db.prepare(query).bind(now).all<{ id: string }>();
+  // Receipts expire with the media, including owner/moderator removals.
+  await db.prepare(`DELETE FROM room_flash_views WHERE flash_id IN
+    (SELECT id FROM room_flashes WHERE (status = 'deleted' OR expires_at <= ?) ${eventSlug ? "AND event_slug = ?" : ""})`)
+    .bind(...(eventSlug ? [now, eventSlug] : [now])).run();
   if (rows.results.length === 0) return 0;
   const statements = rows.results.map((row) => db.prepare(`
     UPDATE room_flashes

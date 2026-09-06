@@ -21,7 +21,7 @@ import EventExplorer from "./event-explorer";
 import { eventImageUrl } from "./event-images";
 import type { CuratedEvent } from "./events";
 import RoomPreviewCarousel from "./room-preview-carousel";
-import { RoomComposeContent, RoomReaction } from "./room-chat-parts";
+import { FlashMarker, RoomComposeContent, RoomReaction } from "./room-chat-parts";
 import { ActionLink } from "./action";
 import { discoveryPrice } from "../lib/event-pricing";
 
@@ -64,7 +64,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:24 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Found the car. Nobody move.</p></div></div></div></article>
         </> : <>
           <article className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>{event?.vibe ?? "Front left"} is the move tonight.</p></div><div className="chat-tapbacks" aria-label="6 watching reactions"><RoomReaction emoji="👀" count={6} /></div></div></div></article>
-          <article className="scene-flash-message"><small>Ama · 10:43 PM</small><div className="scene-flash-closed"><Camera size={18} /><span><b>Flash</b><i>Tap to open</i></span></div></article>
+          <article className="scene-flash-message"><small>Ama · 10:43 PM</small><FlashMarker /></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 10:44 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Found you. This set is ridiculous.</p></div><div className="chat-tapbacks" aria-label="5 fire reactions"><RoomReaction emoji="🔥" count={5} /></div></div></div></article>
           <HostUpdate label="HOST UPDATE" time="10:47 PM" dateTime="22:47" title="Gate change." detail="Use Gate 2 for last entry." compact />
         </>}

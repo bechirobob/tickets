@@ -76,7 +76,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   const setting = page.locator(".room-page");
   await expect(setting).toBeVisible();
   await expect(setting).toHaveCSS("background-image", /the-room\.webp/u);
-  await expect(page.locator(".room-message.announcement")).toContainText("Gate 2 tonight");
+  await expect(page.locator(".room-pinned")).toContainText("Gate 2 tonight");
   await page.locator(".room-pinned summary").click();
   await expect(page.locator(".room-pinned > p")).toBeVisible();
   await page.locator(".room-pinned summary").click();
@@ -84,8 +84,11 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   const kofi = page.locator(".room-message").filter({ hasText: "Front left. You know the drill." }).first();
   const trigger = kofi.getByRole("button", { name: "Actions for Kofi's message" });
   await trigger.click();
-  const actions = page.getByRole("dialog", { name: "Actions for Kofi's message" });
+  const actions = page.getByRole("toolbar", { name: "Actions for Kofi's message" });
   await expect(actions).toBeVisible();
+  await expect(actions).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(actions).toHaveCSS("border-top-width", "0px");
+  await expect(actions.getByRole("button", { name: "React 🔥", exact: true })).toHaveCSS("font-size", "19px");
   expect(await page.locator("dialog[open]").count()).toBe(0);
   const anchored = await actions.evaluate((tray) => {
     const shelf = tray.getBoundingClientRect();
