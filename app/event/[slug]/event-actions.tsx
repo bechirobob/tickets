@@ -1,6 +1,6 @@
 "use client";
 
-import { Share2 } from "lucide-react";
+import { Link2, Share2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { trackProductMetric } from "../../../lib/client-analytics";
 
@@ -10,15 +10,18 @@ export default function EventActions({ title, eventSlug }: { title: string; even
   const [shareUrl, setShareUrl] = useState("");
   const inFlight = useRef(false);
   const shareButton = useRef<HTMLButtonElement>(null);
+  const copyButton = useRef<HTMLButtonElement>(null);
+  const [lastAction, setLastAction] = useState<"copy" | "share">("share");
 
   function closeFeedback() {
     setOutcome(null);
-    shareButton.current?.focus();
+    (lastAction === "copy" ? copyButton : shareButton).current?.focus();
   }
 
-  async function share() {
+  async function share(copyOnly = false) {
     if (inFlight.current) return;
     inFlight.current = true;
+    setLastAction(copyOnly ? "copy" : "share");
     setBusy(true);
     setOutcome(null);
     const url = window.location.href;
@@ -26,7 +29,7 @@ export default function EventActions({ title, eventSlug }: { title: string; even
     try {
       trackProductMetric("share_started", eventSlug);
       const data = { title: `${title} · BeCore Tickets`, text: `${title}. Shall we?`, url };
-      if (navigator.share) {
+      if (!copyOnly && navigator.share) {
         try {
           await navigator.share(data);
           return;
@@ -48,6 +51,7 @@ export default function EventActions({ title, eventSlug }: { title: string; even
   }
 
   return <div className="event-share" onKeyDown={(event) => { if (event.key === "Escape" && outcome) { event.stopPropagation(); closeFeedback(); } }}>
+    <button ref={copyButton} type="button" className="icon-text" onClick={() => void share(true)} disabled={busy} aria-busy={busy && lastAction === "copy"}><Link2 size={17} /> {busy && lastAction === "copy" ? "Copying…" : "Copy Link"}</button>
     <button ref={shareButton} type="button" className="icon-text" onClick={() => void share()} disabled={busy} aria-busy={busy} aria-expanded={outcome !== null} aria-controls={outcome ? "event-share-feedback" : undefined}><Share2 size={17} /> {busy ? "Opening…" : "Share"}</button>
     {outcome && <div id="event-share-feedback" className="event-share__feedback">
       <p role="status">{outcome === "copied" ? "Link copied. Send it to the usual suspects." : "Your browser won’t copy this one. Select the link below and copy it yourself."}</p>

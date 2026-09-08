@@ -9,7 +9,7 @@ type PreviewSlot = {
 const PREVIEW_SLOTS: PreviewSlot[] = [
   { slug: "after-dark-osu", weekday: 5, hour: 22, minute: 0, durationMinutes: 360 },
   { slug: "noir-room-labone", weekday: 6, hour: 21, minute: 30, durationMinutes: 330 },
-  { slug: "sun-chasers-labadi", weekday: 0, hour: 15, minute: 0, durationMinutes: 480 },
+  { slug: "sun-chasers-labadi", weekday: 0, hour: 14, minute: 0, durationMinutes: 480 },
   { slug: "longitude-spintex", weekday: 5, hour: 23, minute: 0, durationMinutes: 360 },
 ];
 
