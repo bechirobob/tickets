@@ -20,6 +20,7 @@ export async function releaseWaitlistOffers(env: Cloudflare.Env, origin: string)
     JOIN curated_event_records event ON event.slug = tier.event_slug
     LEFT JOIN inventory_reservations reservation ON reservation.ticket_tier_id = tier.id
     WHERE event.event_state IN ('on_sale', 'rescheduled') AND event.starts_at > ?
+      AND event.schedule_status = 'confirmed' AND event.status = 'published'
       AND tier.status <> 'hidden'
     GROUP BY tier.id
     HAVING capacity > allocated

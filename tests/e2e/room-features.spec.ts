@@ -8,7 +8,7 @@ async function roomFixture(page: Page, options: { vipFailure?: boolean; imageFai
   await page.emulateMedia({ reducedMotion: "reduce" });
   const photo = await readFile(new URL("../../public/atmospheres/behind-the-night.webp", import.meta.url));
   const now = new Date().toISOString(); const future = new Date(Date.now() + 86_400_000).toISOString();
-  const room = { eventSlug: "after-dark-osu", eventTitle: "After Dark: Osu", readOnly: false, readOnlyAt: future };
+  const room = { eventSlug: "the-weekend-braai", eventTitle: "After Dark: Osu", readOnly: false, readOnlyAt: future };
   const base = { sequence: 1, roomBadge: null, kind: "message", parentId: null, pinned: false, deletedAt: null, reactions: [], createdAt: now };
   const messages = [
     { ...base, id: "pin", attendeeId: "host", displayName: "The Host", role: "organizer", kind: "announcement", pinned: true, content: "Gate 2 tonight. The pin is right; the queue on the other side isn’t." },
@@ -66,7 +66,7 @@ async function roomFixture(page: Page, options: { vipFailure?: boolean; imageFai
     return route.fulfill({ status: 401, json: { error: "Isolated fixture: no real attendee API access" } });
   });
   await page.routeWebSocket(/\/api\/room\/socket/u, (socket) => socket.send(JSON.stringify({ type: "snapshot", messages, room, online: 4 })));
-  await page.goto("/room/after-dark-osu", { waitUntil: "domcontentloaded" });
+  await page.goto("/room/the-weekend-braai", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("textbox", { name: "Message The Room" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Flashes; 2 unopened" })).toBeVisible();
   return calls;

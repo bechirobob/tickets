@@ -155,7 +155,9 @@ export async function loadTicketedEventExperience(
 }
 
 export function eventTiming(event: Pick<CuratedEvent, "startsAt" | "endsAt">, now = Date.now()): "upcoming" | "live" | "past" {
+  if (!event.startsAt) return "upcoming";
   if (new Date(event.startsAt).getTime() > now) return "upcoming";
+  if (!event.endsAt) return "live";
   if (new Date(event.endsAt).getTime() >= now) return "live";
   return "past";
 }

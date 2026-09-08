@@ -37,7 +37,7 @@ sandbox, even if the Worker is configured for live SeevPlus payments.
 
 ## Verification before activation
 
-1. Apply `0032_seevplus_checkout.sql` to the isolated test database, build, and
+1. Apply `0033_seevplus_checkout.sql` to the isolated test database, build, and
    configure the sandbox secrets. Do not reuse the production customer database.
 2. Buy a test admission with each offered MoMo network. Exercise Seev's sandbox
    success and decline actions. Confirm the saved provider reference, amount and

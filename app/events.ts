@@ -9,8 +9,10 @@ export type CuratedEvent = {
   fullDate: string;
   day: string;
   time: string;
-  startsAt: string;
-  endsAt: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  scheduleStatus?: "confirmed" | "coming_soon" | "end_pending";
+  isVerified?: boolean;
   venue: string;
   venueMapUrl: string | null;
   area: string;
@@ -55,6 +57,8 @@ type EventRecord = {
   lineup: string;
   eventState: EventState;
   isTestEvent: number;
+  scheduleStatus: "confirmed" | "coming_soon" | "end_pending";
+  isVerified: number;
   dressCode: string | null;
   colourScheme: string | null;
   awarenessNote: string | null;
@@ -84,15 +88,19 @@ type TierRecord = {
 function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): CuratedEvent {
   const starts = new Date(record.startsAt);
   const ends = new Date(record.endsAt);
+  const comingSoon = record.scheduleStatus === "coming_soon";
+  const endPending = record.scheduleStatus !== "confirmed";
   return {
     slug: record.slug,
     title: record.title,
-    shortDate: new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" }).format(starts).toUpperCase(),
-    fullDate: new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
-    day: new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" }).format(starts),
-    time: `${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(starts)} — ${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(ends)}`,
-    startsAt: record.startsAt,
-    endsAt: record.endsAt,
+    shortDate: comingSoon ? "Coming soon" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" }).format(starts).toUpperCase(),
+    fullDate: comingSoon ? "Coming soon" : new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
+    day: comingSoon ? "" : new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" }).format(starts),
+    time: comingSoon ? "Time to be announced" : `${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(starts)}${endPending ? " onwards" : ` — ${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(ends)}`}`,
+    startsAt: comingSoon ? null : record.startsAt,
+    endsAt: endPending ? null : record.endsAt,
+    scheduleStatus: record.scheduleStatus,
+    isVerified: Boolean(record.isVerified),
     venue: record.venue,
     venueMapUrl: record.venueMapUrl,
     area: record.area,
@@ -109,9 +117,9 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     colourScheme: record.colourScheme,
     awarenessNote: record.awarenessNote,
     guestPerk: record.guestPerk,
-    rescheduledFrom: record.rescheduledFrom,
-    salesOpenAt: record.salesOpenAt,
-    salesCloseAt: record.salesCloseAt,
+    rescheduledFrom: comingSoon ? null : record.rescheduledFrom,
+    salesOpenAt: endPending ? null : record.salesOpenAt,
+    salesCloseAt: endPending ? null : record.salesCloseAt,
     ticketTiers: tiers,
     image: record.imageUrl,
     note: record.curationNote,
@@ -127,6 +135,7 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
 
 function resolveTierStatus(record: EventRecord, tier: TierRecord, now: string): TicketTier["status"] {
   if (tier.configuredStatus === "hidden") return "hidden";
+  if (record.scheduleStatus !== "confirmed") return "upcoming";
   if (record.eventState === "cancelled" || record.eventState === "postponed") return "closed";
   if (record.eventState === "sold_out" || tier.configuredStatus === "sold_out") return "sold_out";
   const opensAt = tier.salesOpenAt ?? record.salesOpenAt;
@@ -153,6 +162,7 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
            sales_open_at AS salesOpenAt, sales_close_at AS salesCloseAt,
            age_restriction AS ageRestriction, lineup,
            event_state AS eventState, is_test_event AS isTestEvent,
+           schedule_status AS scheduleStatus, is_verified AS isVerified,
            dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote,
            guest_perk AS guestPerk,
            rescheduled_from AS rescheduledFrom,
@@ -168,7 +178,7 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
     FROM curated_event_records
     WHERE (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
       ${slugFilter}
-    ORDER BY starts_at, title
+    ORDER BY CASE WHEN schedule_status = 'coming_soon' THEN 1 ELSE 0 END, starts_at, title
     LIMIT 100
   `);
   const result = slug

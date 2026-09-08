@@ -3,8 +3,8 @@ import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 type NightRecord = {
   eventSlug: string;
   title: string;
-  startsAt: string;
-  endsAt: string;
+  startsAt: string | null;
+  endsAt: string | null;
   venue: string;
   area: string;
   imageUrl: string;
@@ -26,8 +26,10 @@ export async function GET(request: Request) {
     return Response.json({ error: "Your first verified ticket unlocks My Nights." }, { status: 401, headers: { "cache-control": "no-store" } });
   }
   const rows = await env.DB.prepare(`
-    SELECT event.slug AS eventSlug, event.title, event.starts_at AS startsAt,
-           event.ends_at AS endsAt, event.venue, event.area, event.image_url AS imageUrl,
+    SELECT event.slug AS eventSlug, event.title,
+           CASE WHEN event.schedule_status != 'coming_soon' THEN event.starts_at END AS startsAt,
+           CASE WHEN event.schedule_status = 'confirmed' THEN event.ends_at END AS endsAt,
+           event.venue, event.area, event.image_url AS imageUrl,
            event.event_state AS eventState, event.is_test_event AS isTestEvent,
            COUNT(DISTINCT CASE WHEN assignment.status = 'active' AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded') THEN ticket.id END) AS ticketCount,
            COALESCE(preference.keep_posted, false) AS keepPosted,

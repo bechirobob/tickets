@@ -11,7 +11,8 @@ export function resolveTicketSelection(
   const tier = event.ticketTiers.find((candidate) => candidate.id === ticketTierId);
 
   if (
-    !tier
+    (event.scheduleStatus && event.scheduleStatus !== "confirmed")
+    || !tier
     || tier.status !== "available"
     || !Number.isInteger(unitQuantity)
     || unitQuantity < 1

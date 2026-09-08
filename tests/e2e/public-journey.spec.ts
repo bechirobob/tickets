@@ -18,8 +18,8 @@ const publicPages = [
   "/notifications",
   "/tickets",
   "/account/privacy",
-  "/event/after-dark-osu",
-  "/checkout/after-dark-osu",
+  "/event/the-weekend-braai",
+  "/checkout/the-weekend-braai",
   "/admin/login",
 ];
 
@@ -135,33 +135,21 @@ test("My Nights exposes secure recovery to a signed-out customer", async ({ page
   await expect(page.getByRole("button", { name: "Bring back my Nights" })).toHaveAttribute("type", "submit");
 });
 
-test("preview events remain excluded from search while sharing metadata stays complete", async ({ page }) => {
-  await page.goto("/event/after-dark-osu");
-  await expect(page.getByRole("heading", { name: "After Dark: Osu" })).toBeVisible();
-  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /After Dark: Osu/u);
+test("launch event sharing metadata stays complete", async ({ page }) => {
+  await page.goto("/event/the-weekend-braai");
+  await expect(page.getByRole("heading", { name: "The Weekend Braai — Birthday Edition" })).toBeVisible();
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /The Weekend Braai — Birthday Edition/u);
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /^https:\/\//u);
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/u);
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /index, follow/u);
 });
 
-test("checkout groups mobile money providers separately from secure card payment", async ({ page }) => {
-  await page.goto("/events");
-  await page.locator(".drop-card").filter({ hasText: /From GH₵/u }).first().getByRole("link", { name: /^See /u }).click();
-  await page.getByRole("link", { name: "Get tickets", exact: true }).click();
-  const mobileMoney = page.getByRole("radio", { name: /Mobile Money/u });
-  const card = page.getByRole("radio", { name: /^Card/u });
-  await expect(mobileMoney).not.toBeChecked();
-  await expect(card).not.toBeChecked();
-  await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toHaveCount(0);
-  await mobileMoney.click();
-  await expect(mobileMoney).toBeChecked();
-  await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toBeVisible();
-  await card.click();
-  await expect(card).toBeChecked();
-  await expect(page.getByText("BeCore never receives or stores your card number.")).toBeVisible();
-  await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toHaveCount(0);
-  const serious = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze())
-    .violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
-  expect(serious, serious.map((violation) => `${violation.id}: ${violation.help}`).join("\n")).toEqual([]);
+test("checkout stays closed until launch inventory is confirmed", async ({ page }) => {
+  for (const slug of ["the-weekend-braai", "sun-chasers-labadi"]) {
+    await page.goto(`/checkout/${slug}`);
+    await expect(page).toHaveURL(new RegExp(`/event/${slug}$`));
+    await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
+    await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
+  }
 });
 
 test("the install manifest has complete app identity and adaptive icons", async ({ request }) => {

@@ -19,6 +19,7 @@ export async function resolveRoomPolicy(db: D1Database, eventSlug: string): Prom
     FROM curated_event_records event
     LEFT JOIN room_settings setting ON setting.event_slug = event.slug
     WHERE event.slug = ? AND event.status IN ('published', 'scheduled')
+      AND event.schedule_status = 'confirmed'
     LIMIT 1
   `).bind(eventSlug).first<{ title: string; startsAt: string; endsAt: string; emergencyReadOnly: number; slowModeSeconds: number; archivedAt: string | null }>();
   if (!record) return null;

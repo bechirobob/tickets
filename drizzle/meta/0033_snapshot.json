@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "87b875f6-6b18-4f59-8d24-2d1d630610c6",
-  "prevId": "efbc67f3-4dd4-4c5e-896f-f5fc50b965cd",
+  "id": "4ed7e4eb-1287-43f4-8121-e147b50d7b9a",
+  "prevId": "87b875f6-6b18-4f59-8d24-2d1d630610c6",
   "tables": {
     "approval_requests": {
       "name": "approval_requests",
@@ -3068,6 +3068,42 @@
           "notNull": false,
           "autoincrement": false
         },
+        "payment_provider": {
+          "name": "payment_provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'paystack'"
+        },
+        "provider_reference": {
+          "name": "provider_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_transaction_id": {
+          "name": "provider_transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_status": {
+          "name": "provider_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payment_environment": {
+          "name": "payment_environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "ticket_tier_id": {
           "name": "ticket_tier_id",
           "type": "text",
@@ -3177,6 +3213,14 @@
             "status"
           ],
           "isUnique": false
+        },
+        "orders_provider_reference_unique": {
+          "name": "orders_provider_reference_unique",
+          "columns": [
+            "payment_provider",
+            "provider_reference"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {},
@@ -5440,6 +5484,79 @@
         }
       },
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "seev_checkout_sessions": {
+      "name": "seev_checkout_sessions",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_json": {
+          "name": "request_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "checkout_url": {
+          "name": "checkout_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "seev_checkout_sessions_order_id_orders_id_fk": {
+          "name": "seev_checkout_sessions_order_id_orders_id_fk",
+          "tableFrom": "seev_checkout_sessions",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

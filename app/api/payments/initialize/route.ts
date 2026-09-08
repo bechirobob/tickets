@@ -119,6 +119,7 @@ export async function POST(request: Request) {
       JOIN event_ticket_tiers tier ON tier.event_slug = event.slug
       WHERE event.slug = ? AND tier.id = ? AND tier.code = ?
         AND (event.status = 'published' OR (event.status = 'scheduled' AND event.scheduled_publish_at <= ?))
+        AND event.schedule_status = 'confirmed'
         AND (event.event_state IN ('on_sale', 'rescheduled') OR ? IS NOT NULL)
         AND (tier.status = 'available' OR ? IS NOT NULL)
         AND (COALESCE(tier.sales_open_at, event.sales_open_at) IS NULL OR COALESCE(tier.sales_open_at, event.sales_open_at) <= ?)

@@ -229,8 +229,15 @@
     {
       "idx": 32,
       "version": "6",
-      "when": 1788905401808,
-      "tag": "0032_seevplus_checkout",
+      "when": 1788905035213,
+      "tag": "0032_launch_event_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1788906831463,
+      "tag": "0033_seevplus_checkout",
       "breakpoints": true
     }
   ]

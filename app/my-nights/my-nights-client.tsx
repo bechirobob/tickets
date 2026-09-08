@@ -13,7 +13,7 @@ import LoadingSkeleton from "../loading-skeleton";
 import { requestJson, requestErrorMessage, RequestError } from "../../lib/client-request";
 
 type Night = {
-  eventSlug: string; title: string; startsAt: string; endsAt: string; venue: string; area: string; imageUrl: string;
+  eventSlug: string; title: string; startsAt: string | null; endsAt: string | null; venue: string; area: string; imageUrl: string;
   eventState: string; isTestEvent: boolean; ticketCount: number; purchased: boolean; keepPosted: boolean;
   attendeeVisible: boolean; hostSlug: string | null; hostName: string | null; updateCount: number; questionCount: number;
 };
@@ -21,6 +21,7 @@ type Payload = { attendee: { displayName: string }; nights: Night[] };
 type View = "upcoming" | "past" | "following";
 
 function nextAction(night: Night, now: number) {
+  if (!night.startsAt || !night.endsAt) return { href: `/my-nights/${night.eventSlug}?view=details`, label: "See event details", icon: Bell };
   const startsIn = new Date(night.startsAt).getTime() - now;
   const ended = new Date(night.endsAt).getTime() < now;
   if (["cancelled", "postponed"].includes(night.eventState)) return { href: `/my-nights/${night.eventSlug}?view=details`, label: "See what changed", icon: Bell };
@@ -78,7 +79,7 @@ export default function MyNightsClient() {
     return (payload?.nights ?? []).filter((night) => {
       if (view === "following") return night.keepPosted || !night.purchased;
       if (!night.purchased) return false;
-      return view === "past" ? new Date(night.endsAt).getTime() < now : new Date(night.endsAt).getTime() >= now;
+      return view === "past" ? Boolean(night.endsAt && Date.parse(night.endsAt) < now) : !night.endsAt || Date.parse(night.endsAt) >= now;
     });
   }, [now, payload, view]);
 
@@ -95,7 +96,7 @@ export default function MyNightsClient() {
         {nights.length ? <div className="my-nights-list">{nights.map((night) => {
           const action = nextAction(night, now);
           const ActionIcon = action.icon;
-          return <article key={night.eventSlug}><img src={night.imageUrl} alt={`Atmosphere for ${night.title}`} /><div><p>{night.isTestEvent ? "Working preview" : night.purchased ? `${night.ticketCount} ${night.ticketCount === 1 ? "ticket" : "tickets"}` : "Following"}</p><h2>{night.title}</h2><span><CalendarDays size={13} /> {new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(night.startsAt))}</span><span><MapPin size={13} /> {night.venue}, {night.area}</span>{night.hostName ? <small>Hosted by {night.hostName}</small> : null}</div><aside>{night.updateCount ? <span><Bell size={12} /> {night.updateCount} {night.updateCount === 1 ? "update" : "updates"}</span> : null}{night.purchased ? <div className="my-nights-actions"><ActionLink href={action.href} icon={<ActionIcon size={17} />}>{action.label}</ActionLink><Link href={`/my-nights/${night.eventSlug}?view=perks`}>Ticket &amp; perks</Link></div> : <Link href={`/event/${night.eventSlug}`}>View event <ArrowUpRight size={14} /></Link>}</aside></article>;
+          return <article key={night.eventSlug}><img src={night.imageUrl} alt={`Atmosphere for ${night.title}`} /><div><p>{night.isTestEvent ? "Working preview" : night.purchased ? `${night.ticketCount} ${night.ticketCount === 1 ? "ticket" : "tickets"}` : "Following"}</p><h2>{night.title}</h2><span><CalendarDays size={13} /> {night.startsAt ? new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(night.startsAt)) : "Coming soon"}</span><span><MapPin size={13} /> {night.venue}, {night.area}</span>{night.hostName ? <small>Hosted by {night.hostName}</small> : null}</div><aside>{night.updateCount ? <span><Bell size={12} /> {night.updateCount} {night.updateCount === 1 ? "update" : "updates"}</span> : null}{night.purchased ? <div className="my-nights-actions"><ActionLink href={action.href} icon={<ActionIcon size={17} />}>{action.label}</ActionLink><Link href={`/my-nights/${night.eventSlug}?view=perks`}>Ticket &amp; perks</Link></div> : <Link href={`/event/${night.eventSlug}`}>View event <ArrowUpRight size={14} /></Link>}</aside></article>;
         })}</div> : <section className="my-nights-empty"><h2>This tab is suspiciously tidy.</h2><p>{view === "following" ? "Use Keep me posted on an event or follow a Host. A little anticipation is healthy." : view === "past" ? "Your attended nights will gather here, evidence and all." : "Your next paid ticket will appear here automatically. No filing cabinet required."}</p><Link href="/events">Find a night</Link></section>}
       </>}
     </section>
