@@ -114,7 +114,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
         {event.isTestEvent ? <p className="event-detail-preview"><strong>Preview event</strong> · Sample date and tickets for trying BeCore. This is not a live event booking.</p> : null}
       </section>
       <article className="compact-event-main event-detail-story">
-        <section className="compact-event-story"><p className="eyebrow">About the night</p><h2>{event.quip}</h2><p>{event.note}</p><dl><div><dt>Line-up</dt><dd>{event.lineup}</dd></div>{!salesPending ? <div><dt>Entry</dt><dd>{event.ageRestriction} · Valid government-issued ID · One scan per admission</dd></div> : null}</dl></section>
+        <section className="compact-event-story"><p className="eyebrow">About the night</p>{event.quip ? <h2>{event.quip}</h2> : null}<p>{event.note}</p><dl><div><dt>Line-up</dt><dd>{event.lineup}</dd></div>{!salesPending ? <div><dt>Entry</dt><dd>{event.ageRestriction} · Valid government-issued ID · One scan per admission</dd></div> : null}</dl></section>
         {host ? <section className="event-host"><div className="host-monogram">{host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div><div><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified Host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span><Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link></div></section> : null}
       </article>
 

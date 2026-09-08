@@ -11,7 +11,7 @@ type Submission = {
   id: string; organizerName: string; contactName: string; contactEmail: string; contactPhone: string;
   title: string; concept: string; venueName: string; venueMapUrl: string | null; area: string; startsAt: string; endsAt: string;
   vibe: string; lineup: string; capacity: number; priceFromMinor: number; ageRestriction: string;
-  posterObjectKey: string | null; status: string; reviewNote: string | null; curationNote: string | null;
+  posterObjectKey: string | null; status: string; reviewNote: string | null; curationNote: string | null; tagline: string | null;
   scheduledPublishAt: string | null; eventSlug: string | null; createdAt: string;
 };
 
@@ -25,6 +25,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [curationNote, setCurationNote] = useState("");
+  const [tagline, setTagline] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
 
   const applyLoadedItems = useCallback((submissions: Submission[]) => {
@@ -35,6 +36,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
       if (first) {
         setNote(first.reviewNote ?? "");
         setCurationNote(first.curationNote ?? "");
+        setTagline(first.tagline ?? "");
         setScheduledAt(first.scheduledPublishAt?.slice(0, 16) ?? "");
       }
       return first?.id ?? null;
@@ -65,6 +67,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
     setSelectedId(item.id);
     setNote(item.reviewNote ?? "");
     setCurationNote(item.curationNote ?? "");
+    setTagline(item.tagline ?? "");
     setScheduledAt(item.scheduledPublishAt?.slice(0, 16) ?? "");
     setError("");
   }
@@ -72,7 +75,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
   async function act(action: string) {
     if (!selected) return;
     setWorking(true); setError("");
-    const response = await fetch("/api/admin/submissions", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: selected.id, action, note, curationNote, scheduledPublishAt: scheduledAt }) });
+    const response = await fetch("/api/admin/submissions", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: selected.id, action, note, curationNote, tagline, scheduledPublishAt: scheduledAt }) });
     const result = await response.json() as { error?: string };
     if (!response.ok) setError(result.error ?? "The review action failed.");
     else await load();
@@ -95,6 +98,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
               <section><h3>The pitch</h3><p>{selected.concept}</p></section>
               <section><h3>Line-up</h3><p>{selected.lineup}</p></section>
               <section><h3>Contact</h3><p>{selected.contactName} · {selected.contactEmail} · {selected.contactPhone}</p></section>
+              <label>Event line<input maxLength={100} value={tagline} onChange={(event) => setTagline(event.target.value)} placeholder="One original line, written for this event." /></label>
               <label>Why it made the list<textarea value={curationNote} onChange={(event) => setCurationNote(event.target.value)} placeholder="Customer-facing editorial note. Keep it specific and useful." /></label>
               <label>Private / organiser note<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Explain requested changes or rejection clearly." /></label>
               <label>Publication time<input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></label>

@@ -13,16 +13,16 @@
 .poster-event-page .compact-event-story dt { color: var(--muted); }
 .poster-event-page .event-practical-details:not(:has(.event-dress-code)) { grid-template-columns: 1fr; }
 /* Artwork and facts flow through the selected event palette. */
-.event-detail-toolbar, .event-detail-layout { width: min(1180px, calc(100% - 80px)); margin-inline: auto; }
+.event-detail-toolbar, .event-detail-layout { width: min(1040px, calc(100% - 80px)); margin-inline: auto; }
 .event-detail-toolbar { padding-block: 12px 20px; }
 .event-detail-toolbar .event-share { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
 .event-detail-toolbar .event-share > button { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 15px; }
 .event-detail-toolbar .event-share > button:hover { color: var(--ink); }
 .event-detail-toolbar .event-share__feedback { position: static; width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); }
 .event-detail-toolbar .event-share__feedback label { max-width: 540px; }
-.event-detail-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px 64px; align-items: start; padding-bottom: 96px; }
-.event-detail-poster { margin: 0; min-width: 0; overflow: hidden; border-radius: var(--radius-surface); grid-column: 1; grid-row: 1 / 3; }
-.event-detail-poster img { display: block; width: 100%; height: auto; max-height: 780px; object-fit: contain; filter: none; }
+.event-detail-layout { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 32px 56px; align-items: start; padding-bottom: 96px; }
+.event-detail-poster { margin: 0; min-width: 0; overflow: hidden; border-radius: var(--radius-surface); grid-column: 1; grid-row: 1 / 3; aspect-ratio: 5 / 6; }
+.event-detail-poster img { display: block; width: 100%; height: 100%; max-height: 480px; object-fit: contain; filter: none; }
 .event-detail-overview { min-width: 0; grid-column: 2; grid-row: 1; padding-top: 5px; }
 .event-detail-overview > .eyebrow { margin: 0 0 12px; color: var(--orange); }
 .event-detail-overview > .eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
