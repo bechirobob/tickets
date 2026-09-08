@@ -2,7 +2,7 @@ import BrandLogo from "../../brand-logo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowUpRight, BadgeCheck, Gem, MapPin, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BadgeCheck, Gem, GlassWater, MessageCircle, Ribbon, ShieldCheck, Ticket } from "lucide-react";
 import { notFound } from "next/navigation";
 import { eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
@@ -14,6 +14,7 @@ import MemberActions from "../../member-actions";
 import WaitlistControl from "./waitlist-control";
 import PublicNavigation from "../../mobile-navigation";
 import EventCountdown from "./event-countdown";
+import { eventColourScheme, eventPresentationStyle } from "../../../lib/event-presentation";
 import "./event-details.css";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const event = await findCuratedEvent(slug);
   if (!event) return { title: "Night not found", robots: { index: false, follow: false } };
-  const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}. Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`;
+  const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}.${event.dressCode ? ` Dress code: ${event.dressCode}.` : ""}${event.guestPerk ? ` ${event.guestPerk}` : ""} Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`;
   const canonical = `/event/${event.slug}`;
   const image = eventImageUrl(event.image, 1440, 82);
   const isPoster = event.image.endsWith("/on-the-guest-list.webp");
@@ -54,9 +55,11 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
   if (!event) notFound();
   const start = new Date(event.startsAt);
-  const calendarMonth = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "Africa/Accra" }).format(start);
-  const calendarDay = new Intl.DateTimeFormat("en-GB", { day: "numeric", timeZone: "Africa/Accra" }).format(start);
+  const calendarMonth = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Africa/Accra" }).format(start);
+  const calendarDay = new Intl.DateTimeFormat("en-GB", { day: "2-digit", timeZone: "Africa/Accra" }).format(start);
   const eventTime = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Accra" });
+  const formatTime = (date: Date) => eventTime.format(date).replace(":00", "").toUpperCase();
+  const colourScheme = eventColourScheme(event);
   const poster = event.image.endsWith("/on-the-guest-list.webp");
   const available = event.ticketTiers.some((tier) => tier.status === "available");
   const structuredEvent = event.isTestEvent ? null : {
@@ -82,7 +85,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     })),
   };
 
-  return <main className="event-page compact-event-page poster-event-page">
+  return <main className="event-page compact-event-page poster-event-page" data-colour-scheme={colourScheme} style={eventPresentationStyle(event)}>
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
     <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="public-header-actions"><PublicNavigation /></span></header>
     <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>
@@ -92,8 +95,17 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       <section className="event-detail-overview" aria-labelledby="event-title">
         <p className="eyebrow">{event.vibe}{!event.isTestEvent ? <span className="event-detail-verified"><BadgeCheck size={15} aria-hidden="true" /> Verified event</span> : null}</p><h1 id="event-title">{event.title}</h1>
         <div className="event-detail-facts">
-          <div className="event-detail-fact"><span className="event-date-icon" aria-hidden="true"><small>{calendarMonth}</small><b>{calendarDay}</b></span><div><time dateTime={event.startsAt}>{event.fullDate}</time><span>{eventTime.format(start)} – {eventTime.format(new Date(event.endsAt))}</span><a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}>Add to calendar</a></div></div>
-          <div className="event-detail-fact"><span className="event-place-icon" aria-hidden="true"><MapPin size={23} strokeWidth={1.6} /></span><div>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer" className="event-detail-venue">{event.venue}<ArrowUpRight size={15} aria-hidden="true" /></Link> : <strong>{event.venue}</strong>}<span>{event.area}</span></div></div>
+          <div className="event-date-line">
+            <time className="event-date-display" dateTime={event.startsAt} aria-label={event.fullDate}><b>{calendarDay}</b><span><strong>{calendarMonth}</strong><small>{event.day} · {start.getUTCFullYear()}</small></span></time>
+            <div className="event-hours" aria-label={`${formatTime(start)} to ${formatTime(new Date(event.endsAt))}, Accra time`}><span><b>{formatTime(start)}</b><small>Doors open</small></span><i aria-hidden="true">—</i><span><b>{formatTime(new Date(event.endsAt))}</b><small>Last dance</small></span></div>
+          </div>
+          <a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}>Add to calendar <ArrowUpRight size={14} aria-hidden="true" /></a>
+          <dl className="event-practical-details">
+            <div><dt>Find us</dt><dd>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer" className="event-detail-venue">{event.venue}<ArrowUpRight size={15} aria-hidden="true" /></Link> : <strong>{event.venue}</strong>}<span>{event.area}</span></dd></div>
+            {event.dressCode ? <div className="event-dress-code"><dt>Dress code</dt><dd><strong>{event.dressCode}</strong>{colourScheme === "blush" ? <span className="event-dress-swatches" aria-hidden="true"><i /><i /></span> : null}</dd></div> : null}
+          </dl>
+          {event.guestPerk ? <p className="event-guest-perk"><GlassWater size={21} strokeWidth={1.7} aria-hidden="true" /><span>{event.guestPerk}</span></p> : null}
+          {event.awarenessNote ? <p className="event-awareness-note"><Ribbon size={19} strokeWidth={1.7} aria-hidden="true" />{event.awarenessNote}</p> : null}
         </div>
         <EventCountdown startsAt={event.startsAt} endsAt={event.endsAt} eventState={event.eventState} isPreview={event.isTestEvent} />
         {event.isTestEvent ? <p className="event-detail-preview"><strong>Preview event</strong> · Sample date and tickets for trying BeCore. This is not a live event booking.</p> : null}

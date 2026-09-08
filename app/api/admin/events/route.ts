@@ -1,5 +1,6 @@
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { notifyEventAttendees } from "../../../../lib/notifications";
+import { isEventColourScheme } from "../../../../lib/event-presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,10 @@ function text(value: unknown, label: string, max: number): string {
   return result;
 }
 
+function optionalText(value: unknown, label: string, max: number): string | null {
+  return value === null || value === undefined || value === "" ? null : text(value, label, max);
+}
+
 export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
@@ -51,6 +56,7 @@ export async function GET(request: Request) {
              lineup, event_state AS eventState, is_test_event AS isTestEvent,
              rescheduled_from AS rescheduledFrom,
              image_url AS imageUrl, curation_note AS curationNote, status,
+             dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk,
              scheduled_publish_at AS scheduledPublishAt, published_at AS publishedAt, updated_at AS updatedAt
       FROM curated_event_records ORDER BY starts_at DESC
     `).all<Record<string, unknown>>(),
@@ -92,9 +98,14 @@ export async function PATCH(request: Request) {
     if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > 12) throw new Error("Every event needs between one and twelve ticket tiers.");
 
     const { env } = await import("cloudflare:workers");
-    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, status FROM curated_event_records WHERE slug = ? LIMIT 1")
-      .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; status: string }>();
+    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, status, dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk FROM curated_event_records WHERE slug = ? LIMIT 1")
+      .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; status: string; dressCode: string | null; colourScheme: string | null; awarenessNote: string | null; guestPerk: string | null }>();
     if (!current) return Response.json({ error: "Event not found." }, { status: 404 });
+    const dressCode = body.dressCode === undefined ? current.dressCode : optionalText(body.dressCode, "dress code", 100);
+    const awarenessNote = body.awarenessNote === undefined ? current.awarenessNote : optionalText(body.awarenessNote, "cause or occasion", 160);
+    const guestPerk = body.guestPerk === undefined ? current.guestPerk : optionalText(body.guestPerk, "guest perk", 160);
+    const colourScheme = body.colourScheme === undefined ? current.colourScheme : optionalText(body.colourScheme, "event colours", 30);
+    if (colourScheme && !isEventColourScheme(colourScheme)) throw new Error("Choose valid event colours.");
     const existing = await env.DB.prepare("SELECT id, code FROM event_ticket_tiers WHERE event_slug = ?").bind(slug).all<{ id: string; code: string }>();
     const existingIds = new Set(existing.results.map((tier) => tier.id));
     const codes = new Set<string>();
@@ -145,14 +156,14 @@ export async function PATCH(request: Request) {
         UPDATE curated_event_records SET title = ?, venue = ?, venue_map_url = ?, area = ?,
           starts_at = ?, ends_at = ?, vibe = ?, price_from_minor = ?, capacity = ?,
           sales_open_at = ?, sales_close_at = ?, age_restriction = ?, lineup = ?,
-          event_state = ?, rescheduled_from = ?, curation_note = ?, updated_at = ?
+          event_state = ?, rescheduled_from = ?, curation_note = ?, dress_code = ?, colour_scheme = ?, awareness_note = ?, guest_perk = ?, updated_at = ?
         WHERE slug = ?
       `).bind(
         text(body.title, "event title", 120), text(body.venue, "venue", 160), validUrl(body.venueMapUrl),
         text(body.area, "area", 80), startsAt, endsAt, text(body.vibe, "event mood", 30),
         priceFromMinor, capacity, salesOpenAt, salesCloseAt, text(body.ageRestriction, "age restriction", 20),
         text(body.lineup, "line-up", 1000), eventState, rescheduledFrom,
-        text(body.curationNote, "customer-facing event note", 1800), now, slug,
+        text(body.curationNote, "customer-facing event note", 1800), dressCode, colourScheme, awarenessNote, guestPerk, now, slug,
       ),
       ...normalizedTiers.map((tier) => env.DB.prepare(`
         INSERT INTO event_ticket_tiers (

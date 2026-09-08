@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, MapPin, Search, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, MapPin, Search, Ticket } from "lucide-react";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { eventImageLoader } from "./event-images";
 import type { CuratedEvent } from "./events";
@@ -10,6 +10,7 @@ import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
 import { ActionLink } from "./action";
 import { discoveryPrice } from "../lib/event-pricing";
 import PosterLink from "./poster-link";
+import { eventColourScheme, eventPresentationStyle } from "../lib/event-presentation";
 
 type WindowFilter = EventWindow;
 type VibeFilter = CuratedEvent["vibe"] | "All";
@@ -71,10 +72,11 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
     <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
 
     {pageEvents.length ? <div key={`${windowFilter}:${area}:${vibe}:${page}:${search}`} className={`drop-grid discovery-grid${full ? " drop-grid--full" : ""}`} data-count={pageEvents.length}>
-      {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-featured={event.slug === featuredSlug ? "true" : undefined}>
+      {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-colour-scheme={eventColourScheme(event)} style={eventPresentationStyle(event)} data-featured={event.slug === featuredSlug ? "true" : undefined}>
         <PosterLink href={`/event/${event.slug}`} className="drop-card__image">
+          <div className="drop-card__artwork-wash" aria-hidden="true" style={{ backgroundImage: `url(${JSON.stringify(event.image)})` }} />
           <Image loader={eventImageLoader} src={event.image} width={720} height={900} sizes="(max-width: 700px) 50vw, (max-width: 1000px) 33vw, 25vw" alt={`${event.isTestEvent ? "Preview image" : "Artwork"} for ${event.title}`} />
-          {event.isTestEvent ? <span>Preview</span> : <span>Verified event</span>}
+          {event.isTestEvent ? <span>Preview</span> : null}
           {event.isTestEvent ? <div className="event-artwork-type" aria-hidden="true"><small>{event.area} · Accra</small><b>{event.title}</b><em>{event.vibe}</em></div> : null}
         </PosterLink>
         <div className="drop-card__body">
@@ -82,7 +84,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
           <h3><Link href={`/event/${event.slug}`}>{event.title}</Link></h3>
           <small>{event.venue} · {event.area}</small>
           <p className="drop-card__quip">{event.quip}</p>
-          <div><span>{event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${discoveryPrice(event)}` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span></div>
+          <div><span>{event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${discoveryPrice(event)}` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span>{!event.isTestEvent ? <span className="drop-card__verified"><BadgeCheck size={13} aria-hidden="true" /> Verified event</span> : null}</div>
           <ActionLink href={`/event/${event.slug}`} variant="text" aria-label={`See ${event.title}`}>View event</ActionLink>
         </div>
       </article>)}

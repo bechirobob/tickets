@@ -40,6 +40,12 @@ BeCore keeps its aubergine print texture, backstage photography shared by Hosts 
 
 Preserve compact layouts, clear focus, reduced-motion and reduced-transparency settings, touch use and readable prices. Keep the 4.5-second automatic slideshow without a visible playback status or presentation instructions. Never use fabricated audience counts, fake scarcity, decorative coloured glows or constant shimmer.
 
+## Event artwork and details — 8 September 2026
+
+Keep the homepage's aubergine identity. Show the complete flier in each Drop tile, with a softened extension of its artwork behind it. Put verification beside the ticket price so it does not cover the artwork. Each opened event has its own scoped colour palette; staff can choose it in event operations, with an event-mood fallback for older listings.
+
+On The Guest List is a verified day party on Sunday 4 October 2026, 2 PM–10 PM in Accra. Its palette is blush, warm white, sage and deep rose. Light pink and white is the dress code, in support of Breast Cancer Awareness Month. Dress code and “Clink early. Free mimosas till 5 PM.” belong in the main details. Keep the countdown, and pair the editorial date with “Doors open” and “Last dance”. Awareness support does not imply donations or a named charity partnership.
+
 ## Identity and The Room
 
 The orange ticket and ivory B are the identity. Use the shared BrandLogo component with live native type, not a typed B inside a generic square. The enamel render is 7.7 KB; transparent notches remain part of the silhouette. App icons retain safe padding and the small SVG remains a simplified version of the same mark.
