@@ -76,7 +76,13 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   const actionBounds = await primaryAction.boundingBox();
   expect(actionBounds?.height).toBeGreaterThanOrEqual(44);
   expect(actionBounds?.width).toBeGreaterThanOrEqual(44);
-  await expect(hero.locator('.compact-hero__price')).not.toContainText(/fee/i);
+  if (activeSlug === "sun-chasers-labadi") {
+    await expect(hero.locator('.compact-hero__price')).toHaveCount(0);
+    await expect(hero).toContainText("Coming soon");
+  } else {
+    await expect(hero.locator('.compact-hero__price')).toContainText("GH₵350");
+    await expect(hero.locator('.compact-hero__price')).not.toContainText(/fee/i);
+  }
   await expect(page.locator(".room-product-phone__header b").first()).toHaveText(heroTitle);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
