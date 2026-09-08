@@ -127,7 +127,7 @@ const worker = {
         response = await handler.fetch(new Request(request, { headers }), env, ctx);
       }
       if (response.status === 101) return response;
-      let secured = securityResponse(response, nonce);
+      let secured = securityResponse(response, nonce, url.pathname);
       if (cacheKey && secured.status === 200 && secured.headers.get("content-type")?.includes("text/html")) {
         secured = publicCacheResponse(secured, "MISS");
         ctx.waitUntil(edgeCache.put(cacheKey, secured.clone()));
@@ -146,12 +146,17 @@ const worker = {
   },
 };
 
-function securityResponse(response: Response, nonce = requestNonce()): Response {
+function securityResponse(response: Response, nonce = requestNonce(), path = ""): Response {
   const headers = new Headers(response.headers);
   if (!headers.has("Content-Security-Policy")) headers.set("Content-Security-Policy", contentSecurityPolicy(nonce));
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  if (path === "/admin/recover" || path === "/api/admin/recovery") {
+    headers.set("Referrer-Policy", "no-referrer");
+    headers.set("Cache-Control", "no-store");
+    headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
   headers.set("Cross-Origin-Opener-Policy", "same-origin");

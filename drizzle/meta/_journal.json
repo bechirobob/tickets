@@ -211,6 +211,13 @@
       "when": 1788863249672,
       "tag": "0029_guest_perks",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1788896534074,
+      "tag": "0030_famous_mandroid",
+      "breakpoints": true
     }
   ]
 }

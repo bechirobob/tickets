@@ -705,6 +705,20 @@ export const staffAccounts = sqliteTable("staff_accounts", {
   index("staff_accounts_role_status_idx").on(table.role, table.status),
 ]);
 
+export const staffPasswordRecoveries = sqliteTable("staff_password_recoveries", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  accountUpdatedAt: text("account_updated_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  usedAt: text("used_at"),
+  claimId: text("claim_id"),
+}, (table) => [
+  uniqueIndex("staff_password_recoveries_token_unique").on(table.tokenHash),
+  index("staff_password_recoveries_account_idx").on(table.accountId),
+]);
+
 export const staffSessions = sqliteTable("staff_sessions", {
   id: text("id").primaryKey(),
   accountId: text("account_id").notNull(),
