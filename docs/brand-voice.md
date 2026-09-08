@@ -48,7 +48,7 @@ On The Guest List is a verified day party on Sunday 4 October 2026, 2 PM–10 PM
 
 These rules apply to every current and future event through shared components. Use a slim mimosa flute with an orange garnish for a mimosa perk; use a general perk icon for other offers. Do not fade or crop the foreground flier, including its edge lettering. Keep the backdrop soft and inexpensive to download. Before release, inspect visible text bounds across event pages and tiles, including a narrow phone screen and long future event details.
 
-The colour preview at `?look=immersive` explores a stronger backdrop drawn from the event palette, easing into the lighter paper colour. It removes the frame around the flier and uses the same event facts and ticket flow. For the guest list this is rose, pink and warm cream; it need not be uniformly pink. The preview is excluded from search indexing and keeps a link to the current event design. The live event's default palette changes only when that direction is accepted.
+The approved event design is the default for every current and future event. The backdrop follows the event palette and eases into its lighter paper colour, with an unframed flier and matching mobile navigation. For the guest list this is rose, pink and warm cream; it need not be uniformly pink. Keep all artwork and lettering visible, use the same event facts and ticket flow, and preserve the homepage's aubergine identity. Old colour-preview links open the finished event design.
 
 ## Identity and The Room
 
