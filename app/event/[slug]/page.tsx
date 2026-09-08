@@ -2,7 +2,7 @@ import BrandLogo from "../../brand-logo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowUpRight, BadgeCheck, Gem, GlassWater, MessageCircle, Ribbon, ShieldCheck, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BadgeCheck, Gem, MessageCircle, Ribbon, ShieldCheck, Ticket } from "lucide-react";
 import { notFound } from "next/navigation";
 import { eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
@@ -14,6 +14,7 @@ import MemberActions from "../../member-actions";
 import WaitlistControl from "./waitlist-control";
 import PublicNavigation from "../../mobile-navigation";
 import EventCountdown from "./event-countdown";
+import EventPerkIcon from "./event-perk-icon";
 import { eventColourScheme, eventPresentationStyle } from "../../../lib/event-presentation";
 import "./event-details.css";
 
@@ -21,19 +22,22 @@ export const dynamic = "force-dynamic";
 
 const origin = "https://tickets.becoreops.com";
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+type EventPageProps = { params: Promise<{ slug: string }>; searchParams: Promise<{ ref?: string; look?: string }> };
+
+export async function generateMetadata({ params, searchParams }: EventPageProps): Promise<Metadata> {
   const { slug } = await params;
   const event = await findCuratedEvent(slug);
   if (!event) return { title: "Night not found", robots: { index: false, follow: false } };
+  const colourPreview = (await searchParams).look === "immersive";
   const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}.${event.dressCode ? ` Dress code: ${event.dressCode}.` : ""}${event.guestPerk ? ` ${event.guestPerk}` : ""} Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`;
   const canonical = `/event/${event.slug}`;
   const image = eventImageUrl(event.image, 1440, 82);
   const isPoster = event.image.endsWith("/on-the-guest-list.webp");
   return {
-    title: event.title,
+    title: colourPreview ? `${event.title} · Colour preview` : event.title,
     description,
     alternates: { canonical },
-    robots: event.isTestEvent ? { index: false, follow: false } : { index: true, follow: true },
+    robots: event.isTestEvent || colourPreview ? { index: false, follow: false } : { index: true, follow: true },
     openGraph: {
       type: "website",
       locale: "en_GH",
@@ -47,9 +51,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function EventPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ ref?: string }> }) {
+export default async function EventPage({ params, searchParams }: EventPageProps) {
   const { slug } = await params;
   const query = await searchParams;
+  const colourPreview = query.look === "immersive";
   const promoterCode = query.ref?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const { env } = await import("cloudflare:workers");
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
@@ -62,7 +67,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const colourScheme = eventColourScheme(event);
   const poster = event.image.endsWith("/on-the-guest-list.webp");
   const available = event.ticketTiers.some((tier) => tier.status === "available");
-  const structuredEvent = event.isTestEvent ? null : {
+  const structuredEvent = event.isTestEvent || colourPreview ? null : {
     "@context": "https://schema.org",
     "@type": "Event",
     name: event.title,
@@ -85,10 +90,10 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     })),
   };
 
-  return <main className="event-page compact-event-page poster-event-page" data-colour-scheme={colourScheme} style={eventPresentationStyle(event)}>
+  return <main className={`event-page compact-event-page poster-event-page${colourPreview ? " event-palette-preview" : ""}`} data-colour-scheme={colourScheme} style={eventPresentationStyle(event)}>
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
     <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="public-header-actions"><PublicNavigation /></span></header>
-    <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>
+    <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} />{colourPreview ? <p className="event-colour-preview-note"><span>Colour preview</span><Link href={`/event/${event.slug}`}>Current event <ArrowUpRight size={14} aria-hidden="true" /></Link></p> : null}</div>
 
     <div className="event-detail-layout">
       <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized /></figure>
@@ -102,9 +107,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}>Add to calendar <ArrowUpRight size={14} aria-hidden="true" /></a>
           <dl className="event-practical-details">
             <div><dt>Find us</dt><dd>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer" className="event-detail-venue">{event.venue}<ArrowUpRight size={15} aria-hidden="true" /></Link> : <strong>{event.venue}</strong>}<span>{event.area}</span></dd></div>
-            {event.dressCode ? <div className="event-dress-code"><dt>Dress code</dt><dd><strong>{event.dressCode}</strong>{colourScheme === "blush" ? <span className="event-dress-swatches" aria-hidden="true"><i /><i /></span> : null}</dd></div> : null}
+            {event.dressCode ? <div className="event-dress-code"><dt>Dress code</dt><dd><strong>{event.dressCode}</strong>{/^light pink\s*(?:&|and)\s*white$/iu.test(event.dressCode) ? <span className="event-dress-swatches" aria-hidden="true"><i /><i /></span> : null}</dd></div> : null}
           </dl>
-          {event.guestPerk ? <p className="event-guest-perk"><GlassWater size={21} strokeWidth={1.7} aria-hidden="true" /><span>{event.guestPerk}</span></p> : null}
+          {event.guestPerk ? <p className="event-guest-perk"><EventPerkIcon perk={event.guestPerk} /><span>{event.guestPerk}</span></p> : null}
           {event.awarenessNote ? <p className="event-awareness-note"><Ribbon size={19} strokeWidth={1.7} aria-hidden="true" />{event.awarenessNote}</p> : null}
         </div>
         <EventCountdown startsAt={event.startsAt} endsAt={event.endsAt} eventState={event.eventState} isPreview={event.isTestEvent} />

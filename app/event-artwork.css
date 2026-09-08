@@ -4,7 +4,8 @@
 .discovery-grid .drop-card[data-colour-scheme] .drop-card__image { --artwork-inset: 12px; aspect-ratio: 4 / 5; height: auto; background: transparent; border-radius: 10px; }
 .discovery-grid .drop-card .drop-card__artwork-wash { position: absolute; inset: -16px; background-size: cover; background-position: center; filter: blur(24px) saturate(.6); mask-image: radial-gradient(ellipse, #000 28%, transparent 72%); opacity: .32; pointer-events: none; }
 .discovery-grid .drop-card[data-colour-scheme] .drop-card__image img { display: block; position: absolute; inset: var(--artwork-inset); z-index: 1; width: calc(100% - 2 * var(--artwork-inset)); height: calc(100% - 2 * var(--artwork-inset)); object-fit: contain; object-position: center; filter: none; transform: none; }
-.discovery-grid .drop-card[data-colour-scheme] .drop-card__image:not(:has(.event-artwork-type)) img { mask-image: linear-gradient(90deg, rgba(0,0,0,.3), #000 2%, #000 98%, rgba(0,0,0,.3)); }
+.discovery-grid .drop-card[data-colour-scheme] .drop-card__image img { mask-image: none; }
+.discovery-grid .drop-card__body { overflow-wrap: anywhere; }
 .discovery-grid .drop-card[data-colour-scheme] .drop-card__verified { color: var(--event-wash); font-size: 12px; font-weight: 450; gap: 4px; }
 @media (max-width: 700px) {
   .discovery-grid .drop-card[data-colour-scheme] .drop-card__image { --artwork-inset: 6px; }

@@ -46,6 +46,10 @@ Keep the homepage's aubergine identity. Show the complete flier in each Drop til
 
 On The Guest List is a verified day party on Sunday 4 October 2026, 2 PM–10 PM in Accra. Its palette is blush, warm white, sage and deep rose. Light pink and white is the dress code, in support of Breast Cancer Awareness Month. Dress code and “Clink early. Free mimosas till 5 PM.” belong in the main details. Keep the countdown, and pair the editorial date with “Doors open” and “Last dance”. Awareness support does not imply donations or a named charity partnership.
 
+These rules apply to every current and future event through shared components. Use a slim mimosa flute with an orange garnish for a mimosa perk; use a general perk icon for other offers. Do not fade or crop the foreground flier, including its edge lettering. Keep the backdrop soft and inexpensive to download. Before release, inspect visible text bounds across event pages and tiles, including a narrow phone screen and long future event details.
+
+The colour preview at `?look=immersive` explores a stronger backdrop drawn from the event palette, easing into the lighter paper colour. It removes the frame around the flier and uses the same event facts and ticket flow. For the guest list this is rose, pink and warm cream; it need not be uniformly pink. The preview is excluded from search indexing and keeps a link to the current event design. The live event's default palette changes only when that direction is accepted.
+
 ## Identity and The Room
 
 The orange ticket and ivory B are the identity. Use the shared BrandLogo component with live native type, not a typed B inside a generic square. The enamel render is 7.7 KB; transparent notches remain part of the silhouette. App icons retain safe padding and the small SVG remains a simplified version of the same mark.
