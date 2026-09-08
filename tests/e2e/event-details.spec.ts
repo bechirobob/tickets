@@ -13,17 +13,27 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   await expect(poster).toHaveCSS("filter", "none");
   await expect(page.locator(".event-detail-facts")).toContainText("Asana Restaurant");
   await expect(page.locator(".event-detail-facts")).toContainText("Kempinski Gold Coast Hotel, Accra");
-  await expect(page.locator(".event-detail-facts")).toContainText(/2:00 pm – 10:00 pm/i);
+  await expect(page.locator(".event-hours")).toHaveAttribute("aria-label", /2\s?PM to 10\s?PM, Accra time/);
+  await expect(page.locator(".event-hours")).toContainText("Doors open");
+  await expect(page.locator(".event-hours")).toContainText("Last dance");
   await expect(page.getByRole("button", { name: "Copy Link", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Add to calendar" })).toHaveAttribute("href", "/api/calendar/sun-chasers-labadi");
   await expect(page.locator(".event-detail-preview")).toHaveCount(0);
   await expect(page.locator(".event-detail-verified")).toHaveText("Verified event");
-  await expect(page.locator(".event-detail-facts time")).toHaveAttribute("datetime", "2026-09-13T14:00:00.000Z");
-  await expect(page.locator(".event-detail-story")).toContainText("Dress code: white with a touch of golden brown.");
+  await expect(page.locator(".event-detail-facts time")).toHaveAttribute("datetime", "2026-10-04T14:00:00.000Z");
+  await expect(page.locator(".event-detail-facts time")).toContainText("October");
+  await expect(page.locator(".event-dress-code")).toContainText("Light pink & white");
+  await expect(page.locator(".event-guest-perk")).toHaveText("Clink early. Free mimosas till 5 PM.");
+  await expect(page.locator(".event-awareness-note")).toHaveText("In support of Breast Cancer Awareness Month");
+  await expect(page.locator("main")).toHaveAttribute("data-colour-scheme", "blush");
+  await expect(page.locator("main")).toHaveCSS("background-color", "rgb(255, 249, 248)");
   await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toBeVisible();
   const calendar = await page.request.get("/api/calendar/sun-chasers-labadi");
   expect(calendar.ok()).toBe(true);
-  expect(await calendar.text()).toContain("DTSTART:20260913T140000Z");
+  const calendarText = (await calendar.text()).replace(/\r\n /g, "");
+  expect(calendarText).toContain("DTSTART:20261004T140000Z");
+  expect(calendarText).toContain("Dress code: Light pink & white");
+  expect(calendarText).toContain("Free mimosas till 5 PM.");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   const layout = await page.evaluate(() => {
     const posterBounds = document.querySelector(".event-detail-poster")!.getBoundingClientRect();
@@ -35,6 +45,35 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   const issues = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations.filter((issue) => issue.impact === "serious" || issue.impact === "critical");
   expect(issues).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("event-poster.png"), fullPage: true });
+});
+
+test("full flyers blend into the Drop while the homepage keeps its colours", async ({ page }, testInfo) => {
+  await page.goto("/");
+  const card = page.locator(".discovery-grid .drop-card").filter({ hasText: "On The Guest List" });
+  await expect(card).toBeVisible();
+  const poster = card.locator(".drop-card__image img");
+  await expect.poll(() => poster.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await expect(poster).toHaveCSS("object-fit", "contain");
+  await expect(card.locator(".drop-card__image .drop-card__verified")).toHaveCount(0);
+  await expect(card.locator(".drop-card__verified")).toContainText("Verified event");
+  await expect(page.locator(".discovery-home .night-drop--compact")).toHaveCSS("background-color", "rgb(48, 32, 51)");
+  const bounds = await poster.evaluate((image) => {
+    const rect = image.getBoundingClientRect();
+    const container = image.closest(".drop-card__image")!.getBoundingClientRect();
+    return { top: rect.top - container.top, left: rect.left - container.left, right: container.right - rect.right, bottom: container.bottom - rect.bottom };
+  });
+  expect(Math.min(...Object.values(bounds))).toBeGreaterThanOrEqual(-1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await card.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("homepage-full-flyer.png"), fullPage: true });
+});
+
+test("event colours belong to each opened event", async ({ page }) => {
+  await page.goto("/event/after-dark-osu");
+  await expect(page.locator("main")).toHaveAttribute("data-colour-scheme", "midnight");
+  await expect(page.locator("main")).toHaveCSS("background-color", "rgb(242, 243, 233)");
+  await expect(page.locator(".event-guest-perk")).toHaveCount(0);
+  await expect(page.locator(".event-dress-code")).toHaveCount(0);
 });
 
 test("copying a promoter link does not open native sharing and restores focus", async ({ page }) => {

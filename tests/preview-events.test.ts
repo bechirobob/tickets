@@ -44,18 +44,22 @@ describe("working preview events", () => {
   });
 
   it("keeps the published guest list date fixed after it ends", async () => {
-    await refreshExpiredPreviewEvents(env.DB, new Date("2026-09-20T08:00:00.000Z"));
+    await refreshExpiredPreviewEvents(env.DB, new Date("2026-10-11T08:00:00.000Z"));
     const event = await env.DB.prepare(`
-      SELECT starts_at, ends_at, is_test_event, status, curation_note
+      SELECT starts_at, ends_at, is_test_event, status, curation_note, dress_code, colour_scheme, awareness_note, guest_perk
       FROM curated_event_records WHERE slug = 'sun-chasers-labadi'
     `).first();
     expect(event).toMatchObject({
-      starts_at: "2026-09-13T14:00:00.000Z",
-      ends_at: "2026-09-13T22:00:00.000Z",
+      starts_at: "2026-10-04T14:00:00.000Z",
+      ends_at: "2026-10-04T22:00:00.000Z",
       is_test_event: 0,
       status: "published",
+      dress_code: "Light pink & white",
+      colour_scheme: "blush",
+      awareness_note: "In support of Breast Cancer Awareness Month",
+      guest_perk: "Clink early. Free mimosas till 5 PM.",
     });
-    expect(event?.curation_note).toContain("Dress code: white with a touch of golden brown.");
+    expect(event?.curation_note).toContain("Free mimosas till 5 PM.");
     const placeholderHost = await env.DB.prepare("SELECT host_id FROM event_hosts WHERE event_slug = 'sun-chasers-labadi' AND host_id = 'host:becore-preview-desk'").first();
     expect(placeholderHost).toBeNull();
   });

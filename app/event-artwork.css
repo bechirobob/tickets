@@ -1,0 +1,15 @@
+/* Complete artwork sits inside an extension of its own colours, without changing The Drop. */
+.discovery-grid .drop-card[data-colour-scheme] { position: relative; isolation: isolate; --poster-ink: var(--event-wash); }
+.discovery-grid .drop-card[data-colour-scheme]::before { content: ""; position: absolute; inset: 0 -8px 22%; z-index: -1; pointer-events: none; background: linear-gradient(180deg, color-mix(in srgb, var(--event-accent) 24%, transparent), color-mix(in srgb, var(--event-wash) 10%, transparent) 54%, transparent 95%); border-radius: 16px 16px 0 0; }
+.discovery-grid .drop-card[data-colour-scheme] .drop-card__image { aspect-ratio: 4 / 5; height: auto; padding: 12px; background: transparent; border-radius: 10px; }
+.discovery-grid .drop-card .drop-card__artwork-wash { position: absolute; inset: -16px; background-size: cover; background-position: center; filter: blur(24px) saturate(.6); opacity: .32; pointer-events: none; }
+.discovery-grid .drop-card[data-colour-scheme] .drop-card__image img { display: block; position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; object-position: center; filter: none; transform: none; }
+.discovery-grid .drop-card[data-colour-scheme] .drop-card__image:not(:has(.event-artwork-type)) img { mask-image: linear-gradient(90deg, rgba(0,0,0,.3), #000 2%, #000 98%, rgba(0,0,0,.3)); }
+.discovery-grid .drop-card[data-colour-scheme] .drop-card__verified { color: var(--event-wash); font-size: 12px; font-weight: 450; gap: 4px; }
+@media (max-width: 700px) {
+  .discovery-grid .drop-card[data-colour-scheme] .drop-card__image { padding: 6px; }
+  .discovery-grid .drop-card[data-colour-scheme]::before { inset-inline: -5px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .discovery-grid .drop-card .drop-card__artwork-wash { display: none; }
+}

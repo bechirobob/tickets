@@ -23,6 +23,10 @@ export type CuratedEvent = {
   lineup: string;
   eventState: EventState;
   isTestEvent: boolean;
+  dressCode?: string | null;
+  colourScheme?: string | null;
+  awarenessNote?: string | null;
+  guestPerk?: string | null;
   rescheduledFrom: string | null;
   salesOpenAt: string | null;
   salesCloseAt: string | null;
@@ -51,6 +55,10 @@ type EventRecord = {
   lineup: string;
   eventState: EventState;
   isTestEvent: number;
+  dressCode: string | null;
+  colourScheme: string | null;
+  awarenessNote: string | null;
+  guestPerk: string | null;
   rescheduledFrom: string | null;
   imageUrl: string;
   curationNote: string;
@@ -97,6 +105,10 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     lineup: record.lineup,
     eventState: record.eventState,
     isTestEvent: Boolean(record.isTestEvent),
+    dressCode: record.dressCode,
+    colourScheme: record.colourScheme,
+    awarenessNote: record.awarenessNote,
+    guestPerk: record.guestPerk,
     rescheduledFrom: record.rescheduledFrom,
     salesOpenAt: record.salesOpenAt,
     salesCloseAt: record.salesCloseAt,
@@ -141,6 +153,8 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
            sales_open_at AS salesOpenAt, sales_close_at AS salesCloseAt,
            age_restriction AS ageRestriction, lineup,
            event_state AS eventState, is_test_event AS isTestEvent,
+           dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote,
+           guest_perk AS guestPerk,
            rescheduled_from AS rescheduledFrom,
            image_url AS imageUrl, curation_note AS curationNote,
            COALESCE(
