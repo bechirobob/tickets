@@ -181,6 +181,7 @@ export async function PATCH(request: Request) {
         text(body.lineup, "line-up", 1000), eventState, rescheduledFrom,
         text(body.curationNote, "customer-facing event note", 1800), tagline, dressCode, colourScheme, awarenessNote, guestPerk, now, slug,
       ),
+      env.DB.prepare("UPDATE party_submissions SET tagline = ? WHERE event_slug = ?").bind(tagline, slug),
       ...normalizedTiers.map((tier) => env.DB.prepare(`
         INSERT INTO event_ticket_tiers (
           id, event_slug, code, name, description, price_minor, admissions_per_unit,
