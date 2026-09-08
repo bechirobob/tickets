@@ -149,6 +149,12 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await notifications.click();
   await expect(page.getByRole("dialog", { name: "Room notifications" })).toBeVisible();
   await expect(page.getByRole("switch", { name: "Host updates and Room messages" })).toBeEnabled();
+  const settings = page.getByRole("dialog", { name: "Room notifications" });
+  const settingsBounds = await settings.locator(".notification-panel").boundingBox();
+  expect(settingsBounds!.height).toBeLessThan(340);
+  expect(settingsBounds!.width).toBeLessThanOrEqual(410);
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("room-notification-settings.png") });
   await page.keyboard.press("Escape");
   await expect(notifications).toBeFocused();
 });

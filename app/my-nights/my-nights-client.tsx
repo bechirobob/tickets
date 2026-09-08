@@ -4,6 +4,7 @@
 import BrandLogo from "../brand-logo";
 import AccountNavigation from "../account-navigation";
 import PublicNavigation from "../mobile-navigation";
+import NotificationBell from "../notification-bell";
 import Link from "next/link";
 import { ActionButton, ActionLink } from "../action";
 import { ArrowLeft, ArrowUpRight, Bell, CalendarDays, CheckCircle2, Loader2, LockKeyhole, Mail, MapPin, MessageCircle, QrCode, Ticket } from "lucide-react";
@@ -41,7 +42,6 @@ export default function MyNightsClient() {
   const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
   const [recoveryError, setRecoveryError] = useState("");
   const recoveryBusy = useRef(false);
-  const [unread, setUnread] = useState(0);
   const [recovered] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recovered") === "1");
 
   const load = useCallback(() => requestJson<Payload>("/api/customer/my-nights", { cache: "no-store" })
@@ -55,10 +55,6 @@ export default function MyNightsClient() {
 
   useEffect(() => {
     void load();
-    void fetch("/api/customer/notifications", { cache: "no-store" })
-      .then(async (response) => response.ok ? response.json() as Promise<{ unread?: number }> : null)
-      .then((result) => setUnread(result?.unread ?? 0))
-      .catch(() => setUnread(0));
   }, [load]);
 
   async function requestRecovery(event: React.FormEvent<HTMLFormElement>) {
@@ -89,7 +85,7 @@ export default function MyNightsClient() {
   if (loading) return <LoadingSkeleton kind="wallet" label="Lining up your nights" />;
 
   return <main className="my-nights-page">
-    <header className="directory-header"><Link href="/events" aria-label="Back to The Drop"><ArrowLeft size={16} /><span className="directory-header__back-label">The Drop</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="my-nights-header-actions"><PublicNavigation /><Link className="notification-bell" href="/notifications" aria-label={unread ? `${unread} unread notifications` : "Notifications"}><Bell size={16} />{unread ? <b>{unread > 9 ? "9+" : unread}</b> : null}</Link></span></header>
+    <header className="directory-header"><Link href="/events" aria-label="Back to The Drop"><ArrowLeft size={16} /><span className="directory-header__back-label">The Drop</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="my-nights-header-actions"><PublicNavigation /><NotificationBell /></span></header>
     <AccountNavigation />
     <section className="my-nights-shell">
       <header><div><p className="eyebrow">Tickets, perks and the Room</p><h1>{loading ? "Gathering your evidence…" : payload ? `${payload.attendee.displayName}’s nights.` : "Been here before? Good."}</h1><p className="my-nights-intro">Everything your ticket unlocked, exactly where you left it. No password archaeology.</p></div>{payload ? <span><LockKeyhole size={13} /> The useful kind of exclusive</span> : null}</header>

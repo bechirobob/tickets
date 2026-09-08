@@ -4,6 +4,7 @@
 import Link from "next/link";
 import BrandLogo from "../../brand-logo";
 import PublicNavigation from "../../mobile-navigation";
+import NotificationBell from "../../notification-bell";
 import {
   ArrowLeft,
   Bell,
@@ -155,7 +156,6 @@ export default function NightHub({ event }: { event: EventSummary }) {
   );
   const [locked, setLocked] = useState(false);
   const [offlineOwnerId, setOfflineOwnerId] = useState("");
-  const [unread, setUnread] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -164,14 +164,12 @@ export default function NightHub({ event }: { event: EventSummary }) {
         cache: "no-store",
       }),
       fetch("/api/customer/tickets", { method: "POST", cache: "no-store" }),
-      fetch("/api/customer/notifications", { cache: "no-store" }),
       fetch("/api/customer/wallet/config", { cache: "no-store" }),
     ])
       .then(
         async ([
           experienceResponse,
           ticketsResponse,
-          notificationsResponse,
           walletResponse,
         ]) => {
           if (experienceResponse.status === 401) {
@@ -190,9 +188,6 @@ export default function NightHub({ event }: { event: EventSummary }) {
             setOfflineOwnerId(ticketsData.attendee.attendeeId);
             reconcileOfflineTickets(ticketsData.attendee.attendeeId, (ticketsData.orders ?? []).flatMap((order) => order.tickets.filter((ticket) => ticket.status === "issued" && ticket.qrPayload).map((ticket) => ticket.id)));
           }
-          const notificationsData = notificationsResponse.ok
-            ? ((await notificationsResponse.json()) as { unread?: number })
-            : null;
           setExperience(experienceData);
           setAnswers(
             Object.fromEntries(
@@ -207,7 +202,6 @@ export default function NightHub({ event }: { event: EventSummary }) {
               (order) => order.eventSlug === event.slug,
             ),
           );
-          setUnread(notificationsData?.unread ?? 0);
           if (walletResponse.ok)
             setWallet(
               (await walletResponse.json()) as {
@@ -348,14 +342,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           <Link href={`/room/${event.slug}`}>
             <MessageCircle size={15} /> Enter The Room
           </Link>
-          <Link className="notification-bell" href="/notifications"
-            aria-label={
-              unread ? `${unread} unread notifications` : "Notifications"
-            }
-          >
-            <Bell size={16} />
-            {unread ? <b>{unread > 9 ? "9+" : unread}</b> : null}
-          </Link>
+          <NotificationBell />
         </span>
       </header>
       <section className="night-hub__hero">

@@ -10,6 +10,8 @@ export async function expectVisibleLettering(page: Page, rootSelector: string) {
       while ((node = walker.nextNode())) {
         const content = node.textContent?.trim();
         if (!content || node.parentElement?.closest(".sr-only, script, style")) continue;
+        const closedDetails = node.parentElement?.closest("details:not([open])");
+        if (closedDetails && !closedDetails.querySelector("summary")?.contains(node)) continue;
         const ancestors: HTMLElement[] = [];
         let visible = true;
         for (let element = node.parentElement; element; element = element.parentElement) {
