@@ -13,7 +13,7 @@ export default function PaymentReturn() {
     ? "The payment provider did not return a clear result. We are checking the original payment. Do not start another payment yet."
     : params.get("prompt") === "1"
     ? "Your MoMo prompt is on its way. Approve it on your phone; this page will update automatically."
-    : "Paystack is confirming the payment. The serious little pause before the good part.");
+    : "We’re confirming your payment. The serious little pause before the good part.");
 
   useEffect(() => {
     const reference = params.get("reference") ?? "";
@@ -34,10 +34,17 @@ export default function PaymentReturn() {
         const response = await fetch("/api/customer/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ reference, claim }),
+          body: JSON.stringify({ reference, claim, resumeCheckout: params.get("pending") === "1" }),
         });
-        const result = await response.json() as { pending?: boolean; signedIn?: boolean; eventSlug?: string; error?: string };
+        const result = await response.json() as { pending?: boolean; authorizationUrl?: string; signedIn?: boolean; eventSlug?: string; error?: string };
         if (cancelled) return;
+        if (response.status === 202 && result.authorizationUrl) {
+          const url = new URL(result.authorizationUrl);
+          if (url.origin === "https://pay.seevplus.com" && !url.username && !url.password) {
+            window.location.replace(url.href);
+            return;
+          }
+        }
         if (response.ok && result.signedIn) {
           const purchasedEvent = result.eventSlug ?? "";
           try { sessionStorage.removeItem(`bct:payment-attempt:${purchasedEvent}`); } catch { /* Storage is optional. */ }
@@ -52,7 +59,7 @@ export default function PaymentReturn() {
           return;
         }
         setState("failed");
-        setMessage(result.error ?? "We cannot call it a ticket until Paystack calls it paid. The money check is still the boss here.");
+        setMessage(result.error ?? "We cannot call it a ticket until the payment provider calls it paid. The money check is still the boss here.");
       } catch {
         if (attempt < 72) window.setTimeout(check, 2500);
         else {

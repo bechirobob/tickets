@@ -16,6 +16,10 @@ declare namespace Cloudflare {
     ANALYTICS_RATE_LIMITER: RateLimit;
     IMAGES: ImagesBinding;
     PAYSTACK_SECRET_KEY: string;
+    SEEV_ENABLED?: string;
+    SEEV_ENVIRONMENT?: string;
+    SEEV_CHECKOUT_API_KEY?: string;
+    SEEV_WEBHOOK_SECRET?: string;
     RESEND_API_KEY?: string;
     EMAIL_FROM?: string;
     OPS_ALERT_EMAIL?: string;

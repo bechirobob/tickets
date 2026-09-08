@@ -1,3 +1,4 @@
+import { recoverSeevPayment, validSeevCheckoutUrl, verifyOrderPayment } from "../../../../lib/seevplus";
 import {
   attendeeCookieHeader,
   attendeeSessionExpiry,
@@ -8,7 +9,7 @@ import {
   readAttendeeIdentity,
   readCookie,
 } from "../../../../lib/attendee-auth";
-import { deliverConfirmedOrder, verifyAndFulfill } from "../../../../lib/payment-operations";
+import { deliverConfirmedOrder } from "../../../../lib/payment-operations";
 import { mutationHasValidOrigin } from "../../../../lib/admin-session";
 
 type ClaimRecord = {
@@ -18,6 +19,7 @@ type ClaimRecord = {
   customerPhone: string;
   customerName: string | null;
   orderStatus: string;
+  paymentProvider: string;
   expiresAt: string;
   claimedAt: string | null;
 };
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) {
     return Response.json({ error: "This ticket request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
   }
-  const body = await request.json() as { reference?: string; claim?: string };
+  const body = await request.json() as { reference?: string; claim?: string; resumeCheckout?: boolean };
   const reference = body.reference?.trim() ?? "";
   const claim = body.claim?.trim() ?? "";
   if (!reference || claim.length < 40 || claim.length > 128) {
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const findClaimRecord = () => db.prepare(`
     SELECT o.id AS orderId, o.event_slug AS eventSlug, o.customer_email AS customerEmail,
-           o.customer_phone AS customerPhone, o.customer_name AS customerName, o.status AS orderStatus,
+           o.customer_phone AS customerPhone, o.customer_name AS customerName, o.status AS orderStatus, o.payment_provider AS paymentProvider,
            g.expires_at AS expiresAt, g.claimed_at AS claimedAt
     FROM order_access_grants g
     JOIN orders o ON o.id = g.order_id
@@ -55,15 +57,22 @@ export async function POST(request: Request) {
   if (!record || record.expiresAt <= now || record.claimedAt) {
     return Response.json({ error: "That ticket link already did its one job—or took too long getting here." }, { status: 401 });
   }
-  if (record.orderStatus === "payment_pending") {
+  if (["payment_pending", "expired", "failed"].includes(record.orderStatus)) {
     const { env } = await import("cloudflare:workers");
-    if (env.PAYSTACK_SECRET_KEY) {
+    if (record.paymentProvider === "seevplus" || env.PAYSTACK_SECRET_KEY) {
       try {
-        const verified = await verifyAndFulfill(db, reference, env.PAYSTACK_SECRET_KEY);
+        const verified = record.paymentProvider === "seevplus"
+          ? await recoverSeevPayment(env, reference, new URL(request.url).origin)
+          : await verifyOrderPayment(env, reference);
+        if (verified.result === "checkout") return Response.json({ pending: true, authorizationUrl: verified.authorizationUrl }, { status: 202, headers: { "cache-control": "no-store" } });
         if (verified.result === "paid") {
-          await deliverConfirmedOrder(db, verified.order, new URL(request.url).origin);
-          record = await findClaimRecord();
+          if (record.paymentProvider !== "seevplus") await deliverConfirmedOrder(db, verified.order, new URL(request.url).origin);
         }
+        if (record.paymentProvider === "seevplus" && body.resumeCheckout === true && verified.result === "pending") {
+          const session = await db.prepare("SELECT checkout_url AS url FROM seev_checkout_sessions WHERE order_id = ?").bind(record.orderId).first<{ url: string | null }>();
+          if (validSeevCheckoutUrl(session?.url)) return Response.json({ pending: true, authorizationUrl: session.url }, { status: 202, headers: { "cache-control": "no-store" } });
+        }
+        record = await findClaimRecord();
       } catch (error) {
         console.error(JSON.stringify({ message: "payment return verification failed", reference, error: error instanceof Error ? error.message : String(error) }));
       }

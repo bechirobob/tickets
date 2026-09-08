@@ -80,6 +80,13 @@ contains a reusable QR code.
 Paystack must remain in test mode until the business account, webhook, refund,
 settlement and reconciliation checks have passed.
 
+## Optional SeevPlus payments
+
+SeevPlus Mobile Money checkout is available behind an explicit configuration
+flag. Setup, sandbox tests, recovery behavior and refund/settlement limits are
+documented in [the SeevPlus runbook](docs/runbooks/seevplus.md). Paystack remains
+the default; no SeevPlus credentials are included in the repository.
+
 ## Operational security
 
 Staff sessions are random opaque credentials; only their SHA-256 hashes are

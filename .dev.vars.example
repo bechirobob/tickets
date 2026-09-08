@@ -1,3 +1,9 @@
 ADMIN_ACCESS_KEY=replace-with-a-long-local-development-key
 PAYSTACK_SECRET_KEY=sk_test_replace_me
 RESEND_API_KEY=re_replace_me
+
+# Optional SeevPlus sandbox integration (server-side only)
+SEEV_ENABLED=false
+SEEV_ENVIRONMENT=sandbox
+SEEV_CHECKOUT_API_KEY=
+SEEV_WEBHOOK_SECRET=

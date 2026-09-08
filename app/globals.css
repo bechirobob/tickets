@@ -1802,3 +1802,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media (prefers-reduced-motion: reduce) {
   .analytics-loading > div { animation: none; }
 }
+
+.checkout-provider-choice { display: flex; flex-wrap: wrap; gap: 8px 20px; border: 0; padding: 0; margin: 0 0 12px; }
+.checkout-provider-choice legend { font-size: 13px; padding: 0; margin-bottom: 4px; }
+.checkout-provider-choice label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; cursor: pointer; }
+.checkout-provider-choice input { accent-color: currentColor; width: 16px; height: 16px; }

@@ -68,7 +68,7 @@ test("the compact homepage hero stays within a deliberate desktop and mobile hei
   const css = await readFile(discoveryUrl, "utf8");
   assert.match(css, /\.discovery-home \.compact-hero\s*\{[^}]*height:\s*450px[^}]*min-height:\s*450px/su);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*430px/su);
-  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(46px, 6\.3vw, 86px\)/su);
+  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(42px, 5vw, 72px\)/su);
 });
 
 test("The Drop uses compact filters, bounded cards and a dedicated full page", async () => {
@@ -482,7 +482,7 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(paymentRoute, /https:\/\/api\.paystack\.co\/transaction\/initialize/u);
   assert.match(paymentRoute, /mtn: "mtn", telecel: "vod", at: "atl"/u);
   assert.match(paymentRoute, /channels: \[paymentMethod\]/u);
-  assert.match(paymentRoute, /paymentMethod === "card" \? "card" : `mobile_money:/u);
+  assert.match(paymentRoute, /paymentMethod === "card" \? "card" : paymentProvider === "seevplus" \? "mobile_money" : `mobile_money:/u);
   assert.match(css, /\.payment-methods\s*\{[^}]*border:\s*0/su);
   assert.match(css, /\.payment-option\s*\{[^}]*border-top:\s*1px solid/su);
   assert.match(css, /\.card-payment-detail\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/su);

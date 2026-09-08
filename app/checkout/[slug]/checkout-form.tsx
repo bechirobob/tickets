@@ -17,13 +17,14 @@ const paymentNetworks = [
   { id: "at", label: "AT Money", icon: "/payment-providers/at-money.svg" },
 ] as const;
 
-export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: string; event: CuratedEvent; feeBasisPoints: number }) {
+export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled = false }: { seevEnabled?: boolean; slug: string; event: CuratedEvent; feeBasisPoints: number }) {
   const params = useSearchParams();
   const [quantity, setQuantity] = useState(1);
   const [selectedTierId, setSelectedTierId] = useState(() => {
     const requested = params.get("tier");
     return event.ticketTiers.find((tier) => tier.status === "available" && (!requested || tier.id === requested))?.id ?? event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id;
   });
+  const [momoProvider, setMomoProvider] = useState<"paystack" | "seevplus">("paystack");
   const [network, setNetwork] = useState("mtn");
   const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | null>(null);
   const [message, setMessage] = useState("");
@@ -35,6 +36,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
   const [acceptedPolicies, setAcceptedPolicies] = useState(false);
   const paying = useRef(false);
   const paymentAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  const paymentProvider = paymentMethod === "mobile_money" ? momoProvider : "paystack";
   const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
   const ticketTotalMinor = quantity * selectedTier.priceMinor;
   const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
@@ -70,11 +72,11 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
     setIsPaying(true);
     paying.current = true;
     trackProductMetric("checkout_started", slug);
-    setMessage(paymentMethod === "mobile_money" ? "Sending the MoMo prompt to your phone…" : "Opening Paystack's secure card checkout…");
+    setMessage(paymentProvider === "seevplus" ? "Opening SeevPlus’s secure MoMo checkout…" : paymentMethod === "mobile_money" ? "Sending the MoMo prompt to your phone…" : "Opening Paystack's secure card checkout…");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
-      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, network: paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref"), expectedTotalMinor: totalMinor });
+      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, paymentProvider, network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref"), expectedTotalMinor: totalMinor });
       const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload))), (byte) => byte.toString(16).padStart(2, "0")).join("");
       const storageKey = `bct:payment-attempt:${slug}`;
       if (!paymentAttempt.current) {
@@ -123,7 +125,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
       </header>
       <div className="checkout-layout">
         <section className="checkout-main">
-          {event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. Paystack test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP.</span></div> : null}
+          {event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. For Paystack, test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP. {seevEnabled ? "SeevPlus offers success and decline actions in its sandbox checkout." : ""}</span></div> : null}
           <div className="checkout-step">
             <span>1</span><div><small>Your order</small><h1>{event.title}</h1></div>
           </div>
@@ -177,7 +179,13 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
                 <input type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={() => { setPaymentMethod("mobile_money"); setMessage(""); }} />
                 <Smartphone size={20} aria-hidden="true" /><span>Mobile Money<small>MTN MoMo, Telecel Cash or AT Money</small></span>
               </label>
-              {paymentMethod === "mobile_money" ? <div className="payment-method-detail"><div className="network-list" role="radiogroup" aria-label="Choose mobile money service">
+              {paymentMethod === "mobile_money" ? <div className="payment-method-detail">
+                {seevEnabled ? <fieldset className="checkout-provider-choice" disabled={isPaying}>
+                  <legend>Pay through</legend>
+                  <label><input type="radio" name="momoProvider" value="paystack" checked={momoProvider === "paystack"} onChange={() => { setMomoProvider("paystack"); setMessage(""); }} />Paystack</label>
+                  <label><input type="radio" name="momoProvider" value="seevplus" checked={momoProvider === "seevplus"} onChange={() => { setMomoProvider("seevplus"); setMessage(""); }} />SeevPlus</label>
+                </fieldset> : null}
+                {momoProvider === "seevplus" ? <p className="secure-note">Choose your network and approve payment on SeevPlus.</p> : <div className="network-list" role="radiogroup" aria-label="Choose mobile money service">
                 {paymentNetworks.map((item) => (
                   <button type="button" role="radio" aria-checked={network === item.id} key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
                     <span className="network-logo" aria-hidden="true"><Image src={item.icon} alt="" width={38} height={38} /></span>
@@ -185,7 +193,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
                     {network === item.id && <Check size={18} aria-hidden="true" />}
                   </button>
                 ))}
-              </div></div> : null}
+              </div>}</div> : null}
             </section>
             <section className={`payment-option${paymentMethod === "card" ? " selected" : ""}`}>
               <label className="payment-method-choice">
@@ -212,7 +220,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints }: { slug: st
           </div>
           <ActionButton type="button" className="pay-button" aria-busy={isPaying} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={isPaying || !acceptedPolicies || !paymentMethod}>{isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
           {message && <p className="payment-message" role="status">{message}</p>}
-          <p className="secure-note"><ShieldCheck size={15} /> Paystack handles the money. We handle the night.</p>
+          <p className="secure-note"><ShieldCheck size={15} /> {paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.</p>
         </aside>
       </div>
     </main>

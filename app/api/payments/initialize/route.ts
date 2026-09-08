@@ -1,3 +1,4 @@
+import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
 import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
 import { resolveBookingFee } from "../../../../lib/booking-fees";
 import { expireReservations } from "../../../../lib/payment-operations";
@@ -14,13 +15,13 @@ const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  type PaymentBody = { eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
+  type PaymentBody = { paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
   let body: PaymentBody;
   try {
     const value: unknown = await request.json();
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid body");
     const fields = value as Record<string, unknown>;
-    for (const field of ["eventSlug", "ticketTierId", "email", "phone", "paymentMethod", "network", "fullName", "offer", "promoterCode"]) {
+    for (const field of ["paymentProvider", "eventSlug", "ticketTierId", "email", "phone", "paymentMethod", "network", "fullName", "offer", "promoterCode"]) {
       if (fields[field] != null && (typeof fields[field] !== "string" || (fields[field] as string).length > 320)) throw new Error("Invalid field");
     }
     body = value as PaymentBody;
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   const attemptKey = request.headers.get("idempotency-key");
   if (attemptKey && !/^[a-f0-9-]{36,80}$/iu.test(attemptKey)) return Response.json({ error: "Invalid payment attempt." }, { status: 400 });
   const attemptHash = attemptKey ? await hashToken(attemptKey) : null;
-  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor]));
+  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack"]));
   if (attemptHash) {
     const replay = await replayPaymentAttempt(env.DB, attemptHash, requestHash);
     if (replay) return replay;
@@ -61,16 +62,26 @@ export async function POST(request: Request) {
   const selectableEvent = event && offer && candidateTier ? { ...event, eventState: "on_sale" as const, ticketTiers: event.ticketTiers.map((tier) => tier.id === candidateTier.id ? { ...tier, status: "available" as const, remainingAdmissions: Math.max(tier.remainingAdmissions, tier.admissionsPerUnit) } : tier) } : event;
   const selection = selectableEvent ? resolveTicketSelection(selectableEvent, body.ticketTierId ?? "general", body.quantity) : null;
   if (!event || !selection) return Response.json({ error: "That ticket tier is unavailable. Refresh the page and choose an available ticket." }, { status: 400 });
+  const paymentProvider = body.paymentProvider ?? "paystack";
+  if (!["paystack", "seevplus"].includes(paymentProvider)) return Response.json({ error: "Choose an available payment provider." }, { status: 400 });
+  if (paymentProvider === "seevplus" && !seevAvailable(env, event.isTestEvent)) return Response.json({ error: "SeevPlus is not available for this event yet." }, { status: 503 });
+  if (paymentProvider === "seevplus" && !body.fullName?.trim()) return Response.json({ error: "Enter your full name before payment." }, { status: 400 });
   const paymentMethod = body.paymentMethod ?? "mobile_money";
   if (paymentMethod !== "mobile_money" && paymentMethod !== "card") return Response.json({ error: "Choose mobile money or card payment." }, { status: 400 });
+  if (paymentProvider === "seevplus" && paymentMethod !== "mobile_money") return Response.json({ error: "SeevPlus currently accepts Mobile Money." }, { status: 400 });
   const provider = paystackProviders[body.network as keyof typeof paystackProviders];
-  if (paymentMethod === "mobile_money" && !provider) return Response.json({ error: "Choose a supported mobile money network." }, { status: 400 });
+  if (paymentProvider === "paystack" && paymentMethod === "mobile_money" && !provider) return Response.json({ error: "Choose a supported mobile money network." }, { status: 400 });
+
+  const otherAttempt = await env.DB.prepare(`SELECT 1 AS found FROM orders WHERE event_slug = ? AND customer_email = ?
+    AND payment_provider <> ? AND status IN ('payment_pending', 'expired') LIMIT 1`)
+    .bind(eventSlug, email, paymentProvider).first();
+  if (otherAttempt) return Response.json({ error: "Your payment with the other provider is still pending. Check that payment before switching providers." }, { status: 409 });
 
   const requestedPromoterCode = body.promoterCode?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const promoter = requestedPromoterCode ? await env.DB.prepare(`SELECT code FROM event_promoter_codes WHERE event_slug = ? AND code = ? AND status = 'active' LIMIT 1`)
     .bind(eventSlug, requestedPromoterCode).first<{ code: string }>() : null;
-  if (!env.PAYSTACK_SECRET_KEY) return Response.json({ error: "Live Paystack credentials have not been connected yet." }, { status: 503 });
-  if (event.isTestEvent && !env.PAYSTACK_SECRET_KEY.startsWith("sk_test_")) {
+  if (paymentProvider === "paystack" && !env.PAYSTACK_SECRET_KEY) return Response.json({ error: "Live Paystack credentials have not been connected yet." }, { status: 503 });
+  if (paymentProvider === "paystack" && event.isTestEvent && !env.PAYSTACK_SECRET_KEY.startsWith("sk_test_")) {
     return Response.json({ error: "Preview events can only use Paystack test mode. No live payment was started." }, { status: 503 });
   }
   const now = new Date();
@@ -114,6 +125,9 @@ export async function POST(request: Request) {
         AND (COALESCE(tier.sales_open_at, event.sales_open_at) IS NULL OR COALESCE(tier.sales_open_at, event.sales_open_at) <= ?)
         AND (COALESCE(tier.sales_close_at, event.sales_close_at, event.starts_at) > ?)
         AND event.starts_at > ?
+        AND NOT EXISTS (SELECT 1 FROM orders previous WHERE previous.event_slug = event.slug
+          AND previous.customer_email = ? AND previous.payment_provider <> ?
+          AND previous.status IN ('payment_pending', 'expired'))
         AND (
           SELECT COALESCE(SUM(existing.admission_count), 0)
           FROM inventory_reservations existing
@@ -123,22 +137,22 @@ export async function POST(request: Request) {
     `).bind(
       id, selection.unitQuantity, selection.ticketCount, expiresAt, createdAt, createdAt,
       eventSlug, selection.tier.recordId, selection.tier.id, createdAt, offer?.id ?? null, offer?.id ?? null,
-      createdAt, createdAt, createdAt, createdAt, selection.ticketCount,
+      createdAt, createdAt, createdAt, email, paymentProvider, createdAt, selection.ticketCount,
     ),
     env.DB.prepare(`
       INSERT INTO orders (
         id, reference, event_slug, ticket_type, ticket_tier_id, unit_quantity, quantity,
         face_amount_minor, booking_fee_minor, total_amount_minor, currency,
-        customer_email, customer_phone, customer_name, payment_channel, status,
+        customer_email, customer_phone, customer_name, payment_channel, payment_provider, payment_environment, status,
         reservation_expires_at, payment_updated_at, promoter_code, waitlist_entry_id, created_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GHS', ?, ?, ?, ?, 'payment_pending', ?, ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GHS', ?, ?, ?, ?, ?, ?, 'payment_pending', ?, ?, ?, ?, ?
       FROM inventory_reservations WHERE order_id = ? AND status = 'held'
     `).bind(
       id, reference, eventSlug, selection.tier.id, selection.tier.recordId,
       selection.unitQuantity, selection.ticketCount, faceAmountMinor, bookingFeeMinor,
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
-      paymentMethod === "card" ? "card" : `mobile_money:${body.network}`, expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
+      paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : null, expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
     ),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
@@ -174,11 +188,29 @@ export async function POST(request: Request) {
     customerName: body.fullName?.trim(),
     phone,
     paymentMethod,
-    network: paymentMethod === "mobile_money" ? body.network : undefined,
+    network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? body.network : undefined,
     faceAmountMinor,
     bookingFeeMinor,
     reservationExpiresAt: expiresAt,
   };
+
+  if (paymentProvider === "seevplus") {
+    const nextUrl = `/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}&pending=1`;
+    await env.DB.prepare(`INSERT INTO seev_checkout_sessions (order_id, request_json, created_at) VALUES (?, ?, ?)`)
+      .bind(id, JSON.stringify({ type: "checkout", amount: totalAmountMinor, currency: "GHS", channels: ["mobile_money"],
+        recipient: { name: body.fullName!.trim().slice(0, 120), email, phone },
+        redirect_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`,
+        meta: paymentMetadata }), createdAt).run();
+    await recordProductMetric(env.DB, "payment_attempted", eventSlug);
+    try {
+      const authorizationUrl = await createSeevCheckout(env.DB, reference, env);
+      return finish({ authorizationUrl, reference, reservationExpiresAt: expiresAt });
+    } catch {
+      await env.DB.prepare("UPDATE orders SET failure_reason = ? WHERE id = ? AND status = 'payment_pending'")
+        .bind("SeevPlus checkout response unavailable; the original payment needs verification.", id).run();
+      return finish({ nextUrl, reference, pending: true, reservationExpiresAt: expiresAt }, 202);
+    }
+  }
 
   const usesHostedCheckout = event.isTestEvent || paymentMethod === "card";
   const nextUrl = `/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}&prompt=1`;
