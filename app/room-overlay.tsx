@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 /** A Room surface keeps native focus containment, including while it exits. */
-export default function RoomOverlay({ label, onClose, children, className = "", beforeClose, busy = false }: {
+export default function RoomOverlay({ label, onClose, children, className = "", beforeClose, busy = false, returnFocus }: {
   label: string; onClose: () => void; children: (dismiss: () => void) => ReactNode;
   className?: string; beforeClose?: () => void; busy?: boolean;
+  returnFocus?: RefObject<HTMLElement | null>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,7 +24,7 @@ export default function RoomOverlay({ label, onClose, children, className = "", 
   }, []);
   useEffect(() => {
     const element = dialog.current;
-    const previousFocus = document.activeElement;
+    const previousFocus = returnFocus?.current ?? document.activeElement;
     element?.showModal();
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -35,7 +36,7 @@ export default function RoomOverlay({ label, onClose, children, className = "", 
         target?.focus({ preventScroll: true });
       });
     };
-  }, []);
+  }, [returnFocus]);
   return <dialog ref={dialog} className={`room-overlay ${className}`} aria-label={label} data-phase={closing ? "closing" : "open"}
     onCancel={(event) => { event.preventDefault(); dismiss(); }} onClick={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
     {/* This render prop passes dismiss to event handlers; it never invokes it while rendering. */}

@@ -15,13 +15,18 @@ test("notification bell keeps a busy inbox compact and every update reachable", 
   const longBody = "The guest list has a little update. We are using the garden entrance beside the restaurant this Sunday. Bring your ticket, arrive with your people and give yourself enough time to settle in before the music starts. If you need step-free access, the team at the garden entrance will help. Every part of this message should remain readable, including this final sentence.";
   const items = Array.from({ length: 14 }, (_, i) => ({ id: `notice-${i}`, eventSlug: "sun-chasers-labadi", eventTitle: "On The Guest List", kind: i % 3 ? "room_message" : "host_update", title: i === 1 ? "A longer note before your Night" : ["The Host has spoken", "Your people are moving", "Your ticket is ready"][i % 3], body: i === 1 ? longBody : "Gate 2 tonight. Bring the ticket. We’ll bring the good part.", url: "/my-nights/sun-chasers-labadi?view=details", createdAt: new Date(Date.now() - i * 60_000).toISOString(), readAt: i < 4 ? null : new Date().toISOString() as string | null }));
   const marks: unknown[] = [];
+  let loads = 0;
+  let finishRefresh!: () => void;
+  const refreshGate = new Promise<void>((resolve) => { finishRefresh = resolve; });
   await page.route("**/api/customer/notifications", async (route) => {
     if (route.request().method() === "PATCH") {
       const payload = route.request().postDataJSON(); marks.push(payload);
       items.forEach((item) => { if (payload.all || item.id === payload.id) item.readAt = new Date().toISOString(); });
       return route.fulfill({ json: { updated: true } });
     }
-    return route.fulfill({ json: { notifications: items, unread: items.filter((item) => !item.readAt).length } });
+    const snapshot = items.map((item) => ({ ...item }));
+    if (++loads === 2) await refreshGate;
+    return route.fulfill({ json: { notifications: snapshot, unread: snapshot.filter((item) => !item.readAt).length } });
   });
   await page.goto("/my-nights");
   const bell = page.getByRole("button", { name: "4 unread notifications" });
@@ -30,6 +35,7 @@ test("notification bell keeps a busy inbox compact and every update reachable", 
   const dialog = page.getByRole("dialog", { name: "The Buzz", exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator(".buzz-row")).toHaveCount(8);
+  await expect(dialog.getByRole("button", { name: "All", exact: true })).toHaveCSS("border-radius", "0px");
   const bounds = await dialog.locator(".notification-panel").boundingBox();
   expect(bounds!.width).toBeLessThanOrEqual(410);
   expect(bounds!.height).toBeLessThanOrEqual(540);
@@ -42,6 +48,9 @@ test("notification bell keeps a busy inbox compact and every update reachable", 
   await expect(long.locator(".buzz-update p")).toHaveText(longBody);
   await expect(long).toHaveClass("buzz-row read");
   expect(marks).toContainEqual({ id: "notice-1" });
+  finishRefresh();
+  await expect(dialog.locator(".notification-feed")).toHaveAttribute("aria-busy", "false");
+  await expect(long).toHaveClass("buzz-row read");
   await page.setViewportSize({ width: 320, height: 740 });
   await long.scrollIntoViewIfNeeded();
   await expectVisibleLettering(page, ".buzz-update[open]");

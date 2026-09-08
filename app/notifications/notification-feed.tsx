@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, Bell, CheckCheck, ChevronDown, MessageCircle, Ticket } from "lucide-react";
+import { ArrowUpRight, BadgeCheck, Bell, CheckCheck, ChevronDown, MessageCircle, Ticket } from "lucide-react";
 import { useState } from "react";
 import type { NotificationItem, useNotifications } from "./use-notifications";
 
@@ -27,11 +27,11 @@ function NotificationRow({ item, mark, now, onNavigate }: { item: NotificationIt
     <Icon className="buzz-row-icon" data-kind={host ? "host" : "message"} size={17} aria-hidden="true" />
     <div className="buzz-row-main">
       <header><span>{host ? "Host" : ticket ? "Ticket" : "The Room"}{item.eventTitle ? ` · ${item.eventTitle}` : ""}</span><time dateTime={item.createdAt} title={stamp} aria-label={stamp}>{notificationTime(item.createdAt, now)}</time></header>
-      <Link className="buzz-destination" href={item.url} onClick={() => { if (!item.readAt) void mark(item.id); onNavigate?.(); }}>
+      {!long && <Link className="buzz-destination" href={item.url} onClick={() => { if (!item.readAt) void mark(item.id); onNavigate?.(); }}>
         <h3>{!item.readAt && <span className="sr-only">Unread: </span>}{item.title}</h3>
-        {!long && item.body && <p>{item.body}</p>}
-      </Link>
-      {long && <details className="buzz-update" onToggle={(event) => { if (event.currentTarget.open && !item.readAt) void mark(item.id); }}><summary aria-label={`Read full update: ${item.title}`}>Read update <ChevronDown size={13} aria-hidden="true" /></summary><p>{item.body}</p></details>}
+        {item.body && <p>{item.body}</p>}
+      </Link>}
+      {long && <details className="buzz-update" onToggle={(event) => { if (event.currentTarget.open && !item.readAt) void mark(item.id); }}><summary aria-label={`Read full update: ${item.title}`}><h3>{!item.readAt && <span className="sr-only">Unread: </span>}{item.title}</h3><span>Read update <ChevronDown size={13} aria-hidden="true" /></span></summary><p>{item.body}</p><Link className="buzz-update-link" href={item.url} onClick={onNavigate}>Open Night <ArrowUpRight size={13} aria-hidden="true" /></Link></details>}
     </div>
     {!item.readAt && <i className="buzz-unread-dot" aria-hidden="true" />}
   </article>;
@@ -44,7 +44,7 @@ export default function NotificationFeed({ feed, compact = false, onNavigate }: 
   const [now] = useState(() => Date.now());
   const { items, loading, locked, loadError, actionError, markingAll, unread, load, mark } = feed;
   const filtered = items?.filter((item) => filter === "all" || !item.readAt) ?? [];
-  return <div className="notification-feed">
+  return <div className="notification-feed" aria-busy={loading}>
     {!locked && items && <div className="buzz-tools"><div role="group" aria-label="Filter notifications">{(["all", "unread"] as const).map((view) => <button key={view} type="button" aria-pressed={filter === view} onClick={() => { setFilter(view); setLimit(batch); }}>{view === "all" ? "All" : "Unread"}{view === "unread" && unread > 0 ? <span>{unread}</span> : null}</button>)}</div><button type="button" onClick={() => void mark()} disabled={!unread || markingAll} aria-busy={markingAll}><CheckCheck size={15} aria-hidden="true" />{markingAll ? "Marking…" : "Mark all read"}</button></div>}
     {actionError && <p className="buzz-error" role="alert">{actionError}</p>}
     {loadError && <div className="buzz-load-error"><p role="alert">{loadError}</p><button type="button" disabled={loading} onClick={() => void load()}>Try again</button></div>}
