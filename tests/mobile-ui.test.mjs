@@ -109,10 +109,10 @@ test("notification history stays behind the verified My Nights entrance", async 
   assert.doesNotMatch(dock, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
   assert.match(home, /<PublicNavigation \/>/u);
-  assert.match(myNights, /<Link className="notification-bell" href="\/notifications"/u);
-  assert.doesNotMatch(myNights, /payload \? <Link className="notification-bell"/u);
-  assert.match(hub, /className="notification-bell" href="\/notifications"/u);
-  assert.ok(hub.indexOf('href={`/room/${event.slug}`}') < hub.indexOf('className="notification-bell"'), "The Room action must precede the notification bell so the bell owns the far-right edge");
+  assert.match(myNights, /<NotificationBell \/>/u);
+  assert.doesNotMatch(myNights, /payload \? <NotificationBell/u);
+  assert.match(hub, /<NotificationBell \/>/u);
+  assert.ok(hub.indexOf('href={`/room/${event.slug}`}') < hub.indexOf('<NotificationBell'), "The Room action must precede the notification bell so the bell owns the far-right edge");
   assert.match(polish, /\.my-nights-header-actions,[\s\S]*?\.night-hub__header-actions\s*\{[^}]*justify-self:\s*end/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.my-nights-page \.directory-header\s*\{[^}]*padding-right:\s*16px/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.night-hub__header\s*\{[^}]*padding-right:\s*13px/su);

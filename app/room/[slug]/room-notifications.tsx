@@ -1,8 +1,8 @@
 "use client";
 
 import { Bell, BellOff, Loader2, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import RoomOverlay from "../../room-overlay";
+import { useEffect, useRef, useState } from "react";
+import NotificationPanel from "../../notifications/notification-panel";
 import { requestJson } from "../../../lib/client-request";
 
 async function readyRegistration(): Promise<ServiceWorkerRegistration> {
@@ -27,6 +27,7 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [settingsReady, setSettingsReady] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,8 +90,8 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
     }
   }
 
-  return <><button type="button" className={`room-notification-toggle${enabled ? " is-on" : ""}`} aria-label="Room notification settings" title="Room notification settings" onClick={() => { setOpen(true); }}>
+  return <><button ref={trigger} type="button" className={`room-notification-toggle${enabled ? " is-on" : ""}`} aria-label="Room notification settings" title="Room notification settings" aria-haspopup="dialog" aria-expanded={open} onClick={() => { setOpen(true); }}>
     {busy ? <Loader2 aria-hidden="true" className="spin" size={16} /> : enabled ? <Bell aria-hidden="true" size={17} /> : <BellOff aria-hidden="true" size={17} />}
     {enabled ? <i aria-hidden="true" /> : null}
-  </button>{open && <RoomOverlay className="room-overlay--sheet" label="Room notifications" onClose={() => setOpen(false)}>{(dismiss) => <section className="room-sheet room-notification-settings"><header className="room-sheet__header"><div><span className="room-surface-kicker"><Bell aria-hidden="true" size={17} /> Notifications</span><h2>Keep an ear out.</h2></div><button aria-label="Close notification settings" onClick={dismiss}><X aria-hidden="true" size={18} /></button></header><p>Choose how this Night reaches you.</p><div className="room-notification-option"><span><b>Host updates & messages</b><small>Notifications for this Night</small></span><button role="switch" aria-checked={enabled} aria-label="Host updates and Room messages" disabled={busy || !settingsReady} onClick={() => void toggle()}>{!settingsReady ? "Loading…" : enabled ? "On" : "Off"}</button></div><div className="room-notification-option"><span><b>On your lock screen</b><small>{!supported ? "Not supported in this browser" : permission === "denied" ? "Blocked in your browser settings" : subscribed ? "This device is connected" : !pushAvailable ? "Device delivery is currently unavailable" : "Deliver notifications to this device"}</small></span>{supported && pushAvailable && !subscribed && permission !== "denied" && <button disabled={busy || !enabled} onClick={() => void toggle(true)}>Enable</button>}</div>{feedback && <p role="status">{feedback}</p>}</section>}</RoomOverlay>}</>;
+  </button>{open && <NotificationPanel anchor={trigger} label="Room notifications" onClose={() => setOpen(false)}>{(dismiss) => <><header className="notification-panel-header"><div><h2>Keep an ear out.</h2><span>This Night’s notifications.</span></div><button type="button" aria-label="Close notification settings" onClick={dismiss}><X aria-hidden="true" size={18} /></button></header><div className="notification-panel-scroll room-notification-settings"><div className="room-notification-option"><span><b>Host updates & messages</b><small>{enabled ? "You’re in the loop." : "A little peace and quiet."}</small></span><button type="button" role="switch" aria-checked={enabled} aria-label="Host updates and Room messages" disabled={busy || !settingsReady} onClick={() => void toggle()}><i aria-hidden="true" /><span>{!settingsReady ? "Loading…" : enabled ? "On" : "Off"}</span></button></div><div className="room-notification-option"><span><b>On your lock screen</b><small>{!supported ? "Not supported in this browser" : permission === "denied" ? "Blocked in your browser settings" : subscribed ? "This device is connected" : !pushAvailable ? "Device delivery is currently unavailable" : "Take the useful noise with you."}</small></span>{supported && pushAvailable && !subscribed && permission !== "denied" && <button type="button" disabled={busy || !enabled} onClick={() => void toggle(true)}>Enable</button>}</div>{feedback && <p className="notification-settings-feedback" role="status">{feedback}</p>}</div></>}</NotificationPanel>}</>;
 }

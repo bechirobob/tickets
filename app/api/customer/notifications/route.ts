@@ -6,10 +6,13 @@ export async function GET(request: Request) {
   const identity = await readAttendeeIdentity(env.DB, request.headers.get("cookie"));
   if (!identity) return Response.json({ error: "Verified attendee access required." }, { status: 401, headers: { "cache-control": "no-store" } });
   const rows = await env.DB.prepare(`
-    SELECT id, event_slug AS eventSlug, kind, title, body, url,
-           created_at AS createdAt, read_at AS readAt
-    FROM attendee_notifications WHERE attendee_id = ?
-    ORDER BY created_at DESC LIMIT 100
+    SELECT notification.id, notification.event_slug AS eventSlug, event.title AS eventTitle,
+           notification.kind, notification.title, notification.body, notification.url,
+           notification.created_at AS createdAt, notification.read_at AS readAt
+    FROM attendee_notifications AS notification
+    LEFT JOIN curated_event_records AS event ON event.slug = notification.event_slug
+    WHERE notification.attendee_id = ?
+    ORDER BY notification.created_at DESC LIMIT 100
   `).bind(identity.attendeeId).all();
   const unread = rows.results.filter((item) => !item.readAt).length;
   return Response.json({ notifications: rows.results, unread }, { headers: { "cache-control": "no-store" } });
