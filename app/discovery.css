@@ -26,7 +26,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .compact-hero > img { inset: 0; width: 100%; filter: saturate(1.08) contrast(1.02); }
 .discovery-home .compact-hero__shade { background: linear-gradient(90deg, rgba(10,12,10,.9), rgba(10,12,10,.76) 37%, rgba(10,12,10,.12) 78%), linear-gradient(0deg, rgba(10,12,10,.6), transparent 45%); }
 .discovery-home .compact-hero__copy { left: 5vw; right: auto; bottom: 91px; width: min(650px, 60%); }
-.discovery-home .compact-hero__copy h1 { max-width: 640px; font-size: clamp(46px, 6.3vw, 86px); line-height: 1.02; font-weight: 600; letter-spacing: -.045em; text-wrap: balance; text-transform: none; }
+.discovery-home .compact-hero__copy h1 { max-width: 700px; font-size: clamp(42px, 5vw, 72px); line-height: 1.02; font-weight: 600; letter-spacing: -.045em; text-wrap: balance; text-transform: none; }
 .discovery-home .compact-hero__copy > .night-kicker { margin-bottom: 22px; color: #e8e5dc; font-size: 12px; letter-spacing: .1em; }
 .discovery-home .compact-hero__copy > p:not(.night-kicker) { margin-top: 20px; color: #f3f0e8; font-size: 15px; line-height: 1.45; }
 .discovery-home .compact-hero__copy > .hero-venue { margin-top: 6px; color: #c3c2b9; }
@@ -49,7 +49,11 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-explorer .drop-controls button { min-height: 46px; color: #5a584f; font-size: 14px; }
 .discovery-explorer .drop-controls button[aria-pressed="true"] { color: #10110f; }
 .discovery-explorer .drop-controls button[aria-pressed="true"]::after { content: ""; position: absolute; inset: auto 0 0; height: 2px; background: #10110f; }
-.discovery-explorer .drop-controls select { min-height: 44px; font-size: 16px; }
+.discovery-explorer { min-width: 0; max-width: 100%; }
+.discovery-explorer .drop-controls > div { min-width: 0; flex-wrap: wrap; }
+.discovery-explorer .drop-controls label { min-width: 0; width: min(100%, 360px); max-width: 100%; flex: 0 1 auto; }
+.discovery-explorer .drop-controls label > svg { flex: 0 0 auto; }
+.discovery-explorer .drop-controls select { min-width: 0; width: 0; max-width: 100%; flex: 1; min-height: 44px; font-size: 16px; }
 .discovery-explorer .drop-vibes { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; overflow: visible; border: 0; }
 .discovery-explorer .drop-vibes button { min-width: 0; min-height: 44px; padding: 0 2px; display: inline-flex; align-items: center; border: 0; border-radius: 0; background: transparent; color: #656259; }
 .discovery-explorer .drop-vibes button b { font-size: 13px; font-weight: 600; }
@@ -81,7 +85,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-grid .drop-card__body > div { margin-top: 8px; color: #24251f; font-size: 14px; font-weight: 650; }
 .discovery-grid .drop-card__body > a { min-height: 44px; margin-top: 4px; padding: 0; border: 0; font-size: 13px; }
 .discovery-grid .drop-card[data-featured="true"] .drop-card__body > p { color: #94401d; }
-.discovery-explorer .drop-no-match { padding: 44px 20px; }
+.discovery-explorer .drop-no-match { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 44px 20px; }
 .discovery-explorer .drop-no-match button { min-height: 44px; margin-top: 12px; padding: 0 18px; border: 1px solid #10110f; background: transparent; color: #10110f; font-size: 14px; }
 
 .discovery-directory { background: #f4f1ea; }

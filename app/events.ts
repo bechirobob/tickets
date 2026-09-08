@@ -123,7 +123,7 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     ticketTiers: tiers,
     image: record.imageUrl,
     note: record.curationNote,
-    quip: {
+    quip: /\b(?:grills?|braai|barbecue|bbq)\b/iu.test(record.guestPerk ?? "") ? "Grills on. You’re off duty." : {
       "Late night": "Small room. Big decisions.",
       "Day party": "Sunset first. Regret nothing.",
       "Alté": "Dress like your ex might be there.",

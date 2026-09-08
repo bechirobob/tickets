@@ -68,7 +68,7 @@ test("the compact homepage hero stays within a deliberate desktop and mobile hei
   const css = await readFile(discoveryUrl, "utf8");
   assert.match(css, /\.discovery-home \.compact-hero\s*\{[^}]*height:\s*450px[^}]*min-height:\s*450px/su);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.compact-hero\s*\{[^}]*height:\s*430px/su);
-  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(46px, 6\.3vw, 86px\)/su);
+  assert.match(css, /\.compact-hero__copy h1\s*\{[^}]*font-size:\s*clamp\(42px, 5vw, 72px\)/su);
 });
 
 test("The Drop uses compact filters, bounded cards and a dedicated full page", async () => {

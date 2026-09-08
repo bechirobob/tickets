@@ -8,14 +8,14 @@
 
 .admin-bootstrap > section { width: min(620px, 100%); }
 .admin-bootstrap__back { display: flex; align-items: baseline; justify-content: space-between; }
-.admin-bootstrap__back span { color: #777870; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.admin-bootstrap__back span { color: #9b9b94; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .admin-bootstrap .admin-login__eyebrow { margin-top: 44px; }
 .admin-bootstrap h1 + p { margin-bottom: 28px; }
 .admin-bootstrap__form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 22px; border-top: 1px solid #343531; }
 .admin-form-field { min-width: 0; display: grid; align-content: start; gap: 7px; }
 .admin-form-field--wide, .admin-bootstrap__form > p, .admin-bootstrap__form > button { grid-column: 1 / -1; }
 .admin-form-field small { color: #85867f; font-size: 12px; line-height: 1.5; }
-.admin-form-field code { color: #bbbcb5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .95em; }
+.admin-form-field code { color: #bbbcb5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1em; }
 .admin-bootstrap__key-help { margin-top: 2px; padding-top: 10px; border-top: 1px solid #2b2c29; }
 .admin-bootstrap__key-help summary { width: max-content; cursor: pointer; color: #ff7459; font-size: 12px; font-weight: 740; }
 .admin-bootstrap__key-help p { margin: 10px 0 0; color: #9b9b94; font-size: 13px; line-height: 1.6; }
