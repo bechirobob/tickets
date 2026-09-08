@@ -450,6 +450,7 @@ export const partySubmissions = sqliteTable("party_submissions", {
   status: text("status", { enum: ["submitted", "in_review", "changes_requested", "approved", "rejected", "scheduled", "published", "unpublished", "archived"] }).notNull(),
   reviewNote: text("review_note"),
   curationNote: text("curation_note"),
+  tagline: text("tagline"),
   scheduledPublishAt: text("scheduled_publish_at"),
   publishedAt: text("published_at"),
   eventSlug: text("event_slug"),
@@ -489,6 +490,7 @@ export const curatedEventRecords = sqliteTable("curated_event_records", {
   guestPerk: text("guest_perk"),
   imageUrl: text("image_url").notNull(),
   curationNote: text("curation_note").notNull(),
+  tagline: text("tagline"),
   status: text("status", { enum: ["scheduled", "published", "unpublished"] }).notNull(),
   scheduledPublishAt: text("scheduled_publish_at"),
   publishedAt: text("published_at"),
@@ -497,6 +499,7 @@ export const curatedEventRecords = sqliteTable("curated_event_records", {
 }, (table) => [
   uniqueIndex("curated_events_submission_unique").on(table.submissionId),
   uniqueIndex("curated_events_slug_unique").on(table.slug),
+  uniqueIndex("curated_events_tagline_unique").on(sql`lower(trim(${table.tagline}))`),
   index("curated_events_publication_idx").on(table.status, table.scheduledPublishAt),
 ]);
 

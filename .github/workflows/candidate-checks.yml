@@ -47,7 +47,7 @@ jobs:
       - name: Verify optional SeevPlus checkout on desktop and mobile
         run: |
           node scripts/prepare-seev-browser-fixture.mjs
-          npx playwright test --config playwright.seev.config.ts --project ${{ matrix.browser }}
+          npx playwright test --config playwright.seev.config.ts --project ${{ matrix.browser }} --output test-results/seevplus
       - name: Preserve event-page renders and browser results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

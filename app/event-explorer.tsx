@@ -80,11 +80,11 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
           {event.isTestEvent ? <div className="event-artwork-type" aria-hidden="true"><small>{event.area} · Accra</small><b>{event.title}</b><em>{event.vibe}</em></div> : null}
         </PosterLink>
         <div className="drop-card__body">
-          <p>{event.startsAt ? <><time dateTime={event.startsAt}>{event.day.slice(0, 3)} {event.shortDate}</time> · {event.time.split(" — ")[0]}</> : "Coming soon"}</p>
+          <p className="drop-card__schedule">{event.startsAt ? <><time dateTime={event.startsAt}>{event.day.slice(0, 3)} {event.shortDate}</time> · {event.time.split(" — ")[0]}</> : "Coming soon"}</p>
           <h3><Link href={`/event/${event.slug}`}>{event.title}</Link></h3>
           <small>{event.venue} · {event.area}</small>
-          <p className="drop-card__quip">{event.quip}</p>
-          <div><span>{event.scheduleStatus === "coming_soon" ? "Tickets coming soon" : event.scheduleStatus === "end_pending" ? `GH₵${discoveryPrice(event)} · Sales soon` : event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${discoveryPrice(event)}` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span>{event.isVerified ? <span className="drop-card__verified"><BadgeCheck size={13} aria-hidden="true" /> Verified event</span> : null}</div>
+          <p className="drop-card__quip" aria-hidden={event.quip ? undefined : true}>{event.quip}</p>
+          <div><span>{event.scheduleStatus === "coming_soon" ? "Tickets coming soon" : event.scheduleStatus === "end_pending" ? `GH₵${discoveryPrice(event)} · Sales soon` : event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${discoveryPrice(event)}` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span></div><p className="drop-card__verification" aria-hidden={event.isVerified ? undefined : true}>{event.isVerified ? <span className="drop-card__verified"><BadgeCheck size={13} aria-hidden="true" /> Verified event</span> : null}</p>
           <ActionLink href={`/event/${event.slug}`} variant="text" aria-label={`See ${event.title}`}>View event</ActionLink>
         </div>
       </article>)}

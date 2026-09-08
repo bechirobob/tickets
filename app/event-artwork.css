@@ -14,3 +14,25 @@
 @media (prefers-reduced-transparency: reduce) {
   .discovery-grid .drop-card .drop-card__artwork-wash { display: none; }
 }
+
+/* Cards share content tracks: long copy grows the whole row, never gets cut off. */
+.discovery-grid,
+.discovery-directory .discovery-grid,
+.discovery-grid[data-count="1"],
+.discovery-grid[data-count="2"] { grid-template-columns: repeat(auto-fit, minmax(230px, 280px)); justify-content: center; gap: 8px 28px; }
+.discovery-grid .drop-card { display: grid; grid-template-rows: subgrid; grid-row: span 8; row-gap: 8px; align-content: start; margin-bottom: 28px; }
+.discovery-grid .drop-card[data-colour-scheme] .drop-card__image { aspect-ratio: 5 / 6; width: 100%; height: auto; --artwork-inset: 6px; }
+.discovery-grid .drop-card__body { display: grid; grid-template-rows: subgrid; grid-row: span 7; row-gap: 8px; padding-top: 4px; min-width: 0; }
+.discovery-grid .drop-card .drop-card__body > * { margin-block: 0; align-self: start; min-width: 0; }
+.discovery-grid .drop-card .drop-card__body > small { display: block; overflow: visible; white-space: normal; }
+.discovery-grid .drop-card .drop-card__body > .drop-card__schedule { text-transform: none; font-weight: 650; letter-spacing: 0; }
+.discovery-grid .drop-card .drop-card__body > .drop-card__verification { font-size: 12px; font-weight: 450; text-transform: none; letter-spacing: 0; }
+.discovery-grid .drop-card__verified { display: flex; align-items: center; gap: 4px; }
+.discovery-grid .drop-card__verified svg { flex: 0 0 auto; }
+.discovery-grid .drop-card .drop-card__body > .ticket-action { min-height: 44px; margin-block: 0; }
+@media (max-width: 700px) {
+  .discovery-grid,
+  .discovery-directory .discovery-grid,
+  .discovery-grid[data-count="1"],
+  .discovery-grid[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
+}

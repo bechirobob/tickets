@@ -1,6 +1,7 @@
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { notifyEventAttendees } from "../../../../lib/notifications";
 import { isEventColourScheme } from "../../../../lib/event-presentation";
+import { normalizeEventTagline, assertOriginalEventTagline } from "../../../../lib/event-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
              sales_close_at AS salesCloseAt, age_restriction AS ageRestriction,
              lineup, event_state AS eventState, is_test_event AS isTestEvent,
              rescheduled_from AS rescheduledFrom,
-             image_url AS imageUrl, curation_note AS curationNote, status,
+             image_url AS imageUrl, curation_note AS curationNote, tagline, status,
              dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk,
              scheduled_publish_at AS scheduledPublishAt, published_at AS publishedAt, updated_at AS updatedAt
       FROM curated_event_records ORDER BY starts_at DESC
@@ -86,6 +87,19 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown> & { tiers?: TierInput[] };
     const slug = text(body.slug, "event", 80);
+    if (body.action === "save_copy") {
+      const { env } = await import("cloudflare:workers");
+      const event = await env.DB.prepare("SELECT slug FROM curated_event_records WHERE slug = ?").bind(slug).first();
+      if (!event) return Response.json({ error: "Event not found." }, { status: 404 });
+      const tagline = normalizeEventTagline(body.tagline, true);
+      await assertOriginalEventTagline(env.DB, tagline, slug);
+      await env.DB.batch([
+        env.DB.prepare("UPDATE curated_event_records SET tagline = ?, updated_at = ? WHERE slug = ?").bind(tagline, new Date().toISOString(), slug),
+        env.DB.prepare("UPDATE party_submissions SET tagline = ? WHERE event_slug = ?").bind(tagline, slug),
+      ]);
+      await recordAudit(env.DB, { session, action: "events.copy_updated", targetType: "event", targetId: slug, outcome: "success", detail: "Updated the individual event line", requestId: requestMetadata(request).requestId });
+      return Response.json({ saved: true, slug, tagline });
+    }
     const startsAt = validDate(body.startsAt)!;
     const endsAt = validDate(body.endsAt)!;
     if (endsAt <= startsAt) throw new Error("The event must end after it starts.");
@@ -98,9 +112,11 @@ export async function PATCH(request: Request) {
     if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > 12) throw new Error("Every event needs between one and twelve ticket tiers.");
 
     const { env } = await import("cloudflare:workers");
-    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, status, dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk FROM curated_event_records WHERE slug = ? LIMIT 1")
-      .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; status: string; dressCode: string | null; colourScheme: string | null; awarenessNote: string | null; guestPerk: string | null }>();
+    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, status, dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk, tagline FROM curated_event_records WHERE slug = ? LIMIT 1")
+      .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; status: string; dressCode: string | null; colourScheme: string | null; awarenessNote: string | null; guestPerk: string | null; tagline: string | null }>();
     if (!current) return Response.json({ error: "Event not found." }, { status: 404 });
+    const tagline = body.tagline === undefined ? current.tagline : normalizeEventTagline(body.tagline, true);
+    await assertOriginalEventTagline(env.DB, tagline, slug);
     const dressCode = body.dressCode === undefined ? current.dressCode : optionalText(body.dressCode, "dress code", 100);
     const awarenessNote = body.awarenessNote === undefined ? current.awarenessNote : optionalText(body.awarenessNote, "cause or occasion", 160);
     const guestPerk = body.guestPerk === undefined ? current.guestPerk : optionalText(body.guestPerk, "guest perk", 160);
@@ -156,15 +172,16 @@ export async function PATCH(request: Request) {
         UPDATE curated_event_records SET title = ?, venue = ?, venue_map_url = ?, area = ?,
           starts_at = ?, ends_at = ?, vibe = ?, price_from_minor = ?, capacity = ?,
           sales_open_at = ?, sales_close_at = ?, age_restriction = ?, lineup = ?,
-          event_state = ?, rescheduled_from = ?, curation_note = ?, dress_code = ?, colour_scheme = ?, awareness_note = ?, guest_perk = ?, updated_at = ?
+          event_state = ?, rescheduled_from = ?, curation_note = ?, tagline = ?, dress_code = ?, colour_scheme = ?, awareness_note = ?, guest_perk = ?, updated_at = ?
         WHERE slug = ?
       `).bind(
         text(body.title, "event title", 120), text(body.venue, "venue", 160), validUrl(body.venueMapUrl),
         text(body.area, "area", 80), startsAt, endsAt, text(body.vibe, "event mood", 30),
         priceFromMinor, capacity, salesOpenAt, salesCloseAt, text(body.ageRestriction, "age restriction", 20),
         text(body.lineup, "line-up", 1000), eventState, rescheduledFrom,
-        text(body.curationNote, "customer-facing event note", 1800), dressCode, colourScheme, awarenessNote, guestPerk, now, slug,
+        text(body.curationNote, "customer-facing event note", 1800), tagline, dressCode, colourScheme, awarenessNote, guestPerk, now, slug,
       ),
+      env.DB.prepare("UPDATE party_submissions SET tagline = ? WHERE event_slug = ?").bind(tagline, slug),
       ...normalizedTiers.map((tier) => env.DB.prepare(`
         INSERT INTO event_ticket_tiers (
           id, event_slug, code, name, description, price_minor, admissions_per_unit,
@@ -203,6 +220,7 @@ export async function PATCH(request: Request) {
     await recordAudit(env.DB, { session, action: "events.inventory_updated", targetType: "event", targetId: slug, outcome: "success", detail: `${normalizedTiers.length} tiers`, requestId: requestMetadata(request).requestId });
     return Response.json({ saved: true, slug, updatedAt: now });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "The event could not be saved." }, { status: 400 });
+    const message = error instanceof Error ? error.message : "The event could not be saved.";
+    return Response.json({ error: /curated_events_tagline_unique/iu.test(message) ? "That event line is already in use. Write one just for this event." : message }, { status: 400 });
   }
 }

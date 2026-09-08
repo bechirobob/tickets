@@ -4,6 +4,7 @@ import { expectVisibleLettering } from "./text-visibility";
 test.use({ serviceWorkers: "block" });
 
 test("poster, event facts and pending sales fit both launch events", async ({ page }, testInfo) => {
+  const posterSizes: Array<{ width: number; height: number }> = [];
   for (const slug of ["the-weekend-braai", "sun-chasers-labadi"]) {
     await page.goto(`/event/${slug}`);
     const poster = page.locator(".event-detail-poster img");
@@ -11,6 +12,12 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
     await expect.poll(() => poster.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
     await expect(poster).toHaveCSS("object-fit", "contain");
     await expect(poster).toHaveCSS("filter", "none");
+    const size = await page.locator(".event-detail-poster").boundingBox();
+    posterSizes.push(size!);
+    if (page.viewportSize()!.width > 760) {
+      expect(size!.width).toBeLessThanOrEqual(401);
+      expect(size!.height).toBeLessThanOrEqual(481);
+    }
     await expect(page.getByRole("button", { name: "Copy Link", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
     await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
@@ -43,6 +50,39 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
     await page.screenshot({ path: testInfo.outputPath(`${slug}.png`), fullPage: true });
     await page.goto(`/checkout/${slug}`);
     await expect(page).toHaveURL(new RegExp(`/event/${slug}$`));
+  }
+  expect(Math.abs(posterSizes[0].height - posterSizes[1].height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(posterSizes[0].width - posterSizes[1].width)).toBeLessThanOrEqual(1);
+});
+
+test("event cards share aligned rows and compact poster sizes as copy grows", async ({ page }, testInfo) => {
+  for (const path of ["/", "/events"]) {
+    await page.goto(path);
+    const cards = page.locator(".discovery-grid .drop-card");
+    await expect(cards).toHaveCount(2);
+    const lines = await cards.locator(".drop-card__quip").allTextContents();
+    expect(new Set(lines).size).toBe(2);
+    expect(lines).not.toContain("Sunset first. Regret nothing.");
+    const assertAlignment = async () => {
+      const rows = await cards.evaluateAll((elements) => elements.map((card) => ({
+        width: card.getBoundingClientRect().width,
+        poster: card.querySelector(".drop-card__image")!.getBoundingClientRect().height,
+        tops: Array.from(card.querySelector(".drop-card__body")!.children).map((child) => child.getBoundingClientRect().top),
+      })));
+      expect(Math.abs(rows[0].width - rows[1].width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(rows[0].poster - rows[1].poster)).toBeLessThanOrEqual(1);
+      for (let index = 0; index < rows[0].tops.length; index++) expect(Math.abs(rows[0].tops[index] - rows[1].tops[index]), `Matching card row ${index} on ${path}`).toBeLessThanOrEqual(1);
+      if (page.viewportSize()!.width > 700) {
+        expect(rows[0].width).toBeLessThanOrEqual(281);
+        expect(rows[0].poster).toBeLessThanOrEqual(337);
+      }
+      await expectVisibleLettering(page, ".discovery-grid");
+    };
+    await assertAlignment();
+    await page.screenshot({ path: testInfo.outputPath(path === "/" ? "aligned-home.png" : "aligned-directory.png"), fullPage: true });
+    await cards.first().locator("h3 a").evaluate((title) => { title.textContent = "A Longer Event Title with Friends, Music and a Very Good Reason to Go Out"; });
+    await cards.last().locator(".drop-card__body > small").evaluate((venue) => { venue.textContent = "The Courtyard, a venue with an unusually long address that still needs to be readable in full"; });
+    await assertAlignment();
   }
 });
 

@@ -66,6 +66,7 @@ type EventRecord = {
   rescheduledFrom: string | null;
   imageUrl: string;
   curationNote: string;
+  tagline: string | null;
 };
 
 type TierRecord = {
@@ -123,12 +124,7 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     ticketTiers: tiers,
     image: record.imageUrl,
     note: record.curationNote,
-    quip: /\b(?:grills?|braai|barbecue|bbq)\b/iu.test(record.guestPerk ?? "") ? "Grills on. You’re off duty." : {
-      "Late night": "Small room. Big decisions.",
-      "Day party": "Sunset first. Regret nothing.",
-      "Alté": "Dress like your ex might be there.",
-      "Amapiano": "The shoes will not survive.",
-    }[record.vibe],
+    quip: record.tagline ?? "",
     sequence: String(index + 1).padStart(2, "0"),
   };
 }
@@ -166,7 +162,7 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
            dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote,
            guest_perk AS guestPerk,
            rescheduled_from AS rescheduledFrom,
-           image_url AS imageUrl, curation_note AS curationNote,
+           image_url AS imageUrl, curation_note AS curationNote, tagline,
            COALESCE(
              (SELECT percentage_basis_points FROM booking_fee_rules
               WHERE scope = 'event' AND scope_id = curated_event_records.slug AND effective_at <= ?
