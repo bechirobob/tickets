@@ -356,7 +356,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </span>
         </div>
         <p className="night-hub__countdown">
-          {hoursUntil > 24
+          {!event.startsAt ? "Coming soon" : hoursUntil > 24
             ? `${Math.ceil(hoursUntil / 24)} days to go`
             : hoursUntil > 0
               ? `${hoursUntil} hours to go`
@@ -405,7 +405,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
             <header>
               <p className="eyebrow">Tonight Mode</p>
               <h2>
-                {hoursUntil > 0
+                {!event.startsAt ? "Date to be announced." : hoursUntil > 0
                   ? `Doors in ${hoursUntil} ${hoursUntil === 1 ? "hour" : "hours"}.`
                   : "You are officially on the clock."}
               </h2>
