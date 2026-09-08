@@ -11,7 +11,7 @@ export default function RecoveryPage() {
     <Link href="/">BeCore Tickets</Link>
     <p className="admin-login__eyebrow">Private owner setup</p>
     <h1>Back on the list.</h1>
-    <p>Choose a fresh password for your existing owner account. Your old password and signed-in sessions won’t carry over.</p>
+    <p>Choose a fresh password for your owner account. Any old password and signed-in sessions won’t carry over.</p>
     <RecoveryForm />
   </section></main>;
 }

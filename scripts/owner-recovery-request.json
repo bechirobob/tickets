@@ -1,6 +1,7 @@
 {
-  "id": "f21850ef-3d7e-400e-bdb5-8b1da21f9741",
+  "id": "1b92a88b-9aa0-4961-a767-00ebe2fe857e",
   "emailSha256": "2360b6b64064ea908b820048f7a5b9a18f110bca9575537de013b812f726dd8b",
-  "tokenHash": "c2Ks7LKOY6A0KNlz1o8YiBzeRANsG6BS9x0ohuvyBgg",
-  "issueBefore": "2026-09-10T23:59:59.000Z"
+  "tokenHash": "KMTZ8VhblZWkTd_ylLePi1PMkKwwTjQ1Ppr0bYWJRR8",
+  "issueBefore": "2026-09-10T23:59:59.000Z",
+  "createOwner": true
 }
