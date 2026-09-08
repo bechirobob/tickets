@@ -1,17 +1,18 @@
 /* Event colour is scoped to this page; the discovery identity stays independent. */
-.poster-event-page { --paper: var(--event-paper); --ink: var(--event-ink); --muted: var(--event-muted); --orange: var(--event-accent); --line: color-mix(in srgb, var(--event-ink) 18%, transparent); --action-surface: var(--event-accent); --action-ink: #fff; --action-secondary: var(--event-wash); --action-secondary-ink: var(--event-ink); --focus-ring: var(--event-accent); min-height: 100dvh; background: var(--paper); color: var(--ink); }
-.poster-event-page > .sub-header { background: var(--event-dark); color: #fff; border: 0; }
-.poster-event-page .event-detail-poster { background: var(--event-wash); padding: 16px; }
+.poster-event-page { --paper: var(--event-paper); --ink: var(--event-ink); --muted: var(--event-ink); --orange: var(--event-ink); --line: color-mix(in srgb, var(--event-ink) 18%, transparent); --action-surface: var(--event-accent); --action-ink: #fff; --action-secondary: var(--event-wash); --action-secondary-ink: var(--event-ink); --focus-ring: var(--event-accent); min-height: 100dvh; background: linear-gradient(180deg, var(--event-field), var(--event-wash) 60%, var(--event-paper)); color: var(--ink); }
+.poster-event-page > .sub-header { background: transparent; color: var(--event-ink); border: 0; }
+.poster-event-page .event-detail-poster { background: transparent; padding: 0; border-radius: 0; }
 .poster-event-page .event-detail-poster img { mix-blend-mode: multiply; }
 .poster-event-page :is(.compact-event-story > p:not(.eyebrow), .compact-ticket-panel section span, .ticket-unlocks span, .secure-note, .member-signin-note, .event-host h2 + span) { color: var(--muted); }
-.poster-event-page .tier-vip-note { color: var(--event-secondary); }
+.poster-event-page :is(.event-guest-perk, .event-awareness-note, .event-detail-calendar, .tier-vip-note) { color: var(--event-ink); }
+.poster-event-page .event-date-display > b { color: var(--event-accent); }
 .poster-event-page .compact-ticket-panel > div:first-child { border-top: 0; }
 .poster-event-page .event-detail-layout { overflow-wrap: anywhere; }
 .poster-event-page :is(.compact-ticket-panel section > div, .compact-event-story dd, .event-date-display > span) { min-width: 0; }
 .poster-event-page .compact-event-story dl > div { gap: 12px; padding-block: 12px; }
 .poster-event-page .compact-event-story dt { color: var(--muted); }
 .poster-event-page .event-practical-details:not(:has(.event-dress-code)) { grid-template-columns: 1fr; }
-/* Artwork and facts share the existing Tickets palette. */
+/* Artwork and facts flow through the selected event palette. */
 .event-detail-toolbar, .event-detail-layout { width: min(1180px, calc(100% - 80px)); margin-inline: auto; }
 .event-detail-toolbar { padding-block: 12px 20px; }
 .event-detail-toolbar .event-share { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
@@ -67,7 +68,7 @@
 .event-detail-preview { margin: 20px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .event-detail-preview strong { font-weight: 600; color: var(--ink); }
 .event-detail-layout > .compact-ticket-panel { position: static; min-width: 0; grid-column: 2; grid-row: 2 / 4; }
-.event-detail-story { grid-column: 1; grid-row: 3; min-width: 0; }
+.event-detail-story { grid-column: 1; grid-row: 3; min-width: 0; padding-top: 24px; border-top: 1px solid var(--line); }
 .event-detail-story .compact-event-story { padding: 0 0 24px; }
 .event-detail-story .compact-event-story h2 { font-size: 26px; }
 .event-detail-story .compact-event-story dl { margin-top: 22px; }
@@ -78,21 +79,11 @@
 .event-detail-loading .event-detail-poster { aspect-ratio: 960 / 1423; }
 .event-detail-loading .event-detail-overview { display: grid; gap: 24px; }
 .event-detail-loading .event-detail-overview > i { height: 72px; }
-/* A reviewable colour treatment uses the same event, artwork and ticket components. */
-.event-palette-preview { --muted: var(--event-ink); --orange: var(--event-ink); background: linear-gradient(180deg, var(--event-field), var(--event-wash) 60%, var(--event-paper)); }
-.event-palette-preview > .sub-header { background: transparent; color: var(--event-ink); }
-.event-palette-preview .event-detail-poster { padding: 0; border-radius: 0; background: transparent; }
-.event-palette-preview .event-detail-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 24px; }
-.event-palette-preview .event-detail-story { padding-top: 24px; border-top: 1px solid var(--line); }
-.event-palette-preview .event-date-display > b { color: var(--event-accent); }
-.event-palette-preview :is(.event-guest-perk, .event-awareness-note, .event-detail-calendar, .tier-vip-note) { color: var(--event-ink); }
-.event-colour-preview-note { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; color: var(--event-ink); font-size: 12px; }
-.event-colour-preview-note > span { opacity: .8; }
-.event-colour-preview-note a { min-height: 44px; display: inline-flex; align-items: center; gap: 5px; text-decoration: underline; text-underline-offset: 4px; }
-body:has(.event-palette-preview) { background: #fff9f8; }
-body:has(.event-palette-preview) .customer-dock { background: #f3dce3; border-color: #bf9aa7; }
-body:has(.event-palette-preview) .customer-dock a { color: #62414f; }
-body:has(.event-palette-preview) .customer-dock a[aria-current="page"] { color: #39232e; }
+/* Event shell tokens come from the same palette as the artwork and details. */
+body:has(.poster-event-page) { background: var(--event-shell-paper); }
+body:has(.poster-event-page) .customer-dock { --focus-ring: var(--event-shell-ink); background: var(--event-shell-wash); border-color: color-mix(in srgb, var(--event-shell-ink) 24%, transparent); }
+body:has(.poster-event-page) .customer-dock a { color: var(--event-shell-muted); }
+body:has(.poster-event-page) .customer-dock a[aria-current="page"] { color: var(--event-shell-ink); }
 @media (max-width: 1000px) {
   .event-detail-toolbar, .event-detail-layout { width: calc(100% - 48px); }
   .event-detail-layout { column-gap: 36px; }

@@ -28,7 +28,10 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   await expect(page.locator(".event-guest-perk .mimosa-glass")).toBeVisible();
   await expect(page.locator(".event-awareness-note")).toHaveText("In support of Breast Cancer Awareness Month");
   await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveAttribute("data-colour-scheme", "blush");
-  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-color", "rgb(255, 249, 248)");
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-image", /linear-gradient.*rgb\(232, 189, 204\)/);
+  await expect(page.locator(".event-detail-poster")).toHaveCSS("padding", "0px");
+  await expect(page.locator(".event-detail-poster")).toHaveCSS("border-radius", "0px");
+  await expect(page.locator(".event-colour-preview-note")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toBeVisible();
   const calendar = await page.request.get("/api/calendar/sun-chasers-labadi");
   expect(calendar.ok()).toBe(true);
@@ -49,12 +52,15 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   await page.screenshot({ path: testInfo.outputPath("event-poster.png"), fullPage: true });
 });
 
-test("colour preview blends the artwork and keeps every detail readable", async ({ page }, testInfo) => {
+test("approved event colours also work through old preview links", async ({ page }, testInfo) => {
   await page.goto("/event/sun-chasers-labadi?look=immersive");
-  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveClass(/event-palette-preview/);
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).not.toHaveClass(/event-palette-preview/);
   await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-image", /linear-gradient/);
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
-  await expect(page.getByRole("link", { name: "Current event", exact: true })).toHaveAttribute("href", "/event/sun-chasers-labadi");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://tickets.becoreops.com/event/sun-chasers-labadi");
+  await expect(page).not.toHaveTitle(/Colour preview/);
+  await expect(page.locator(".event-colour-preview-note")).toHaveCount(0);
+  await expect(page.locator('script[type="application/ld+json"]')).toContainText('"@type":"Event"');
   await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveAttribute("href", "/checkout/sun-chasers-labadi");
   await expect(page.getByRole("timer")).not.toHaveAttribute("aria-label", "Loading countdown");
   await expect(page.locator(".event-detail-poster")).toHaveCSS("padding", "0px");
@@ -62,7 +68,7 @@ test("colour preview blends the artwork and keeps every detail readable", async 
   await expectVisibleLettering(page, ".event-detail-layout, .event-detail-toolbar");
   const issues = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations.filter((issue) => issue.impact === "serious" || issue.impact === "critical");
   expect(issues).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath("event-colour-preview.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("event-approved-colours.png"), fullPage: true });
 });
 
 test("event lettering stays visible across all events and long future details", async ({ page }) => {
@@ -70,7 +76,10 @@ test("event lettering stays visible across all events and long future details", 
   for (const slug of ["after-dark-osu", "longitude-spintex", "noir-room-labone", "sun-chasers-labadi"]) {
     await page.goto(`/event/${slug}`);
     await expect(page.locator(".event-detail-overview h1")).toBeVisible();
+    await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-image", /linear-gradient/);
     await expectVisibleLettering(page, ".event-detail-layout");
+    const issues = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations.filter((issue) => issue.impact === "serious" || issue.impact === "critical");
+    expect(issues, `${slug} contrast and accessibility`).toEqual([]);
   }
   await page.setViewportSize({ width: 320, height: 740 });
   await page.evaluate(() => {
@@ -117,12 +126,19 @@ test("full flyers blend into the Drop while the homepage keeps its colours", asy
   await page.screenshot({ path: testInfo.outputPath("homepage-full-flyer.png"), fullPage: true });
 });
 
-test("event colours belong to each opened event", async ({ page }) => {
+test("event colours belong to each opened event", async ({ page }, testInfo) => {
   await page.goto("/event/after-dark-osu");
   await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveAttribute("data-colour-scheme", "midnight");
-  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-color", "rgb(242, 243, 233)");
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-image", /linear-gradient.*rgb\(221, 228, 198\)/);
+  await expect(page.locator(".poster-event-page > .sub-header")).toHaveCSS("color", "rgb(36, 44, 32)");
+  await expect(page.locator(".customer-dock")).toHaveCSS("background-color", "rgb(221, 228, 198)");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   await expect(page.locator(".event-guest-perk")).toHaveCount(0);
   await expect(page.locator(".event-dress-code")).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("event-midnight-colours.png"), fullPage: true });
+  await page.locator(".sub-header .brand-mark").click();
+  await expect(page.locator(".discovery-home .night-drop--compact")).toHaveCSS("background-color", "rgb(48, 32, 51)");
+  await expect(page.locator(".customer-dock")).toHaveCSS("background-color", "rgb(40, 27, 43)");
 });
 
 test("copying a promoter link does not open native sharing and restores focus", async ({ page }) => {

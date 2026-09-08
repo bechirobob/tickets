@@ -15,29 +15,28 @@ import WaitlistControl from "./waitlist-control";
 import PublicNavigation from "../../mobile-navigation";
 import EventCountdown from "./event-countdown";
 import EventPerkIcon from "./event-perk-icon";
-import { eventColourScheme, eventPresentationStyle } from "../../../lib/event-presentation";
+import { eventColourScheme, eventPresentationStyle, eventShellStyles } from "../../../lib/event-presentation";
 import "./event-details.css";
 
 export const dynamic = "force-dynamic";
 
 const origin = "https://tickets.becoreops.com";
 
-type EventPageProps = { params: Promise<{ slug: string }>; searchParams: Promise<{ ref?: string; look?: string }> };
+type EventPageProps = { params: Promise<{ slug: string }>; searchParams: Promise<{ ref?: string }> };
 
-export async function generateMetadata({ params, searchParams }: EventPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: EventPageProps): Promise<Metadata> {
   const { slug } = await params;
   const event = await findCuratedEvent(slug);
   if (!event) return { title: "Night not found", robots: { index: false, follow: false } };
-  const colourPreview = (await searchParams).look === "immersive";
   const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}.${event.dressCode ? ` Dress code: ${event.dressCode}.` : ""}${event.guestPerk ? ` ${event.guestPerk}` : ""} Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`;
   const canonical = `/event/${event.slug}`;
   const image = eventImageUrl(event.image, 1440, 82);
   const isPoster = event.image.endsWith("/on-the-guest-list.webp");
   return {
-    title: colourPreview ? `${event.title} · Colour preview` : event.title,
+    title: event.title,
     description,
     alternates: { canonical },
-    robots: event.isTestEvent || colourPreview ? { index: false, follow: false } : { index: true, follow: true },
+    robots: event.isTestEvent ? { index: false, follow: false } : { index: true, follow: true },
     openGraph: {
       type: "website",
       locale: "en_GH",
@@ -54,7 +53,6 @@ export async function generateMetadata({ params, searchParams }: EventPageProps)
 export default async function EventPage({ params, searchParams }: EventPageProps) {
   const { slug } = await params;
   const query = await searchParams;
-  const colourPreview = query.look === "immersive";
   const promoterCode = query.ref?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const { env } = await import("cloudflare:workers");
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
@@ -67,7 +65,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   const colourScheme = eventColourScheme(event);
   const poster = event.image.endsWith("/on-the-guest-list.webp");
   const available = event.ticketTiers.some((tier) => tier.status === "available");
-  const structuredEvent = event.isTestEvent || colourPreview ? null : {
+  const structuredEvent = event.isTestEvent ? null : {
     "@context": "https://schema.org",
     "@type": "Event",
     name: event.title,
@@ -90,10 +88,11 @@ export default async function EventPage({ params, searchParams }: EventPageProps
     })),
   };
 
-  return <main className={`event-page compact-event-page poster-event-page${colourPreview ? " event-palette-preview" : ""}`} data-colour-scheme={colourScheme} style={eventPresentationStyle(event)}>
+  return <main className="event-page compact-event-page poster-event-page" data-colour-scheme={colourScheme} style={eventPresentationStyle(event)}>
+    <style>{eventShellStyles(event)}</style>
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
     <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="public-header-actions"><PublicNavigation /></span></header>
-    <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} />{colourPreview ? <p className="event-colour-preview-note"><span>Colour preview</span><Link href={`/event/${event.slug}`}>Current event <ArrowUpRight size={14} aria-hidden="true" /></Link></p> : null}</div>
+    <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>
 
     <div className="event-detail-layout">
       <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized /></figure>
