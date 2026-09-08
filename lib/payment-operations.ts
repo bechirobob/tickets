@@ -2,6 +2,8 @@ import { sendOrderConfirmation } from "./email-delivery";
 import { recordProductMetric } from "./product-analytics";
 
 export type PaystackVerification = {
+  provider?: "paystack" | "seevplus";
+  providerReference?: string;
   id: number | string;
   reference: string;
   status: string;
@@ -29,6 +31,8 @@ type OrderRecord = {
   paymentChannel: string;
   status: string;
   paidAt: string | null;
+  paymentProvider: string;
+  providerReference: string | null;
 };
 
 export async function expireReservations(db: D1Database, now = new Date().toISOString()) {
@@ -87,7 +91,7 @@ async function readOrder(db: D1Database, reference: string) {
            booking_fee_minor AS bookingFeeMinor, total_amount_minor AS totalAmountMinor,
            currency, customer_email AS customerEmail, customer_phone AS customerPhone,
            customer_name AS customerName, payment_channel AS paymentChannel,
-           status, paid_at AS paidAt
+           status, paid_at AS paidAt, payment_provider AS paymentProvider, provider_reference AS providerReference
     FROM orders WHERE reference = ? LIMIT 1
   `).bind(reference).first<OrderRecord>();
 }
@@ -109,10 +113,14 @@ async function ensureIssuedTickets(db: D1Database, order: OrderRecord, issuedAt:
 export async function fulfillVerifiedPayment(db: D1Database, verification: PaystackVerification) {
   const order = await readOrder(db, verification.reference);
   if (!order) return { result: "unknown_order" as const };
+  if (order.paymentProvider !== (verification.provider ?? "paystack") || (order.paymentProvider === "seevplus" && (!order.providerReference || verification.providerReference !== order.providerReference))) return { result: "mismatch" as const, order };
+  const statusColumn = order.paymentProvider === "seevplus" ? "provider_status" : "paystack_status";
+  const referenceColumn = order.paymentProvider === "seevplus" ? "provider_reference" : "paystack_reference";
+  const transactionColumn = order.paymentProvider === "seevplus" ? "provider_transaction_id" : "paystack_transaction_id";
   const now = new Date().toISOString();
   if (verification.reference !== order.reference || verification.amount !== order.totalAmountMinor || verification.currency !== order.currency) {
     await db.prepare(`
-      UPDATE orders SET paystack_status = ?, payment_updated_at = ?, failure_reason = ?
+      UPDATE orders SET ${statusColumn} = ?, payment_updated_at = ?, failure_reason = ?
       WHERE id = ?
     `).bind(verification.status, now, "Provider amount, currency or reference did not match the order.", order.id).run();
     await recordProductMetric(db, "payment_failed", order.eventSlug);
@@ -121,18 +129,19 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
   if (verification.status !== "success") {
     if (["abandoned", "failed", "reversed"].includes(verification.status)) {
       const [failedOrder] = await db.batch([
-        db.prepare(`UPDATE orders SET status = 'failed', paystack_status = ?, payment_updated_at = ?, failure_reason = ? WHERE id = ? AND status = 'payment_pending'`)
+        db.prepare(`UPDATE orders SET status = 'failed', ${statusColumn} = ?, payment_updated_at = ?, failure_reason = ? WHERE id = ? AND status = 'payment_pending'`)
           .bind(verification.status, now, verification.gatewayResponse ?? `Payment ${verification.status}.`, order.id),
         db.prepare(`UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ? AND status = 'held'`).bind(now, order.id),
       ]);
       if (failedOrder.meta.changes === 1) await recordProductMetric(db, "payment_failed", order.eventSlug);
     } else {
-      await db.prepare("UPDATE orders SET paystack_status = ?, payment_updated_at = ? WHERE id = ?")
+      await db.prepare(`UPDATE orders SET ${statusColumn} = ?, payment_updated_at = ? WHERE id = ?`)
         .bind(verification.status, now, order.id).run();
     }
     return { result: "pending" as const, providerStatus: verification.status, order };
   }
 
+  if (!["payment_pending", "expired", "failed", "paid"].includes(order.status)) return { result: "not_fulfilled" as const, order };
   let newlyPaid = false;
   if (order.status !== "paid") {
     await db.prepare(`
@@ -158,19 +167,19 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
       .bind(order.id).first<{ status: string }>();
     if (reservation?.status !== "consumed") {
       await db.prepare(`
-        UPDATE orders SET status = 'requires_refund', paystack_status = 'success',
-          paystack_transaction_id = ?, payment_verified_at = ?, payment_updated_at = ?,
+        UPDATE orders SET status = 'requires_refund', ${statusColumn} = 'success',
+          ${transactionColumn} = ?, payment_verified_at = ?, payment_updated_at = ?,
           failure_reason = 'Payment succeeded after inventory was no longer available.'
         WHERE id = ?
       `).bind(String(verification.id), now, now, order.id).run();
       return { result: "requires_refund" as const, order };
     }
     const paidUpdate = await db.prepare(`
-      UPDATE orders SET status = 'paid', paystack_status = 'success', paystack_reference = ?,
-        paystack_transaction_id = ?, payment_verified_at = ?, payment_updated_at = ?,
+      UPDATE orders SET status = 'paid', ${statusColumn} = 'success', ${referenceColumn} = ?,
+        ${transactionColumn} = ?, payment_verified_at = ?, payment_updated_at = ?,
         paid_at = COALESCE(paid_at, ?), failure_reason = NULL
       WHERE id = ? AND status IN ('payment_pending', 'expired', 'failed')
-    `).bind(verification.reference, String(verification.id), now, now, verification.paidAt ?? now, order.id).run();
+    `).bind(verification.providerReference ?? verification.reference, String(verification.id), now, now, verification.paidAt ?? now, order.id).run();
     newlyPaid = paidUpdate.meta.changes === 1;
   }
 
@@ -192,10 +201,11 @@ export async function deliverConfirmedOrder(db: D1Database, order: OrderRecord, 
 
 export async function initiatePaystackRefund(db: D1Database, input: { orderId: string; actor: string; reason: string; secret: string; amountMinor?: number; ticketIds?: string[]; batchId?: string }) {
   const order = await db.prepare(`
-    SELECT id, reference, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor, status
+    SELECT id, reference, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor, status, payment_provider AS provider
     FROM orders WHERE id = ? LIMIT 1
-  `).bind(input.orderId).first<{ id: string; reference: string; totalAmountMinor: number; refundedAmountMinor: number; status: string }>();
+  `).bind(input.orderId).first<{ id: string; reference: string; totalAmountMinor: number; refundedAmountMinor: number; status: string; provider: string }>();
   if (!order) throw new Error("Order not found.");
+  if (order.provider !== "paystack") throw new Error("SeevPlus refunds require finance review with SeevPlus. No Paystack refund was started.");
   if (!["paid", "requires_refund", "refund_pending"].includes(order.status)) throw new Error("Only a paid order can be refunded.");
   const ticketIds = [...new Set((input.ticketIds ?? []).filter((value) => typeof value === "string" && value.length > 0))];
   const ticketFilter = ticketIds.length ? `AND id IN (${ticketIds.map(() => "?").join(",")})` : "";
@@ -245,7 +255,7 @@ export async function initiatePaystackRefund(db: D1Database, input: { orderId: s
 
 export async function applyRefundWebhook(db: D1Database, input: { eventType: string; reference: string; amountMinor: number; providerRefundId?: string | null; failureReason?: string | null }) {
   const now = new Date().toISOString();
-  const order = await db.prepare("SELECT id, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor FROM orders WHERE reference = ? LIMIT 1")
+  const order = await db.prepare("SELECT id, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor FROM orders WHERE reference = ? AND payment_provider = 'paystack' LIMIT 1")
     .bind(input.reference).first<{ id: string; totalAmountMinor: number; refundedAmountMinor: number }>();
   if (!order) return;
   const refund = await db.prepare(`
@@ -291,7 +301,7 @@ export async function recordDisputeWebhook(db: D1Database, input: { eventType: s
   const providerId = data?.id ? String(data.id) : null;
   const status = String(data?.status ?? (input.eventType.endsWith("resolve") ? "resolved" : "awaiting-merchant-feedback"));
   const resolution = String(data?.resolution ?? "").toLowerCase();
-  const order = await db.prepare("SELECT id FROM orders WHERE reference = ? LIMIT 1").bind(input.reference).first<{ id: string }>();
+  const order = await db.prepare("SELECT id FROM orders WHERE reference = ? AND payment_provider = 'paystack' LIMIT 1").bind(input.reference).first<{ id: string }>();
   const statements: D1PreparedStatement[] = [
     db.prepare(`
       INSERT INTO payment_disputes (
@@ -357,7 +367,7 @@ export async function runDailyReconciliation(db: D1Database, input: { secret: st
         SELECT id, reference, event_slug AS eventSlug, status, total_amount_minor AS totalAmountMinor,
                face_amount_minor AS faceAmountMinor, booking_fee_minor AS bookingFeeMinor,
                refunded_amount_minor AS refundedAmountMinor, currency
-        FROM orders WHERE created_at >= ? AND created_at < ? ORDER BY created_at
+        FROM orders WHERE payment_provider = 'paystack' AND created_at >= ? AND created_at < ? ORDER BY created_at
       `).bind(input.periodStart, input.periodEnd).all<{ id: string; reference: string; eventSlug: string; status: string; totalAmountMinor: number; faceAmountMinor: number; bookingFeeMinor: number; refundedAmountMinor: number; currency: string }>(),
     ]);
     const providerByReference = new Map(provider.filter((item) => item.reference).map((item) => [item.reference!, item]));

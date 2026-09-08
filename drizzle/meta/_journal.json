@@ -225,6 +225,13 @@
       "when": 1788898015741,
       "tag": "0031_awesome_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1788905401808,
+      "tag": "0032_seevplus_checkout",
+      "breakpoints": true
     }
   ]
 }

@@ -63,7 +63,7 @@ export async function recoverAbandonedPayments(env: Cloudflare.Env, origin: stri
            orders.event_slug AS eventSlug, event.title AS eventTitle
     FROM orders JOIN curated_event_records event ON event.slug = orders.event_slug
     LEFT JOIN payment_recovery_events recovery ON recovery.order_id = orders.id
-    WHERE orders.status = 'expired' AND recovery.order_id IS NULL
+    WHERE orders.payment_provider = 'paystack' AND orders.status = 'expired' AND recovery.order_id IS NULL
       AND orders.created_at > ? ORDER BY orders.created_at LIMIT 20
   `).bind(new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()).all<{ id: string; reference: string; customerEmail: string; eventSlug: string; eventTitle: string }>();
   let recovered = 0;

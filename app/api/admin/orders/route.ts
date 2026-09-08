@@ -1,6 +1,7 @@
+import { verifyOrderPayment } from "../../../../lib/seevplus";
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { issueRecoveryGrant } from "../../../../lib/email-delivery";
-import { deliverConfirmedOrder, expireReservations, initiatePaystackRefund, runDailyReconciliation, verifyAndFulfill } from "../../../../lib/payment-operations";
+import { deliverConfirmedOrder, expireReservations, initiatePaystackRefund, runDailyReconciliation } from "../../../../lib/payment-operations";
 import { buildDisputeEvidence, resolvePaystackDispute } from "../../../../lib/operational-finance";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,10 @@ export async function GET(request: Request) {
            orders.quantity, orders.total_amount_minor AS totalAmountMinor, orders.refunded_amount_minor AS refundedAmountMinor,
            orders.currency, orders.customer_email AS customerEmail,
            orders.customer_phone AS customerPhone, orders.customer_name AS customerName,
-           orders.status, orders.paystack_status AS paystackStatus,
+           orders.status, orders.payment_provider AS paymentProvider,
+           COALESCE(orders.provider_reference, orders.paystack_reference) AS providerReference,
+           COALESCE(orders.provider_status, orders.paystack_status) AS providerStatus,
+           orders.payment_environment AS paymentEnvironment, orders.failure_reason AS failureReason,
            orders.refund_status AS refundStatus, orders.dispute_status AS disputeStatus,
            orders.reservation_expires_at AS reservationExpiresAt,
            orders.created_at AS createdAt, orders.paid_at AS paidAt,
@@ -70,7 +74,7 @@ export async function POST(request: Request) {
   if (!session || !hasPermission(session, "orders.manage")) return Response.json({ error: "Finance access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
   const body = await request.json() as { action?: string; orderId?: string; reason?: string; periodStart?: string; periodEnd?: string; amountMinor?: number; ticketIds?: string[]; disputeId?: string; resolution?: "merchant-accepted" | "declined" };
-  if (!env.PAYSTACK_SECRET_KEY && ["verify", "refund", "reconcile", "dispute_resolve"].includes(body.action ?? "")) return Response.json({ error: "Paystack credentials are not configured." }, { status: 503 });
+  if (!env.PAYSTACK_SECRET_KEY && ["refund", "reconcile", "dispute_resolve"].includes(body.action ?? "")) return Response.json({ error: "Paystack credentials are not configured." }, { status: 503 });
   try {
     if (body.action === "expire") {
       const result = await expireReservations(env.DB);
@@ -80,7 +84,7 @@ export async function POST(request: Request) {
     if (body.action === "verify") {
       const order = await orderForDelivery(env.DB, body.orderId ?? "");
       if (!order) return Response.json({ error: "Order not found." }, { status: 404 });
-      const result = await verifyAndFulfill(env.DB, order.reference, env.PAYSTACK_SECRET_KEY);
+      const result = await verifyOrderPayment(env, order.reference);
       if (result.result === "paid") await deliverConfirmedOrder(env.DB, result.order, new URL(request.url).origin);
       await recordAudit(env.DB, { session, action: "payments.verify", targetType: "order", targetId: order.id, outcome: "success", detail: result.result, requestId: requestMetadata(request).requestId });
       return Response.json({ result: result.result, providerStatus: "providerStatus" in result ? result.providerStatus : undefined });

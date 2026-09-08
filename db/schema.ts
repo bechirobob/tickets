@@ -29,6 +29,11 @@ export const orders = sqliteTable("orders", {
   paystackReference: text("paystack_reference"),
   paystackTransactionId: text("paystack_transaction_id"),
   paystackStatus: text("paystack_status"),
+  paymentProvider: text("payment_provider", { enum: ["paystack", "seevplus"] }).notNull().default("paystack"),
+  providerReference: text("provider_reference"),
+  providerTransactionId: text("provider_transaction_id"),
+  providerStatus: text("provider_status"),
+  paymentEnvironment: text("payment_environment"),
   ticketTierId: text("ticket_tier_id"),
   unitQuantity: integer("unit_quantity").notNull().default(1),
   reservationExpiresAt: text("reservation_expires_at"),
@@ -45,7 +50,18 @@ export const orders = sqliteTable("orders", {
 }, (table) => [
   uniqueIndex("orders_reference_unique").on(table.reference),
   index("orders_event_status_idx").on(table.eventSlug, table.status),
+  uniqueIndex("orders_provider_reference_unique").on(table.paymentProvider, table.providerReference),
 ]);
+
+export const seevCheckoutSessions = sqliteTable("seev_checkout_sessions", {
+  orderId: text("order_id").primaryKey().references(() => orders.id),
+  requestJson: text("request_json"),
+  checkoutUrl: text("checkout_url"),
+  createdAt: text("created_at").notNull(),
+  checkedAt: text("checked_at"),
+  leaseUntil: text("lease_until"),
+  lastError: text("last_error"),
+});
 
 export const attendeeProfiles = sqliteTable("attendee_profiles", {
   id: text("id").primaryKey(),

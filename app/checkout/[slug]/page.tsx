@@ -1,3 +1,4 @@
+import { seevAvailable } from "../../../lib/seevplus";
 import CheckoutForm from "./checkout-form";
 import { notFound, redirect } from "next/navigation";
 import { findCuratedEvent } from "../../events";
@@ -8,5 +9,6 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
   const event = await findCuratedEvent(slug);
   if (!event) notFound();
   if (!event.ticketTiers.some((tier) => tier.status === "available")) redirect(`/event/${slug}`);
-  return <CheckoutForm slug={slug} event={event} feeBasisPoints={await resolveBookingFee(slug)} />;
+  const { env } = await import("cloudflare:workers");
+  return <CheckoutForm seevEnabled={seevAvailable(env, event.isTestEvent)} slug={slug} event={event} feeBasisPoints={await resolveBookingFee(slug)} />;
 }
