@@ -39,12 +39,12 @@ test("sharing has a usable manual fallback when browser capabilities fail", asyn
     Object.defineProperty(navigator, "share", { configurable: true, value: async () => { throw new DOMException("Unavailable", "NotAllowedError"); } });
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new DOMException("Unavailable", "NotAllowedError"); } } });
   });
-  await page.goto("/event/after-dark-osu");
+  await page.goto("/event/the-weekend-braai");
   const share = page.getByRole("button", { name: "Share", exact: true });
   await share.click();
   await expect(page.getByRole("status")).toContainText("Select the link below");
   const link = page.getByLabel("Event link", { exact: true });
-  await expect(link).toHaveValue(/\/event\/after-dark-osu$/u);
+  await expect(link).toHaveValue(/\/event\/the-weekend-braai$/u);
   await link.focus();
   const selection = await link.evaluate((element: HTMLInputElement) => ({ start: element.selectionStart, end: element.selectionEnd, length: element.value.length }));
   expect(selection).toEqual({ start: 0, end: selection.length, length: selection.length });
@@ -60,7 +60,7 @@ test("a cancelled native share stays quiet and clipboard success is accurately l
     Object.defineProperty(navigator, "share", { configurable: true, value: async () => { throw new DOMException("Cancelled", "AbortError"); } });
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => undefined } });
   });
-  await page.goto("/event/after-dark-osu");
+  await page.goto("/event/the-weekend-braai");
   const share = page.getByRole("button", { name: "Share", exact: true });
   await share.click();
   await expect(share).toHaveAttribute("aria-busy", "false");

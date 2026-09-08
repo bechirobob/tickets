@@ -6,7 +6,7 @@ test.use({ serviceWorkers: "block" });
 
 test("the rendered identity stays legible and Hosts connect to the guest journey", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const path of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/after-dark-osu"]) {
+  for (const path of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/the-weekend-braai"]) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
     const logo = page.locator("header .brand-logo").first();
     await expect(logo).toBeVisible();
@@ -44,7 +44,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   expect(phoneFit.bottom).toBeGreaterThanOrEqual(0);
   expect(phoneFit.bottom).toBeLessThan(10);
   await preview.screenshot({ path: testInfo.outputPath("homepage-room-phone.png") });
-  const room = { eventSlug: "after-dark-osu", eventTitle: "After Dark: Osu", readOnlyAt: new Date(Date.now() + 86_400_000).toISOString(), readOnly: false };
+  const room = { eventSlug: "the-weekend-braai", eventTitle: "After Dark: Osu", readOnlyAt: new Date(Date.now() + 86_400_000).toISOString(), readOnly: false };
   const base = { sequence: 1, roomBadge: null, kind: "message", parentId: null, pinned: false, deletedAt: null, reactions: [], createdAt: new Date().toISOString() };
   const messages = [
     { ...base, id: "host-update", attendeeId: "fixture-host", displayName: "The Host", role: "organizer", kind: "announcement", pinned: true, content: "Gate 2 tonight. Have your ticket ready and we’ll see you inside." },
@@ -72,7 +72,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
       }
     });
   });
-  await page.goto("/room/after-dark-osu");
+  await page.goto("/room/the-weekend-braai");
   const setting = page.locator(".room-page");
   await expect(setting).toBeVisible();
   await expect(page.getByRole("button", { name: "Share a Flash", exact: true })).toBeVisible();

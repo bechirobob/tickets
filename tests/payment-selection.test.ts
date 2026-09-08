@@ -176,6 +176,10 @@ describe("payment ticket validation", () => {
   });
 
   it("uses Paystack hosted checkout so test events can complete visibly", async () => {
+    // Explicit isolated fixture: retired production previews stay unpublished.
+    await env.DB.prepare("UPDATE curated_event_records SET status = 'published' WHERE slug = 'after-dark-osu'").run();
+    await env.DB.prepare("UPDATE event_ticket_tiers SET status = 'available' WHERE event_slug = 'after-dark-osu'").run();
+    await refreshExpiredPreviewEvents(env.DB);
     const response = await initializePayment(paymentRequest("after-dark-osu", "general", 1, "mtn"));
     expect(response.status).toBe(200);
     const [url, init] = vi.mocked(fetch).mock.calls.at(-1)!;

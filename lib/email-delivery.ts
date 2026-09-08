@@ -188,9 +188,9 @@ export async function issueRecoveryGrant(input: {
   const recoveryUrl = `${input.origin}/api/customer/recovery/claim?token=${encodeURIComponent(token)}`;
   const name = input.order?.customerName?.trim() || "there";
   const event = input.order ? await input.db.prepare(`
-    SELECT title, venue, area, starts_at AS startsAt
+    SELECT title, venue, area, CASE WHEN schedule_status != 'coming_soon' THEN starts_at END AS startsAt
     FROM curated_event_records WHERE slug = ? LIMIT 1
-  `).bind(input.order.eventSlug).first<{ title: string; venue: string; area: string; startsAt: string }>() : null;
+  `).bind(input.order.eventSlug).first<{ title: string; venue: string; area: string; startsAt: string | null }>() : null;
   const subject = input.kind === "payment_confirmation" && event
     ? `${event.title}: payment confirmed and tickets ready`
     : "Your Nights are ready to come back";
@@ -202,7 +202,7 @@ export async function issueRecoveryGrant(input: {
       <tr><td style="padding:8px 0;color:#666">Booking fee</td><td style="padding:8px 0;text-align:right">${money(input.order.bookingFeeMinor, input.order.currency)}</td></tr>
       <tr><td style="padding:12px 0;border-top:1px solid #ddd;font-weight:700">Total paid</td><td style="padding:12px 0;border-top:1px solid #ddd;text-align:right;font-weight:700">${money(input.order.totalAmountMinor, input.order.currency)}</td></tr>
     </table>` : "";
-  const eventBlock = event ? `<p style="font-size:18px"><strong>${escapeHtml(event.title)}</strong><br>${escapeHtml(event.venue)}, ${escapeHtml(event.area)}<br>${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "full", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(event.startsAt)))}</p>` : "";
+  const eventBlock = event ? `<p style="font-size:18px"><strong>${escapeHtml(event.title)}</strong><br>${escapeHtml(event.venue)}, ${escapeHtml(event.area)}<br>${escapeHtml(event.startsAt ? new Intl.DateTimeFormat("en-GH", { dateStyle: "full", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(event.startsAt)) : "Coming soon")}</p>` : "";
   const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914"><p style="color:#f05a28;font-weight:700">BECORE TICKETS</p><h1 style="font-size:28px">${input.kind === "payment_confirmation" ? "Paid. Verified. Your Night is ready." : "Your Nights missed you. Slightly."}</h1><p>Hi ${escapeHtml(name)},</p>${eventBlock}${receipt}<p>This private link opens My Nights on this device and brings together every confirmed purchase on this email. Tickets, perks, Rooms and receipts—no password archaeology. It expires at ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt)))}.</p><p style="margin:28px 0"><a href="${escapeHtml(recoveryUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open My Nights</a></p><p style="color:#666;font-size:13px">The link is one-time and private. Fresh rotating QR passes appear only after you open it. Forwarding it would be a very generous mistake.</p></div>`;
   const plain = `${input.kind === "payment_confirmation" ? "Paid. Verified. Your Night is ready." : "Your Nights missed you. Slightly."}\n\n${event ? `${event.title}\n${event.venue}, ${event.area}\n\n` : ""}${input.order ? `Reference: ${input.order.reference}\nTotal paid: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}Secure one-time My Nights link: ${recoveryUrl}\n\nThis link expires at ${expiresAt}. It does not contain a QR pass.`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;

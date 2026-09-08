@@ -40,8 +40,8 @@ import SupportCentre from "./support-centre";
 type EventSummary = {
   slug: string;
   title: string;
-  startsAt: string;
-  endsAt: string;
+  startsAt: string | null;
+  endsAt: string | null;
   fullDate: string;
   time: string;
   venue: string;
@@ -141,8 +141,8 @@ export default function NightHub({ event }: { event: EventSummary }) {
   const [view, setView] = useState<View>(() => {
     const requested = params.get("view") as View | null;
     if (requested && views.includes(requested)) return requested;
-    const start = new Date(event.startsAt).getTime();
-    const end = new Date(event.endsAt).getTime();
+    const start = event.startsAt ? Date.parse(event.startsAt) : Infinity;
+    const end = event.endsAt ? Date.parse(event.endsAt) : -Infinity;
     return Date.now() >= start - 86_400_000 && Date.now() <= end + 21_600_000
       ? "tonight"
       : "overview";
@@ -224,17 +224,18 @@ export default function NightHub({ event }: { event: EventSummary }) {
     [orders],
   );
   const hoursUntil = Math.ceil(
-    (new Date(event.startsAt).getTime() - now) / (60 * 60 * 1000),
+    ((event.startsAt ? Date.parse(event.startsAt) : Infinity) - now) / (60 * 60 * 1000),
   );
   const tonightAvailable =
-    now >= new Date(event.startsAt).getTime() - 86_400_000 &&
-    now <= new Date(event.endsAt).getTime() + 21_600_000;
+    event.startsAt !== null && event.endsAt !== null &&
+    now >= Date.parse(event.startsAt) - 86_400_000 &&
+    now <= Date.parse(event.endsAt) + 21_600_000;
   const pinnedUpdate =
     experience?.updates.find((update) => update.pinned) ??
     experience?.updates[0];
   const compactDate = (value: string) =>
     new Date(value).toISOString().replace(/[-:]|\.\d{3}/gu, "");
-  const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${compactDate(event.startsAt)}/${compactDate(event.endsAt)}&location=${encodeURIComponent(`${event.venue}, ${event.area}`)}&details=${encodeURIComponent(`Open My Nights for your ticket and live Host updates: https://tickets.becoreops.com/my-nights/${event.slug}`)}`;
+  const googleCalendarUrl = event.startsAt && event.endsAt ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${compactDate(event.startsAt)}/${compactDate(event.endsAt)}&location=${encodeURIComponent(`${event.venue}, ${event.area}`)}&details=${encodeURIComponent(`Open My Nights for your ticket and live Host updates: https://tickets.becoreops.com/my-nights/${event.slug}`)}` : null;
 
   async function save(input: {
     attendeeVisible?: boolean;
@@ -701,14 +702,14 @@ export default function NightHub({ event }: { event: EventSummary }) {
             <header>
               <p className="eyebrow">The practical bits</p>
               <h2>Know where. Know when. Then overthink the outfit.</h2>
-              <div className="night-calendar-actions">
+              {event.startsAt ? <div className="night-calendar-actions">
                 <a href={`/api/calendar/${encodeURIComponent(event.slug)}`}>
                   <CalendarDays size={14} /> Apple / Outlook calendar
                 </a>
-                <a href={googleCalendarUrl} target="_blank" rel="noreferrer">
+                {googleCalendarUrl ? <a href={googleCalendarUrl} target="_blank" rel="noreferrer">
                   <ExternalLink size={14} /> Google Calendar
-                </a>
-              </div>
+                </a> : null}
+              </div> : null}
             </header>
             <dl>
               <div>

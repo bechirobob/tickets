@@ -1,66 +1,58 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
+import { findCuratedEvent, getPublicEvents } from "../app/events";
+import { GET as calendar } from "../app/api/calendar/[slug]/route";
+import { POST as payment } from "../app/api/payments/initialize/route";
+import { matchesEventWindow } from "../lib/event-discovery";
 
-describe("working preview events", () => {
-  it("keeps three preview events after publishing the guest list", async () => {
-    const events = await env.DB.prepare(`
-      SELECT slug, is_test_event AS isTestEvent
-      FROM curated_event_records
-      WHERE is_test_event = 1 AND status = 'published'
-      ORDER BY slug
-    `).all<{ slug: string; isTestEvent: number }>();
-    const tiers = await env.DB.prepare(`
-      SELECT COUNT(*) AS count
-      FROM event_ticket_tiers
-      WHERE event_slug IN ('after-dark-osu', 'noir-room-labone', 'sun-chasers-labadi', 'longitude-spintex')
-    `).first<{ count: number }>();
+const origin = "https://tickets.becoreops.com";
+const calendarFor = (slug: string) => calendar(new Request(`${origin}/api/calendar/${slug}`), { params: Promise.resolve({ slug }) });
 
-    expect(events.results.map((event) => event.slug)).toEqual([
-      "after-dark-osu",
-      "longitude-spintex",
-      "noir-room-labone",
-    ]);
-    expect(events.results.every((event) => event.isTestEvent === 1)).toBe(true);
-    expect(tiers?.count).toBe(12);
+describe("launch event inventory", () => {
+  it("publishes exactly two real listings and preserves retired inventory", async () => {
+    expect((await getPublicEvents()).map((event) => event.slug)).toEqual(["the-weekend-braai", "sun-chasers-labadi"]);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM curated_event_records WHERE is_test_event = 1 AND status = 'published'").first()).toEqual({ count: 0 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM event_ticket_tiers").first()).toEqual({ count: 12 });
+    for (const slug of ["after-dark-osu", "longitude-spintex", "noir-room-labone"]) {
+      expect(await findCuratedEvent(slug)).toBeNull();
+      expect((await calendarFor(slug)).status).toBe(404);
+    }
   });
-
-  it("rolls expired preview dates forward without creating duplicate inventory", async () => {
-    const expiredNow = new Date("2026-09-01T08:00:00.000Z");
-    const updated = await refreshExpiredPreviewEvents(env.DB, expiredNow);
-    const afterDark = await env.DB.prepare(`
-      SELECT starts_at AS startsAt, ends_at AS endsAt
-      FROM curated_event_records
-      WHERE slug = 'after-dark-osu'
-    `).first<{ startsAt: string; endsAt: string }>();
-    const tierCount = await env.DB.prepare(`
-      SELECT COUNT(*) AS count FROM event_ticket_tiers WHERE event_slug = 'after-dark-osu'
-    `).first<{ count: number }>();
-
-    expect(updated).toBe(3);
-    expect(new Date(afterDark?.startsAt ?? 0).getTime()).toBeGreaterThan(expiredNow.getTime());
-    expect(new Date(afterDark?.endsAt ?? 0).getTime()).toBeGreaterThan(new Date(afterDark?.startsAt ?? 0).getTime());
-    expect(tierCount?.count).toBe(3);
+  it("never republishes retired previews during the daily rollover", async () => {
+    expect(await refreshExpiredPreviewEvents(env.DB, new Date("2027-01-01"))).toBe(0);
+    expect((await getPublicEvents()).map((event) => event.slug)).toEqual(["the-weekend-braai", "sun-chasers-labadi"]);
   });
-
-  it("keeps the published guest list date fixed after it ends", async () => {
-    await refreshExpiredPreviewEvents(env.DB, new Date("2026-10-11T08:00:00.000Z"));
-    const event = await env.DB.prepare(`
-      SELECT starts_at, ends_at, is_test_event, status, curation_note, dress_code, colour_scheme, awareness_note, guest_perk
-      FROM curated_event_records WHERE slug = 'sun-chasers-labadi'
-    `).first();
-    expect(event).toMatchObject({
-      starts_at: "2026-10-04T14:00:00.000Z",
-      ends_at: "2026-10-04T22:00:00.000Z",
-      is_test_event: 0,
-      status: "published",
-      dress_code: "Light pink & white",
-      colour_scheme: "blush",
-      awareness_note: "In support of Breast Cancer Awareness Month",
-      guest_perk: "Clink early. Free mimosas till 5 PM.",
-    });
-    expect(event?.curation_note).toContain("Free mimosas till 5 PM.");
-    const placeholderHost = await env.DB.prepare("SELECT host_id FROM event_hosts WHERE event_slug = 'sun-chasers-labadi' AND host_id = 'host:becore-preview-desk'").first();
-    expect(placeholderHost).toBeNull();
+  it("redacts Guest List dates and keeps coming-soon events discoverable", async () => {
+    const event = await findCuratedEvent("sun-chasers-labadi");
+    expect(event).toMatchObject({ startsAt: null, endsAt: null, rescheduledFrom: null, salesOpenAt: null, salesCloseAt: null, fullDate: "Coming soon", scheduleStatus: "coming_soon", dressCode: "Light pink & white", isVerified: true });
+    expect(JSON.stringify(event)).not.toMatch(/2026-10-04|2026-09-13/);
+    expect(event?.note).not.toContain("first Sunday");
+    expect(event?.ticketTiers.every((tier) => tier.status === "hidden")).toBe(true);
+    expect(matchesEventWindow(event!, "next", Date.parse("2027-01-01"))).toBe(true);
+    expect(matchesEventWindow(event!, "tonight", Date.now())).toBe(false);
+    expect(matchesEventWindow(event!, "weekend", Date.now())).toBe(false);
+    expect((await calendarFor("sun-chasers-labadi")).status).toBe(404);
+  });
+  it("uses flier-backed Braai facts without invented stock or closing time", async () => {
+    const event = await findCuratedEvent("the-weekend-braai");
+    expect(event).toMatchObject({ startsAt: "2026-09-20T14:00:00.000Z", endsAt: null, priceFromMinor: 35000, capacity: 0, ticketTiers: [], scheduleStatus: "end_pending", isVerified: false, image: "/events/the-weekend-braai.jpeg" });
+    expect(new Date(event!.startsAt!).getUTCDay()).toBe(0);
+    const response = await calendarFor(event!.slug);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const ics = await response.text();
+    expect(ics).toContain("DTSTART:20260920T140000Z");
+    expect(ics).not.toContain("DTEND");
+  });
+  it("blocks direct payment attempts for pending listings and retired previews", async () => {
+    const provider = vi.spyOn(globalThis, "fetch");
+    try {
+      for (const slug of ["sun-chasers-labadi", "the-weekend-braai", "after-dark-osu"]) {
+        const response = await payment(new Request(`${origin}/api/payments/initialize`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ eventSlug: slug, ticketTierId: "general", quantity: 1, email: "launch@example.com", phone: "233000000000", acceptedPolicies: true }) }));
+        expect(response.status).toBe(400);
+      }
+      expect(provider).not.toHaveBeenCalled();
+    } finally { provider.mockRestore(); }
   });
 });
