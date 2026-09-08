@@ -20,7 +20,7 @@
 .discovery-grid .poster-link:focus-visible::before { opacity: .6; }
 .discovery-grid .drop-card__body > .drop-card__quip,
 .discovery-grid .drop-card[data-featured="true"] .drop-card__body > .drop-card__quip {
-  margin: 10px 0 12px;
+  margin: 0;
   color: #ddd0d6;
   font-size: 14px;
   font-weight: 400;

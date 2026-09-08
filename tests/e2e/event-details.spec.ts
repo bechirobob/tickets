@@ -71,7 +71,7 @@ test("event cards share aligned rows and compact poster sizes as copy grows", as
       })));
       expect(Math.abs(rows[0].width - rows[1].width)).toBeLessThanOrEqual(1);
       expect(Math.abs(rows[0].poster - rows[1].poster)).toBeLessThanOrEqual(1);
-      for (let index = 0; index < rows[0].tops.length; index++) expect(Math.abs(rows[0].tops[index] - rows[1].tops[index])).toBeLessThanOrEqual(1);
+      for (let index = 0; index < rows[0].tops.length; index++) expect(Math.abs(rows[0].tops[index] - rows[1].tops[index]), `Matching card row ${index} on ${path}`).toBeLessThanOrEqual(1);
       if (page.viewportSize()!.width > 700) {
         expect(rows[0].width).toBeLessThanOrEqual(281);
         expect(rows[0].poster).toBeLessThanOrEqual(337);
