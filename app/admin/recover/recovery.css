@@ -1,0 +1,9 @@
+.admin-recovery { min-height: 100svh; padding: 40px 24px; }
+.admin-recovery .admin-login__eyebrow { margin-top: 32px; }
+.admin-recovery h1 { font-size: clamp(32px, 5vw, 42px); line-height: 1.12; letter-spacing: -.035em; }
+.admin-recovery h1 + p { margin: 18px 0 24px; line-height: 1.55; }
+.admin-recovery .admin-login__form input { font-size: 16px; }
+.admin-recovery .admin-login__form small { color: #b8b7b0; font-size: 14px; line-height: 1.5; margin-bottom: 8px; }
+.admin-recovery .admin-login__form button { color: #17110e; background: #ff6a4d; }
+.admin-recovery :is(a, button, input):focus-visible { outline: 2px solid #ffad99; outline-offset: 4px; }
+.admin-recovery p, .admin-recovery small, .admin-recovery label { overflow-wrap: anywhere; }

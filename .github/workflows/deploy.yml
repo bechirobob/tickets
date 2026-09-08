@@ -205,3 +205,6 @@ jobs:
 
       - name: Deploy Worker
         run: npx wrangler deploy --config dist/server/wrangler.json
+
+      - name: Issue the approved single-use owner recovery grant
+        run: node scripts/issue-owner-recovery.mjs
