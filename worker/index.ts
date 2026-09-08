@@ -1,3 +1,4 @@
+import { recoverSeevPayments } from "../lib/seevplus";
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
@@ -198,6 +199,12 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
     } catch (error) {
       await recordSystemAlert(env, "approved-refund-batch", error);
     }
+  }
+  try {
+    const recovery = await recoverSeevPayments(env, "https://tickets.becoreops.com");
+    if (recovery.failed) throw new Error(`${recovery.failed} SeevPlus payments need verification; review order records.`);
+  } catch (error) {
+    await recordSystemAlert(env, "seevplus-payment-recovery", error);
   }
   if (env.PAYSTACK_SECRET_KEY) {
     try {
