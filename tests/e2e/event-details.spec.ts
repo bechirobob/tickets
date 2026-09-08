@@ -32,6 +32,7 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   await expect(page.locator(".event-detail-poster")).toHaveCSS("padding", "0px");
   await expect(page.locator(".event-detail-poster")).toHaveCSS("border-radius", "0px");
   await expect(page.locator(".event-colour-preview-note")).toHaveCount(0);
+  await expect(page.getByRole("timer")).not.toHaveAttribute("aria-label", "Loading countdown");
   await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toBeVisible();
   const calendar = await page.request.get("/api/calendar/sun-chasers-labadi");
   expect(calendar.ok()).toBe(true);
@@ -60,7 +61,7 @@ test("approved event colours also work through old preview links", async ({ page
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://tickets.becoreops.com/event/sun-chasers-labadi");
   await expect(page).not.toHaveTitle(/Colour preview/);
   await expect(page.locator(".event-colour-preview-note")).toHaveCount(0);
-  await expect(page.locator('script[type="application/ld+json"]')).toContainText('"@type":"Event"');
+  await expect.poll(() => page.locator('script[type="application/ld+json"]').evaluate((script) => JSON.parse(script.textContent || "{}")["@type"])).toBe("Event");
   await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveAttribute("href", "/checkout/sun-chasers-labadi");
   await expect(page.getByRole("timer")).not.toHaveAttribute("aria-label", "Loading countdown");
   await expect(page.locator(".event-detail-poster")).toHaveCSS("padding", "0px");
@@ -77,6 +78,8 @@ test("event lettering stays visible across all events and long future details", 
     await page.goto(`/event/${slug}`);
     await expect(page.locator(".event-detail-overview h1")).toBeVisible();
     await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-image", /linear-gradient/);
+    const wash = await page.locator(".poster-event-page[data-colour-scheme]").evaluate((main) => getComputedStyle(main).getPropertyValue("--event-wash").trim());
+    await expect(page.locator("body")).toHaveCSS("--event-shell-wash", wash);
     await expectVisibleLettering(page, ".event-detail-layout");
     const issues = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations.filter((issue) => issue.impact === "serious" || issue.impact === "critical");
     expect(issues, `${slug} contrast and accessibility`).toEqual([]);

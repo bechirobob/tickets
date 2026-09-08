@@ -15,7 +15,7 @@ import WaitlistControl from "./waitlist-control";
 import PublicNavigation from "../../mobile-navigation";
 import EventCountdown from "./event-countdown";
 import EventPerkIcon from "./event-perk-icon";
-import { eventColourScheme, eventPresentationStyle, eventShellStyles } from "../../../lib/event-presentation";
+import { eventColourScheme, eventPresentationStyle } from "../../../lib/event-presentation";
 import "./event-details.css";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +89,6 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   };
 
   return <main className="event-page compact-event-page poster-event-page" data-colour-scheme={colourScheme} style={eventPresentationStyle(event)}>
-    <style>{eventShellStyles(event)}</style>
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
     <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="public-header-actions"><PublicNavigation /></span></header>
     <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>

@@ -30,11 +30,3 @@ export function eventPresentationStyle(event: EventPresentation): CSSProperties 
     "--event-field": eventColourScheme(event) === "blush" ? "#e8bdcc" : palette.wash,
   } as CSSProperties;
 }
-
-// The mobile dock is outside the event main. Scope its inherited tokens to the
-// rendered event so client navigation never carries event colours onto discovery.
-export function eventShellStyles(event: EventPresentation): string {
-  const scheme = eventColourScheme(event);
-  const palette = eventColourSchemes[scheme];
-  return `body:has(.poster-event-page[data-colour-scheme="${scheme}"]) { --event-shell-paper: ${palette.paper}; --event-shell-wash: ${palette.wash}; --event-shell-ink: ${palette.ink}; --event-shell-muted: ${palette.muted}; }`;
-}

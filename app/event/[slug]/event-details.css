@@ -79,7 +79,13 @@
 .event-detail-loading .event-detail-poster { aspect-ratio: 960 / 1423; }
 .event-detail-loading .event-detail-overview { display: grid; gap: 24px; }
 .event-detail-loading .event-detail-overview > i { height: 72px; }
-/* Event shell tokens come from the same palette as the artwork and details. */
+/* The dock sits outside main. These tokens match lib/event-presentation.ts;
+   keep them in the external stylesheet to respect the site's style policy. */
+body:has(.poster-event-page[data-colour-scheme="blush"]) { --event-shell-paper: #fff9f8; --event-shell-wash: #f3dce3; --event-shell-ink: #39232e; --event-shell-muted: #71525f; }
+body:has(.poster-event-page[data-colour-scheme="sunset"]) { --event-shell-paper: #fcf5eb; --event-shell-wash: #ebd7b7; --event-shell-ink: #382c22; --event-shell-muted: #6f5947; }
+body:has(.poster-event-page[data-colour-scheme="midnight"]) { --event-shell-paper: #f2f3e9; --event-shell-wash: #dde4c6; --event-shell-ink: #242c20; --event-shell-muted: #59604c; }
+body:has(.poster-event-page[data-colour-scheme="blue"]) { --event-shell-paper: #f3f7fa; --event-shell-wash: #dce6ef; --event-shell-ink: #243447; --event-shell-muted: #516478; }
+body:has(.poster-event-page[data-colour-scheme="plum"]) { --event-shell-paper: #fbf5fb; --event-shell-wash: #e9dced; --event-shell-ink: #3c2944; --event-shell-muted: #6d5375; }
 body:has(.poster-event-page) { background: var(--event-shell-paper); }
 body:has(.poster-event-page) .customer-dock { --focus-ring: var(--event-shell-ink); background: var(--event-shell-wash); border-color: color-mix(in srgb, var(--event-shell-ink) 24%, transparent); }
 body:has(.poster-event-page) .customer-dock a { color: var(--event-shell-muted); }
