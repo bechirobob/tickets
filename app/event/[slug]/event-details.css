@@ -65,6 +65,8 @@
 .event-countdown b { font-size: 30px; line-height: 1; font-weight: 570; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .event-countdown small { color: var(--muted); font-size: 12px; }
 .event-countdown-state { margin: 24px 0 0; font-size: 16px; font-weight: 600; }
+.event-coming-soon h2 { margin: 0 0 8px; font-size: clamp(26px, 4vw, 36px); font-weight: 570; }
+.event-coming-soon p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
 .event-detail-preview { margin: 20px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .event-detail-preview strong { font-weight: 600; color: var(--ink); }
 .event-detail-layout > .compact-ticket-panel { position: static; min-width: 0; grid-column: 2; grid-row: 2 / 4; }

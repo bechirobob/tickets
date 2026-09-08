@@ -23,7 +23,7 @@ async function fixture() {
   const owner = await guest("Ama"); const recipient = await guest("Kofi");
   const id = crypto.randomUUID();
   const now = new Date().toISOString(); const future = new Date(Date.now() + 3_600_000).toISOString();
-  await env.DB.prepare("UPDATE curated_event_records SET starts_at = ?, ends_at = ? WHERE slug = ?").bind(now, future, slug).run();
+  await env.DB.prepare("UPDATE curated_event_records SET status = 'published', starts_at = ?, ends_at = ? WHERE slug = ?").bind(now, future, slug).run();
   await env.DB.prepare("INSERT INTO room_flashes (id, event_slug, attendee_id, image_data, content_type, width, height, byte_size, status, moderation_result, created_at, expires_at) VALUES (?, ?, ?, ?, 'image/webp', 1, 1, 3, 'active', 'allowed', ?, ?)").bind(id, slug, owner.id, new Uint8Array([1, 2, 3]), now, future).run();
   const context = { params: Promise.resolve({ slug, id }) };
   const url = `${origin}/api/rooms/${slug}/flashes/${id}`;

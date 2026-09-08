@@ -26,7 +26,7 @@ export async function refreshExpiredPreviewEvents(db: D1Database, now = new Date
   const expired = await db.prepare(`
     SELECT slug
     FROM curated_event_records
-    WHERE is_test_event = 1 AND ends_at <= ?
+    WHERE is_test_event = 1 AND status = 'published' AND ends_at <= ?
   `).bind(now.toISOString()).all<{ slug: string }>();
   const expiredSlugs = new Set(expired.results.map((event) => event.slug));
   const updates = PREVIEW_SLOTS.filter((slot) => expiredSlugs.has(slot.slug)).map((slot) => {
@@ -36,7 +36,7 @@ export async function refreshExpiredPreviewEvents(db: D1Database, now = new Date
       UPDATE curated_event_records
       SET starts_at = ?, ends_at = ?, sales_close_at = ?, event_state = 'on_sale',
           rescheduled_from = NULL, status = 'published', updated_at = ?
-      WHERE slug = ? AND is_test_event = 1
+      WHERE slug = ? AND is_test_event = 1 AND status = 'published'
     `).bind(startsAt.toISOString(), endsAt.toISOString(), startsAt.toISOString(), now.toISOString(), slot.slug);
   });
   if (!updates.length) return 0;

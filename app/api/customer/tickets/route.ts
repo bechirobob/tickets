@@ -46,8 +46,10 @@ export async function POST(request: Request) {
            o.face_amount_minor AS faceAmountMinor, o.booking_fee_minor AS bookingFeeMinor,
            o.total_amount_minor AS totalAmountMinor, o.currency, o.quantity, o.paid_at AS paidAt,
            o.customer_name AS customerName, o.customer_email AS customerEmail,
-           event.title AS eventTitle, event.starts_at AS eventStartsAt,
-           event.ends_at AS eventEndsAt, event.venue AS eventVenue, event.area AS eventArea,
+           event.title AS eventTitle,
+           CASE WHEN event.schedule_status != 'coming_soon' THEN event.starts_at END AS eventStartsAt,
+           CASE WHEN event.schedule_status = 'confirmed' THEN event.ends_at END AS eventEndsAt,
+           event.venue AS eventVenue, event.area AS eventArea,
            event.event_state AS eventState,
            tier.name AS tierName, tier.description AS tierDescription, tier.room_badge AS roomBadge,
            credential.token AS gateToken

@@ -78,7 +78,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
 
 export default function ActiveNightExperience({ events }: { events: CuratedEvent[] }) {
   const [observedAt] = useState(() => Date.now());
-  const scenes = useMemo(() => events.filter((event) => event.eventState !== "cancelled" && event.eventState !== "postponed" && Date.parse(event.endsAt) > observedAt).slice(0, 4), [events, observedAt]);
+  const scenes = useMemo(() => events.filter((event) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > observedAt)).slice(0, 4), [events, observedAt]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [previousIndex, setPreviousIndex] = useState<number | null>(null);
   const [manualPause, setManualPause] = useState(false);
@@ -178,11 +178,11 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
       <div key={`copy-${active?.slug ?? "waiting"}`} className="compact-hero__copy" aria-live={autoplayRunning ? "off" : "polite"} aria-atomic="true">
         <p className="night-kicker hero-editor-note"><span /> {active?.quip ?? "Your next good excuse to go out."}{active?.isTestEvent ? <small> / Preview</small> : null}</p>
         <h1>{active?.title ?? "Plans, sorted."}</h1>
-        <p>{active ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : "Discover music, people and places worth going out for."}</p>
+        <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · Coming soon` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
         {active ? <div className="hero-actions">{active.ticketTiers.some((tier) => tier.status === "available") ? <ActionLink href={`/checkout/${active.slug}`} icon={<Ticket size={18} />}>Get tickets</ActionLink> : <ActionLink href="/events">Browse events</ActionLink>}<ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink></div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
       </div>
-      {active ? <p className="compact-hero__price" aria-label={`Tickets from GH₵${discoveryPrice(active)}`}>From <b>GH₵{discoveryPrice(active)}</b></p> : null}
+      {active && active.scheduleStatus !== "coming_soon" ? <p className="compact-hero__price" aria-label={`Tickets from GH₵${discoveryPrice(active)}`}>From <b>GH₵{discoveryPrice(active)}</b></p> : null}
       {hasScenes ? <button
         type="button"
         className="active-night-autoplay-toggle"

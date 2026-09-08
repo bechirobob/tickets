@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { saveOfflineNight } from "../lib/offline-tickets";
 
 type OfflineTicket = { id: string; ticketType: string; status: string; gateCode: string | null; qrPayload: string | null };
-type OfflineEvent = { slug: string; title: string; fullDate: string; time: string; venue: string; area: string; endsAt: string };
+type OfflineEvent = { slug: string; title: string; fullDate: string; time: string; venue: string; area: string; endsAt: string | null };
 
 export default function OfflineTicketSaver({ event, tickets, ownerId }: { event: OfflineEvent; tickets: OfflineTicket[]; ownerId: string }) {
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function OfflineTicketSaver({ event, tickets, ownerId }: { event:
       }),
     }))).then((prepared) => {
       if (cancelled) return;
-      saveOfflineNight(ownerId, { ...event, savedAt: new Date().toISOString(), expiresAt: new Date(Math.min(Date.parse(event.endsAt) + 86_400_000, Date.now() + 7 * 86_400_000)).toISOString(), tickets: prepared });
+      saveOfflineNight(ownerId, { ...event, savedAt: new Date().toISOString(), expiresAt: new Date(event.endsAt ? Math.min(Date.parse(event.endsAt) + 86_400_000, Date.now() + 7 * 86_400_000) : Date.now()).toISOString(), tickets: prepared });
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [event, tickets, ownerId]);

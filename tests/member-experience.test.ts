@@ -10,6 +10,7 @@ const origin = "https://tickets.becoreops.com";
 const eventSlug = "after-dark-osu";
 
 async function memberCookie() {
+  await env.DB.prepare("UPDATE curated_event_records SET status = 'published' WHERE slug = ?").bind(eventSlug).run();
   const suffix = crypto.randomUUID();
   const attendeeId = `attendee:${suffix}`;
   const sessionToken = `session-${suffix}-with-a-long-secure-value`;

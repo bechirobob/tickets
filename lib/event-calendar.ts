@@ -17,7 +17,7 @@ export function eventCalendar(input: {
   slug: string;
   title: string;
   startsAt: string;
-  endsAt: string;
+  endsAt: string | null;
   venue: string;
   area: string;
   description?: string;
@@ -34,7 +34,7 @@ export function eventCalendar(input: {
     `UID:${escapeIcs(input.slug)}@tickets.becoreops.com`,
     `DTSTAMP:${utcStamp(new Date().toISOString())}`,
     `DTSTART:${utcStamp(input.startsAt)}`,
-    `DTEND:${utcStamp(input.endsAt)}`,
+    ...(input.endsAt ? [`DTEND:${utcStamp(input.endsAt)}`] : []),
     `SUMMARY:${escapeIcs(input.title)}`,
     `LOCATION:${escapeIcs(`${input.venue}, ${input.area}`)}`,
     `DESCRIPTION:${escapeIcs(input.description ?? `Your night at ${input.title}. Open My Nights for your ticket and live Host updates.`)}`,

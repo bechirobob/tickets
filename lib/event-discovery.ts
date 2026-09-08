@@ -3,9 +3,11 @@ import type { CuratedEvent } from "../app/events";
 export type EventWindow = "tonight" | "weekend" | "next";
 
 export function matchesEventWindow(event: Pick<CuratedEvent, "startsAt" | "endsAt" | "eventState">, filter: EventWindow, now: number) {
+  if (event.eventState === "cancelled" || event.eventState === "postponed") return false;
+  if (!event.startsAt) return filter === "next";
   const start = Date.parse(event.startsAt);
-  const end = Date.parse(event.endsAt);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= now || event.eventState === "cancelled" || event.eventState === "postponed") return false;
+  const end = event.endsAt ? Date.parse(event.endsAt) : Math.floor(start / 86400000) * 86400000 + 86400000;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= now) return false;
   if (filter === "next") return true;
   // Accra uses UTC. A night rolls over at 06:00, retaining after-midnight sets.
   const nightDate = new Date(now - 6 * 60 * 60 * 1000);
