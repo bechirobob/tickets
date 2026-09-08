@@ -74,7 +74,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
       {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-featured={event.slug === featuredSlug ? "true" : undefined}>
         <PosterLink href={`/event/${event.slug}`} className="drop-card__image">
           <Image loader={eventImageLoader} src={event.image} width={720} height={900} sizes="(max-width: 700px) 50vw, (max-width: 1000px) 33vw, 25vw" alt={`${event.isTestEvent ? "Preview image" : "Artwork"} for ${event.title}`} />
-          {event.isTestEvent ? <span>Preview</span> : null}
+          {event.isTestEvent ? <span>Preview</span> : <span>Verified event</span>}
           {event.isTestEvent ? <div className="event-artwork-type" aria-hidden="true"><small>{event.area} · Accra</small><b>{event.title}</b><em>{event.vibe}</em></div> : null}
         </PosterLink>
         <div className="drop-card__body">

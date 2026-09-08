@@ -2,7 +2,7 @@ import BrandLogo from "../../brand-logo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowUpRight, BadgeCheck, CalendarDays, Clock3, Gem, MapPin, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BadgeCheck, Gem, MapPin, MessageCircle, ShieldCheck, Ticket } from "lucide-react";
 import { notFound } from "next/navigation";
 import { eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
@@ -13,6 +13,8 @@ import EventActions from "./event-actions";
 import MemberActions from "../../member-actions";
 import WaitlistControl from "./waitlist-control";
 import PublicNavigation from "../../mobile-navigation";
+import EventCountdown from "./event-countdown";
+import "./event-details.css";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}. Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`;
   const canonical = `/event/${event.slug}`;
   const image = eventImageUrl(event.image, 1440, 82);
+  const isPoster = event.image.endsWith("/on-the-guest-list.webp");
   return {
     title: event.title,
     description,
@@ -37,7 +40,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       title: `${event.title} · BeCore Tickets`,
       description,
       url: canonical,
-      images: [{ url: image, width: 1440, height: 960, alt: `Atmosphere for ${event.title}` }],
+      images: [{ url: image, width: isPoster ? 960 : 1440, height: isPoster ? 1423 : 960, alt: `Event poster for ${event.title}` }],
     },
     twitter: { card: "summary_large_image", title: `${event.title} · BeCore Tickets`, description, images: [image] },
   };
@@ -50,6 +53,11 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const { env } = await import("cloudflare:workers");
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
   if (!event) notFound();
+  const start = new Date(event.startsAt);
+  const calendarMonth = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "Africa/Accra" }).format(start);
+  const calendarDay = new Intl.DateTimeFormat("en-GB", { day: "numeric", timeZone: "Africa/Accra" }).format(start);
+  const eventTime = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Accra" });
+  const poster = event.image.endsWith("/on-the-guest-list.webp");
   const available = event.ticketTiers.some((tier) => tier.status === "available");
   const structuredEvent = event.isTestEvent ? null : {
     "@context": "https://schema.org",
@@ -74,16 +82,23 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     })),
   };
 
-  return <main className="event-page compact-event-page">
+  return <main className="event-page compact-event-page poster-event-page">
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
-    <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="public-header-actions"><EventActions title={event.title} eventSlug={event.slug} /><PublicNavigation /></span></header>
+    <header className="sub-header"><Link href="/events" className="back-link"><ArrowLeft size={17} /> The Drop</Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="public-header-actions"><PublicNavigation /></span></header>
+    <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>
 
-    <section className="compact-event-hero"><Image src={eventImageUrl(event.image, 1440, 78)} width={1440} height={810} sizes="100vw" alt={`Atmosphere for ${event.title}`} priority unoptimized /><div /><article><p className="eyebrow">{event.isTestEvent ? "Working preview" : "BeCore pick"} · {event.vibe}</p><h1>{event.title}</h1><span>{event.fullDate} · {event.venue}, {event.area}</span></article></section>
-
-    <section className="compact-event-layout">
-      <article className="compact-event-main">
-        {event.isTestEvent ? <div className="preview-event-notice"><strong>Preview event</strong><span>This is a working test listing, not a real scheduled event. Use it to try the complete BeCore Tickets journey.</span></div> : null}
-        <div className="compact-event-facts"><span><CalendarDays size={16} /> {event.fullDate}</span><span><Clock3 size={16} /> {event.time}</span>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer"><MapPin size={16} /> {event.venue}, {event.area}</Link> : <span><MapPin size={16} /> {event.venue}, {event.area}</span>}</div>
+    <div className="event-detail-layout">
+      <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized /></figure>
+      <section className="event-detail-overview" aria-labelledby="event-title">
+        <p className="eyebrow">{event.vibe}{!event.isTestEvent ? <span className="event-detail-verified"><BadgeCheck size={15} aria-hidden="true" /> Verified event</span> : null}</p><h1 id="event-title">{event.title}</h1>
+        <div className="event-detail-facts">
+          <div className="event-detail-fact"><span className="event-date-icon" aria-hidden="true"><small>{calendarMonth}</small><b>{calendarDay}</b></span><div><time dateTime={event.startsAt}>{event.fullDate}</time><span>{eventTime.format(start)} – {eventTime.format(new Date(event.endsAt))}</span><a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}>Add to calendar</a></div></div>
+          <div className="event-detail-fact"><span className="event-place-icon" aria-hidden="true"><MapPin size={23} strokeWidth={1.6} /></span><div>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer" className="event-detail-venue">{event.venue}<ArrowUpRight size={15} aria-hidden="true" /></Link> : <strong>{event.venue}</strong>}<span>{event.area}</span></div></div>
+        </div>
+        <EventCountdown startsAt={event.startsAt} endsAt={event.endsAt} eventState={event.eventState} isPreview={event.isTestEvent} />
+        {event.isTestEvent ? <p className="event-detail-preview"><strong>Preview event</strong> · Sample date and tickets for trying BeCore. This is not a live event booking.</p> : null}
+      </section>
+      <article className="compact-event-main event-detail-story">
         <section className="compact-event-story"><p className="eyebrow">About the night</p><h2>{event.quip}</h2><p>{event.note}</p><dl><div><dt>Line-up</dt><dd>{event.lineup}</dd></div><div><dt>Entry</dt><dd>{event.ageRestriction} · Valid government-issued ID · One scan per admission</dd></div></dl></section>
         {host ? <section className="event-host"><div className="host-monogram">{host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div><div><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified Host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span><Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link></div></section> : null}
       </article>
@@ -96,6 +111,6 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         <MemberActions eventSlug={event.slug} hostSlug={host?.slug} />
         <WaitlistControl eventSlug={event.slug} tiers={event.ticketTiers} />
       </aside>
-    </section>
+    </div>
   </main>;
 }

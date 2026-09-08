@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 
 describe("working preview events", () => {
-  it("seeds four public D1 events with real ticket inventory", async () => {
+  it("keeps three preview events after publishing the guest list", async () => {
     const events = await env.DB.prepare(`
       SELECT slug, is_test_event AS isTestEvent
       FROM curated_event_records
@@ -20,7 +20,6 @@ describe("working preview events", () => {
       "after-dark-osu",
       "longitude-spintex",
       "noir-room-labone",
-      "sun-chasers-labadi",
     ]);
     expect(events.results.every((event) => event.isTestEvent === 1)).toBe(true);
     expect(tiers?.count).toBe(12);
@@ -38,9 +37,26 @@ describe("working preview events", () => {
       SELECT COUNT(*) AS count FROM event_ticket_tiers WHERE event_slug = 'after-dark-osu'
     `).first<{ count: number }>();
 
-    expect(updated).toBe(4);
+    expect(updated).toBe(3);
     expect(new Date(afterDark?.startsAt ?? 0).getTime()).toBeGreaterThan(expiredNow.getTime());
     expect(new Date(afterDark?.endsAt ?? 0).getTime()).toBeGreaterThan(new Date(afterDark?.startsAt ?? 0).getTime());
     expect(tierCount?.count).toBe(3);
+  });
+
+  it("keeps the published guest list date fixed after it ends", async () => {
+    await refreshExpiredPreviewEvents(env.DB, new Date("2026-09-20T08:00:00.000Z"));
+    const event = await env.DB.prepare(`
+      SELECT starts_at, ends_at, is_test_event, status, curation_note
+      FROM curated_event_records WHERE slug = 'sun-chasers-labadi'
+    `).first();
+    expect(event).toMatchObject({
+      starts_at: "2026-09-13T14:00:00.000Z",
+      ends_at: "2026-09-13T22:00:00.000Z",
+      is_test_event: 0,
+      status: "published",
+    });
+    expect(event?.curation_note).toContain("Dress code: white with a touch of golden brown.");
+    const placeholderHost = await env.DB.prepare("SELECT host_id FROM event_hosts WHERE event_slug = 'sun-chasers-labadi' AND host_id = 'host:becore-preview-desk'").first();
+    expect(placeholderHost).toBeNull();
   });
 });

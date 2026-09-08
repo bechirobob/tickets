@@ -23,7 +23,7 @@ export function eventCalendar(input: {
   description?: string;
   origin: string;
 }) {
-  const url = `${input.origin}/events/${encodeURIComponent(input.slug)}`;
+  const url = `${input.origin}/event/${encodeURIComponent(input.slug)}`;
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
