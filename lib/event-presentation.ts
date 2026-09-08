@@ -27,5 +27,6 @@ export function eventPresentationStyle(event: EventPresentation): CSSProperties 
     "--event-muted": palette.muted, "--event-accent": palette.accent,
     "--event-wash": palette.wash, "--event-secondary": palette.secondary,
     "--event-dark": palette.dark,
+    "--event-field": eventColourScheme(event) === "blush" ? "#e8bdcc" : palette.wash,
   } as CSSProperties;
 }

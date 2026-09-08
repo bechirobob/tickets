@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { expectVisibleLettering } from "./text-visibility";
 
 test.use({ serviceWorkers: "block" });
 
@@ -24,6 +25,7 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   await expect(page.locator(".event-detail-facts time")).toContainText("October");
   await expect(page.locator(".event-dress-code")).toContainText("Light pink & white");
   await expect(page.locator(".event-guest-perk")).toHaveText("Clink early. Free mimosas till 5 PM.");
+  await expect(page.locator(".event-guest-perk .mimosa-glass")).toBeVisible();
   await expect(page.locator(".event-awareness-note")).toHaveText("In support of Breast Cancer Awareness Month");
   await expect(page.locator("main")).toHaveAttribute("data-colour-scheme", "blush");
   await expect(page.locator("main")).toHaveCSS("background-color", "rgb(255, 249, 248)");
@@ -45,6 +47,52 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   const issues = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations.filter((issue) => issue.impact === "serious" || issue.impact === "critical");
   expect(issues).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("event-poster.png"), fullPage: true });
+});
+
+test("colour preview blends the artwork and keeps every detail readable", async ({ page }, testInfo) => {
+  await page.goto("/event/sun-chasers-labadi?look=immersive");
+  await expect(page.locator("main")).toHaveClass(/event-palette-preview/);
+  await expect(page.locator("main")).toHaveCSS("background-image", /linear-gradient/);
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  await expect(page.getByRole("link", { name: "Current event", exact: true })).toHaveAttribute("href", "/event/sun-chasers-labadi");
+  await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveAttribute("href", "/checkout/sun-chasers-labadi");
+  await expect(page.getByRole("timer")).not.toHaveAttribute("aria-label", "Loading countdown");
+  await expect(page.locator(".event-detail-poster")).toHaveCSS("padding", "0px");
+  await expect(page.locator(".event-guest-perk .mimosa-glass")).toBeVisible();
+  await expectVisibleLettering(page, ".event-detail-layout, .event-detail-toolbar");
+  const issues = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations.filter((issue) => issue.impact === "serious" || issue.impact === "critical");
+  expect(issues).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("event-colour-preview.png"), fullPage: true });
+});
+
+test("event lettering stays visible across all events and long future details", async ({ page }) => {
+  test.setTimeout(60_000);
+  for (const slug of ["after-dark-osu", "longitude-spintex", "noir-room-labone", "sun-chasers-labadi"]) {
+    await page.goto(`/event/${slug}`);
+    await expect(page.locator(".event-detail-overview h1")).toBeVisible();
+    await expectVisibleLettering(page, ".event-detail-layout");
+  }
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.evaluate(() => {
+    const set = (selector: string, text: string) => { const element = document.querySelector(selector); if (element) element.textContent = text; };
+    set("#event-title", "The Sunday Social: A Very Long Name for a Very Good Day Party with Friends from Across Accra");
+    set(".event-detail-venue", "The Garden Terrace and Rooftop at the Grand Accra Riverside Restaurant");
+    set(".event-dress-code strong", "Light pink, white and whatever makes you feel like the best dressed person in the group chat");
+    set(".event-guest-perk span", "Clink early. Free mimosas till 5 PM. Bring the group chat, arrive together and leave plenty of time for a very long overdue catch-up.");
+    set(".compact-ticket-panel section b", "Priority admission with reserved rooftop access for you and your friends");
+    set(".compact-ticket-panel section span", "A longer ticket description that explains exactly what is included, where to arrive and how to make the most of the afternoon without losing any of the important details.");
+  });
+  await expectVisibleLettering(page, ".event-detail-layout");
+});
+
+test("event lettering on every Drop tile is complete", async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date("2026-08-13T12:00:00Z") });
+  await page.goto("/events");
+  await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
+  await expect(page.locator(".discovery-grid")).toBeVisible();
+  expect(await page.locator(".discovery-grid .drop-card").count()).toBeGreaterThan(0);
+  await expectVisibleLettering(page, ".discovery-grid");
+  await page.screenshot({ path: testInfo.outputPath("all-event-tiles.png"), fullPage: true });
 });
 
 test("full flyers blend into the Drop while the homepage keeps its colours", async ({ page }, testInfo) => {
