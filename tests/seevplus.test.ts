@@ -104,6 +104,7 @@ describe("SeevPlus checkout and payment safety", () => {
     expect(await replay.json()).toEqual(result);
     expect(replay.headers.get("idempotency-replayed")).toBe("true");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].redirect).toBe("manual");
     expect(createBody.amount).toBeGreaterThanOrEqual(20000);
     expect(createBody.channels).toEqual(["mobile_money"]);
     expect(createBody.recipient.name).toBe("Seev Buyer");
@@ -120,6 +121,14 @@ describe("SeevPlus checkout and payment safety", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining("still pending") });
     expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it("rejects provider redirects without following them or issuing tickets", async () => {
+    const result = await checkout();
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://example.com/payment" } }));
+    await expect(verifySeevPayment(env.DB, result.reference, runtime)).rejects.toThrow();
+    expect(fetchMock.mock.calls.at(-1)?.[1]?.redirect).toBe("manual");
+    expect(await ticketCount(result.reference)).toBe(0);
   });
 
   it("returns the recovered checkout to its owner when cron recovered initiation first", async () => {
