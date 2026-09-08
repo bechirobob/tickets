@@ -27,8 +27,8 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
   await expect(page.locator(".event-guest-perk")).toHaveText("Clink early. Free mimosas till 5 PM.");
   await expect(page.locator(".event-guest-perk .mimosa-glass")).toBeVisible();
   await expect(page.locator(".event-awareness-note")).toHaveText("In support of Breast Cancer Awareness Month");
-  await expect(page.locator("main")).toHaveAttribute("data-colour-scheme", "blush");
-  await expect(page.locator("main")).toHaveCSS("background-color", "rgb(255, 249, 248)");
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveAttribute("data-colour-scheme", "blush");
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-color", "rgb(255, 249, 248)");
   await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toBeVisible();
   const calendar = await page.request.get("/api/calendar/sun-chasers-labadi");
   expect(calendar.ok()).toBe(true);
@@ -51,8 +51,8 @@ test("poster, event facts and ticket access fit the event page", async ({ page }
 
 test("colour preview blends the artwork and keeps every detail readable", async ({ page }, testInfo) => {
   await page.goto("/event/sun-chasers-labadi?look=immersive");
-  await expect(page.locator("main")).toHaveClass(/event-palette-preview/);
-  await expect(page.locator("main")).toHaveCSS("background-image", /linear-gradient/);
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveClass(/event-palette-preview/);
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-image", /linear-gradient/);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   await expect(page.getByRole("link", { name: "Current event", exact: true })).toHaveAttribute("href", "/event/sun-chasers-labadi");
   await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveAttribute("href", "/checkout/sun-chasers-labadi");
@@ -92,6 +92,7 @@ test("event lettering on every Drop tile is complete", async ({ page }, testInfo
   await expect(page.locator(".discovery-grid")).toBeVisible();
   expect(await page.locator(".discovery-grid .drop-card").count()).toBeGreaterThan(0);
   await expectVisibleLettering(page, ".discovery-grid");
+  for (const card of await page.locator(".discovery-grid .drop-card").all()) await card.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("all-event-tiles.png"), fullPage: true });
 });
 
@@ -118,8 +119,8 @@ test("full flyers blend into the Drop while the homepage keeps its colours", asy
 
 test("event colours belong to each opened event", async ({ page }) => {
   await page.goto("/event/after-dark-osu");
-  await expect(page.locator("main")).toHaveAttribute("data-colour-scheme", "midnight");
-  await expect(page.locator("main")).toHaveCSS("background-color", "rgb(242, 243, 233)");
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveAttribute("data-colour-scheme", "midnight");
+  await expect(page.locator(".poster-event-page[data-colour-scheme]")).toHaveCSS("background-color", "rgb(242, 243, 233)");
   await expect(page.locator(".event-guest-perk")).toHaveCount(0);
   await expect(page.locator(".event-dress-code")).toHaveCount(0);
 });

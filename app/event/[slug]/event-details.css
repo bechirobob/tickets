@@ -79,12 +79,13 @@
 .event-detail-loading .event-detail-overview { display: grid; gap: 24px; }
 .event-detail-loading .event-detail-overview > i { height: 72px; }
 /* A reviewable colour treatment uses the same event, artwork and ticket components. */
-.event-palette-preview { --muted: var(--event-ink); background: linear-gradient(180deg, var(--event-field), var(--event-wash) 60%, var(--event-paper)); }
+.event-palette-preview { --muted: var(--event-ink); --orange: var(--event-ink); background: linear-gradient(180deg, var(--event-field), var(--event-wash) 60%, var(--event-paper)); }
 .event-palette-preview > .sub-header { background: transparent; color: var(--event-ink); }
 .event-palette-preview .event-detail-poster { padding: 0; border-radius: 0; background: transparent; }
 .event-palette-preview .event-detail-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 24px; }
 .event-palette-preview .event-detail-story { padding-top: 24px; border-top: 1px solid var(--line); }
-.event-palette-preview :is(.event-guest-perk, .event-awareness-note, .event-detail-calendar) { color: var(--event-ink); }
+.event-palette-preview .event-date-display > b { color: var(--event-accent); }
+.event-palette-preview :is(.event-guest-perk, .event-awareness-note, .event-detail-calendar, .tier-vip-note) { color: var(--event-ink); }
 .event-colour-preview-note { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; color: var(--event-ink); font-size: 12px; }
 .event-colour-preview-note > span { opacity: .8; }
 .event-colour-preview-note a { min-height: 44px; display: inline-flex; align-items: center; gap: 5px; text-decoration: underline; text-underline-offset: 4px; }
