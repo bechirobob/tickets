@@ -1,0 +1,1 @@
+ALTER TABLE `staff_password_recoveries` ADD `target_email_hash` text;

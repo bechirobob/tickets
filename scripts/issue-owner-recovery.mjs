@@ -12,17 +12,41 @@ export async function issueOwnerRecovery(query, request, now = new Date()) {
   const existing = await query("SELECT id FROM staff_password_recoveries WHERE id = ?", [request.id]);
   if (existing.length) return { status: "already_issued" };
   if (now.getTime() >= Date.parse(request.issueBefore)) return { status: "issuance_window_closed" };
-  const owners = await query("SELECT id, normalized_email, updated_at FROM staff_accounts WHERE role = 'owner' AND status IN ('active', 'disabled') LIMIT 101", []);
-  if (owners.length > 100) throw new Error("Owner inventory needs manual review.");
-  const matches = owners.filter((owner) => createHash("sha256").update(owner.normalized_email.trim().toLowerCase()).digest("hex") === request.emailSha256);
-  if (matches.length !== 1) throw new Error("The confirmed email did not match exactly one existing owner. No access changed.");
-  const owner = matches[0];
   const createdAt = now.toISOString();
+  let owner;
+  if (request.createOwner === true) {
+    // New-owner creation requires a separate, explicit approval. The real email
+    // is bound by hash and supplied privately by its holder during activation.
+    const accounts = await query("SELECT id, normalized_email FROM staff_accounts LIMIT 1001", []);
+    if (accounts.length > 1000) throw new Error("Staff inventory needs manual review.");
+    if (accounts.some((account) => createHash("sha256").update(account.normalized_email.trim().toLowerCase()).digest("hex") === request.emailSha256)) {
+      throw new Error("An account already uses the approved email. No existing account was changed.");
+    }
+    const accountId = `owner-setup-${request.id}`;
+    const pendingEmail = `${request.id}@owner-setup.invalid`;
+    const createdBy = `system:approved-owner-setup:${request.id}`;
+    await query(`INSERT INTO staff_accounts
+      (id, normalized_email, display_name, role, password_hash, password_salt, password_iterations,
+        must_change_password, status, failed_login_count, password_changed_at, created_at, created_by, updated_at)
+      VALUES (?, ?, 'BeCore Owner', 'owner', 'setup-pending', 'setup-pending', 600000, 1, 'disabled', 0, ?, ?, ?, ?)
+      ON CONFLICT(id) DO NOTHING`, [accountId, pendingEmail, createdAt, createdAt, createdBy, createdAt]);
+    const pending = await query(`SELECT id, normalized_email, updated_at FROM staff_accounts
+      WHERE id = ? AND normalized_email = ? AND created_by = ? AND role = 'owner'
+        AND status = 'disabled' AND password_hash = 'setup-pending'`, [accountId, pendingEmail, createdBy]);
+    if (pending.length !== 1) throw new Error("The pending owner does not match this approval. No existing account was changed.");
+    owner = pending[0];
+  } else {
+    const owners = await query("SELECT id, normalized_email, updated_at FROM staff_accounts WHERE role = 'owner' AND status IN ('active', 'disabled') LIMIT 101", []);
+    if (owners.length > 100) throw new Error("Owner inventory needs manual review.");
+    const matches = owners.filter((owner) => createHash("sha256").update(owner.normalized_email.trim().toLowerCase()).digest("hex") === request.emailSha256);
+    if (matches.length !== 1) throw new Error("The confirmed email did not match exactly one existing owner. No access changed.");
+    owner = matches[0];
+  }
   const expiresAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-  await query(`INSERT INTO staff_password_recoveries (id, account_id, token_hash, account_updated_at, expires_at, created_at)
-    SELECT ?, id, ?, updated_at, ?, ? FROM staff_accounts
+  await query(`INSERT INTO staff_password_recoveries (id, account_id, token_hash, account_updated_at, expires_at, created_at, target_email_hash)
+    SELECT ?, id, ?, updated_at, ?, ?, ? FROM staff_accounts
     WHERE id = ? AND normalized_email = ? AND role = 'owner' AND status IN ('active', 'disabled') AND updated_at = ?
-    ON CONFLICT(id) DO NOTHING`, [request.id, request.tokenHash, expiresAt, createdAt, owner.id, owner.normalized_email, owner.updated_at]);
+    ON CONFLICT(id) DO NOTHING`, [request.id, request.tokenHash, expiresAt, createdAt, request.createOwner === true ? request.emailSha256 : null, owner.id, owner.normalized_email, owner.updated_at]);
   const issued = await query("SELECT id, expires_at FROM staff_password_recoveries WHERE id = ? AND token_hash = ?", [request.id, request.tokenHash]);
   if (issued.length !== 1) throw new Error("The owner account changed during recovery issuance. No access changed.");
   await query(`INSERT INTO operational_audit_events

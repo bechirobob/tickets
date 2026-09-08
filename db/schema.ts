@@ -707,6 +707,7 @@ export const staffAccounts = sqliteTable("staff_accounts", {
 
 export const staffPasswordRecoveries = sqliteTable("staff_password_recoveries", {
   id: text("id").primaryKey(),
+  targetEmailHash: text("target_email_hash"),
   accountId: text("account_id").notNull(),
   tokenHash: text("token_hash").notNull(),
   accountUpdatedAt: text("account_updated_at").notNull(),

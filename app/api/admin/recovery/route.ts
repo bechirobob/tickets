@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   }
   if (body.action === "inspect") {
     const grant = await inspectPasswordRecovery(env.DB, body.token);
-    return grant ? respond({ valid: true, expiresAt: grant.expiresAt }, 200) : respond({ error: RECOVERY_ERROR }, 400);
+    return grant ? respond({ valid: true, expiresAt: grant.expiresAt, requiresEmail: Boolean(grant.targetEmailHash) }, 200) : respond({ error: RECOVERY_ERROR }, 400);
   }
   if (body.action !== "claim") return respond({ error: "This request was not accepted." }, 400);
   const payload: StaffPasswordPayload = {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     passwordIterations: typeof body.passwordIterations === "number" ? body.passwordIterations : 0,
   };
   try {
-    await claimPasswordRecovery(env.DB, body.token, payload);
+    await claimPasswordRecovery(env.DB, body.token, payload, typeof body.email === "string" ? body.email : "");
     return Response.json({ changed: true }, { headers: { ...privateHeaders, "set-cookie": expiredAdminCookieHeader() } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";

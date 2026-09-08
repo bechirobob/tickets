@@ -1,7 +1,18 @@
 # Owner password recovery
 
-This restores an existing, explicitly authorised owner account; it never creates
-an owner or removes MFA. There is no public grant-issuance API.
+This normally restores an existing, explicitly authorised owner account. Creating
+a new owner requires separate explicit approval and `createOwner: true` in the
+reviewed issuance request. There is no public issuance API; MFA is never removed.
+
+For approved new-owner creation, issuance first checks that no staff account uses
+the approved email fingerprint. It creates an idempotent, disabled pending owner
+with an unusable password record and a reserved internal email. The grant binds
+the approved real email by SHA-256 hash; no real email or bearer token is committed.
+Deliver `/admin/recover#token=…&email=…` privately. Activation verifies that email
+against the grant and atomically sets it with the chosen password. A uniqueness
+conflict rolls back the whole transaction, leaving all existing accounts intact.
+Never roll back to code older than migration 0031 while a new-owner grant is live;
+revoke those grants first, since older claim code does not enforce email binding.
 
 1. Verify the requester’s authority and exact existing owner email. Obtain explicit
    authorisation to restore this account before preparing a recovery request.

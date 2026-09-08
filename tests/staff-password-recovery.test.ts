@@ -25,6 +25,36 @@ async function fixture() {
 }
 
 describe("operator-authorised owner recovery", () => {
+  it("activates a fresh pending owner only under the approved email", async () => {
+    const item = await fixture();
+    const email = `new-${item.id}@example.com`;
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email)));
+    const emailHash = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await env.DB.prepare("UPDATE staff_password_recoveries SET target_email_hash = ? WHERE id = ?").bind(emailHash, item.id).run();
+    await expect(claimPasswordRecovery(env.DB, item.token, payload, "wrong@example.com")).rejects.toThrow("approved");
+    expect(await inspectPasswordRecovery(env.DB, item.token)).not.toBeNull();
+    await claimPasswordRecovery(env.DB, item.token, payload, email.toUpperCase());
+    expect((await authenticateStaff(env.DB, email, payload.passwordProof)).account?.id).toBe(item.id);
+    expect((await authenticateStaff(env.DB, item.email, payload.passwordProof)).account).toBeNull();
+  });
+
+  it("rolls back activation and token consumption if the approved email becomes occupied", async () => {
+    const item = await fixture();
+    const other = await fixture();
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(other.email)));
+    const emailHash = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await env.DB.prepare("UPDATE staff_password_recoveries SET target_email_hash = ? WHERE id = ?").bind(emailHash, item.id).run();
+    await expect(claimPasswordRecovery(env.DB, item.token, payload, other.email)).rejects.toThrow();
+    expect((await env.DB.prepare("SELECT used_at FROM staff_password_recoveries WHERE id = ?").bind(item.id).first())?.used_at).toBeNull();
+    expect((await env.DB.prepare("SELECT status FROM staff_accounts WHERE id = ?").bind(item.id).first())?.status).toBe("disabled");
+  });
+
+  it("never changes an existing owner's email during ordinary password recovery", async () => {
+    const item = await fixture();
+    await claimPasswordRecovery(env.DB, item.token, payload, "different@example.com");
+    expect((await env.DB.prepare("SELECT normalized_email FROM staff_accounts WHERE id = ?").bind(item.id).first())?.normalized_email).toBe(item.email);
+  });
+
   it("restores only the existing owner, replaces the password, revokes sessions and pending challenges, and retains MFA", async () => {
     const item = await fixture();
     const other = await fixture();

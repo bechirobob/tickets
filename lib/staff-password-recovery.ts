@@ -10,14 +10,23 @@ const eligibleAccount = `SELECT id FROM staff_accounts
 
 export async function inspectPasswordRecovery(db: D1Database, token: string) {
   if (!isRecoveryToken(token)) return null;
-  return db.prepare(`SELECT expires_at AS expiresAt FROM staff_password_recoveries
+  return db.prepare(`SELECT expires_at AS expiresAt, target_email_hash AS targetEmailHash FROM staff_password_recoveries
     WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
       AND EXISTS (${eligibleAccount}) LIMIT 1`)
-    .bind(await hashToken(token), new Date().toISOString()).first<{ expiresAt: string }>();
+    .bind(await hashToken(token), new Date().toISOString()).first<{ expiresAt: string; targetEmailHash: string | null }>();
 }
 
-export async function claimPasswordRecovery(db: D1Database, token: string, payload: StaffPasswordPayload) {
-  if (!isRecoveryToken(token) || !(await inspectPasswordRecovery(db, token))) throw new Error(RECOVERY_ERROR);
+export async function claimPasswordRecovery(db: D1Database, token: string, payload: StaffPasswordPayload, email = "") {
+  const grant = isRecoveryToken(token) ? await inspectPasswordRecovery(db, token) : null;
+  if (!grant) throw new Error(RECOVERY_ERROR);
+  const normalizedEmail = email.trim().toLowerCase();
+  if (grant.targetEmailHash) {
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalizedEmail)));
+    const emailHash = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    if (normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalizedEmail) || emailHash !== grant.targetEmailHash) {
+      throw new Error("Use the email approved for this owner setup.");
+    }
+  }
   const password = await createPasswordRecord(payload);
   const now = new Date().toISOString();
   const claimId = crypto.randomUUID();
@@ -29,9 +38,10 @@ export async function claimPasswordRecovery(db: D1Database, token: string, paylo
       WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? AND EXISTS (${eligibleAccount})`)
       .bind(now, claimId, await hashToken(token), now),
     db.prepare(`UPDATE staff_accounts SET password_hash = ?, password_salt = ?, password_iterations = ?,
+      normalized_email = CASE WHEN ? = 1 THEN ? ELSE normalized_email END,
       status = 'active', must_change_password = 0, failed_login_count = 0, locked_until = NULL,
       password_changed_at = ?, updated_at = ? WHERE id IN (${claimedAccount})`)
-      .bind(password.hash, password.salt, password.iterations, now, now, claimId),
+      .bind(password.hash, password.salt, password.iterations, grant.targetEmailHash ? 1 : 0, normalizedEmail, now, now, claimId),
     db.prepare(`UPDATE staff_sessions SET revoked_at = ? WHERE revoked_at IS NULL AND account_id IN (${claimedAccount})`).bind(now, claimId),
     db.prepare(`UPDATE staff_auth_challenges SET used_at = ? WHERE used_at IS NULL AND account_id IN (${claimedAccount})`).bind(now, claimId),
     db.prepare(`UPDATE staff_password_recoveries SET used_at = ? WHERE used_at IS NULL AND account_id IN (${claimedAccount})`).bind(now, claimId),

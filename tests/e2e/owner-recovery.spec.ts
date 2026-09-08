@@ -5,6 +5,25 @@ import { expectVisibleLettering } from "./text-visibility";
 test.use({ serviceWorkers: "block" });
 const fixtureToken = "T".repeat(43);
 
+test("owner recovery sets up a new owner with the privately supplied email", async ({ page }, testInfo) => {
+  await page.route("**/api/admin/recovery", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.action === "inspect") return route.fulfill({ json: { valid: true, requiresEmail: true } });
+    expect(body.email).toBe("owner@example.com");
+    return route.fulfill({ json: { changed: true } });
+  });
+  await page.goto(`/admin/recover#token=${fixtureToken}&email=owner%40example.com`);
+  await expect(page.getByLabel("Work email")).toHaveValue("owner@example.com");
+  await expect(page).toHaveURL(/\/admin\/recover$/u);
+  await expectVisibleLettering(page, ".admin-recovery");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("new-owner-setup.png"), fullPage: true });
+  await page.getByLabel("New password", { exact: true }).fill("FreshOwnerPassword9");
+  await page.getByLabel("Confirm new password").fill("FreshOwnerPassword9");
+  await page.getByRole("button", { name: "Save new password" }).click();
+  await expect(page.getByRole("status")).toContainText("Your new password is saved");
+});
+
 test("owner recovery keeps the token out of the URL and requires matching passwords", async ({ page }, testInfo) => {
   let claimed = false;
   await page.route("**/api/admin/recovery", async (route) => {
