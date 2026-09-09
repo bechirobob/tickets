@@ -6,7 +6,7 @@ type Context = { params: Promise<{ slug: string }> };
 export async function GET(request: Request, context: Context) {
   const { slug } = await context.params;
   const { env } = await import("cloudflare:workers");
-  const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug);
+  const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug, false);
   if (!access) return Response.json({ error: "A valid ticket is required." }, { status: 401 });
   const row = await env.DB.prepare(`
     SELECT room_messages AS roomMessages, host_updates AS hostUpdates, muted_until AS mutedUntil
@@ -18,7 +18,7 @@ export async function GET(request: Request, context: Context) {
 export async function PATCH(request: Request, context: Context) {
   const { slug } = await context.params;
   const { env } = await import("cloudflare:workers");
-  const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug);
+  const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug, false);
   if (!access) return Response.json({ error: "A valid ticket is required." }, { status: 401 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This notification request was not accepted." }, { status: 403 });
   const body = await request.json() as { enabled?: boolean; roomMessages?: boolean; hostUpdates?: boolean; mute?: "off" | "1h" | "tonight" };
