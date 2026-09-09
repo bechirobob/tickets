@@ -94,3 +94,8 @@
 .registration-live li span,.registration-live time { color: #56534c; }
 .registration-live .registration-actions a { font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; text-decoration: underline; }
 .registration-live p { font-size: 13px; line-height: 1.5; }
+
+.registration-success { display: grid; gap: 12px; padding-block: 24px; }
+.registration-success > span { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid currentColor; border-radius: 50%; font-size: 24px; }
+.registration-success h2 { margin: 0; }
+.registration-success__detail { font-size: 14px; line-height: 1.5; }

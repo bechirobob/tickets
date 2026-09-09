@@ -13,7 +13,8 @@ export async function POST(request: Request) {
   const ip = requestMetadata(request).ip ?? 'unknown';
   const allowed = await Promise.all([enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `registration-ip:${await hashToken(ip)}`), enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `registration-email:${await hashToken(input.email)}`)]);
   if (allowed.some(value => !value)) return Response.json({ error: 'Give it a minute before trying again.' }, { status: 429 });
-  try { await requestRegistration(env.DB, input, new URL(request.url).origin); }
+  let mode: string;
+  try { ({ mode } = await requestRegistration(env.DB, input, new URL(request.url).origin, true)); }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'Registration could not be saved.' }, { status: 400 }); }
-  return Response.json({ message: 'Check your email to confirm or manage your registration. Your place is only reserved once confirmed.' }, { status: 202, headers: { 'cache-control': 'no-store' } });
+  return Response.json({ message: mode === 'rsvp' ? 'RSVP received. Outfit planning starts now.' : 'Check your email to confirm your updates.' }, { status: 202, headers: { 'cache-control': 'no-store' } });
 }

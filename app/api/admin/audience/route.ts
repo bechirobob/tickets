@@ -5,7 +5,7 @@ async function access(request: Request, slug: string) {
   return { env, session: session && (hasPermission(session,'events.manage') || hasPermission(session,'organizer.workspace')) && await hasEventAssignment(env.DB,session,slug) ? session : null };
 }
 const audience = `WITH guests AS (
-  SELECT normalized_email AS email,guest_name AS name,party_size AS guests,kind AS source FROM event_registrations WHERE event_slug=? AND verified_at IS NOT NULL
+  SELECT normalized_email AS email,guest_name AS name,party_size AS guests,kind AS source FROM event_registrations WHERE event_slug=? AND status <> 'unverified'
   UNION ALL SELECT customer_email,COALESCE(customer_name,'Guest'),quantity,'paid' FROM orders WHERE event_slug=? AND payment_provider <> 'rsvp' AND status IN ('paid','refund_pending','refunded','disputed')
 ), people AS (SELECT LOWER(email) AS email,MAX(name) AS name,SUM(guests) AS guests,GROUP_CONCAT(DISTINCT source) AS source FROM guests GROUP BY LOWER(email))
 SELECT p.*,CASE WHEN ${subscriber} THEN 1 ELSE 0 END AS subscribed FROM people p LEFT JOIN event_audience_contacts a ON a.event_slug=? AND a.email=p.email`;
