@@ -147,7 +147,7 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string) 
       .bind(signature(s), timestamp(), event.slug, signature(s)).run();
   }
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return;
-  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE verified_at IS NOT NULL AND version > notified_version ORDER BY updated_at LIMIT 40`).all<Registration>();
+  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE verified_at IS NOT NULL AND version > notified_version AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = event_registrations.event_slug AND e.removed_at IS NOT NULL) ORDER BY updated_at LIMIT 40`).all<Registration>();
   for (const reg of rows.results) {
     const s = await registrationSettings(env.DB, reg.eventSlug);
     if (!s) continue;

@@ -24,7 +24,7 @@ for (const [path, heading] of [
     await expect(page).not.toHaveURL(/\/admin\/login/);
     if (path !== '/admin/account') await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     // Wait for server-backed screen data before examining layout and accessibility.
-    await expect(page.getByText(/Loading (real inventory|accounts|operations)/i)).toHaveCount(0);
+    await expect(page.getByText(/Loading (real inventory|accounts|operations|events|submissions)/i)).toHaveCount(0);
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
     expect(axe.violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })), heading).toEqual([]);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
@@ -69,7 +69,7 @@ test('owner signs in through the real password flow and signs out', async ({ pag
   await context.clearCookies(); await page.goto('/admin/login?returnTo=%2Fadmin%2Foperations');
   await page.getByLabel('Work email').fill(fixture.email); await page.getByLabel('Password', { exact: true }).fill(fixture.password);
   await page.getByRole('button', { name: 'Enter secure workspace' }).click(); await expect(page).toHaveURL(/\/admin\/operations$/);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expect(page).toHaveURL('http://127.0.0.1:8791/');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expect(page).toHaveURL('https://127.0.0.1:8791/');
   await page.goto('/admin/accounts'); await expect(page).toHaveURL(/\/admin\/login/);
 });
 
@@ -92,6 +92,8 @@ test('review decisions clear the active list and event removal clears inventory'
   await page.getByRole('button',{name:/^Previews/}).click();
   const preview = page.locator('.ops-directory__row').filter({hasText:'Obsolete audit preview'});
   await preview.click();
+  const detailAxe = await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+  expect(detailAxe.violations.map(item => ({id:item.id,nodes:item.nodes.map(node=>node.target)}))).toEqual([]);
   await page.getByRole('button',{name:'Remove event',exact:true}).click();
   await page.getByLabel('Reason',{exact:true}).fill('Remove this obsolete local preview');
   await page.getByRole('button',{name:'Confirm removal',exact:true}).click();

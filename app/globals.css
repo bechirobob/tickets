@@ -1902,3 +1902,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .ops-main .operations-title > strong { color: #785008; }
 .ops-main .operations-metrics span { color: #56534c; }
 .support-ops__layout > article > header > div > span { color: #56534c; }
+.room-ops .curation-nav > p, .room-ops .curation-nav nav > span { color: #b4b5ae; }
+.ops-page .staff-events small, .ops-page .role-boundary p { color: #56534c; }
+.ops-page .support-ops small, .ops-page .support-ops i, .ops-page .support-ops time { color: #56534c; }
+.ops-page .support-ops__layout > nav > button.active small, .ops-page .support-ops__layout > nav > button.active i, .ops-page .support-ops__messages p.staff time { color: #c7c6bc; }
+.ops-page .support-ops__messages time { opacity: 1; }
+.ops-page .settings-card small { color: #55534c; }
+.account-page .passkey-security small, .account-page .passkey-security > p { color: #55534c; }
+.ops-tabs button, .ops-directory__row { border-radius: 0; }
+@media (min-width: 901px) {
+  .ops-page, .curation-page, .room-ops { grid-template-columns: 230px minmax(0, 1fr); }
+  .curation-nav, .room-ops > .curation-nav { height: 100dvh; min-height: 0; padding: 22px 18px; overflow-y: auto; }
+  .curation-nav nav, .room-ops > .curation-nav nav { margin-top: 26px; gap: 2px; }
+  .curation-nav nav a, .room-ops > .curation-nav nav a { padding: 6px 10px; font-size: 14px; line-height: 1.25; }
+  .curation-nav > p, .room-ops > .curation-nav > p { padding-top: 12px; font-size: 12px; line-height: 1.4; }
+}
+@media (max-width: 900px) {
+  .ops-page, .curation-page, .room-ops { grid-template-columns: minmax(0, 1fr); }
+  .curation-nav, .room-ops > .curation-nav { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; gap: 12px; min-width: 0; }
+  .curation-nav .brand-logo__type { display: none; }
+  .curation-nav .brand-logo__emblem { width: 34px; height: auto; }
+  .curation-nav > .workspace-jump { width: 100%; min-width: 0; margin: 0; }
+  .curation-nav .workspace-jump select { min-width: 0; width: 100%; font-size: 16px; }
+  .curation-nav .workspace-jump > span { color: #b4b5ae; }
+  .curation-nav .curation-signout { margin: 0; padding: 10px; font-size: 0; }
+}

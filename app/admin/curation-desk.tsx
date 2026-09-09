@@ -84,7 +84,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
     <main className="curation-page">
       <OperationsNav actor={actor} role={role} active="/admin" />
       <section className="curation-main">
-        <header><div><p>BeCore editorial operations</p><h1>Submission queue</h1></div><span>{items.filter((item) => item.status === "submitted").length} waiting</span></header>
+        <header><div><p>BeCore editorial operations</p><h1>Submission queue</h1></div><span>{items.filter((item) => groups.active.includes(item.status)).length} to review</span></header>
         {error && !selected ? <p className="curation-error" role="alert">{error} <button onClick={() => void load()}>Retry</button></p> : null}
         {notice ? <p className="ops-message" role="status">{notice}</p> : null}
         {!selected ? <>

@@ -31,7 +31,7 @@ export async function cleanupRemovedEvent(env: Cloudflare.Env, slug: string) {
     env.DB.prepare("UPDATE tickets SET status = 'voided' WHERE event_slug = ? AND status = 'issued'").bind(slug),
     env.DB.prepare("UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE event_slug = ? AND status = 'held'").bind(now, slug),
     env.DB.prepare("UPDATE orders SET status = 'expired' WHERE event_slug = ? AND status = 'payment_pending'").bind(slug),
-    env.DB.prepare("UPDATE event_registrations SET status = 'cancelled', version = version + 1, updated_at = ? WHERE event_slug = ? AND status NOT IN ('cancelled','declined')").bind(now, slug),
+    env.DB.prepare("UPDATE event_registrations SET status = 'cancelled', notified_version = version + 1, version = version + 1, updated_at = ? WHERE event_slug = ? AND status NOT IN ('cancelled','declined')").bind(now, slug),
     env.DB.prepare("UPDATE room_flashes SET status = 'deleted', image_data = NULL, deleted_at = ? WHERE event_slug = ?").bind(now, slug),
     env.DB.prepare("UPDATE event_promoter_codes SET status = 'disabled' WHERE event_slug = ?").bind(slug),
     env.DB.prepare('DELETE FROM registration_access_grants WHERE registration_id IN (SELECT id FROM event_registrations WHERE event_slug = ?)').bind(slug),

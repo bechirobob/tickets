@@ -22,7 +22,7 @@ for (const [path, expected] of [["/api/customer/registrations", 401], ["/api/adm
   const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(15000) });
   if (response.status !== expected) throw new Error(`Registration privacy check ${path} returned ${response.status}`);
 }
-for (const path of ["events", "operations", "accounts", "orders", "support", "promoters", "rooms"]) {
+for (const path of ["events", "events/removal", "operations", "accounts", "orders", "support", "promoters", "rooms"]) {
   const response = await fetch(`${origin}/api/admin/${path}`, { signal: AbortSignal.timeout(15000) });
   if (![401, 403].includes(response.status)) throw new Error(`Operations privacy check ${path} returned ${response.status}`);
 }

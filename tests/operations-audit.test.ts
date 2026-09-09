@@ -59,6 +59,7 @@ describe('Operations Center audit regressions', () => {
     expect(await removed.json()).toEqual({ removed: true });
     expect(await eventDraft(cookie,slug)).toBeUndefined();
     expect(await env.DB.prepare('SELECT status FROM event_registrations WHERE id = ?').bind(slug).first()).toEqual({ status:'cancelled' });
+    expect(await env.DB.prepare('SELECT version > notified_version AS pending FROM event_registrations WHERE id = ?').bind(slug).first()).toEqual({pending:0});
     expect(await env.DB.prepare('SELECT status FROM tickets WHERE id = ?').bind(ticket.id).first()).toEqual({status:'voided'});
     expect(await env.DB.prepare('SELECT id FROM orders WHERE id = ?').bind(ticket.id).first()).not.toBeNull();
     expect(await env.DB.prepare('SELECT id FROM registration_access_grants WHERE registration_id = ?').bind(slug).first()).toBeNull();
