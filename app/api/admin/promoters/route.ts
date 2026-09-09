@@ -10,14 +10,14 @@ export async function GET(request: Request) {
   const { env, session } = await access(request);
   if (!session) return Response.json({ error: "Curation access is required." }, { status: 403 });
   const [events, codes] = await Promise.all([
-    env.DB.prepare("SELECT slug, title FROM curated_event_records ORDER BY starts_at DESC").all(),
+    env.DB.prepare("SELECT slug, title FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all(),
     env.DB.prepare(`
       SELECT code.id, code.event_slug AS eventSlug, event.title AS eventTitle, code.code, code.label, code.status,
         code.created_at AS createdAt, COUNT(orders.id) AS orderCount,
         COALESCE(SUM(CASE WHEN orders.status IN ('paid', 'refund_pending', 'refunded') THEN orders.total_amount_minor ELSE 0 END), 0) AS grossMinor
       FROM event_promoter_codes code JOIN curated_event_records event ON event.slug = code.event_slug
       LEFT JOIN orders ON orders.event_slug = code.event_slug AND orders.promoter_code = code.code
-      GROUP BY code.id ORDER BY code.created_at DESC
+      WHERE event.removed_at IS NULL GROUP BY code.id ORDER BY code.created_at DESC
     `).all(),
   ]);
   return Response.json({ events: events.results, codes: codes.results }, { headers: { "cache-control": "no-store" } });

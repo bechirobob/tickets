@@ -12,10 +12,15 @@ const email = 'operations-audit@example.com';
 const start = new Date(Date.now() + 7 * 86400000).toISOString();
 const end = new Date(Date.now() + 8 * 86400000).toISOString();
 const sql = `
+INSERT OR REPLACE INTO party_submissions (id,organizer_name,contact_name,contact_email,contact_phone,title,concept,venue_name,area,starts_at,ends_at,vibe,lineup,capacity,price_from_minor,age_restriction,status,created_at,updated_at)
+VALUES ('operations-review','Audit Organiser','Audit Contact','review-audit@example.com','233000000000','Queue audit submission','A complete event pitch for local review.','Audit Venue','Accra','${start}','${end}','Late night','Audit DJ',20,10000,'18+','in_review','${stamp}','${stamp}');
+INSERT OR REPLACE INTO curated_event_records (id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,age_restriction,lineup,image_url,curation_note,status,created_at,updated_at,is_test_event)
+VALUES ('operations-remove','operations-remove','operations-remove','Obsolete audit preview','Audit Venue','Accra','${start}','${end}','Late night',0,20,'18+','Audit DJ','https://example.com/art.jpg','A disposable local event used to verify removal.','unpublished','${stamp}','${stamp}',1);
+
 INSERT OR REPLACE INTO staff_accounts (id, normalized_email, display_name, role, password_hash, password_salt, password_iterations, must_change_password, status, password_changed_at, created_at, created_by, updated_at)
 VALUES ('operations-audit', '${email}', 'Operations Audit Owner', 'owner', 'client-pbkdf2-sha256-v1.${digest(proof)}', '${salt.toString('base64url')}', 600000, 0, 'active', '${stamp}', '${stamp}', 'isolated-browser-fixture', '${stamp}');
 INSERT OR REPLACE INTO staff_sessions (id, account_id, token_hash, expires_at, created_at, last_seen_at) VALUES ('operations-audit-session', 'operations-audit', '${digest(token)}', '${new Date(Date.now()+3600000).toISOString()}', '${stamp}', '${stamp}');
-UPDATE curated_event_records SET starts_at = '${start}', ends_at = '${end}', status = 'published', schedule_status = 'confirmed', event_state = 'on_sale', sales_close_at = '${start}', sales_open_at = NULL WHERE slug = 'after-dark-osu';
+UPDATE curated_event_records SET is_test_event = 0, starts_at = '${start}', ends_at = '${end}', status = 'published', schedule_status = 'confirmed', event_state = 'on_sale', sales_close_at = '${start}', sales_open_at = NULL WHERE slug = 'after-dark-osu';
 UPDATE event_ticket_tiers SET status = 'available', sales_open_at = NULL, sales_close_at = '${start}' WHERE event_slug = 'after-dark-osu';
 INSERT OR REPLACE INTO orders (id, reference, event_slug, ticket_type, quantity, face_amount_minor, booking_fee_minor, total_amount_minor, currency, customer_email, customer_phone, payment_channel, payment_provider, status, created_at, paid_at)
 VALUES ('operations-rsvp', 'BCT-AUDIT-RSVP', 'after-dark-osu', 'rsvp', 1, 0, 0, 0, 'GHS', 'rsvp-audit@example.com', '233000000000', 'rsvp', 'rsvp', 'paid', '${stamp}', '${stamp}');

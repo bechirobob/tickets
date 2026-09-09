@@ -18,10 +18,11 @@ for (const [path, heading] of [
     page.on('pageerror', error => errors.push(error.message));
     const apiErrors: string[] = [];
     page.on('response', response => { if (response.url().includes('/api/') && response.status() >= 500) apiErrors.push(`${response.status()}: ${response.url()}`); });
-    await page.goto(path);
+    const response = await page.goto(path);
+    expect(response?.headers()["cache-control"]).toContain("no-store");
     await expect(page.locator('h1')).toBeVisible();
     await expect(page).not.toHaveURL(/\/admin\/login/);
-    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+    if (path !== '/admin/account') await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     // Wait for server-backed screen data before examining layout and accessibility.
     await expect(page.getByText(/Loading (real inventory|accounts|operations)/i)).toHaveCount(0);
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
@@ -34,6 +35,7 @@ for (const [path, heading] of [
 }
 test('event save survives a dropped connection and retains the draft', async ({ page }) => {
   await page.goto('/admin/events');
+  await page.locator('.ops-directory__row').first().click();
   const title = page.getByLabel('Title', { exact: true }); await expect(title).toBeVisible();
   const original = await title.inputValue(); await title.fill(`${original} revised`);
   await page.route('**/api/admin/events', route => route.request().method() === 'PATCH' ? route.abort('failed') : route.continue());
@@ -56,6 +58,7 @@ test('support reply and room memory retain content after failed writes', async (
   await expect(page.getByRole('button', { name: 'Send reply' })).toBeEnabled();
   await expect(page.getByLabel('Reply to customer')).toHaveValue('Please check My Nights for the guest pass.');
   await page.goto('/admin/rooms');
+  await expect(page.locator('#room-event')).not.toHaveValue('');
   await page.getByLabel('Title', { exact: true }).fill('A night to remember'); await page.getByLabel('Note', { exact: true }).fill('Thank you for joining us.');
   await page.route('**/api/admin/rooms', route => route.request().method() === 'POST' ? route.abort('failed') : route.continue());
   await page.getByRole('button', { name: 'Publish memory' }).click();
@@ -68,4 +71,43 @@ test('owner signs in through the real password flow and signs out', async ({ pag
   await page.getByRole('button', { name: 'Enter secure workspace' }).click(); await expect(page).toHaveURL(/\/admin\/operations$/);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expect(page).toHaveURL('http://127.0.0.1:8791/');
   await page.goto('/admin/accounts'); await expect(page).toHaveURL(/\/admin\/login/);
+});
+
+test('review decisions clear the active list and event removal clears inventory', async ({ page }, info) => {
+  await page.goto('/admin');
+  await expect(page.locator('.curation-detail')).toHaveCount(0);
+  const submission = page.locator('.ops-directory__row').filter({hasText:'Queue audit submission'});
+  await submission.click();
+  await page.getByLabel('Private / organiser note').fill('This proposal does not meet the event requirements.');
+  await page.getByRole('button',{name:'Reject',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Submission rejected');
+  await expect(submission).toHaveCount(0);
+  await page.getByRole('button',{name:/^Rejected /}).click();
+  await expect(submission).toBeVisible();
+  await submission.click();
+  await page.getByRole('button',{name:'Archive submission'}).click();
+  await expect(submission).toHaveCount(0);
+  await page.goto('/admin/events');
+  await expect(page.getByLabel('Title',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:/^Previews/}).click();
+  const preview = page.locator('.ops-directory__row').filter({hasText:'Obsolete audit preview'});
+  await preview.click();
+  await page.getByRole('button',{name:'Remove event',exact:true}).click();
+  await page.getByLabel('Reason',{exact:true}).fill('Remove this obsolete local preview');
+  await page.getByRole('button',{name:'Confirm removal',exact:true}).click();
+  await expect(page.getByLabel('Title',{exact:true})).toHaveCount(0);
+  await expect(preview).toHaveCount(0);
+  await page.screenshot({path:info.outputPath('compact-inventory.png'),fullPage:true});
+});
+test('finance separates orders from reports and filters free registrations', async ({ page }) => {
+  await page.goto('/admin/orders');
+  await expect(page.getByRole('heading',{name:'Open disputes'})).not.toBeVisible();
+  await page.getByRole('button',{name:'Disputes',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Open disputes'})).toBeVisible();
+  await expect(page.getByRole('table')).not.toBeVisible();
+  await page.getByRole('button',{name:'Orders',exact:true}).click();
+  await page.getByText('Filter by event or payment method',{exact:true}).click();
+  await page.getByLabel('Payment method',{exact:true}).selectOption('rsvp');
+  await page.getByRole('button',{name:'Apply filters'}).click();
+  await expect(page.getByRole('row').filter({hasText:'BCT-AUDIT-RSVP'})).toBeVisible();
 });

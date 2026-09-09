@@ -14,7 +14,7 @@ export async function registrationSettings(db: D1Database, slug: string) {
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.capacity, 0) AS capacity, COALESCE(s.max_party_size, 1) AS maxPartySize,
     COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess
-    FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ?`).bind(slug).first<RegistrationSettings>();
+    FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(slug).first<RegistrationSettings>();
 }
 export function registrationsOpen(settings: RegistrationSettings) {
   return settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)

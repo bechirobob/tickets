@@ -1,3 +1,4 @@
+import { retryEventRemovals } from "../lib/event-removal";
 import { processRegistrations } from "../lib/registrations";
 import { recoverSeevPayments } from "../lib/seevplus";
 /** Cloudflare Worker entry point for the vinext-starter template. */
@@ -154,6 +155,10 @@ function securityResponse(response: Response, nonce = requestNonce(), path = "")
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  if (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan") {
+    headers.set("Cache-Control", "no-store");
+    headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
   if (path === "/admin/recover" || path === "/api/admin/recovery") {
     headers.set("Referrer-Policy", "no-referrer");
     headers.set("Cache-Control", "no-store");
@@ -174,6 +179,7 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
 }
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
   try {
     await purgeExpiredFlashes(env.DB);

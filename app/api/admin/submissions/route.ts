@@ -1,5 +1,5 @@
 import { normalizeEventTagline, assertOriginalEventTagline } from "../../../../lib/event-copy";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { curatedEventRecords, curationAuditEvents, eventHosts, eventTicketTiers, hosts, partySubmissions, staffAccounts, staffEventAssignments } from "../../../../db/schema";
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
@@ -44,8 +44,8 @@ export async function GET(request: Request) {
   const actor = await actorOrUnauthorized(request);
   if (!actor) return Response.json({ error: "Sign in is required." }, { status: 401 });
   const db = await getDb();
-  const submissions = await db.select().from(partySubmissions).orderBy(desc(partySubmissions.createdAt));
-  return Response.json({ submissions });
+  const submissions = await db.select().from(partySubmissions).where(sql`NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.submission_id = ${partySubmissions.id} AND event.removed_at IS NOT NULL)`).orderBy(desc(partySubmissions.createdAt));
+  return Response.json({ submissions }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function PATCH(request: Request) {
@@ -134,10 +134,8 @@ export async function PATCH(request: Request) {
       }).onConflictDoUpdate({
         target: curatedEventRecords.submissionId,
         set: {
-          title: current.title, venue: current.venueName, venueMapUrl: current.venueMapUrl,
-          area: current.area, startsAt: current.startsAt, endsAt: current.endsAt,
-          vibe: current.vibe, priceFromMinor: current.priceFromMinor, capacity: current.capacity,
-          salesCloseAt: current.startsAt, ageRestriction: current.ageRestriction, lineup: current.lineup,
+          // Publication changes must preserve the live event's edited venue,
+          // schedule, capacity and price. The submission is an intake snapshot.
           status: publicStatus, scheduledPublishAt,
           publishedAt: next === "published" ? now : current.publishedAt,
           curationNote, tagline, updatedAt: now,

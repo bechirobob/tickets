@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const reports = await env.DB.prepare(`
     SELECT id, event_slug AS eventSlug, reporter_attendee_id AS reporterAttendeeId,
            message_id AS messageId, reason, details, status, created_at AS createdAt
-    FROM room_reports WHERE (? = 'owner' OR EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id = ? AND a.event_slug = room_reports.event_slug)) ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, created_at DESC LIMIT 100
+    FROM room_reports WHERE NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = room_reports.event_slug AND e.removed_at IS NOT NULL) AND (? = 'owner' OR EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id = ? AND a.event_slug = room_reports.event_slug)) ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, created_at DESC LIMIT 100
   `).bind(session.role, session.accountId).all<{ id: string; eventSlug: string; reporterAttendeeId: string; messageId: string; reason: string; details: string | null; status: string; createdAt: string }>();
   const scopedReports = session.role === "owner" ? reports.results : (await Promise.all(reports.results.map(async (report) => await hasEventAssignment(env.DB, session, report.eventSlug) ? report : null))).filter((report): report is typeof reports.results[number] => Boolean(report));
   const enriched = await Promise.all(scopedReports.map(async (report) => ({
@@ -28,14 +28,14 @@ export async function GET(request: Request) {
     FROM room_flash_reports report
     JOIN room_flashes flash ON flash.id = report.flash_id
     JOIN attendee_profiles profile ON profile.id = flash.attendee_id
-    WHERE (? = 'owner' OR EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id = ? AND a.event_slug = report.event_slug))
+    WHERE NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = report.event_slug AND e.removed_at IS NOT NULL) AND (? = 'owner' OR EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id = ? AND a.event_slug = report.event_slug))
     ORDER BY CASE report.status WHEN 'open' THEN 0 ELSE 1 END, report.created_at DESC
     LIMIT 100
   `).bind(session.role, session.accountId).all<{ id: string; flashId: string; eventSlug: string; reason: string; details: string | null; status: string; createdAt: string; flashStatus: string; attendeeId: string; displayName: string }>();
   const scopedFlashReports = session.role === "owner" ? flashReports.results : (await Promise.all(flashReports.results.map(async (report) => await hasEventAssignment(env.DB, session, report.eventSlug) ? report : null))).filter((report): report is typeof flashReports.results[number] => Boolean(report));
   const eventRows = session.role === "owner"
-    ? await env.DB.prepare("SELECT slug, title FROM curated_event_records ORDER BY starts_at DESC").all<{ slug: string; title: string }>()
-    : await env.DB.prepare("SELECT event.slug, event.title FROM curated_event_records event JOIN staff_event_assignments assignment ON assignment.event_slug = event.slug WHERE assignment.account_id = ? ORDER BY event.starts_at DESC").bind(session.accountId).all<{ slug: string; title: string }>();
+    ? await env.DB.prepare("SELECT slug, title FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all<{ slug: string; title: string }>()
+    : await env.DB.prepare("SELECT event.slug, event.title FROM curated_event_records event JOIN staff_event_assignments assignment ON assignment.event_slug = event.slug WHERE assignment.account_id = ? AND event.removed_at IS NULL ORDER BY event.starts_at DESC").bind(session.accountId).all<{ slug: string; title: string }>();
   const eventSlugs = eventRows.results.map((event) => event.slug);
   const [settings, memories, suspensions] = eventSlugs.length ? await Promise.all([
     env.DB.prepare(`SELECT event_slug AS eventSlug, emergency_read_only AS emergencyReadOnly,

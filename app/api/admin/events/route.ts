@@ -59,7 +59,7 @@ export async function GET(request: Request) {
              image_url AS imageUrl, curation_note AS curationNote, tagline, status,
              dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk,
              scheduled_publish_at AS scheduledPublishAt, published_at AS publishedAt, updated_at AS updatedAt
-      FROM curated_event_records ORDER BY starts_at DESC
+      FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC
     `).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT tier.id, tier.event_slug AS eventSlug, tier.code, tier.name, tier.description,
@@ -89,7 +89,7 @@ export async function PATCH(request: Request) {
     const slug = text(body.slug, "event", 80);
     if (body.action === "save_copy") {
       const { env } = await import("cloudflare:workers");
-      const event = await env.DB.prepare("SELECT slug FROM curated_event_records WHERE slug = ?").bind(slug).first();
+      const event = await env.DB.prepare("SELECT slug FROM curated_event_records WHERE slug = ? AND removed_at IS NULL").bind(slug).first();
       if (!event) return Response.json({ error: "Event not found." }, { status: 404 });
       const tagline = normalizeEventTagline(body.tagline, true);
       await assertOriginalEventTagline(env.DB, tagline, slug);
@@ -112,7 +112,7 @@ export async function PATCH(request: Request) {
     if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > 12) throw new Error("Every event needs between one and twelve ticket tiers.");
 
     const { env } = await import("cloudflare:workers");
-    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, schedule_status AS scheduleStatus, status, dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk, tagline FROM curated_event_records WHERE slug = ? LIMIT 1")
+    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, schedule_status AS scheduleStatus, status, dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk, tagline FROM curated_event_records WHERE slug = ? AND removed_at IS NULL LIMIT 1")
       .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; scheduleStatus: string; status: string; dressCode: string | null; colourScheme: string | null; awarenessNote: string | null; guestPerk: string | null; tagline: string | null }>();
     if (!current) return Response.json({ error: "Event not found." }, { status: 404 });
     if (eventState === "cancelled" && current.eventState !== "cancelled") throw new Error("Request cancellation in Event operations so another authorised person can approve it.");

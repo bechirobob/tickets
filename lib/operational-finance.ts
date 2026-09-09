@@ -1,3 +1,4 @@
+import { removeEvent } from "./event-removal";
 import { initiatePaystackRefund } from "./payment-operations";
 import { notifyEventAttendees } from "./notifications";
 import { hasPermission, recordAudit, type AdminSession } from "./admin-session";
@@ -157,7 +158,8 @@ export async function decideApproval(env: Cloudflare.Env, session: AdminSession,
         env.DB.prepare("UPDATE tickets SET status = 'voided' WHERE event_slug = ? AND status = 'issued'").bind(approval.eventSlug),
         env.DB.prepare("UPDATE approval_requests SET status = 'completed', completed_at = ? WHERE id = ?").bind(now, approval.id),
       ]);
-      await notifyEventAttendees(env, approval.eventSlug, { kind: "event_status", title: "This Night is cancelled", body: "Open My Nights for refund status and order-linked support.", url: `/my-nights/${encodeURIComponent(approval.eventSlug)}?view=purchase`, sourceId: `event-cancelled-${approval.id}`, tag: `event-${approval.eventSlug}` });
+      if (JSON.parse(approval.payloadJson).removeEvent === true) await removeEvent(env, session, approval.eventSlug, true, String(JSON.parse(approval.payloadJson).reason));
+      else await notifyEventAttendees(env, approval.eventSlug, { kind: "event_status", title: "This Night is cancelled", body: "Open My Nights for refund status and order-linked support.", url: `/my-nights/${encodeURIComponent(approval.eventSlug)}?view=purchase`, sourceId: `event-cancelled-${approval.id}`, tag: `event-${approval.eventSlug}` });
     }
     await recordAudit(env.DB, { session, action: "approval.completed", targetType: "approval", targetId: approval.id, outcome: "success", detail: approval.kind });
     return { status: "completed" as const };

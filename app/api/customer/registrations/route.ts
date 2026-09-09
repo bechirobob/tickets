@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.max_party_size, 1) AS maxPartySize, COALESCE(s.room_access, 0) AS roomAccess
     FROM event_registrations r JOIN curated_event_records e ON e.slug = r.event_slug LEFT JOIN event_registration_settings s ON s.event_slug = r.event_slug
-    WHERE r.attendee_id = ? ORDER BY r.updated_at DESC LIMIT 100`).bind(identity.attendeeId).all();
+    WHERE r.attendee_id = ? AND e.removed_at IS NULL ORDER BY r.updated_at DESC LIMIT 100`).bind(identity.attendeeId).all();
   return Response.json({ registrations: rows.results }, { headers: { 'cache-control': 'no-store, private' } });
 }
 export async function POST(request: Request) {

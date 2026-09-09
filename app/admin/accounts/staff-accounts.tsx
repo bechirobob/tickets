@@ -43,6 +43,7 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true); setMessage("");
     try {
       const form = new FormData(event.currentTarget);
@@ -68,7 +69,7 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
     <OperationsNav actor={actor} role={role} active="/admin/accounts" />
     <section className="curation-main"><header><div><p>Named access only</p><h1>People & permissions</h1></div></header>
       {loading ? <div className="curation-empty"><Loader2 className="spin" /> Loading accounts…</div> : <div className="staff-workspace">
-        <div className="staff-list"><button className={`staff-list__new${selectedId === "new" ? " active" : ""}`} onClick={() => { setSelectedId("new"); setDraftRole("organizer"); setMessage(""); }}><span><UserPlus size={15} /></span><b>New person</b><small>Create named access</small></button>{accounts.map((account) => <button key={account.id} className={selectedId === account.id ? "active" : ""} onClick={() => { setSelectedId(account.id); setDraftRole(account.role); setMessage(""); }}><span>{account.displayName.slice(0, 2).toUpperCase()}</span><b>{account.displayName}</b><small>{STAFF_ROLE_DEFINITIONS[account.role].label} · {account.status}</small></button>)}</div>
+        <div className="staff-list"><button disabled={busy} className={`staff-list__new${selectedId === "new" ? " active" : ""}`} onClick={() => { setSelectedId("new"); setDraftRole("organizer"); setMessage(""); }}><span><UserPlus size={15} /></span><b>New person</b><small>Create named access</small></button>{accounts.map((account) => <button disabled={busy} key={account.id} className={selectedId === account.id ? "active" : ""} onClick={() => { setSelectedId(account.id); setDraftRole(account.role); setMessage(""); }}><span>{account.displayName.slice(0, 2).toUpperCase()}</span><b>{account.displayName}</b><small>{STAFF_ROLE_DEFINITIONS[account.role].label} · {account.status}</small></button>)}</div>
         <form key={selected?.id ?? "new"} className="staff-editor" onSubmit={save}>
           <p className="night-kicker"><span /> {selected ? "Account controls" : "New named account"}</p><h2>{selected?.displayName ?? "Add someone to operations"}</h2>
           <div className="ops-grid"><label>Name<input name="displayName" defaultValue={selected?.displayName} required /></label><label>Email<input name="email" type="email" defaultValue={selected?.email} required /></label><label>Role<select name="role" value={draftRole} onChange={(event) => setDraftRole(event.target.value as StaffRole)}>{STAFF_ROLES.map((value) => <option key={value} value={value}>{STAFF_ROLE_DEFINITIONS[value].label}</option>)}</select></label><label>Status<select name="status" defaultValue={selected?.status ?? "active"}><option value="active">Active</option><option value="disabled">Disabled</option></select></label><label className="wide"><KeyRound size={14} /> {selected ? "Reset with temporary password (optional)" : "Temporary password"}<input name="temporaryPassword" type="password" minLength={12} required={!selected} /></label></div>

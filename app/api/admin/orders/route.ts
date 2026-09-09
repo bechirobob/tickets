@@ -29,17 +29,23 @@ export async function GET(request: Request) {
   const status = url.searchParams.get("status")?.trim() ?? "";
   const requestedPage = Math.max(1, Math.min(10_000, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1));
   const pageSize = 10;
+  const provider = url.searchParams.get("provider") ?? "";
+  const eventSlug = url.searchParams.get("event") ?? "";
+  const includeRemoved = url.searchParams.get("removed") === "1" ? 1 : 0;
+  if (provider && !["paystack", "seevplus", "rsvp"].includes(provider)) return Response.json({ error: "Choose a valid payment method." }, { status: 400 });
   const wildcard = `%${query}%`;
   const totalRow = await env.DB.prepare(`
     SELECT COUNT(*) AS total
     FROM orders
     WHERE (? = '' OR orders.reference LIKE ? OR orders.customer_email LIKE ? OR orders.customer_phone LIKE ? OR orders.customer_name LIKE ?)
       AND (? = '' OR orders.status = ?)
-  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status).first<{ total: number }>();
+      AND (? = '' OR orders.payment_provider = ?) AND (? = '' OR orders.event_slug = ?)
+      AND (? = 1 OR NOT EXISTS (SELECT 1 FROM curated_event_records removed WHERE removed.slug = orders.event_slug AND removed.removed_at IS NOT NULL))
+  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status, provider, provider, eventSlug, eventSlug, includeRemoved).first<{ total: number }>();
   const total = Number(totalRow?.total ?? 0);
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize)));
   const offset = (page - 1) * pageSize;
-  const [orders, runs, disputes, settlements] = await Promise.all([
+  const [orders, runs, disputes, settlements, eventOptions] = await Promise.all([
     env.DB.prepare(`
     SELECT orders.id, orders.reference, orders.event_slug AS eventSlug,
            COALESCE(event.title, orders.event_slug) AS eventTitle,
@@ -59,13 +65,16 @@ export async function GET(request: Request) {
     FROM orders LEFT JOIN curated_event_records event ON event.slug = orders.event_slug
     WHERE (? = '' OR orders.reference LIKE ? OR orders.customer_email LIKE ? OR orders.customer_phone LIKE ? OR orders.customer_name LIKE ?)
       AND (? = '' OR orders.status = ?)
+      AND (? = '' OR orders.payment_provider = ?) AND (? = '' OR orders.event_slug = ?)
+      AND (? = 1 OR NOT EXISTS (SELECT 1 FROM curated_event_records removed WHERE removed.slug = orders.event_slug AND removed.removed_at IS NOT NULL))
     ORDER BY orders.created_at DESC LIMIT ? OFFSET ?
-  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status, pageSize, offset).all<Record<string, unknown>>(),
+  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status, provider, provider, eventSlug, eventSlug, includeRemoved, pageSize, offset).all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM reconciliation_runs ORDER BY created_at DESC LIMIT 20").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM payment_disputes WHERE status NOT IN ('resolved', 'accepted') ORDER BY updated_at DESC LIMIT 50").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM event_settlements ORDER BY period_end DESC, event_slug LIMIT 100").all<Record<string, unknown>>(),
+    env.DB.prepare("SELECT slug, title FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all(),
   ]);
-  return Response.json({ orders: orders.results, total, page, pageSize, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ orders: orders.results, total, page, pageSize, events: eventOptions.results, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {

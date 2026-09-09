@@ -152,10 +152,9 @@ export async function finishPasskeyAuthentication(db: D1Database, origin: string
   });
   if (!verification.verified) throw new Error("The passkey could not verify this sign-in.");
   const now = new Date().toISOString();
-  await db.batch([
-    db.prepare("UPDATE staff_passkeys SET counter = ?, last_used_at = ? WHERE id = ?").bind(verification.authenticationInfo.newCounter, now, passkey.id),
-    db.prepare("UPDATE staff_auth_challenges SET used_at = ? WHERE id = ?").bind(now, challenge.id),
-  ]);
+  const claimed = await db.prepare("UPDATE staff_auth_challenges SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?").bind(now, challenge.id, now).run();
+  if (claimed.meta.changes !== 1) throw new Error("That secure sign-in expired or was already used. Start again.");
+  await db.prepare("UPDATE staff_passkeys SET counter = MAX(counter, ?), last_used_at = ? WHERE id = ?").bind(verification.authenticationInfo.newCounter, now, passkey.id).run();
   return { accountId: challenge.accountId, returnTo: challenge.returnTo ?? "/admin" };
 }
 
@@ -170,9 +169,9 @@ export async function consumeRecoveryCode(db: D1Database, exchangeToken: string,
     .bind(challenge.accountId, await hashToken(code.trim().toUpperCase())).first<{ id: string }>();
   if (!recovery) throw new Error("That recovery code is invalid or already used.");
   const now = new Date().toISOString();
-  await db.batch([
-    db.prepare("UPDATE staff_recovery_codes SET used_at = ? WHERE id = ?").bind(now, recovery.id),
-    db.prepare("UPDATE staff_auth_challenges SET used_at = ? WHERE id = ?").bind(now, challenge.id),
-  ]);
+  const claimed = await db.prepare("UPDATE staff_auth_challenges SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?").bind(now, challenge.id, now).run();
+  if (claimed.meta.changes !== 1) throw new Error("That secure sign-in expired or was already used. Start again.");
+  const consumed = await db.prepare("UPDATE staff_recovery_codes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(now, recovery.id).run();
+  if (consumed.meta.changes !== 1) throw new Error("That recovery code was already used. Start again.");
   return { accountId: challenge.accountId, returnTo: challenge.returnTo ?? "/admin" };
 }

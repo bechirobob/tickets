@@ -316,6 +316,12 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     return message;
   }
 
+  async removeEventContent(): Promise<void> {
+    for (const socket of this.ctx.getWebSockets()) socket.close(1008, "Event removed");
+    this.ctx.storage.sql.exec("DELETE FROM reactions; DELETE FROM messages; DELETE FROM room_config;");
+    await this.ctx.storage.deleteAlarm();
+  }
+
   async removeMessage(messageId: string): Promise<boolean> {
     const found = this.messageExists(messageId);
     if (!found) return false;

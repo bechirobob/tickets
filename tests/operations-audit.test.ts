@@ -1,16 +1,20 @@
+import { GET as removalPreview, POST as removeEventRoute } from '../app/api/admin/events/removal/route';
+import { cleanupRemovedEvent, retryEventRemovals } from '../lib/event-removal';
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { createStaffSession, readAdminSession, type StaffRole } from '../lib/admin-session';
+import { createStaffSession, readAdminSession, hashToken, type StaffRole } from '../lib/admin-session';
 import { GET as events, PATCH as editEvent } from '../app/api/admin/events/route';
 import { GET as operations, POST as operate } from '../app/api/admin/operations/route';
 import { GET as accounts } from '../app/api/admin/accounts/route';
 import { GET as orders, POST as orderAction } from '../app/api/admin/orders/route';
 import { GET as support } from '../app/api/admin/support/route';
 import { GET as rooms } from '../app/api/admin/rooms/route';
+import { PATCH as reviewSubmission } from '../app/api/admin/submissions/route';
 import { GET as promoters } from '../app/api/admin/promoters/route';
 import { POST as gate, GET as manifest } from '../app/api/admin/check-in/route';
 import { createApprovalRequest, decideApproval, requestMassRefund } from '../lib/operational-finance';
 import { createGateToken, hashGateToken } from '../lib/gate-pass';
+import { consumeRecoveryCode } from '../lib/staff-passkeys';
 const origin = 'https://tickets.becoreops.com';
 const now = () => new Date().toISOString();
 async function staff(role: StaffRole = 'owner') {
@@ -46,6 +50,51 @@ async function booking(slug: string, provider = 'paystack', status = 'issued') {
 }
 
 describe('Operations Center audit regressions', () => {
+  it('removes an unpaid event from active workspaces, cancels RSVP and keeps booking analytics', async () => {
+    const cookie = await staff(); const slug = await seed(); const ticket = await booking(slug, 'rsvp');
+    await env.DB.prepare(`INSERT INTO event_registrations (id,event_slug,normalized_email,guest_name,kind,status,order_id,created_at,updated_at) VALUES (?,?,'removed@example.com','Removed guest','rsvp','confirmed',?,?,?)`).bind(slug,slug,ticket.id,now(),now()).run();
+    await env.DB.prepare(`INSERT INTO registration_access_grants (id,registration_id,token_hash,expires_at,created_at) VALUES (?,?,?, ?,?)`).bind(slug,slug,slug,now(),now()).run();
+    expect((await removalPreview(req(`events/removal?slug=${slug}`, cookie))).status).toBe(200);
+    const removed = await removeEventRoute(req('events/removal', cookie, { slug, reason: 'Remove the obsolete preview event' }));
+    expect(await removed.json()).toEqual({ removed: true });
+    expect(await eventDraft(cookie,slug)).toBeUndefined();
+    expect(await env.DB.prepare('SELECT status FROM event_registrations WHERE id = ?').bind(slug).first()).toEqual({ status:'cancelled' });
+    expect(await env.DB.prepare('SELECT status FROM tickets WHERE id = ?').bind(ticket.id).first()).toEqual({status:'voided'});
+    expect(await env.DB.prepare('SELECT id FROM orders WHERE id = ?').bind(ticket.id).first()).not.toBeNull();
+    expect(await env.DB.prepare('SELECT id FROM registration_access_grants WHERE registration_id = ?').bind(slug).first()).toBeNull();
+    expect(await env.DB.prepare('SELECT event_slug FROM event_removal_cleanup WHERE event_slug = ?').bind(slug).first()).toBeNull();
+    expect(await (await orders(req('orders',cookie))).json()).not.toMatchObject({orders:expect.arrayContaining([expect.objectContaining({id:ticket.id})])});
+    expect(await (await orders(req('orders?removed=1',cookie))).json()).toMatchObject({orders:expect.arrayContaining([expect.objectContaining({id:ticket.id})])});
+    await expect(env.DB.prepare("UPDATE curated_event_records SET status = 'published' WHERE slug = ?").bind(slug).run()).rejects.toThrow('Removed events cannot be republished');
+    await expect(cleanupRemovedEvent(env,slug)).resolves.toBeUndefined();
+    await env.DB.prepare("UPDATE tickets SET status = 'issued' WHERE id = ?").bind(ticket.id).run();
+    expect(await env.DB.prepare('SELECT status FROM tickets WHERE id = ?').bind(ticket.id).first()).toEqual({status:'voided'});
+  });
+  it('requires independent approval before removing an upcoming paid event and retains refund records', async () => {
+    const requester = await staff(); const reviewer = await staff(); const slug = await seed(); const ticket = await booking(slug);
+    const response = await removeEventRoute(req('events/removal',requester,{slug,reason:'The organiser withdrew this event'}));
+    expect(response.status).toBe(202);
+    const result = await response.json() as {approvalId:string};
+    expect(await eventDraft(requester,slug)).toBeDefined();
+    await expect(decideApproval(env,(await readAdminSession(requester,env.DB))!,{approvalId:result.approvalId,decision:'approve'})).rejects.toThrow();
+    await decideApproval(env,(await readAdminSession(reviewer,env.DB))!,{approvalId:result.approvalId,decision:'approve'});
+    expect(await eventDraft(reviewer,slug)).toBeUndefined();
+    expect(await env.DB.prepare('SELECT status FROM orders WHERE id = ?').bind(ticket.id).first()).toEqual({status:'paid'});
+    expect(await env.DB.prepare('SELECT id FROM attendee_notifications WHERE event_slug = ?').bind(slug).first()).toBeNull();
+  });
+  it('resumes interrupted cleanup and denies removal to unrelated staff roles', async () => {
+    const slug = await seed();
+    for (const role of ['finance','support','organizer','gate','moderator'] as StaffRole[]) {
+      expect((await removeEventRoute(req('events/removal',await staff(role),{slug,reason:'Not an authorised event manager'}))).status).toBe(403);
+    }
+    await env.DB.batch([
+      env.DB.prepare("UPDATE curated_event_records SET removed_at = ?, status = 'unpublished' WHERE slug = ?").bind(now(),slug),
+      env.DB.prepare('INSERT INTO event_removal_cleanup (event_slug,created_at) VALUES (?,?)').bind(slug,now()),
+    ]);
+    await retryEventRemovals(env);
+    expect(await env.DB.prepare('SELECT event_slug FROM event_removal_cleanup WHERE event_slug = ?').bind(slug).first()).toBeNull();
+    expect(await env.DB.prepare('SELECT status FROM event_ticket_tiers WHERE event_slug = ?').bind(slug).first()).toEqual({status:'hidden'});
+  });
   it('enforces each workspace API against every staff role', async () => {
     const routes: Array<[string, (r: Request) => Promise<Response>, StaffRole[]]> = [
       ['events', events, ['owner','curator']], ['operations', operations, ['owner','curator','finance']],
@@ -126,6 +175,27 @@ describe('Operations Center audit regressions', () => {
     expect((await orderAction(req('orders', cookie, { action: 'verify', orderId: ticket.id }))).status).toBe(400);
     await env.DB.prepare("UPDATE orders SET status = 'payment_pending' WHERE id = ?").bind(ticket.id).run();
     expect((await orderAction(req('orders', cookie, { action: 'resend', orderId: ticket.id }))).status).toBe(404);
+  });
+  it('enforces capacity and cancellation invariants inside database writes', async () => {
+    const slug = await seed(); const ticket = await booking(slug);
+    await env.DB.prepare(`INSERT INTO inventory_reservations (order_id, event_slug, ticket_tier_id, unit_quantity, admission_count, status, expires_at, created_at, updated_at) VALUES (?, ?, ?, 10, 10, 'consumed', ?, ?, ?)`).bind(ticket.id, slug, `${slug}-tier`, now(), now(), now()).run();
+    await expect(env.DB.prepare('UPDATE event_ticket_tiers SET capacity_admissions = 5 WHERE event_slug = ?').bind(slug).run()).rejects.toThrow('capacity');
+    await env.DB.prepare("UPDATE curated_event_records SET event_state = 'cancelled' WHERE slug = ?").bind(slug).run();
+    await expect(env.DB.prepare("UPDATE curated_event_records SET event_state = 'on_sale' WHERE slug = ?").bind(slug).run()).rejects.toThrow('cancelled');
+  });
+  it('preserves edited event data when changing publication status', async () => {
+    const cookie = await staff(); const slug = await seed();
+    await env.DB.prepare(`INSERT INTO party_submissions (id, organizer_name, contact_name, contact_email, contact_phone, title, concept, venue_name, venue_map_url, area, starts_at, ends_at, vibe, lineup, capacity, price_from_minor, age_restriction, status, curation_note, tagline, event_slug, created_at, updated_at) SELECT submission_id, 'Audit Host', 'Audit Contact', 'host@example.com', '233000000000', 'Original title', 'Original concept', 'Old venue', venue_map_url, area, starts_at, ends_at, vibe, lineup, 3, 100, age_restriction, 'published', curation_note, tagline, slug, created_at, updated_at FROM curated_event_records WHERE slug = ?`).bind(slug).run();
+    expect((await reviewSubmission(req('submissions', cookie, { id: slug, action: 'unpublish' }, 'PATCH'))).status).toBe(200);
+    expect(await env.DB.prepare('SELECT title, venue, capacity, price_from_minor AS price, status FROM curated_event_records WHERE slug = ?').bind(slug).first()).toMatchObject({ title: 'Audit Night', venue: 'Audit Venue', capacity: 20, price: 10000, status: 'unpublished' });
+  });
+  it('consumes an MFA recovery code only once across concurrent challenges', async () => {
+    const actor = (await readAdminSession(await staff()))!;
+    const code = 'ABCDE-12345'; const tokens = [crypto.randomUUID(), crypto.randomUUID()];
+    await env.DB.prepare('INSERT INTO staff_recovery_codes (id, account_id, code_hash, created_at) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), actor.accountId, await hashToken(code), now()).run();
+    for (const token of tokens) await env.DB.prepare("INSERT INTO staff_auth_challenges (id, account_id, purpose, challenge, exchange_token_hash, expires_at, created_at) VALUES (?, ?, 'authentication', 'test-challenge', ?, ?, ?)").bind(crypto.randomUUID(), actor.accountId, await hashToken(token), new Date(Date.now() + 60000).toISOString(), now()).run();
+    const results = await Promise.allSettled(tokens.map(token => consumeRecoveryCode(env.DB, token, code)));
+    expect(results.filter(item => item.status === 'fulfilled')).toHaveLength(1);
   });
   it('paginates support by conversation without truncating a long thread', async () => {
     const cookie = await staff(); const slug = await seed(); const ticket = await booking(slug);

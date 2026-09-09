@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       status, locked_until AS lockedUntil, last_login_at AS lastLoginAt, created_at AS createdAt FROM staff_accounts ORDER BY created_at`)
       .all<Record<string, unknown>>(),
     env.DB.prepare("SELECT account_id AS accountId, event_slug AS eventSlug FROM staff_event_assignments ORDER BY event_slug").all<{ accountId: string; eventSlug: string }>(),
-    env.DB.prepare("SELECT slug, title, starts_at AS startsAt FROM curated_event_records ORDER BY starts_at DESC").all<Record<string, unknown>>(),
+    env.DB.prepare("SELECT slug, title, starts_at AS startsAt FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all<Record<string, unknown>>(),
   ]);
   return Response.json({
     accounts: accounts.results.map((account) => ({ ...account, eventSlugs: assignments.results.filter((item) => item.accountId === account.id).map((item) => item.eventSlug) })),
@@ -83,7 +83,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const id = String(body.id ?? "");
-    const current = await env.DB.prepare("SELECT id, role, status FROM staff_accounts WHERE id = ? LIMIT 1").bind(id).first<{ id: string; role: StaffRole; status: string }>();
+    const current = await env.DB.prepare("SELECT id, role, status, normalized_email AS email FROM staff_accounts WHERE id = ? LIMIT 1").bind(id).first<{ id: string; role: StaffRole; status: string; email: string }>();
     if (!current) return Response.json({ error: "Account not found." }, { status: 404 });
     const input = accountInput(body);
     const status = body.status === "disabled" ? "disabled" : "active";
@@ -100,7 +100,10 @@ export async function PATCH(request: Request) {
       ...input.eventSlugs.map((slug) => env.DB.prepare("INSERT INTO staff_event_assignments (account_id, event_slug, assigned_by, assigned_at) VALUES (?, ?, ?, ?)")
         .bind(id, slug, session.accountId, now)),
     ];
-    if (status === "disabled") statements.push(env.DB.prepare("UPDATE staff_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL").bind(now, id));
+    if (status === "disabled" || input.role !== current.role || input.email !== current.email || (typeof body.temporaryPassword === "string" && body.temporaryPassword.length > 0)) {
+      statements.push(env.DB.prepare("UPDATE staff_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL").bind(now, id));
+      statements.push(env.DB.prepare("UPDATE staff_auth_challenges SET used_at = ? WHERE account_id = ? AND used_at IS NULL").bind(now, id));
+    }
     if (typeof body.temporaryPassword === "string" && body.temporaryPassword.length > 0) {
       const password = await createPasswordRecord({
         password: body.temporaryPassword,

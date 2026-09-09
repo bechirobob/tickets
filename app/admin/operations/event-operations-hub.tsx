@@ -78,6 +78,7 @@ type Alert = {
   created_at: string;
 };
 type Approval = {
+  payload_json: string;
   id: string;
   kind: string;
   event_slug: string | null;
@@ -114,6 +115,10 @@ const money = (minor: number) =>
     maximumFractionDigits: 0,
   }).format(minor / 100);
 
+function approvalDetail(item: Approval): { removeEvent?: boolean; reason?: string } {
+  try { return JSON.parse(item.payload_json ?? "{}"); } catch { return {}; }
+}
+
 export default function EventOperationsHub({
   actor,
   role,
@@ -146,6 +151,7 @@ export default function EventOperationsHub({
   });
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
     const response = await operationsFetch("/api/admin/operations", {
@@ -187,6 +193,8 @@ export default function EventOperationsHub({
   const canEvents = role === "owner" || role === "curator";
 
   async function act(body: Record<string, unknown>) {
+    if (working) return;
+    setWorking(true);
     setMessage("");
     const response = await operationsFetch("/api/admin/operations", {
       method: "POST",
@@ -196,10 +204,11 @@ export default function EventOperationsHub({
     const result = (await response.json()) as { error?: string };
     setMessage(
       response.ok
-        ? "Saved. Operations agree."
+        ? "Operation saved."
         : (result.error ?? "That operation failed."),
     );
     await load();
+    setWorking(false);
   }
   function incident() {
     const title = window.prompt("Short incident title")?.trim();
@@ -412,7 +421,7 @@ export default function EventOperationsHub({
                             })
                           }
                         >
-                          Run rehearsal
+                          Check setup
                         </button>
                       </header>
                       {checks.map((item) => (
@@ -540,7 +549,7 @@ export default function EventOperationsHub({
                       .map((item) => (
                         <article key={item.id}>
                           <span>
-                            <b>{item.kind.replaceAll("_", " ")}</b>
+                            <b>{approvalDetail(item).removeEvent ? "Cancellation & removal" : item.kind.replaceAll("_", " ")}</b><small>{approvalDetail(item).reason}</small>
                             <small>
                               {item.requested_by_email} · {item.status}
                               {item.failure_reason

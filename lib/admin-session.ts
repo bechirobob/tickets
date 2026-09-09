@@ -128,6 +128,7 @@ export function requirePermission(session: AdminSession | null, permission: Staf
 
 export async function hasEventAssignment(db: D1Database, session: AdminSession, eventSlug: string): Promise<boolean> {
   if (session.mustChangePassword) return false;
+  if (await db.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND removed_at IS NOT NULL").bind(eventSlug).first()) return false;
   if (session.role === "owner") return true;
   const assignment = await db.prepare("SELECT 1 AS allowed FROM staff_event_assignments WHERE account_id = ? AND event_slug = ? LIMIT 1")
     .bind(session.accountId, eventSlug).first<{ allowed: number }>();

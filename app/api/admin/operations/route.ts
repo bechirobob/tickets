@@ -23,7 +23,7 @@ const readiness = [
   ["comms", "Customer update and escalation copy ready"],
   ["emergency", "Emergency contact and Room lock tested"],
   ["finance", "Reconciliation and refund owner confirmed"],
-  ["rehearsal", "Full event rehearsal passed"],
+  ["rehearsal", "Automated setup checks passed"],
 ] as const;
 
 function approvalKind(value: unknown): ApprovalKind | null {
@@ -39,7 +39,7 @@ async function seedReadiness(db: D1Database, eventSlugs: string[]) {
     readiness.map(([key, label]) =>
       db
         .prepare(
-          "INSERT OR IGNORE INTO event_readiness_checks (event_slug, check_key, label, status) VALUES (?, ?, ?, 'pending')",
+          "INSERT INTO event_readiness_checks (event_slug, check_key, label, status) VALUES (?, ?, ?, 'pending') ON CONFLICT(event_slug, check_key) DO UPDATE SET label = excluded.label",
         )
         .bind(slug, key, label),
     ),
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
   const canFinance = hasPermission(session, "orders.manage");
   const isOwner = session.role === "owner";
   const events = await env.DB.prepare(
-    "SELECT slug, title, venue, starts_at AS startsAt, event_state AS eventState FROM curated_event_records ORDER BY starts_at DESC LIMIT 100",
+    "SELECT slug, title, venue, starts_at AS startsAt, event_state AS eventState FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC LIMIT 100",
   ).all<{
     slug: string;
     title: string;
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
         (SELECT COUNT(*) FROM gate_devices WHERE event_slug = event.slug AND julianday(last_seen_at) > julianday('now','-2 minutes')) AS activeDevices,
         (SELECT COALESCE(SUM(pending_offline_scans),0) FROM gate_devices WHERE event_slug = event.slug AND julianday(last_seen_at) > julianday('now','-30 minutes')) AS pendingOffline,
         (SELECT MAX(created_at) FROM gate_checkin_events WHERE event_slug = event.slug) AS lastEntryAt
-      FROM curated_event_records event ORDER BY event.starts_at DESC
+      FROM curated_event_records event WHERE event.removed_at IS NULL ORDER BY event.starts_at DESC
     `,
     ).all<Record<string, unknown>>(),
     env.DB.prepare(
@@ -138,10 +138,8 @@ export async function GET(request: Request) {
   ]);
   let returns: Record<string, unknown>[] = [];
   if (canFinance) {
-    {
       const result = await env.DB.prepare(`SELECT request.id, request.event_slug AS eventSlug, request.ticket_id AS ticketId, request.status, request.face_value_minor AS faceValueMinor, request.currency, request.waitlist_demand_at_request AS waitlistDemand, request.requested_at AS requestedAt, attendee.normalized_email AS attendeeEmail FROM ticket_return_requests request JOIN attendee_profiles attendee ON attendee.id = request.attendee_id WHERE request.status IN ('requested','matched','refund_pending') ORDER BY request.requested_at ASC LIMIT 100`).all<Record<string, unknown>>();
       returns = result.results;
-    }
   }
   const scopedMetrics = metrics.results.map((metric) => ({
     slug: metric.slug,
@@ -321,8 +319,8 @@ export async function POST(request: Request) {
       const rehearsal = await env.DB.prepare(
         `
         SELECT
-          EXISTS(SELECT 1 FROM curated_event_records WHERE slug = ? AND event_state NOT IN ('cancelled','past')) AS eventReady,
-          EXISTS(SELECT 1 FROM event_ticket_tiers WHERE event_slug = ? AND status != 'hidden' AND capacity_admissions > 0) AS inventoryReady,
+          EXISTS(SELECT 1 FROM curated_event_records WHERE slug = ? AND status = 'published' AND schedule_status <> 'coming_soon' AND event_state NOT IN ('cancelled','postponed','past')) AS eventReady,
+          EXISTS(SELECT 1 FROM curated_event_records event LEFT JOIN event_registration_settings registration ON registration.event_slug = event.slug WHERE event.slug = ? AND (registration.mode = 'rsvp' AND registration.capacity > 0 OR COALESCE(registration.mode, 'paid') = 'paid' AND EXISTS(SELECT 1 FROM event_ticket_tiers WHERE event_slug = event.slug AND status != 'hidden' AND capacity_admissions > 0))) AS inventoryReady,
           EXISTS(SELECT 1 FROM staff_event_assignments WHERE event_slug = ?) AS staffReady,
           EXISTS(SELECT 1 FROM staff_accounts account JOIN staff_event_assignments assignment ON assignment.account_id = account.id WHERE assignment.event_slug = ? AND account.status = 'active') AS accessReady
       `,
@@ -345,7 +343,7 @@ export async function POST(request: Request) {
       const resultStatus = missing.length ? "blocked" : "passed";
       const note = missing.length
         ? `Missing: ${missing.join(", ")}.`
-        : "Event record, sellable inventory, named staff and staff access all passed.";
+        : "Event record, admission capacity and staff access passed. Complete the physical gate and payment rehearsal separately.";
       await env.DB.prepare(
         "UPDATE event_readiness_checks SET status = ?, note = ?, checked_by = ?, checked_at = ? WHERE event_slug = ? AND check_key = 'rehearsal'",
       )
