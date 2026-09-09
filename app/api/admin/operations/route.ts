@@ -85,15 +85,15 @@ export async function GET(request: Request) {
     env.DB.prepare(
       `
       SELECT event.slug, event.title, event.event_state AS eventState,
-        (SELECT COUNT(*) FROM orders WHERE event_slug = event.slug AND status IN ('paid','refund_pending','refunded','disputed')) AS paidOrders,
+        (SELECT COUNT(*) FROM orders WHERE event_slug = event.slug AND payment_provider <> 'rsvp' AND status IN ('paid','refund_pending','refunded','disputed')) AS paidOrders,
         (SELECT COALESCE(SUM(total_amount_minor),0) FROM orders WHERE event_slug = event.slug AND status IN ('paid','refund_pending','refunded','disputed')) AS grossMinor,
         (SELECT COUNT(*) FROM tickets WHERE event_slug = event.slug AND status IN ('issued','checked_in')) AS activeTickets,
         (SELECT COUNT(*) FROM tickets WHERE event_slug = event.slug AND status = 'checked_in') AS checkedIn,
         (SELECT COUNT(*) FROM support_cases WHERE event_slug = event.slug AND status NOT IN ('resolved','closed')) AS openSupport,
         (SELECT COUNT(*) FROM room_reports WHERE event_slug = event.slug AND status = 'open') + (SELECT COUNT(*) FROM room_flash_reports WHERE event_slug = event.slug AND status = 'open') AS roomReports,
         (SELECT COUNT(*) FROM operational_incidents WHERE event_slug = event.slug AND status != 'resolved') AS openIncidents,
-        (SELECT COUNT(*) FROM gate_devices WHERE event_slug = event.slug AND last_seen_at > datetime('now','-2 minutes')) AS activeDevices,
-        (SELECT COALESCE(SUM(pending_offline_scans),0) FROM gate_devices WHERE event_slug = event.slug AND last_seen_at > datetime('now','-30 minutes')) AS pendingOffline,
+        (SELECT COUNT(*) FROM gate_devices WHERE event_slug = event.slug AND julianday(last_seen_at) > julianday('now','-2 minutes')) AS activeDevices,
+        (SELECT COALESCE(SUM(pending_offline_scans),0) FROM gate_devices WHERE event_slug = event.slug AND julianday(last_seen_at) > julianday('now','-30 minutes')) AS pendingOffline,
         (SELECT MAX(created_at) FROM gate_checkin_events WHERE event_slug = event.slug) AS lastEntryAt
       FROM curated_event_records event ORDER BY event.starts_at DESC
     `,
@@ -138,10 +138,10 @@ export async function GET(request: Request) {
   ]);
   let returns: Record<string, unknown>[] = [];
   if (canFinance) {
-    try {
-      const result = await env.DB.prepare(`SELECT request.id, request.event_slug AS eventSlug, request.ticket_id AS ticketId, request.status, request.face_value_minor AS faceValueMinor, request.currency, request.waitlist_demand_at_request AS waitlistDemand, request.requested_at AS requestedAt, attendee.normalized_email AS attendeeEmail FROM ticket_return_requests request JOIN attendee_accounts attendee ON attendee.id = request.attendee_id WHERE request.status IN ('requested','matched','refund_pending') ORDER BY request.requested_at ASC LIMIT 100`).all<Record<string, unknown>>();
+    {
+      const result = await env.DB.prepare(`SELECT request.id, request.event_slug AS eventSlug, request.ticket_id AS ticketId, request.status, request.face_value_minor AS faceValueMinor, request.currency, request.waitlist_demand_at_request AS waitlistDemand, request.requested_at AS requestedAt, attendee.normalized_email AS attendeeEmail FROM ticket_return_requests request JOIN attendee_profiles attendee ON attendee.id = request.attendee_id WHERE request.status IN ('requested','matched','refund_pending') ORDER BY request.requested_at ASC LIMIT 100`).all<Record<string, unknown>>();
       returns = result.results;
-    } catch { /* The migration may still be rolling out; core operations must remain available. */ }
+    }
   }
   const scopedMetrics = metrics.results.map((metric) => ({
     slug: metric.slug,
@@ -203,12 +203,18 @@ export async function POST(request: Request) {
       { error: "This request was not accepted." },
       { status: 403 },
     );
-  const body = (await request.json()) as Record<string, unknown>;
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "Send a valid operations request." }, { status: 400 });
   const action = String(body.action ?? "");
   const eventSlug = String(body.eventSlug ?? "");
   const requestId = requestMetadata(request).requestId;
   try {
+    if (["readiness", "incident_create", "run_rehearsal", "request_cancellation"].includes(action)) {
+      if (!await env.DB.prepare("SELECT 1 FROM curated_event_records WHERE slug = ?").bind(eventSlug).first()) return Response.json({ error: "Event not found." }, { status: 404 });
+      await seedReadiness(env.DB, [eventSlug]);
+    }
     if (action === "readiness") {
+      if (!readiness.some(([key]) => key === body.checkKey)) throw new Error("Choose a valid readiness check.");
       if (!hasPermission(session, "events.manage"))
         return Response.json(
           { error: "Event readiness belongs to curation." },
@@ -422,6 +428,7 @@ export async function POST(request: Request) {
         { status: 201 },
       );
     } else if (action === "approval") {
+      if (body.decision !== "approve" && body.decision !== "reject") throw new Error("Choose approve or reject.");
       const approval = await env.DB.prepare(
         "SELECT kind FROM approval_requests WHERE id = ? AND status = 'pending' LIMIT 1",
       )
@@ -442,7 +449,7 @@ export async function POST(request: Request) {
       return Response.json(
         await decideApproval(env, session, {
           approvalId: String(body.approvalId ?? ""),
-          decision: body.decision === "reject" ? "reject" : "approve",
+          decision: body.decision as "approve" | "reject",
           note: String(body.note ?? ""),
         }),
       );

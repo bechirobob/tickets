@@ -52,6 +52,10 @@ jobs:
         run: |
           node scripts/prepare-registration-browser-fixture.mjs
           npx playwright test --config playwright.registration.config.ts --project ${{ matrix.browser }} --output test-results/registration
+      - name: Verify owner Operations workflows on desktop and mobile
+        run: |
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --output test-results/operations
       - name: Preserve event-page renders and browser results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

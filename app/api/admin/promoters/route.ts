@@ -34,6 +34,9 @@ export async function POST(request: Request) {
     const code = body.code?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
     const label = body.label?.trim().slice(0, 100) ?? "";
     if (!eventSlug || code.length < 2 || !label) return Response.json({ error: "Choose an event, label and code." }, { status: 400 });
+    if (!await env.DB.prepare("SELECT 1 FROM curated_event_records WHERE slug = ?").bind(eventSlug).first()) return Response.json({ error: "Event not found." }, { status: 404 });
+    const duplicate = await env.DB.prepare("SELECT 1 FROM event_promoter_codes WHERE event_slug = ? AND code = ?").bind(eventSlug, code).first();
+    if (duplicate) return Response.json({ error: "That code already exists for this event." }, { status: 409 });
     await env.DB.prepare(`INSERT INTO event_promoter_codes (id, event_slug, code, label, status, created_at, created_by) VALUES (?, ?, ?, ?, 'active', ?, ?)`)
       .bind(crypto.randomUUID(), eventSlug, code, label, now, session.actor).run();
     await recordAudit(env.DB, { session, action: "promoter.created", targetType: "event", targetId: eventSlug, outcome: "success", detail: code, requestId: requestMetadata(request).requestId });
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
   if (body.action === "toggle") {
     const result = await env.DB.prepare("UPDATE event_promoter_codes SET status = CASE status WHEN 'active' THEN 'disabled' ELSE 'active' END WHERE id = ?").bind(body.id ?? "").run();
     if (result.meta.changes !== 1) return Response.json({ error: "Promoter link not found." }, { status: 404 });
+    await recordAudit(env.DB, { session, action: "promoter.toggled", targetType: "promoter_code", targetId: body.id, outcome: "success", requestId: requestMetadata(request).requestId });
     return Response.json({ updated: true });
   }
   return Response.json({ error: "Choose a valid promoter action." }, { status: 400 });

@@ -1,5 +1,7 @@
 "use client";
 
+import { operationsFetch } from "../../../lib/operations-client";
+
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Check, KeyRound, Loader2, Save, ShieldX, UserPlus } from "lucide-react";
 import OperationsNav from "../operations-nav";
@@ -19,7 +21,7 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
   const [draftRole, setDraftRole] = useState<StaffRole>("organizer");
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/admin/accounts", { cache: "no-store" });
+    const response = await operationsFetch("/api/admin/accounts", { cache: "no-store" });
     const result = await response.json() as { accounts?: StaffAccount[]; events?: EventOption[]; error?: string };
     if (!response.ok) setMessage(result.error ?? "Accounts could not be loaded.");
     else { setAccounts(result.accounts ?? []); setEvents(result.events ?? []); }
@@ -27,7 +29,7 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
   }, []);
 
   useEffect(() => {
-    fetch("/api/admin/accounts", { cache: "no-store" })
+    operationsFetch("/api/admin/accounts", { cache: "no-store" })
       .then(async (response) => ({ response, result: await response.json() as { accounts?: StaffAccount[]; events?: EventOption[]; error?: string } }))
       .then(({ response, result }) => {
         if (!response.ok) setMessage(result.error ?? "Accounts could not be loaded.");
@@ -51,7 +53,7 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
         displayName: form.get("displayName"), email: form.get("email"), role: form.get("role"), status: form.get("status"),
         temporaryPassword, ...password, eventSlugs: form.getAll("eventSlugs"),
       };
-      const response = await fetch("/api/admin/accounts", { method: selected ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const response = await operationsFetch("/api/admin/accounts", { method: selected ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json() as { error?: string; id?: string };
       if (!response.ok) setMessage(result.error ?? "The account could not be saved.");
       else { setMessage(selected ? "Account updated." : "Account created. Share the temporary password through a secure channel."); await load(); if (result.id) setSelectedId(result.id); }

@@ -1,6 +1,8 @@
 /* eslint-disable @next/next/no-img-element -- moderation images are private API responses and must bypass the public image optimizer. */
 "use client";
 
+import { operationsFetch } from "../../lib/operations-client";
+
 import Link from "next/link";
 import { CalendarClock, Check, ChevronRight, Eye, Loader2, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -44,7 +46,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
   }, []);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/admin/submissions", { cache: "no-store" });
+    const response = await operationsFetch("/api/admin/submissions", { cache: "no-store" });
     const result = await response.json() as { submissions?: Submission[]; error?: string };
     if (!response.ok) { setError(result.error ?? "Could not load the curation queue."); setLoading(false); return; }
     applyLoadedItems(result.submissions ?? []);
@@ -52,7 +54,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
   }, [applyLoadedItems]);
 
   useEffect(() => {
-    fetch("/api/admin/submissions", { cache: "no-store" })
+    operationsFetch("/api/admin/submissions", { cache: "no-store" })
       .then(async (response) => ({ response, result: await response.json() as { submissions?: Submission[]; error?: string } }))
       .then(({ response, result }) => {
         if (!response.ok) setError(result.error ?? "Could not load the curation queue.");
@@ -75,7 +77,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
   async function act(action: string) {
     if (!selected) return;
     setWorking(true); setError("");
-    const response = await fetch("/api/admin/submissions", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: selected.id, action, note, curationNote, tagline, scheduledPublishAt: scheduledAt }) });
+    const response = await operationsFetch("/api/admin/submissions", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: selected.id, action, note, curationNote, tagline, scheduledPublishAt: scheduledAt }) });
     const result = await response.json() as { error?: string };
     if (!response.ok) setError(result.error ?? "The review action failed.");
     else await load();

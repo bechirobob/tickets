@@ -12,7 +12,7 @@ async function orderForDelivery(db: D1Database, orderId: string) {
            customer_name AS customerName, face_amount_minor AS faceAmountMinor,
            booking_fee_minor AS bookingFeeMinor, total_amount_minor AS totalAmountMinor,
            currency, quantity, paid_at AS paidAt
-    FROM orders WHERE id = ? LIMIT 1
+    FROM orders WHERE id = ? AND status = 'paid' LIMIT 1
   `).bind(orderId).first<{
     id: string; reference: string; eventSlug: string; customerEmail: string; customerName: string | null;
     faceAmountMinor: number; bookingFeeMinor: number; totalAmountMinor: number; currency: string; quantity: number; paidAt: string | null;
@@ -82,8 +82,9 @@ export async function POST(request: Request) {
       return Response.json(result);
     }
     if (body.action === "verify") {
-      const order = await orderForDelivery(env.DB, body.orderId ?? "");
+      const order = await env.DB.prepare("SELECT id, reference, payment_provider AS provider FROM orders WHERE id = ?").bind(body.orderId ?? "").first<{ id: string; reference: string; provider: string }>();
       if (!order) return Response.json({ error: "Order not found." }, { status: 404 });
+      if (order.provider === "rsvp") return Response.json({ error: "This is a free RSVP. Manage it under Events & inventory." }, { status: 400 });
       const result = await verifyOrderPayment(env, order.reference);
       if (result.result === "paid") await deliverConfirmedOrder(env.DB, result.order, new URL(request.url).origin);
       await recordAudit(env.DB, { session, action: "payments.verify", targetType: "order", targetId: order.id, outcome: "success", detail: result.result, requestId: requestMetadata(request).requestId });

@@ -1,4 +1,6 @@
 "use client";
+
+import { operationsFetch } from "../../../lib/operations-client";
 /* eslint-disable jsx-a11y/alt-text -- the imported Image glyph is an icon, not content imagery */
 /* eslint-disable react-hooks/set-state-in-effect -- changing the selected Room intentionally resets its draft controls */
 /* eslint-disable @next/next/no-img-element -- private, cookie-authenticated moderation media cannot pass through the public optimizer */
@@ -36,12 +38,12 @@ export default function RoomOperations({ actor, role }: { actor: string; role: S
   const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
   const load = useCallback(async () => {
-    const response = await fetch("/api/admin/rooms", { cache: "no-store" });
+    const response = await operationsFetch("/api/admin/rooms", { cache: "no-store" });
     const result = await response.json() as { reports?: Report[]; flashReports?: FlashReport[]; events?: { slug: string; title: string }[]; settings?: RoomSetting[]; suspensions?: Suspension[]; error?: string };
     if (response.ok) { setReports(result.reports ?? []); setFlashReports(result.flashReports ?? []); setEvents(result.events ?? []); setSettings(result.settings ?? []); setSuspensions(result.suspensions ?? []); setEventSlug((current) => current || result.events?.[0]?.slug || ""); } else setNotice(result.error ?? "Reports could not be loaded.");
   }, []);
   useEffect(() => {
-    fetch("/api/admin/rooms", { cache: "no-store" })
+    operationsFetch("/api/admin/rooms", { cache: "no-store" })
       .then(async (response) => ({ response, result: await response.json() as { reports?: Report[]; flashReports?: FlashReport[]; events?: { slug: string; title: string }[]; settings?: RoomSetting[]; suspensions?: Suspension[]; error?: string } }))
       .then(({ response, result }) => {
         if (response.ok) { setReports(result.reports ?? []); setFlashReports(result.flashReports ?? []); setEvents(result.events ?? []); setSettings(result.settings ?? []); setSuspensions(result.suspensions ?? []); setEventSlug(result.events?.[0]?.slug || ""); }
@@ -63,17 +65,20 @@ export default function RoomOperations({ actor, role }: { actor: string; role: S
   const selectedSuspensions = suspensions.filter((item) => item.eventSlug === eventSlug);
 
   async function operate(body: Record<string, unknown>, success: string) {
+    if (working) return;
     setWorking(true); setNotice("");
-    const response = await fetch("/api/admin/rooms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventSlug, ...body }) });
+    const response = await operationsFetch("/api/admin/rooms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventSlug, ...body }) });
     const result = await response.json() as { error?: string };
     setNotice(response.ok ? success : result.error ?? "Room operation failed.");
     setWorking(false);
     if (response.ok) await load();
+    return response.ok;
   }
 
   async function publish() {
+    if (working) return;
     setWorking(true); setNotice("");
-    const response = await fetch("/api/admin/rooms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventSlug, content: announcement, pinned }) });
+    const response = await operationsFetch("/api/admin/rooms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventSlug, content: announcement, pinned }) });
     const result = await response.json() as { error?: string };
     setNotice(response.ok ? "Announcement is live in The Room." : result.error ?? "Announcement failed.");
     if (response.ok) setAnnouncement("");
@@ -82,7 +87,7 @@ export default function RoomOperations({ actor, role }: { actor: string; role: S
 
   async function remove(report: Report) {
     if (!window.confirm("Remove this message and resolve every open report against it?")) return;
-    const response = await fetch("/api/admin/rooms", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventSlug: report.eventSlug, messageId: report.messageId, note: `Removed from report ${report.id}` }) });
+    const response = await operationsFetch("/api/admin/rooms", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventSlug: report.eventSlug, messageId: report.messageId, note: `Removed from report ${report.id}` }) });
     const result = await response.json() as { error?: string };
     setNotice(response.ok ? "Message removed and report action recorded." : result.error ?? "Moderation action failed.");
     if (response.ok) await load();
@@ -90,15 +95,14 @@ export default function RoomOperations({ actor, role }: { actor: string; role: S
 
   async function removeFlash(report: FlashReport) {
     if (!window.confirm("Remove this Flash permanently and resolve every open report against it?")) return;
-    const response = await fetch(`/api/admin/rooms/flashes/${encodeURIComponent(report.flashId)}`, { method: "DELETE" });
+    const response = await operationsFetch(`/api/admin/rooms/flashes/${encodeURIComponent(report.flashId)}`, { method: "DELETE" });
     const result = await response.json() as { error?: string };
     setNotice(response.ok ? "Flash removed permanently and the action was recorded." : result.error ?? "Moderation action failed.");
     if (response.ok) await load();
   }
 
   async function publishMemory() {
-    await operate({ action: "memory", title: memoryTitle, content: memoryBody }, "Memory published inside this Night.");
-    setMemoryTitle(""); setMemoryBody("");
+    if (await operate({ action: "memory", title: memoryTitle, content: memoryBody }, "Memory published inside this Night.")) { setMemoryTitle(""); setMemoryBody(""); }
   }
 
   return <main className="room-ops">

@@ -1,5 +1,7 @@
 "use client";
 
+import { operationsFetch } from "../../../lib/operations-client";
+
 import { FormEvent, useEffect, useState } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { deriveStaffPasswordProof, prepareStaffPassword } from "../../../lib/staff-password-client";
@@ -18,9 +20,9 @@ export default function AccountSecurity({ mustChangePassword }: { mustChangePass
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
 
   async function loadSecurity() {
-    const response = await fetch("/api/admin/passkeys", { cache: "no-store" });
-    const data = await response.json() as { passkeys?: Passkey[]; sessions?: Session[]; currentSessionId?: string; recoveryCodesRemaining?: number };
-    if (response.ok) { setPasskeys(data.passkeys ?? []); setSessions(data.sessions ?? []); setCurrentSessionId(data.currentSessionId ?? ""); setRecoveryCodesRemaining(data.recoveryCodesRemaining ?? 0); }
+    const response = await operationsFetch("/api/admin/passkeys", { cache: "no-store" });
+    const data = await response.json() as { passkeys?: Passkey[]; sessions?: Session[]; currentSessionId?: string; recoveryCodesRemaining?: number; error?: string };
+    if (response.ok) { setPasskeys(data.passkeys ?? []); setSessions(data.sessions ?? []); setCurrentSessionId(data.currentSessionId ?? ""); setRecoveryCodesRemaining(data.recoveryCodesRemaining ?? 0); } else setMessage(data.error ?? "Account security could not load.");
   }
 
   useEffect(() => { const timer = window.setTimeout(() => void loadSecurity(), 0); return () => window.clearTimeout(timer); }, []);
@@ -28,11 +30,11 @@ export default function AccountSecurity({ mustChangePassword }: { mustChangePass
   async function addPasskey() {
     setBusy(true); setMessage("");
     try {
-      const begin = await fetch("/api/admin/passkeys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "begin" }) });
+      const begin = await operationsFetch("/api/admin/passkeys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "begin" }) });
       const challenge = await begin.json() as { options?: RegistrationOptions; exchangeToken?: string; error?: string };
       if (!begin.ok || !challenge.options || !challenge.exchangeToken) throw new Error(challenge.error ?? "Passkey setup could not start.");
       const response = await startRegistration({ optionsJSON: challenge.options });
-      const finish = await fetch("/api/admin/passkeys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "finish", exchangeToken: challenge.exchangeToken, response, label: navigator.platform || "Passkey" }) });
+      const finish = await operationsFetch("/api/admin/passkeys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "finish", exchangeToken: challenge.exchangeToken, response, label: navigator.platform || "Passkey" }) });
       const result = await finish.json() as { recoveryCodes?: string[]; error?: string };
       if (!finish.ok) throw new Error(result.error ?? "Passkey setup could not finish.");
       setRecoveryCodes(result.recoveryCodes ?? []);
@@ -43,7 +45,7 @@ export default function AccountSecurity({ mustChangePassword }: { mustChangePass
   }
 
   async function revokeSession(id: string) {
-    const response = await fetch("/api/admin/passkeys", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: id }) });
+    const response = await operationsFetch("/api/admin/passkeys", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: id }) });
     const result = await response.json() as { error?: string };
     setMessage(response.ok ? "That device is signed out." : result.error ?? "The device could not be signed out.");
     if (response.ok) await loadSecurity();
@@ -55,12 +57,12 @@ export default function AccountSecurity({ mustChangePassword }: { mustChangePass
     setMessage("");
     try {
       const form = new FormData(event.currentTarget);
-      const parametersResponse = await fetch("/api/admin/session", { cache: "no-store" });
+      const parametersResponse = await operationsFetch("/api/admin/session", { cache: "no-store" });
       const parameters = await parametersResponse.json() as { passwordSalt?: string; passwordIterations?: number; error?: string };
       if (!parametersResponse.ok || !parameters.passwordSalt || !parameters.passwordIterations) throw new Error(parameters.error ?? "The password check could not start.");
       const currentPasswordProof = await deriveStaffPasswordProof(String(form.get("currentPassword") ?? ""), parameters.passwordSalt, parameters.passwordIterations);
       const newPassword = await prepareStaffPassword(String(form.get("newPassword") ?? ""));
-      const response = await fetch("/api/admin/session", {
+      const response = await operationsFetch("/api/admin/session", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ currentPasswordProof, ...newPassword }),

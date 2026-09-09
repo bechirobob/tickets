@@ -1,5 +1,7 @@
 "use client";
 
+import { operationsFetch } from "../../../lib/operations-client";
+
 import {
   AlertTriangle,
   BarChart3,
@@ -146,7 +148,7 @@ export default function EventOperationsHub({
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
-    const response = await fetch("/api/admin/operations", {
+    const response = await operationsFetch("/api/admin/operations", {
       cache: "no-store",
     });
     const next = (await response.json()) as typeof data & { error?: string };
@@ -186,7 +188,7 @@ export default function EventOperationsHub({
 
   async function act(body: Record<string, unknown>) {
     setMessage("");
-    const response = await fetch("/api/admin/operations", {
+    const response = await operationsFetch("/api/admin/operations", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

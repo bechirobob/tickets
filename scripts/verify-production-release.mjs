@@ -22,7 +22,15 @@ for (const [path, expected] of [["/api/customer/registrations", 401], ["/api/adm
   const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(15000) });
   if (response.status !== expected) throw new Error(`Registration privacy check ${path} returned ${response.status}`);
 }
+for (const path of ["events", "operations", "accounts", "orders", "support", "promoters", "rooms"]) {
+  const response = await fetch(`${origin}/api/admin/${path}`, { signal: AbortSignal.timeout(15000) });
+  if (![401, 403].includes(response.status)) throw new Error(`Operations privacy check ${path} returned ${response.status}`);
+}
+for (const path of ["/admin/operations", "/admin/accounts", "/admin/events", "/admin/orders", "/admin/support", "/admin/rooms", "/admin/fees"]) {
+  const response = await fetch(`${origin}${path}`, { redirect: "manual", signal: AbortSignal.timeout(15000) });
+  if (![302, 303, 307, 308].includes(response.status) || !response.headers.get("location")?.includes("/admin/login")) throw new Error(`Operations route guard failed: ${path}`);
+}
 const catalogueResponse = await fetch(`${origin}/api/public/events`, { signal: AbortSignal.timeout(15000) });
 const catalogue = await catalogueResponse.json();
 if (!catalogueResponse.ok || !catalogue.events?.length || catalogue.events.some(event => !['paid', 'rsvp', 'interest'].includes(event.registrationMode))) throw new Error('Production registration catalogue is not ready');
-console.log(JSON.stringify({ ...version, registrationPrivacy: 'passed', registrationCatalogue: 'passed', publicRoutes: "passed", unsignedSeevWebhook: "rejected" }));
+console.log(JSON.stringify({ ...version, operationsPrivacy: 'passed', registrationPrivacy: 'passed', registrationCatalogue: 'passed', publicRoutes: "passed", unsignedSeevWebhook: "rejected" }));
