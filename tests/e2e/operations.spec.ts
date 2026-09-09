@@ -115,6 +115,8 @@ test('finance separates orders from reports and filters free registrations', asy
 });
 
 test.describe.serial('organiser RSVP and guest journey',()=>{
+ // These steps share one booking and a single-use email grant; replay requires fresh fixtures.
+ test.describe.configure({retries:0});
  test.beforeEach(async({context,baseURL})=>{await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);});
  test('organiser chooses free or paid entry and previews a direct registration link',async({page},info)=>{
   await page.goto('/organizer/workspace?event=rsvp-browser');
@@ -144,7 +146,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const response=await page.request.post('/api/registrations/claim',{data:{token:fixture.registrationToken},headers:{origin:'https://127.0.0.1:8791'}});expect(response.ok(),await response.text()).toBe(true);
   await expect(manager.getByText('Guest activity updated.')).toBeVisible({timeout:12000});
   await expect(manager.getByLabel('Guest capacity',{exact:true})).toHaveValue('31');
-  await manager.getByText('Recent signups & changes',{exact:true}).click();await expect(manager.getByText('Live RSVP Guest',{exact:true})).toBeVisible();
+  await manager.getByText('Recent signups & changes',{exact:true}).click();await expect(manager.getByLabel('Live registrations').getByText('Live RSVP Guest',{exact:true})).toBeVisible();
   await manager.getByRole('button',{name:'Guest emails',exact:true}).click();
   await expect(manager.getByText('rsvp-browser@example.com',{exact:true})).toBeVisible();
   const csv=await page.request.get('/api/admin/audience?eventSlug=rsvp-browser&export=csv');expect(await csv.text()).toContain('rsvp-browser@example.com');
