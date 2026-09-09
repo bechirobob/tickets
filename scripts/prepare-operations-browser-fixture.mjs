@@ -21,7 +21,7 @@ VALUES('rsvp-browser','rsvp-browser','rsvp-browser','RSVP browser gathering','Te
 INSERT OR REPLACE INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES('rsvp-host','rsvp-browser','operations-audit','${stamp}');
 INSERT OR REPLACE INTO event_registration_settings(event_slug,mode,capacity,max_party_size,updated_at) VALUES('rsvp-browser','rsvp',25,2,'${stamp}');
 INSERT OR REPLACE INTO event_registrations(id,event_slug,normalized_email,guest_name,party_size,kind,status,announcements_opt_in,created_at,updated_at) VALUES('rsvp-browser-guest','rsvp-browser','rsvp-browser@example.com','Live RSVP Guest',1,'rsvp','unverified',1,'${stamp}','${stamp}');
-INSERT OR REPLACE INTO registration_access_grants(id,registration_id,token_hash,expires_at,created_at) VALUES('rsvp-browser-grant','rsvp-browser-guest','${digest(registrationToken)}','${new Date(Date.now()+3600000).toISOString()}','${stamp}');
+INSERT OR REPLACE INTO registration_access_grants(id,registration_id,token_hash,expires_at,created_at) VALUES('rsvp-browser-grant','rsvp-browser-guest','${createHash('sha256').update(registrationToken).digest('hex')}','${new Date(Date.now()+3600000).toISOString()}','${stamp}');
 
 INSERT OR REPLACE INTO party_submissions (id,organizer_name,contact_name,contact_email,contact_phone,title,concept,venue_name,area,starts_at,ends_at,vibe,lineup,capacity,price_from_minor,age_restriction,status,created_at,updated_at)
 VALUES ('operations-review','Audit Organiser','Audit Contact','review-audit@example.com','233000000000','Queue audit submission','A complete event pitch for local review.','Audit Venue','Accra','${start}','${end}','Late night','Audit DJ',20,10000,'18+','in_review','${stamp}','${stamp}');

@@ -199,7 +199,7 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
     await recordSystemAlert(env, "waitlist-offers", error);
   }
   try {
-    await retryFailedDeliveries(env);
+    await retryFailedDeliveries(env, 20, 'standard');
   } catch (error) {
     await recordSystemAlert(env, "email-delivery-retry", error);
   }

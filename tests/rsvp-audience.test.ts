@@ -112,10 +112,24 @@ it('suppresses failed announcement retries after unsubscribe and recovers abando
  expect(await env.DB.prepare("SELECT status FROM delivery_events WHERE kind='event_announcement'").first()).toEqual({status:'suppressed'});
  // A worker can stop between creating a delivery and contacting the provider.
  await env.DB.prepare("UPDATE delivery_events SET status='queued',created_at='2020-01-01T00:00:00Z' WHERE kind='organizer_signup'").run();
- expect((await retryFailedDeliveries(env)).delivered).toBe(1);
+ const standard=await retryFailedDeliveries(env,20,'standard');expect(standard.delivered).toBe(0);
+ expect(await env.DB.prepare("SELECT status FROM delivery_events WHERE kind='organizer_signup'").first()).toEqual({status:'queued'});
+ const prepare=vi.spyOn(env.DB,'prepare');
+ await processEventAnnouncements(env,origin);expect(prepare.mock.calls.length).toBeLessThanOrEqual(50);prepare.mockRestore();
+ expect(await env.DB.prepare("SELECT status FROM delivery_events WHERE kind='organizer_signup'").first()).toEqual({status:'sent'});
 });
 it('exports filtered guest emails safely and keeps subscriber count independent of search',async()=>{
  await signup('export@example.com',true);await env.DB.prepare("UPDATE event_registrations SET guest_name='=HYPERLINK(1)' WHERE event_slug=?").bind(slug).run();
  const csv=await audience(get(`/api/admin/audience?eventSlug=${slug}&export=csv`));expect(csv.headers.get('cache-control')).toBe('no-store');expect(await csv.text()).toContain("'=HYPERLINK(1)");
  const empty=await (await audience(get(`/api/admin/audience?eventSlug=${slug}&q=missing`))).json() as {total:number;subscribers:number};expect(empty).toMatchObject({total:0,subscribers:1});
+});
+it('keeps announcement batches within the free D1 query budget and defers daily quotas',async()=>{
+ for(let i=0;i<10;i++)await rememberEventContact(env.DB,{eventSlug:slug,email:`bulk${i}@example.com`,guestName:'Bulk Guest',source:'rsvp',consentedAt:new Date().toISOString()});
+ await campaign();const prepare=vi.spyOn(env.DB,'prepare');
+ vi.mocked(fetch).mockResolvedValueOnce(Response.json({name:'daily_quota_exceeded',message:'Daily email quota reached'},{status:429}));
+ await processEventAnnouncements(env,origin);
+ expect(prepare.mock.calls.length).toBeLessThanOrEqual(50);prepare.mockRestore();
+ const delivered=await env.DB.prepare("SELECT COUNT(*) AS count FROM delivery_events WHERE kind='event_announcement'").first<{count:number}>();expect(delivered?.count).toBe(8);
+ const deferred=await env.DB.prepare("SELECT attempt_count AS attempts,next_attempt_at AS next FROM delivery_events WHERE kind='event_announcement' AND status='failed'").first<{attempts:number;next:string}>();expect(deferred?.attempts).toBe(0);expect(new Date(deferred!.next).getTime()).toBeGreaterThan(Date.now());
+ await processEventAnnouncements(env,origin);expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM event_announcement_recipients WHERE status='pending'").first<{count:number}>())?.count).toBe(0);
 });

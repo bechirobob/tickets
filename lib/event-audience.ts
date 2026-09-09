@@ -1,5 +1,5 @@
 import { createSecureToken } from './attendee-auth';
-import { sendEmail } from './email-delivery';
+import { sendEmail, retryFailedDeliveries } from './email-delivery';
 
 const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 export async function rememberEventContact(db: D1Database, input: { eventSlug: string; email: string; guestName: string; source: string; consentedAt?: string | null }) {
@@ -13,6 +13,9 @@ export async function rememberEventContact(db: D1Database, input: { eventSlug: s
 /** Queue individual deliveries; provider retry and idempotency remain in the shared delivery service. */
 export async function processEventAnnouncements(env: Cloudflare.Env, origin: string) {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return;
+  // A dedicated invocation keeps audience retries out of the operational cron's query budget.
+  const retried = await retryFailedDeliveries(env, 8, 'audience');
+  if (retried.attempted) return;
   const now = new Date().toISOString(), stale = new Date(Date.now() - 5 * 60000).toISOString();
   const rows = await env.DB.prepare(`SELECT r.campaign_id AS campaignId,r.contact_id AS contactId,c.subject,c.body,c.event_slug AS eventSlug,
       a.email,a.guest_name AS guestName,a.unsubscribe_token AS unsubscribeToken,
@@ -21,7 +24,7 @@ export async function processEventAnnouncements(env: Cloudflare.Env, origin: str
     FROM event_announcement_recipients r JOIN event_announcement_campaigns c ON c.id=r.campaign_id
     JOIN event_audience_contacts a ON a.id=r.contact_id JOIN curated_event_records e ON e.slug=c.event_slug
     WHERE c.status='queued' AND (r.status='pending' OR (r.status='sending' AND r.claimed_at < ?))
-    ORDER BY c.created_at,r.contact_id LIMIT 25`).bind(stale).all<{campaignId:string;contactId:string;subject:string;body:string;eventSlug:string;email:string;guestName:string;unsubscribeToken:string;subscribed:number;title:string;removedAt:string|null}>();
+    ORDER BY c.created_at,r.contact_id LIMIT 8`).bind(stale).all<{campaignId:string;contactId:string;subject:string;body:string;eventSlug:string;email:string;guestName:string;unsubscribeToken:string;subscribed:number;title:string;removedAt:string|null}>();
   for (const row of rows.results) {
     const claimed = await env.DB.prepare("UPDATE event_announcement_recipients SET status='sending',claimed_at=? WHERE campaign_id=? AND contact_id=? AND (status='pending' OR (status='sending' AND claimed_at < ?))").bind(now,row.campaignId,row.contactId,stale).run();
     if (!claimed.meta.changes) continue;
@@ -35,6 +38,7 @@ export async function processEventAnnouncements(env: Cloudflare.Env, origin: str
       await sendEmail({ db:env.DB,kind:'event_announcement',deliveryId:key,recipient:row.email,subject:`${row.title} · ${row.subject}`,
         text:`${row.body}\n\n${origin}/event/${row.eventSlug}\n\nYou subscribed to announcements from this event's organiser. Unsubscribe: ${unsubscribe}`,
         html:`<h2>${escape(row.subject)}</h2><p>${escape(row.body).replaceAll('\n','<br />')}</p><p><a href="${origin}/event/${encodeURIComponent(row.eventSlug)}">${escape(row.title)}</a></p><p>You subscribed to announcements from this event's organiser. <a href="${escape(unsubscribe)}">Unsubscribe</a></p>`,idempotencyKey:key });
+      await new Promise(resolve=>setTimeout(resolve,200));
     }
     await env.DB.prepare("UPDATE event_announcement_recipients SET status='queued',delivery_id=(SELECT id FROM delivery_events WHERE kind='event_announcement' AND json_extract(payload_json,'$.idempotencyKey')=? LIMIT 1) WHERE campaign_id=? AND contact_id=?").bind(key,row.campaignId,row.contactId).run();
   }

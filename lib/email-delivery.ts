@@ -24,6 +24,13 @@ function money(minor: number, currency: string) {
   return new Intl.NumberFormat("en-GH", { style: "currency", currency, minimumFractionDigits: 2 }).format(minor / 100);
 }
 
+function quotaRetryAt(response:Response,name?:string) {
+  if(name==='daily_quota_exceeded') {const next=new Date();next.setUTCDate(next.getUTCDate()+1);next.setUTCHours(0,1,0,0);return next.toISOString();}
+  if(name==='monthly_quota_exceeded')return new Date(Date.now()+86400000).toISOString();
+  const seconds=Number(response.headers.get('retry-after'));
+  return new Date(Date.now()+Math.max(60,Number.isFinite(seconds)?Math.min(seconds,86400):60)*1000).toISOString();
+}
+
 export async function sendEmail(input: {
   db: D1Database;
   kind: DeliveryKind;
@@ -66,7 +73,11 @@ export async function sendEmail(input: {
       },
       body: JSON.stringify({ from: env.EMAIL_FROM, to: [input.recipient], subject: input.subject, html: input.html, text: input.text }),
     });
-    const result = await response.json() as { id?: string; message?: string; error?: { message?: string } };
+    const result = await response.json() as { id?: string; name?: string; message?: string; error?: { message?: string } };
+    if(response.status===429 && ['event_announcement','organizer_signup'].includes(input.kind)) {
+      await input.db.prepare("UPDATE delivery_events SET status='failed',attempt_count=0,next_attempt_at=?,failure_reason=?,updated_at=? WHERE id=?").bind(quotaRetryAt(response,result.name),result.message??'Email provider quota reached.',now,deliveryId).run();
+      return {sent:false,reason:'provider_quota' as const};
+    }
     if (!response.ok || !result.id) throw new Error(result.message ?? result.error?.message ?? "Email provider rejected the message.");
     await input.db.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = 1, next_attempt_at = NULL, updated_at = ? WHERE id = ?")
       .bind(result.id, new Date().toISOString(), deliveryId).run();
@@ -107,12 +118,13 @@ export async function applyDeliveryWebhook(db: D1Database, input: {
   return { updated: result.meta.changes === 1, status };
 }
 
-export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20) {
+export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, scope: 'all' | 'audience' | 'standard' = 'all') {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return { attempted: 0, delivered: 0 };
+  const scopeSql = scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
   const due = await env.DB.prepare(`
     SELECT id, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
-    WHERE (status IN ('failed', 'delayed') AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (kind IN ('event_announcement','organizer_signup') AND status='queued' AND julianday(created_at) < julianday('now','-5 minutes'))
+    WHERE (${scopeSql}) AND ((status IN ('failed', 'delayed') AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (kind IN ('event_announcement','organizer_signup') AND status='queued' AND julianday(created_at) < julianday('now','-5 minutes')))
     ORDER BY next_attempt_at LIMIT ?
   `).bind(new Date().toISOString(), limit).all<{ id: string; recipient: string; payloadJson: string | null; attemptCount: number }>();
   let delivered = 0;
@@ -133,12 +145,16 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20) {
         const allowed=await env.DB.prepare(`SELECT 1 FROM staff_event_assignments a JOIN staff_accounts s ON s.id=a.account_id JOIN curated_event_records e ON e.slug=a.event_slug LEFT JOIN event_registration_settings r ON r.event_slug=e.slug WHERE a.account_id=? AND a.event_slug=? AND s.status='active' AND s.role='organizer' AND s.normalized_email=? AND e.removed_at IS NULL AND COALESCE(r.notify_host,1)=1`).bind(accountId,slug,item.recipient).first();
         if(!allowed){await env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL WHERE id=?").bind(item.id).run();continue;}
       }
+      if(/^(event-announcement|organizer-signup)\//u.test(payload.idempotencyKey))await new Promise(resolve=>setTimeout(resolve,200));
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": ((payload.idempotencyKey.startsWith("event-announcement/") || payload.idempotencyKey.startsWith("organizer-signup/")) ? payload.idempotencyKey : `${payload.idempotencyKey}/retry-${item.attemptCount}`).slice(0, 256) },
         body: JSON.stringify({ from: env.EMAIL_FROM, to: [item.recipient], subject: payload.subject, html: payload.html, text: payload.text }),
       });
-      const result = await response.json() as { id?: string; message?: string };
+      const result = await response.json() as { id?: string; name?:string; message?: string };
+      if(response.status===429 && /^(event-announcement|organizer-signup)\//u.test(payload.idempotencyKey)) {
+        await env.DB.prepare("UPDATE delivery_events SET status='failed',next_attempt_at=?,failure_reason=?,updated_at=? WHERE id=?").bind(quotaRetryAt(response,result.name),result.message??'Email provider quota reached.',new Date().toISOString(),item.id).run();continue;
+      }
       if (!response.ok || !result.id) throw new Error(result.message ?? "Email retry was rejected.");
       await env.DB.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = attempt_count + 1, failure_reason = NULL, next_attempt_at = NULL, updated_at = ? WHERE id = ?")
         .bind(result.id, new Date().toISOString(), item.id).run();
