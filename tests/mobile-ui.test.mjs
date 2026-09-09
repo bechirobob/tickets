@@ -388,7 +388,7 @@ test("returning buyers recover and manage the whole purchase through My Nights",
     readFile(new URL("../app/payment/return/page.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(myNights, /Bring back my Nights/u);
-  assert.match(myNights, /Same checkout email\. One private link/u);
+  assert.match(myNights, /Same email\. One private link/u);
   assert.match(myNights, /Ticket &amp; perks/u);
   assert.match(myNights, /Enter the live Room/u);
   assert.match(hub, />Ticket \(\{tickets\.length\}\)</u);

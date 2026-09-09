@@ -81,6 +81,6 @@ describe("ticket email delivery and recovery", () => {
   it("does not disclose whether an unknown email has tickets", async () => {
     const response = await requestRecovery(new Request("https://tickets.becoreops.com/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json", origin: "https://tickets.becoreops.com" }, body: JSON.stringify({ email: "unknown@example.com" }) }));
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toEqual({ message: "If that email has active paid tickets, a secure access link is on the way." });
+    await expect(response.json()).resolves.toEqual({ message: "If that email has tickets or registrations, a secure access link is on the way." });
   });
 });

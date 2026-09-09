@@ -4,7 +4,7 @@ import { loadTicketedEventExperience } from "../../../../../lib/event-experience
 
 async function access(request: Request, slug: string) {
   const { env } = await import("cloudflare:workers");
-  const attendee = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug);
+  const attendee = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug, false);
   return { env, attendee };
 }
 

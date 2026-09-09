@@ -29,7 +29,7 @@ export const orders = sqliteTable("orders", {
   paystackReference: text("paystack_reference"),
   paystackTransactionId: text("paystack_transaction_id"),
   paystackStatus: text("paystack_status"),
-  paymentProvider: text("payment_provider", { enum: ["paystack", "seevplus"] }).notNull().default("paystack"),
+  paymentProvider: text("payment_provider", { enum: ["paystack", "seevplus", "rsvp"] }).notNull().default("paystack"),
   providerReference: text("provider_reference"),
   providerTransactionId: text("provider_transaction_id"),
   providerStatus: text("provider_status"),
@@ -676,7 +676,7 @@ export const deliveryEvents = sqliteTable("delivery_events", {
   id: text("id").primaryKey(),
   orderId: text("order_id"),
   recoveryGrantId: text("recovery_grant_id"),
-  kind: text("kind", { enum: ["payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update", "operational_alert"] }).notNull(),
+  kind: text("kind", { enum: ["registration_access", "registration_update", "payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update", "operational_alert"] }).notNull(),
   recipient: text("recipient").notNull(),
   providerId: text("provider_id"),
   status: text("status", { enum: ["queued", "sent", "delivered", "delayed", "failed", "bounced", "complained", "suppressed"] }).notNull(),
@@ -908,7 +908,7 @@ export const policyVersions = sqliteTable("policy_versions", {
 
 export const consentRecords = sqliteTable("consent_records", {
   id: text("id").primaryKey(),
-  subjectType: text("subject_type", { enum: ["order", "organizer_submission", "attendee"] }).notNull(),
+  subjectType: text("subject_type", { enum: ["order", "organizer_submission", "attendee", "registration"] }).notNull(),
   subjectId: text("subject_id").notNull(),
   policy: text("policy").notNull(),
   version: text("version").notNull(),
@@ -1073,3 +1073,31 @@ export const refundBatches = sqliteTable("refund_batches", {
   updatedAt: text("updated_at").notNull(),
   completedAt: text("completed_at"),
 }, (table) => [index("refund_batches_status_idx").on(table.status, table.updatedAt)]);
+
+
+export const eventRegistrationSettings = sqliteTable("event_registration_settings", {
+  eventSlug: text("event_slug").primaryKey(),
+  mode: text("mode", { enum: ["paid", "rsvp", "interest"] }).notNull().default("paid"),
+  capacity: integer("capacity").notNull().default(0),
+  maxPartySize: integer("max_party_size").notNull().default(1),
+  approvalRequired: integer("approval_required", { mode: "boolean" }).notNull().default(false),
+  roomAccess: integer("room_access", { mode: "boolean" }).notNull().default(false),
+  updatedAt: text("updated_at").notNull(),
+});
+export const eventRegistrations = sqliteTable("event_registrations", {
+  id: text("id").primaryKey(), eventSlug: text("event_slug").notNull(),
+  normalizedEmail: text("normalized_email").notNull(), guestName: text("guest_name").notNull(),
+  phone: text("phone").notNull().default(""), partySize: integer("party_size").notNull().default(1),
+  kind: text("kind", { enum: ["rsvp", "interest"] }).notNull(),
+  status: text("status", { enum: ["unverified", "interested", "requested", "waitlisted", "confirmed", "cancelled", "declined"] }).notNull(),
+  attendeeId: text("attendee_id"), orderId: text("order_id"), verifiedAt: text("verified_at"),
+  approvedAt: text("approved_at"), eventSignature: text("event_signature"),
+  version: integer("version").notNull().default(0), notifiedVersion: integer("notified_version").notNull().default(0),
+  createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+}, table => [uniqueIndex("registrations_event_email_unique").on(table.eventSlug, table.normalizedEmail),
+  uniqueIndex("registrations_order_unique").on(table.orderId), index("registrations_queue_idx").on(table.eventSlug, table.status, table.createdAt)]);
+export const registrationAccessGrants = sqliteTable("registration_access_grants", {
+  id: text("id").primaryKey(), registrationId: text("registration_id").notNull(),
+  tokenHash: text("token_hash").notNull(), expiresAt: text("expires_at").notNull(),
+  claimedSessionId: text("claimed_session_id"), createdAt: text("created_at").notNull(),
+}, table => [uniqueIndex("registration_access_token_unique").on(table.tokenHash), index("registration_access_recent_idx").on(table.registrationId, table.createdAt)]);

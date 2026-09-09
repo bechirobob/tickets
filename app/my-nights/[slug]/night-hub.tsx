@@ -92,6 +92,7 @@ type GateTicket = {
   qrPayload: string | null;
 };
 type TicketOrder = {
+  roomAccess?: boolean;
   orderId: string;
   reference: string;
   eventSlug: string;
@@ -378,9 +379,9 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </button>
         ) : null}
         <button type="button" aria-current={view === "passes" ? "page" : undefined} onClick={() => setView("passes")}>Ticket ({tickets.length})</button>
-        <Link href={`/room/${event.slug}`}>
+        {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}>
           <MessageCircle size={13} /> Room
-        </Link>
+        </Link> : null}
         <button type="button" aria-current={view === "perks" ? "page" : undefined} onClick={() => setView("perks")}>Perks</button>
         <button type="button" aria-current={view === "details" ? "page" : undefined} onClick={() => setView("details")}>Details</button>
         <button type="button" aria-current={view === "purchase" ? "page" : undefined} onClick={() => setView("purchase")}>Purchase</button>
@@ -442,12 +443,12 @@ export default function NightHub({ event }: { event: EventSummary }) {
                   <b>Offline pass</b>No signal required
                 </span>
               </Link>
-              <Link href={`/room/${event.slug}`}>
+              {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}>
                 <MessageCircle size={17} />
                 <span>
                   <b>Enter The Room</b>Updates and conversation
                 </span>
-              </Link>
+              </Link> : null}
             </div>
           </div>
         ) : null}
@@ -464,13 +465,13 @@ export default function NightHub({ event }: { event: EventSummary }) {
                     <b>Show my ticket</b>Fresh moving passes for the gate
                   </span>
                 </button>
-                <Link href={`/room/${event.slug}`}>
+                {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}>
                   <MessageCircle />{" "}
                   <span>
                     <b>Enter The Room</b>Chat, Host updates and Flashes—same
                     conversation
                   </span>
-                </Link>
+                </Link> : null}
                 <button type="button" onClick={() => setView("perks")}>
                   <Crown />{" "}
                   <span>
@@ -564,6 +565,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                           ) : null}
                         </div>
                       ) : null}
+                      {ticket.ticketType !== "RSVP" ? <>
                       <TicketTransfer
                         ticketId={ticket.id}
                         disabled={ticket.status !== "issued"}
@@ -572,6 +574,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                         ticketId={ticket.id}
                         disabled={ticket.status !== "issued"}
                       />
+                      </> : <Link href="/my-nights">Manage RSVP</Link>}
                     </>
                   ) : (
                     <p>

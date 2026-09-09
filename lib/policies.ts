@@ -4,11 +4,12 @@ export type PolicyKey = "purchase" | "refund" | "privacy" | "community" | "organ
 
 export const policies: Record<PolicyKey, { version: string; title: string; summary: string; points: readonly string[] }> = {
   purchase: {
-    version: "2026-08-12",
-    title: "Ticket purchase terms",
+    version: "2026-09-09",
+    title: "Ticket and registration terms",
     summary: "The ticket belongs to the verified buyer or accepted recipient, and entry still follows the venue rules.",
     points: [
-      "A ticket is issued only after the payment provider confirms the correct amount, currency and reference.",
+      "Paid tickets require verified payment. Free RSVP passes require email verification, available capacity and host approval where enabled.",
+      "An announcement subscription or waitlist place does not reserve admission. Cancelling an RSVP releases the place; already-used passes cannot be cancelled.",
       "QR codes may rotate after a transfer, refund, dispute or security action. Only the latest valid code admits a guest.",
       "The purchaser is responsible for accurate delivery details and must not share private recovery links.",
       "Event staff may refuse entry for a void, refunded, duplicated, transferred or already-used ticket.",
@@ -26,11 +27,11 @@ export const policies: Record<PolicyKey, { version: string; title: string; summa
     ],
   },
   privacy: {
-    version: "2026-08-12",
+    version: "2026-09-09",
     title: "Privacy and retention",
     summary: "We keep what makes tickets work, restrict who sees it, and delete or anonymise it when the job is finished.",
     points: [
-      "Payment details stay with Paystack; BeCore stores transaction references, amounts, contact details and operational evidence.",
+      "Payment details stay with the payment provider; BeCore stores transaction references, amounts, contact details and operational evidence.",
       "Ticket, entry, consent and financial audit records are retained for legal, fraud and reconciliation needs.",
       "Room content and temporary Flashes follow the event retention controls shown inside the Room.",
       "Authorised staff receive only the event and role access needed for their work.",
@@ -65,7 +66,7 @@ export const organizerPolicyKeys: readonly PolicyKey[] = ["organizer", "privacy"
 
 export async function recordPolicyConsents(input: {
   db: D1Database;
-  subjectType: "order" | "organizer_submission" | "attendee";
+  subjectType: "registration" | "order" | "organizer_submission" | "attendee";
   subjectId: string;
   policyKeys: readonly PolicyKey[];
   actorEmail?: string | null;

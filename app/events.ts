@@ -3,6 +3,7 @@ import type { TicketTier } from "../lib/ticket-tiers";
 export type EventState = "on_sale" | "sold_out" | "cancelled" | "postponed" | "rescheduled";
 
 export type CuratedEvent = {
+  registrationMode?: 'paid' | 'rsvp' | 'interest';
   slug: string;
   title: string;
   shortDate: string;
@@ -40,6 +41,7 @@ export type CuratedEvent = {
 };
 
 type EventRecord = {
+  registrationMode: 'paid' | 'rsvp' | 'interest';
   slug: string;
   title: string;
   venue: string;
@@ -93,6 +95,7 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
   const endPending = record.scheduleStatus !== "confirmed";
   return {
     slug: record.slug,
+    registrationMode: record.registrationMode,
     title: record.title,
     shortDate: comingSoon ? "Coming soon" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" }).format(starts).toUpperCase(),
     fullDate: comingSoon ? "Coming soon" : new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
@@ -152,7 +155,7 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
   const now = new Date().toISOString();
   const slugFilter = slug ? "AND slug = ?" : "";
   const statement = db.prepare(`
-    SELECT slug, title, venue, venue_map_url AS venueMapUrl, area,
+    SELECT COALESCE((SELECT mode FROM event_registration_settings WHERE event_slug = curated_event_records.slug), CASE WHEN schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS registrationMode, slug, title, venue, venue_map_url AS venueMapUrl, area,
            starts_at AS startsAt, ends_at AS endsAt, vibe,
            price_from_minor AS priceFromMinor, capacity,
            sales_open_at AS salesOpenAt, sales_close_at AS salesCloseAt,

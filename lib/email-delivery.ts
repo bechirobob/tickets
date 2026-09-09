@@ -1,6 +1,6 @@
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
+type DeliveryKind = "registration_access" | "registration_update" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
   id: string;

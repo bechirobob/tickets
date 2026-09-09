@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     );
   const body = (await request.json()) as { ticketId?: string };
   const ticket = await env.DB.prepare(
-    `SELECT ticket.id, ticket.order_id AS orderId, ticket.event_slug AS eventSlug, orders.ticket_tier_id AS ticketTierId, orders.face_amount_minor AS faceAmountMinor, orders.quantity, orders.currency, event.starts_at AS startsAt FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id JOIN orders ON orders.id = ticket.order_id JOIN curated_event_records event ON event.slug = ticket.event_slug WHERE ticket.id = ? AND assignment.attendee_id = ? AND assignment.status = 'active' AND ticket.status = 'issued' AND orders.status = 'paid' LIMIT 1`,
+    `SELECT ticket.id, ticket.order_id AS orderId, ticket.event_slug AS eventSlug, orders.ticket_tier_id AS ticketTierId, orders.face_amount_minor AS faceAmountMinor, orders.quantity, orders.currency, event.starts_at AS startsAt FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id JOIN orders ON orders.id = ticket.order_id JOIN curated_event_records event ON event.slug = ticket.event_slug WHERE ticket.id = ? AND assignment.attendee_id = ? AND assignment.status = 'active' AND ticket.status = 'issued' AND orders.status = 'paid' AND orders.payment_provider <> 'rsvp' LIMIT 1`,
   )
     .bind(body.ticketId ?? "", identity.attendeeId)
     .first<{

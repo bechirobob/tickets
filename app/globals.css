@@ -1807,3 +1807,24 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .checkout-provider-choice legend { font-size: 13px; padding: 0; margin-bottom: 4px; }
 .checkout-provider-choice label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; cursor: pointer; }
 .checkout-provider-choice input { accent-color: currentColor; width: 16px; height: 16px; }
+
+/* RSVP uses the same compact controls as the event and member pages. */
+.registration-form, .registration-manager, .my-registrations { min-width: 0; margin-block: 18px; }
+.registration-form form, .registration-form fieldset, .registration-settings { display: grid; gap: 12px; border: 0; padding: 0; min-width: 0; }
+.registration-form h2, .my-registrations h2 { font-size: 20px; margin: 0; }
+.registration-form p, .registration-manager p { font-size: 14px; line-height: 1.5; }
+.registration-form label, .registration-settings label { display: grid; gap: 5px; font-size: 14px; }
+.registration-form input, .registration-form select, .registration-settings input, .registration-settings select { min-height: 44px; width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; font-size: 16px; }
+.registration-form .registration-consent, .registration-settings .registration-consent { display: flex; align-items: center; gap: 8px; }
+.registration-consent input[type=checkbox] { width: 20px; min-height: 20px; flex: 0 0 20px; }
+.registration-access { max-width: 540px; margin: 70px auto; padding: 24px; line-height: 1.5; }
+.registration-access h1 { font-size: 28px; }
+.registration-manager { padding-block: 12px; border-block: 1px solid var(--line); }
+.registration-manager summary { min-height: 44px; display: list-item; cursor: pointer; font-weight: 650; }
+.registration-settings { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); margin-block: 12px; }
+.registration-roster article, .my-registrations article { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.registration-roster article > div, .my-registrations article > div { min-width: 0; overflow-wrap: anywhere; }
+.registration-roster span, .registration-roster small { display: block; font-size: 14px; }
+.registration-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.registration-actions button, .registration-actions a, .registration-settings button { min-height: 44px; padding: 8px 12px; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); cursor: pointer; }
+.my-registrations p { margin: 5px 0; font-size: 14px; }

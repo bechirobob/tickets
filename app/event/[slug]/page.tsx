@@ -1,3 +1,5 @@
+import RegistrationForm from "../../registration-form";
+import { registrationSettings, registrationsOpen } from "../../../lib/registrations";
 import BrandLogo from "../../brand-logo";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -28,7 +30,7 @@ export async function generateMetadata({ params }: EventPageProps): Promise<Meta
   const { slug } = await params;
   const event = await findCuratedEvent(slug);
   if (!event) return { title: "Night not found", robots: { index: false, follow: false } };
-  const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}.${event.dressCode ? ` Dress code: ${event.dressCode}.` : ""}${event.guestPerk ? ` ${event.guestPerk}` : ""}${event.scheduleStatus === "coming_soon" ? " Tickets coming soon." : ` Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`}`;
+  const description = `${event.quip} ${event.fullDate} at ${event.venue}, ${event.area}.${event.dressCode ? ` Dress code: ${event.dressCode}.` : ""}${event.guestPerk ? ` ${event.guestPerk}` : ""}${event.registrationMode === "rsvp" ? " Free RSVP." : event.registrationMode === "interest" ? " Register for announcements." : event.scheduleStatus === "coming_soon" ? " Tickets coming soon." : ` Tickets from ${formatGhanaCedis(event.priceFromMinor)}.`}`;
   const canonical = `/event/${event.slug}`;
   const image = eventImageUrl(event.image, 1440, 82);
   return {
@@ -56,6 +58,8 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   const { env } = await import("cloudflare:workers");
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
   if (!event) notFound();
+  const registration = await registrationSettings(env.DB, slug);
+  const registrationMode = registration?.mode ?? "paid";
   const start = event.startsAt ? new Date(event.startsAt) : null;
   const calendarMonth = start ? new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Africa/Accra" }).format(start) : "";
   const calendarDay = start ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", timeZone: "Africa/Accra" }).format(start) : "";
@@ -77,7 +81,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
     image: [eventImageUrl(event.image, 1440, 82)],
     location: { "@type": "Place", name: event.venue, address: { "@type": "PostalAddress", addressLocality: event.area, addressRegion: "Greater Accra", addressCountry: "GH" } },
     organizer: host ? { "@type": "Organization", name: host.name, url: `${origin}/hosts/${host.slug}` } : undefined,
-    offers: event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => ({
+    offers: registrationMode === 'interest' ? undefined : registrationMode === 'rsvp' ? [{ '@type': 'Offer', name: 'Free RSVP', price: '0', priceCurrency: 'GHS', url: `${origin}/event/${event.slug}` }] : event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => ({
       "@type": "Offer",
       name: tier.name,
       price: (tier.priceMinor / 100).toFixed(2),
@@ -119,12 +123,14 @@ export default async function EventPage({ params, searchParams }: EventPageProps
       </article>
 
       <aside className="compact-ticket-panel">
+        {registration && registrationMode !== "paid" ? <><p className="eyebrow">{registrationMode === "interest" ? "Stay in the loop" : "Free registration"}</p>{registrationsOpen(registration) ? <RegistrationForm eventSlug={slug} mode={registrationMode as "rsvp" | "interest"} maxPartySize={registration.maxPartySize} approvalRequired={Boolean(registration.approvalRequired)} /> : <p>Registration is closed for this event.</p>}</> : <>
         <div><p className="eyebrow">{salesPending ? "The plan" : "Choose your access"}</p>{salesPending ? <section><div><b>{event.startsAt ? "Admission" : "Tickets coming soon"}</b><span>{event.startsAt ? "The price is set. Ticket sales open soon." : "Keep the outfit ready. We’ll sort the date."}</span></div>{event.startsAt ? <strong>{formatGhanaCedis(event.priceFromMinor)}</strong> : null}</section> : event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => <section key={tier.id}><div><b>{tier.name}</b><span>{tier.description}{tier.status === "available" && tier.remainingAdmissions <= Math.max(5, Math.ceil(tier.capacityAdmissions * 0.1)) ? ` · Only ${tier.remainingAdmissions} left` : ""}</span>{tier.roomBadge === "VIP" ? <small className="tier-vip-note"><Gem size={11} /> VIP identity in The Room · private Host concierge when enabled</small> : null}</div><strong>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</strong></section>)}</div>
         {salesPending ? <p className="event-state-notice">Ticket sales open soon.</p> : event.eventState === "cancelled" ? <p className="event-state-notice">This event has been cancelled. Existing customers will receive refund instructions.</p> : event.eventState === "postponed" ? <p className="event-state-notice">This event has been postponed. A new date will be published after confirmation.</p> : available ? <ActionLink href={`/checkout/${slug}${promoterCode ? `?ref=${encodeURIComponent(promoterCode)}` : ""}`} className="checkout-link" icon={<Ticket size={18} />}>Get tickets</ActionLink> : <span className="checkout-link checkout-link--disabled">Tickets are not currently available</span>}
         {!salesPending ? <p className="secure-note"><ShieldCheck size={14} /> Secure payment with Paystack</p> : null}
         <div className="ticket-unlocks"><MessageCircle size={17} /><span><b>Your ticket unlocks the night</b>My Nights, Before the Night, updates, The Room and Flashes.</span></div>
         <MemberActions eventSlug={event.slug} hostSlug={host?.slug} />
         <WaitlistControl eventSlug={event.slug} tiers={event.ticketTiers} />
+        </>}
       </aside>
     </div>
   </main>;

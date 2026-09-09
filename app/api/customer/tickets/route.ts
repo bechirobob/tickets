@@ -3,6 +3,7 @@ import { createGateToken, formatGateCode, gateQrPayload, hashGateToken } from ".
 import { mutationHasValidOrigin } from "../../../../lib/admin-session";
 
 type TicketRow = {
+  roomAccess: number;
   ticketId: string;
   orderId: string;
   reference: string;
@@ -52,7 +53,8 @@ export async function POST(request: Request) {
            event.venue AS eventVenue, event.area AS eventArea,
            event.event_state AS eventState,
            tier.name AS tierName, tier.description AS tierDescription, tier.room_badge AS roomBadge,
-           credential.token AS gateToken
+           credential.token AS gateToken,
+           CASE WHEN o.payment_provider <> 'rsvp' THEN 1 ELSE COALESCE((SELECT room_access FROM event_registration_settings WHERE event_slug = t.event_slug), 0) END AS roomAccess
     FROM ticket_assignments a
     JOIN tickets t ON t.id = a.ticket_id
     JOIN orders o ON o.id = t.order_id
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
   `).bind(identity.attendeeId).all<TicketRow>();
 
   const activeCodes = new Map<string, string>();
-  const eligible = rows.results.filter((ticket) => ticket.ticketStatus === "issued" && ["on_sale", "rescheduled"].includes(ticket.eventState ?? "on_sale"));
+  const eligible = rows.results.filter((ticket) => ticket.ticketStatus === "issued" && ["on_sale", "sold_out", "rescheduled"].includes(ticket.eventState ?? "on_sale"));
   for (const ticket of eligible) {
     if (ticket.gateToken) { activeCodes.set(ticket.ticketId, ticket.gateToken); continue; }
     const token = createGateToken();
@@ -83,7 +85,7 @@ export async function POST(request: Request) {
     orderId: string; reference: string; eventSlug: string; faceAmountMinor: number;
     bookingFeeMinor: number; totalAmountMinor: number; currency: string; quantity: number;
     paidAt: string | null; event: { title: string; date: string; venue: string; state: string } | null; tickets: Array<Record<string, unknown>>;
-    bookedFor: string | null; canViewPurchase: boolean;
+    bookedFor: string | null; canViewPurchase: boolean; roomAccess: boolean;
     tierName: string | null; tierDescription: string | null; roomBadge: "VIP" | null;
   }>();
   for (const ticket of rows.results) {
@@ -99,6 +101,7 @@ export async function POST(request: Request) {
       quantity: ticket.quantity,
       paidAt: ticket.paidAt,
       bookedFor: ticket.customerName,
+      roomAccess: Boolean(ticket.roomAccess),
       canViewPurchase,
       tierName: ticket.tierName,
       tierDescription: ticket.tierDescription,

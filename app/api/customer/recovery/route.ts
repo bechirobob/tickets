@@ -1,10 +1,11 @@
+import { readRegistration, registrationSettings, sendRegistrationAccess } from '../../../../lib/registrations';
 import { hashToken } from "../../../../lib/attendee-auth";
 import { issueRecoveryGrant } from "../../../../lib/email-delivery";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
 import { recordProductMetric } from "../../../../lib/product-analytics";
 
-const GENERIC_MESSAGE = "If that email has active paid tickets, a secure access link is on the way.";
+const GENERIC_MESSAGE = "If that email has tickets or registrations, a secure access link is on the way.";
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
@@ -49,6 +50,12 @@ export async function POST(request: Request) {
       requestedIp: ip,
       ttlMinutes: 20,
     });
+  }
+  if (!active) {
+    const row = await env.DB.prepare("SELECT id FROM event_registrations WHERE normalized_email = ? AND verified_at IS NOT NULL ORDER BY updated_at DESC LIMIT 1").bind(normalizedEmail).first<{ id: string }>();
+    const reg = row ? await readRegistration(env.DB, row.id) : null;
+    const settings = reg ? await registrationSettings(env.DB, reg.eventSlug) : null;
+    if (reg && settings) await sendRegistrationAccess(env.DB, reg, settings.title, new URL(request.url).origin);
   }
   return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
 }

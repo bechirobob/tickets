@@ -25,6 +25,8 @@ export function parseCatalogue(value: unknown): PublicCatalogue {
     const textFields = ['title', 'image', 'venue', 'area', 'vibe', 'fullDate', 'time', 'scheduleStatus', 'eventState', 'lineup', 'ageRestriction', 'note', 'quip'] as const;
     if (textFields.some(key => typeof event[key] !== 'string' || event[key].length > 10000)
       || !event.title.trim() || typeof event.isVerified !== 'boolean' || typeof event.ticketsAvailable !== 'boolean'
+      || (event.registrationMode !== undefined && !['paid', 'rsvp', 'interest'].includes(event.registrationMode))
+      || (event.registrationOpen !== undefined && typeof event.registrationOpen !== 'boolean')
       || !Number.isSafeInteger(event.priceFromMinor) || event.priceFromMinor < 0
       || (event.startsAt !== null && (typeof event.startsAt !== 'string' || !Number.isFinite(Date.parse(event.startsAt))))
       || ['colourScheme', 'dressCode', 'guestPerk', 'awarenessNote'].some(key => {
@@ -51,6 +53,8 @@ export function saveCatalogue(storage: Pick<Storage, 'setItem'>, data: PublicCat
 export function ticketLabel(event: PublicEvent): string {
   if (event.eventState === 'cancelled') return 'Cancelled';
   if (event.eventState === 'postponed') return 'New date on the way';
+  if (event.registrationMode === 'rsvp') return 'Free RSVP';
+  if (event.registrationMode === 'interest') return event.registrationOpen ? 'Announcements open' : 'Announcements';
   if (event.eventState === 'sold_out') return 'Sold out';
   if (event.scheduleStatus === 'coming_soon') return 'Tickets coming soon';
   const price = event.priceFromMinor ? `GH₵${new Intl.NumberFormat('en-GH', { maximumFractionDigits: 2 }).format(event.priceFromMinor / 100)}` : 'Free entry';

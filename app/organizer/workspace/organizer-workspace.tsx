@@ -1,5 +1,7 @@
 "use client";
 
+import RegistrationManager from "../../registration-manager";
+
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -185,7 +187,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
           {selected ? <section className="organizer-dashboard" id="organizer-event-detail">
             <header><div><p>{selected.venue} · {selected.area}</p><h2>{selected.title}</h2></div><Link href={`/event/${selected.slug}`}>View customer page <ArrowUpRight size={15} /></Link></header>
             <div className="organizer-metrics"><article><TicketCheck /><small>Paid orders</small><b>{selected.paidOrders}</b></article><article><UsersRound /><small>Admissions issued</small><b>{selected.issuedAdmissions}</b></article><article><ScanLine /><small>Checked in</small><b>{selected.checkedInAdmissions}</b></article><article><CheckCircle2 /><small>Gross collected</small><b>{money(selected.grossMinor)}</b></article></div>
-            <div className="organizer-grid">
+            <RegistrationManager key={selected.slug} eventSlug={selected.slug} /><div className="organizer-grid">
               <section className="organizer-panel organizer-panel--wide"><header><div><small>Live inventory</small><h3>Ticket tiers</h3></div><ShieldCheck size={18} /></header><div className="organizer-tier-table">{tiers.map((tier) => <div key={tier.id}><span><b>{tier.name}</b><small>{money(tier.priceMinor)} · {tier.status}</small></span><strong>{tier.allocatedAdmissions} / {tier.capacityAdmissions}</strong><i><b style={{ width: `${Math.min(100, (tier.allocatedAdmissions / Math.max(1, tier.capacityAdmissions)) * 100)}%` }} /></i></div>)}</div></section>
               <form key={`details-${selected.slug}`} className="organizer-panel" onSubmit={saveDetails}><header><div><small>Authorised details</small><h3>Venue & line-up</h3></div><Save size={18} /></header><label>Venue<input name="venue" defaultValue={selected.venue} required /></label><label>Exact map URL<input name="venueMapUrl" type="url" defaultValue={selected.venueMapUrl} required /></label><label>Line-up<textarea name="lineup" defaultValue={selected.lineup} required /></label><button disabled={busy}>Save public details</button></form>
               <form className="organizer-panel" onSubmit={submitAnnouncement}><header><div><small>The Room</small><h3>Post an update</h3></div><Megaphone size={18} /></header><label>Announcement<textarea name="content" minLength={2} maxLength={1000} placeholder="Doors, timing, entry or venue update…" required /></label><label className="organizer-check"><input name="pinned" type="checkbox" /> Pin this update</label><button disabled={busy}>Publish to ticket holders</button></form>

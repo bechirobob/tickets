@@ -418,6 +418,13 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     ).toArray()[0]?.eventSlug ?? "";
   }
 
+  async refreshAdmissionAccess(): Promise<void> {
+    for (const socket of this.ctx.getWebSockets()) {
+      const state = socket.deserializeAttachment() as ConnectionState | null;
+      if (state && await this.currentRoomBadge(state.attendeeId) === undefined) socket.close(4003, "Room access changed");
+    }
+  }
+
   private async currentRoomBadge(attendeeId: string): Promise<"VIP" | null | undefined> {
     const row = await this.env.DB.prepare(`
       SELECT tier.room_badge AS roomBadge
@@ -427,6 +434,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       LEFT JOIN event_ticket_tiers tier ON tier.id = orders.ticket_tier_id
       WHERE assignment.attendee_id = ? AND assignment.status = 'active'
         AND ticket.event_slug = ? AND ticket.status IN ('issued', 'checked_in')
+        AND (orders.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = orders.id AND r.status = 'confirmed' AND rs.room_access = 1))
       ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
       LIMIT 1
     `).bind(attendeeId, this.eventSlug()).first<{ roomBadge: string | null }>();

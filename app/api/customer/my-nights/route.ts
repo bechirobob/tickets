@@ -1,6 +1,7 @@
 import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 
 type NightRecord = {
+  roomAccess: number;
   eventSlug: string;
   title: string;
   startsAt: string | null;
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
   }
   const rows = await env.DB.prepare(`
     SELECT event.slug AS eventSlug, event.title,
+           CASE WHEN COALESCE((SELECT mode FROM event_registration_settings WHERE event_slug = event.slug), 'paid') <> 'rsvp' THEN 1 ELSE COALESCE((SELECT room_access FROM event_registration_settings WHERE event_slug = event.slug), 0) END AS roomAccess,
            CASE WHEN event.schedule_status != 'coming_soon' THEN event.starts_at END AS startsAt,
            CASE WHEN event.schedule_status = 'confirmed' THEN event.ends_at END AS endsAt,
            event.venue, event.area, event.image_url AS imageUrl,
@@ -73,6 +75,7 @@ export async function GET(request: Request) {
       const purchased = ticketCount > 0;
       return {
         ...row,
+        roomAccess: Boolean(row.roomAccess),
         ticketCount,
         purchased,
         keepPosted: Boolean(row.keepPosted),
