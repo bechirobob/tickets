@@ -41,8 +41,25 @@ it('only advertises links for saved, published and open registration',async()=>{
  for(const change of [{publication:'unpublished'},{accepting:0},{scheduleStatus:'coming_soon'},{closesAt:'2020-01-01T00:00:00.000Z'}])expect(registrationShareState({...s,...change}).ready).toBe(false);
  expect(registrationShareState({...s,mode:'paid'})).toMatchObject({ready:true,mode:'paid'});
  expect(registrationShareState({...s,mode:'interest',scheduleStatus:'coming_soon'})).toMatchObject({ready:true,mode:'interest'});
+ expect(registrationShareState({...s,scheduleStatus:'end_pending',endsAt:''})).toMatchObject({ready:true,mode:'rsvp'});
+ expect(registrationShareState({...s,scheduleStatus:'end_pending',startsAt:''}).ready).toBe(false);
  const live=await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&live=1`))).json() as {sharing:{ready:boolean;mode:string}};
  expect(live.sharing).toMatchObject({ready:true,mode:'rsvp'});
+});
+it('opens 100 approval-only RSVP places with a confirmed start and no known end time',async()=>{
+ await env.DB.prepare("UPDATE curated_event_records SET schedule_status='end_pending' WHERE slug=?").bind(slug).run();
+ const deadline=new Date(Date.now()+3600000).toISOString();
+ expect((await settings({capacity:100,approvalRequired:true,closesAt:deadline})).status).toBe(200);
+ const guest=await signup('approval-before-admission@example.com');
+ expect(guest.registration?.status).toBe('requested');
+ expect(await env.DB.prepare("SELECT id FROM orders WHERE id=?").bind(`rsvp_${guest.registration!.id}`).first()).toBeNull();
+ expect((await configure(post('/api/admin/registrations',{eventSlug:slug,action:'approve',id:guest.registration!.id}))).status).toBe(200);
+ expect(await env.DB.prepare('SELECT status FROM event_registrations WHERE id=?').bind(guest.registration!.id).first()).toEqual({status:'confirmed'});
+ expect(await registrationSettings(env.DB,slug)).toMatchObject({capacity:100,approvalRequired:1,closesAt:deadline});
+ await settings({capacity:100,approvalRequired:true,closesAt:'2020-01-01T00:00:00.000Z'});
+ await expect(signup('after-cutoff@example.com')).rejects.toThrow('not open');
+ await env.DB.prepare("UPDATE curated_event_records SET schedule_status='coming_soon' WHERE slug=?").bind(slug).run();
+ expect((await settings({capacity:100})).status).toBe(409);
 });
 it('stores only verified free emails and preserves explicit subscription choice',async()=>{
  await requestRegistration(env.DB,{eventSlug:slug,email:'unverified@example.com',guestName:'Pending',phone:'',partySize:1,announcementsOptIn:true},origin);

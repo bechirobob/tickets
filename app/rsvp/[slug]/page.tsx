@@ -3,7 +3,7 @@ import {notFound} from 'next/navigation';
 import {findCuratedEvent} from '../../events';
 import RegistrationForm from '../../registration-form';
 import BrandLogo from '../../brand-logo';
-import {registrationSettings,registrationShareState} from '../../../lib/registrations';
+import {registrationSettings,registrationShareState,registrationStartConfirmed} from '../../../lib/registrations';
 
 export const dynamic='force-dynamic';
 export const metadata={title:'Event registration'};
@@ -15,7 +15,8 @@ export default async function EventRegistrationPage({params}:{params:Promise<{sl
   if(!event||!settings||settings.publication!=='published')notFound();
   const sharing=registrationShareState(settings);
   const label=settings.mode==='rsvp'?'Free RSVP':settings.mode==='interest'?'Event updates':'Paid registration';
-  const unavailable=settings.eventState==='cancelled'?'This event has been cancelled.':settings.eventState==='postponed'?'Registration is paused while the host confirms a new date.':settings.scheduleStatus!=='confirmed'&&settings.mode!=='interest'?'Registration has not opened yet. The host is confirming the event schedule.':'Registration is closed for this event.';
+  const schedulePending=settings.mode==='rsvp'?!registrationStartConfirmed(settings):settings.mode==='paid'&&settings.scheduleStatus!=='confirmed';
+  const unavailable=settings.eventState==='cancelled'?'This event has been cancelled.':settings.eventState==='postponed'?'Registration is paused while the host confirms a new date.':schedulePending?'Registration has not opened yet. The host is confirming the event schedule.':'Registration is closed for this event.';
   return <main className="rsvp-signup" id="register">
     <header><Link href="/events" aria-label="BeCore Tickets — events"><BrandLogo/></Link><Link href={`/event/${encodeURIComponent(slug)}`}>Event details ↗</Link></header>
     <p className="eyebrow">{label}</p><h1>{event.title}</h1>
