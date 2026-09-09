@@ -340,9 +340,6 @@ export default function NightHub({ event }: { event: EventSummary }) {
         <Link href="/" className="brand-mark"><BrandLogo /></Link>
         <span className="night-hub__header-actions">
           <PublicNavigation />
-          <Link href={`/room/${event.slug}`}>
-            <MessageCircle size={15} /> Enter The Room
-          </Link>
           <NotificationBell />
         </span>
       </header>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import BrandLogo from "../brand-logo";
@@ -28,7 +28,7 @@ export default function NotificationsClient() {
   }, [params]);
 
   return <main className="buzz-page">
-    <header className="directory-header"><Link href="/my-nights" aria-label="Back to My Nights"><ArrowLeft size={16} /><span className="directory-header__back-label">My Nights</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation /></header>
+    <header className="directory-header"><span className="account-header-label">Account</span><Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation /></header>
     <AccountNavigation />
     <section className="buzz-shell"><header className="buzz-intro"><div><h1>The Buzz</h1><p>Only the useful noise.</p></div>{feed.items && <span role="status">{feed.unread ? `${feed.unread} unread` : "All caught up"}</span>}</header>
       {notice && <p className="buzz-feedback" role="status">{notice}<button type="button" aria-label="Dismiss notice" onClick={() => setNotice("")}><X size={16} aria-hidden="true" /></button></p>}

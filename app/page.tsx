@@ -18,7 +18,7 @@ export default async function Home() {
     <ScrollReveal />
     <header className="night-header">
       <Link href="/" className="night-brand-link"><BrandLogo prominent /></Link>
-      <div className="night-header__actions"><nav className="night-desktop-links" aria-label="Explore"><Link href="/events">The Drop</Link><Link href="/hosts">Hosts</Link><Link href="/my-nights">My Nights</Link></nav><span className="night-city"><MapPin size={14} aria-hidden="true" /> Accra, GH</span><PublicNavigation /></div>
+      <div className="night-header__actions"><nav className="night-desktop-links" aria-label="Explore"><Link href="/events">The Drop</Link><Link href="/hosts">Hosts</Link><Link href="/my-nights">My Nights</Link></nav><span className="night-city"><MapPin size={14} aria-hidden="true" /> Accra, GH</span><PublicNavigation primaryVisible /></div>
     </header>
 
     <ActiveNightExperience events={events} />
