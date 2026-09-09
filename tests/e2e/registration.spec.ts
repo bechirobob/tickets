@@ -7,7 +7,7 @@ test('direct registration links respect the saved mode and do not imply free adm
 });
 test('free RSVP preserves form details on failure and submits the selected party without checkout', async ({ page }) => {
   await page.goto('/event/after-dark-osu');
-  await page.getByRole('button', { name: 'RSVP — free entry' }).click();
+  await page.getByRole('button', { name: 'RSVP' }).click();
   await page.getByLabel('Your name').fill('Registration Guest');
   await page.getByLabel('Email address').fill('registration@example.com');
   await page.getByLabel('Guests, including you').selectOption('3');

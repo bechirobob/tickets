@@ -157,7 +157,7 @@ test("checkout stays closed until launch inventory is confirmed", async ({ page 
     const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string}[]};
     const mode=catalogue.events.find(event=>event.slug===slug)?.registrationMode;
     if (mode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
-    else if (mode === 'rsvp') await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP — free entry)$/})).toBeVisible();
+    else if (mode === 'rsvp') await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP)$/})).toBeVisible();
     else await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
   }
 });

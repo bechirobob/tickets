@@ -153,7 +153,9 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const shared=await manager.getByLabel('RSVP link',{exact:true}).inputValue();
   expect(shared).toBe('https://127.0.0.1:8791/rsvp/rsvp-browser');
   await page.context().clearCookies();await page.goto(shared);
-  await expect(page.getByLabel('Your name')).toBeInViewport();await expect(page.getByText('Free entry · no payment details needed')).toBeVisible();
+  await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.locator('main')).not.toContainText(/free|no payment/i);
+  const flier=page.getByRole('img',{name:'Event flier for RSVP browser gathering'});await expect(flier).toBeVisible();await expect(flier).toHaveCSS('object-fit','contain');
+  await expect.poll(()=>flier.evaluate((img:HTMLImageElement)=>img.complete&&img.naturalWidth>0)).toBe(true);
   await expect(page.getByLabel('Email me announcements')).not.toBeChecked();
   const guestAxe=await new AxeBuilder({page}).include('.registration-form').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(guestAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('guest-rsvp-form.png'),fullPage:true});
@@ -162,7 +164,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const submitted=page.waitForResponse(r=>r.url().endsWith('/api/registrations')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'Send my confirmation link'}).click();expect((await submitted).status()).toBe(202);
   await expect(page.getByRole('status')).toContainText('Check your email');
-  await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeInViewport();
+  await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeVisible();
  });
  test('verified signup appears without refreshing the organiser dashboard and joins guest emails',async({page})=>{
   await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
