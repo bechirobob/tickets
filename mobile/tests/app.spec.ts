@@ -16,6 +16,7 @@ test.beforeEach(async ({ page }) => {
 test('discovery uses aligned full posters, unique routes and event palettes', async ({ page }, info) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: braai.title })).toBeVisible();
+  await expect.poll(() => page.locator('.event-card img').evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   const posters = await page.locator('.event-card .poster').evaluateAll(nodes => nodes.map(node => ({ height: node.getBoundingClientRect().height, fit: getComputedStyle(node.querySelector('img')!).objectFit })));
   expect(posters).toHaveLength(2); expect(posters[0]).toEqual(posters[1]); expect(posters[0].fit).toBe('contain');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
