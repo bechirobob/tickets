@@ -9,11 +9,15 @@ export async function issueOwnerRecovery(query, request, now = new Date()) {
     || !/^[A-Za-z0-9_-]{43}$/u.test(request.tokenHash) || !Number.isFinite(Date.parse(request.issueBefore))) {
     throw new Error("Invalid owner recovery request.");
   }
+  if (request.renewSetupFrom !== undefined && (!/^[a-f0-9-]{36}$/u.test(request.renewSetupFrom) || request.createOwner === true)) {
+    throw new Error("Invalid pending-owner renewal request.");
+  }
   const existing = await query("SELECT id FROM staff_password_recoveries WHERE id = ?", [request.id]);
   if (existing.length) return { status: "already_issued" };
   if (now.getTime() >= Date.parse(request.issueBefore)) return { status: "issuance_window_closed" };
   const createdAt = now.toISOString();
   let owner;
+  let targetEmailHash = request.createOwner === true ? request.emailSha256 : null;
   if (request.createOwner === true) {
     // New-owner creation requires a separate, explicit approval. The real email
     // is bound by hash and supplied privately by its holder during activation.
@@ -39,14 +43,30 @@ export async function issueOwnerRecovery(query, request, now = new Date()) {
     const owners = await query("SELECT id, normalized_email, updated_at FROM staff_accounts WHERE role = 'owner' AND status IN ('active', 'disabled') LIMIT 101", []);
     if (owners.length > 100) throw new Error("Owner inventory needs manual review.");
     const matches = owners.filter((owner) => createHash("sha256").update(owner.normalized_email.trim().toLowerCase()).digest("hex") === request.emailSha256);
-    if (matches.length !== 1) throw new Error("The confirmed email did not match exactly one existing owner. No access changed.");
-    owner = matches[0];
+    if (matches.length === 0 && request.renewSetupFrom) {
+      // Renew the original, unclaimed setup for this approved email. Never create
+      // another owner or bind an unrelated disabled account to a real email.
+      const pending = await query(`SELECT account.id, account.normalized_email, account.updated_at
+        FROM staff_accounts account JOIN staff_password_recoveries original ON original.account_id = account.id
+        WHERE original.id = ? AND original.target_email_hash = ? AND original.used_at IS NULL
+          AND original.account_updated_at = account.updated_at
+          AND account.id = ? AND account.normalized_email = ? AND account.created_by = ?
+          AND account.role = 'owner' AND account.status = 'disabled' AND account.password_hash = 'setup-pending'`,
+        [request.renewSetupFrom, request.emailSha256, `owner-setup-${request.renewSetupFrom}`,
+          `${request.renewSetupFrom}@owner-setup.invalid`, `system:approved-owner-setup:${request.renewSetupFrom}`]);
+      if (pending.length !== 1) throw new Error("The original pending owner setup could not be verified. No access changed.");
+      owner = pending[0];
+      targetEmailHash = request.emailSha256;
+    } else {
+      if (matches.length !== 1) throw new Error("The confirmed email did not match exactly one existing owner. No access changed.");
+      owner = matches[0];
+    }
   }
   const expiresAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
   await query(`INSERT INTO staff_password_recoveries (id, account_id, token_hash, account_updated_at, expires_at, created_at, target_email_hash)
     SELECT ?, id, ?, updated_at, ?, ?, ? FROM staff_accounts
     WHERE id = ? AND normalized_email = ? AND role = 'owner' AND status IN ('active', 'disabled') AND updated_at = ?
-    ON CONFLICT(id) DO NOTHING`, [request.id, request.tokenHash, expiresAt, createdAt, request.createOwner === true ? request.emailSha256 : null, owner.id, owner.normalized_email, owner.updated_at]);
+    ON CONFLICT(id) DO NOTHING`, [request.id, request.tokenHash, expiresAt, createdAt, targetEmailHash, owner.id, owner.normalized_email, owner.updated_at]);
   const issued = await query("SELECT id, expires_at FROM staff_password_recoveries WHERE id = ? AND token_hash = ?", [request.id, request.tokenHash]);
   if (issued.length !== 1) throw new Error("The owner account changed during recovery issuance. No access changed.");
   await query(`INSERT INTO operational_audit_events
