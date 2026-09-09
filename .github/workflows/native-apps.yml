@@ -3,7 +3,7 @@ name: Native app builds
 on:
   pull_request:
     branches: [main]
-    paths: ['mobile/**', 'lib/public-event.ts', 'lib/event-presentation.ts', 'lib/event-palette.ts', 'app/api/public/**', '.github/workflows/native-apps.yml']
+    paths: ['mobile/**', 'lib/public-event.ts', 'lib/event-presentation.ts', 'lib/event-palette.ts', 'app/api/public/**', '.github/workflows/native-apps.yml', '.github/workflows/android-release.yml']
   workflow_dispatch:
 
 permissions:
@@ -24,6 +24,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
@@ -32,6 +33,15 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=moderate
       - run: npm test
+      - name: Validate Android release version
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          node scripts/android-release.mjs validate
+          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:mobile/android/release.json" 2>/dev/null; then
+            git show "$BASE_SHA:mobile/android/release.json" > "$RUNNER_TEMP/base-android-release.json"
+            node scripts/android-release.mjs validate "$RUNNER_TEMP/base-android-release.json"
+          fi
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -65,13 +75,13 @@ jobs:
       - run: npm run sync
       - name: Install Android SDK
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
-      - name: Compile Android pilot
-        run: ./gradlew --no-daemon assembleDebug lintDebug
+      - name: Validate Android release configuration
+        run: ./gradlew --no-daemon -PunsignedReleaseCheck assembleRelease lintRelease
         working-directory: mobile/android
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: BeCore-Tickets-Android-pilot-${{ github.run_id }}
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          name: Android-unsigned-validation-${{ github.run_id }}
+          path: mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -101,7 +111,7 @@ jobs:
           xcodebuild -showsdks
       - run: npm ci
       - run: npm run sync
-      - name: Compile iOS simulator pilot
+      - name: Compile iOS simulator
         run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO build
       - name: Package simulator app
         run: ditto -c -k --sequesterRsrc --keepParent ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app BeCore-Tickets-iOS-simulator.zip

@@ -1,14 +1,31 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+def releaseIdentity = new JsonSlurper().parse(file('../release.json'))
+def signingPath = System.getenv('ANDROID_SIGNING_FILE')
+def releaseSigning = signingPath ? new JsonSlurper().parse(new File(signingPath)) : null
+
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') }) {
+        if (!releaseSigning && !project.hasProperty('unsignedReleaseCheck')) {
+            throw new GradleException('Release signing is required. Run the Android release workflow; debug signing is never a release fallback.')
+        }
+        if (releaseSigning && project.hasProperty('unsignedReleaseCheck')) {
+            throw new GradleException('Unsigned validation must not receive signing credentials.')
+        }
+    }
+}
 
 android {
     namespace = "com.becoreops.tickets"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.becoreops.tickets"
+        applicationId releaseIdentity.applicationId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        versionCode releaseIdentity.versionCode
+        versionName releaseIdentity.versionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +33,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (releaseSigning) {
+            production {
+                storeFile file(releaseSigning.storeFile)
+                storePassword releaseSigning.storePassword
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+            }
+        }
+    }
     buildTypes {
+        debug {
+            applicationIdSuffix '.dev'
+            versionNameSuffix '-dev'
+        }
         release {
+            debuggable false
+            if (releaseSigning) signingConfig signingConfigs.production
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
