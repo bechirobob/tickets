@@ -11,7 +11,7 @@ export default function MyRegistrations() {
     if (!response.ok) throw new Error(data.error ?? 'Could not load registrations.');
     setRows(data.registrations);
   }).catch(error => setMessage(error instanceof Error ? error.message : 'Could not connect.')).finally(() => setLoading(false)), []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load();const timer=setInterval(()=>{if(!document.hidden)void load();},10000);return()=>clearInterval(timer); }, [load]);
   async function act(row: Registration, action: string) {
     if (busy) return; setBusy(row.id); setMessage('');
     try {

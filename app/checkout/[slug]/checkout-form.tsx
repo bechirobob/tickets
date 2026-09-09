@@ -33,6 +33,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const [phone, setPhone] = useState("");
   const [feePercent, setFeePercent] = useState(feeBasisPoints / 100);
   const [isPaying, setIsPaying] = useState(false);
+  const [announcementsOptIn, setAnnouncementsOptIn] = useState(false);
   const [acceptedPolicies, setAcceptedPolicies] = useState(false);
   const paying = useRef(false);
   const paymentAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -76,7 +77,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
-      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, paymentProvider, network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, offer: params.get("offer"), promoterCode: params.get("ref"), expectedTotalMinor: totalMinor });
+      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, paymentProvider, network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, announcementsOptIn, offer: params.get("offer"), promoterCode: params.get("ref"), expectedTotalMinor: totalMinor });
       const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload))), (byte) => byte.toString(16).padStart(2, "0")).join("");
       const storageKey = `bct:payment-attempt:${slug}`;
       if (!paymentAttempt.current) {
@@ -205,6 +206,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
               </div></div> : null}
             </section>
           </fieldset>
+          <label className="checkout-consent"><input type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label>
           <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>. The accepted versions stay attached to this order.</span></label>
         </section>
 

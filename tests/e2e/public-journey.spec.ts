@@ -154,7 +154,8 @@ test("checkout stays closed until launch inventory is confirmed", async ({ page 
     await page.goto(`/checkout/${slug}`);
     await expect(page).toHaveURL(new RegExp(`/event/${slug}$`));
     await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
-    if (slug === "sun-chasers-labadi") await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
+    const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string}[]};
+    if (catalogue.events.find(event=>event.slug===slug)?.registrationMode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
     else await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
   }
 });

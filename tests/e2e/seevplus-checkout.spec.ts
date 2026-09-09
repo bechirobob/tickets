@@ -13,7 +13,7 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
   await page.getByLabel("Full name").fill("Test Buyer");
   await page.getByLabel("Phone number").fill("0240000000");
   await page.getByLabel("Email address").fill("test@example.com");
-  await page.getByRole("checkbox").check();
+  await page.getByRole("checkbox", { name: /I accept the ticket terms/ }).check();
   await page.route("**/api/payments/initialize", async (route) => {
     expect(route.request().postDataJSON()).toMatchObject({ paymentProvider: "seevplus", paymentMethod: "mobile_money" });
     expect(route.request().headers()["idempotency-key"]).toBeTruthy();

@@ -1,6 +1,6 @@
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "registration_access" | "registration_update" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
+type DeliveryKind = "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
   id: string;
@@ -34,12 +34,13 @@ export async function sendEmail(input: {
   idempotencyKey: string;
   orderId?: string;
   recoveryGrantId?: string;
+  deliveryId?: string;
 }) {
   const { env } = await import("cloudflare:workers");
-  const deliveryId = crypto.randomUUID();
+  const deliveryId = input.deliveryId ?? crypto.randomUUID();
   const now = new Date().toISOString();
-  await input.db.prepare(`
-    INSERT INTO delivery_events (
+  const inserted = await input.db.prepare(`
+    INSERT OR IGNORE INTO delivery_events (
       id, order_id, recovery_grant_id, kind, recipient, status, attempt_count,
       payload_json, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)
@@ -48,6 +49,7 @@ export async function sendEmail(input: {
     JSON.stringify({ subject: input.subject, html: input.html, text: input.text, idempotencyKey: input.idempotencyKey }), now, now,
   ).run();
 
+  if (!inserted.meta.changes) return {sent:false,reason:'already_queued' as const};
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
     await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, attempt_count = 1, updated_at = ? WHERE id = ?")
       .bind("Transactional email is not configured.", now, deliveryId).run();
@@ -110,8 +112,7 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20) {
   const due = await env.DB.prepare(`
     SELECT id, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
-    WHERE status IN ('failed', 'delayed') AND attempt_count < 3
-      AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?
+    WHERE (status IN ('failed', 'delayed') AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (kind IN ('event_announcement','organizer_signup') AND status='queued' AND julianday(created_at) < julianday('now','-5 minutes'))
     ORDER BY next_attempt_at LIMIT ?
   `).bind(new Date().toISOString(), limit).all<{ id: string; recipient: string; payloadJson: string | null; attemptCount: number }>();
   let delivered = 0;
@@ -119,9 +120,22 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20) {
     try {
       const payload = JSON.parse(item.payloadJson ?? "{}") as { subject?: string; html?: string; text?: string; idempotencyKey?: string };
       if (!payload.subject || !payload.html || !payload.text || !payload.idempotencyKey) throw new Error("Saved delivery payload is incomplete.");
+      if (payload.idempotencyKey.startsWith('event-announcement/')) {
+        const [,campaignId,contactId]=payload.idempotencyKey.split('/');
+        const allowed=await env.DB.prepare(`SELECT 1 FROM event_audience_contacts a JOIN curated_event_records e ON e.slug=a.event_slug WHERE a.id=? AND a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND e.removed_at IS NULL`).bind(contactId).first();
+        if(!allowed){await env.DB.batch([
+          env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,updated_at=? WHERE id=?").bind(new Date().toISOString(),item.id),
+          env.DB.prepare("UPDATE event_announcement_recipients SET status='skipped' WHERE campaign_id=? AND contact_id=?").bind(campaignId,contactId),
+        ]);continue;}
+      }
+      if(payload.idempotencyKey.startsWith('organizer-signup/')) {
+        const [,slug,,accountId]=payload.idempotencyKey.split('/');
+        const allowed=await env.DB.prepare(`SELECT 1 FROM staff_event_assignments a JOIN staff_accounts s ON s.id=a.account_id JOIN curated_event_records e ON e.slug=a.event_slug LEFT JOIN event_registration_settings r ON r.event_slug=e.slug WHERE a.account_id=? AND a.event_slug=? AND s.status='active' AND s.role='organizer' AND s.normalized_email=? AND e.removed_at IS NULL AND COALESCE(r.notify_host,1)=1`).bind(accountId,slug,item.recipient).first();
+        if(!allowed){await env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL WHERE id=?").bind(item.id).run();continue;}
+      }
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
-        headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": `${payload.idempotencyKey}/retry-${item.attemptCount}`.slice(0, 256) },
+        headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": ((payload.idempotencyKey.startsWith("event-announcement/") || payload.idempotencyKey.startsWith("organizer-signup/")) ? payload.idempotencyKey : `${payload.idempotencyKey}/retry-${item.attemptCount}`).slice(0, 256) },
         body: JSON.stringify({ from: env.EMAIL_FROM, to: [item.recipient], subject: payload.subject, html: payload.html, text: payload.text }),
       });
       const result = await response.json() as { id?: string; message?: string };

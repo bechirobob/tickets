@@ -49,7 +49,8 @@ export default function EventOperations({ actor, role }: { actor: string; role: 
         if (!response.ok) setMessage(data.error ?? "Events could not be loaded.");
         else {
           setEvents(data.events ?? []);
-          setSelected(null);
+          const requested = new URLSearchParams(window.location.search).get("event");
+          setSelected(data.events?.find(event => event.slug === requested) ?? null);
         }
         setLoading(false);
       })

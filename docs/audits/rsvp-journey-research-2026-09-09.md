@@ -36,47 +36,30 @@ Sources:
 
 These are references, not promises of identical functionality. Luma's paid waitlist uses deferred payment capture; do not assume Seev supports that. BeCore's existing free waitlist automatically promotes eligible parties, unlike Luma's documented manual approval.
 
-## Implementation checkpoint
+## Implementation and verification
 
-The coding workspace disconnected with environment_offline after initial implementation. Repeated attempts to reconnect failed. New RSVP work remains uncommitted in the local feature worktree and has NOT been deployed.
+The interrupted workspace recovered with its files intact. The candidate now includes:
 
-Local worktree: /workspace/scratch/2a4746bde3db/tickets-rsvp
-Local branch: feature/rsvp-audience
-Local starting commit: 7ee63ac287914f4a119aa004c41c82f335953afa
+- Explicit free RSVP, paid registration and email-list choices, paid price/capacity, accepting toggle, optional Accra-time deadline, host email preference and booking-preservation guards.
+- Shareable direct registration link, guest preview, live activity/counts every five seconds while visible, recent signups and preserved unsaved settings during refresh.
+- Immediate host signup emails with stable per-booking delivery identifiers and retries; assigned active organisers only, respecting the event preference. Notifications do not represent payment until fulfilment verifies it.
+- Guest page explains free admission, optional subscriptions, verification, group size and deadlines. Confirmation distinguishes confirmed, waiting for approval, waitlisted and interest; confirmed guests get QR/calendar links. My Nights refreshes status and supports cancellation.
+- Search/export of verified free and paid guest emails; optional announcement consent; message preview, durable per-recipient sends and unsubscribe. Payment retries cannot re-subscribe an unsubscribed guest with older consent.
+- Owner-only organiser activity, unread tracking and direct event links.
+- Removal clears audience contacts/campaigns and prevents remaining delivery retries from sending for removed events.
 
-This remote branch starts at merged Operations release 06f341a021556598dd7509240bb934df13855da9 and contains this checkpoint only. Preserve and commit local RSVP edits, then merge this remote branch before opening a release PR.
+Migrations: 0039_rsvp_audience and 0040_registration_controls. They are additive. Existing registrations are still visible in the guest list; existing guests are not silently subscribed to marketing announcements.
 
-Implemented locally before interruption:
-- Free/paid/email-list organiser choices and paid base price/capacity.
-- Guest email capture and subscription consent on free verification and paid fulfilment.
-- Audience search/CSV export, announcement preview/composer, campaign and recipient queue, unsubscribe.
-- Owner organiser-activity feed and unread tracking.
-- Migration 0039_rsvp_audience and corresponding schema metadata.
-- Further partial edits for accepting/deadline/host-alert settings, closed checkout checks and neutral provider copy.
+Delivery scope: announcements are per event. The minutely queue processes up to 25 recipients per invocation; large audiences take multiple batches, and provider quotas/retries can delay delivery. The dashboard distinguishes provider acceptance from a delivery failure. No real customers were emailed during verification. Tests use isolated D1 and mocked email/payment providers; browser send-failure testing never sends an announcement.
 
-Verification before the last partial edits: all 180 existing Worker tests passed; typechecks passed. This does NOT validate the new audience features or the subsequent registration-control edits.
+Local integration coverage includes mode/price changes, closed/deadline registration, assigned-event access, owner-only feed, live counts, free/paid email capture, notification deduplication, campaign deduplication, unsubscribe before send/retry, abandoned-delivery recovery and safe CSV export. Candidate browser coverage exercises organiser controls, guest page, real verified signup appearing without refresh, preserved settings drafts, guest export, announcement preview/error recovery and owner oversight on desktop Chrome, mobile Chrome and mobile WebKit.
 
-A later command intended to add RegistrationLive, finish guest confirmation/registration pages and generate registration_controls migration did not execute because the environment was offline. In particular, the current local schema references new accepting/closes_at/notify_host columns but their migration has not yet been generated. The event page also passes new RegistrationForm props that have not yet been added to its component type. Resolve these before any build or push.
+Exact candidate and post-deployment results are recorded in the PR and GitHub Actions; this document alone is not a release sign-off.
 
-## Required completion work
+## Operations audit follow-up
 
-1. Recover the existing worktree, inspect its exact diff and finish registration controls/migration.
-2. Finish shareable direct RSVP entry, connection-aware live host updates, recent signup/status feed, host alert preference and real delivery behavior.
-3. Finish guest form, explicit confirmation/waitlist/approval status, recovery and calendar/QR actions.
-4. Fix campaign progress to distinguish provider acceptance from confirmed delivery, and count delivered/bounced/suppressed states. Test campaign idempotency, unsubscribe before sends/retries, abandoned queue claims and event removal.
-5. Test assigned-organiser permissions, owner-only activity, free/paid mode and price/capacity changes, deadlines, live counts, guest deduplication/export and payment capture.
-6. Add browser fixtures for organiser/owner and guest journeys, checking desktop Chrome, mobile Chrome and mobile WebKit, keyboard access, contrast, long text and overflow.
-7. Update production privacy smoke coverage for audience/activity/unsubscribe endpoints.
-8. Run exact candidate gates, inspect browser renders, merge/deploy under existing user authorization, verify exact live revision and migrations.
+Operations PR116 merged at 06f341a021556598dd7509240bb934df13855da9; Worker version 8ec58e25-abc1-4bcf-8cd2-c902364cdcba. Candidate 34403317899, release 34403967459 and recovery rehearsal 34403967430 succeeded.
 
-No real customer announcements or host notifications were sent for this implementation. No production event settings were changed for testing.
+Production browser audit 34404207518 had two failing assertions across three browsers. Both assumed sun-chasers-labadi had interest registration. Read-only production inspection showed its saved registrationMode was paid, and the guest page correctly showed pending ticket sales. Tests now read the public catalogue mode when asserting the entry UI; they continue to assert closed checkout and no purchase link for the pending launch fixtures. No production registration settings were overwritten to satisfy a test.
 
-## Operations release status and remaining production audit
-
-Operations PR116 merged at 06f341a021556598dd7509240bb934df13855da9.
-Worker version: 8ec58e25-abc1-4bcf-8cd2-c902364cdcba.
-Candidate verification 34403317899 and release 34403967459 succeeded, including exact-revision public/privacy smoke and D1 migrations 0037/0038. Recovery rehearsal 34403967430 succeeded.
-
-The later production browser audit 34404207518 FAILED: 192 passed, 63 skipped, 6 failed and 3 flaky. The six failures are two assertions repeated across three browser projects: event-details expected a Keep me posted button for sun-chasers-labadi, and a pending-launch checkout assertion failed. Investigate current production event state versus fixture assumptions before changing tests; do not report this audit as fully green. Log job 102643144768 and artifact 10124913040 retain evidence.
-
-Do not visit old owner recovery links, rotate owner credentials, or overwrite the user's existing payment configuration as part of completing this work.
+Production rollback base: 06f341a021556598dd7509240bb934df13855da9. Capture a D1 bookmark before migrating; leave additive columns/tables in place if rolling the Worker back. Do not remove owner accounts, revisit recovery links, or alter existing payment-provider credentials.

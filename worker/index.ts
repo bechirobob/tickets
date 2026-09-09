@@ -1,3 +1,4 @@
+import { processEventAnnouncements } from "../lib/event-audience";
 import { retryEventRemovals } from "../lib/event-removal";
 import { processRegistrations } from "../lib/registrations";
 import { recoverSeevPayments } from "../lib/seevplus";
@@ -159,7 +160,7 @@ function securityResponse(response: Response, nonce = requestNonce(), path = "")
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
   }
-  if (path === "/admin/recover" || path === "/api/admin/recovery") {
+  if (path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/")) {
     headers.set("Referrer-Policy", "no-referrer");
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -179,6 +180,7 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
 }
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  if(controller.cron === "* * * * *"){await processEventAnnouncements(env,"https://tickets.becoreops.com");return;}
   try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
   try {

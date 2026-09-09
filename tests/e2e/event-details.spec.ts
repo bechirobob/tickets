@@ -20,7 +20,8 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
     }
     await expect(page.getByRole("button", { name: "Copy Link", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
-    if (slug === "sun-chasers-labadi") await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
+    const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string}[]};
+    if (catalogue.events.find(event=>event.slug===slug)?.registrationMode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
     else await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
     await expect(page.locator(".event-detail-preview")).toHaveCount(0);
     await expect(page.locator(".event-detail-verified")).toContainText("Verified event");

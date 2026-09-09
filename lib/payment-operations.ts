@@ -1,3 +1,4 @@
+import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { sendOrderConfirmation } from "./email-delivery";
 import { recordProductMetric } from "./product-analytics";
 
@@ -189,6 +190,9 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
   if (paidOrder && await db.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND removed_at IS NOT NULL").bind(paidOrder.eventSlug).first()) return { result: "not_fulfilled" as const, order: paidOrder };
   if (!paidOrder || paidOrder.status !== "paid") return { result: "not_fulfilled" as const, order };
   await ensureIssuedTickets(db, paidOrder, verification.paidAt ?? now);
+  const consent = await db.prepare('SELECT announcements_opt_in AS optedIn,created_at AS createdAt FROM orders WHERE id=?').bind(paidOrder.id).first<{optedIn:number;createdAt:string}>();
+  await rememberEventContact(db,{eventSlug:paidOrder.eventSlug,email:paidOrder.customerEmail,guestName:paidOrder.customerName ?? 'Guest',source:'paid',consentedAt:consent?.optedIn ? consent.createdAt : null});
+  await notifyRegistrationHosts(db,{eventSlug:paidOrder.eventSlug,sourceId:paidOrder.id,guestName:paidOrder.customerName??'Guest',status:'paid',guests:paidOrder.quantity});
   if (newlyPaid) await recordProductMetric(db, "payment_confirmed", paidOrder.eventSlug);
   return { result: "paid" as const, order: paidOrder, newlyPaid };
 }
