@@ -10,6 +10,7 @@ Scope: customer discovery, event pages, My Nights, tickets, notifications, priva
 | Night header and tab bar repeated the same Room destination | Low | Keep Room in the Night tabs and the bell at the far right |
 | Account header and tabs repeated My Nights; locked privacy/wallet paths split recovery | Low | Account label in header, mobile account tabs use the dock's My Nights; privacy uses the main recovery route; remove redundant wallet detour |
 | Desktop staff navigation omitted organizer destinations available in the mobile selector | Medium | Add authorized organizer destinations to desktop; retain responsive sidebar/selector exclusivity |
+| Submission header sent “Back to events” to Home and omitted the standard menu | Low | Shared menu plus one organizer sign-in action |
 | Organizer analytics had a second workspace route among data filters | Low | Workspace switching remains in the header; filters contain data controls |
 | Menu labels could ellipsize and tall panels could leave the viewport | Medium | Full wrapping labels, bounded scrolling, keyboard and visibility regression coverage |
 | Notification tap trusted arbitrary destinations and reused staff windows | Medium | Same-origin customer destinations only, safe inbox fallback, preserve staff windows and await navigation before focus |

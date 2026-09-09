@@ -105,3 +105,4 @@
 }
 @media (prefers-reduced-motion: reduce) { .notification-panel--dropdown[data-phase='closing'] { animation: none; } }
 @media (prefers-reduced-transparency: reduce) { .notification-panel--dropdown { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; } }
+.customer-dock a:focus-visible { outline: 2px solid #eeeeee; outline-offset: -4px; box-shadow: none; text-shadow: none; }

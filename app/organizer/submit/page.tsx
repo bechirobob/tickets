@@ -1,6 +1,7 @@
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
-import { ArrowLeft, LogIn } from "lucide-react";
+import PublicNavigation from "../../mobile-navigation";
+import { LogIn } from "lucide-react";
 import PartySubmissionForm from "./submission-form";
 
 export default function SubmitPartyPage() {
@@ -9,8 +10,8 @@ export default function SubmitPartyPage() {
       <header className="submission-header">
         <Link href="/" className="night-brand-link"><BrandLogo /></Link>
         <nav className="submission-header__actions" aria-label="Organiser access">
-          <Link href="/" className="submission-header__back" aria-label="Back to events"><ArrowLeft size={14} /> <span>Back to events</span></Link>
           <Link href="/organizer/workspace" className="submission-header__signin"><LogIn size={14} /> <span>Organiser sign in</span></Link>
+          <PublicNavigation />
         </nav>
       </header>
       <section className="submission-intro">

@@ -525,7 +525,7 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.match(home, />List your event\s*</u);
   assert.match(organizer, /redirect\("\/organizer\/workspace"\)/u);
   assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
-  assert.match(submission, /href="\/"[^>]*>.*Back to events/su);
+  assert.match(submission, /<PublicNavigation \/>/u);
   assert.match(submission, /className="submission-header__signin"/u);
   assert.match(submission, /aria-label="Organiser access"/u);
   assert.match(submission, /Organiser sign in/u);
@@ -979,7 +979,7 @@ test("public typography keeps compact copy readable without shrinking header lab
     assert.match(source, /className="(?:directory-header__back-label|account-header-label)"/u);
     if (!source.includes('className="account-header-label"')) assert.match(source, /aria-label="Back to /u);
   }
-  assert.match(submission, /className="submission-header__back" aria-label="Back to events"/u);
+  assert.match(submission, /<PublicNavigation \/>/u);
 });
 
 test("organiser analytics has a dedicated compact responsive workspace", async () => {
