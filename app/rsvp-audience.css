@@ -1,5 +1,5 @@
 .registration-manager > .ops-tabs { margin-top: 10px; }
-.rsvp-signup { max-width: 680px; margin: 0 auto; padding: 24px 20px 110px; }
+.rsvp-signup { max-width: 680px; margin: 0 auto; padding: 24px 20px 40px; }
 .rsvp-signup > header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 26px; }
 .rsvp-signup > header .brand-logo { width: 130px; }
 .rsvp-signup > header a { font-size: 14px; }
