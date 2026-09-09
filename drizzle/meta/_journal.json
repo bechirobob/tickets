@@ -260,6 +260,20 @@
       "when": 1788978995331,
       "tag": "0036_event_rsvp",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1788984262616,
+      "tag": "0037_operations_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1788985001592,
+      "tag": "0038_event_removal",
+      "breakpoints": true
     }
   ]
 }

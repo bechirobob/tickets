@@ -1,6 +1,7 @@
+import { removeEvent } from "./event-removal";
 import { initiatePaystackRefund } from "./payment-operations";
 import { notifyEventAttendees } from "./notifications";
-import { hasPermission, type AdminSession } from "./admin-session";
+import { hasPermission, recordAudit, type AdminSession } from "./admin-session";
 
 export type ApprovalKind = "event_cancellation" | "mass_refund" | "organizer_payout";
 
@@ -54,18 +55,24 @@ export async function createPayoutAccount(env: Cloudflare.Env, session: AdminSes
 }
 
 export async function createApprovalRequest(db: D1Database, session: AdminSession, input: { kind: ApprovalRow["kind"]; eventSlug?: string | null; targetId?: string | null; payload: Record<string, unknown> }) {
+  if (!canDecideApproval(session, input.kind)) throw new Error("This request belongs to a different role.");
+  if (input.kind === "event_cancellation") {
+    if (String(input.payload.reason ?? "").trim().length < 8) throw new Error("Add a clear cancellation reason.");
+    if (!await db.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND event_state <> 'cancelled'").bind(input.eventSlug ?? "").first()) throw new Error("Choose an event that has not been cancelled.");
+  }
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await db.prepare(`
     INSERT INTO approval_requests (id, kind, event_slug, target_id, payload_json, status, requested_by, requested_by_email, requested_at)
     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
   `).bind(id, input.kind, input.eventSlug ?? null, input.targetId ?? null, JSON.stringify(input.payload), session.accountId, session.email, now).run();
+  await recordAudit(db, { session, action: "approval.requested", targetType: "approval", targetId: id, outcome: "success", detail: input.kind });
   return { id, status: "pending" as const };
 }
 
 export async function requestMassRefund(db: D1Database, session: AdminSession, eventSlug: string, reason: string) {
   if (!/^[a-z0-9-]{1,80}$/u.test(eventSlug) || reason.trim().length < 8) throw new Error("Choose an event and add a clear refund reason.");
-  const otherProvider = await db.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider <> 'paystack' AND status IN ('paid', 'requires_refund') LIMIT 1").bind(eventSlug).first();
+  const otherProvider = await db.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider NOT IN ('paystack', 'rsvp') AND total_amount_minor > refunded_amount_minor AND status IN ('paid', 'requires_refund') LIMIT 1").bind(eventSlug).first();
   if (otherProvider) throw new Error("This event includes SeevPlus payments. Arrange those refunds with SeevPlus before starting a Paystack refund batch.");
   const batchId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -110,18 +117,20 @@ export async function decideApproval(env: Cloudflare.Env, session: AdminSession,
   if (!canDecideApproval(session, approval.kind)) throw new Error("This approval belongs to a different role.");
   if (approval.requestedBy === session.accountId) throw new Error("The person who requested this cannot approve it. Two people means two people.");
   const now = new Date().toISOString();
-  if (input.decision === "reject") {
-    await env.DB.batch([
-      env.DB.prepare("UPDATE approval_requests SET status = 'rejected', decided_by = ?, decided_by_email = ?, decided_at = ?, decision_note = ? WHERE id = ? AND status = 'pending'")
-        .bind(session.accountId, session.email, now, input.note?.slice(0, 500) ?? null, approval.id),
-      approval.kind === "mass_refund" ? env.DB.prepare("UPDATE refund_batches SET status = 'failed', updated_at = ? WHERE id = ?").bind(now, approval.targetId) : env.DB.prepare("SELECT 1"),
-      approval.kind === "organizer_payout" ? env.DB.prepare("UPDATE payout_transfers SET status = 'failed', failure_reason = 'Approval rejected', updated_at = ? WHERE id = ?").bind(now, approval.targetId) : env.DB.prepare("SELECT 1"),
-    ]);
-    return { status: "rejected" as const };
-  }
-  await env.DB.prepare("UPDATE approval_requests SET status = 'executing', decided_by = ?, decided_by_email = ?, decided_at = ?, decision_note = ? WHERE id = ? AND status = 'pending'")
+  if (input.decision !== "approve" && input.decision !== "reject") throw new Error("Choose approve or reject.");
+  const claimed = await env.DB.prepare("UPDATE approval_requests SET status = 'executing', decided_by = ?, decided_by_email = ?, decided_at = ?, decision_note = ? WHERE id = ? AND status = 'pending'")
     .bind(session.accountId, session.email, now, input.note?.slice(0, 500) ?? null, approval.id).run();
+  if (claimed.meta.changes !== 1) throw new Error("This approval has already been decided. Refresh the queue.");
   try {
+    if (input.decision === "reject") {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE approval_requests SET status = 'rejected', completed_at = ? WHERE id = ?").bind(now, approval.id),
+        approval.kind === "mass_refund" ? env.DB.prepare("UPDATE refund_batches SET status = 'failed', updated_at = ? WHERE id = ?").bind(now, approval.targetId) : env.DB.prepare("SELECT 1"),
+        approval.kind === "organizer_payout" ? env.DB.prepare("UPDATE payout_transfers SET status = 'failed', failure_reason = 'Approval rejected', updated_at = ? WHERE id = ?").bind(now, approval.targetId) : env.DB.prepare("SELECT 1"),
+      ]);
+      await recordAudit(env.DB, { session, action: "approval.rejected", targetType: "approval", targetId: approval.id, outcome: "success", detail: approval.kind });
+      return { status: "rejected" as const };
+    }
     if (approval.kind === "mass_refund") {
       await env.DB.batch([
         env.DB.prepare("UPDATE refund_batches SET status = 'queued', updated_at = ? WHERE id = ?").bind(now, approval.targetId),
@@ -149,8 +158,10 @@ export async function decideApproval(env: Cloudflare.Env, session: AdminSession,
         env.DB.prepare("UPDATE tickets SET status = 'voided' WHERE event_slug = ? AND status = 'issued'").bind(approval.eventSlug),
         env.DB.prepare("UPDATE approval_requests SET status = 'completed', completed_at = ? WHERE id = ?").bind(now, approval.id),
       ]);
-      await notifyEventAttendees(env, approval.eventSlug, { kind: "event_status", title: "This Night is cancelled", body: "Open My Nights for refund status and order-linked support.", url: `/my-nights/${encodeURIComponent(approval.eventSlug)}?view=purchase`, sourceId: `event-cancelled-${approval.id}`, tag: `event-${approval.eventSlug}` });
+      if (JSON.parse(approval.payloadJson).removeEvent === true) await removeEvent(env, session, approval.eventSlug, true, String(JSON.parse(approval.payloadJson).reason));
+      else await notifyEventAttendees(env, approval.eventSlug, { kind: "event_status", title: "This Night is cancelled", body: "Open My Nights for refund status and order-linked support.", url: `/my-nights/${encodeURIComponent(approval.eventSlug)}?view=purchase`, sourceId: `event-cancelled-${approval.id}`, tag: `event-${approval.eventSlug}` });
     }
+    await recordAudit(env.DB, { session, action: "approval.completed", targetType: "approval", targetId: approval.id, outcome: "success", detail: approval.kind });
     return { status: "completed" as const };
   } catch (error) {
     await env.DB.prepare("UPDATE approval_requests SET status = 'failed', failure_reason = ?, completed_at = ? WHERE id = ?")
@@ -164,7 +175,7 @@ export async function processRefundBatches(env: Cloudflare.Env, limit = 5) {
   const batch = await env.DB.prepare("SELECT id, event_slug AS eventSlug, reason, total_orders AS totalOrders, processed_orders AS processedOrders, failed_orders AS failedOrders FROM refund_batches WHERE status IN ('queued', 'processing') ORDER BY created_at LIMIT 1")
     .first<{ id: string; eventSlug: string; reason: string; totalOrders: number; processedOrders: number; failedOrders: number }>();
   if (!batch) return { processed: 0 };
-  const otherProvider = await env.DB.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider <> 'paystack' AND status IN ('paid', 'requires_refund') LIMIT 1").bind(batch.eventSlug).first();
+  const otherProvider = await env.DB.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider NOT IN ('paystack', 'rsvp') AND total_amount_minor > refunded_amount_minor AND status IN ('paid', 'requires_refund') LIMIT 1").bind(batch.eventSlug).first();
   if (otherProvider) {
     await env.DB.prepare("UPDATE refund_batches SET status = 'failed', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), batch.id).run();
     throw new Error("Refund batch includes SeevPlus payments and needs finance review.");

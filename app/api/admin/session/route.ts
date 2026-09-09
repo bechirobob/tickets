@@ -179,6 +179,7 @@ export async function PATCH(request: Request) {
     await env.DB.batch([
       env.DB.prepare(`UPDATE staff_accounts SET password_hash = ?, password_salt = ?, password_iterations = ?, must_change_password = 0, password_changed_at = ?, updated_at = ? WHERE id = ?`)
         .bind(password.hash, password.salt, password.iterations, now, now, session.accountId),
+      env.DB.prepare("UPDATE staff_auth_challenges SET used_at = ? WHERE account_id = ? AND used_at IS NULL").bind(now, session.accountId),
       env.DB.prepare("UPDATE staff_sessions SET revoked_at = ? WHERE account_id = ? AND id <> ? AND revoked_at IS NULL")
         .bind(now, session.accountId, session.sessionId),
     ]);

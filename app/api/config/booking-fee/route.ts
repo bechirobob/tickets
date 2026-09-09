@@ -33,6 +33,7 @@ export async function POST(request: Request) {
   const percentage = Number(body.percentage);
   if (!Number.isFinite(percentage) || percentage < 0 || percentage > 25) return Response.json({ error: "Fee must be between 0% and 25%." }, { status: 400 });
   const scope = body.scope ?? "global";
+  if (!["global", "event", "organizer"].includes(scope)) return Response.json({ error: "Choose a valid fee scope." }, { status: 400 });
   if (scope !== "global" && !body.scopeId?.trim()) return Response.json({ error: "A scope target is required." }, { status: 400 });
   const now = new Date().toISOString();
   const effectiveAt = body.effectiveAt ? new Date(body.effectiveAt) : new Date(now);

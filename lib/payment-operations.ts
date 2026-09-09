@@ -151,6 +151,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
         AND EXISTS (
           SELECT 1 FROM event_ticket_tiers tier
           WHERE tier.id = inventory_reservations.ticket_tier_id
+            AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = tier.event_slug AND event.removed_at IS NOT NULL)
             AND (
               SELECT COALESCE(SUM(other.admission_count), 0)
               FROM inventory_reservations other
@@ -175,7 +176,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
       return { result: "requires_refund" as const, order };
     }
     const paidUpdate = await db.prepare(`
-      UPDATE orders SET status = 'paid', ${statusColumn} = 'success', ${referenceColumn} = ?,
+      UPDATE orders SET status = CASE WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = orders.event_slug AND e.removed_at IS NOT NULL) THEN 'requires_refund' ELSE 'paid' END, ${statusColumn} = 'success', ${referenceColumn} = ?,
         ${transactionColumn} = ?, payment_verified_at = ?, payment_updated_at = ?,
         paid_at = COALESCE(paid_at, ?), failure_reason = NULL
       WHERE id = ? AND status IN ('payment_pending', 'expired', 'failed')
@@ -184,6 +185,8 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
   }
 
   const paidOrder = await readOrder(db, verification.reference);
+  if (paidOrder?.status === "requires_refund") return { result: "requires_refund" as const, order: paidOrder };
+  if (paidOrder && await db.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND removed_at IS NOT NULL").bind(paidOrder.eventSlug).first()) return { result: "not_fulfilled" as const, order: paidOrder };
   if (!paidOrder || paidOrder.status !== "paid") return { result: "not_fulfilled" as const, order };
   await ensureIssuedTickets(db, paidOrder, verification.paidAt ?? now);
   if (newlyPaid) await recordProductMetric(db, "payment_confirmed", paidOrder.eventSlug);

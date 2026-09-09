@@ -25,6 +25,7 @@ export async function POST(request: Request) {
   const eventSlug = String(body.eventSlug ?? "");
   const { env, session } = await gateAccess(request, eventSlug);
   if (!session) return Response.json({ error: "This door list is not assigned to your account." }, { status: 403 });
+  if (await env.DB.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')").bind(eventSlug).first()) return Response.json({ error: "Door entry is paused for this event." }, { status: 409 });
   const action = String(body.action ?? "");
   const now = new Date().toISOString();
   if (action === "add") {

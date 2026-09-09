@@ -11,20 +11,29 @@ async function access(request: Request) {
 export async function GET(request: Request) {
   const { env, session } = await access(request);
   if (!session) return Response.json({ error: "Customer operations access is required." }, { status: 403 });
+  const url = new URL(request.url);
+  const requestedPage = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+  const total = Number((await env.DB.prepare("SELECT COUNT(*) AS total FROM support_cases").first<{ total: number }>())?.total ?? 0);
+  const pageSize = 20;
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize)));
   const rows = await env.DB.prepare(`
+    WITH page_cases AS (
+      SELECT * FROM support_cases
+      ORDER BY CASE status WHEN 'waiting_support' THEN 0 WHEN 'open' THEN 1 ELSE 2 END, updated_at DESC, id
+      LIMIT ? OFFSET ?
+    )
     SELECT support.id, support.attendee_id AS attendeeId, support.event_slug AS eventSlug,
       event.title AS eventTitle, support.order_id AS orderId, orders.reference,
       profile.display_name AS displayName, profile.normalized_email AS email,
       support.kind, support.subject, support.status, support.created_at AS createdAt, support.updated_at AS updatedAt,
       message.id AS messageId, message.author_type AS authorType, message.body, message.created_at AS messageCreatedAt
-    FROM support_cases support JOIN attendee_profiles profile ON profile.id = support.attendee_id
+    FROM page_cases support JOIN attendee_profiles profile ON profile.id = support.attendee_id
     JOIN curated_event_records event ON event.slug = support.event_slug
     LEFT JOIN orders ON orders.id = support.order_id
     LEFT JOIN support_messages message ON message.case_id = support.id
     ORDER BY CASE support.status WHEN 'waiting_support' THEN 0 WHEN 'open' THEN 1 ELSE 2 END,
-      support.updated_at DESC, message.created_at
-    LIMIT 600
-  `).all<Record<string, unknown>>();
+      support.updated_at DESC, support.id, message.created_at, message.id
+  `).bind(pageSize, (page - 1) * pageSize).all<Record<string, unknown>>();
   const cases = new Map<string, Record<string, unknown> & { messages: Array<Record<string, unknown>> }>();
   for (const row of rows.results) {
     const id = String(row.id);
@@ -32,7 +41,7 @@ export async function GET(request: Request) {
     if (row.messageId) item.messages.push({ id: row.messageId, authorType: row.authorType, body: row.body, createdAt: row.messageCreatedAt });
     cases.set(id, item);
   }
-  return Response.json({ cases: [...cases.values()] }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ cases: [...cases.values()], page, pageSize, total }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {

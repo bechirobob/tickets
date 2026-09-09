@@ -75,7 +75,7 @@ export async function GET(request: Request) {
       FROM tickets t JOIN orders o ON o.id = t.order_id
       LEFT JOIN ticket_assignments assignment ON assignment.ticket_id = t.id AND assignment.status = 'active'
       LEFT JOIN attendee_profiles profile ON profile.id = assignment.attendee_id
-      WHERE t.event_slug = ? AND t.status IN ('issued', 'checked_in') LIMIT 10000
+      WHERE t.event_slug = ? AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = t.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')) LIMIT 10000
     `).bind(eventSlug).all();
     return Response.json({ issued: stats?.issued ?? 0, checkedIn: stats?.checkedIn ?? 0, tiers: tiers.results, canUndo: hasPermission(session, "gate.undo"), manifest: manifest.results, generatedAt: new Date().toISOString() }, { headers: { "cache-control": "no-store" } });
   }
@@ -116,13 +116,15 @@ export async function POST(request: Request) {
   }
 
   if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
+  const unavailable = await env.DB.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')").bind(eventSlug).first();
+  if (unavailable) return Response.json({ result: "invalid", error: "Entry is paused for this event. Check its latest status." }, { status: 409 });
   if (clientScanId) {
     const replay = await env.DB.prepare(`
       SELECT ticket.id AS ticketId, ticket.event_slug AS eventSlug, ticket.ticket_type AS ticketType,
              ticket.status, ticket.checked_in_at AS checkedInAt, ticket.checked_in_gate AS checkedInGate
       FROM gate_checkin_events event JOIN tickets ticket ON ticket.id = event.ticket_id
-      WHERE event.client_scan_id = ? AND event.action = 'check_in' LIMIT 1
-    `).bind(clientScanId).first();
+      WHERE event.client_scan_id = ? AND event.event_slug = ? AND ticket.qr_token_hash = ? AND event.action = 'check_in' LIMIT 1
+    `).bind(clientScanId, eventSlug, await hashGateToken(token)).first();
     if (replay) return Response.json({ result: "valid", ticket: replay, replayed: true, message: "Offline entry synchronized." }, { headers: { "cache-control": "no-store" } });
   }
   const tokenHash = await hashGateToken(token);
@@ -141,7 +143,7 @@ export async function POST(request: Request) {
   const checkedInAt = new Date().toISOString();
   const result = await env.DB.prepare(`
     UPDATE tickets SET status = 'checked_in', checked_in_at = ?, checked_in_by = ?, checked_in_gate = ?
-    WHERE id = ? AND status = 'issued' AND qr_token_hash = ?
+    WHERE id = ? AND status = 'issued' AND qr_token_hash = ? AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = tickets.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon'))
   `).bind(checkedInAt, `${session.actor} <${session.email}>`, gate, ticket.ticketId, tokenHash).run();
   if (result.meta.changes !== 1) {
     const current = await findTicket(env.DB, tokenHash);

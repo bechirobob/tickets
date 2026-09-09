@@ -54,12 +54,12 @@ export async function GET(request: Request) {
              area, starts_at AS startsAt, ends_at AS endsAt, vibe,
              price_from_minor AS priceFromMinor, capacity, sales_open_at AS salesOpenAt,
              sales_close_at AS salesCloseAt, age_restriction AS ageRestriction,
-             lineup, event_state AS eventState, is_test_event AS isTestEvent,
+             lineup, event_state AS eventState, schedule_status AS scheduleStatus, is_test_event AS isTestEvent,
              rescheduled_from AS rescheduledFrom,
              image_url AS imageUrl, curation_note AS curationNote, tagline, status,
              dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk,
              scheduled_publish_at AS scheduledPublishAt, published_at AS publishedAt, updated_at AS updatedAt
-      FROM curated_event_records ORDER BY starts_at DESC
+      FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC
     `).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT tier.id, tier.event_slug AS eventSlug, tier.code, tier.name, tier.description,
@@ -89,7 +89,7 @@ export async function PATCH(request: Request) {
     const slug = text(body.slug, "event", 80);
     if (body.action === "save_copy") {
       const { env } = await import("cloudflare:workers");
-      const event = await env.DB.prepare("SELECT slug FROM curated_event_records WHERE slug = ?").bind(slug).first();
+      const event = await env.DB.prepare("SELECT slug FROM curated_event_records WHERE slug = ? AND removed_at IS NULL").bind(slug).first();
       if (!event) return Response.json({ error: "Event not found." }, { status: 404 });
       const tagline = normalizeEventTagline(body.tagline, true);
       await assertOriginalEventTagline(env.DB, tagline, slug);
@@ -112,9 +112,14 @@ export async function PATCH(request: Request) {
     if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > 12) throw new Error("Every event needs between one and twelve ticket tiers.");
 
     const { env } = await import("cloudflare:workers");
-    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, status, dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk, tagline FROM curated_event_records WHERE slug = ? LIMIT 1")
-      .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; status: string; dressCode: string | null; colourScheme: string | null; awarenessNote: string | null; guestPerk: string | null; tagline: string | null }>();
+    const current = await env.DB.prepare("SELECT id, submission_id AS submissionId, title, starts_at AS startsAt, event_state AS eventState, schedule_status AS scheduleStatus, status, dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote, guest_perk AS guestPerk, tagline FROM curated_event_records WHERE slug = ? AND removed_at IS NULL LIMIT 1")
+      .bind(slug).first<{ id: string; submissionId: string; title: string; startsAt: string; eventState: string; scheduleStatus: string; status: string; dressCode: string | null; colourScheme: string | null; awarenessNote: string | null; guestPerk: string | null; tagline: string | null }>();
     if (!current) return Response.json({ error: "Event not found." }, { status: 404 });
+    if (eventState === "cancelled" && current.eventState !== "cancelled") throw new Error("Request cancellation in Event operations so another authorised person can approve it.");
+    if (current.eventState === "cancelled" && eventState !== "cancelled") throw new Error("A cancelled event cannot be reopened through the event editor.");
+    const scheduleStatus = String(body.scheduleStatus ?? current.scheduleStatus);
+    if (!["confirmed", "coming_soon", "end_pending"].includes(scheduleStatus)) throw new Error("Choose a valid date status.");
+    if (scheduleStatus === "coming_soon" && current.scheduleStatus !== "coming_soon") throw new Error("Use postponement when a previously announced date is no longer confirmed.");
     const tagline = body.tagline === undefined ? current.tagline : normalizeEventTagline(body.tagline, true);
     await assertOriginalEventTagline(env.DB, tagline, slug);
     const dressCode = body.dressCode === undefined ? current.dressCode : optionalText(body.dressCode, "dress code", 100);
@@ -125,6 +130,7 @@ export async function PATCH(request: Request) {
     const existing = await env.DB.prepare("SELECT id, code FROM event_ticket_tiers WHERE event_slug = ?").bind(slug).all<{ id: string; code: string }>();
     const existingIds = new Set(existing.results.map((tier) => tier.id));
     const codes = new Set<string>();
+    const tierIds = new Set<string>();
     const now = new Date().toISOString();
     const normalizedTiers = [];
 
@@ -134,6 +140,9 @@ export async function PATCH(request: Request) {
       if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(code) || codes.has(code)) throw new Error("Ticket tier codes must be unique lower-case words.");
       codes.add(code);
       const id = tier.id && existingIds.has(tier.id) ? tier.id : crypto.randomUUID();
+      if (tier.id && !existingIds.has(tier.id)) throw new Error("This ticket tier does not belong to the event.");
+      if (tierIds.has(id)) throw new Error("A ticket tier cannot appear twice.");
+      tierIds.add(id);
       const priceMinor = Number(tier.priceMinor);
       const admissionsPerUnit = Number(tier.admissionsPerUnit);
       const capacityAdmissions = Number(tier.capacityAdmissions);
@@ -151,11 +160,15 @@ export async function PATCH(request: Request) {
         FROM inventory_reservations WHERE ticket_tier_id = ?
       `).bind(now, id).first<{ count: number }>() : null;
       if ((tierUsage?.count ?? 0) > capacityAdmissions) throw new Error(`${text(tier.name, "ticket tier name", 80)} already has more admissions allocated than the new capacity.`);
+      const tierSalesOpenAt = validDate(tier.salesOpenAt, true);
+      const tierSalesCloseAt = validDate(tier.salesCloseAt, true);
+      if (tierSalesOpenAt && (tierSalesCloseAt ?? salesCloseAt) <= tierSalesOpenAt) throw new Error("Tier sales must close after they open.");
+      if (tierSalesCloseAt && tierSalesCloseAt > startsAt) throw new Error("Tier sales cannot close after the event starts.");
       normalizedTiers.push({
         id, code, name: text(tier.name, "ticket tier name", 80),
         description: text(tier.description, "ticket tier description", 240),
         priceMinor, admissionsPerUnit, capacityAdmissions, maxUnitsPerOrder, status,
-        salesOpenAt: validDate(tier.salesOpenAt, true), salesCloseAt: validDate(tier.salesCloseAt, true),
+        salesOpenAt: tierSalesOpenAt, salesCloseAt: tierSalesCloseAt,
         roomBadge: tier.roomBadge === "VIP" ? "VIP" : null,
         sortOrder: index,
       });
@@ -172,13 +185,13 @@ export async function PATCH(request: Request) {
         UPDATE curated_event_records SET title = ?, venue = ?, venue_map_url = ?, area = ?,
           starts_at = ?, ends_at = ?, vibe = ?, price_from_minor = ?, capacity = ?,
           sales_open_at = ?, sales_close_at = ?, age_restriction = ?, lineup = ?,
-          event_state = ?, rescheduled_from = ?, curation_note = ?, tagline = ?, dress_code = ?, colour_scheme = ?, awareness_note = ?, guest_perk = ?, updated_at = ?
+          event_state = ?, schedule_status = ?, rescheduled_from = ?, curation_note = ?, tagline = ?, dress_code = ?, colour_scheme = ?, awareness_note = ?, guest_perk = ?, updated_at = ?
         WHERE slug = ?
       `).bind(
         text(body.title, "event title", 120), text(body.venue, "venue", 160), validUrl(body.venueMapUrl),
         text(body.area, "area", 80), startsAt, endsAt, text(body.vibe, "event mood", 30),
         priceFromMinor, capacity, salesOpenAt, salesCloseAt, text(body.ageRestriction, "age restriction", 20),
-        text(body.lineup, "line-up", 1000), eventState, rescheduledFrom,
+        text(body.lineup, "line-up", 1000), eventState, scheduleStatus, rescheduledFrom,
         text(body.curationNote, "customer-facing event note", 1800), tagline, dressCode, colourScheme, awarenessNote, guestPerk, now, slug,
       ),
       env.DB.prepare("UPDATE party_submissions SET tagline = ? WHERE event_slug = ?").bind(tagline, slug),
@@ -201,11 +214,8 @@ export async function PATCH(request: Request) {
         tier.salesOpenAt, tier.salesCloseAt, tier.roomBadge, tier.sortOrder, now, now,
       )),
       ...existing.results.filter((tier) => !activeIds.has(tier.id)).map((tier) => env.DB.prepare("UPDATE event_ticket_tiers SET status = 'hidden', updated_at = ? WHERE id = ? AND event_slug = ?").bind(now, tier.id, slug)),
-      ...(["cancelled", "postponed"].includes(eventState) ? [
-        env.DB.prepare("UPDATE tickets SET status = 'voided' WHERE event_slug = ? AND status = 'issued'").bind(slug),
-      ] : [
-        env.DB.prepare(`UPDATE tickets SET status = 'issued' WHERE event_slug = ? AND status = 'voided' AND order_id IN (SELECT id FROM orders WHERE status = 'paid')`).bind(slug),
-      ]),
+      // Event availability is checked at admission. Editing metadata must never
+      // revive tickets voided by a refund, return, dispute or RSVP cancellation.
       env.DB.prepare(`
         INSERT INTO curation_audit_events (id, submission_id, action, from_status, to_status, note, actor, created_at)
         VALUES (?, ?, 'edit_event_inventory', ?, ?, ?, ?, ?)

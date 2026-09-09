@@ -1,5 +1,7 @@
 "use client";
 
+import { operationsFetch } from "../../lib/operations-client";
+
 import { CheckCircle2, Info, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { StaffRole } from "../../lib/admin-session";
@@ -15,26 +17,29 @@ export default function FeeSettings({ actor, role }: { actor: string; role: Staf
   const [fee, setFee] = useState("7.50");
   const [effectiveAt, setEffectiveAt] = useState(localInputDate);
   const [history, setHistory] = useState<FeeRule[]>([]);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/config/booking-fee", { cache: "no-store" });
+    const response = await operationsFetch("/api/config/booking-fee", { cache: "no-store" });
     const result = await response.json() as { percentage?: number; history?: FeeRule[] };
     if (response.ok) { setFee(Number(result.percentage ?? 7.5).toFixed(2)); setHistory(result.history ?? []); }
   }, []);
   useEffect(() => {
-    fetch("/api/config/booking-fee", { cache: "no-store" })
-      .then((response) => response.json() as Promise<{ percentage?: number; history?: FeeRule[] }>)
+    operationsFetch("/api/config/booking-fee", { cache: "no-store" })
+      .then(async (response) => { const result = await response.json() as { percentage?: number; history?: FeeRule[]; error?: string }; if (!response.ok) throw new Error(result.error ?? "Fee settings could not load."); return result; })
       .then((result) => { setFee(Number(result.percentage ?? 7.5).toFixed(2)); setHistory(result.history ?? []); })
       .catch(() => setError("Fee settings could not be loaded."));
   }, []);
 
   async function saveFee() {
+    if (saving) return;
     setSaved(false); setError("");
     const effectiveTimestamp = new Date(effectiveAt);
     if (!Number.isFinite(effectiveTimestamp.getTime())) { setError("Choose a valid effective time."); return; }
-    const response = await fetch("/api/config/booking-fee", {
+    setSaving(true);
+    const response = await operationsFetch("/api/config/booking-fee", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ percentage: Number(fee), scope: "global", effectiveAt: effectiveTimestamp.toISOString() }),
@@ -42,6 +47,7 @@ export default function FeeSettings({ actor, role }: { actor: string; role: Staf
     const result = await response.json() as { error?: string };
     if (!response.ok) setError(result.error ?? "The fee rule could not be saved.");
     else { setSaved(true); await load(); }
+    setSaving(false);
   }
   return <main className="ops-page">
     <OperationsNav actor={actor} role={role} active="/admin/fees" />
@@ -55,7 +61,7 @@ export default function FeeSettings({ actor, role }: { actor: string; role: Staf
           <label>Effective from<input type="datetime-local" value={effectiveAt} onChange={(event) => setEffectiveAt(event.target.value)} /><small>Existing paid, pending and reserved orders keep their original fee.</small></label>
         </div>
         <div className="fee-preview"><Info size={19} /><div><strong>Customer price preview</strong><p>On a GH₵100.00 ticket, the buyer pays <b>GH₵{(100 + Number(fee || 0)).toFixed(2)}</b>. The booking fee is GH₵{Number(fee || 0).toFixed(2)}.</p></div></div>
-        <div className="settings-actions"><button onClick={saveFee}><Save size={17} /> Save fee rule</button>{saved ? <span><CheckCircle2 size={17} /> Fee rule saved</span> : null}{error ? <span className="settings-error">{error}</span> : null}</div>
+        <div className="settings-actions"><button disabled={saving} onClick={saveFee}><Save size={17} /> {saving ? "Saving…" : "Save fee rule"}</button>{saved ? <span><CheckCircle2 size={17} /> Fee rule saved</span> : null}{error ? <span className="settings-error" role="alert">{error}</span> : null}</div>
         <section className="audit-preview"><h2>Recent fee changes</h2>{history.length ? history.map((rule) => <div key={rule.id}><span>{(rule.percentageBasisPoints / 100).toFixed(2)}%</span><p><b>{rule.scope === "global" ? "Global default created" : `${rule.scope} rule created`}</b><small>Effective {new Date(rule.effectiveAt).toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" })} · {rule.createdBy}</small></p><time>{new Date(rule.createdAt).toLocaleDateString("en-GH", { dateStyle: "medium" })}</time></div>) : <p>No fee changes recorded yet.</p>}</section>
       </div>
     </section>

@@ -14,7 +14,7 @@ export async function registrationSettings(db: D1Database, slug: string) {
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.capacity, 0) AS capacity, COALESCE(s.max_party_size, 1) AS maxPartySize,
     COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess
-    FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ?`).bind(slug).first<RegistrationSettings>();
+    FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(slug).first<RegistrationSettings>();
 }
 export function registrationsOpen(settings: RegistrationSettings) {
   return settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)
@@ -147,7 +147,7 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string) 
       .bind(signature(s), timestamp(), event.slug, signature(s)).run();
   }
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return;
-  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE verified_at IS NOT NULL AND version > notified_version ORDER BY updated_at LIMIT 40`).all<Registration>();
+  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE verified_at IS NOT NULL AND version > notified_version AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = event_registrations.event_slug AND e.removed_at IS NOT NULL) ORDER BY updated_at LIMIT 40`).all<Registration>();
   for (const reg of rows.results) {
     const s = await registrationSettings(env.DB, reg.eventSlug);
     if (!s) continue;

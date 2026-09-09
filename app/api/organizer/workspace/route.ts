@@ -54,14 +54,14 @@ export async function GET(request: Request) {
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status = 'checked_in'), 0) AS checkedInAdmissions
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    ${scope}
+    ${scope || "WHERE 1 = 1"} AND event.removed_at IS NULL
     ORDER BY event.starts_at DESC
   `);
   const submissionStatement = env.DB.prepare(`
     SELECT id, organizer_name AS organizerName, title, status, review_note AS reviewNote,
            event_slug AS eventSlug, starts_at AS startsAt, created_at AS createdAt, updated_at AS updatedAt
     FROM party_submissions
-    ${session.role === "owner" ? "" : "WHERE contact_email = ?"}
+    ${session.role === "owner" ? "WHERE 1 = 1" : "WHERE contact_email = ?"} AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = party_submissions.event_slug AND e.removed_at IS NOT NULL)
     ORDER BY created_at DESC
     LIMIT 250
   `);
