@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
+test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{
+  await page.goto('/rsvp/the-weekend-braai');await expect(page.getByText('Paid registration',{exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
+  await page.goto('/rsvp/sun-chasers-labadi');await expect(page.getByLabel('Your name')).toBeInViewport();await expect(page.getByText('Email updates · no admission included')).toBeVisible();
+});
 test('free RSVP preserves form details on failure and submits the selected party without checkout', async ({ page }) => {
   await page.goto('/event/after-dark-osu');
   await page.getByRole('button', { name: 'RSVP — free entry' }).click();

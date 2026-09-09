@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, ArrowUpRight, BadgeCheck, Gem, MessageCircle, Ribbon, ShieldCheck, Ticket } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
@@ -54,6 +54,7 @@ export async function generateMetadata({ params }: EventPageProps): Promise<Meta
 export default async function EventPage({ params, searchParams }: EventPageProps) {
   const { slug } = await params;
   const query = await searchParams;
+  if(query.register === "1") redirect(`/rsvp/${encodeURIComponent(slug)}`);
   const promoterCode = query.ref?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const { env } = await import("cloudflare:workers");
   const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);

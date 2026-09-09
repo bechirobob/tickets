@@ -10,7 +10,7 @@ for (let attempt = 0; attempt < 12; attempt++) {
   console.log("Waiting for the published revision to reach this edge.");
   await wait(5000);
 }
-for (const path of ["/", "/events", "/my-nights", "/notifications", "/event/the-weekend-braai", "/rsvp/access", "/announcements/unsubscribe"]) {
+for (const path of ["/", "/events", "/my-nights", "/notifications", "/event/the-weekend-braai", "/rsvp/access", "/rsvp/the-weekend-braai", "/announcements/unsubscribe"]) {
   const page = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(15000) });
   if (!page.ok) throw new Error(`Production route ${path} returned ${page.status}`);
 }

@@ -21,6 +21,15 @@ export function registrationsOpen(settings: RegistrationSettings) {
   return settings.accepting !== 0 && (!settings.closesAt || settings.closesAt > timestamp()) && settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)
     && (settings.scheduleStatus === 'coming_soon' || (settings.mode === 'rsvp' ? settings.startsAt : settings.endsAt) > timestamp());
 }
+export function registrationShareState(settings: RegistrationSettings | null) {
+  if (!settings) return {ready:false,mode:'paid',reason:'Choose an available event.'};
+  const mode=settings.mode;
+  if (settings.publication !== 'published') return {ready:false,mode,reason:'Publish this event before sharing registration.'};
+  if (['cancelled','postponed'].includes(settings.eventState)) return {ready:false,mode,reason:'Registration is unavailable while this event is cancelled or postponed.'};
+  if (mode !== 'interest' && settings.scheduleStatus !== 'confirmed') return {ready:false,mode,reason:'Confirm the event date and end time before opening registration.'};
+  if (!registrationsOpen(settings)) return {ready:false,mode,reason:'Registration is closed. Check the opening switch, deadline and event date.'};
+  return {ready:true,mode,reason:''};
+}
 function signature(s: RegistrationSettings) { return JSON.stringify([s.scheduleStatus, s.startsAt, s.endsAt, s.eventState, s.mode]); }
 export async function readRegistration(db: D1Database, id: string) { return db.prepare(`SELECT ${fields} FROM event_registrations WHERE id = ?`).bind(id).first<Registration>(); }
 

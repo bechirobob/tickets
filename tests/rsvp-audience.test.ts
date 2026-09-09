@@ -1,7 +1,7 @@
 import {env} from 'cloudflare:test';
 import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import {adminCookieHeader,createStaffSession} from '../lib/admin-session';
-import {requestRegistration,claimRegistration,registrationSettings} from '../lib/registrations';
+import {requestRegistration,claimRegistration,registrationSettings,registrationShareState} from '../lib/registrations';
 import {rememberEventContact,processEventAnnouncements,notifyRegistrationHosts} from '../lib/event-audience';
 import {retryFailedDeliveries,applyDeliveryWebhook} from '../lib/email-delivery';
 import {fulfillVerifiedPayment} from '../lib/payment-operations';
@@ -35,6 +35,15 @@ beforeEach(async()=>{
  expect((await settings()).status).toBe(200);
 });
 afterEach(()=>vi.restoreAllMocks());
+it('only advertises links for saved, published and open registration',async()=>{
+ const s=(await registrationSettings(env.DB,slug))!;
+ expect(registrationShareState(s)).toMatchObject({ready:true,mode:'rsvp'});
+ for(const change of [{publication:'unpublished'},{accepting:0},{scheduleStatus:'coming_soon'},{closesAt:'2020-01-01T00:00:00.000Z'}])expect(registrationShareState({...s,...change}).ready).toBe(false);
+ expect(registrationShareState({...s,mode:'paid'})).toMatchObject({ready:true,mode:'paid'});
+ expect(registrationShareState({...s,mode:'interest',scheduleStatus:'coming_soon'})).toMatchObject({ready:true,mode:'interest'});
+ const live=await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&live=1`))).json() as {sharing:{ready:boolean;mode:string}};
+ expect(live.sharing).toMatchObject({ready:true,mode:'rsvp'});
+});
 it('stores only verified free emails and preserves explicit subscription choice',async()=>{
  await requestRegistration(env.DB,{eventSlug:slug,email:'unverified@example.com',guestName:'Pending',phone:'',partySize:1,announcementsOptIn:true},origin);
  expect((await (await audience(get(`/api/admin/audience?eventSlug=${slug}`))).json() as {total:number}).total).toBe(0);
