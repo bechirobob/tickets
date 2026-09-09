@@ -33,6 +33,13 @@ revoke those grants first, since older claim code does not enforce email binding
    Inspection does not consume it. Claiming atomically consumes it, restores the
    same owner, replaces the password, clears lockouts and revokes all sessions,
    pending authentication challenges and other password grants. MFA stays intact.
+For an expired, unclaimed new-owner setup, a fresh issuance request may specify
+`renewSetupFrom` with the original setup request UUID, the same approved email
+hash, a fresh request UUID and token hash. Do not set `createOwner`. The issuer
+first matches an existing owner at the real email; otherwise it verifies the
+original unused email-bound grant and the unchanged disabled pending account.
+It issues a fresh one-hour grant for that same account without creating staff.
+
 6. Sign in normally after setting the password. Do not claim authenticated access
    was verified unless the owner has completed this step.
 
