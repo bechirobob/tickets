@@ -5,3 +5,10 @@ playwright-report/
 *.tsbuildinfo
 
 BeCore-Tickets-*.zip
+
+# Signing material must never enter source control.
+*.jks
+*.keystore
+*.p12
+*signing-secret*
+*signing-backup*

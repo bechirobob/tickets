@@ -1,0 +1,99 @@
+name: Android release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Check release version against previous distribution
+        run: |
+          node mobile/scripts/android-release.mjs validate
+          RELEASE_TAG="android-v$(node -p "require('./mobile/android/release.json').versionName")"
+          if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo 'This version has already been distributed. Increase both release version fields.' >&2
+            exit 1
+          fi
+          PREVIOUS_TAG="$(git tag --list 'android-v*' --sort=-version:refname | head -n 1)"
+          if [ -n "$PREVIOUS_TAG" ]; then
+            git show "$PREVIOUS_TAG:mobile/android/release.json" > "$RUNNER_TEMP/previous-android-release.json"
+            node mobile/scripts/android-release.mjs validate "$RUNNER_TEMP/previous-android-release.json"
+          fi
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+      - name: Prepare permanent signing identity
+        env:
+          ANDROID_RELEASE_SIGNING: ${{ secrets.ANDROID_RELEASE_SIGNING }}
+        run: node mobile/scripts/android-release.mjs prepare "$RUNNER_TEMP/becore-android-signing"
+      - name: Validate client
+        working-directory: mobile
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
+          npm test
+          npm run sync
+          npx playwright install --with-deps chromium webkit
+          npm run test:browser
+      - name: Install Android SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
+      - name: Build signed release APK and Android App Bundle
+        working-directory: mobile/android
+        run: ./gradlew --no-daemon assembleRelease bundleRelease lintRelease
+      - name: Verify packaged release identity and signature
+        run: |
+          node mobile/scripts/android-release.mjs verify mobile/android/app/build/outputs/apk/release/app-release.apk mobile/android/app/build/outputs/bundle/release/app-release.aab
+      - name: Publish verified Android release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "BeCore Tickets $RELEASE_TAG" \
+            --notes-file mobile/android/RELEASE-NOTES.md \
+            mobile/android/app/build/outputs/apk/release/app-release.apk \
+            mobile/android/app/build/outputs/apk/release/release-manifest.json \
+            mobile/android/app/build/outputs/bundle/release/app-release.aab
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: BeCore-Tickets-Android-release-${{ github.run_id }}
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            mobile/android/app/build/outputs/apk/release/release-manifest.json
+            mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-release-evidence-${{ github.run_id }}
+          path: |
+            mobile/android/app/build/reports
+            mobile/playwright-report
+            mobile/test-results
+          retention-days: 30
+      - name: Remove runner signing material
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/becore-android-signing"
