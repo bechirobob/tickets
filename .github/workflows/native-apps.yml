@@ -1,0 +1,113 @@
+name: Native app builds
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['mobile/**', 'lib/public-event.ts', 'lib/event-presentation.ts', 'lib/event-palette.ts', 'app/api/public/**', '.github/workflows/native-apps.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-apps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm test
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mobile-browser-evidence-${{ github.run_id }}
+          path: |
+            mobile/playwright-report
+            mobile/test-results
+          retention-days: 14
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run sync
+      - name: Install Android SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
+      - name: Compile Android pilot
+        run: ./gradlew --no-daemon assembleDebug lintDebug
+        working-directory: mobile/android
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: BeCore-Tickets-Android-pilot-${{ github.run_id }}
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-build-reports-${{ github.run_id }}
+          path: mobile/android/app/build/reports
+          retention-days: 14
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Verify Xcode
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+      - run: npm ci
+      - run: npm run sync
+      - name: Compile iOS simulator pilot
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO build
+      - name: Package simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app BeCore-Tickets-iOS-simulator.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: BeCore-Tickets-iOS-simulator-${{ github.run_id }}
+          path: mobile/BeCore-Tickets-iOS-simulator.zip
+          if-no-files-found: error
+          retention-days: 30

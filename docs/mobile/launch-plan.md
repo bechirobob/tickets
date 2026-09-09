@@ -23,7 +23,7 @@ Before adopting the runtime, prove one vertical journey: event discovery → ema
 | 3. Store candidate | Account deletion, moderation review, privacy/data disclosures, permission copy, age rating, reviewer access, store artwork, signed builds | TestFlight and Play internal tests complete; launch checklist has evidence; no credentials or placeholders in submission assets |
 | 4. Release | Closed testing where required; final metadata and compliance review; staged rollout with error monitoring | Store approval and real production payment acceptance; rollback/incident ownership documented |
 
-Stage 1 is implemented in the navigation release. Stages 2–4 are pending. No native binaries, native push registration or universal/app-link association files are claimed complete.
+Stage 1 is implemented. Stage 2 has started in `mobile/`: packaged discovery/detail screens, native sharing and lifecycle hooks, public offline catalogue, Android/iOS projects and native build pipelines. My Nights, recovery and checkout still use the secure browser flow; native session handoff and private passes remain pending. Build results and artifact links are recorded in the implementation PR. Stages 3–4, native push registration and verified universal/app-link association files remain pending. See [app build instructions](../../mobile/README.md).
 
 ## Launch dependencies
 
