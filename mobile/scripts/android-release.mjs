@@ -73,7 +73,12 @@ function main() {
     const report = command(join(buildTools, 'apksigner'), ['verify', '--verbose', '--print-certs', apk]);
     const badging = command(join(buildTools, 'aapt'), ['dump', 'badging', apk]);
     verifyApkReport(report, identity, badging);
-    const manifest = { ...identity, sha256: createHash('sha256').update(readFileSync(apk)).digest('hex'), sourceCommit: process.env.GITHUB_SHA || null };
+    const bundle = resolve(process.argv[4]);
+    const bundleVerification = command('jarsigner', ['-verify', bundle]);
+    if (!/jar verified\./.test(bundleVerification) || /jar is unsigned|unsigned entries/i.test(bundleVerification)) throw new Error('Android App Bundle signature verification failed.');
+    const bundleCertificate = new X509Certificate(command('keytool', ['-printcert', '-rfc', '-jarfile', bundle]));
+    if (bundleCertificate.fingerprint256.replaceAll(':', '').toLowerCase() !== identity.certificateSha256) throw new Error('Android App Bundle signer does not match the permanent certificate.');
+    const manifest = { ...identity, bundleSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'), sha256: createHash('sha256').update(readFileSync(apk)).digest('hex'), sourceCommit: process.env.GITHUB_SHA || null };
     writeFileSync(join(dirname(apk), 'release-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
     console.log(`Verified non-debuggable signed APK ${identity.versionName} (${identity.versionCode}).`);
   } else throw new Error('Expected validate, prepare or verify.');
