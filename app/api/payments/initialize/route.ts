@@ -1,3 +1,4 @@
+import { registrationSettings } from "../../../../lib/registrations";
 import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
 import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
 import { resolveBookingFee } from "../../../../lib/booking-fees";
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
   const selectableEvent = event && offer && candidateTier ? { ...event, eventState: "on_sale" as const, ticketTiers: event.ticketTiers.map((tier) => tier.id === candidateTier.id ? { ...tier, status: "available" as const, remainingAdmissions: Math.max(tier.remainingAdmissions, tier.admissionsPerUnit) } : tier) } : event;
   const selection = selectableEvent ? resolveTicketSelection(selectableEvent, body.ticketTierId ?? "general", body.quantity) : null;
   if (!event || !selection) return Response.json({ error: "That ticket tier is unavailable. Refresh the page and choose an available ticket." }, { status: 400 });
+  if ((await registrationSettings(env.DB, eventSlug))?.mode !== "paid") return Response.json({ error: "This event uses registration. Return to the event page to continue." }, { status: 409 });
   const paymentProvider = body.paymentProvider ?? "paystack";
   if (!["paystack", "seevplus"].includes(paymentProvider)) return Response.json({ error: "Choose an available payment provider." }, { status: 400 });
   if (paymentProvider === "seevplus" && !seevAvailable(env, event.isTestEvent)) return Response.json({ error: "SeevPlus is not available for this event yet." }, { status: 503 });
@@ -117,7 +119,8 @@ export async function POST(request: Request) {
       SELECT ?, event.slug, tier.id, ?, ?, 'held', ?, ?, ?
       FROM curated_event_records event
       JOIN event_ticket_tiers tier ON tier.event_slug = event.slug
-      WHERE event.slug = ? AND tier.id = ? AND tier.code = ?
+      WHERE event.slug = ?
+        AND NOT EXISTS (SELECT 1 FROM event_registration_settings registration WHERE registration.event_slug = event.slug AND registration.mode <> 'paid') AND tier.id = ? AND tier.code = ?
         AND (event.status = 'published' OR (event.status = 'scheduled' AND event.scheduled_publish_at <= ?))
         AND event.schedule_status = 'confirmed'
         AND (event.event_state IN ('on_sale', 'rescheduled') OR ? IS NOT NULL)

@@ -51,7 +51,7 @@ test("My Nights recovers from a service failure and keeps member navigation cons
   await page.route("**/api/customer/notifications", (route) => route.fulfill({ json: { notifications: [], unread: 0 } }));
   await page.goto("/my-nights");
   await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
-  await expect(page.getByLabel("Email used at checkout")).toHaveCount(0);
+  await expect(page.getByLabel("Booking or registration email")).toHaveCount(0);
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("heading", { name: "Ama’s nights." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Show my ticket" })).toHaveAttribute("href", "/my-nights/after-dark-osu?view=passes");

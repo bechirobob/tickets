@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     FROM ticket_assignments assignment
     JOIN tickets ticket ON ticket.id = assignment.ticket_id
     JOIN curated_event_records event ON event.slug = ticket.event_slug
-    WHERE assignment.ticket_id = ? AND assignment.attendee_id = ? AND assignment.status = 'active'
+    WHERE NOT EXISTS (SELECT 1 FROM orders WHERE id = ticket.order_id AND payment_provider = 'rsvp') AND assignment.ticket_id = ? AND assignment.attendee_id = ? AND assignment.status = 'active'
       AND ticket.status = 'issued' LIMIT 1
   `).bind(ticketId, identity.attendeeId).first<{ id: string; eventSlug: string; ticketType: string; status: string; title: string; startsAt: string; venue: string; area: string }>();
   if (!ticket) return Response.json({ error: "Only an unused ticket currently in My Nights can be transferred." }, { status: 409 });

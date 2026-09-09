@@ -101,6 +101,7 @@ export async function readAttendeeRoomAccess(
   db: D1Database,
   cookieHeader: string | null,
   eventSlug: string,
+  requireRoom = true,
 ): Promise<AttendeeRoomAccess | null> {
   const token = readCookie(cookieHeader);
   if (!token) return null;
@@ -118,9 +119,10 @@ export async function readAttendeeRoomAccess(
     LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
       AND t.event_slug = ? AND t.status IN ('issued', 'checked_in')
+      AND (? = 0 OR o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1))
     ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
     LIMIT 1
-  `).bind(tokenHash, now, eventSlug).first<AttendeeRoomAccess>();
+  `).bind(tokenHash, now, eventSlug, requireRoom ? 1 : 0).first<AttendeeRoomAccess>();
   if (!access) return null;
   await db.prepare("UPDATE attendee_sessions SET last_seen_at = ? WHERE token_hash = ?")
     .bind(now, tokenHash).run();

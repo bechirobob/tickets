@@ -19,7 +19,7 @@ test("a failed recovery preserves the email and allows a successful retry", asyn
       : { status: 202, json: { message: "If that email has tickets, a link is on its way." } });
   });
   await page.goto("/my-nights");
-  const email = page.getByLabel("Email used at checkout");
+  const email = page.getByLabel("Booking or registration email");
   await email.fill("recovery@example.com");
   const submit = page.getByRole("button", { name: "Bring back my Nights" });
   await submit.click();

@@ -1,3 +1,4 @@
+import { registrationSettings, registrationsOpen } from '../../../../lib/registrations';
 import { getPublicEvents } from '../../../events';
 import type { PublicCatalogue, PublicEvent } from '../../../../lib/public-event';
 
@@ -8,13 +9,17 @@ const headers = { 'access-control-allow-origin': '*', 'cache-control': 'public, 
 export async function GET() {
   try {
     const records = await getPublicEvents({ throwOnError: true });
+    const { env } = await import('cloudflare:workers');
+    const settings = new Map(await Promise.all(records.map(async event => [event.slug, await registrationSettings(env.DB, event.slug)] as const)));
     const events: PublicEvent[] = records.filter(event => !event.isTestEvent).map(event => ({
       slug: event.slug, title: event.title, image: event.image, venue: event.venue,
       area: event.area, vibe: event.vibe, fullDate: event.fullDate, time: event.time,
       startsAt: event.startsAt, scheduleStatus: event.scheduleStatus ?? 'confirmed',
       isVerified: event.isVerified === true, eventState: event.eventState,
-      priceFromMinor: event.priceFromMinor,
-      ticketsAvailable: event.eventState !== 'cancelled' && event.eventState !== 'postponed'
+      priceFromMinor: settings.get(event.slug)?.mode === 'rsvp' ? 0 : event.priceFromMinor,
+      registrationMode: settings.get(event.slug)?.mode ?? 'paid',
+      registrationOpen: Boolean(settings.get(event.slug) && registrationsOpen(settings.get(event.slug)!) && settings.get(event.slug)?.mode !== 'paid'),
+      ticketsAvailable: settings.get(event.slug)?.mode === 'paid' && event.eventState !== 'cancelled' && event.eventState !== 'postponed'
         && event.ticketTiers.some(tier => tier.status === 'available'),
       colourScheme: event.colourScheme ?? null, dressCode: event.dressCode ?? null,
       guestPerk: event.guestPerk ?? null, awarenessNote: event.awarenessNote ?? null,

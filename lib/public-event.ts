@@ -14,6 +14,8 @@ export type PublicEvent = {
   eventState: string;
   priceFromMinor: number;
   ticketsAvailable: boolean;
+  registrationMode?: 'paid' | 'rsvp' | 'interest';
+  registrationOpen?: boolean;
   colourScheme: string | null;
   dressCode: string | null;
   guestPerk: string | null;

@@ -136,8 +136,8 @@ test("featured motion continues in the Room and resumes after returning to the h
 
 test("My Nights exposes secure recovery to a signed-out customer", async ({ page }) => {
   await page.goto("/my-nights");
-  await expect(page.getByRole("heading", { name: /Use the email you paid with/u })).toBeVisible();
-  await expect(page.getByLabel("Email used at checkout")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Use your booking or registration email/u })).toBeVisible();
+  await expect(page.getByLabel("Booking or registration email")).toBeVisible();
   await expect(page.getByRole("button", { name: "Bring back my Nights" })).toHaveAttribute("type", "submit");
 });
 

@@ -146,7 +146,7 @@ function App() {
           {event.awarenessNote && <p className="description">{event.awarenessNote}</p>}
           {event.lineup && <section className="lineup"><h2>In good company</h2><p>{event.lineup}</p></section>}
           <div className="ticket-action"><p><strong>{ticketLabel(event)}</strong>{event.ageRestriction && <small>{event.ageRestriction}</small>}</p>
-            {event.ticketsAvailable && !stale && <button className="primary" disabled={opening} onClick={() => void open(`/event/${event.slug}`)}>Get tickets <ArrowUpRight /></button>}
+            {(event.ticketsAvailable || event.registrationOpen) && !stale && <button className="primary" disabled={opening} onClick={() => void open(`/event/${event.slug}`)}>{event.registrationMode === 'rsvp' ? 'RSVP for free' : event.registrationMode === 'interest' ? 'Keep me posted' : 'Get tickets'} <ArrowUpRight /></button>}
             <button className="text-action" onClick={async () => { try { setNotice(await shareEvent(event.slug, event.title)); } catch (error) { if (!(error instanceof Error && error.name === 'AbortError')) setNotice('Sharing couldn’t open. Try again.'); } }}><Share2 />Bring your people</button>
           </div>
         </article> : !loading && <section className="empty"><h2>This one isn’t on the list.</h2><p>It may have moved. The Drop has the latest.</p><button className="primary" onClick={() => setScreen({ tab: 'drop' })}>Back to The Drop</button></section>

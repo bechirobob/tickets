@@ -1,3 +1,4 @@
+import { processRegistrations } from "../lib/registrations";
 import { recoverSeevPayments } from "../lib/seevplus";
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
@@ -173,6 +174,7 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
 }
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
   try {
     await purgeExpiredFlashes(env.DB);
   } catch (error) {
