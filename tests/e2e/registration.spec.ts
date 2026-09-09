@@ -7,7 +7,7 @@ test('free RSVP preserves form details on failure and submits the selected party
   await page.getByLabel('Your name').fill('Registration Guest');
   await page.getByLabel('Email address').fill('registration@example.com');
   await page.getByLabel('Guests, including you').selectOption('3');
-  await page.getByRole('checkbox').check();
+  await page.getByRole('checkbox', { name: /I accept the event terms/ }).check();
   let attempts = 0;
   await page.route('**/api/registrations', async route => {
     expect(route.request().postDataJSON()).toMatchObject({ eventSlug: 'after-dark-osu', partySize: 3, acceptedTerms: true });

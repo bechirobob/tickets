@@ -4,7 +4,6 @@ import { operationsFetch } from "../../lib/operations-client";
 
 import BrandLogo from "../brand-logo";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut, ShieldCheck } from "lucide-react";
 import type { StaffRole } from "../../lib/admin-session";
@@ -12,14 +11,17 @@ import { STAFF_ROLE_DEFINITIONS, STAFF_WORKSPACE_LINKS } from "../../lib/staff-r
 import WorkspaceJump from "./workspace-jump";
 
 export default function OperationsNav({ actor, role, active }: { actor: string; role: StaffRole; active: string }) {
-  const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   async function signOut() {
     if (signingOut) return;
     setSigningOut(true); setError("");
     const response = await operationsFetch("/api/admin/session", { method: "DELETE" });
-    if (response.ok) { router.push("/"); router.refresh(); }
+    if (response.ok) {
+      // Full navigation clears cached authenticated screens after revoking the session.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign("/");
+    }
     else { setError("Sign out could not be confirmed. Please try again."); setSigningOut(false); }
   }
   return <aside className="curation-nav">

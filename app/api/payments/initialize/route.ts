@@ -1,4 +1,4 @@
-import { registrationSettings } from "../../../../lib/registrations";
+import { registrationSettings, registrationsOpen } from "../../../../lib/registrations";
 import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
 import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
 import { resolveBookingFee } from "../../../../lib/booking-fees";
@@ -16,7 +16,7 @@ const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  type PaymentBody = { paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
+  type PaymentBody = { paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
   let body: PaymentBody;
   try {
     const value: unknown = await request.json();
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   const attemptKey = request.headers.get("idempotency-key");
   if (attemptKey && !/^[a-f0-9-]{36,80}$/iu.test(attemptKey)) return Response.json({ error: "Invalid payment attempt." }, { status: 400 });
   const attemptHash = attemptKey ? await hashToken(attemptKey) : null;
-  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack"]));
+  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack", body.announcementsOptIn === true]));
   if (attemptHash) {
     const replay = await replayPaymentAttempt(env.DB, attemptHash, requestHash);
     if (replay) return replay;
@@ -63,7 +63,8 @@ export async function POST(request: Request) {
   const selectableEvent = event && offer && candidateTier ? { ...event, eventState: "on_sale" as const, ticketTiers: event.ticketTiers.map((tier) => tier.id === candidateTier.id ? { ...tier, status: "available" as const, remainingAdmissions: Math.max(tier.remainingAdmissions, tier.admissionsPerUnit) } : tier) } : event;
   const selection = selectableEvent ? resolveTicketSelection(selectableEvent, body.ticketTierId ?? "general", body.quantity) : null;
   if (!event || !selection) return Response.json({ error: "That ticket tier is unavailable. Refresh the page and choose an available ticket." }, { status: 400 });
-  if ((await registrationSettings(env.DB, eventSlug))?.mode !== "paid") return Response.json({ error: "This event uses registration. Return to the event page to continue." }, { status: 409 });
+  const registration = await registrationSettings(env.DB, eventSlug);
+  if (!registration || registration.mode !== "paid" || !registrationsOpen(registration)) return Response.json({ error: "This event uses registration. Return to the event page to continue." }, { status: 409 });
   const paymentProvider = body.paymentProvider ?? "paystack";
   if (!["paystack", "seevplus"].includes(paymentProvider)) return Response.json({ error: "Choose an available payment provider." }, { status: 400 });
   if (paymentProvider === "seevplus" && !seevAvailable(env, event.isTestEvent)) return Response.json({ error: "SeevPlus is not available for this event yet." }, { status: 503 });
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
       FROM curated_event_records event
       JOIN event_ticket_tiers tier ON tier.event_slug = event.slug
       WHERE event.slug = ?
-        AND NOT EXISTS (SELECT 1 FROM event_registration_settings registration WHERE registration.event_slug = event.slug AND registration.mode <> 'paid') AND tier.id = ? AND tier.code = ?
+        AND NOT EXISTS (SELECT 1 FROM event_registration_settings registration WHERE registration.event_slug = event.slug AND (registration.mode <> 'paid' OR registration.accepting=0 OR (registration.closes_at IS NOT NULL AND registration.closes_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now')))) AND tier.id = ? AND tier.code = ?
         AND (event.status = 'published' OR (event.status = 'scheduled' AND event.scheduled_publish_at <= ?))
         AND event.schedule_status = 'confirmed'
         AND (event.event_state IN ('on_sale', 'rescheduled') OR ? IS NOT NULL)
@@ -157,6 +158,7 @@ export async function POST(request: Request) {
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
       paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : null, expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
     ),
+    env.DB.prepare("UPDATE orders SET announcements_opt_in=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,id),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
       SELECT ?, ?, ?, ? FROM orders WHERE id = ?

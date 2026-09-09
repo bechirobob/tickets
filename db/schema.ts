@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const bookingFeeRules = sqliteTable("booking_fee_rules", {
   id: text("id").primaryKey(),
@@ -24,6 +24,7 @@ export const orders = sqliteTable("orders", {
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerName: text("customer_name"),
+  announcementsOptIn: integer("announcements_opt_in").notNull().default(0),
   paymentChannel: text("payment_channel").notNull(),
   status: text("status", { enum: ["payment_pending", "paid", "failed", "refund_pending", "refunded", "expired", "requires_refund", "disputed"] }).notNull(),
   paystackReference: text("paystack_reference"),
@@ -677,7 +678,7 @@ export const deliveryEvents = sqliteTable("delivery_events", {
   id: text("id").primaryKey(),
   orderId: text("order_id"),
   recoveryGrantId: text("recovery_grant_id"),
-  kind: text("kind", { enum: ["registration_access", "registration_update", "payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update", "operational_alert"] }).notNull(),
+  kind: text("kind", { enum: ["organizer_signup", "registration_access", "registration_update", "event_announcement", "payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update", "operational_alert"] }).notNull(),
   recipient: text("recipient").notNull(),
   providerId: text("provider_id"),
   status: text("status", { enum: ["queued", "sent", "delivered", "delayed", "failed", "bounced", "complained", "suppressed"] }).notNull(),
@@ -1077,6 +1078,9 @@ export const refundBatches = sqliteTable("refund_batches", {
 
 
 export const eventRegistrationSettings = sqliteTable("event_registration_settings", {
+  accepting: integer("accepting").notNull().default(1),
+  closesAt: text("closes_at"),
+  notifyHost: integer("notify_host").notNull().default(1),
   eventSlug: text("event_slug").primaryKey(),
   mode: text("mode", { enum: ["paid", "rsvp", "interest"] }).notNull().default("paid"),
   capacity: integer("capacity").notNull().default(0),
@@ -1091,6 +1095,7 @@ export const eventRegistrations = sqliteTable("event_registrations", {
   phone: text("phone").notNull().default(""), partySize: integer("party_size").notNull().default(1),
   kind: text("kind", { enum: ["rsvp", "interest"] }).notNull(),
   status: text("status", { enum: ["unverified", "interested", "requested", "waitlisted", "confirmed", "cancelled", "declined"] }).notNull(),
+  announcementsOptIn: integer("announcements_opt_in").notNull().default(0),
   attendeeId: text("attendee_id"), orderId: text("order_id"), verifiedAt: text("verified_at"),
   approvedAt: text("approved_at"), eventSignature: text("event_signature"),
   version: integer("version").notNull().default(0), notifiedVersion: integer("notified_version").notNull().default(0),
@@ -1102,3 +1107,23 @@ export const registrationAccessGrants = sqliteTable("registration_access_grants"
   tokenHash: text("token_hash").notNull(), expiresAt: text("expires_at").notNull(),
   claimedSessionId: text("claimed_session_id"), createdAt: text("created_at").notNull(),
 }, table => [uniqueIndex("registration_access_token_unique").on(table.tokenHash), index("registration_access_recent_idx").on(table.registrationId, table.createdAt)]);
+
+
+export const eventAudienceContacts = sqliteTable("event_audience_contacts", {
+  id: text("id").primaryKey(), eventSlug: text("event_slug").notNull(),
+  email: text("email").notNull(), guestName: text("guest_name").notNull(), source: text("source").notNull(),
+  consentedAt: text("consented_at"), unsubscribedAt: text("unsubscribed_at"),
+  unsubscribeToken: text("unsubscribe_token").notNull(), confirmedAt: text("confirmed_at").notNull(),
+}, table => [uniqueIndex("event_audience_email_unique").on(table.eventSlug, table.email), uniqueIndex("audience_unsubscribe_unique").on(table.unsubscribeToken)]);
+export const eventAnnouncementCampaigns = sqliteTable("event_announcement_campaigns", {
+  id: text("id").primaryKey(), eventSlug: text("event_slug").notNull(), subject: text("subject").notNull(), body: text("body").notNull(),
+  status: text("status").notNull().default("queued"), createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull(),
+  recipientCount: integer("recipient_count").notNull().default(0), completedAt: text("completed_at"),
+}, table => [index("announcement_queue_idx").on(table.status, table.createdAt)]);
+export const eventAnnouncementRecipients = sqliteTable("event_announcement_recipients", {
+  campaignId: text("campaign_id").notNull(), contactId: text("contact_id").notNull(), status: text("status").notNull().default("pending"),
+  claimedAt: text("claimed_at"), deliveryId: text("delivery_id"),
+}, table => [primaryKey({ columns: [table.campaignId, table.contactId] })]);
+export const ownerActivityReads = sqliteTable("owner_activity_reads", {
+  accountId: text("account_id").primaryKey(), seenAt: text("seen_at").notNull(),
+});

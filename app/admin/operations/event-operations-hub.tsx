@@ -20,6 +20,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import type { StaffRole } from "../../../lib/admin-session";
 import OperationsNav from "../operations-nav";
+import OrganizerActivity from "./organizer-activity";
 
 type Event = {
   slug: string;
@@ -257,6 +258,7 @@ export default function EventOperationsHub({
             <RefreshCw size={14} /> Refresh
           </button>
         </header>
+        {role === "owner" ? <OrganizerActivity /> : null}
         {loading ? (
           <div className="curation-empty">
             <Loader2 className="spin" /> Checking every moving part…

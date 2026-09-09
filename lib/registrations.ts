@@ -1,10 +1,11 @@
+import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from './attendee-auth';
 import { createGateToken, hashGateToken } from './gate-pass';
 import { sendEmail } from './email-delivery';
 import { recordPolicyConsents } from './policies';
 
 export type RegistrationMode = 'paid' | 'rsvp' | 'interest';
-export type RegistrationSettings = { eventSlug: string; title: string; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string };
+export type RegistrationSettings = { eventSlug: string; title: string; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; closesAt?: string | null; notifyHost?: number };
 export type Registration = { id: string; eventSlug: string; email: string; guestName: string; phone: string; partySize: number; kind: string; status: string; attendeeId: string | null; orderId: string | null; version: number; eventSignature: string | null };
 const fields = `id, event_slug AS eventSlug, normalized_email AS email, guest_name AS guestName, phone, party_size AS partySize, kind, status, attendee_id AS attendeeId, order_id AS orderId, version, event_signature AS eventSignature`;
 const timestamp = () => new Date().toISOString();
@@ -13,24 +14,24 @@ export async function registrationSettings(db: D1Database, slug: string) {
   return db.prepare(`SELECT e.slug AS eventSlug, e.title, e.schedule_status AS scheduleStatus, e.starts_at AS startsAt, e.ends_at AS endsAt, e.event_state AS eventState, e.status AS publication,
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.capacity, 0) AS capacity, COALESCE(s.max_party_size, 1) AS maxPartySize,
-    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess
+    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, COALESCE(s.accepting,1) AS accepting, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost
     FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(slug).first<RegistrationSettings>();
 }
 export function registrationsOpen(settings: RegistrationSettings) {
-  return settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)
+  return settings.accepting !== 0 && (!settings.closesAt || settings.closesAt > timestamp()) && settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)
     && (settings.scheduleStatus === 'coming_soon' || (settings.mode === 'rsvp' ? settings.startsAt : settings.endsAt) > timestamp());
 }
 function signature(s: RegistrationSettings) { return JSON.stringify([s.scheduleStatus, s.startsAt, s.endsAt, s.eventState, s.mode]); }
 export async function readRegistration(db: D1Database, id: string) { return db.prepare(`SELECT ${fields} FROM event_registrations WHERE id = ?`).bind(id).first<Registration>(); }
 
-export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number }, origin: string) {
+export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean }, origin: string) {
   const settings = await registrationSettings(db, input.eventSlug);
   if (!settings || !registrationsOpen(settings) || settings.mode === 'paid') throw new Error('Registration is not open for this event.');
   if (settings.mode === 'rsvp' && settings.scheduleStatus !== 'confirmed') throw new Error('RSVP opens when the event date is confirmed.');
   if (!Number.isInteger(input.partySize) || input.partySize < 1 || input.partySize > (settings.mode === 'interest' ? 1 : settings.maxPartySize)) throw new Error('Choose an allowed number of guests.');
   const now = timestamp();
-  await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?)`).bind(crypto.randomUUID(), input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now).run();
+  await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?)`).bind(crypto.randomUUID(), input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0).run();
   const reg = await db.prepare(`SELECT ${fields} FROM event_registrations WHERE event_slug = ? AND normalized_email = ?`).bind(input.eventSlug, input.email).first<Registration>();
   if (!reg) throw new Error('Registration could not be saved. Try again.');
   await recordPolicyConsents({ db, subjectType: 'registration', subjectId: reg.id, actorEmail: input.email, policyKeys: ['purchase', 'privacy'] });
@@ -118,8 +119,12 @@ export async function claimRegistration(db: D1Database, token: string) {
       .bind(attendeeId, now, settings.approvalRequired, now, reg.id, grant.id, sessionId),
   ]);
   if (claimed.meta.changes !== 1) throw new Error('This link was already used. Request another from the event page.');
+  const consent = await db.prepare('SELECT announcements_opt_in AS optedIn, created_at AS createdAt FROM event_registrations WHERE id=?').bind(reg.id).first<{optedIn:number;createdAt:string}>();
+  await rememberEventContact(db,{eventSlug:reg.eventSlug,email:reg.email,guestName:reg.guestName,source:reg.kind,consentedAt:consent?.optedIn ? consent.createdAt : null});
   await promoteRegistrations(db, reg.eventSlug);
-  return { registration: await readRegistration(db, reg.id), cookie: attendeeCookieHeader(sessionToken) };
+  const registration=await readRegistration(db,reg.id);
+  if(registration) await notifyRegistrationHosts(db,{eventSlug:reg.eventSlug,sourceId:reg.id,guestName:reg.guestName,status:registration.status,guests:reg.partySize});
+  return { registration, cookie: attendeeCookieHeader(sessionToken) };
 }
 export async function cancelRegistration(db: D1Database, id: string) {
   const reg = await readRegistration(db, id);
@@ -131,6 +136,7 @@ export async function cancelRegistration(db: D1Database, id: string) {
     db.prepare(`UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued' AND EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'cancelled')`).bind(reg.orderId, id),
     db.prepare(`UPDATE orders SET status = 'expired' WHERE id = ? AND payment_provider = 'rsvp' AND EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'cancelled')`).bind(reg.orderId, id),
   ]);
+  if (reg.kind === 'interest') await db.prepare('UPDATE event_audience_contacts SET unsubscribed_at=? WHERE event_slug=? AND email=?').bind(now,reg.eventSlug,reg.email).run();
   if (!result.meta.changes && reg.status !== 'cancelled') throw new Error('This registration cannot be cancelled after check-in.');
   const { env } = await import('cloudflare:workers');
   if (reg.attendeeId) await env.THE_ROOM.getByName(reg.eventSlug).suspendAttendee(reg.attendeeId);

@@ -9,7 +9,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
   assert.equal(config.configPath, undefined);
   assert.equal(config.userConfigPath, undefined);
   assert.deepEqual(config.routes, [{ pattern: "tickets.becoreops.com", custom_domain: true }]);
-  assert.deepEqual(config.triggers, { crons: ["*/5 * * * *", "15 3 * * *"] });
+  assert.deepEqual(config.triggers, { crons: ["* * * * *", "*/5 * * * *", "15 3 * * *"] });
   assert.equal(config.vars.EMAIL_FROM, "BeCore Tickets <tickets@tickets.becoreops.com>");
   assert.equal(config.vars.OPS_ALERT_EMAIL, "tickets@becoreops.com");
   assert.equal(config.vars.ENVIRONMENT, "production");

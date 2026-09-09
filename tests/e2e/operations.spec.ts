@@ -113,3 +113,55 @@ test('finance separates orders from reports and filters free registrations', asy
   await page.getByRole('button',{name:'Apply filters'}).click();
   await expect(page.getByRole('row').filter({hasText:'BCT-AUDIT-RSVP'})).toBeVisible();
 });
+
+test.describe.serial('organiser RSVP and guest journey',()=>{
+ // These steps share one booking and a single-use email grant; replay requires fresh fixtures.
+ test.describe.configure({retries:0});
+ test.beforeEach(async({context,baseURL})=>{await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);});
+ test('organiser chooses free or paid entry and previews a direct registration link',async({page},info)=>{
+  await page.goto('/organizer/workspace?event=rsvp-browser');
+  const manager=page.locator('.registration-manager');await expect(manager).toBeVisible();
+  await expect(manager.getByText('Live · refreshes every 5 seconds')).toBeVisible();
+  await manager.getByRole('button',{name:/Paid registration Guests/}).click();
+  await manager.getByLabel('Base registration price (GHS)').fill('75');
+  await manager.getByRole('button',{name:'Save registration settings'}).click();
+  await expect(manager.getByRole('status')).toContainText('Registration settings saved');
+  await manager.getByRole('button',{name:/Free RSVP Guests/}).click();
+  await manager.getByRole('button',{name:'Save registration settings'}).click();
+  await expect(manager.getByRole('status')).toContainText('Registration settings saved');
+  await expect(manager.getByRole('link',{name:'Preview guest page'})).toHaveAttribute('href','/event/rsvp-browser?register=1#register');
+  const axe=await new AxeBuilder({page}).include('.registration-manager').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+  await page.screenshot({path:info.outputPath('organiser-rsvp.png'),fullPage:true});
+  await page.goto('/event/rsvp-browser?register=1#register');
+  await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.getByText('Free entry · no payment details needed')).toBeVisible();
+  await expect(page.getByLabel('Email me announcements')).not.toBeChecked();
+  const guestAxe=await new AxeBuilder({page}).include('.registration-form').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(guestAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+  await page.screenshot({path:info.outputPath('guest-rsvp-form.png'),fullPage:true});
+ });
+ test('verified signup appears without refreshing the organiser dashboard and joins guest emails',async({page})=>{
+  await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
+  await expect(manager.getByText('Live · refreshes every 5 seconds')).toBeVisible();
+  await manager.getByLabel('Guest capacity',{exact:true}).fill('31');
+  const response=await page.request.post('/api/registrations/claim',{data:{token:fixture.registrationToken},headers:{origin:'https://127.0.0.1:8791'}});expect(response.ok(),await response.text()).toBe(true);
+  await expect(manager.getByText('Guest activity updated.')).toBeVisible({timeout:12000});
+  await expect(manager.getByLabel('Guest capacity',{exact:true})).toHaveValue('31');
+  await manager.getByText('Recent signups & changes',{exact:true}).click();await expect(manager.getByLabel('Live registrations').getByText('Live RSVP Guest',{exact:true})).toBeVisible();
+  await manager.getByRole('button',{name:'Guest emails',exact:true}).click();
+  await expect(manager.getByText('rsvp-browser@example.com',{exact:true})).toBeVisible();
+  const csv=await page.request.get('/api/admin/audience?eventSlug=rsvp-browser&export=csv');expect(await csv.text()).toContain('rsvp-browser@example.com');
+ });
+ test('announcement preview preserves a failed send and owner sees organiser actions',async({page,context,baseURL},info)=>{
+  await page.route('**/api/admin/audience?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,emailConfigured:true}});});
+  await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
+  await manager.getByRole('button',{name:'Announcements',exact:true}).click();
+  await manager.getByLabel('Subject',{exact:true}).fill('Doors open at eight');await manager.getByLabel('Announcement',{exact:true}).fill('Please bring your QR pass. See you at the event.');
+  await manager.getByRole('button',{name:'Preview announcement'}).click();await expect(manager.locator('.announcement-preview')).toContainText('1 subscribed guest emails');
+  await page.route('**/api/admin/audience',route=>route.abort('failed'));await manager.getByRole('button',{name:'Send announcement'}).click();
+  await expect(manager.getByRole('button',{name:'Send announcement'})).toBeEnabled();await expect(manager.getByLabel('Subject',{exact:true})).toHaveValue('Doors open at eight');
+  const axe=await new AxeBuilder({page}).include('.registration-manager').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+  await page.screenshot({path:info.outputPath('announcement-preview.png'),fullPage:true});
+  await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.token,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);await page.goto('/admin/operations');
+  await page.locator('.organizer-activity summary').click();await expect(page.locator('.organizer-activity')).toContainText('rsvp-host@example.com');await expect(page.locator('.organizer-activity')).toContainText('GHS 75.00');
+ });
+});
