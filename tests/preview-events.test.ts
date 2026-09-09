@@ -36,7 +36,7 @@ describe("launch event inventory", () => {
   });
   it("uses flier-backed Braai facts without invented stock or closing time", async () => {
     const event = await findCuratedEvent("the-weekend-braai");
-    expect(event).toMatchObject({ startsAt: "2026-09-20T14:00:00.000Z", endsAt: null, priceFromMinor: 35000, capacity: 0, ticketTiers: [], scheduleStatus: "end_pending", isVerified: false, image: "/events/the-weekend-braai.jpeg" });
+    expect(event).toMatchObject({ startsAt: "2026-09-20T14:00:00.000Z", endsAt: null, priceFromMinor: 35000, capacity: 0, ticketTiers: [], scheduleStatus: "end_pending", isVerified: true, image: "/events/the-weekend-braai.jpeg" });
     expect(new Date(event!.startsAt!).getUTCDay()).toBe(0);
     const response = await calendarFor(event!.slug);
     expect(response.status).toBe(200);

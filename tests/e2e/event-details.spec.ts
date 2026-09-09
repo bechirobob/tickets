@@ -22,6 +22,7 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
     await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
     await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
     await expect(page.locator(".event-detail-preview")).toHaveCount(0);
+    await expect(page.locator(".event-detail-verified")).toContainText("Verified event");
     if (slug === "sun-chasers-labadi") {
       await expect(page.locator(".event-coming-soon")).toContainText("Coming soon");
       await expect(page.locator(".event-detail-facts time")).toHaveCount(0);
@@ -39,7 +40,6 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
       await expect(page.locator(".event-guest-perk")).toContainText("Unlimited grills & drinks");
       await expect(page.locator(".compact-ticket-panel")).toContainText("350");
       await expect(page.locator(".event-detail-facts")).toContainText("No. 19 Akosombo Street");
-      await expect(page.locator(".event-detail-verified")).toHaveCount(0);
       await expect(page.getByRole("timer")).not.toHaveAttribute("aria-label", "Loading countdown");
       const ics = await (await page.request.get("/api/calendar/the-weekend-braai")).text();
       expect(ics).toContain("DTSTART:20260920T140000Z");
