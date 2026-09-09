@@ -132,6 +132,8 @@ export async function cancelRegistration(db: D1Database, id: string) {
     db.prepare(`UPDATE orders SET status = 'expired' WHERE id = ? AND payment_provider = 'rsvp' AND EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'cancelled')`).bind(reg.orderId, id),
   ]);
   if (!result.meta.changes && reg.status !== 'cancelled') throw new Error('This registration cannot be cancelled after check-in.');
+  const { env } = await import('cloudflare:workers');
+  if (reg.attendeeId) await env.THE_ROOM.getByName(reg.eventSlug).suspendAttendee(reg.attendeeId);
   await promoteRegistrations(db, reg.eventSlug);
 }
 export const registrationStatusText: Record<string, string> = { unverified: 'Check your email', interested: 'You’re on the announcement list. No admission reserved.', requested: 'Your RSVP is awaiting host approval.', waitlisted: 'You’re on the waitlist. We’ll email when a place opens.', confirmed: 'Your RSVP is confirmed. Your QR passes are in My Nights.', cancelled: 'Your registration is cancelled.', declined: 'The host could not confirm your RSVP.' };

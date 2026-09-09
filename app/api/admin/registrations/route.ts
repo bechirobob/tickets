@@ -38,6 +38,7 @@ export async function POST(request: Request) {
         ON CONFLICT(event_slug) DO UPDATE SET mode = excluded.mode, capacity = excluded.capacity, max_party_size = excluded.max_party_size, approval_required = excluded.approval_required, room_access = excluded.room_access, updated_at = excluded.updated_at`)
         .bind(body.eventSlug, body.mode, body.capacity, body.maxPartySize, body.approvalRequired ? 1 : 0, body.roomAccess ? 1 : 0, new Date().toISOString(), body.eventSlug, body.capacity, body.eventSlug, body.maxPartySize, body.mode, body.mode, body.eventSlug).run();
       if (saved.meta.changes !== 1) throw new Error('Existing bookings need the current entry mode, party size or capacity. Refresh and check the guest list.');
+      if (!body.roomAccess) await env.THE_ROOM.getByName(body.eventSlug).refreshAdmissionAccess();
       if (!body.approvalRequired) await env.DB.prepare("UPDATE event_registrations SET status = 'waitlisted', version = version + 1, updated_at = ? WHERE event_slug = ? AND status = 'requested'").bind(new Date().toISOString(), body.eventSlug).run();
     } else {
       const reg = typeof body.id === 'string' ? await readRegistration(env.DB, body.id) : null;

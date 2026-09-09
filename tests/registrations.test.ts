@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { requestRegistration, claimRegistration, readRegistration, cancelRegistration, processRegistrations, registrationSettings } from '../lib/registrations';
+import { notifyRoomMessage } from '../lib/notifications';
 import { readAttendeeRoomAccess } from '../lib/attendee-auth';
 import { adminCookieHeader, createStaffSession } from '../lib/admin-session';
 import { POST as passes } from '../app/api/customer/tickets/route';
@@ -58,8 +59,12 @@ describe('RSVP admission and interest registrations', () => {
     expect(wallet.orders[0].tickets[0].qrPayload).toBeTruthy();
     expect(await readAttendeeRoomAccess(env.DB, claim.cookie, slug)).toBeNull();
     expect(await readAttendeeRoomAccess(env.DB, claim.cookie, slug, false)).not.toBeNull();
+    await notifyRoomMessage(env, { eventSlug: slug, messageId: 'rsvp-private-room', senderAttendeeId: 'another-member', senderName: 'Another Member', content: 'Private Room message' });
+    expect(await env.DB.prepare("SELECT id FROM attendee_notifications WHERE source_id = 'rsvp-private-room'").first()).toBeNull();
     expect((await configure({ roomAccess: true })).status).toBe(200);
     expect(await readAttendeeRoomAccess(env.DB, claim.cookie, slug)).not.toBeNull();
+    await notifyRoomMessage(env, { eventSlug: slug, messageId: 'rsvp-enabled-room', senderAttendeeId: 'another-member', senderName: 'Another Member', content: 'Room now enabled' });
+    expect(await env.DB.prepare("SELECT id FROM attendee_notifications WHERE source_id = 'rsvp-enabled-room'").first()).not.toBeNull();
     const gateCookie = await owner();
     const scan = () => checkIn(req('/api/admin/check-in', { code: wallet.orders[0].tickets[0].qrPayload, eventSlug: slug, gate: 'Main' }, gateCookie));
     expect((await scan()).status).toBe(200);
@@ -121,6 +126,24 @@ describe('RSVP admission and interest registrations', () => {
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
     expect((await signup(req('/api/registrations', { acceptedTerms: true, email: 42 }))).status).toBe(400);
     expect((await signup(new Request(`${origin}/api/registrations`, { method: 'POST', headers: { origin: 'https://other.example' }, body: '{}' }))).status).toBe(403);
+  });
+  it('disconnects an existing Room session when the host withdraws RSVP Room access', async () => {
+    expect((await configure({ roomAccess: true })).status).toBe(200);
+    const pending = await access('rsvp-socket@example.com');
+    const claim = await claimRegistration(env.DB, pending.token);
+    const settings = (await registrationSettings(env.DB, slug))!;
+    const response = await env.THE_ROOM.getByName(slug).fetch(new Request('https://room.internal/socket', { headers: {
+      upgrade: 'websocket', 'x-bct-room-authorized': '1', 'x-bct-attendee-id': claim.registration!.attendeeId!, 'x-bct-display-name': 'RSVP Guest',
+      'x-bct-event-slug': slug, 'x-bct-event-title': 'RSVP Test', 'x-bct-starts-at': settings.startsAt, 'x-bct-ends-at': settings.endsAt,
+      'x-bct-read-only-at': new Date(Date.now() + 172800000).toISOString(),
+    } }));
+    expect(response.status).toBe(101);
+    const socket = response.webSocket!;
+    socket.accept();
+    const closed = new Promise<number>(resolve => socket.addEventListener('close', event => resolve(event.code), { once: true }));
+    expect((await configure({ roomAccess: false })).status).toBe(200);
+    expect(await closed).toBe(4003);
+    expect(await readAttendeeRoomAccess(env.DB, claim.cookie, slug)).toBeNull();
   });
   it('uses interest for an undated event without changing its paid ticket tiers', async () => {
     await env.DB.prepare('DELETE FROM event_registration_settings WHERE event_slug = ?').bind(slug).run();

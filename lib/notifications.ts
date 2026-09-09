@@ -107,6 +107,7 @@ export async function notifyRoomMessage(env: Cloudflare.Env, input: {
       ON subscription.attendee_id = assignment.attendee_id AND subscription.revoked_at IS NULL
     WHERE ticket.event_slug = ? AND assignment.status = 'active'
       AND ticket.status IN ('issued', 'checked_in')
+      AND EXISTS (SELECT 1 FROM orders o WHERE o.id = ticket.order_id AND (o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1)))
       AND assignment.attendee_id <> ?
       AND NOT EXISTS (
         SELECT 1 FROM room_suspensions suspension
