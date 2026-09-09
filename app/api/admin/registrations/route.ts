@@ -1,5 +1,5 @@
 import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from '../../../../lib/admin-session';
-import { cancelRegistration, promoteRegistrations, readRegistration, registrationSettings, registrationShareState } from '../../../../lib/registrations';
+import { cancelRegistration, promoteRegistrations, readRegistration, registrationSettings, registrationShareState, registrationStartConfirmed } from '../../../../lib/registrations';
 async function access(request: Request, eventSlug: string) {
   const { env } = await import('cloudflare:workers');
   const session = await readAdminSession(request.headers.get('cookie'), env.DB);
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     if (body.action === 'settings') {
       const s = await registrationSettings(env.DB, body.eventSlug);
       if (!s || typeof body.mode !== 'string' || !['paid', 'rsvp', 'interest'].includes(body.mode) || typeof body.capacity !== 'number' || !Number.isInteger(body.capacity) || body.capacity < 0 || body.capacity > 50000 || typeof body.maxPartySize !== 'number' || !Number.isInteger(body.maxPartySize) || body.maxPartySize < 1 || body.maxPartySize > 10 || typeof body.approvalRequired !== 'boolean' || typeof body.roomAccess !== 'boolean') throw new Error('Check the registration settings.');
-      if (body.mode === 'rsvp' && (s.scheduleStatus !== 'confirmed' || body.capacity < 1)) throw new Error('Confirm the event date and admission capacity before opening RSVP.');
+      if (body.mode === 'rsvp' && (!registrationStartConfirmed(s) || body.capacity < 1)) throw new Error('Confirm the event date, start time and admission capacity before opening RSVP.');
       const count = await env.DB.prepare(`SELECT COALESCE(SUM(party_size),0) AS guests FROM event_registrations WHERE event_slug = ? AND status = 'confirmed'`).bind(body.eventSlug).first<{ guests: number }>();
       if ((count?.guests ?? 0) > body.capacity || ((count?.guests ?? 0) > 0 && body.mode !== 'rsvp')) throw new Error('Keep enough capacity and RSVP access for the confirmed guests.');
       const paid = await env.DB.prepare(`SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider <> 'rsvp' AND status IN ('paid', 'payment_pending') LIMIT 1`).bind(body.eventSlug).first();

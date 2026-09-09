@@ -21,7 +21,9 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
     await expect(page.getByRole("button", { name: "Copy Link", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
     const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string}[]};
-    if (catalogue.events.find(event=>event.slug===slug)?.registrationMode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
+    const mode=catalogue.events.find(event=>event.slug===slug)?.registrationMode;
+    if (mode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
+    else if (mode === 'rsvp') await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP — free entry)$/})).toBeVisible();
     else await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
     await expect(page.locator(".event-detail-preview")).toHaveCount(0);
     await expect(page.locator(".event-detail-verified")).toContainText("Verified event");
@@ -40,7 +42,8 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
       await expect(page.locator(".event-detail-facts time")).toHaveAttribute("datetime", "2026-09-20T14:00:00.000Z");
       await expect(page.locator(".event-hours")).toHaveAttribute("aria-label", /2\s?PM onwards, Accra time/);
       await expect(page.locator(".event-guest-perk")).toContainText("Unlimited grills & drinks");
-      await expect(page.locator(".compact-ticket-panel")).toContainText("350");
+      if (mode === "paid") await expect(page.locator(".compact-ticket-panel")).toContainText("350");
+      else await expect(page.locator(".registration-form")).toBeVisible();
       await expect(page.locator(".event-detail-facts")).toContainText("No. 19 Akosombo Street");
       await expect(page.getByRole("timer")).not.toHaveAttribute("aria-label", "Loading countdown");
       const ics = await (await page.request.get("/api/calendar/the-weekend-braai")).text();
