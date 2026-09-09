@@ -209,7 +209,7 @@ async function loadTiers(eventSlugs: string[], now: string): Promise<TierRecord[
   return result.results;
 }
 
-export async function getPublicEvents(): Promise<CuratedEvent[]> {
+export async function getPublicEvents(options: { throwOnError?: boolean } = {}): Promise<CuratedEvent[]> {
   try {
     const now = new Date().toISOString();
     const records = await loadPublicEventRecords();
@@ -233,6 +233,7 @@ export async function getPublicEvents(): Promise<CuratedEvent[]> {
     ));
   } catch (error) {
     console.error(JSON.stringify({ message: "public event inventory unavailable", error: error instanceof Error ? error.message : String(error) }));
+    if (options.throwOnError) throw error;
     return [];
   }
 }
