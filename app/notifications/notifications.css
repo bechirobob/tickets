@@ -86,3 +86,22 @@
   .buzz-update summary svg { transition: none; }
 }
 @media (prefers-reduced-transparency: reduce) { .room-overlay--notifications::backdrop { background: #211820; } }
+
+/* Header disclosures share the site's warm, light-touch menu surface. */
+.notification-panel--dropdown { z-index: 150; width: min(360px, calc(100vw - 24px)); padding-inline: 14px; background: rgba(48,33,44,.94); backdrop-filter: blur(18px) saturate(.9); -webkit-backdrop-filter: blur(18px) saturate(.9); border-color: rgba(238,214,228,.22); box-shadow: none; }
+.notification-panel--dropdown[data-phase='closing'] { animation: notification-out 180ms ease-in both; pointer-events: none; }
+.notification-panel--dropdown .notification-panel-header { min-height: 52px; padding-block: 4px; }
+.notification-panel--dropdown .notification-panel-header h2 { font-size: 19px; margin: 0; }
+.notification-panel--dropdown .buzz-row { gap: 8px; padding-block: 9px; }
+.night-mobile-menu .night-mobile-menu__panel a span { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.night-mobile-menu__panel { max-height: calc(100dvh - 90px); overflow-y: auto; overscroll-behavior: contain; }
+.account-header-label { font-size: 13px; color: inherit; }
+@media (min-width: 701px) {
+  .has-primary-nav .night-mobile-menu__panel :is(.menu-primary-route, .menu-host-route) { display: none; }
+}
+@media (max-width: 700px) {
+  body:has(.customer-dock) .night-mobile-menu__panel .menu-primary-route { display: none; }
+  .account-navigation > a[href='/my-nights'] { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .notification-panel--dropdown[data-phase='closing'] { animation: none; } }
+@media (prefers-reduced-transparency: reduce) { .notification-panel--dropdown { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; } }

@@ -4,7 +4,7 @@ import BrandLogo from "../../brand-logo";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, ArrowLeft, BadgeCheck, BarChart3, Loader2, LogOut, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowDownToLine, BadgeCheck, BarChart3, Loader2, LogOut, TrendingDown, TrendingUp } from "lucide-react";
 import type { StaffRole } from "../../../lib/admin-session";
 import WorkspaceJump from "../../admin/workspace-jump";
 
@@ -118,7 +118,6 @@ export default function OrganizerAnalytics({ actor, role }: { actor: string; rol
     </section>
 
     <section className="analytics-controls" aria-label="Analytics filters">
-      <Link href="/organizer/workspace"><ArrowLeft size={15} /> Workspace</Link>
       <label>Night<select value={eventSlug} onChange={(event) => { setLoading(true); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{data?.events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
       <label>Period<select value={range} onChange={(event) => { setLoading(true); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
       <a href={exportUrl}><ArrowDownToLine size={15} /> Export CSV</a>

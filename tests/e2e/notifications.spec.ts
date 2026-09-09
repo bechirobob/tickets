@@ -36,7 +36,7 @@ test("notification bell keeps a busy inbox compact and every update reachable", 
   await expect(dialog).toBeVisible();
   await expect(dialog.locator(".buzz-row")).toHaveCount(8);
   await expect(dialog.getByRole("button", { name: "All", exact: true })).toHaveCSS("border-radius", "0px");
-  const bounds = await dialog.locator(".notification-panel").boundingBox();
+  const bounds = await dialog.boundingBox();
   expect(bounds!.width).toBeLessThanOrEqual(410);
   expect(bounds!.height).toBeLessThanOrEqual(540);
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 12);
@@ -94,7 +94,7 @@ test("notification panel has useful loading, failure and private states", async 
   await expect(page.getByRole("button", { name: "Notifications", exact: true })).toBeFocused();
 });
 
-test("notification panel contains keyboard focus and closes outside the bell", async ({ page }) => {
+test("notification dropdown toggles, yields focus and closes outside the bell", async ({ page }) => {
   await memberPage(page);
   await page.route("**/api/customer/notifications", (route) => route.fulfill({ json: { notifications: [], unread: 0 } }));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -103,9 +103,22 @@ test("notification panel contains keyboard focus and closes outside the bell", a
   await bell.focus(); await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "The Buzz", exact: true });
   await expect(dialog.getByRole("button", { name: "Close notifications" })).toBeFocused();
-  await expect(dialog.locator(".notification-panel")).toHaveCSS("animation-name", "none");
-  for (let i = 0; i < 6; i++) { await page.keyboard.press("Tab"); expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true); }
+  await expect(dialog).toHaveCSS("animation-name", "none");
+  await expect(dialog).toHaveAttribute("aria-modal", "false");
+  await bell.click();
+  await expect(dialog).toHaveCount(0);
+  await bell.click();
+  await expect(dialog).toBeVisible();
   await page.mouse.click(3, 200);
   await expect(dialog).toHaveCount(0);
-  await expect(bell).toBeFocused();
+  await bell.click();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Main navigation", exact: true })).toBeVisible();
+  await bell.click();
+  await expect(page.getByRole("navigation", { name: "Main navigation", exact: true })).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("link", { name: "Open inbox" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(dialog).toHaveCount(0);
 });

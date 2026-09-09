@@ -108,11 +108,11 @@ test("notification history stays behind the verified My Nights entrance", async 
   assert.doesNotMatch(home, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
-  assert.match(home, /<PublicNavigation \/>/u);
+  assert.match(home, /<PublicNavigation(?: primaryVisible)? \/>/u);
   assert.match(myNights, /<NotificationBell \/>/u);
   assert.doesNotMatch(myNights, /payload \? <NotificationBell/u);
   assert.match(hub, /<NotificationBell \/>/u);
-  assert.ok(hub.indexOf('href={`/room/${event.slug}`}') < hub.indexOf('<NotificationBell'), "The Room action must precede the notification bell so the bell owns the far-right edge");
+  assert.ok(hub.indexOf('<PublicNavigation') < hub.indexOf('<NotificationBell'), "The notification bell owns the far-right edge");
   assert.match(polish, /\.my-nights-header-actions,[\s\S]*?\.night-hub__header-actions\s*\{[^}]*justify-self:\s*end/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.my-nights-page \.directory-header\s*\{[^}]*padding-right:\s*16px/su);
   assert.match(polish, /@media \(max-width: 700px\)[\s\S]*?\.night-hub__header\s*\{[^}]*padding-right:\s*13px/su);
@@ -330,7 +330,7 @@ test("public navigation belongs to each header on mobile and desktop", async () 
     readFile(customerDockUrl, "utf8"),
   ]);
 
-  for (const page of [home, about, events, help, privacy]) assert.match(page, /<PublicNavigation \/>/u);
+  for (const page of [home, about, events, help, privacy]) assert.match(page, /<PublicNavigation(?: primaryVisible)? \/>/u);
   assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
   assert.match(mobileNavigation, /href: "\/events", label: "The Drop"/u);
   assert.match(mobileNavigation, /href: "\/my-nights", label: "My Nights"/u);
@@ -340,7 +340,7 @@ test("public navigation belongs to each header on mobile and desktop", async () 
   assert.match(dock, /href: "\/events", label: "The Drop"/u);
   assert.match(dock, /href: "\/my-nights", label: "My Nights"/u);
   assert.match(mobileNavigation, /aria-expanded=\{open\}/u);
-  assert.match(mobileNavigation, /event\.key === "Escape"/u);
+  assert.match(await readFile(new URL("../app/use-header-panel.ts", import.meta.url), "utf8"), /event\.key === "Escape"/u);
   for (const icon of ["CalendarDays", "Ticket", "UsersRound", "CalendarPlus", "Info", "LifeBuoy"]) assert.match(mobileNavigation, new RegExp(icon, "u"));
   assert.match(css, /\.night-mobile-menu\s*\{[^}]*position:\s*relative[^}]*display:\s*block/su);
   assert.match(css, /\.night-mobile-menu__trigger\s*\{[^}]*position:\s*static/su);
@@ -976,8 +976,8 @@ test("public typography keeps compact copy readable without shrinking header lab
   assert.match(css, /\.submission-page\s*\{[^}]*--signal:\s*#bd3f11/su);
   assert.match(css, /\.directory-header__back-label\s*\{[^}]*display:\s*none/su);
   for (const source of [about, events, hosts, host, privacy, nights]) {
-    assert.match(source, /className="directory-header__back-label"/u);
-    assert.match(source, /aria-label="Back to /u);
+    assert.match(source, /className="(?:directory-header__back-label|account-header-label)"/u);
+    if (!source.includes('className="account-header-label"')) assert.match(source, /aria-label="Back to /u);
   }
   assert.match(submission, /className="submission-header__back" aria-label="Back to events"/u);
 });

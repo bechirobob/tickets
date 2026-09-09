@@ -1,4 +1,4 @@
-const CACHE = "becore-tickets-shell-v4";
+const CACHE = "becore-tickets-shell-v5";
 const SHELL = ["/offline-ticket.html", "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -31,12 +31,15 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const eventSlug = event.notification.data?.eventSlug;
-  const target = event.action === "quiet" && eventSlug
-    ? `/notifications?mute=${encodeURIComponent(eventSlug)}`
-    : event.notification.data?.url || "/notifications";
+  let target = "/notifications";
+  try {
+    const candidate = new URL(event.notification.data?.url || "/notifications", self.location.origin);
+    if (candidate.origin === self.location.origin && /^\/(?:notifications|my-nights|event|events|room|tickets|hosts)(?:\/|$)/u.test(candidate.pathname)) target = candidate.pathname + candidate.search + candidate.hash;
+  } catch { /* Invalid payloads open the inbox. */ }
+  if (event.action === "quiet" && typeof eventSlug === "string" && /^[a-z0-9-]{1,80}$/u.test(eventSlug)) target = `/notifications?mute=${encodeURIComponent(eventSlug)}`;
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-    const existing = clients.find((client) => "focus" in client);
-    if (existing) { existing.navigate(target); return existing.focus(); }
+    const existing = clients.find((client) => "focus" in client && !/\/(?:admin|organizer|scan)(?:\/|$)/u.test(new URL(client.url).pathname));
+    if (existing) return existing.navigate(target).then((navigated) => navigated ? navigated.focus() : self.clients.openWindow(target));
     return self.clients.openWindow(target);
   }));
 });
