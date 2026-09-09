@@ -1,4 +1,15 @@
 .registration-manager > .ops-tabs { margin-top: 10px; }
+.organizer-workspace__intro { padding: 24px 6vw; align-items: center; }
+.organizer-workspace__intro h1 { font-size: clamp(28px,4vw,42px); line-height: 1.1; letter-spacing: -.04em; }
+.organizer-workspace__intro > p { padding: 0; border: 0; font-size: 14px; color: #d0cec4; }
+.organizer-record-fold { margin: 0 6vw; border-bottom: 1px solid #c6c2b8; }
+.organizer-record-fold > summary, .organizer-tools-fold > summary { min-height: 48px; padding: 14px 0; font-size: 14px; font-weight: 650; cursor: pointer; }
+.organizer-record-fold .organizer-portfolio, .organizer-record-fold .organizer-history { padding: 20px 0; }
+.organizer-tools-fold { margin-top: 16px; border-top: 1px solid #c6c2b8; }
+.organizer-dashboard { padding: 24px 6vw 40px; }
+.organizer-dashboard > header h2 { font-size: clamp(26px,4vw,38px); line-height: 1.1; }
+.organizer-metrics { margin-block: 18px; }
+.organizer-metrics article { padding: 12px; min-height: 0; gap: 6px; }
 .registration-manager > h3 { margin: 12px 0; font-size: 19px; }
 .registration-mode-choices { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
 .registration-mode-choices button { padding: 14px; display: grid; gap: 7px; text-align: left; border: 1px solid #b3afa5; background: transparent; color: inherit; font: inherit; cursor: pointer; }

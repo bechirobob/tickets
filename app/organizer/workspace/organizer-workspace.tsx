@@ -151,11 +151,12 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
       </header>
 
       <section className="organizer-workspace__intro">
-        <div><p className="night-kicker"><span /> Organiser workspace</p><h1>Every Night.<br />One record.</h1></div>
-        <p>Your submissions, live events, sales, attendance and operations trail stay together under the verified email on this account. Less chasing. More hosting.</p>
+        <div><p className="night-kicker"><span /> Organiser workspace</p><h1>Manage your event</h1></div>
+        <p>Choose an event, share its registration link and keep up with your guests.</p>
       </section>
 
       {loading ? <div className="organizer-empty"><Loader2 className="spin" /> Loading your record…</div> : <>
+        <details className="organizer-record-fold" open={data.events.length===0||undefined}><summary>Your record & submission history</summary>
         <section className="organizer-portfolio" aria-labelledby="organizer-record-title">
           <header><div><p>All-time on BeCore</p><h2 id="organizer-record-title">Your organiser record</h2></div><div className="organizer-portfolio__actions"><Link href="/organizer/analytics">Open analytics <BarChart3 size={15} /></Link><Link href="/help">How this works <LifeBuoy size={15} /></Link></div></header>
           <div>
@@ -177,6 +178,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
           </article>)}</div> : <div className="organizer-history__empty"><History size={22} /><p>No submissions are linked to this account yet. Use this account email the next time you submit.</p></div>}
         </section>
 
+        </details>
         {data.events.length === 0 ? <div className="organizer-empty"><CalendarRange /><h2>No approved Nights yet.</h2><p>Your submission trail will stay above while the curation team reviews it.</p><Link href="/organizer/submit">Submit an event</Link></div> : <>
           <div className="workspace-event-picker organizer-event-picker">
             <label htmlFor="organizer-event">Event record</label>
@@ -187,7 +189,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
           {selected ? <section className="organizer-dashboard" id="organizer-event-detail">
             <header><div><p>{selected.venue} · {selected.area}</p><h2>{selected.title}</h2></div><Link href={`/event/${selected.slug}`}>View customer page <ArrowUpRight size={15} /></Link></header>
             <div className="organizer-metrics"><article><TicketCheck /><small>Paid orders</small><b>{selected.paidOrders}</b></article><article><UsersRound /><small>Admissions issued</small><b>{selected.issuedAdmissions}</b></article><article><ScanLine /><small>Checked in</small><b>{selected.checkedInAdmissions}</b></article><article><CheckCircle2 /><small>Gross collected</small><b>{money(selected.grossMinor)}</b></article></div>
-            <RegistrationManager key={selected.slug} eventSlug={selected.slug} expanded /><div className="organizer-grid">
+            <RegistrationManager key={selected.slug} eventSlug={selected.slug} expanded /><details className="organizer-tools-fold"><summary>Event details, ticket tiers & operations</summary><div className="organizer-grid">
               <section className="organizer-panel organizer-panel--wide"><header><div><small>Live inventory</small><h3>Ticket tiers</h3></div><ShieldCheck size={18} /></header><div className="organizer-tier-table">{tiers.map((tier) => <div key={tier.id}><span><b>{tier.name}</b><small>{money(tier.priceMinor)} · {tier.status}</small></span><strong>{tier.allocatedAdmissions} / {tier.capacityAdmissions}</strong><i><b style={{ width: `${Math.min(100, (tier.allocatedAdmissions / Math.max(1, tier.capacityAdmissions)) * 100)}%` }} /></i></div>)}</div></section>
               <form key={`details-${selected.slug}`} className="organizer-panel" onSubmit={saveDetails}><header><div><small>Authorised details</small><h3>Venue & line-up</h3></div><Save size={18} /></header><label>Venue<input name="venue" defaultValue={selected.venue} required /></label><label>Exact map URL<input name="venueMapUrl" type="url" defaultValue={selected.venueMapUrl} required /></label><label>Line-up<textarea name="lineup" defaultValue={selected.lineup} required /></label><button disabled={busy}>Save public details</button></form>
               <form className="organizer-panel" onSubmit={submitAnnouncement}><header><div><small>The Room</small><h3>Post an update</h3></div><Megaphone size={18} /></header><label>Announcement<textarea name="content" minLength={2} maxLength={1000} placeholder="Doors, timing, entry or venue update…" required /></label><label className="organizer-check"><input name="pinned" type="checkbox" /> Pin this update</label><button disabled={busy}>Publish to ticket holders</button></form>
@@ -200,7 +202,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
               <form className="organizer-panel" onSubmit={submitRequest}><header><div><small>BeCore operations</small><h3>Make a request</h3></div><ArrowUpRight size={18} /></header><label>Request<select name="kind"><option value="cancel_event">Cancel event</option><option value="reschedule_event">Reschedule event</option><option value="refund_order">Refund an order</option><option value="inventory_change">Change inventory</option><option value="other">Other</option></select></label><label>Order ID <small>refund only</small><input name="orderId" /></label><label>Detail<textarea name="detail" minLength={10} maxLength={1200} required /></label><button disabled={busy}>Send to BeCore</button></form>
               <section className="organizer-panel"><header><div><small>Operations trail</small><h3>Requests</h3></div><FileCheck2 size={18} /></header>{requests.length ? requests.map((item) => <article className="organizer-request" key={item.id}><b>{readable(item.kind)}</b><span>{item.status}</span><p>{item.detail}</p>{item.reviewNote ? <small>{item.reviewNote}</small> : null}</article>) : <p>No requests yet.</p>}</section>
               <section className="organizer-panel organizer-panel--wide"><header><div><small>Finance</small><h3>Settlement statements</h3></div></header>{settlements.length ? <div className="organizer-settlements">{settlements.map((item) => <div key={item.id}><time>{date(item.periodEnd)}</time><span>{money(item.grossMinor)} gross</span><span>{money(item.refundsMinor)} refunds</span><b>{money(item.netTicketSalesMinor)} net</b><small>{item.status}</small></div>)}</div> : <p>Statements appear after reconciliation runs.</p>}</section>
-            </div>
+            </div></details>
             {message ? <p className="organizer-message" role="status">{message}</p> : null}
           </section> : null}
         </>}
