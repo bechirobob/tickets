@@ -34,11 +34,17 @@ for (const [path, heading] of [
   });
 }
 test('event save survives a dropped connection and retains the draft', async ({ page }) => {
-  await page.goto('/admin/events');
-  await page.locator('.ops-directory__row').first().click();
+  await page.goto('/admin/events?event=after-dark-osu');
   const title = page.getByLabel('Title', { exact: true }); await expect(title).toBeVisible();
   const original = await title.inputValue(); await title.fill(`${original} revised`);
-  await page.route('**/api/admin/events', route => route.request().method() === 'PATCH' ? route.abort('failed') : route.continue());
+  await page.getByText('Ticket prices & capacity',{exact:true}).click();
+  for(const label of ['Price (GH₵)','Admissions / unit','Admission capacity','Max units / order']) {
+    const field=page.getByLabel(label,{exact:label!=='Admission capacity'}).first();const value=await field.inputValue();await field.fill('');await expect(field).toHaveValue('');
+    await page.getByRole('button',{name:'Save event & inventory',exact:true}).click();await expect(page.getByRole('status')).toContainText('Fill in each ticket price');
+    await field.fill(value);
+  }
+  await page.getByLabel('Price (GH₵)',{exact:true}).first().fill('12.50');
+  await page.route('**/api/admin/events', route => {if(route.request().method()==='PATCH'){expect(route.request().postDataJSON().tiers[0].priceMinor).toBe(1250);return route.abort('failed');}return route.continue();});
   const save = page.getByRole('button', { name: 'Save event & inventory', exact: true }); await save.click();
   await expect(page.getByRole('status')).toContainText('Connection lost'); await expect(save).toBeEnabled();
   await expect(title).toHaveValue(`${original} revised`);
@@ -122,22 +128,41 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await page.goto('/organizer/workspace?event=rsvp-browser');
   const manager=page.locator('.registration-manager');await expect(manager).toBeVisible();
   await expect(manager.getByText('Live · refreshes every 5 seconds')).toBeVisible();
+  await manager.getByLabel('Guest capacity',{exact:true}).fill('');
+  await expect(manager.getByLabel('Guest capacity',{exact:true})).toHaveValue('');
+  await manager.getByRole('button',{name:'Save registration settings'}).click();
+  await expect(manager.getByRole('status')).toContainText('Enter a guest capacity');
+  await expect(manager.getByRole('button',{name:/^Copy .* link$/})).toBeDisabled();
+  await manager.getByLabel('Guest capacity',{exact:true}).pressSequentially('25');
   await manager.getByRole('button',{name:/Paid registration Guests/}).click();
-  await manager.getByLabel('Base registration price (GHS)').fill('75');
+  const price=manager.getByLabel('Base registration price (GHS)');await price.fill('');await expect(price).toHaveValue('');
+  await price.pressSequentially('75.50');await expect(price).toHaveValue('75.50');
+  await expect(manager.getByRole('button',{name:/^Copy .* link$/})).toBeDisabled();
+  await price.fill('75');
   await manager.getByRole('button',{name:'Save registration settings'}).click();
   await expect(manager.getByRole('status')).toContainText('Registration settings saved');
   await manager.getByRole('button',{name:/Free RSVP Guests/}).click();
   await manager.getByRole('button',{name:'Save registration settings'}).click();
   await expect(manager.getByRole('status')).toContainText('Registration settings saved');
-  await expect(manager.getByRole('link',{name:'Preview guest page'})).toHaveAttribute('href','/event/rsvp-browser?register=1#register');
+  await expect(manager.getByRole('link',{name:'Preview guest page'})).toHaveAttribute('href','/rsvp/rsvp-browser');
   const axe=await new AxeBuilder({page}).include('.registration-manager').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
   await page.screenshot({path:info.outputPath('organiser-rsvp.png'),fullPage:true});
-  await page.goto('/event/rsvp-browser?register=1#register');
-  await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.getByText('Free entry · no payment details needed')).toBeVisible();
+  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
+  await manager.getByRole('button',{name:'Copy RSVP link',exact:true}).click();
+  const shared=await manager.getByLabel('RSVP link',{exact:true}).inputValue();
+  expect(shared).toBe('https://127.0.0.1:8791/rsvp/rsvp-browser');
+  await page.context().clearCookies();await page.goto(shared);
+  await expect(page.getByLabel('Your name')).toBeInViewport();await expect(page.getByText('Free entry · no payment details needed')).toBeVisible();
   await expect(page.getByLabel('Email me announcements')).not.toBeChecked();
   const guestAxe=await new AxeBuilder({page}).include('.registration-form').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(guestAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('guest-rsvp-form.png'),fullPage:true});
+  await page.getByLabel('Your name').fill('Shared Link Guest');await page.getByLabel('Email address').fill('shared-link@example.com');
+  await page.getByRole('checkbox',{name:/I accept the event terms/}).check();
+  const submitted=page.waitForResponse(r=>r.url().endsWith('/api/registrations')&&r.request().method()==='POST');
+  await page.getByRole('button',{name:'Send my confirmation link'}).click();expect((await submitted).status()).toBe(202);
+  await expect(page.getByRole('status')).toContainText('Check your email');
+  await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeInViewport();
  });
  test('verified signup appears without refreshing the organiser dashboard and joins guest emails',async({page})=>{
   await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');

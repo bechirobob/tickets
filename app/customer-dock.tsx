@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CalendarDays, House, Ticket } from "lucide-react";
 import { usePathname } from "next/navigation";
 
-const hiddenPrefixes = ["/admin", "/checkout", "/organizer", "/payment", "/room", "/scan"];
+const hiddenPrefixes = ["/admin", "/checkout", "/organizer", "/payment", "/room", "/scan", "/rsvp/"];
 
 export default function CustomerDock() {
   const pathname = usePathname();

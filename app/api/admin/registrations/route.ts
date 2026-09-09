@@ -1,5 +1,5 @@
 import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from '../../../../lib/admin-session';
-import { cancelRegistration, promoteRegistrations, readRegistration, registrationSettings } from '../../../../lib/registrations';
+import { cancelRegistration, promoteRegistrations, readRegistration, registrationSettings, registrationShareState } from '../../../../lib/registrations';
 async function access(request: Request, eventSlug: string) {
   const { env } = await import('cloudflare:workers');
   const session = await readAdminSession(request.headers.get('cookie'), env.DB);
@@ -17,7 +17,8 @@ export async function GET(request: Request) {
         UNION ALL SELECT id,COALESCE(customer_name,'Guest') AS name,status,quantity AS guests,paid_at AS updatedAt FROM orders WHERE event_slug=? AND payment_provider <> 'rsvp' AND status='paid') ORDER BY updatedAt DESC,id DESC LIMIT 10`).bind(slug,slug).all(),
     ]);
     const count=(status:string)=>counts.results.find(row=>row.status===status)?.guests??0;
-    return Response.json({latest:latest.results,confirmed:count('confirmed'),waiting:count('waitlisted'),requested:count('requested'),interested:count('interested'),paid:paid?.guests??0},{headers:{'cache-control':'no-store, private'}});
+    const sharing=registrationShareState(await registrationSettings(env.DB,slug));
+    return Response.json({latest:latest.results,confirmed:count('confirmed'),waiting:count('waitlisted'),requested:count('requested'),interested:count('interested'),paid:paid?.guests??0,sharing},{headers:{'cache-control':'no-store, private'}});
   }
   const offset = Math.max(0, Math.min(100000, Math.floor(Number(url.searchParams.get('offset'))) || 0));
   const [settings, rows, counts, pricing] = await Promise.all([registrationSettings(env.DB, slug),
