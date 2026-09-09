@@ -25,7 +25,7 @@ test('discovery uses aligned full posters, unique routes and event palettes', as
   await expect(page.getByText('Light pink & white')).toBeVisible();
   await expect(page.getByText('Free mimosas till 5pm')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Get tickets' })).toHaveCount(0);
-  expect(await page.locator('.app').evaluate(node => getComputedStyle(node).backgroundColor)).toBe('rgb(255, 249, 248)');
+  await expect(page.locator('.app')).toHaveCSS('background-color', 'rgb(255, 249, 248)');
   await page.screenshot({ path: info.outputPath('app-event.png'), fullPage: true });
   await page.getByRole('button', { name: 'Back to The Drop' }).click();
   await page.getByRole('button', { name: 'Open navigation' }).click();

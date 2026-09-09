@@ -64,7 +64,7 @@ jobs:
       - run: npm ci
       - run: npm run sync
       - name: Install Android SDK
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
       - name: Compile Android pilot
         run: ./gradlew --no-daemon assembleDebug lintDebug
         working-directory: mobile/android
