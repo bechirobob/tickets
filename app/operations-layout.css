@@ -72,12 +72,13 @@
 .ops-main .operations-metrics span { color: #56534c; }
 .support-ops__layout > article > header > div > span { color: #56534c; }
 .room-ops .curation-nav > p, .room-ops .curation-nav nav > span { color: #b4b5ae; }
-.ops-page .staff-events small, .ops-page .role-boundary p { color: #56534c; }
+.staff-page .staff-events small, .staff-page .role-boundary p { color: #56534c; }
 .ops-page .support-ops small, .ops-page .support-ops i, .ops-page .support-ops time { color: #56534c; }
-.ops-page .support-ops__layout > nav > button.active small, .ops-page .support-ops__layout > nav > button.active i, .ops-page .support-ops__messages p.staff time { color: #c7c6bc; }
+.ops-page .support-ops__layout > nav > button.active small, .ops-page .support-ops__layout > nav > button.active i { color: #56534c; }
+.ops-page .support-ops__messages p.staff time { color: #c7c6bc; }
 .ops-page .support-ops__messages time { opacity: 1; }
 .ops-page .settings-card small { color: #55534c; }
-.account-page .passkey-security small, .account-page .passkey-security > p { color: #55534c; }
+.account-page .passkey-security small, .account-page .passkey-security > p { color: #b4b5ae; }
 .ops-tabs button, .ops-directory__row { border-radius: 0; }
 @media (min-width: 901px) {
   .ops-page, .curation-page, .room-ops { grid-template-columns: 230px minmax(0, 1fr); }
