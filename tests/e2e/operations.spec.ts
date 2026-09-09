@@ -39,7 +39,7 @@ test('event save survives a dropped connection and retains the draft', async ({ 
   const original = await title.inputValue(); await title.fill(`${original} revised`);
   await page.getByText('Ticket prices & capacity',{exact:true}).click();
   for(const label of ['Price (GH₵)','Admissions / unit','Admission capacity','Max units / order']) {
-    const field=page.getByLabel(label,{exact:true}).first();const value=await field.inputValue();await field.fill('');await expect(field).toHaveValue('');
+    const field=page.getByLabel(label,{exact:label!=='Admission capacity'}).first();const value=await field.inputValue();await field.fill('');await expect(field).toHaveValue('');
     await page.getByRole('button',{name:'Save event & inventory',exact:true}).click();await expect(page.getByRole('status')).toContainText('Fill in each ticket price');
     await field.fill(value);
   }
