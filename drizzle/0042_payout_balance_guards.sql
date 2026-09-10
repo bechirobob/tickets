@@ -1,16 +1,17 @@
-DROP INDEX `payout_transfers_settlement_unique`;--> statement-breakpoint
-CREATE INDEX `payout_transfers_settlement_idx` ON `payout_transfers` (`settlement_id`);--> statement-breakpoint
-CREATE TRIGGER payout_balance_guard BEFORE INSERT ON payout_transfers
-WHEN NEW.status NOT IN ('failed','reversed')
-BEGIN
-  SELECT CASE WHEN NEW.amount_minor < 1 OR NEW.amount_minor + (
+DROP INDEX IF EXISTS `payout_transfers_settlement_unique`;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `payout_transfers_settlement_idx` ON `payout_transfers` (`settlement_id`);--> statement-breakpoint
+CREATE TRIGGER IF NOT EXISTS payout_balance_guard BEFORE INSERT ON payout_transfers
+WHEN NEW.status NOT IN ('failed','reversed') AND (
+  NEW.amount_minor < 1 OR NEW.amount_minor + (
     SELECT COALESCE(SUM(p.amount_minor),0)
     FROM payout_transfers p JOIN event_settlements prior ON prior.id=p.settlement_id
     JOIN event_settlements current ON current.id=NEW.settlement_id
     WHERE p.event_slug=NEW.event_slug AND p.status NOT IN ('failed','reversed')
       AND prior.period_start<current.period_end AND prior.period_end>current.period_start
   ) > COALESCE((SELECT net_ticket_sales_minor FROM event_settlements WHERE id=NEW.settlement_id),0)
-  THEN RAISE(ABORT,'Settlement balance is already reserved') END;
+)
+BEGIN
+  SELECT RAISE(ABORT,'Settlement balance is already reserved');
 END;
 --> statement-breakpoint
 INSERT OR IGNORE INTO guest_entries (id,event_slug,guest_name,guest_email,guest_phone,admission_count,kind,note,status,created_by,created_at)

@@ -2,6 +2,17 @@ import {env} from 'cloudflare:test';
 import {expect,it} from 'vitest';
 import {requestPayout,applyTransferWebhook} from '../lib/operational-finance';
 import type {AdminSession} from '../lib/admin-session';
+it('enforces the payout ceiling in the database even when the application reservation is bypassed',async()=>{
+ const id=crypto.randomUUID(),overlap=`overlap-${id}`,event=`trigger-${id}`,now=new Date().toISOString();
+ for(const settlement of [id,overlap])await env.DB.prepare("INSERT INTO event_settlements (id,run_id,event_slug,period_start,period_end,gross_minor,booking_fees_minor,refunds_minor,net_ticket_sales_minor,currency,status,created_at) VALUES (?,?,?,'2026-09-09T00:00:00Z','2026-09-10T00:00:00Z',10000,0,0,10000,'GHS','ready',?)").bind(settlement,settlement,event,now).run();
+ const insert=(settlement:string,amount:number,status='pending_approval')=>env.DB.prepare("INSERT INTO payout_transfers (id,settlement_id,event_slug,payout_account_id,reference,amount_minor,currency,status,initiated_by,created_at,updated_at) VALUES (?,?,?,'fixture',?,?,'GHS',?,'fixture',?,?)").bind(crypto.randomUUID(),settlement,event,crypto.randomUUID(),amount,status,now,now).run();
+ await insert(id,6000);
+ await expect(insert(overlap,5000)).rejects.toThrow('Settlement balance is already reserved');
+ await expect(insert(id,0)).rejects.toThrow('Settlement balance is already reserved');
+ await insert(overlap,4000);
+ await insert(id,5000,'failed');
+ expect(await env.DB.prepare("SELECT SUM(amount_minor) AS reserved FROM payout_transfers WHERE event_slug=? AND status NOT IN ('failed','reversed')").bind(event).first()).toEqual({reserved:10000});
+});
 it('reserves settlement balance once and only closes it when all funds have been paid',async()=>{
  const id=crypto.randomUUID(),now=new Date().toISOString();
  await env.DB.batch([

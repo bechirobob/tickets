@@ -46,4 +46,8 @@ Validation: baseline 206 Worker tests; full local release suite passed with 227,
 - [Resend idempotency](https://resend.com/docs/dashboard/emails/idempotency-keys): retain one key when retrying an uncertain send.
 - [WCAG 2.2](https://www.w3.org/WAI/WCAG22/quickref/): keyboard access, readable states and usable controls.
 
-Final findings, exact candidate/merge, CI, deployment, production results and rollback evidence are recorded below and in the release PR as verification completes.
+Candidate `9604cb06ad39aa932c38cb966c598e8e6f52e5dd` passed 228 Worker/D1 tests and 312 browser checks in run `34466109546`. PR #124 merged as `6d7bc56f3f4cb33f33c292f025ed6ca19c27711e`.
+
+Deployment `34466945667` applied migration 0041 but rejected 0042 with `incomplete input` before Worker publication. The nested CASE inside the trigger passed local D1 but failed the remote multi-statement query path. The correction expresses the same condition in the trigger's WHEN clause, matching the already deployed capacity guard. Index changes are retry-safe, and an additional direct-database regression proves the ceiling remains enforced independently of application checks. Migration 0042 was not recorded as applied. The baseline Worker remains the live app until the corrected release succeeds.
+
+Pre-migration bookmark: `00002369-00000000-000050e2-3ef3fbd83c7087bc9a34cfccea07e95b`, artifact `10147977063`. Recovery rehearsal `34466945660` passed. Final deployment and production evidence is recorded in the release PRs as verification completes.
