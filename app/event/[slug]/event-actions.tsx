@@ -26,7 +26,7 @@ export default function EventActions({ title, eventSlug }: { title: string; even
     setLastAction(copyOnly ? "copy" : "share");
     setBusy(true);
     setOutcome(null);
-    const url = `https://tickets.becoreops.com/event/${encodeURIComponent(eventSlug)}`;
+    const url = runtime.openSecurePage ? `https://tickets.becoreops.com/event/${encodeURIComponent(eventSlug)}` : window.location.href;
     setShareUrl(url);
     try {
       if (!runtime.openSecurePage) trackProductMetric("share_started", eventSlug);

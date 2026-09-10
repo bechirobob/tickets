@@ -82,7 +82,7 @@ test('back restores Drop position and filtering; edge gestures distinguish verti
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto('/events');
   await page.getByRole('searchbox', { name: 'Search events, artists or venues' }).fill('Braai');
-  const link = page.locator('.drop-card').getByRole('link', { name: /View event/ });
+  const link = page.locator('.drop-card').getByRole('link', { name: `See ${braai.title}`, exact: true });
   await link.scrollIntoViewIfNeeded(); const position = await page.evaluate(() => scrollY);
   await link.click();
   await expect(page.getByRole('heading', { level: 1, name: braai.title })).toBeFocused();
