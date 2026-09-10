@@ -180,7 +180,7 @@ export default function ActiveNightExperience({ events }: { events: CustomerEven
         <h1>{active?.title ?? "Plans, sorted."}</h1>
         <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · Coming soon` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
-        {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink><ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink></div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
+        {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink>{discoveryOffer(active).href !== `/event/${active.slug}` ? <ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink> : null}</div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
       </div>
       {active && active.scheduleStatus !== "coming_soon" ? <p className="compact-hero__price">{discoveryOffer(active).label}</p> : null}
       {hasScenes ? <button

@@ -12,3 +12,6 @@ html { background: #281b2b; }
 .catalogue-skeleton { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding-top: 24px; }
 .catalogue-skeleton i { aspect-ratio: 5 / 6; background: #514052; }
 .catalogue-skeleton span { height: 40px; background: #514052; }
+
+/* Route focus announces the new screen without drawing a control ring on prose. */
+.packaged-customer h1[tabindex="-1"]:focus { outline: none; }
