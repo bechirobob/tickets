@@ -37,3 +37,9 @@ The browser suite opens disclosures before accessibility and visual-contract che
 Local unit, rendered, type, lint and browser results, final SHA, deployment ID, cleanup counts and production verification are recorded in the PR as they complete. The release captures a D1 recovery bookmark before any changes. Code rollback cannot recreate deliberately erased preview records; use the recorded bookmark only if a verified restoration is needed.
 
 Design reference: [Carbon accordion guidance](https://carbondesignsystem.com/components/accordion/usage/) supports concise disclosure titles and recommends task views for large sections. BeCore retains its own typography, aubergine identity and event artwork.
+
+### Production follow-up
+
+PR 122 / candidate `ae6798b5485dc625b1412043a10f50d050df859e` passed 206 Worker tests and 303 browser checks. Merge `be6a2d51ae8cb07bd9abe0709ba0a7a60ac0881c` deployed as Worker `92c608ed-5e6f-48da-8336-bd181a039df9`. The live RSVP page retained its flier, approval wording and deadline.
+
+The release cleanup stopped during planning, before deletion: D1 rejected an audit-search expression exceeding its production depth limit of 100. Read-only inventory 34430539693 confirmed the pending marker, all original rows, and Braai's capacity 100, approval requirement, deadline and existing registration. Replace per-identifier OR clauses with a JSON values-table search; regression coverage now exercises 604 preview orders and indirect audit references. Do not retry the unchanged failing query.

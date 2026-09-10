@@ -16,6 +16,8 @@ const primary: Record<string,string> = {
 };
 const literal=(value:string)=>`'${value.replaceAll("'","''")}'`;
 const inside=(column:string, values:string[])=>values.length?`${column} IN (${values.map(literal).join(',')})`:'0';
+// D1 limits expression depth to 100. Search a values table instead of expanding one OR per identifier.
+const mentionsAny=(column:string,values:string[])=>values.length?`EXISTS (SELECT 1 FROM json_each(${literal(JSON.stringify(values))}) AS preview_keys WHERE instr(COALESCE(${column},''),preview_keys.value)>0)`:'0';
 function condition(table:string,columns:string[],t:Targets) {
  const clauses=columns.filter(c=>t[c]?.length).map(c=>inside(c,t[c]));
  if(historicalContent.has(table)&&columns.includes('event_slug')){const date=['updated_at','created_at','published_at','suspended_at','decided_at','answered_at'].find(c=>columns.includes(c));if(date)clauses.push(`(event_slug=${literal(convertedSlug)} AND datetime(${date}) < datetime(${literal(convertedAt)}))`);}
@@ -29,12 +31,12 @@ function condition(table:string,columns:string[],t:Targets) {
  if(table==='consent_records')clauses.push(inside('subject_id',t.subject_id??[]));
  if(table==='delivery_events'){
   clauses.push(inside('recipient',t.orphan_email??[]));
-  for(const key of [...t.event_slug,...(t.registration_id??[]),...(t.campaign_id??[])])clauses.push(`instr(COALESCE(payload_json,''),${literal(key)})>0`);
+  clauses.push(mentionsAny('payload_json',[...t.event_slug,...(t.registration_id??[]),...(t.campaign_id??[])]));
  }
  if(table==='operational_audit_events'||table==='security_events'||table==='system_alerts'){
   const keys=[...t.event_slug,...(t.order_id??[]),...(t.reference??[]),...(t.ticket_id??[]),...(t.registration_id??[]),...(t.submission_id??[])];
   if(columns.includes('target_id'))clauses.push(inside('target_id',keys));
-  for(const key of keys)for(const col of ['detail','path'].filter(c=>columns.includes(c)))clauses.push(`instr(COALESCE(${col},''),${literal(key)})>0`);
+  for(const col of ['detail','path'].filter(c=>columns.includes(c)))clauses.push(mentionsAny(col,keys));
  }
  return clauses.length?`(${clauses.join(' OR ')})`:'0';
 }
@@ -102,6 +104,7 @@ export async function runPreviewCleanup(env:Pick<Cloudflare.Env,'DB'|'THE_ROOM'>
   const where=condition(table,cols,plan.targets);if(where==='0')continue;
   statements.push(env.DB.prepare(`DELETE FROM ${table} WHERE ${where}${table==='operational_audit_events'?' AND id<>?':''}`).bind(...(table==='operational_audit_events'?[previewCleanupId]:[])));
  }
+ statements.push(env.DB.prepare("UPDATE system_alerts SET status='resolved',resolved_at=?,resolved_by='system:preview-cleanup' WHERE source='preview-cleanup' AND status='open'").bind(new Date().toISOString()));
  statements.push(env.DB.prepare("UPDATE operational_audit_events SET outcome='success',detail=? WHERE id=?").bind(JSON.stringify({removed:plan.counts,roomStores:retired.length+(plan.extraPreviewRooms?.length??0)}),previewCleanupId));
  await env.DB.batch(statements);
  return plan.counts;
