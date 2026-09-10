@@ -31,7 +31,8 @@ async function capture(title,kind='App screen',single=false) {
   if(overflow) throw new Error(`Horizontal clipping: ${title}`);
   const max=await page.evaluate(()=>Math.max(0,document.documentElement.scrollHeight-innerHeight));
   const positions=[0];
-  if(!single) {for(let y=600;y<max;y+=600)positions.push(y);if(max>0)positions.push(max);}
+  const stride=Math.max(200, page.viewportSize().height-260);
+  if(!single) {for(let y=stride;y<max;y+=stride)positions.push(y);if(max>0)positions.push(max);}
   const files=[];
   for(const [i,y] of positions.entries()) {
     await page.evaluate(y=>scrollTo(0,y),y);await page.waitForTimeout(180);
@@ -39,7 +40,7 @@ async function capture(title,kind='App screen',single=false) {
     await page.screenshot({path:path.join(out,file)});files.push(file);
   }
   pages.push({title,kind,files,url:page.url()});
-  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.GITHUB_SHA||null,viewport:page.viewportSize(),engine:'Playwright WebKit, iPhone 13 emulation',pages},null,2));
+  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.LAYOUT_SOURCE_SHA||process.env.GITHUB_SHA||null,viewport:page.viewportSize(),engine:'Playwright WebKit, iPhone 13 emulation',pages},null,2));
   console.log(`${title}: ${files.length} screenshots`);
   await page.evaluate(()=>scrollTo(0,0));
 }

@@ -1,0 +1,24 @@
+/* Apple devices use their installed system face. Inter is the licensed fallback. */
+@font-face {
+  font-family: "BeCore Inter";
+  src: url("./fonts/InterVariable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --font-system: -apple-system, BlinkMacSystemFont, "BeCore Inter", system-ui, "Segoe UI", sans-serif;
+  --ui-press: 120ms;
+  --ui-control: 180ms;
+  --ui-panel: 260ms;
+  --ui-arrival: 380ms;
+  --ui-ease: cubic-bezier(.2, .8, .2, 1);
+  --ui-arrive: cubic-bezier(.16, 1, .3, 1);
+  --ui-radius-control: 12px;
+  --ui-radius-panel: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --ui-press: 0ms; --ui-control: 0ms; --ui-panel: 0ms; --ui-arrival: 0ms; }
+}

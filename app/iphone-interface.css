@@ -1,0 +1,107 @@
+/* Customer surfaces share the app's typography, touch rhythm and motion. */
+body { font-family: var(--font-system); font-optical-sizing: auto; }
+:is(button, input, textarea, select) { font-family: var(--font-system); }
+
+:is(.discovery-home, .discovery-directory, .event-page, .my-nights-page, .buzz-page, .help-page, .policy-page, .about-page, .hosts-page, .host-page, .checkout-page, .submission-page) {
+  -webkit-font-smoothing: antialiased;
+  --radius-picker: var(--ui-radius-control);
+}
+:is(.directory-intro, .my-nights-shell > header, .buzz-intro, .help-centre__intro, .policy-page, .account-privacy) h1 {
+  font-size: clamp(32px, 3.8vw, 48px); font-weight: 650; line-height: 1.14; letter-spacing: -.035em;
+}
+.my-nights-locked h2, .my-nights-empty h2 { font-size: 24px; line-height: 1.3; letter-spacing: -.025em; }
+.my-nights-locked { max-width: 520px; padding-top: 24px; }
+.my-nights-locked > p { font-size: 16px; line-height: 1.55; }
+.my-nights-recovery label { font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.my-nights-recovery input { min-height: 50px; font-size: 17px; font-weight: 400; border-radius: var(--ui-radius-control); }
+.account-navigation a { font-size: 14px; font-weight: 500; letter-spacing: -.01em; }
+.help-page .help-guide summary b { font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.help-page .help-guide summary i { line-height: 1.5; margin-top: 5px; }
+.help-page .help-guide > summary { padding-block: 16px; }
+.help-page .help-guide { border-radius: var(--ui-radius-control); }
+.help-page :is(input, textarea, select), .checkout-page :is(input, textarea, select), .submission-page :is(input, textarea, select) { font-size: 16px; }
+
+/* Keep the event artwork intact; shorten the surrounding chrome. */
+.event-detail-overview h1 { font-size: clamp(28px, 3.1vw, 40px); line-height: 1.17; font-weight: 650; letter-spacing: -.03em; }
+.event-detail-facts { margin-top: 20px; }
+.event-date-line { padding-top: 18px; }
+.event-date-display > b { font-size: 56px; font-weight: 600; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.event-date-display strong { font-size: 21px; font-weight: 600; }
+.event-practical-details dt { font-size: 13px; margin-bottom: 5px; }
+.event-practical-details dd { font-size: 16px; }
+.event-practical-details dd > span:not(.event-dress-swatches) { line-height: 1.5; }
+.event-countdown b { font-size: 28px; font-weight: 600; }
+.event-story-intro h2 { font-size: 23px; line-height: 1.3; letter-spacing: -.025em; }
+.event-credits li { font-size: 18px; line-height: 1.4; }
+.event-detail-toolbar .event-share > button { min-height: 44px; font-size: 14px; }
+.discovery-grid .drop-card h3 { font-weight: 600; line-height: 1.3; letter-spacing: -.02em; }
+.discovery-grid .drop-card .drop-card__body > .drop-card__schedule { font-weight: 600; font-size: 13px; line-height: 1.45; }
+.discovery-grid .drop-card .drop-card__body > small { line-height: 1.5; }
+
+/* Translucency belongs to navigation, with opaque fallbacks below. */
+.night-mobile-menu__panel, .notification-panel--dropdown {
+  border-radius: var(--ui-radius-panel); background: rgba(48,33,44,.96);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: none;
+  transition-timing-function: var(--ui-ease);
+}
+.night-mobile-menu .night-mobile-menu__panel a { min-height: 46px; font-size: 15px; font-weight: 500; }
+.night-mobile-menu__panel-header > span { font-size: 13px; letter-spacing: 0; font-weight: 500; }
+.notification-panel--dropdown .notification-panel-header h2 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.notification-panel--dropdown .buzz-row { padding-block: 11px; }
+.notification-panel--dropdown .buzz-row h3 { font-size: 15px; }
+.notification-panel--dropdown .buzz-row p { font-size: 13px; line-height: 1.5; }
+body :is(a, button).ticket-action[data-variant] { min-height: 48px; border-radius: var(--ui-radius-control); font-size: 16px; font-weight: 600; letter-spacing: -.015em; transition: transform var(--ui-press), opacity var(--ui-press), background-color var(--ui-control); }
+body :is(a, button).ticket-action[data-variant] .ticket-action__icon { background: transparent; }
+body :is(a, button).ticket-action[data-variant]:active:not(:disabled) { transform: scale(.985); opacity: .82; }
+body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
+
+@media (max-width: 700px) {
+  .customer-dock {
+    min-height: calc(56px + env(safe-area-inset-bottom)); padding: 4px 12px max(4px, env(safe-area-inset-bottom));
+    background: rgba(40,27,43,.94); border-top: 1px solid rgba(219,197,211,.18);
+    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  }
+  .customer-dock a { min-height: 48px; gap: 3px; font-size: 11px; line-height: 1.35; font-weight: 500; padding: 3px 2px; }
+  .customer-dock a[aria-current=page] { font-weight: 600; }
+  .customer-dock svg { width: 23px; height: 23px; stroke-width: 1.7; transition: transform var(--ui-press); }
+  .customer-dock a:active svg { transform: scale(.9); }
+  body:has(.poster-event-page) .customer-dock { background: color-mix(in srgb, var(--event-shell-paper) 94%, transparent); border-color: color-mix(in srgb, var(--event-shell-ink) 17%, transparent); }
+  .night-header { height: 60px; }
+  .night-header__actions, .my-nights-header-actions { gap: 6px; }
+  .night-header .brand-logo__type > b { font-size: 20px; letter-spacing: -.035em; }
+  .night-header .brand-logo__type > small { font-size: 10px; letter-spacing: .08em; }
+  .discovery-directory .directory-intro { padding-top: 26px; padding-bottom: 22px; }
+  :is(.directory-intro, .my-nights-shell > header, .buzz-intro, .help-centre__intro, .policy-page, .account-privacy) h1 { font-size: 32px; line-height: 1.15; letter-spacing: -.03em; }
+  .discovery-directory .directory-intro > p:last-child { font-size: 16px; line-height: 1.55; }
+  .my-nights-shell > header { padding-block: 20px 10px; }
+  .my-nights-locked { padding-block: 22px; }
+  .my-nights-locked h2 { font-size: 22px; }
+  .my-nights-locked > p { font-size: 15px; }
+  .event-detail-layout { gap: 22px; }
+  .event-detail-poster { max-height: 54svh; }
+  .event-detail-poster img { max-height: 54svh; }
+  .event-detail-overview h1 { font-size: 28px; }
+  .event-detail-toolbar { padding-block: 4px 12px; }
+  .event-date-display > b { font-size: 52px; }
+  .event-date-display strong { font-size: 20px; }
+  .event-hours b { font-size: 18px; }
+  .event-date-line { gap: 16px; }
+  .event-countdown > div { gap: 25px; }
+  .event-practical-details { padding-top: 16px; gap: 18px; }
+  .event-guest-perk { font-size: 16px; line-height: 1.5; margin-top: 18px; }
+  .event-credits { gap: 18px; }
+  .event-story-content { gap: 24px; }
+  .discovery-grid .drop-card h3 { font-size: 17px; }
+  .discovery-grid .drop-card .drop-card__body > .drop-card__schedule { font-size: 12px; }
+  .discovery-grid .drop-card .drop-card__body > small { font-size: 13px; }
+  body :is(a, button).ticket-action[data-variant] { font-size: 16px; }
+  body :is(a, button).ticket-action[data-variant="text"] { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .customer-dock svg, body :is(a, button).ticket-action[data-variant] { transition: none; transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .night-mobile-menu__panel, .notification-panel--dropdown { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .customer-dock { background: #281b2b; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  body:has(.poster-event-page) .customer-dock { background: var(--event-shell-paper); }
+}
