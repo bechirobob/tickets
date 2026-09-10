@@ -83,6 +83,7 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
   const headers = new Headers(request.headers);
   headers.set("x-bct-room-authorized", "1");
   headers.set("x-bct-attendee-id", access.attendeeId);
+  headers.set("x-bct-session-id", access.sessionId ?? "");
   headers.set("x-bct-display-name", encodeURIComponent(access.displayName));
   headers.set("x-bct-room-badge", access.roomBadge ?? "");
   headers.set("x-bct-blocked-attendees", blocked.results.map((item) => item.attendeeId).join(","));
@@ -157,11 +158,11 @@ function securityResponse(response: Response, nonce = requestNonce(), path = "")
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  if (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan") {
+  if (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan" || path.startsWith("/api/customer/") || path.startsWith("/api/organizer/") || path.startsWith("/organizer/workspace") || path.startsWith("/my-nights")) {
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
   }
-  if (path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/")) {
+  if (path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/") || path === "/my-nights/access" || path === "/rsvp/access" || path === "/payment/return" || path.startsWith("/api/customer/recovery") || path.startsWith("/api/customer/transfers/claim")) {
     headers.set("Referrer-Policy", "no-referrer");
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -177,12 +178,12 @@ function securityResponse(response: Response, nonce = requestNonce(), path = "")
 async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unknown): Promise<void> {
   const detail = error instanceof Error ? error.message : String(error);
   console.error(JSON.stringify({ message: "scheduled operation failed", source, error: detail }));
-  await sendOperationalAlert(env, { source, severity: "critical", message: `${source} failed`, detail });
+  try { await sendOperationalAlert(env, { source, severity: "critical", message: `${source} failed`, detail }); } catch { console.error(JSON.stringify({message:"Could not save operational alert",source})); }
 }
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
   if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
-  if(controller.cron === "* * * * *"){await processEventAnnouncements(env,"https://tickets.becoreops.com");return;}
+  if(controller.cron === "* * * * *"){try { await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
   try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
   try {

@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as prepareTickets } from "../app/api/customer/tickets/route";
 import { POST as createTransfer } from "../app/api/customer/transfers/route";
-import { GET as claimTransfer } from "../app/api/customer/transfers/claim/route";
+import { POST as claimTransfer } from "../app/api/customer/transfers/claim/route";
 import { GET as listNotifications } from "../app/api/customer/notifications/route";
 import { PATCH as updatePreference } from "../app/api/customer/notifications/preferences/[slug]/route";
 import { attendeeCookieHeader, hashToken } from "../lib/attendee-auth";
@@ -69,6 +69,7 @@ describe("event-day operations", () => {
   it("keeps an offline ticket stable until an accepted transfer rotates ownership and QR", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const sender = await seedAttendee(suffix);
+    await env.DB.prepare("UPDATE curated_event_records SET ends_at=?,event_state='on_sale' WHERE slug='after-dark-osu'").bind(new Date(Date.now()+86400000).toISOString()).run();
     const walletRequest = () => new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: sender.cookie, origin: "https://tickets.becoreops.com" } });
     const first = await (await prepareTickets(walletRequest())).json() as { orders: Array<{ canViewPurchase: boolean; reference: string; tickets: Array<{ qrPayload: string }> }> };
     const second = await (await prepareTickets(walletRequest())).json() as typeof first;
@@ -88,8 +89,8 @@ describe("event-day operations", () => {
     const token = sent.text.match(/claim\?token=([^\s]+)/u)?.[1];
     expect(token).toBeTruthy();
 
-    const claim = await claimTransfer(new Request(`https://tickets.becoreops.com/api/customer/transfers/claim?token=${token}`));
-    expect(claim.status).toBe(303);
+    const claim = await claimTransfer(new Request('https://tickets.becoreops.com/api/customer/transfers/claim', {method:'POST',headers:{origin:'https://tickets.becoreops.com','content-type':'application/json'},body:JSON.stringify({token})}));
+    expect(claim.status).toBe(200);
     const recipientCookie = claim.headers.get("set-cookie")?.split(";")[0];
     expect(recipientCookie).toMatch(/^bct_attendee=/u);
     const recipientWallet = await (await prepareTickets(new Request("https://tickets.becoreops.com/api/customer/tickets", { method: "POST", headers: { cookie: recipientCookie!, origin: "https://tickets.becoreops.com" } }))).json() as typeof first;

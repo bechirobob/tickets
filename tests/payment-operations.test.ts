@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyRefundWebhook, expireReservations, fulfillVerifiedPayment, initiatePaystackRefund, recordDisputeWebhook } from "../lib/payment-operations";
+import { applyRefundWebhook, expireReservations, fulfillVerifiedPayment, initiatePaystackRefund, recordDisputeWebhook, verifyPaystackTransaction } from "../lib/payment-operations";
 import { hashToken } from "../lib/attendee-auth";
 
 async function seedPendingOrder(suffix: string, quantity = 2, capacity = 10) {
@@ -103,6 +103,59 @@ describe("payment fulfilment operations", () => {
     expect(await env.DB.prepare("SELECT status FROM orders WHERE id = ?").bind(seeded.orderId).first()).toMatchObject({ status: "paid" });
     expect(await env.DB.prepare("SELECT status FROM tickets WHERE order_id = ?").bind(seeded.orderId).first()).toMatchObject({ status: "issued" });
   });
+});
+
+async function paid(suffix:string) {
+  const o=await seedPendingOrder(suffix,2);
+  await fulfillVerifiedPayment(env.DB,{id:1,reference:o.reference,status:'success',amount:o.amount,currency:'GHS',paidAt:new Date().toISOString(),channel:'mobile_money',gatewayResponse:'Approved'});
+  return o;
+}
+it('reserves refunds atomically and applies a replayed partial refund only once',async()=>{
+  const o=await paid('partial-race');
+  const provider=vi.fn(async()=>Response.json({status:true,data:{id:900,status:'pending'}}));vi.stubGlobal('fetch',provider);
+  const input={orderId:o.orderId,actor:'Finance',reason:'Customer requested a partial refund.',secret:'sk_test_fixture',amountMinor:5000};
+  const requested=await Promise.allSettled([initiatePaystackRefund(env.DB,input),initiatePaystackRefund(env.DB,input)]);
+  expect(requested.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(provider).toHaveBeenCalledTimes(1);
+  const callback={eventType:'refund.processed',reference:o.reference,amountMinor:5000,providerRefundId:'900'};
+  await Promise.all([applyRefundWebhook(env.DB,callback),applyRefundWebhook(env.DB,callback)]);
+  await applyRefundWebhook(env.DB,{...callback,eventType:'refund.failed'});
+  expect(await env.DB.prepare('SELECT status,refunded_amount_minor AS refunded FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({status:'paid',refunded:5000});
+  expect(await env.DB.prepare('SELECT status FROM payment_refunds WHERE order_id=?').bind(o.orderId).first()).toEqual({status:'processed'});
+});
+it('keeps an uncertain refund reserved and ignores an unrelated refund callback',async()=>{
+  const o=await paid('refund-uncertain');vi.stubGlobal('fetch',vi.fn(async()=>{throw new Error('Connection lost');}));
+  const input={orderId:o.orderId,actor:'Finance',reason:'Customer requested a partial refund.',secret:'sk_test_fixture',amountMinor:5000};
+  await expect(initiatePaystackRefund(env.DB,input)).rejects.toThrow('awaiting Paystack');
+  await expect(initiatePaystackRefund(env.DB,input)).rejects.toThrow('already underway');expect(fetch).toHaveBeenCalledTimes(1);
+  await env.DB.prepare("UPDATE payment_refunds SET paystack_refund_id='known-refund' WHERE order_id=?").bind(o.orderId).run();
+  await applyRefundWebhook(env.DB,{eventType:'refund.processed',reference:o.reference,amountMinor:5000,providerRefundId:'unrelated'});
+  expect(await env.DB.prepare('SELECT refunded_amount_minor AS refunded FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({refunded:0});
+});
+it('records an immediately processed refund without waiting for a webhook',async()=>{
+  const o=await paid('immediate-refund');vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:true,data:{id:901,status:'processed'}})));
+  expect(await initiatePaystackRefund(env.DB,{orderId:o.orderId,actor:'Finance',reason:'Immediate partial refund requested.',secret:'sk_test_fixture',amountMinor:5000})).toMatchObject({status:'processed'});
+  expect(await env.DB.prepare('SELECT refunded_amount_minor AS refunded FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({refunded:5000});
+});
+it('never revives admissions after cancellation when a refund fails',async()=>{
+  const o=await paid('cancelled-refund');vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:true,data:{id:902,status:'pending'}})));
+  await initiatePaystackRefund(env.DB,{orderId:o.orderId,actor:'Finance',reason:'Full refund requested for event.',secret:'sk_test_fixture'});
+  await env.DB.prepare("UPDATE curated_event_records SET event_state='cancelled' WHERE slug=?").bind(o.eventSlug).run();
+  await applyRefundWebhook(env.DB,{eventType:'refund.failed',reference:o.reference,amountMinor:o.amount,providerRefundId:'902'});
+  expect(await env.DB.prepare('SELECT status FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({status:'requires_refund'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM tickets WHERE order_id=? AND status='issued'").bind(o.orderId).first()).toEqual({count:0});
+});
+it('releases a verified failed payment after its reservation has expired',async()=>{
+  const o=await seedPendingOrder('expired-failed',1);await env.DB.prepare("UPDATE orders SET status='expired' WHERE id=?").bind(o.orderId).run();
+  await fulfillVerifiedPayment(env.DB,{id:1,reference:o.reference,status:'failed',amount:o.amount,currency:'GHS',paidAt:null,channel:null,gatewayResponse:'Failed'});
+  expect(await env.DB.prepare('SELECT status FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({status:'failed'});
+});
+it('rejects verification from a different provider environment or transaction',async()=>{
+  for(const data of [{domain:'live',reference:'expected'},{domain:'test',reference:'different'}]) {
+    vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:true,data:{...data,status:'success',amount:100,currency:'GHS'}})));
+    await expect(verifyPaystackTransaction('expected','sk_test_fixture')).rejects.toThrow('did not match');
+  }
+  const o=await seedPendingOrder('environment',1);await env.DB.prepare("UPDATE orders SET payment_environment='live' WHERE id=?").bind(o.orderId).run();
+  expect((await fulfillVerifiedPayment(env.DB,{id:1,reference:o.reference,status:'success',environment:'test',amount:o.amount,currency:'GHS',paidAt:null,channel:null,gatewayResponse:null})).result).toBe('mismatch');
 });
 
 afterEach(() => vi.unstubAllGlobals());

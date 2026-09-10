@@ -92,3 +92,18 @@ test("filtering keeps search focus and reduced motion leaves posters still", asy
   await expect(search).toHaveValue("");
   await expect(page.locator(".drop-card").first()).toBeVisible();
 });
+
+for (const kind of ['recovery','transfer'] as const) test(`${kind} link waits for the guest and stays usable after a failed request`,async({page},info)=>{
+  const token='a'.repeat(43);let attempts=0;
+  await page.route(`**/api/customer/${kind==='transfer'?'transfers':'recovery'}/claim`,async route=>{
+    attempts++;expect(route.request().method()).toBe('POST');expect(route.request().postDataJSON()).toEqual({token});
+    await route.fulfill({status:503,json:{error:'Give it another moment, then try again.'}});
+  });
+  await page.goto(`/my-nights/access?kind=${kind}#token=${token}`);
+  const accept=page.getByRole('button',{name:kind==='transfer'?'Accept ticket':'Open my tickets',exact:true});
+  await expect(accept).toBeVisible();expect(attempts).toBe(0);expect(new URL(page.url()).hash).toBe('');
+  await accept.click();await expect(page.getByRole('alert')).toContainText('another moment');await expect(accept).toBeEnabled();
+  await accept.click();await expect.poll(()=>attempts).toBe(2);await expect(accept).toBeEnabled();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+  await page.screenshot({path:info.outputPath(`${kind}-access.png`),fullPage:true});
+});

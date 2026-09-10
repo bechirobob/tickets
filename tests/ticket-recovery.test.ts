@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as requestRecovery } from "../app/api/customer/recovery/route";
-import { GET as claimRecovery } from "../app/api/customer/recovery/claim/route";
+import { POST as claimRecovery } from "../app/api/customer/recovery/claim/route";
 import { POST as preparePasses } from "../app/api/customer/tickets/route";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -60,9 +60,9 @@ describe("ticket email delivery and recovery", () => {
     const match = sent.text.match(/https:\/\/tickets\.becoreops\.com\/api\/customer\/recovery\/claim\?token=([^\s]+)/u);
     expect(match?.[1]).toBeTruthy();
 
-    const claimResponse = await claimRecovery(new Request(`https://tickets.becoreops.com/api/customer/recovery/claim?token=${match![1]}`));
-    expect(claimResponse.status).toBe(303);
-    expect(claimResponse.headers.get("location")).toBe("https://tickets.becoreops.com/my-nights?recovered=1");
+    const claimResponse = await claimRecovery(new Request('https://tickets.becoreops.com/api/customer/recovery/claim', {method:'POST',headers:{origin:'https://tickets.becoreops.com','content-type':'application/json'},body:JSON.stringify({token:match![1]})}));
+    expect(claimResponse.status).toBe(200);
+    expect(await claimResponse.json()).toEqual({redirectTo:"/my-nights?recovered=1"});
     const cookie = claimResponse.headers.get("set-cookie")?.split(";")[0];
     expect(cookie).toMatch(/^bct_attendee=/u);
 
@@ -74,8 +74,8 @@ describe("ticket email delivery and recovery", () => {
     expect(wallet.orders[0].tickets[0].qrPayload).toMatch(/^BCT:/u);
     expect(wallet.orders[0].tickets[0].gateCode).toMatch(/^BCT-/u);
 
-    const replay = await claimRecovery(new Request(`https://tickets.becoreops.com/api/customer/recovery/claim?token=${match![1]}`));
-    expect(replay.headers.get("location")).toBe("https://tickets.becoreops.com/tickets?recovery=invalid");
+    const replay = await claimRecovery(new Request('https://tickets.becoreops.com/api/customer/recovery/claim', {method:'POST',headers:{origin:'https://tickets.becoreops.com','content-type':'application/json'},body:JSON.stringify({token:match![1]})}));
+    expect(replay.status).toBe(400);
   });
 
   it("does not disclose whether an unknown email has tickets", async () => {

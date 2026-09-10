@@ -54,6 +54,8 @@ export async function requestRegistration(db: D1Database, input: { eventSlug: st
     await db.prepare(`UPDATE event_registrations SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND status = 'unverified'`)
       .bind(settings.approvalRequired ? 'requested' : 'waitlisted', now, reg.id).run();
     await promoteRegistrations(db, reg.eventSlug);
+    const consent=await db.prepare('SELECT announcements_opt_in AS optedIn,created_at AS createdAt FROM event_registrations WHERE id=?').bind(reg.id).first<{optedIn:number;createdAt:string}>();
+    await rememberEventContact(db,{eventSlug:reg.eventSlug,email:reg.email,guestName:reg.guestName,source:'rsvp',consentedAt:consent?.optedIn ? consent.createdAt : null});
     const current = await readRegistration(db, reg.id);
     if (current) await notifyRegistrationHosts(db, { eventSlug: reg.eventSlug, sourceId: reg.id, guestName: reg.guestName, status: current.status, guests: reg.partySize });
     return { mode: settings.mode };
@@ -111,6 +113,15 @@ export async function confirmRegistration(db: D1Database, id: string) {
   }
   statements.push(db.prepare(`UPDATE orders SET status = 'paid' WHERE id = ? AND payment_provider = 'rsvp' AND ${confirmed}`).bind(orderId, id));
   statements.push(db.prepare(`UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided' AND ${confirmed}`).bind(orderId, id));
+  statements.push(
+    db.prepare(`INSERT INTO guest_entries (id,event_slug,guest_name,guest_email,guest_phone,admission_count,kind,note,status,created_by,created_at)
+      SELECT 'rsvp:'||id,event_slug,guest_name,normalized_email,phone,party_size,'guest_list','RSVP','expected','system:rsvp',? FROM event_registrations
+      WHERE id=? AND status='confirmed' AND verified_at IS NULL
+      ON CONFLICT(id) DO UPDATE SET guest_name=excluded.guest_name,admission_count=excluded.admission_count WHERE guest_entries.status='expected'`).bind(now,id),
+    db.prepare(`UPDATE tickets SET status='checked_in',checked_in_at=(SELECT checked_in_at FROM guest_entries WHERE id=?),checked_in_gate='Guest list'
+      WHERE order_id=? AND status='issued' AND EXISTS (SELECT 1 FROM guest_entries WHERE id=? AND status='checked_in')`).bind(`rsvp:${id}`,orderId,`rsvp:${id}`),
+    db.prepare(`UPDATE guest_entries SET status='cancelled' WHERE id=? AND status='expected' AND EXISTS (SELECT 1 FROM event_registrations WHERE id=? AND verified_at IS NOT NULL)`).bind(`rsvp:${id}`,id),
+  );
   const [changed] = await db.batch(statements);
   return changed.meta.changes === 1;
 }
@@ -160,8 +171,9 @@ export async function cancelRegistration(db: D1Database, id: string) {
   const now = timestamp();
   const [result] = await db.batch([
     db.prepare(`UPDATE event_registrations SET status = 'cancelled', version = version + 1, updated_at = ? WHERE id = ? AND status IN ('interested', 'requested', 'waitlisted', 'confirmed')
-      AND NOT EXISTS (SELECT 1 FROM tickets WHERE order_id = event_registrations.order_id AND status = 'checked_in')`).bind(now, id),
+      AND NOT EXISTS (SELECT 1 FROM tickets WHERE order_id = event_registrations.order_id AND status = 'checked_in') AND NOT EXISTS (SELECT 1 FROM guest_entries WHERE id='rsvp:'||event_registrations.id AND status='checked_in')`).bind(now, id),
     db.prepare(`UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued' AND EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'cancelled')`).bind(reg.orderId, id),
+    db.prepare(`UPDATE guest_entries SET status='cancelled' WHERE id=? AND status='expected' AND EXISTS (SELECT 1 FROM event_registrations WHERE id=? AND status='cancelled')`).bind(`rsvp:${id}`,id),
     db.prepare(`UPDATE orders SET status = 'expired' WHERE id = ? AND payment_provider = 'rsvp' AND EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'cancelled')`).bind(reg.orderId, id),
   ]);
   if (reg.kind === 'interest') await db.prepare('UPDATE event_audience_contacts SET unsubscribed_at=? WHERE event_slug=? AND email=?').bind(now,reg.eventSlug,reg.email).run();

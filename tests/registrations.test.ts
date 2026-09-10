@@ -132,8 +132,9 @@ describe('RSVP admission and interest registrations', () => {
     const pending = await access('rsvp-socket@example.com');
     const claim = await claimRegistration(env.DB, pending.token);
     const settings = (await registrationSettings(env.DB, slug))!;
+    const socketSession=await env.DB.prepare('SELECT id FROM attendee_sessions WHERE attendee_id=? AND revoked_at IS NULL').bind(claim.registration!.attendeeId).first<{id:string}>();
     const response = await env.THE_ROOM.getByName(slug).fetch(new Request('https://room.internal/socket', { headers: {
-      upgrade: 'websocket', 'x-bct-room-authorized': '1', 'x-bct-attendee-id': claim.registration!.attendeeId!, 'x-bct-display-name': 'RSVP Guest',
+      upgrade: 'websocket', 'x-bct-session-id':socketSession!.id, 'x-bct-room-authorized': '1', 'x-bct-attendee-id': claim.registration!.attendeeId!, 'x-bct-display-name': 'RSVP Guest',
       'x-bct-event-slug': slug, 'x-bct-event-title': 'RSVP Test', 'x-bct-starts-at': settings.startsAt, 'x-bct-ends-at': settings.endsAt,
       'x-bct-read-only-at': new Date(Date.now() + 172800000).toISOString(),
     } }));

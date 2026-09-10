@@ -44,7 +44,7 @@ export async function sendEmail(input: {
   deliveryId?: string;
 }) {
   const { env } = await import("cloudflare:workers");
-  const deliveryId = input.deliveryId ?? crypto.randomUUID();
+  const deliveryId = input.deliveryId ?? (input.kind === "payment_confirmation" && input.orderId ? `payment-confirmation/${input.orderId}` : crypto.randomUUID());
   const now = new Date().toISOString();
   const inserted = await input.db.prepare(`
     INSERT OR IGNORE INTO delivery_events (
@@ -66,6 +66,7 @@ export async function sendEmail(input: {
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: {
         authorization: `Bearer ${env.RESEND_API_KEY}`,
         "content-type": "application/json",
@@ -110,11 +111,13 @@ export async function applyDeliveryWebhook(db: D1Database, input: {
   const now = new Date().toISOString();
   const result = await db.prepare(`
     UPDATE delivery_events SET status = ?, failure_reason = ?, provider_event_at = ?,
-      next_attempt_at = CASE WHEN ? IN ('failed', 'delayed') AND attempt_count < 3
+      next_attempt_at = CASE WHEN ? = 'failed' AND provider_id IS NULL AND attempt_count < 3
         THEN datetime('now', '+' || (attempt_count * 5) || ' minutes') ELSE NULL END,
       updated_at = ?
-    WHERE provider_id = ?
-  `).bind(status, input.detail?.slice(0, 500) ?? null, input.eventAt ?? now, status, now, input.providerId).run();
+    WHERE provider_id = ? AND (provider_event_at IS NULL OR julianday(provider_event_at) <= julianday(?))
+      AND status NOT IN ('bounced','complained','suppressed')
+      AND (status<>'delivered' OR ? IN ('bounced','complained','suppressed'))
+  `).bind(status, input.detail?.slice(0, 500) ?? null, input.eventAt ?? now, status, now, input.providerId,input.eventAt??now,status).run();
   return { updated: result.meta.changes === 1, status };
 }
 
@@ -124,11 +127,13 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
   const due = await env.DB.prepare(`
     SELECT id, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
-    WHERE (${scopeSql}) AND ((status IN ('failed', 'delayed') AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (kind IN ('event_announcement','organizer_signup') AND status='queued' AND julianday(created_at) < julianday('now','-5 minutes')))
+    WHERE (${scopeSql}) AND ((status='failed' AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (status='queued' AND julianday(updated_at) < julianday('now','-5 minutes')))
     ORDER BY next_attempt_at LIMIT ?
   `).bind(new Date().toISOString(), limit).all<{ id: string; recipient: string; payloadJson: string | null; attemptCount: number }>();
   let delivered = 0;
   for (const item of due.results) {
+    const lease=await env.DB.prepare("UPDATE delivery_events SET status='queued',updated_at=?,next_attempt_at=NULL WHERE id=? AND ((status='failed' AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now')) OR (status='queued' AND julianday(updated_at)<julianday('now','-5 minutes'))) ").bind(new Date().toISOString(),item.id).run();
+    if (!lease.meta.changes) continue;
     try {
       const payload = JSON.parse(item.payloadJson ?? "{}") as { subject?: string; html?: string; text?: string; idempotencyKey?: string };
       if (!payload.subject || !payload.html || !payload.text || !payload.idempotencyKey) throw new Error("Saved delivery payload is incomplete.");
@@ -148,7 +153,8 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
       if(/^(event-announcement|organizer-signup)\//u.test(payload.idempotencyKey))await new Promise(resolve=>setTimeout(resolve,200));
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
-        headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": ((payload.idempotencyKey.startsWith("event-announcement/") || payload.idempotencyKey.startsWith("organizer-signup/")) ? payload.idempotencyKey : `${payload.idempotencyKey}/retry-${item.attemptCount}`).slice(0, 256) },
+        signal: AbortSignal.timeout(10_000),
+        headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": payload.idempotencyKey.slice(0, 256) },
         body: JSON.stringify({ from: env.EMAIL_FROM, to: [item.recipient], subject: payload.subject, html: payload.html, text: payload.text }),
       });
       const result = await response.json() as { id?: string; name?:string; message?: string };
@@ -156,13 +162,13 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
         await env.DB.prepare("UPDATE delivery_events SET status='failed',next_attempt_at=?,failure_reason=?,updated_at=? WHERE id=?").bind(quotaRetryAt(response,result.name),result.message??'Email provider quota reached.',new Date().toISOString(),item.id).run();continue;
       }
       if (!response.ok || !result.id) throw new Error(result.message ?? "Email retry was rejected.");
-      await env.DB.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = attempt_count + 1, failure_reason = NULL, next_attempt_at = NULL, updated_at = ? WHERE id = ?")
+      await env.DB.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = attempt_count + 1, failure_reason = NULL, next_attempt_at = NULL, updated_at = ? WHERE id = ? AND status='queued'")
         .bind(result.id, new Date().toISOString(), item.id).run();
       delivered += 1;
     } catch (error) {
       const nextAttempts = item.attemptCount + 1;
       const nextAt = nextAttempts < 3 ? new Date(Date.now() + nextAttempts * 5 * 60 * 1000).toISOString() : null;
-      await env.DB.prepare("UPDATE delivery_events SET status = 'failed', attempt_count = ?, failure_reason = ?, next_attempt_at = ?, updated_at = ? WHERE id = ?")
+      await env.DB.prepare("UPDATE delivery_events SET status = 'failed', attempt_count = ?, failure_reason = ?, next_attempt_at = ?, updated_at = ? WHERE id = ? AND status='queued'")
         .bind(nextAttempts, (error instanceof Error ? error.message : String(error)).slice(0, 500), nextAt, new Date().toISOString(), item.id).run();
     }
   }
@@ -268,7 +274,7 @@ export async function sendTicketTransferEmail(input: {
 export async function sendOrderConfirmation(db: D1Database, order: OrderForEmail, origin: string) {
   const existing = await db.prepare(`
     SELECT id FROM delivery_events
-    WHERE order_id = ? AND kind = 'payment_confirmation' AND status IN ('queued', 'sent')
+    WHERE order_id = ? AND kind = 'payment_confirmation'
     LIMIT 1
   `).bind(order.id).first();
   if (existing) return { sent: true, duplicate: true };

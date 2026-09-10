@@ -56,14 +56,16 @@ export async function POST(request: Request) {
       const closesAt = body.closesAt === undefined ? s.closesAt ?? null : body.closesAt;
       if (typeof accepting !== 'boolean' || typeof notifyHost !== 'boolean' || (closesAt !== null && (typeof closesAt !== 'string' || !Number.isFinite(Date.parse(closesAt))))) throw new Error('Check the registration deadline.');
       const deadline = closesAt ? new Date(closesAt).toISOString() : null;
+      if (deadline && registrationStartConfirmed(s) && deadline>s.startsAt) throw new Error('Set the registration deadline before the event starts.');
       const stamp = new Date().toISOString();
       const settingStatement = env.DB.prepare(`INSERT INTO event_registration_settings (event_slug, mode, capacity, max_party_size, approval_required, room_access, updated_at, accepting, closes_at, notify_host)
         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE
           (SELECT COALESCE(SUM(party_size), 0) FROM event_registrations WHERE event_slug = ? AND status = 'confirmed') <= ?
           AND NOT EXISTS (SELECT 1 FROM event_registrations WHERE event_slug = ? AND status IN ('confirmed', 'waitlisted', 'requested') AND (party_size > ? OR ? <> 'rsvp'))
           AND (? = 'paid' OR NOT EXISTS (SELECT 1 FROM orders WHERE event_slug = ? AND payment_provider <> 'rsvp' AND status IN ('paid', 'payment_pending')))
+          AND (? <> 'paid' OR (SELECT COALESCE(SUM(admission_count),0) FROM inventory_reservations WHERE ticket_tier_id=? AND (status='consumed' OR (status='held' AND expires_at>?))) <= ?)
         ON CONFLICT(event_slug) DO UPDATE SET mode = excluded.mode, capacity = excluded.capacity, max_party_size = excluded.max_party_size, approval_required = excluded.approval_required, room_access = excluded.room_access, updated_at = excluded.updated_at, accepting=excluded.accepting, closes_at=excluded.closes_at, notify_host=excluded.notify_host`)
-        .bind(body.eventSlug, body.mode, body.capacity, body.maxPartySize, body.approvalRequired ? 1 : 0, body.roomAccess ? 1 : 0, stamp, accepting ? 1 : 0, deadline, notifyHost ? 1 : 0, body.eventSlug, body.capacity, body.eventSlug, body.maxPartySize, body.mode, body.mode, body.eventSlug);
+        .bind(body.eventSlug, body.mode, body.capacity, body.maxPartySize, body.approvalRequired ? 1 : 0, body.roomAccess ? 1 : 0, stamp, accepting ? 1 : 0, deadline, notifyHost ? 1 : 0, body.eventSlug, body.capacity, body.eventSlug, body.maxPartySize, body.mode, body.mode, body.eventSlug,body.mode,tier?.id??"",stamp,body.capacity);
       const pricingStatements = body.mode !== 'paid' ? [] : [
         tier ? env.DB.prepare(`UPDATE event_ticket_tiers SET price_minor=?,capacity_admissions=?,updated_at=? WHERE id=? AND EXISTS (SELECT 1 FROM event_registration_settings WHERE event_slug=? AND updated_at=?)`).bind(priceMinor,body.capacity,stamp,tier.id,body.eventSlug,stamp)
         : env.DB.prepare(`INSERT INTO event_ticket_tiers (id,event_slug,code,name,description,price_minor,admissions_per_unit,capacity_admissions,max_units_per_order,status,sort_order,created_at,updated_at)

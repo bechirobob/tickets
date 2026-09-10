@@ -28,6 +28,7 @@ function maskAccount(value: string): string {
 async function paystack<T>(secret: string, path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`https://api.paystack.co${path}`, {
     ...options,
+    signal: AbortSignal.timeout(10_000),
     headers: { authorization: `Bearer ${secret}`, "content-type": "application/json", ...options.headers },
   });
   const payload = await response.json() as { status?: boolean; message?: string; data?: T };
@@ -101,10 +102,15 @@ export async function requestPayout(db: D1Database, session: AdminSession, input
   const reference = `BCT-PAYOUT-${Date.now().toString(36).toUpperCase()}-${payoutId.slice(0, 6).toUpperCase()}`;
   const approval = await createApprovalRequest(db, session, { kind: "organizer_payout", eventSlug: settlement.eventSlug, targetId: payoutId, payload: { payoutId } });
   const now = new Date().toISOString();
-  await db.prepare(`
+  const reservation=await db.prepare(`
     INSERT INTO payout_transfers (id, settlement_id, event_slug, payout_account_id, approval_request_id, reference, amount_minor, currency, status, initiated_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?)
-  `).bind(payoutId, settlement.id, settlement.eventSlug, account.id, approval.id, reference, amountMinor, settlement.currency, session.accountId, now, now).run();
+    SELECT ?,id,event_slug,?,?,?, ?,currency,'pending_approval',?,?,? FROM event_settlements
+    WHERE id=? AND status='ready' AND ? + (SELECT COALESCE(SUM(p.amount_minor),0) FROM payout_transfers p JOIN event_settlements prior ON prior.id=p.settlement_id WHERE p.event_slug=event_settlements.event_slug AND prior.period_start<event_settlements.period_end AND prior.period_end>event_settlements.period_start AND p.status NOT IN ('failed','reversed')) <= net_ticket_sales_minor
+  `).bind(payoutId,account.id,approval.id,reference,amountMinor,session.accountId,now,now,settlement.id,amountMinor).run();
+  if (!reservation.meta.changes) {
+    await db.prepare("UPDATE approval_requests SET status='failed',failure_reason='Settlement balance is already reserved.',completed_at=? WHERE id=?").bind(now,approval.id).run();
+    throw new Error('This settlement balance is already reserved for a payout. Refresh before continuing.');
+  }
   return { payoutId, approvalId: approval.id, reference };
 }
 
@@ -143,15 +149,17 @@ export async function decideApproval(env: Cloudflare.Env, session: AdminSession,
         WHERE payout.id = ? LIMIT 1
       `).bind(approval.targetId).first<{ id: string; reference: string; amountMinor: number; currency: string; recipientCode: string }>();
       if (!payout) throw new Error("Payout record not found.");
+      await env.DB.prepare("UPDATE payout_transfers SET status='pending',updated_at=? WHERE id=? AND status='pending_approval'").bind(now,payout.id).run();
       const transfer = await paystack<{ status?: string; transfer_code?: string }>(env.PAYSTACK_SECRET_KEY, "/transfer", {
         method: "POST",
         body: JSON.stringify({ source: "balance", amount: payout.amountMinor, recipient: payout.recipientCode, reason: `BeCore Tickets organiser payout · ${approval.eventSlug}`, reference: payout.reference, currency: payout.currency }),
       });
       await env.DB.batch([
-        env.DB.prepare("UPDATE payout_transfers SET status = ?, provider_transfer_code = ?, updated_at = ? WHERE id = ?")
+        env.DB.prepare("UPDATE payout_transfers SET status = ?, provider_transfer_code = ?, updated_at = ? WHERE id = ? AND status IN ('pending_approval','pending')")
           .bind(transfer.status === "otp" ? "otp" : "pending", transfer.transfer_code ?? null, now, payout.id),
         env.DB.prepare("UPDATE approval_requests SET status = 'completed', completed_at = ? WHERE id = ?").bind(now, approval.id),
       ]);
+      if (transfer.status==='success' || transfer.status==='failed' || transfer.status==='reversed') await applyTransferWebhook(env.DB,{reference:payout.reference,status:transfer.status,transferCode:transfer.transfer_code});
     } else if (approval.kind === "event_cancellation" && approval.eventSlug) {
       await env.DB.batch([
         env.DB.prepare("UPDATE curated_event_records SET event_state = 'cancelled', updated_at = ? WHERE slug = ?").bind(now, approval.eventSlug),
@@ -187,36 +195,41 @@ export async function processRefundBatches(env: Cloudflare.Env, limit = 5) {
       AND NOT EXISTS (SELECT 1 FROM payment_refunds WHERE batch_id = ? AND payment_refunds.order_id = orders.id)
     ORDER BY paid_at LIMIT ?
   `).bind(batch.eventSlug, batch.id, limit).all<{ id: string }>();
-  let processed = 0;
-  let failed = 0;
   for (const order of orders.results) {
     try {
       await initiatePaystackRefund(env.DB, { orderId: order.id, actor: "system:approved-mass-refund", reason: batch.reason, secret: env.PAYSTACK_SECRET_KEY, batchId: batch.id });
-      processed += 1;
-    } catch {
-      failed += 1;
+    } catch(error) {
+      // A claimed or uncertain request already owns its ledger. Record only
+      // preflight failures, never invent a second provider operation.
+      await env.DB.prepare(`INSERT INTO payment_refunds (id,order_id,amount_minor,status,reason,requested_by,requested_at,updated_at,failure_reason,batch_id)
+        SELECT ?,id,total_amount_minor-refunded_amount_minor,'failed',?,'system:approved-mass-refund',?,?,?,? FROM orders WHERE id=?
+        AND NOT EXISTS (SELECT 1 FROM payment_refunds WHERE order_id=orders.id AND (batch_id=? OR status IN ('pending','processing')))`)
+        .bind(crypto.randomUUID(),batch.reason,new Date().toISOString(),new Date().toISOString(),(error instanceof Error?error.message:'Refund requires review.').slice(0,500),batch.id,order.id,batch.id).run();
     }
   }
-  const completed = batch.processedOrders + batch.failedOrders + processed + failed >= batch.totalOrders || orders.results.length === 0;
-  await env.DB.prepare(`
-    UPDATE refund_batches SET processed_orders = processed_orders + ?, failed_orders = failed_orders + ?,
-      status = CASE WHEN ? THEN CASE WHEN failed_orders + ? > 0 THEN 'completed_with_errors' ELSE 'completed' END ELSE 'processing' END,
-      updated_at = ?, completed_at = CASE WHEN ? THEN ? ELSE completed_at END WHERE id = ?
-  `).bind(processed, failed, completed ? 1 : 0, failed, new Date().toISOString(), completed ? 1 : 0, completed ? new Date().toISOString() : null, batch.id).run();
-  return { processed, failed, completed };
+  const counts=await env.DB.prepare(`SELECT SUM(status='processed') AS processed,SUM(status='failed') AS failed,SUM(status IN ('pending','processing')) AS pending FROM payment_refunds WHERE batch_id=?`).bind(batch.id).first<{processed:number;failed:number;pending:number}>();
+  const remaining=await env.DB.prepare(`SELECT COUNT(*) AS count FROM orders WHERE event_slug=? AND status IN ('paid','requires_refund') AND refunded_amount_minor<total_amount_minor
+    AND NOT EXISTS (SELECT 1 FROM payment_refunds WHERE order_id=orders.id AND batch_id=?)`).bind(batch.eventSlug,batch.id).first<{count:number}>();
+  const processed=counts?.processed??0,failed=counts?.failed??0,completed=!(remaining?.count??0)&&!(counts?.pending??0),now=new Date().toISOString();
+  await env.DB.prepare("UPDATE refund_batches SET processed_orders=?,failed_orders=?,status=?,updated_at=?,completed_at=? WHERE id=?")
+    .bind(processed,failed,completed?(failed?'completed_with_errors':'completed'):'processing',now,completed?now:null,batch.id).run();
+  return {processed,failed,completed};
 }
 
 export async function applyTransferWebhook(db: D1Database, input: { reference: string; status: "success" | "failed" | "reversed"; transferCode?: string | null; failureReason?: string | null }) {
   const now = new Date().toISOString();
   const payout = await db.prepare("SELECT id, settlement_id AS settlementId FROM payout_transfers WHERE reference = ? LIMIT 1").bind(input.reference).first<{ id: string; settlementId: string }>();
   if (!payout) return { updated: false };
-  await db.batch([
-    db.prepare("UPDATE payout_transfers SET status = ?, provider_transfer_code = COALESCE(?, provider_transfer_code), failure_reason = ?, updated_at = ?, paid_at = CASE WHEN ? = 'success' THEN ? ELSE paid_at END WHERE id = ?")
-      .bind(input.status, input.transferCode ?? null, input.failureReason ?? null, now, input.status, now, payout.id),
-    db.prepare("UPDATE event_settlements SET status = CASE WHEN ? = 'success' THEN 'paid' WHEN ? IN ('failed', 'reversed') THEN 'held' ELSE status END WHERE id = ?")
-      .bind(input.status, input.status, payout.settlementId),
+  const [changed]=await db.batch([
+    db.prepare("UPDATE payout_transfers SET status=?,provider_transfer_code=COALESCE(?,provider_transfer_code),failure_reason=?,updated_at=?,paid_at=CASE WHEN ?='success' THEN ? ELSE paid_at END WHERE id=? AND (status IN ('pending_approval','pending','otp') OR (status='success' AND ?='reversed'))")
+      .bind(input.status,input.transferCode??null,input.failureReason??null,now,input.status,now,payout.id,input.status),
+    db.prepare(`UPDATE event_settlements SET status=CASE
+      WHEN (SELECT COALESCE(SUM(amount_minor),0) FROM payout_transfers WHERE settlement_id=event_settlements.id AND status='success') >= net_ticket_sales_minor THEN 'paid'
+      WHEN ? IN ('failed','reversed') THEN 'held' ELSE 'ready' END
+      WHERE id=? AND EXISTS (SELECT 1 FROM payout_transfers WHERE id=? AND status=?)`)
+      .bind(input.status,payout.settlementId,payout.id,input.status),
   ]);
-  return { updated: true };
+  return { updated: changed.meta.changes===1 };
 }
 
 export async function buildDisputeEvidence(db: D1Database, disputeId: string) {

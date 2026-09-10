@@ -9,6 +9,7 @@ export type AttendeeIdentity = {
 };
 
 export type AttendeeRoomAccess = AttendeeIdentity & {
+  sessionId?: string;
   eventSlug: string;
   ticketId: string;
   roomBadge: "VIP" | null;
@@ -110,7 +111,7 @@ export async function readAttendeeRoomAccess(
   const access = await db.prepare(`
     SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
            p.email_verified_at IS NOT NULL AS emailVerified,
-           t.event_slug AS eventSlug, t.id AS ticketId, tier.room_badge AS roomBadge
+           s.id AS sessionId, t.event_slug AS eventSlug, t.id AS ticketId, tier.room_badge AS roomBadge
     FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id = s.attendee_id
     JOIN ticket_assignments a ON a.attendee_id = p.id AND a.status = 'active'
@@ -118,7 +119,7 @@ export async function readAttendeeRoomAccess(
     JOIN orders o ON o.id = t.order_id
     LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
-      AND t.event_slug = ? AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.removed_at IS NOT NULL)
+      AND o.status='paid' AND t.event_slug = ? AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.removed_at IS NOT NULL)
       AND (? = 0 OR o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1))
     ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
     LIMIT 1

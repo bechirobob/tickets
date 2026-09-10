@@ -53,8 +53,8 @@ export async function notifyRegistrationHosts(db:D1Database,input:{eventSlug:str
     WHERE a.event_slug=? AND s.role='organizer' AND s.status='active' AND e.removed_at IS NULL AND COALESCE(r.notify_host,1)=1`).bind(input.eventSlug).all<{id:string;email:string;title:string}>();
   for(const host of hosts.results){
     const key=`organizer-signup/${input.eventSlug}/${input.sourceId}/${host.id}`,url=`${origin}/organizer/workspace?event=${encodeURIComponent(input.eventSlug)}`;
-    const status=({confirmed:'confirmed a free RSVP',requested:'requested your approval',waitlisted:'joined the waitlist',interested:'joined your email list',paid:'completed paid registration'} as Record<string,string>)[input.status]??input.status;
-    const text=`${input.guestName} ${status} for ${host.title} (${input.guests} guests).\n\nView guest activity: ${url}\n\nManage signup email alerts in your event's registration settings.`;
+    const status=({confirmed:'joined the guest list',requested:'requested your approval',waitlisted:'joined the waitlist',interested:'joined your email list',paid:'completed paid registration'} as Record<string,string>)[input.status]??input.status;
+    const text=`${input.guestName} ${status} for ${host.title} (${input.guests} ${input.guests===1?'guest':'guests'}).\n\nView guest activity: ${url}\n\nManage signup email alerts in your event's registration settings.`;
     await sendEmail({db,kind:'organizer_signup',deliveryId:key,idempotencyKey:key,recipient:host.email,subject:`New signup · ${host.title}`,text,html:`<p>${escape(text).replaceAll('\n','<br />')}</p><p><a href="${escape(url)}">View guest activity</a></p>`});
   }
 }

@@ -4,6 +4,7 @@ import { issueRecoveryGrant } from "../../../../lib/email-delivery";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
 import { recordProductMetric } from "../../../../lib/product-analytics";
+import { recoverableTickets } from '../../../../lib/ticket-recovery';
 
 const GENERIC_MESSAGE = "If that email has tickets or registrations, a secure access link is on the way.";
 
@@ -35,12 +36,7 @@ export async function POST(request: Request) {
   if ((recent?.count ?? 0) >= 3) {
     return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
   }
-  const active = await env.DB.prepare(`
-    SELECT id FROM orders
-    WHERE customer_email = ? AND status = 'paid'
-      AND EXISTS (SELECT 1 FROM tickets WHERE tickets.order_id = orders.id AND tickets.status IN ('issued', 'checked_in', 'voided'))
-    LIMIT 1
-  `).bind(normalizedEmail).first();
+  const active = await env.DB.prepare(`SELECT t.id ${recoverableTickets} LIMIT 1`).bind(normalizedEmail, normalizedEmail).first();
   if (active) {
     await issueRecoveryGrant({
       db: env.DB,

@@ -1,3 +1,4 @@
+import {GET as doorList,POST as doorAction} from '../app/api/admin/door/route';
 import {env} from 'cloudflare:test';
 import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import {adminCookieHeader,createStaffSession} from '../lib/admin-session';
@@ -50,7 +51,7 @@ it('takes RSVP requests straight to host review and guest emails without sending
  expect(await env.DB.prepare('SELECT id FROM registration_access_grants WHERE registration_id=?').bind(reg!.id).first()).toBeNull();
  expect(await env.DB.prepare('SELECT id FROM delivery_events WHERE recipient=?').bind(email).first()).toBeNull();
  expect(await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&live=1`))).json()).toMatchObject({requested:1,confirmed:0,latest:[{name:'Party Guest',status:'requested'}]});
- expect(await (await audience(get(`/api/admin/audience?eventSlug=${slug}`))).json()).toMatchObject({total:1,subscribers:0,contacts:[{email,subscribed:0}]});
+ expect(await (await audience(get(`/api/admin/audience?eventSlug=${slug}`))).json()).toMatchObject({total:1,subscribers:1,contacts:[{email,subscribed:1}]});
  expect(await (await audience(get(`/api/admin/audience?eventSlug=${slug}&export=csv`))).text()).toContain(email);
  expect((await configure(post('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id}))).status).toBe(200);
  expect(await env.DB.prepare('SELECT status,attendee_id,verified_at,order_id FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({status:'confirmed',attendee_id:null,verified_at:null,order_id:null});
@@ -184,7 +185,7 @@ it('suppresses failed announcement retries after unsubscribe and recovers abando
  await retryFailedDeliveries(env);
  expect(await env.DB.prepare("SELECT status FROM delivery_events WHERE kind='event_announcement'").first()).toEqual({status:'suppressed'});
  // A worker can stop between creating a delivery and contacting the provider.
- await env.DB.prepare("UPDATE delivery_events SET status='queued',created_at='2020-01-01T00:00:00Z' WHERE kind='organizer_signup'").run();
+ await env.DB.prepare("UPDATE delivery_events SET status='queued',created_at='2020-01-01T00:00:00Z',updated_at='2020-01-01T00:00:00Z' WHERE kind='organizer_signup'").run();
  const standard=await retryFailedDeliveries(env,20,'standard');expect(standard.delivered).toBe(0);
  expect(await env.DB.prepare("SELECT status FROM delivery_events WHERE kind='organizer_signup'").first()).toEqual({status:'queued'});
  const prepare=vi.spyOn(env.DB,'prepare');
@@ -205,4 +206,26 @@ it('keeps announcement batches within the free D1 query budget and defers daily 
  const delivered=await env.DB.prepare("SELECT COUNT(*) AS count FROM delivery_events WHERE kind='event_announcement'").first<{count:number}>();expect(delivered?.count).toBe(8);
  const deferred=await env.DB.prepare("SELECT attempt_count AS attempts,next_attempt_at AS next FROM delivery_events WHERE kind='event_announcement' AND status='failed'").first<{attempts:number;next:string}>();expect(deferred?.attempts).toBe(0);expect(new Date(deferred!.next).getTime()).toBeGreaterThan(Date.now());
  await processEventAnnouncements(env,origin);expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM event_announcement_recipients WHERE status='pending'").first<{count:number}>())?.count).toBe(0);
+});
+it('preserves a direct RSVP unsubscribe when the original submission is repeated',async()=>{
+ await settings({capacity:100,approvalRequired:true});await directSignup('unsubscribe-direct@example.com');
+ const contact=await env.DB.prepare('SELECT id,consented_at AS consent FROM event_audience_contacts WHERE email=?').bind('unsubscribe-direct@example.com').first<{id:string;consent:string}>();
+ await env.DB.prepare('UPDATE event_audience_contacts SET unsubscribed_at=? WHERE id=?').bind(new Date(Date.now()+1000).toISOString(),contact!.id).run();
+ await directSignup('unsubscribe-direct@example.com',{announcementsOptIn:true});
+ expect(await env.DB.prepare("SELECT consented_at AS consent,consented_at>COALESCE(unsubscribed_at,'') AS subscribed FROM event_audience_contacts WHERE id=?").bind(contact!.id).first()).toEqual({consent:contact!.consent,subscribed:0});
+});
+
+it('takes approved RSVP guests to the door and preserves their admission if they later open a ticket wallet',async()=>{
+ await settings({capacity:100,approvalRequired:true});const email='door-rsvp@example.com';await directSignup(email);
+ const reg=await env.DB.prepare('SELECT id FROM event_registrations WHERE event_slug=? AND normalized_email=?').bind(slug,email).first<{id:string}>();
+ expect(await (await doorList(get(`/api/admin/door?eventSlug=${slug}`,owner))).json()).toMatchObject({guests:[]});
+ await configure(post('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id}));
+ expect(await (await doorList(get(`/api/admin/door?eventSlug=${slug}`,owner))).json()).toMatchObject({guests:[{id:`rsvp:${reg!.id}`,guestName:'Party Guest',status:'expected'}]});
+ const admission={eventSlug:slug,action:'check_in',id:`rsvp:${reg!.id}`};
+ const results=await Promise.all([doorAction(post('/api/admin/door',admission,owner)),doorAction(post('/api/admin/door',admission,owner))]);
+ expect(results.map(r=>r.status).sort()).toEqual([200,409]);
+ await expect(cancelRegistration(env.DB,reg!.id)).rejects.toThrow('after check-in');
+ await signup(email,true);
+ expect(await env.DB.prepare('SELECT status FROM tickets WHERE order_id=?').bind(`rsvp_${reg!.id}`).first()).toEqual({status:'checked_in'});
+ expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM delivery_events WHERE recipient=? AND kind='payment_confirmation'").bind(email).first()).toEqual({count:0});
 });

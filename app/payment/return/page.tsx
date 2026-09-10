@@ -28,11 +28,14 @@ export default function PaymentReturn() {
     window.history.replaceState({}, "", "/payment/return");
     let cancelled = false;
     let attempt = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
     const check = async () => {
       attempt += 1;
       try {
         const response = await fetch("/api/customer/session", {
           method: "POST",
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ reference, claim, resumeCheckout: params.get("pending") === "1" }),
         });
@@ -50,18 +53,19 @@ export default function PaymentReturn() {
           try { sessionStorage.removeItem(`bct:payment-attempt:${purchasedEvent}`); } catch { /* Storage is optional. */ }
           setEventSlug(purchasedEvent);
           setState("ready");
-          setMessage("Your night survived the group chat. Ticket, perks, receipt and Room access are ready.");
-          window.setTimeout(() => window.location.replace(purchasedEvent ? `/my-nights/${encodeURIComponent(purchasedEvent)}?welcome=1` : "/my-nights?welcome=1"), 700);
+          setMessage("You’re in. Your ticket is ready in My Nights.");
+          timer = setTimeout(() => window.location.replace(purchasedEvent ? `/my-nights/${encodeURIComponent(purchasedEvent)}?welcome=1` : "/my-nights?welcome=1"), 700);
           return;
         }
         if (response.status === 202 && attempt < 72) {
-          window.setTimeout(check, 2500);
+          timer = setTimeout(check, 2500);
           return;
         }
         setState("failed");
         setMessage(result.error ?? "We’re still checking your payment. Your ticket lands once it clears.");
       } catch {
-        if (attempt < 72) window.setTimeout(check, 2500);
+        if (cancelled) return;
+        if (attempt < 72) timer = setTimeout(check, 2500);
         else {
           setState("failed");
           setMessage("This payment’s taking its time. Your order is saved. Don’t pay again.");
@@ -69,17 +73,17 @@ export default function PaymentReturn() {
       }
     };
     void check();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); clearTimeout(timer); };
   }, [params]);
 
   return (
     <main className="payment-return"><div>
       {state === "ready" ? <CheckCircle2 size={45} /> : <Clock3 size={45} />}
-      <p className="eyebrow">{state === "ready" ? "Payment confirmed" : "Secure confirmation"}</p>
+      <p className="eyebrow">{state === "ready" ? "Payment confirmed" : "Checking your payment"}</p>
       <h1>{state === "ready" ? "You’re going out." : state === "failed" ? "A small hold-up." : "One last money check."}</h1>
       <p>{message}</p>
       {state === "ready" && eventSlug ? <Link href={`/my-nights/${eventSlug}?welcome=1`}>Open My Night</Link> : <Link href="/my-nights">Open My Nights</Link>}
-      <span><ShieldCheck size={15} /> No confirmed payment, no mysterious QR. Fair is fair.</span>
+      <span><ShieldCheck size={15} /> Once payment clears, your ticket is right here.</span>
     </div></main>
   );
 }

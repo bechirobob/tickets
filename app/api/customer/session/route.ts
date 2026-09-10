@@ -33,7 +33,8 @@ export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) {
     return Response.json({ error: "This ticket request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
   }
-  const body = await request.json() as { reference?: string; claim?: string; resumeCheckout?: boolean };
+  const body = await request.json().catch(()=>null) as { reference?: string; claim?: string; resumeCheckout?: boolean } | null;
+  if (!body || typeof body.reference!=="string" || typeof body.claim!=="string" || body.reference.length>200) return Response.json({error:"Open the complete link from your checkout."},{status:400});
   const reference = body.reference?.trim() ?? "";
   const claim = body.claim?.trim() ?? "";
   if (!reference || claim.length < 40 || claim.length > 128) {
