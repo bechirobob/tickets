@@ -12,9 +12,16 @@ import {
   parseFlashModerationResponse,
   purgeExpiredFlashes,
   scaledFlashDimensions,
+  storeFlash,
 } from "../lib/flashes";
 
 describe("Room Flashes", () => {
+  it('keeps simultaneous uploads within the per-guest limit', async () => {
+    const id = crypto.randomUUID(), now = new Date().toISOString(), future = new Date(Date.now() + 86_400_000).toISOString();
+    const saved = await Promise.all(Array.from({ length: 12 }, () => storeFlash(env.DB, { id: crypto.randomUUID(), eventSlug: id, attendeeId: id, displayName: 'Guest', width: 160, height: 160, createdAt: now, expiresAt: future, mine: true }, new Uint8Array([1,2,3]))));
+    expect(saved.filter(Boolean)).toHaveLength(8);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM room_flashes WHERE event_slug=?').bind(id).first()).toEqual({ count: 8 });
+  });
   it("keeps temporary media inside the free D1 safety budget", () => {
     expect(FLASH_MAX_STORED_BYTES).toBe(512 * 1024);
     expect(FLASH_MAX_ACTIVE_PER_ATTENDEE).toBe(8);

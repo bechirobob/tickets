@@ -63,6 +63,9 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
 
   const activeSlug = await experience.getAttribute("data-active-night");
   expect(activeSlug).toBeTruthy();
+  const catalogue = await (await page.request.get('/api/public/events')).json() as { events: { slug: string; registrationMode?: string; scheduleStatus: string }[] };
+  const activeEvent = catalogue.events.find(event => event.slug === activeSlug);
+  expect(activeEvent).toBeTruthy();
   await expect(page.locator('.drop-card[data-featured="true"]')).toHaveAttribute("data-event-slug", activeSlug!);
 
   // CSS uppercases the poster heading; compare its actual event text.
@@ -76,9 +79,15 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   const actionBounds = await primaryAction.boundingBox();
   expect(actionBounds?.height).toBeGreaterThanOrEqual(44);
   expect(actionBounds?.width).toBeGreaterThanOrEqual(44);
-  if (activeSlug === "sun-chasers-labadi") {
+  if (activeEvent?.scheduleStatus === 'coming_soon') {
     await expect(hero.locator('.compact-hero__price')).toHaveCount(0);
     await expect(hero).toContainText("Coming soon");
+  } else if (activeEvent?.registrationMode === 'rsvp' || activeEvent?.registrationMode === 'interest') {
+    const label = activeEvent.registrationMode === 'rsvp' ? 'RSVP' : 'Keep me posted';
+    await expect(hero.locator('.compact-hero__price')).toHaveText(label);
+    await expect(primaryAction).toHaveText(label);
+    await expect(primaryAction).toHaveAttribute('href', `/rsvp/${activeSlug}`);
+    await expect(hero.locator('.compact-hero__price')).not.toContainText('GH₵');
   } else {
     await expect(hero.locator('.compact-hero__price')).toContainText("GH₵350");
     await expect(hero.locator('.compact-hero__price')).not.toContainText(/fee/i);

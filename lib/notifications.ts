@@ -1,4 +1,5 @@
-import { sendNotification, type PushSubscription } from "web-push-neo";
+import { generateRequestDetails, type PushSubscription } from "web-push-neo";
+import { validPushEndpoint } from './push-subscription';
 
 type NotificationKind = "room_message" | "host_update" | "ticket_transfer" | "gate_update" | "event_reminder" | "test" | "waitlist_offer" | "payment_recovery" | "event_status" | "support_update";
 
@@ -28,10 +29,11 @@ function chunks<T>(items: T[], size: number): T[][] {
 
 async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: NotificationPayload): Promise<boolean> {
   if (!row.subscriptionId || !row.endpoint || !row.p256dh || !row.auth) return false;
+  if (!validPushEndpoint(row.endpoint)) return false;
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return false;
   const subscription = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } } satisfies PushSubscription;
   try {
-    await sendNotification(subscription, JSON.stringify({
+    const details = await generateRequestDetails(subscription, JSON.stringify({
       title: payload.title,
       body: payload.body,
       url: payload.url,
@@ -45,6 +47,8 @@ async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: Notificat
       topic: (payload.tag ?? `bct-${payload.kind}`).replace(/[^A-Za-z0-9_-]/gu, "-").slice(0, 32),
       signal: AbortSignal.timeout(7_000),
     });
+    const response = await fetch(details.endpoint, { method: details.method, headers: details.headers, body: details.body, redirect: 'error', signal: AbortSignal.timeout(7_000) });
+    if (!response.ok) throw Object.assign(new Error('Push delivery failed'), { statusCode: response.status });
     await env.DB.prepare("UPDATE push_subscriptions SET last_success_at = ?, failure_count = 0, updated_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), new Date().toISOString(), row.subscriptionId).run();
     return true;
@@ -107,7 +111,8 @@ export async function notifyRoomMessage(env: Cloudflare.Env, input: {
       ON subscription.attendee_id = assignment.attendee_id AND subscription.revoked_at IS NULL
     WHERE ticket.event_slug = ? AND assignment.status = 'active'
       AND ticket.status IN ('issued', 'checked_in')
-      AND EXISTS (SELECT 1 FROM orders o WHERE o.id = ticket.order_id AND (o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1)))
+      AND EXISTS (SELECT 1 FROM orders o WHERE o.id = ticket.order_id AND o.status = 'paid' AND (o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1)))
+      AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = ticket.event_slug AND (e.removed_at IS NOT NULL OR e.event_state IN ('cancelled', 'postponed')))
       AND assignment.attendee_id <> ?
       AND NOT EXISTS (
         SELECT 1 FROM room_suspensions suspension

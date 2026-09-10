@@ -95,3 +95,23 @@ it('closes a Room connection if its session is revoked before a reaction',async(
  await env.DB.prepare('UPDATE attendee_sessions SET revoked_at=? WHERE id=?').bind(new Date().toISOString(),`session-${f.id}`).run();
  socket.send(JSON.stringify({type:'reaction',messageId:message.id,emoji:'🔥'}));expect(await closed).toBe(4003);
 });
+
+it('stops private messages reaching a revoked session even when the guest stays silent',async()=>{
+ const f=await fixture(),future=new Date(Date.now()+86400000).toISOString();
+ const room=env.THE_ROOM.getByName(f.eventSlug),policy={eventSlug:f.eventSlug,eventTitle:'Ownership Test',startsAt:new Date().toISOString(),endsAt:future,readOnlyAt:future,readOnly:false};
+ const response=await room.fetch(new Request('https://room.internal/socket',{headers:{upgrade:'websocket','x-bct-room-authorized':'1','x-bct-session-id':`session-${f.id}`,'x-bct-attendee-id':f.sender,'x-bct-display-name':'Sender','x-bct-event-slug':f.eventSlug,'x-bct-event-title':'Ownership Test','x-bct-starts-at':policy.startsAt,'x-bct-ends-at':future,'x-bct-read-only-at':future}}));
+ expect(response.status).toBe(101);const socket=response.webSocket!;socket.accept();
+ const received: string[]=[];
+ socket.addEventListener('message',e=>{received.push(String(e.data));});
+ const welcomed = new Promise<void>(resolve => socket.addEventListener('message',e=>{if(String(e.data).includes('Before logout'))resolve();}));
+ await room.publishAnnouncement('Host','Before logout',false,policy);
+ await welcomed;
+ const outcome=new Promise<string>(resolve=>{
+   socket.addEventListener('close',e=>resolve(`closed:${e.code}`),{once:true});
+   socket.addEventListener('message',e=>{if(String(e.data).includes('Private after logout'))resolve('leaked');});
+ });
+ await env.DB.prepare('UPDATE attendee_sessions SET revoked_at=? WHERE id=?').bind(new Date().toISOString(),`session-${f.id}`).run();
+ await room.publishAnnouncement('Host','Private after logout',false,policy);
+ expect(await outcome).toBe('closed:4003');
+ expect(received.some(item=>item.includes('Private after logout'))).toBe(false);
+});

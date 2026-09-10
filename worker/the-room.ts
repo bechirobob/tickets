@@ -508,6 +508,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   private broadcast(payload: Record<string, unknown>): void {
+    if (payload.type === 'message' || payload.type === 'reaction' || payload.type === 'flash_added') {
+      this.ctx.waitUntil(this.broadcastPrivate(payload));
+      return;
+    }
     const encoded = JSON.stringify(payload);
     for (const socket of this.ctx.getWebSockets()) {
       try {
@@ -520,6 +524,56 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       } catch {
         socket.close(1011, "Room connection reset");
       }
+    }
+  }
+
+  private async broadcastPrivate(payload: Record<string, unknown>): Promise<void> {
+    const sockets = this.ctx.getWebSockets();
+    if (!sockets.length) return;
+    const states = sockets.map(socket => ({ socket, state: socket.deserializeAttachment() as ConnectionState | null }));
+    const sessionIds = [...new Set(states.flatMap(({ state }) => state?.sessionId ? [state.sessionId] : []))];
+    const message = payload.message ?? payload.flash;
+    const sender = isRecord(message) && typeof message.attendeeId === 'string' ? message.attendeeId
+      : typeof payload.attendeeId === 'string' ? payload.attendeeId : '';
+    const allowed = new Map<string, { attendeeId: string; blocked: number }>();
+    try {
+      // Batch socket identities below D1's bind limit. Silent, expired or revoked
+      // connections must be checked before receiving private content too.
+      for (let offset = 0; offset < sessionIds.length; offset += 80) {
+        const ids = sessionIds.slice(offset, offset + 80);
+        const rows = await this.env.DB.prepare(`
+          SELECT session.id, session.attendee_id AS attendeeId,
+            EXISTS (SELECT 1 FROM room_blocks block WHERE block.event_slug = ?
+              AND block.blocker_attendee_id = session.attendee_id AND block.blocked_attendee_id = ?) AS blocked
+          FROM attendee_sessions session JOIN attendee_profiles profile ON profile.id = session.attendee_id
+          WHERE session.id IN (${ids.map(() => '?').join(',')}) AND session.revoked_at IS NULL
+            AND session.expires_at > ? AND profile.status = 'active'
+            AND NOT EXISTS (SELECT 1 FROM room_suspensions r WHERE r.attendee_id = session.attendee_id AND r.event_slug = ? AND r.restored_at IS NULL)
+            AND EXISTS (
+              SELECT 1 FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id
+              JOIN orders orders ON orders.id = ticket.order_id
+              WHERE assignment.attendee_id = session.attendee_id AND assignment.status = 'active'
+                AND ticket.event_slug = ? AND ticket.status IN ('issued', 'checked_in') AND orders.status = 'paid'
+                AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = ticket.event_slug AND (e.removed_at IS NOT NULL OR e.event_state IN ('cancelled', 'postponed')))
+                AND (orders.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r
+                  JOIN event_registration_settings rs ON rs.event_slug = r.event_slug
+                  WHERE r.order_id = orders.id AND r.status = 'confirmed' AND rs.room_access = 1))
+            )
+        `).bind(this.eventSlug(), sender, ...ids, new Date().toISOString(), this.eventSlug(), this.eventSlug())
+          .all<{ id: string; attendeeId: string; blocked: number }>();
+        for (const row of rows.results) allowed.set(row.id, row);
+      }
+      const encoded = JSON.stringify(payload);
+      for (const { socket, state } of states) {
+        const current = state && allowed.get(state.sessionId);
+        if (!current || current.attendeeId !== state?.attendeeId) { socket.close(4003, 'Room access changed'); continue; }
+        if (current.blocked) continue;
+        try { socket.send(encoded); } catch { socket.close(1011, 'Room connection reset'); }
+      }
+    } catch {
+      // Do not send private content when authorization cannot be established.
+      for (const { socket } of states) socket.close(1011, 'Room access could not be checked');
+      console.error(JSON.stringify({ message: 'Room recipient access check failed', eventSlug: this.eventSlug() }));
     }
   }
 }

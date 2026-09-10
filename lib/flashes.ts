@@ -24,6 +24,20 @@ export type FlashRecord = {
   openedAt?: string | null;
 };
 
+export async function storeFlash(db: D1Database, flash: FlashRecord, bytes: Uint8Array): Promise<boolean> {
+  const inserted = await db.prepare(`
+    INSERT INTO room_flashes
+      (id,event_slug,attendee_id,image_data,content_type,width,height,byte_size,status,moderation_result,created_at,expires_at)
+    SELECT ?,?,?,?,?,?,?,?,'active','allowed',?,?
+    WHERE (SELECT COUNT(*) FROM room_flashes WHERE event_slug=? AND attendee_id=? AND status='active' AND expires_at>?) < ?
+      AND (SELECT COUNT(*) FROM room_flashes WHERE event_slug=? AND status='active' AND expires_at>?) < ?
+      AND (SELECT COALESCE(SUM(byte_size),0) FROM room_flashes WHERE status='active' AND expires_at>? AND image_data IS NOT NULL) + ? <= ?
+  `).bind(flash.id,flash.eventSlug,flash.attendeeId,bytes,FLASH_OUTPUT_CONTENT_TYPE,flash.width,flash.height,bytes.length,flash.createdAt,flash.expiresAt,
+    flash.eventSlug,flash.attendeeId,flash.createdAt,FLASH_MAX_ACTIVE_PER_ATTENDEE,flash.eventSlug,flash.createdAt,FLASH_MAX_ACTIVE_PER_EVENT,
+    flash.createdAt,bytes.length,FLASH_MAX_ACTIVE_STORAGE_BYTES).run();
+  return inserted.meta.changes === 1;
+}
+
 export function hasAcceptedFlashType(type: string): boolean {
   return acceptedTypes.has(type);
 }
