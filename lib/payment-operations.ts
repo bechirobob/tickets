@@ -103,7 +103,7 @@ async function readOrder(db: D1Database, reference: string) {
   `).bind(reference).first<OrderRecord>();
 }
 
-async function ensureIssuedTickets(db: D1Database, order: OrderRecord, issuedAt: string) {
+function issuedTicketStatements(db: D1Database, order: OrderRecord, issuedAt: string) {
   const statements: D1PreparedStatement[] = [];
   for (let admissionNumber = 1; admissionNumber <= order.quantity; admissionNumber += 1) {
     const ticketId = crypto.randomUUID();
@@ -112,9 +112,10 @@ async function ensureIssuedTickets(db: D1Database, order: OrderRecord, issuedAt:
         id, order_id, event_slug, ticket_type, admission_number, qr_token_hash, status, issued_at
       ) SELECT ?, id, event_slug, ticket_type, ?, ?, 'issued', ?
         FROM orders WHERE id = ? AND status = 'paid'
+          AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = orders.event_slug AND (event.removed_at IS NOT NULL OR event.event_state = 'cancelled'))
     `).bind(ticketId, admissionNumber, `unissued-${ticketId}`, issuedAt, order.id));
   }
-  if (statements.length) await db.batch(statements);
+  return statements;
 }
 
 export async function fulfillVerifiedPayment(db: D1Database, verification: PaystackVerification) {
@@ -150,53 +151,46 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
   }
 
   if (!["payment_pending", "expired", "failed", "paid"].includes(order.status)) return { result: "not_fulfilled" as const, order };
-  let newlyPaid = false;
-  if (order.status !== "paid") {
-    await db.prepare(`
-      UPDATE inventory_reservations
-      SET status = 'consumed', updated_at = ?
+  // D1 executes this batch as one transaction: event cancellation, inventory,
+  // payment state and ticket issuance cannot interleave halfway through it.
+  const results = await db.batch([
+    db.prepare(`
+      UPDATE inventory_reservations SET status = 'consumed', updated_at = ?
       WHERE order_id = ? AND status IN ('held', 'expired', 'released')
+        AND EXISTS (SELECT 1 FROM orders WHERE id = inventory_reservations.order_id AND status IN ('payment_pending', 'expired', 'failed'))
         AND EXISTS (
           SELECT 1 FROM event_ticket_tiers tier
           WHERE tier.id = inventory_reservations.ticket_tier_id
-            AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = tier.event_slug AND event.removed_at IS NOT NULL)
+            AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = tier.event_slug AND (event.removed_at IS NOT NULL OR event.event_state = 'cancelled'))
             AND (
-              SELECT COALESCE(SUM(other.admission_count), 0)
-              FROM inventory_reservations other
-              WHERE other.ticket_tier_id = tier.id
-                AND other.order_id <> inventory_reservations.order_id
-                AND (
-                  other.status = 'consumed'
-                  OR (other.status = 'held' AND other.expires_at > ?)
-                )
+              SELECT COALESCE(SUM(other.admission_count), 0) FROM inventory_reservations other
+              WHERE other.ticket_tier_id = tier.id AND other.order_id <> inventory_reservations.order_id
+                AND (other.status = 'consumed' OR (other.status = 'held' AND other.expires_at > ?))
             ) + inventory_reservations.admission_count <= tier.capacity_admissions
         )
-    `).bind(now, order.id, now).run();
-    const reservation = await db.prepare("SELECT status FROM inventory_reservations WHERE order_id = ? LIMIT 1")
-      .bind(order.id).first<{ status: string }>();
-    if (reservation?.status !== "consumed") {
-      await db.prepare(`
-        UPDATE orders SET status = 'requires_refund', ${statusColumn} = 'success',
-          ${transactionColumn} = ?, payment_verified_at = ?, payment_updated_at = ?,
-          failure_reason = 'Payment succeeded after inventory was no longer available.'
-        WHERE id = ?
-      `).bind(String(verification.id), now, now, order.id).run();
-      return { result: "requires_refund" as const, order };
-    }
-    const paidUpdate = await db.prepare(`
-      UPDATE orders SET status = CASE WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = orders.event_slug AND e.removed_at IS NOT NULL) THEN 'requires_refund' ELSE 'paid' END, ${statusColumn} = 'success', ${referenceColumn} = ?,
-        ${transactionColumn} = ?, payment_verified_at = ?, payment_updated_at = ?,
-        paid_at = COALESCE(paid_at, ?), failure_reason = NULL
-      WHERE id = ? AND status IN ('payment_pending', 'expired', 'failed')
-    `).bind(verification.providerReference ?? verification.reference, String(verification.id), now, now, verification.paidAt ?? now, order.id).run();
-    newlyPaid = paidUpdate.meta.changes === 1;
-  }
+    `).bind(now, order.id, now),
+    db.prepare(`
+      UPDATE orders SET status = CASE
+          WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state = 'cancelled'))
+            OR NOT EXISTS (SELECT 1 FROM inventory_reservations r WHERE r.order_id = orders.id AND r.status = 'consumed')
+          THEN 'requires_refund' ELSE 'paid' END,
+        ${statusColumn} = 'success', ${referenceColumn} = ?, ${transactionColumn} = ?,
+        payment_verified_at = ?, payment_updated_at = ?, paid_at = COALESCE(paid_at, ?), failure_reason = NULL
+      WHERE id = ? AND (status IN ('payment_pending', 'expired', 'failed') OR
+        (status = 'paid' AND EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state = 'cancelled'))))
+    `).bind(verification.providerReference ?? verification.reference, String(verification.id), now, now, verification.paidAt ?? now, order.id),
+    db.prepare(`UPDATE orders SET failure_reason = 'Payment succeeded after the event or admission was no longer available.' WHERE id = ? AND status = 'requires_refund'`).bind(order.id),
+    db.prepare(`UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ? AND status IN ('held', 'expired', 'consumed')
+      AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'requires_refund')`).bind(now, order.id, order.id),
+    db.prepare(`UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'
+      AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'requires_refund')`).bind(order.id, order.id),
+    ...issuedTicketStatements(db, order, verification.paidAt ?? now),
+  ]);
 
   const paidOrder = await readOrder(db, verification.reference);
   if (paidOrder?.status === "requires_refund") return { result: "requires_refund" as const, order: paidOrder };
-  if (paidOrder && await db.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND removed_at IS NOT NULL").bind(paidOrder.eventSlug).first()) return { result: "not_fulfilled" as const, order: paidOrder };
   if (!paidOrder || paidOrder.status !== "paid") return { result: "not_fulfilled" as const, order };
-  await ensureIssuedTickets(db, paidOrder, verification.paidAt ?? now);
+  const newlyPaid = results[1].meta.changes === 1;
   const consent = await db.prepare('SELECT announcements_opt_in AS optedIn,created_at AS createdAt FROM orders WHERE id=?').bind(paidOrder.id).first<{optedIn:number;createdAt:string}>();
   await rememberEventContact(db,{eventSlug:paidOrder.eventSlug,email:paidOrder.customerEmail,guestName:paidOrder.customerName ?? 'Guest',source:'paid',consentedAt:consent?.optedIn ? consent.createdAt : null});
   await notifyRegistrationHosts(db,{eventSlug:paidOrder.eventSlug,sourceId:paidOrder.id,guestName:paidOrder.customerName??'Guest',status:'paid',guests:paidOrder.quantity});

@@ -12,6 +12,7 @@ import {
   hasValidFlashSignature,
   moderateFlashImage,
   scaledFlashDimensions,
+  storeFlash,
   type FlashRecord,
 } from "../../../../../lib/flashes";
 import { resolveRoomPolicy } from "../../../../../lib/room-policy";
@@ -161,12 +162,9 @@ export async function POST(request: Request, context: Context) {
   }
 
   const now = new Date().toISOString();
-  await env.DB.prepare(`
-    INSERT INTO room_flashes
-      (id, event_slug, attendee_id, image_data, content_type, width, height, byte_size, status, moderation_result, created_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'allowed', ?, ?)
-  `).bind(id, slug, access.attendeeId, imageBytes, FLASH_OUTPUT_CONTENT_TYPE, dimensions.width, dimensions.height, imageBytes.length, now, policy.readOnlyAt).run();
   const flash: FlashRecord = { id, eventSlug: slug, attendeeId: access.attendeeId, displayName: access.displayName, ...dimensions, createdAt: now, expiresAt: policy.readOnlyAt, mine: true };
-  await env.THE_ROOM.getByName(slug).publishFlash(flash, policy);
+  if (!(await storeFlash(env.DB, flash, imageBytes))) return Response.json({ error: 'Flashes filled up while your photo was loading. Try again after an older one clears.' }, { status: 409 });
+  try { await env.THE_ROOM.getByName(slug).publishFlash(flash, policy); }
+  catch { console.error(JSON.stringify({ message: 'Flash saved but Room broadcast failed', eventSlug: slug, flashId: id })); }
   return Response.json({ flash }, { status: 201, headers: flashHeaders() });
 }

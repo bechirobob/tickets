@@ -50,6 +50,18 @@ async function booking(slug: string, provider = 'paystack', status = 'issued') {
 }
 
 describe('Operations Center audit regressions', () => {
+  it('keeps moderation settings scoped with more than 100 historical events', async () => {
+    const cookie = await staff(), prefix = `volume-${crypto.randomUUID()}`;
+    await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<125)
+      INSERT INTO curated_event_records (id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,event_state,image_url,curation_note,status,published_at,created_at,updated_at)
+      SELECT ?||i,?||i,?||i,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,event_state,image_url,curation_note,'published',published_at,created_at,updated_at FROM curated_event_records,n WHERE slug='after-dark-osu'`).bind(prefix,prefix,prefix).run();
+    await env.DB.prepare(`INSERT INTO room_settings (event_slug,updated_at,updated_by) SELECT slug,?,'fixture' FROM curated_event_records WHERE slug LIKE ?`).bind(now(),`${prefix}%`).run();
+    const response = await rooms(req('rooms',cookie));
+    expect(response.status).toBe(200);
+    expect((await response.json() as {settings:{eventSlug:string}[]}).settings.filter(setting=>setting.eventSlug.startsWith(prefix))).toHaveLength(125);
+    const moderator = await staff('moderator');
+    expect((await (await rooms(req('rooms',moderator))).json() as {settings:unknown[]}).settings).toEqual([]);
+  });
   it('removes an unpaid event from active workspaces, cancels RSVP and keeps booking analytics', async () => {
     const cookie = await staff(); const slug = await seed(); const ticket = await booking(slug, 'rsvp');
     await env.DB.prepare(`INSERT INTO event_registrations (id,event_slug,normalized_email,guest_name,kind,status,order_id,created_at,updated_at) VALUES (?,?,'removed@example.com','Removed guest','rsvp','confirmed',?,?,?)`).bind(slug,slug,ticket.id,now(),now()).run();

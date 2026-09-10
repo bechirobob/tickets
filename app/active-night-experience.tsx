@@ -23,7 +23,7 @@ import type { CuratedEvent } from "./events";
 import RoomPreviewCarousel from "./room-preview-carousel";
 import { FlashMarker, RoomComposeContent, RoomReaction } from "./room-chat-parts";
 import { ActionLink } from "./action";
-import { discoveryPrice } from "../lib/event-pricing";
+import { discoveryOffer } from "../lib/event-pricing";
 
 const sceneInterval = 4_500;
 const fallbackImage = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
@@ -47,7 +47,7 @@ function HostUpdate({ label, time, dateTime, title, detail, compact = false }: {
 
 function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | null; heroImage: string; conversation: "arrival" | "inside" }) {
   const eventTitle = event?.title ?? "After Dark";
-  const area = event?.area ?? "Osu";
+  const venue = event?.venue ?? "the venue";
 
   return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
     <Image className="room-product-phone__render" src="/devices/iphone-black-titanium.png" width={1024} height={1536} alt="" aria-hidden="true" unoptimized />
@@ -57,7 +57,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
       <header className="room-product-phone__header"><Image src={eventImageUrl(heroImage, 120)} width={24} height={30} alt="" aria-hidden="true" unoptimized /><div><small>The Room</small><b>{eventTitle}</b></div><span>Preview</span></header>
       <div key={event?.slug ?? "waiting"} className="room-product-phone__stream">
         {conversation === "arrival" ? <>
-          <article className="scene-message"><span>K</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Who is actually in {area} already?</p></div><div className="chat-tapbacks" aria-label="4 laughing reactions"><RoomReaction emoji="😂" count={4} /></div></div></div></article>
+          <article className="scene-message"><span>K</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Anyone at {venue} yet?</p></div><div className="chat-tapbacks" aria-label="4 laughing reactions"><RoomReaction emoji="😂" count={4} /></div></div></div></article>
           <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:19 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>“Five minutes away” in the spiritual sense.</p></div><div className="chat-tapbacks" aria-label="2 laughing reactions"><RoomReaction emoji="😂" count={2} /></div></div></div></article>
           <article className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama · 9:20 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Send the pin. Abena’s coming too.</p></div></div></div></article>
           <article className="scene-message"><span>Y</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>By the entrance. Look for the loud shirt.</p></div><div className="chat-tapbacks" aria-label="3 fire reactions"><RoomReaction emoji="🔥" count={3} /></div></div></div></article>
@@ -180,9 +180,9 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
         <h1>{active?.title ?? "Plans, sorted."}</h1>
         <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · Coming soon` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
-        {active ? <div className="hero-actions">{active.ticketTiers.some((tier) => tier.status === "available") ? <ActionLink href={`/checkout/${active.slug}`} icon={<Ticket size={18} />}>Get tickets</ActionLink> : <ActionLink href="/events">Browse events</ActionLink>}<ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink></div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
+        {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink><ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink></div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
       </div>
-      {active && active.scheduleStatus !== "coming_soon" ? <p className="compact-hero__price" aria-label={`Tickets from GH₵${discoveryPrice(active)}`}>From <b>GH₵{discoveryPrice(active)}</b></p> : null}
+      {active && active.scheduleStatus !== "coming_soon" ? <p className="compact-hero__price">{discoveryOffer(active).label}</p> : null}
       {hasScenes ? <button
         type="button"
         className="active-night-autoplay-toggle"

@@ -5,6 +5,7 @@ import { attendeeCookieHeader, hashToken, readAttendeeRoomAccess } from "../lib/
 
 async function attendee(suffix: string, tier: "general" | "vip") {
   const now = new Date().toISOString();
+  await env.DB.prepare("UPDATE curated_event_records SET status='published',schedule_status='confirmed',ends_at=? WHERE slug='after-dark-osu'").bind(new Date(Date.now()+86_400_000).toISOString()).run();
   const attendeeId = `vip-attendee-${suffix}`;
   const orderId = `vip-order-${suffix}`;
   const ticketId = `vip-ticket-${suffix}`;
@@ -36,6 +37,16 @@ async function attendee(suffix: string, tier: "general" | "vip") {
 }
 
 describe("VIP Room identity and concierge", () => {
+  it('admits only one simultaneous song suggestion and stops new requests after the Room closes', async () => {
+    const vip = await attendee(`parallel-${crypto.randomUUID()}`, 'vip');
+    await env.DB.prepare(`INSERT INTO event_vip_settings (event_slug,song_suggestions_enabled,updated_by,updated_at) VALUES ('after-dark-osu',1,'test-host',?)
+      ON CONFLICT(event_slug) DO UPDATE SET song_suggestions_enabled=1`).bind(new Date().toISOString()).run();
+    const post = () => requestVip(new Request('https://tickets.becoreops.com/api/rooms/after-dark-osu/vip', { method: 'POST', headers: { cookie: vip.cookie, origin: 'https://tickets.becoreops.com', 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'song_suggestion', detail: 'One song please' }) }), { params: Promise.resolve({ slug: 'after-dark-osu' }) });
+    expect((await Promise.all([post(),post(),post()])).map(r=>r.status).sort()).toEqual([201,409,409]);
+    await env.DB.prepare("UPDATE vip_concierge_requests SET status='completed' WHERE attendee_id=?").bind(vip.attendeeId).run();
+    await env.DB.prepare("UPDATE curated_event_records SET ends_at='2020-01-01T00:00:00.000Z' WHERE slug='after-dark-osu'").run();
+    expect((await post()).status).toBe(409);
+  });
   it("keeps GA unlabelled and derives VIP only from an active configured tier", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const ga = await attendee(`ga-${suffix}`, "general");
