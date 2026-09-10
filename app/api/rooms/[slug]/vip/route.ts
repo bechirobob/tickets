@@ -1,5 +1,7 @@
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
 import { mutationHasValidOrigin } from "../../../../../lib/admin-session";
+import { resolveRoomPolicy } from '../../../../../lib/room-policy';
+import { enforceRateLimit } from '../../../../../lib/security-controls';
 
 type VipSettings = {
   bottleServiceEnabled: number;
@@ -59,7 +61,11 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   const { env, access } = await contextFor(request, slug);
   if (!access || access.roomBadge !== "VIP") return Response.json({ error: "VIP ticket access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This concierge request was not accepted." }, { status: 403 });
-  const body = await request.json() as { kind?: string; detail?: string; location?: string };
+  if (!(await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `vip:${access.attendeeId}`))) return Response.json({ error: 'Give the concierge a moment before trying again.' }, { status: 429 });
+  const policy = await resolveRoomPolicy(env.DB, slug);
+  if (!policy || policy.readOnly) return Response.json({ error: 'The concierge has closed for this Night.' }, { status: 409 });
+  const body = await request.json().catch(() => null) as { kind?: string; detail?: string; location?: string } | null;
+  if (!body || typeof body !== 'object') return Response.json({ error: 'Add a short, useful request.' }, { status: 400 });
   const kind = String(body.kind ?? "");
   const configuration = await settings(env.DB, slug);
   const enabled = kind === "bottle_service" ? Boolean(configuration.bottleServiceEnabled)
@@ -68,6 +74,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   if (!enabled) return Response.json({ error: "The Host has not opened that VIP perk for this Night." }, { status: 409 });
   const detail = String(body.detail ?? "").trim();
   const location = String(body.location ?? "").trim();
+  if (location.length > 120) return Response.json({ error: 'Keep your location under 120 characters.' }, { status: 400 });
   if (detail.length < 2 || detail.length > 500) return Response.json({ error: "Add a short, useful request." }, { status: 400 });
   if (kind === "bottle_service" && (location.length < 2 || location.length > 120)) return Response.json({ error: "Tell the Host where the service team can find you." }, { status: 400 });
 
@@ -86,10 +93,14 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
     if (active) return Response.json({ error: "You already have a song in the Host queue." }, { status: 409 });
   }
   const id = crypto.randomUUID();
-  await env.DB.prepare(`
+  const inserted = await env.DB.prepare(`
     INSERT INTO vip_concierge_requests
       (id, event_slug, attendee_id, ticket_id, kind, detail, location, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?)
-  `).bind(id, slug, access.attendeeId, access.ticketId, kind, detail, location || null, now, now).run();
+    SELECT ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?
+    WHERE (SELECT COUNT(*) FROM vip_concierge_requests WHERE attendee_id=? AND event_slug=? AND created_at>?) < 6
+      AND (? <> 'song_suggestion' OR NOT EXISTS (SELECT 1 FROM vip_concierge_requests WHERE attendee_id=? AND event_slug=? AND kind='song_suggestion' AND status IN ('requested','considering')))
+  `).bind(id, slug, access.attendeeId, access.ticketId, kind, detail, location || null, now, now,
+    access.attendeeId,slug,new Date(Date.now()-60*60*1000).toISOString(),kind,access.attendeeId,slug).run();
+  if (!inserted.meta.changes) return Response.json({ error: kind === 'song_suggestion' ? 'You already have a song in the Host queue.' : 'Your concierge queue is full for now. Let the Host catch up.' }, { status: kind === 'song_suggestion' ? 409 : 429 });
   return Response.json({ requested: true, id, status: "requested" }, { status: 201 });
 }

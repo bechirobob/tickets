@@ -36,20 +36,25 @@ export async function GET(request: Request) {
   const eventRows = session.role === "owner"
     ? await env.DB.prepare("SELECT slug, title FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all<{ slug: string; title: string }>()
     : await env.DB.prepare("SELECT event.slug, event.title FROM curated_event_records event JOIN staff_event_assignments assignment ON assignment.event_slug = event.slug WHERE assignment.account_id = ? AND event.removed_at IS NULL ORDER BY event.starts_at DESC").bind(session.accountId).all<{ slug: string; title: string }>();
-  const eventSlugs = eventRows.results.map((event) => event.slug);
-  const [settings, memories, suspensions] = eventSlugs.length ? await Promise.all([
+  // Scope in SQL instead of binding every historical event; D1 has a fixed
+  // parameter limit and the moderation page must keep working as the catalogue grows.
+  const scope = (alias: string) => `EXISTS (SELECT 1 FROM curated_event_records event
+    WHERE event.slug = ${alias}.event_slug AND event.removed_at IS NULL
+      AND (? = 'owner' OR EXISTS (SELECT 1 FROM staff_event_assignments assignment
+        WHERE assignment.account_id = ? AND assignment.event_slug = event.slug)))`;
+  const [settings, memories, suspensions] = await Promise.all([
     env.DB.prepare(`SELECT event_slug AS eventSlug, emergency_read_only AS emergencyReadOnly,
       slow_mode_seconds AS slowModeSeconds, archived_at AS archivedAt, updated_at AS updatedAt
-      FROM room_settings WHERE event_slug IN (${eventSlugs.map(() => "?").join(",")})`).bind(...eventSlugs).all(),
+      FROM room_settings WHERE ${scope('room_settings')}`).bind(session.role,session.accountId).all(),
     env.DB.prepare(`SELECT id, event_slug AS eventSlug, title, body, image_url AS imageUrl,
       published_at AS publishedAt, published_by AS publishedBy
-      FROM event_memories WHERE event_slug IN (${eventSlugs.map(() => "?").join(",")}) ORDER BY published_at DESC LIMIT 100`).bind(...eventSlugs).all(),
+      FROM event_memories WHERE ${scope('event_memories')} ORDER BY published_at DESC LIMIT 100`).bind(session.role,session.accountId).all(),
     env.DB.prepare(`SELECT suspension.event_slug AS eventSlug, suspension.attendee_id AS attendeeId,
       profile.display_name AS displayName, suspension.reason, suspension.suspended_at AS suspendedAt
       FROM room_suspensions suspension JOIN attendee_profiles profile ON profile.id = suspension.attendee_id
-      WHERE suspension.event_slug IN (${eventSlugs.map(() => "?").join(",")}) AND suspension.restored_at IS NULL
-      ORDER BY suspension.suspended_at DESC LIMIT 100`).bind(...eventSlugs).all(),
-  ]) : [{ results: [] }, { results: [] }, { results: [] }];
+      WHERE ${scope('suspension')} AND suspension.restored_at IS NULL
+      ORDER BY suspension.suspended_at DESC LIMIT 100`).bind(session.role,session.accountId).all(),
+  ]);
   return Response.json({ reports: enriched, flashReports: scopedFlashReports, events: eventRows.results, settings: settings.results, memories: memories.results, suspensions: suspensions.results }, { headers: { "cache-control": "no-store" } });
 }
 
