@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App as NativeApp } from '@capacitor/app';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { Network } from '@capacitor/network';
+import { Browser } from '@capacitor/browser';
 import { RefreshCw } from 'lucide-react';
 import '../../styles/customer.css';
 import HomeScreen from '../../app/home-screen';
@@ -101,6 +102,7 @@ function App() {
     const go = (url: string) => { const next = routeFromUrl(url); if (active && next) navigate(screenPath(next)); };
     const handles = [
       NativeApp.addListener('appUrlOpen', ({ url }) => go(url)),
+      Browser.addListener('browserFinished', () => { if (active) void refresh(); }),
       NativeApp.addListener('appStateChange', ({ isActive }) => { if (active && isActive) void refresh(); }),
       NativeApp.addListener('backButton', () => {
         if (document.querySelector('.night-mobile-menu.is-open')) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
