@@ -61,7 +61,7 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
     const choice = permission === "granted" ? permission : await Notification.requestPermission();
     setPermission(choice);
     if (choice !== "granted") {
-      onNotice("In-app Room notifications remain on. Your browser did not enable lock-screen delivery.");
+      onNotice("Updates still land here. Lock-screen alerts didn’t turn on this time.");
       return false;
     }
     const config = await requestJson<{ publicKey?: string | null }>("/api/customer/notifications/subscription");

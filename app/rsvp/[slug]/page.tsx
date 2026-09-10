@@ -26,7 +26,7 @@ export default async function EventRegistrationPage({params}:{params:Promise<{sl
   const sharing=registrationShareState(settings);
   const label=settings.mode==='rsvp'?'RSVP':settings.mode==='interest'?'Event updates':'Paid registration';
   const schedulePending=settings.mode==='rsvp'?!registrationStartConfirmed(settings):settings.mode==='paid'&&settings.scheduleStatus!=='confirmed';
-  const unavailable=settings.eventState==='cancelled'?'This event has been cancelled.':settings.eventState==='postponed'?'Registration is paused while the host confirms a new date.':schedulePending?'Registration has not opened yet. The host is confirming the event schedule.':'Registration is closed for this event.';
+  const unavailable=settings.eventState==='cancelled'?'This one’s been called off.':settings.eventState==='postponed'?'The date’s getting a remix. RSVPs are on pause.':schedulePending?'The host is putting the date together. RSVPs open soon.':'The guest list is closed for this one.';
   return <main className="rsvp-signup" id="register" style={eventPresentationStyle(event)}>
     <header><Link href="/events"><ArrowLeft size={16} aria-hidden="true"/>The Drop</Link><Link href="/" aria-label="BeCore Tickets"><BrandLogo/></Link><Link href={`/event/${encodeURIComponent(slug)}`}>Event details<ArrowUpRight size={15} aria-hidden="true"/></Link></header>
     <div className="rsvp-signup__layout">
@@ -36,7 +36,7 @@ export default async function EventRegistrationPage({params}:{params:Promise<{sl
         <div className="rsvp-signup__facts"><p><CalendarDays size={17} aria-hidden="true"/><span>{event.fullDate}{event.startsAt?<small>{event.time} · Accra time</small>:null}</span></p><p><MapPin size={17} aria-hidden="true"/><span>{event.venue}<small>{event.area}</small></span></p></div>
       </section>
       <section className="rsvp-signup__response" aria-label="Guest registration">
-    {!sharing.ready?<section className="rsvp-signup__notice"><h2>{unavailable}</h2><p>Check the event page for the latest information.</p><Link href={`/event/${encodeURIComponent(slug)}`}>View event</Link></section>:settings.mode==='paid'?<section className="rsvp-signup__notice"><h2>This event uses paid registration</h2><p>Choose your tickets and leave your details at checkout. Your place is confirmed after payment.</p><Link className="ticket-action" href={`/checkout/${encodeURIComponent(slug)}`}>Choose tickets</Link></section>:<RegistrationForm eventSlug={slug} mode={settings.mode} maxPartySize={settings.maxPartySize} approvalRequired={Boolean(settings.approvalRequired)} initiallyOpen deadline={settings.closesAt??undefined}/>}
+    {!sharing.ready?<section className="rsvp-signup__notice"><h2>{unavailable}</h2><p>The latest word from the host is on the event page.</p><Link href={`/event/${encodeURIComponent(slug)}`}>View event</Link></section>:settings.mode==='paid'?<section className="rsvp-signup__notice"><h2>This one needs a ticket</h2><p>Pick your ticket, bring your people. You’re in once payment clears.</p><Link className="ticket-action" href={`/checkout/${encodeURIComponent(slug)}`}>Choose tickets</Link></section>:<RegistrationForm eventSlug={slug} mode={settings.mode} maxPartySize={settings.maxPartySize} approvalRequired={Boolean(settings.approvalRequired)} initiallyOpen deadline={settings.closesAt??undefined}/>}
       </section>
     </div>
   </main>;

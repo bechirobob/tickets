@@ -10,10 +10,10 @@ export default function PaymentReturn() {
   const [state, setState] = useState<"checking" | "ready" | "failed">("checking");
   const [eventSlug, setEventSlug] = useState("");
   const [message, setMessage] = useState(() => params.get("pending") === "1"
-    ? "The payment provider did not return a clear result. We are checking the original payment. Do not start another payment yet."
+    ? "Your payment hasn’t given us an answer yet. We’re checking it. Don’t pay again."
     : params.get("prompt") === "1"
-    ? "Your MoMo prompt is on its way. Approve it on your phone; this page will update automatically."
-    : "We’re confirming your payment. The serious little pause before the good part.");
+    ? "Keep your phone close. Approve the MoMo prompt and we’ll handle the rest."
+    : "Checking your payment. Nearly time to tell the group chat.");
 
   useEffect(() => {
     const reference = params.get("reference") ?? "";
@@ -21,7 +21,7 @@ export default function PaymentReturn() {
     if (!reference || !claim) {
       const timer = window.setTimeout(() => {
         setState("failed");
-        setMessage("This return link arrived missing a shoe. Open the original checkout tab or contact support.");
+        setMessage("This link came back incomplete. Open your checkout tab or ask us for help.");
       }, 0);
       return () => window.clearTimeout(timer);
     }
@@ -59,12 +59,12 @@ export default function PaymentReturn() {
           return;
         }
         setState("failed");
-        setMessage(result.error ?? "We cannot call it a ticket until the payment provider calls it paid. The money check is still the boss here.");
+        setMessage(result.error ?? "We’re still checking your payment. Your ticket lands once it clears.");
       } catch {
         if (attempt < 72) window.setTimeout(check, 2500);
         else {
           setState("failed");
-          setMessage("Confirmation is taking the scenic route. Your order is still recorded safely.");
+          setMessage("This payment’s taking its time. Your order is saved. Don’t pay again.");
         }
       }
     };

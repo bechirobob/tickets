@@ -145,7 +145,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                     onClick={() => chooseTier(tier.id)}
                   >
                     <i aria-hidden="true" />
-                    <span><strong>{tier.name}</strong><small>{tier.description}{tier.admissionsPerUnit > 1 ? ` · Admits ${tier.admissionsPerUnit}` : ""}</small>{tier.roomBadge === "VIP" ? <em className="checkout-tier__vip"><Gem size={11} /> VIP Room identity + private Host concierge when enabled</em> : null}</span>
+                    <span><strong>{tier.name}</strong><small>{tier.description}{tier.admissionsPerUnit > 1 ? ` · Admits ${tier.admissionsPerUnit}` : ""}</small>{tier.roomBadge === "VIP" ? <em className="checkout-tier__vip"><Gem size={11} /> VIP badge + a private line to the host when concierge is open</em> : null}</span>
                     <b>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</b>
                   </button>
                   {selected && !soldOut && (

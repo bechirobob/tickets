@@ -74,6 +74,7 @@ export const STAFF_WORKSPACE_LINKS = [
   { href: "/admin/operations", label: "Event operations", roles: ["owner", "curator", "finance"] },
   { href: "/admin", label: "Submission queue", roles: ["owner", "curator"] },
   { href: "/admin/events", label: "Events & inventory", roles: ["owner", "curator"] },
+  { href: "/admin/registrations", label: "RSVP & guests", roles: ["owner", "curator"] },
   { href: "/admin/promoters", label: "Promoter links", roles: ["owner", "curator"] },
   { href: "/admin/orders", label: "Orders & payments", roles: ["owner", "finance"] },
   { href: "/admin/support", label: "Ticket support", roles: ["owner", "support"] },

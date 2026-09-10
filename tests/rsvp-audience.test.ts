@@ -110,6 +110,16 @@ it('protects event audiences, live counts and owner activity from other organise
  for(const path of [`/api/admin/audience?eventSlug=${slug}`,`/api/admin/registrations?eventSlug=${slug}&live=1`,'/api/admin/organizer-activity'])expect((await (path.includes('audience')?audience(get(path,other)):path.includes('organizer-activity')?activity(get(path,other)):registrations(get(path,other)))).status).toBe(403);
  expect((await announce(post('/api/admin/audience',{eventSlug:slug,id:crypto.randomUUID(),subject:'Update',body:'A private event announcement'},other))).status).toBe(403);
 });
+it('searches and filters the complete RSVP roster before pagination',async()=>{
+ const now=new Date().toISOString();
+ await env.DB.batch(Array.from({length:55},(_,i)=>env.DB.prepare(`INSERT INTO event_registrations(id,event_slug,normalized_email,guest_name,party_size,kind,status,created_at,updated_at) VALUES(?,?,?,?,1,'rsvp',?,?,?)`).bind(crypto.randomUUID(),slug,`person-${i}@example.com`,`Party Guest ${i}`,i===54?'waitlisted':'requested',now,now)));
+ const page=await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&offset=50`))).json() as {total:number;registrations:unknown[]};
+ expect(page.total).toBe(55);expect(page.registrations).toHaveLength(5);
+ const searched=await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&q=person-54&status=waitlisted`))).json() as {total:number;registrations:{email:string}[]};
+ expect(searched).toMatchObject({total:1,registrations:[{email:'person-54@example.com'}]});
+ expect((await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&q=person-54&status=requested`))).json() as {total:number}).total).toBe(0);
+ expect((await registrations(get(`/api/admin/registrations?eventSlug=${slug}&status=unverified`))).status).toBe(400);
+});
 it('gives organisers paid pricing, protects existing admissions and reports owner-readable changes',async()=>{
  const response=await settings({mode:'paid',capacity:10,priceMinor:7500});expect(response.status,await response.clone().text()).toBe(200);
  expect(await env.DB.prepare('SELECT price_minor,capacity_admissions FROM event_ticket_tiers WHERE event_slug=?').bind(slug).first()).toEqual({price_minor:7500,capacity_admissions:10});

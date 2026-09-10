@@ -220,7 +220,7 @@ test("VIP value is visible at decision points without duplicating the interface"
   assert.match(home, /className="scene-concierge" aria-label="VIP concierge"/u);
   assert.match(home, /aria-label="VIP concierge"/u);
   assert.match(eventPage, /tier\.roomBadge === "VIP"/u);
-  assert.match(eventPage, /private Host concierge when enabled/u);
+  assert.match(eventPage, /private line to the host when concierge is open/u);
   assert.match(checkout, /checkout-tier__vip/u);
   assert.match(about, /bottle service, song suggestions or assistance when the Host enables them/u);
   assert.match(help, /How VIP works inside The Room/u);
@@ -388,7 +388,7 @@ test("returning buyers recover and manage the whole purchase through My Nights",
     readFile(new URL("../app/payment/return/page.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(myNights, /Bring back my Nights/u);
-  assert.match(myNights, /Same email\. One private link/u);
+  assert.match(myNights, /Use your booking email/u);
   assert.match(myNights, /Ticket &amp; perks/u);
   assert.match(myNights, /Enter the live Room/u);
   assert.match(hub, />Ticket \(\{tickets\.length\}\)</u);

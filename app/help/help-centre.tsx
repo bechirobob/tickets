@@ -26,7 +26,7 @@ const guides: Guide[] = [
     category: "Tickets",
     title: "Find a ticket you already bought",
     summary: "Your ticket hasn’t gone out without you. Recover it with the email you used at checkout.",
-    steps: ["Open My Nights.", "Enter the email used for payment.", "Use the secure link we send you. Your tickets, transfers and event updates will appear together."],
+    steps: ["Open My Nights.", "Enter the email used for payment.", "Open the link in your email. Your tickets and updates will be waiting."],
     action: { href: "/my-nights", label: "Open My Nights" },
     popular: true,
   },
@@ -35,8 +35,8 @@ const guides: Guide[] = [
     audience: "Going out",
     category: "Payments",
     title: "Pay with Mobile Money or card",
-    summary: "Choose one payment type first, then the matching secure checkout option.",
-    steps: ["Choose Mobile Money to reveal MTN MoMo, Telecel Cash or AT Money, or choose Card to continue with Visa or Mastercard.", "Complete the payment securely through Paystack. BeCore Tickets does not store your card details or Mobile Money PIN.", "Return to the confirmation page and keep your Paystack payment reference until the ticket appears in My Nights."],
+    summary: "Pick how you’re paying. We’ll take you from there.",
+    steps: ["Choose Mobile Money to reveal MTN MoMo, Telecel Cash or AT Money, or choose Card to continue with Visa or Mastercard.", "Finish with the payment provider. Your card details and MoMo PIN stay with them.", "Come back here when you’re done. Keep the payment reference until your ticket lands in My Nights."],
     popular: true,
   },
   {
@@ -64,7 +64,7 @@ const guides: Guide[] = [
     category: "Payments",
     title: "Refunds, postponements and new dates",
     summary: "Plans change. Your Purchase tab shows the event status and whether your order qualifies for a refund.",
-    steps: ["Open the Night in My Nights.", "Choose Purchase to see the current event state and refund eligibility.", "Start the order-linked support conversation there so the team has the correct payment record."],
+    steps: ["Open the Night in My Nights.", "Open Purchase to check the plan and your refund options.", "Message us there. Your booking comes along, so you won’t have to explain twice."],
     action: { href: "/terms#refund", label: "Read the refund rules" },
     popular: true,
   },
@@ -103,7 +103,7 @@ const guides: Guide[] = [
     category: "Performance",
     title: "Understand what moved your Night",
     summary: "See what sold and who brought the crowd. Useful for planning the encore; customer payment details stay private.",
-    steps: ["Choose one assigned Night or keep the all-Nights view, then select 7, 30, 90 days or all time.", "Read the demand funnel, sales trend, ticket tiers, promoter contribution, payment mix, check-in timing and VIP concierge activity together.", "Export the aggregate CSV when the team needs a private working report; customer names, emails, phone numbers and payment details are not included."],
+    steps: ["Choose one assigned Night or keep the all-Nights view, then select 7, 30, 90 days or all time.", "See what sold, who brought the crowd and when people arrived.", "Export the aggregate CSV when the team needs a private working report; customer names, emails, phone numbers and payment details are not included."],
     action: { href: "/organizer/analytics", label: "Open organiser analytics" },
   },
   {
@@ -140,7 +140,7 @@ const guides: Guide[] = [
     category: "Privacy",
     title: "Who can see a Night's Room",
     summary: "The Room is part of the ticket, not a public comment section.",
-    steps: ["Only verified ticket holders and the authorised event team can enter.", "Each Night has its own Room, managed by its authorised event team.", "Ticket-holder content stays private; do not repost someone else's message or Flash without permission."],
+    steps: ["Got a ticket? You’re in. The host’s team is there too.", "Each Night has its own Room, managed by its authorised event team.", "Ticket-holder content stays private; do not repost someone else's message or Flash without permission."],
     action: { href: "/privacy", label: "Read the privacy notice" },
   },
   {
@@ -166,8 +166,8 @@ const guides: Guide[] = [
     audience: "The Room",
     category: "VIP",
     title: "How VIP works inside The Room",
-    summary: "The badge proves an eligible ticket; private services appear only when the Host has opened them.",
-    steps: ["A small VIP mark appears automatically beside eligible ticket holders; General Admission remains unlabelled.", "Open the concierge bell to see the services available for that Night, such as bottle service, a song suggestion or Host assistance.", "Requests are private, service availability is controlled by the Host, and a song suggestion is never a promise that the DJ will play it."],
+    summary: "Your ticket earns the badge. The host opens the concierge when the team’s ready.",
+    steps: ["Your VIP badge shows up beside your messages. No introduction needed.", "Open the concierge bell to see the services available for that Night, such as bottle service, a song suggestion or Host assistance.", "Requests are private, service availability is controlled by the Host, and a song suggestion is never a promise that the DJ will play it."],
     action: { href: "/my-nights", label: "Open My Nights" },
   },
 ];
@@ -231,7 +231,7 @@ export default function HelpCentre() {
       <section className="help-contact">
         <div><Headphones size={21} /><p>Still properly stuck?</p><h2>Bring the reference.<br />We’ll bring a human.</h2></div>
         <div>
-          <article><TicketCheck size={19} /><h3>Ticket holders</h3><p>Use the Purchase tab inside the affected Night. That keeps support tied to the verified order.</p><Link href="/my-nights">Open My Nights <ArrowUpRight size={15} /></Link></article>
+          <article><TicketCheck size={19} /><h3>Ticket holders</h3><p>Open your night, then Purchase. We’ll have your booking ready when you ask for help.</p><Link href="/my-nights">Open My Nights <ArrowUpRight size={15} /></Link></article>
           <article><UsersRound size={19} /><h3>Organisers</h3><p>Choose Make a request in your organiser workspace. We’ll have the event details handy, so you can skip the long introduction.</p><Link href="/organizer/workspace">Open workspace <ArrowUpRight size={15} /></Link></article>
           <article><ShieldCheck size={19} /><h3>Everything else</h3><p>Email <a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a>. Include the account email and reference. Never send passwords or QR screenshots.</p></article>
         </div>

@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
 test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{
-  await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'Registration has not opened yet. The host is confirming the event schedule.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
-  await page.goto('/rsvp/sun-chasers-labadi');await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.getByText('Email updates · no admission included')).toBeVisible();
+  await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'The host is putting the date together. RSVPs open soon.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
+  await page.goto('/rsvp/sun-chasers-labadi');await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.getByText('Date drops & updates')).toBeVisible();
 });
 test('free RSVP preserves form details on failure and submits the selected party without checkout', async ({ page }) => {
   await page.goto('/event/after-dark-osu');
@@ -34,7 +34,7 @@ test('free RSVP preserves form details on failure and submits the selected party
 test('an undated event offers announcements without implying reserved admission', async ({ page }) => {
   await page.goto('/event/sun-chasers-labadi');
   await page.getByRole('button', { name: 'Keep me posted', exact: true }).click();
-  await expect(page.getByText('We’ll email when the date or booking details change. This does not reserve admission.')).toBeVisible();
+  await expect(page.getByText('Get the next date drop in your inbox. You’ll still need to book your spot.')).toBeVisible();
   await expect(page.getByLabel('Guests, including you')).toHaveCount(0);
   await expect(page.getByRole('link', { name: /Get tickets/ })).toHaveCount(0);
 });
@@ -59,7 +59,7 @@ test('My Nights distinguishes waitlisted guests from confirmed passes and suppor
   });
   await page.goto('/my-nights');
   const section = page.locator('.my-registrations');
-  await expect(section).toContainText('On the waitlist · no admission reserved');
+  await expect(section).toContainText('On the waitlist · your spot isn’t confirmed yet');
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
   status = 'confirmed'; await page.reload();
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');

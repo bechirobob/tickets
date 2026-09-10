@@ -21,11 +21,16 @@ export async function GET(request: Request) {
     return Response.json({latest:latest.results,confirmed:count('confirmed'),waiting:count('waitlisted'),requested:count('requested'),interested:count('interested'),paid:paid?.guests??0,sharing},{headers:{'cache-control':'no-store, private'}});
   }
   const offset = Math.max(0, Math.min(100000, Math.floor(Number(url.searchParams.get('offset'))) || 0));
-  const [settings, rows, counts, pricing] = await Promise.all([registrationSettings(env.DB, slug),
-    env.DB.prepare(`SELECT id, guest_name AS guestName, normalized_email AS email, party_size AS partySize, kind, status, created_at AS createdAt FROM event_registrations WHERE event_slug = ? AND status <> 'unverified' ORDER BY created_at, id LIMIT 50 OFFSET ?`).bind(slug, offset).all(),
+  const status = url.searchParams.get('status') ?? '', query = (url.searchParams.get('q') ?? '').trim().slice(0, 120);
+  if (status && !['requested','confirmed','waitlisted','declined','cancelled','interested'].includes(status)) return Response.json({error:'Choose a guest status.'},{status:400});
+  const filter = `event_slug = ? AND status <> 'unverified' AND (? = '' OR status = ?) AND (? = '' OR guest_name LIKE ? OR normalized_email LIKE ?)`;
+  const values = [slug, status, status, query, `%${query}%`, `%${query}%`];
+  const [settings, rows, counts, pricing, total] = await Promise.all([registrationSettings(env.DB, slug),
+    env.DB.prepare(`SELECT id, guest_name AS guestName, normalized_email AS email, party_size AS partySize, kind, status, created_at AS createdAt FROM event_registrations WHERE ${filter} ORDER BY created_at DESC, id LIMIT 50 OFFSET ?`).bind(...values, offset).all(),
     env.DB.prepare(`SELECT status, COUNT(*) AS registrations, SUM(party_size) AS guests FROM event_registrations WHERE event_slug = ? AND status <> 'unverified' GROUP BY status`).bind(slug).all(),
-    env.DB.prepare("SELECT id,price_minor AS priceMinor,capacity_admissions AS capacity FROM event_ticket_tiers WHERE event_slug=? AND status <> 'hidden' ORDER BY sort_order,id LIMIT 1").bind(slug).first()]);
-  return Response.json({ settings, pricing, registrations: rows.results, counts: counts.results, offset }, { headers: { 'cache-control': 'no-store, private' } });
+    env.DB.prepare("SELECT id,price_minor AS priceMinor,capacity_admissions AS capacity FROM event_ticket_tiers WHERE event_slug=? AND status <> 'hidden' ORDER BY sort_order,id LIMIT 1").bind(slug).first(),
+    env.DB.prepare(`SELECT COUNT(*) AS count FROM event_registrations WHERE ${filter}`).bind(...values).first<{count:number}>()]);
+  return Response.json({ settings, pricing, registrations: rows.results, counts: counts.results, total: total?.count ?? 0, offset }, { headers: { 'cache-control': 'no-store, private' } });
 }
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This event action was not accepted.' }, { status: 403 });
