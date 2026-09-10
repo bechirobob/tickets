@@ -81,7 +81,7 @@ test('My Nights goes directly to the existing account flow with no intermediate 
 test('back restores Drop position and filtering; edge gestures distinguish vertical scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto('/events');
-  await page.getByRole('textbox', { name: 'Search events, artists or venues' }).fill('Braai');
+  await page.getByRole('searchbox', { name: 'Search events, artists or venues' }).fill('Braai');
   const link = page.locator('.drop-card').getByRole('link', { name: /View event/ });
   await link.scrollIntoViewIfNeeded(); const position = await page.evaluate(() => scrollY);
   await link.click();
@@ -93,7 +93,7 @@ test('back restores Drop position and filtering; edge gestures distinguish verti
   await content.dispatchEvent('touchstart', { touches: [{ identifier: 0, clientX: 10, clientY: 180 }] });
   await content.dispatchEvent('touchend', { changedTouches: [{ identifier: 0, clientX: 140, clientY: 190 }] });
   await expect(page.getByRole('heading', { level: 1, name: 'Find your next night.' })).toBeFocused();
-  await expect(page.getByRole('textbox', { name: 'Search events, artists or venues' })).toHaveValue('Braai');
+  await expect(page.getByRole('searchbox', { name: 'Search events, artists or venues' })).toHaveValue('Braai');
   await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(position, 0);
 });
 

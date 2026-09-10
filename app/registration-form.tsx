@@ -20,7 +20,7 @@ export default function RegistrationForm({ eventSlug, mode, maxPartySize, approv
     finally { setBusy(false); inFlight.current = false; }
   }
   return <section className="registration-form">
-    {!open ? <ActionButton onClick={() => { if (runtime.openSecurePage) void runtime.openSecurePage(`/rsvp/${eventSlug}`); else setOpen(true); }}>{mode === 'interest' ? 'Keep me posted' : approvalRequired ? 'Request an RSVP' : 'RSVP'}</ActionButton> : <form onSubmit={submit}>
+    {!open ? <ActionButton disabled={runtime.stale} onClick={() => { if (runtime.openSecurePage) void runtime.openSecurePage(`/rsvp/${eventSlug}`); else setOpen(true); }}>{mode === 'interest' ? 'Keep me posted' : approvalRequired ? 'Request an RSVP' : 'RSVP'}</ActionButton> : <form onSubmit={submit}>
       {!sent ? <>{mode==='interest'?<p>Date drops & updates</p>:null}<h2>{mode === 'interest' ? 'Be first to hear' : 'Your RSVP'}</h2>
       <p>{mode === 'interest' ? 'Get the next date drop in your inbox. You’ll still need to book your spot.' : approvalRequired ? 'Drop your details. Your spot needs the host’s nod.' : 'Drop your details. If the guest list fills up, you’re next in line.'}</p>
       {deadline?<p>Register by {new Date(deadline).toLocaleString('en-GH',{timeZone:'Africa/Accra',dateStyle:'medium',timeStyle:'short'})} (Accra time).</p>:null}</> : null}
