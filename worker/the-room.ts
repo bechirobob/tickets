@@ -322,6 +322,17 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     await this.ctx.storage.deleteAlarm();
   }
 
+  async removePreviewContentBefore(before: string): Promise<void> {
+    if (!Number.isFinite(Date.parse(before))) throw new Error("Invalid preview cutoff.");
+    const ids = this.ctx.storage.sql.exec<{id:string}>("SELECT id FROM messages WHERE datetime(created_at) < datetime(?)", before).toArray();
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec("DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE datetime(created_at) < datetime(?))", before);
+      this.ctx.storage.sql.exec("UPDATE messages SET parent_id=NULL WHERE parent_id IN (SELECT id FROM messages WHERE datetime(created_at) < datetime(?))", before);
+      this.ctx.storage.sql.exec("DELETE FROM messages WHERE datetime(created_at) < datetime(?)", before);
+    });
+    for (const {id} of ids) this.broadcast({type:"message_removed",messageId:id});
+  }
+
   async removeMessage(messageId: string): Promise<boolean> {
     const found = this.messageExists(messageId);
     if (!found) return false;

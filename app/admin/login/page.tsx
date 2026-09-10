@@ -13,10 +13,9 @@ export default async function AdminLoginPage() {
       <section>
         <Link href="/">BeCore Tickets</Link>
         <p className="admin-login__eyebrow">Private operations</p>
-        <h1>The guest list for the guest list.</h1>
+        <h1>Welcome back.</h1>
         <p>
-          Your account opens only the work assigned to you. Organiser reviews,
-          event operations, finance, gate access and moderation stay separated.
+          Sign in to manage your events and team.
         </p>
         <AdminLoginForm />
       </section>

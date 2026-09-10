@@ -31,6 +31,17 @@ describe("The Room Durable Object", () => {
     });
   });
 
+  it("removes preview messages before the cutoff and keeps the current Room usable",async()=>{
+    const room=env.THE_ROOM.getByName("converted-preview-room");
+    const old=await room.publishAnnouncement("Host","Preview message",true,policy);
+    await room.removePreviewContentBefore("2000-01-01T00:00:00.000Z");
+    expect(await room.getMessage(old.id)).toBeTruthy();
+    await room.removePreviewContentBefore("2099-01-01T00:00:00.000Z");
+    expect(await room.getMessage(old.id)).toBeNull();
+    const current=await room.publishAnnouncement("Host","Current event update",true,policy);
+    expect(await room.hasMessage(current.id)).toBe(true);
+  });
+
   it("isolates conversations by event", async () => {
     const first = env.THE_ROOM.getByName("event-first");
     const second = env.THE_ROOM.getByName("event-second");

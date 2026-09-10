@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
+import { expectVisibleLettering } from './text-visibility';
 import { expect, test } from '@playwright/test';
 const isolated = existsSync('.wrangler/operations-fixture.json');
 const fixture = isolated ? JSON.parse(readFileSync('.wrangler/operations-fixture.json', 'utf8')) : null;
@@ -30,6 +31,11 @@ for (const [path, heading] of [
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     expect(overflow, `${path} document overflow`).toBe(false);
     expect(errors).toEqual([]); expect(apiErrors).toEqual([]);
+    if(path!=='/admin/account' && (page.viewportSize()?.width??1280)<=900){const gap=await page.evaluate(()=>{const nav=document.querySelector('.curation-nav')!.getBoundingClientRect();const content=document.querySelector('.ops-main,.curation-main,.room-ops > section')!.getBoundingClientRect();return content.top-nav.bottom;});expect(gap,`${path} space below mobile navigation`).toBeLessThan(40);}
+
+    for(const summary of await page.locator('details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+    const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true });
   });
 }
@@ -139,7 +145,7 @@ test('support reply and room memory retain content after failed writes', async (
 test('owner signs in through the real password flow and signs out', async ({ page, context }) => {
   await context.clearCookies(); await page.goto('/admin/login?returnTo=%2Fadmin%2Foperations');
   await page.getByLabel('Work email').fill(fixture.email); await page.getByLabel('Password', { exact: true }).fill(fixture.password);
-  await page.getByRole('button', { name: 'Enter secure workspace' }).click(); await expect(page).toHaveURL(/\/admin\/operations$/);
+  await page.getByRole('button', { name: 'Sign in' }).click(); await expect(page).toHaveURL(/\/admin\/operations$/);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expect(page).toHaveURL('https://127.0.0.1:8791/');
   await page.goto('/admin/accounts'); await expect(page).toHaveURL(/\/admin\/login/);
 });
@@ -192,7 +198,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  test('organiser chooses free or paid entry and previews a direct registration link',async({page},info)=>{
   await page.goto('/organizer/workspace?event=rsvp-browser');
   const manager=page.locator('.registration-manager');await expect(manager).toBeVisible();
-  await expect(manager.getByText('Live · refreshes every 5 seconds')).toBeVisible();
+  await expect(manager.getByText('Updates automatically')).toBeVisible();
   await manager.getByLabel('Guest capacity',{exact:true}).fill('');
   await expect(manager.getByLabel('Guest capacity',{exact:true})).toHaveValue('');
   await manager.getByRole('button',{name:'Save registration settings'}).click();
@@ -239,7 +245,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  });
  test('verified signup appears without refreshing the organiser dashboard and joins guest emails',async({page})=>{
   await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
-  await expect(manager.getByText('Live · refreshes every 5 seconds')).toBeVisible();
+  await expect(manager.getByText('Updates automatically')).toBeVisible();
   await expect(manager.getByLabel('Live registrations')).toContainText('1');
   await manager.getByRole('button',{name:/^Guest list/}).click();
   await expect(manager.getByText('shared-link@example.com',{exact:true})).toBeVisible();
@@ -253,6 +259,8 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const request=manager.locator('.registration-roster article').filter({hasText:'shared-link@example.com'});
   await request.getByRole('button',{name:'Approve',exact:true}).click();await expect(request).toContainText('Confirmed');
   await manager.getByRole('button',{name:'Guest emails',exact:true}).click();
+  await expect(manager.locator('.audience-table')).toHaveCount(0);
+  await manager.getByRole('button',{name:'View guest emails',exact:true}).click();
   await expect(manager.getByText('rsvp-browser@example.com',{exact:true})).toBeVisible();
   const csv=await page.request.get('/api/admin/audience?eventSlug=rsvp-browser&export=csv');expect(await csv.text()).toContain('rsvp-browser@example.com');
  });
@@ -269,4 +277,42 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.token,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);await page.goto('/admin/operations');
   await page.locator('.organizer-activity summary').click();await expect(page.locator('.organizer-activity')).toContainText('rsvp-host@example.com');await expect(page.locator('.organizer-activity')).toContainText('GHS 75.00');
  });
+});
+
+test('master account can remove staff and keeps its own account',async({page},info)=>{
+ await page.goto('/admin/accounts');await page.getByRole('button',{name:/Removable Staff/}).click();
+ await page.getByRole('button',{name:'Remove from Operations'}).click();await expect(page.getByRole('heading',{name:'Remove Removable Staff?'})).toBeVisible();
+ await page.screenshot({path:info.outputPath('staff-removal.png'),fullPage:true});
+ await page.route('**/api/admin/accounts',r=>r.request().method()==='DELETE'?r.abort('failed'):r.continue());
+ await page.getByRole('button',{name:'Confirm removal'}).click();await expect(page.getByRole('status')).toContainText('Connection lost');
+ await page.unroute('**/api/admin/accounts');await page.getByRole('button',{name:'Confirm removal'}).click();await expect(page.getByRole('status')).toContainText('Account removed');await expect(page.getByRole('button',{name:/Removable Staff/})).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('button',{name:/Removable Staff/})).toHaveCount(0);await page.getByRole('button',{name:/Operations Audit Owner/}).click();await expect(page.getByRole('button',{name:'Remove from Operations'})).toHaveCount(0);
+});
+
+test('every organizer task and expanded panel remains compact and readable',async({page},info)=>{
+ await page.goto('/organizer/workspace?event=rsvp-browser');await expect(page.locator('#organizer-event')).toHaveValue('rsvp-browser');
+ await page.getByText('Your events & submissions',{exact:true}).click();
+ await expectVisibleLettering(page,'.organizer-record-fold');await page.screenshot({path:info.outputPath('organizer-history-expanded.png'),fullPage:true});
+ await page.getByText('Your events & submissions',{exact:true}).click();
+ const tabs=page.getByRole('navigation',{name:'Event tools'});
+ for(const name of ['Event & sales','Room & VIP','Entry team','Requests','RSVP & guests']){
+  await tabs.getByRole('button',{name,exact:true}).click();
+  for(const summary of await page.locator('.organizer-dashboard details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
+  await expectVisibleLettering(page,'.organizer-dashboard');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+  const axe=await new AxeBuilder({page}).include('.organizer-dashboard').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),name).toEqual([]);
+  await page.screenshot({path:info.outputPath(`organizer-${name.replaceAll(/[^a-z]/gi,'-')}.png`),fullPage:true});
+ }
+ await tabs.getByRole('button',{name:'Event & sales',exact:true}).click();await page.getByLabel('Venue',{exact:true}).fill('Keep my venue draft');await tabs.getByRole('button',{name:'Room & VIP',exact:true}).click();await tabs.getByRole('button',{name:'Event & sales',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
+ await page.goto('/organizer/analytics');await expect(page.locator('.analytics-overview')).toBeVisible();await expectVisibleLettering(page,'.organizer-analytics');const analyticsAxe=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(analyticsAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),'Analytics').toEqual([]);await page.screenshot({path:info.outputPath('organizer-analytics.png'),fullPage:true});
+});
+
+test('email list stays closed by default and paginates compact search results',async({page},info)=>{
+ await page.route('**/api/admin/audience?**',async route=>{
+  const url=new URL(route.request().url());const offset=Number(url.searchParams.get('offset')||0);const query=url.searchParams.get('q')||'';const all=Array.from({length:23},(_,i)=>({email:`guest-${String(i).padStart(2,'0')}@example.com`,name:`Guest ${i}`,subscribed:i%2,source:'rsvp',guests:1}));const matches=all.filter(c=>!query||c.email.includes(query));
+  await route.fulfill({json:{contacts:url.searchParams.get('summary')==='1'?[]:matches.slice(offset,offset+10),total:matches.length,subscribers:11,campaigns:[],emailConfigured:false}});
+ });
+ await page.goto('/admin/registrations?event=rsvp-browser');await page.getByRole('button',{name:'Guest emails',exact:true}).click();await expect(page.getByRole('heading',{name:'23 guest emails'})).toBeVisible();await expect(page.locator('.audience-table')).toHaveCount(0);await page.screenshot({path:info.outputPath('guest-email-summary.png'),fullPage:true});
+ await page.getByRole('button',{name:'View guest emails',exact:true}).click();await expect(page.locator('.audience-table tbody tr')).toHaveCount(10);await page.locator('.audience-pagination').getByRole('button',{name:'Next'}).click();await expect(page.getByText('11–20 of 23')).toBeVisible();
+ await page.getByLabel('Search guest emails',{exact:true}).fill('guest-22');await expect(page.locator('.audience-table tbody tr')).toHaveCount(1);await expect(page.getByText('guest-22@example.com')).toBeVisible();await expectVisibleLettering(page,'.event-audience');await page.screenshot({path:info.outputPath('guest-email-search.png'),fullPage:true});
 });

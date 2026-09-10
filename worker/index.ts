@@ -1,3 +1,4 @@
+import { runPreviewCleanup } from "../lib/preview-cleanup";
 import { processEventAnnouncements } from "../lib/event-audience";
 import { retryEventRemovals } from "../lib/event-removal";
 import { processRegistrations } from "../lib/registrations";
@@ -180,6 +181,7 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
 }
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
   if(controller.cron === "* * * * *"){await processEventAnnouncements(env,"https://tickets.becoreops.com");return;}
   try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
@@ -225,7 +227,7 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
   }
   if (controller.cron === "15 3 * * *") {
     try {
-      await refreshExpiredPreviewEvents(env.DB);
+      if (env.ENVIRONMENT !== "production") await refreshExpiredPreviewEvents(env.DB);
     } catch (error) {
       await recordSystemAlert(env, "preview-event-rollover", error);
     }

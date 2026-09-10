@@ -22,10 +22,10 @@ export default function AdminLoginForm() {
     try {
       const response = await fetch("/api/admin/session", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...payload, exchangeToken: context.exchangeToken }) });
       const result = await response.json() as { error?: string; returnTo?: string };
-      if (!response.ok || !result.returnTo) throw new Error(result.error ?? "Secure access could not be verified.");
+      if (!response.ok || !result.returnTo) throw new Error(result.error ?? "Couldn’t sign you in. Try again.");
       window.location.assign(result.returnTo);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Secure access could not be verified.");
+      setError(cause instanceof Error ? cause.message : "Couldn’t sign you in. Try again.");
       setBusy(false);
     }
   }
@@ -64,10 +64,10 @@ export default function AdminLoginForm() {
         window.setTimeout(() => void authenticateWithPasskey(next), 0);
         return;
       }
-      if (!response.ok || !result.returnTo) throw new Error(result.error ?? "Access could not be verified.");
+      if (!response.ok || !result.returnTo) throw new Error(result.error ?? "Couldn’t sign you in. Try again.");
       window.location.assign(result.returnTo);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Access could not be verified.");
+      setError(cause instanceof Error ? cause.message : "Couldn’t sign you in. Try again.");
       setBusy(false);
     }
   }
@@ -87,7 +87,7 @@ export default function AdminLoginForm() {
       <label htmlFor="staff-password">Password</label>
       <input id="staff-password" autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
       {error ? <p role="alert">{error}</p> : null}
-      <button disabled={busy} type="submit">{busy ? "Checking…" : "Enter secure workspace"}</button>
+      <button disabled={busy} type="submit">{busy ? "Checking…" : "Sign in"}</button>
     </form>
   );
 }

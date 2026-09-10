@@ -175,10 +175,12 @@ test("the install manifest has complete app identity and adaptive icons", async 
 });
 
 for (const path of publicPages) {
-  test(`${path} has no automatically detectable serious accessibility violations`, async ({ page }) => {
+  test(`${path} has no automatically detectable serious accessibility violations`, async ({ page },info) => {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    for(const summary of await page.locator('details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
+    await page.screenshot({path:info.outputPath(`${path.replaceAll('/','-')||'home'}-expanded.png`),fullPage:true});
     const scan = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     const serious = scan.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
     expect(serious, serious.map((violation) => `${violation.id}: ${violation.help}`).join("\n")).toEqual([]);
@@ -188,6 +190,7 @@ for (const path of publicPages) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    for(const summary of await page.locator('details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
     const findings = await page.evaluate(() => {
       const visible = (element: Element) => {
         const style = getComputedStyle(element);

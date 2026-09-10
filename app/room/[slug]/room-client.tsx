@@ -156,7 +156,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       .then((data) => {
         if (cancelled) return;
         if (!data.allowed || !data.attendee) {
-          setNotice(data.error ?? "A verified ticket is required.");
+          setNotice(data.error ?? "Open your ticket to join the Room.");
           setStatus("denied");
           return;
         }

@@ -54,15 +54,15 @@ export default function FeeSettings({ actor, role }: { actor: string; role: Staf
     <section className="ops-main fee-settings">
       <header><div><p>Commercial controls</p><h1>Fees &amp; charges</h1></div></header>
       <div className="fee-settings__content">
-        <p className="lead">Set the customer booking fee without changing completed orders or active reconciliation records.</p>
+        <p className="lead">Set the booking fee for new orders.</p>
         <div className="settings-card">
           <label>Default booking fee <span className="percent-input"><input type="number" min="0" max="25" step="0.25" value={fee} onChange={(event) => setFee(event.target.value)} /><b>%</b></span><small>Applied to the ticket face value at checkout.</small></label>
-          <label>Application scope<select value="global" disabled><option value="global">All new orders</option></select><small>Event-specific rules remain owner-assisted until target selection is available.</small></label>
+          <label>Applies to<select value="global" disabled><option value="global">All new orders</option></select><small>This fee applies across all events.</small></label>
           <label>Effective from<input type="datetime-local" value={effectiveAt} onChange={(event) => setEffectiveAt(event.target.value)} /><small>Existing paid, pending and reserved orders keep their original fee.</small></label>
         </div>
         <div className="fee-preview"><Info size={19} /><div><strong>Customer price preview</strong><p>On a GH₵100.00 ticket, the buyer pays <b>GH₵{(100 + Number(fee || 0)).toFixed(2)}</b>. The booking fee is GH₵{Number(fee || 0).toFixed(2)}.</p></div></div>
         <div className="settings-actions"><button disabled={saving} onClick={saveFee}><Save size={17} /> {saving ? "Saving…" : "Save fee rule"}</button>{saved ? <span><CheckCircle2 size={17} /> Fee rule saved</span> : null}{error ? <span className="settings-error" role="alert">{error}</span> : null}</div>
-        <section className="audit-preview"><h2>Recent fee changes</h2>{history.length ? history.map((rule) => <div key={rule.id}><span>{(rule.percentageBasisPoints / 100).toFixed(2)}%</span><p><b>{rule.scope === "global" ? "Global default created" : `${rule.scope} rule created`}</b><small>Effective {new Date(rule.effectiveAt).toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" })} · {rule.createdBy}</small></p><time>{new Date(rule.createdAt).toLocaleDateString("en-GH", { dateStyle: "medium" })}</time></div>) : <p>No fee changes recorded yet.</p>}</section>
+        <section className="audit-preview"><h2>Recent fee changes</h2>{history.length ? history.map((rule) => <div key={rule.id}><span>{(rule.percentageBasisPoints / 100).toFixed(2)}%</span><p><b>{rule.scope === "global" ? "Booking fee updated" : `${rule.scope} rule created`}</b><small>Effective {new Date(rule.effectiveAt).toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" })} · {rule.createdBy}</small></p><time>{new Date(rule.createdAt).toLocaleDateString("en-GH", { dateStyle: "medium" })}</time></div>) : <p>No fee changes recorded yet.</p>}</section>
       </div>
     </section>
   </main>;
