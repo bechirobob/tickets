@@ -122,3 +122,28 @@ export async function PATCH(request: Request) {
     return Response.json({ error: error instanceof Error ? error.message : "The account could not be updated." }, { status: 400 });
   }
 }
+
+export async function DELETE(request: Request) {
+  const { env, session } = await owner(request);
+  if (!session) return Response.json({ error: "Owner access is required." }, { status: 403 });
+  if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
+  try {
+    const { id } = await request.json() as { id?: string };
+    if (!id || typeof id !== 'string') return Response.json({ error: 'Choose an account to remove.' }, { status: 400 });
+    if (id === session.accountId) return Response.json({ error: 'You cannot remove the account you are using.' }, { status: 409 });
+    const current = await env.DB.prepare('SELECT id FROM staff_accounts WHERE id=?').bind(id).first();
+    if (!current) return Response.json({ error: 'Account not found.' }, { status: 404 });
+    // D1 runs the batch atomically; the owner count is checked at the deletion itself.
+    const [removed] = await env.DB.batch([
+      env.DB.prepare(`DELETE FROM staff_accounts WHERE id=? AND
+        (role<>'owner' OR status<>'active' OR (SELECT COUNT(*) FROM staff_accounts WHERE role='owner' AND status='active')>1)`).bind(id),
+      ...['staff_sessions','staff_auth_challenges','staff_passkeys','staff_recovery_codes','staff_password_recoveries','staff_event_assignments','owner_activity_reads'].map(table =>
+        env.DB.prepare(`DELETE FROM ${table} WHERE account_id=? AND NOT EXISTS (SELECT 1 FROM staff_accounts WHERE id=?)`).bind(id,id)),
+    ]);
+    if (!removed.meta.changes) return Response.json({ error: 'Keep at least one active master account.' }, { status: 409 });
+    await recordAudit(env.DB, { session, action: 'staff.account_removed', targetType: 'staff_account', targetId: id, outcome: 'success', detail: 'Account, devices, passkeys, recovery access and event assignments removed.', requestId: requestMetadata(request).requestId });
+    return Response.json({ removed: true });
+  } catch {
+    return Response.json({ error: 'The account could not be removed. Try again.' }, { status: 400 });
+  }
+}

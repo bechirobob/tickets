@@ -305,7 +305,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           <h1>This night needs its ticket.</h1>
           <p>
             Use My Nights to recover every paid purchase on your checkout email.
-            One secure link; no password archaeology.
+            Use your booking email. We’ll send you a link.
           </p>
           <Link href="/my-nights">Bring back My Nights</Link>
         </section>
@@ -635,7 +635,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                 <p className="eyebrow">Before the Night</p>
                 <h2>Help the event team prepare.</h2>
                 <p>
-                  Only the Host&apos;s authorised event team can use these
+                  Only the host’s event team can see these
                   answers for this Night.
                 </p>
               </header>

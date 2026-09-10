@@ -224,7 +224,7 @@ test("VIP value is visible at decision points without duplicating the interface"
   assert.match(checkout, /checkout-tier__vip/u);
   assert.match(about, /bottle service, song suggestions or assistance when the Host enables them/u);
   assert.match(help, /How VIP works inside The Room/u);
-  assert.match(organizerWorkspace, /everything stays off by default/u);
+  assert.match(organizerWorkspace, /Choose what your VIP guests can request tonight/u);
   assert.match(nightHub, /order\.roomBadge === "VIP"/u);
   assert.match(ticketsApi, /tier\.room_badge AS roomBadge/u);
   assert.match(events, /tier\.room_badge AS roomBadge/u);
@@ -434,7 +434,7 @@ test("roadmap 5–7 stays inside compact existing journeys", async () => {
     readFile(roomOperationsUrl, "utf8"),
     readFile(nightHubUrl, "utf8"),
   ]);
-  assert.match(roomOperations, /Emergency read-only/u);
+  assert.match(roomOperations, /Pause guest messages/u);
   assert.match(roomOperations, /Slow mode/u);
   assert.match(roomOperations, /Official memory/u);
   assert.match(waitlist, /private 30-minute offer/u);
@@ -836,11 +836,11 @@ test("help is searchable by role and organiser records follow the verified submi
   assert.match(help, /Search BeCore Help/u);
   assert.match(help, /"Going out", "Organising", "At the door", "The Room"/u);
   assert.match(help, /Frequently needed/u);
-  assert.match(help, /verified organiser email used on the submission/u);
+  assert.match(help, /email you used to submit/u);
   assert.match(help, /Understand what moved your Night/u);
   assert.match(help, /href: "\/organizer\/analytics", label: "Open organiser analytics"/u);
-  assert.match(organizerWorkspace, /Your organiser record/u);
-  assert.match(organizerWorkspace, /Submission trail/u);
+  assert.match(organizerWorkspace, /Your events so far/u);
+  assert.match(organizerWorkspace, /Your submissions/u);
   assert.match(organizerWorkspace, /data\.events\.reduce/u);
   assert.match(organizerWorkspaceApi, /submission\.contact_email = \?/u);
   assert.match(organizerWorkspaceApi, /WHERE contact_email = \?/u);
@@ -997,8 +997,8 @@ test("organiser analytics has a dedicated compact responsive workspace", async (
   assert.match(client, /Last 30 days/u);
   assert.match(client, /Last 90 days/u);
   assert.match(client, /Export CSV/u);
-  assert.match(client, /Booking funnel/u);
-  assert.match(client, /Ticket-tier performance/u);
+  assert.match(client, /From browsing to booking/u);
+  assert.match(client, /Ticket sales/u);
   assert.match(client, /Promoter performance/u);
   assert.match(client, /Check-in timing/u);
   assert.match(api, /This Night is not assigned to your organiser account/u);

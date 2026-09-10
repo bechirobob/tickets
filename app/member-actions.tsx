@@ -41,7 +41,7 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
   }
 
   if (member === null) return <div className="member-actions member-actions--loading"><Loader2 className="spin" size={15} /> Checking member access</div>;
-  if (!member) return <p className="member-locked-note">Keep me posted and Host follows unlock after your first verified BeCore ticket.</p>;
+  if (!member) return <p className="member-locked-note">Got a BeCore ticket? Open My Nights to follow your favourite hosts.</p>;
   return <div className="member-actions">
     {eventSlug ? <button type="button" onClick={() => update("event")} disabled={working !== null}>{working === "event" ? <Loader2 className="spin" size={14} /> : keepPosted ? <Check size={14} /> : <Bell size={14} />}{keepPosted ? "Keeping you posted" : "Keep me posted"}</button> : null}
     {hostSlug ? <button type="button" onClick={() => update("host")} disabled={working !== null}>{working === "host" ? <Loader2 className="spin" size={14} /> : followingHost ? <Check size={14} /> : <UserRoundPlus size={14} />}{followingHost ? "Following Host" : "Follow Host"}</button> : null}

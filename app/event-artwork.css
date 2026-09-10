@@ -1,8 +1,8 @@
 /* Complete artwork sits inside an extension of its own colours, without changing The Drop. */
 .discovery-grid .drop-card[data-colour-scheme] { position: relative; isolation: isolate; --poster-ink: var(--event-wash); }
-.discovery-grid .drop-card[data-colour-scheme]::before { content: ""; position: absolute; inset: 0 -8px 22%; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 50% 38%, color-mix(in srgb, var(--event-wash) 16%, transparent), transparent 72%); }
+.discovery-grid .drop-card[data-colour-scheme]::before { content: none; }
 .discovery-grid .drop-card[data-colour-scheme] .drop-card__image { --artwork-inset: 12px; aspect-ratio: 4 / 5; height: auto; background: transparent; border-radius: 10px; }
-.discovery-grid .drop-card .drop-card__artwork-wash { position: absolute; inset: -16px; background-size: cover; background-position: center; filter: blur(24px) saturate(.6); mask-image: radial-gradient(ellipse, #000 28%, transparent 72%); opacity: .32; pointer-events: none; }
+.discovery-grid .drop-card .drop-card__artwork-wash { position: absolute; inset: -16px; background-size: cover; background-position: center; filter: blur(24px) saturate(.6); mask-image: none; opacity: .14; pointer-events: none; }
 .discovery-grid .drop-card[data-colour-scheme] .drop-card__image img { display: block; position: absolute; inset: var(--artwork-inset); z-index: 1; width: calc(100% - 2 * var(--artwork-inset)); height: calc(100% - 2 * var(--artwork-inset)); object-fit: contain; object-position: center; filter: none; transform: none; }
 .discovery-grid .drop-card[data-colour-scheme] .drop-card__image img { mask-image: none; }
 .discovery-grid .drop-card__body { overflow-wrap: anywhere; }

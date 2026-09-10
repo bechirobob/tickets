@@ -344,3 +344,18 @@ describe("named staff access", () => {
     } finally { env.STAFF_LOGIN_DECOY_SECRET = secret; }
   });
 });
+
+describe('master account staff removal',()=>{
+ it('removes staff access and sign-in methods immediately, retains audit history, and forbids self-removal and non-owner removal',async()=>{
+  const {DELETE:removeAccount}=await import('../app/api/admin/accounts/route');
+  const owner=await staff('owner',crypto.randomUUID());const target=await staff('organizer',crypto.randomUUID());const outsider=await staff('finance',crypto.randomUUID());
+  const req=(cookie:string,id:string,origin='https://tickets.becoreops.com')=>new Request('https://tickets.becoreops.com/api/admin/accounts',{method:'DELETE',headers:{cookie,origin,'content-type':'application/json'},body:JSON.stringify({id})});
+  expect((await removeAccount(req(outsider.cookie,target.id))).status).toBe(403);expect((await removeAccount(req(owner.cookie,target.id,'https://wrong.example'))).status).toBe(403);
+  expect((await removeAccount(req(owner.cookie,owner.id))).status).toBe(409);
+  await env.DB.prepare('INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES(?,?,?,?)').bind(target.id,'the-weekend-braai',owner.id,new Date().toISOString()).run();
+  expect((await removeAccount(req(owner.cookie,target.id))).status).toBe(200);
+  expect(await readAdminSession(target.cookie,env.DB)).toBeNull();expect(await readAdminSession(owner.cookie,env.DB)).not.toBeNull();
+  for(const table of ['staff_sessions','staff_event_assignments','staff_auth_challenges','staff_password_recoveries','staff_passkeys','staff_recovery_codes'])expect(await env.DB.prepare(`SELECT 1 FROM ${table} WHERE account_id=?`).bind(target.id).first()).toBeNull();
+  expect(await env.DB.prepare("SELECT action FROM operational_audit_events WHERE target_id=? AND action='staff.account_removed'").bind(target.id).first()).toBeTruthy();
+ });
+});

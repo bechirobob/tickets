@@ -13,6 +13,9 @@ const email = 'operations-audit@example.com';
 const start = new Date(Date.now() + 7 * 86400000).toISOString();
 const end = new Date(Date.now() + 8 * 86400000).toISOString();
 const sql = `
+INSERT OR REPLACE INTO staff_accounts(id,normalized_email,display_name,role,password_hash,password_salt,password_iterations,must_change_password,status,password_changed_at,created_at,created_by,updated_at)
+VALUES('remove-staff-audit','remove-staff@example.com','Removable Staff','gate','test','test',1,0,'active','${stamp}','${stamp}','fixture','${stamp}');
+
 INSERT OR REPLACE INTO staff_accounts (id,normalized_email,display_name,role,password_hash,password_salt,password_iterations,must_change_password,status,password_changed_at,created_at,created_by,updated_at)
 VALUES ('rsvp-host','rsvp-host@example.com','RSVP Host','organizer','test','test',1,0,'active','${stamp}','${stamp}','fixture','${stamp}');
 INSERT OR REPLACE INTO staff_sessions(id,account_id,token_hash,expires_at,created_at,last_seen_at) VALUES('rsvp-host-session','rsvp-host','${digest(organizerToken)}','${new Date(Date.now()+3600000).toISOString()}','${stamp}','${stamp}');

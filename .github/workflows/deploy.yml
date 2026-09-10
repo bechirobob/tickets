@@ -212,5 +212,8 @@ jobs:
       - name: Apply the owner-requested Weekend Braai RSVP settings once
         run: node scripts/configure-braai-rsvp.mjs
 
+      - name: Complete the owner-requested preview data cleanup
+        run: node scripts/complete-preview-cleanup.mjs
+
       - name: Issue the approved single-use owner recovery grant
         run: node scripts/issue-owner-recovery.mjs

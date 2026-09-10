@@ -20,8 +20,9 @@ export async function GET(request: Request) {
     await recordAudit(env.DB,{session,action:'audience.exported',targetType:'event',targetId:slug,outcome:'success',detail:`Exported ${rows.results.length} guest emails.`});
     return new Response([['Name','Email','Source','Announcement subscription'],...rows.results.map(r=>[r.name,r.email,r.source,r.subscribed?'Subscribed':'Not subscribed'])].map(row=>row.map(cell).join(',')).join('\r\n'),{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':`attachment; filename="${slug}-guests.csv"`,'cache-control':'no-store'}});
   }
+  const limit=Math.min(50,Math.max(1,Number.parseInt(url.searchParams.get('limit') ?? '10')||10));
   const [rows,total,campaigns,subscribers]=await Promise.all([
-    env.DB.prepare(`${audience}${filter} ORDER BY p.email LIMIT 50 OFFSET ?`).bind(slug,slug,slug,query,search,search,offset).all(),
+    url.searchParams.get('summary')==='1' ? Promise.resolve({results:[]}) : env.DB.prepare(`${audience}${filter} ORDER BY p.email LIMIT ? OFFSET ?`).bind(slug,slug,slug,query,search,search,limit,offset).all(),
     env.DB.prepare(`SELECT COUNT(*) AS total,COALESCE(SUM(subscribed),0) AS subscribers FROM (${audience}${filter})`).bind(slug,slug,slug,query,search,search).first(),
     env.DB.prepare(`SELECT c.id,c.subject,c.status,c.created_at AS createdAt,c.recipient_count AS recipientCount,
       (SELECT COUNT(*) FROM event_announcement_recipients r JOIN delivery_events d ON d.id=r.delivery_id WHERE r.campaign_id=c.id AND d.status IN ('sent','delivered')) AS sent,

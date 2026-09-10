@@ -109,3 +109,14 @@ body :is(a, button).ticket-action[data-variant][aria-busy="true"] { cursor: prog
 @media (forced-colors: active) {
   body :is(a, button).ticket-action[data-variant] { border: 1px solid ButtonText; }
 }
+
+/* Disclosed content gets the same care as the page above it. */
+.help-page .help-guide { border:0; border-radius:10px; background:#fffdfa; padding:0 20px; margin:0; overflow:visible; }
+.help-page .help-guide > summary { display:flex; align-items:center; gap:18px; padding:20px 0; min-height:64px; border:0; list-style:none; cursor:pointer; }
+.help-page .help-guide > summary::-webkit-details-marker { display:none; }
+.help-page .help-guide > summary > span { min-width:0; flex:1; }.help-page .help-guide summary b { font-size:17px; line-height:1.35; }.help-page .help-guide summary i { font-size:14px; line-height:1.55; margin-top:8px; color:#625a66; font-style:normal; }.help-page .help-guide summary small { font-size:12px; color:#746b77; text-transform:none; letter-spacing:0; }.help-page .help-guide > summary > svg { flex:none; color:#67516f; transition:transform .16s ease; }.help-page .help-guide[open] > summary > svg { transform:rotate(180deg); }
+.help-page .help-guide > div { padding:0 0 20px; border:0; }.help-page .help-guide ol { display:grid; gap:12px; padding:0; list-style:none; }.help-page .help-guide li { font-size:14px; line-height:1.6; gap:12px; }.help-page .help-guide li > svg { flex:none; color:#725a79; margin-top:4px; }.help-page .help-guide > div > a { display:inline-flex; align-items:center; gap:12px; min-height:42px; padding:10px 14px; border:0; border-radius:8px; background:#e9e0ed; color:#48354f; font-size:13px; }
+.help-page .help-guide summary:focus-visible { outline:2px solid #696969; outline-offset:5px; }.help-page > .help-centre > .help-guides { gap:14px; }
+.night-support__threads details,.night-support__new { border:0; border-radius:10px; padding:14px 16px; background:#fffdfa; margin:10px 0; }.night-support__threads summary,.night-support__new summary { min-height:42px; cursor:pointer; font-size:14px; }.night-support__threads details > div { margin-top:12px; }.night-support__threads form { display:flex; gap:8px; }.night-support__new label { display:grid; gap:7px; margin-top:14px; }
+@media(max-width:700px){.help-page .help-guide { padding-inline:16px; }.help-page .help-guide summary b { font-size:16px; }}
+@media(prefers-reduced-motion:reduce){.help-page .help-guide > summary > svg { transition:none; }}

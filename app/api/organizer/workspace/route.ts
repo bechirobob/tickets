@@ -159,11 +159,12 @@ export async function POST(request: Request) {
       const kind = String(body.kind ?? "");
       const allowedKinds = ["cancel_event", "reschedule_event", "refund_order", "inventory_change", "other"];
       const detail = String(body.detail ?? "").trim().slice(0, 1200);
-      const orderId = String(body.orderId ?? "").trim() || null;
+      let orderId = String(body.orderId ?? "").trim() || null;
       if (!allowedKinds.includes(kind) || detail.length < 10) throw new Error("Choose a request type and add useful detail.");
       if (kind === "refund_order") {
-        const order = orderId ? await env.DB.prepare("SELECT id FROM orders WHERE id = ? AND event_slug = ? LIMIT 1").bind(orderId, eventSlug).first() : null;
-        if (!order) throw new Error("That order does not belong to this event.");
+        const order = orderId ? await env.DB.prepare("SELECT id FROM orders WHERE (id = ? OR reference = ?) AND event_slug = ? LIMIT 1").bind(orderId, orderId, eventSlug).first<{id:string}>() : null;
+        if (!order) throw new Error("That booking does not belong to this event.");
+        orderId = order.id;
       }
       const id = crypto.randomUUID();
       await env.DB.prepare(`INSERT INTO organizer_requests (id, event_slug, requested_by, kind, order_id, detail, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)`)
