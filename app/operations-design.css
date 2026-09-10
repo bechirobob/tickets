@@ -1,3 +1,5 @@
+/* Workspaces keep focus and programmatic scrolling immediate. */
+html:has(:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page)) { scroll-behavior:auto; }
 /* Shared workspace system. Guest pages keep their event palette. */
 :is(.ops-page,.curation-page,.room-ops,.organizer-workspace,.account-page) { --ops-surface:#fffdfa; --ops-canvas:#f2f0ec; --ops-ink:#29242c; --ops-muted:#655f69; --ops-accent:#3b2942; --action-surface:#3b2942; --action-ink:#fff9f2; --action-line:#b8aebb; --focus-ring:#694675; color:var(--ops-ink); background:var(--ops-canvas); }
 :is(.ops-page,.curation-page,.room-ops) .curation-nav { background:#2b2230; color:#f9f5ee; border:0; }

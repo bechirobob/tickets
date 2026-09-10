@@ -100,6 +100,25 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
     await page.mouse.up();
   }
 });
+test('registration tabs accept the first click after scrolling to them', async ({ page }) => {
+  for (const path of ['/admin/registrations?event=rsvp-browser', '/organizer/workspace?event=rsvp-browser']) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await page.goto(path);
+      const manager = page.locator('.registration-manager');
+      await manager.getByRole('button', { name: 'Save registration settings', exact: true }).scrollIntoViewIfNeeded();
+      const emails = manager.getByRole('button', { name: 'Guest emails', exact: true });
+      await emails.click();
+      await expect(emails).toHaveAttribute('aria-pressed', 'true');
+      await expect(manager.getByLabel('Search guest emails', { exact: true })).toBeVisible();
+      await manager.getByRole('button', { name: 'Setup', exact: true }).click();
+      await manager.getByRole('button', { name: 'Save registration settings', exact: true }).scrollIntoViewIfNeeded();
+      const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
+      await announcements.click();
+      await expect(announcements).toHaveAttribute('aria-pressed', 'true');
+      await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
+    }
+  }
+});
 test('RSVP save and copy retains the draft after a failed save', async ({ page }) => {
   await page.goto('/admin/registrations?event=rsvp-browser');
   const manager = page.locator('.registration-manager');
