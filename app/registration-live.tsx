@@ -16,11 +16,36 @@ export default function RegistrationLive({eventSlug,onChange,hasUnsavedChanges=f
    timer=setTimeout(refresh,5000);
   }void refresh();return()=>{stopped=true;clearTimeout(timer);controller.abort();};
  },[eventSlug,settingsVersion]);
- async function copy(){if(copying.current||busy)return;copying.current=true;setCopied(false);try{
-  if(hasUnsavedChanges&&!(await onSave?.()))return;
-  const r=await operationsFetch(`/api/admin/registrations?eventSlug=${encodeURIComponent(eventSlug)}&live=1`);if(!r.ok){setNotice('Could not check the link. Try again.');return;}const current=await r.json() as Snapshot;setData(current);if(!current.sharing.ready){setNotice(current.sharing.reason);return;}
-  try{await navigator.clipboard.writeText(url);setCopied(true);setNotice('Link copied. Ready to share.');}catch{link.current?.focus();link.current?.select();setNotice('Your link is selected. Copy it to share.');}
- }finally{copying.current=false;}}
+ async function copy(){
+  if(copying.current||busy)return;
+  copying.current=true;setCopied(false);
+  const prepared=(async()=>{
+   try {
+    if(hasUnsavedChanges&&!(await onSave?.()))return null;
+    const r=await operationsFetch(`/api/admin/registrations?eventSlug=${encodeURIComponent(eventSlug)}&live=1`);
+    if(!r.ok){setNotice('Could not check the link. Try again.');return null;}
+    const current=await r.json() as Snapshot;setData(current);
+    if(!current.sharing.ready){setNotice(current.sharing.reason);return null;}
+    return `${location.origin}/rsvp/${encodeURIComponent(eventSlug)}`;
+   }catch{setNotice('Could not check the link. Try again.');return null;}
+  })();
+  try {
+   // Safari needs write() in the original tap; the item resolves after saving.
+   // https://webkit.org/blog/10855/async-clipboard-api/
+   if(navigator.clipboard?.write&&typeof ClipboardItem!=='undefined'){
+    const content=prepared.then(value=>{if(!value)throw new Error('Registration link is not ready.');return new Blob([value],{type:'text/plain'});});
+    void content.catch(()=>undefined);
+    await navigator.clipboard.write([new ClipboardItem({'text/plain':content})]);
+   }else{
+    const value=await prepared;if(!value)return;
+    await navigator.clipboard.writeText(value);
+   }
+   if(await prepared){setCopied(true);setNotice('Link copied. Ready to share.');}
+  }catch{
+   if(await prepared){link.current?.focus();link.current?.select();setNotice('Your link is selected. Copy it to share.');}
+  }finally{copying.current=false;}
+ }
+
  const label=data?.sharing.mode==='rsvp'?'RSVP':'registration';
  return <section className="registration-live" aria-label="Live registrations"><header><div><b>Invite your guests</b><small><Radio size={12}/>{connected?'Live · refreshes every 5 seconds':'Connecting to guest updates…'}</small></div><span className="registration-open-state">{hasUnsavedChanges?'Changes to save':data?.sharing.ready?'Link ready':'Not open'}</span></header>
  <div className="registration-share"><label>{label==='RSVP'?'RSVP link':'Registration link'}<input ref={link} aria-label={`${label} link`} readOnly value={url} onFocus={e=>e.target.select()}/></label><ActionButton disabled={busy||!data} onClick={()=>void copy()} icon={copied?<Check size={17}/>:<Copy size={17}/>}>{busy?'Saving…':hasUnsavedChanges?'Save & copy link':copied?'Link copied':`Copy ${label} link`}</ActionButton>{data?.sharing.ready?<a href={`/rsvp/${encodeURIComponent(eventSlug)}`} target="_blank" rel="noreferrer" aria-label="Preview guest page"><ExternalLink size={17}/><span>Preview guest page</span></a>:null}</div>

@@ -64,6 +64,24 @@ test('RSVP save and copy retains the draft after a failed save', async ({ page }
   await expect(manager.getByText('Your link is selected. Copy it to share.')).toHaveCount(0);
   await expect(manager.getByText('Link copied. Ready to share.')).toHaveCount(0);
 });
+test('save and copy starts clipboard access on the tap and supplies only the saved link', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    write: async (items: ClipboardItem[]) => {
+      document.documentElement.dataset.clipboardStarted = 'true';
+      document.documentElement.dataset.copiedRegistration = await (await items[0].getType('text/plain')).text();
+    }
+  } }));
+  await page.goto('/admin/registrations?event=rsvp-browser');
+  const manager = page.locator('.registration-manager');
+  await manager.getByLabel('Guest capacity', { exact: true }).fill('26');
+  await page.route('**/api/admin/registrations', async route => {
+    if (route.request().method() === 'POST') expect(await page.locator('html').getAttribute('data-clipboard-started')).toBe('true');
+    await route.continue();
+  });
+  await manager.getByRole('button', { name: 'Save & copy link' }).click();
+  await expect(manager.getByText('Link copied. Ready to share.')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-copied-registration', 'https://127.0.0.1:8791/rsvp/rsvp-browser');
+});
 test('Operations keeps checks, incidents and approvals in focused views', async ({ page }, info) => {
   await page.goto('/admin/operations');
   await expect(page.getByRole('heading', { name: 'Next actions' })).toBeVisible();
