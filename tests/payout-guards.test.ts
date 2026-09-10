@@ -19,6 +19,9 @@ it('reserves settlement balance once and only closes it when all funds have been
  await applyTransferWebhook(env.DB,{reference:second.reference,status:'success'});
  await applyTransferWebhook(env.DB,{reference:second.reference,status:'failed'});
  expect(await env.DB.prepare('SELECT status FROM event_settlements WHERE id=?').bind(id).first()).toEqual({status:'paid'});
+ const overlap=`overlap-${id}`;
+ await env.DB.prepare("INSERT INTO event_settlements (id,run_id,event_slug,period_start,period_end,gross_minor,booking_fees_minor,refunds_minor,net_ticket_sales_minor,currency,status,created_at) SELECT ?,?,event_slug,period_start,period_end,gross_minor,booking_fees_minor,refunds_minor,net_ticket_sales_minor,currency,'ready',created_at FROM event_settlements WHERE id=?").bind(overlap,overlap,id).run();
+ await expect(requestPayout(env.DB,actor,{...input,settlementId:overlap,amountMinor:10000})).rejects.toThrow('already reserved');
  await applyTransferWebhook(env.DB,{reference:second.reference,status:'reversed'});
  expect(await env.DB.prepare('SELECT status FROM event_settlements WHERE id=?').bind(id).first()).toEqual({status:'held'});
 });

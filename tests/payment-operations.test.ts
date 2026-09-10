@@ -1,3 +1,4 @@
+import { processRefundBatches } from '../lib/operational-finance';
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyRefundWebhook, expireReservations, fulfillVerifiedPayment, initiatePaystackRefund, recordDisputeWebhook, verifyPaystackTransaction } from "../lib/payment-operations";
@@ -159,3 +160,14 @@ it('rejects verification from a different provider environment or transaction',a
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+it('keeps batch refunds pending until the provider confirms the ledger',async()=>{
+ const o=await paid('batch-confirmation'),id=crypto.randomUUID(),now=new Date().toISOString();
+ await env.DB.prepare("INSERT INTO refund_batches (id,event_slug,reason,status,total_orders,requested_by,created_at,updated_at) VALUES (?,?,'Event refund requested by finance.','queued',1,'fixture',?,?)").bind(id,o.eventSlug,now,now).run();
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:true,data:{id:903,status:'pending'}})));
+ await Promise.all([processRefundBatches(env),processRefundBatches(env)]);expect(fetch).toHaveBeenCalledTimes(1);
+ expect(await env.DB.prepare('SELECT status,processed_orders AS processed FROM refund_batches WHERE id=?').bind(id).first()).toEqual({status:'processing',processed:0});
+ await applyRefundWebhook(env.DB,{eventType:'refund.processed',reference:o.reference,amountMinor:o.amount,providerRefundId:'903'});
+ await processRefundBatches(env);
+ expect(await env.DB.prepare('SELECT status,processed_orders AS processed,failed_orders AS failed FROM refund_batches WHERE id=?').bind(id).first()).toEqual({status:'completed',processed:1,failed:0});
+});

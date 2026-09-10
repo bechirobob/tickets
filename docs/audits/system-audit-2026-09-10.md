@@ -35,7 +35,7 @@ Additional confirmed fixes:
 
 Migrations 0041–0042 preserve existing records. 0041 adds claim/refund guard fields. 0042 replaces the one-payout-per-settlement index with a balance guard and supplies door entries for existing approved RSVP guests. Keep the balance trigger on code rollback; do not restore the obsolete unique payout index after partial payouts exist. Baseline Worker version above is the code rollback reference; deployment captures the D1 bookmark.
 
-Validation in progress: baseline 206 Worker tests; 226 passed after the first remediation set; new RSVP door test passed with its 46-test payment/Operations/RSVP group. Candidate runs must pass against the final commit, including all desktop/mobile browser and expanded Operations checks. No live customer payment, signup or outbound test email is required or performed by this audit.
+Validation: baseline 206 Worker tests; full local release suite passed with 227, followed by a passing batch-refund regression (228 total). Added coverage includes concurrent overlapping payout requests and settlement completion. Hosted CI exposed the large cleanup fixture exceeding its default five-second test budget; that case now has a bounded 15-second budget. The two-provider browser fixture explicitly configures its invalid Paystack test credential, matching the new availability rules. Candidate runs must pass against the final commit, including all desktop/mobile browser and expanded Operations checks. No live customer payment, signup or outbound test email is required or performed by this audit.
 
 ## References
 
