@@ -72,6 +72,34 @@ test('guest tools wait for initial settings before accepting a tab change', asyn
   await expect(announcements).toHaveAttribute('aria-pressed', 'true');
   await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
 });
+test('guest tabs stay under the pointer when live activity arrives', async ({ page }) => {
+  let releaseActivity!: () => void;
+  const activityReady = new Promise<void>(resolve => { releaseActivity = resolve; });
+  await page.route('**/api/admin/registrations?**', async route => {
+    if (new URL(route.request().url()).searchParams.has('live')) await activityReady;
+    await route.continue();
+  });
+  try {
+    await page.goto('/organizer/workspace?event=rsvp-browser');
+    const manager = page.locator('.registration-manager');
+    const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
+    await expect(announcements).toBeEnabled();
+    await announcements.scrollIntoViewIfNeeded();
+    const before = (await announcements.boundingBox())!;
+    await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+    await page.mouse.down();
+    releaseActivity();
+    await expect(manager.getByText('Updates automatically')).toBeVisible();
+    const after = (await announcements.boundingBox())!;
+    expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+    await page.mouse.up();
+    await expect(announcements).toHaveAttribute('aria-pressed', 'true');
+    await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
+  } finally {
+    releaseActivity();
+    await page.mouse.up();
+  }
+});
 test('RSVP save and copy retains the draft after a failed save', async ({ page }) => {
   await page.goto('/admin/registrations?event=rsvp-browser');
   const manager = page.locator('.registration-manager');
