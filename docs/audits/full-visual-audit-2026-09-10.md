@@ -6,7 +6,7 @@ User request: review the entire design, including closed sections; remove techni
 
 Main and production: `9de60786ec25d59e488ebe1faadf89a58d1be9d3` (PR 121). The prior audit checked top-level screens but left organizer task forms inside a large closed panel. Public help and account device disclosures also needed expanded-state review.
 
-Read-only production inventory: Actions run 34426444988. Retired previews are `after-dark-osu` (32 orders), `noir-room-labone` (1), and `longitude-spintex` (0). None has a live paid order. `sun-chasers-labadi` is now the real **On The Guest List** event despite its legacy preview IDs; preserve the listing. The Weekend Braai has one current RSVP; preserve it. The rejected Bomboclart Parties submission has no evidence identifying it as a preview; preserve it.
+Read-only production inventory: Actions run 34426444988. Retired previews are `after-dark-osu` (32 orders), `noir-room-labone` (1), and `longitude-spintex` (0). The three are explicitly marked test events; their older Paystack environment fields are null. No explicitly live payment is present. `sun-chasers-labadi` is now the real **On The Guest List** event despite its legacy preview IDs; preserve the listing and settings. Inventory run 34429241197 identified its one legacy preview booking (11 August), with no provider transaction or verification, before the 8 September conversion in commit 5283b5a. Remove that exact booking and pre-conversion guest/Room content; preserve later content. The Weekend Braai has one current RSVP; preserve it. The rejected Bomboclart Parties submission has no evidence identifying it as a preview; preserve it.
 
 ## Changes
 
@@ -16,7 +16,7 @@ Read-only production inventory: Actions run 34426444988. Retired previews are `a
 - Plain public/organizer guidance replaces technical descriptions of internal processing. Staff account, login and Room labels use neutral task names. Help instructions match the new organizer views.
 - Removed the Drop's decorative radial colour glow. Artwork remains complete and its softened backdrop stays within the flier frame. Expanded help and guest support use complete surfaces instead of curved partial outlines.
 - Owner-only account removal deletes credentials, sessions, recovery access and event assignments. Self-removal and removing the last active owner are blocked. Past operational work remains attributable in the audit history.
-- One-time preview cleanup runs only after the release job records the owner's authorization. It erases the retired event graphs, test purchases on current listings, retired preview ticket tiers, associated media/Room stores and unshared preview customer accounts. Shared customers and real bookings remain. The temporary retry manifest is replaced with aggregate counts after success. No messages are sent to guests.
+- One-time preview cleanup runs only after the release job records the owner's authorization. It erases the retired event graphs, test purchases on current listings, retired preview ticket tiers, associated media/Room stores, event-specific fee rules and unshared preview customer accounts. The converted listing keeps its Room settings and content after publication. Shared customers and real bookings remain. The temporary retry manifest is replaced with aggregate counts after success. No messages are sent to guests.
 - The production schedule no longer refreshes preview event dates.
 
 ## Coverage map

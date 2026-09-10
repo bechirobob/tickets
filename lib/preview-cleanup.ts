@@ -1,5 +1,9 @@
 /** Owner-authorised one-time removal of retired preview cases and test purchases. */
 export const previewCleanupId = 'operator:preview-cleanup-2026-09-10';
+const convertedSlug='sun-chasers-labadi';
+const convertedAt='2026-09-08T09:59:19.000Z';
+const legacyPreviewOrder='88ad9bcd-2c2c-49f9-8115-ec982bd9a3c4';
+const historicalContent=new Set(['room_flashes','room_reports','room_blocks','room_moderation_actions','room_suspensions','vip_concierge_requests','attendee_notifications','attendee_event_preferences','attendee_event_decisions','attendee_question_answers','notification_preferences','event_audience_contacts','event_waitlist_entries','event_memories','support_cases','operational_incidents']);
 const retired = ['after-dark-osu', 'noir-room-labone', 'longitude-spintex'];
 type Targets = Record<string, string[]>;
 type Plan = { targets: Targets; extraPreviewRooms:string[]; tables: Record<string, string[]>; counts: Record<string,number> };
@@ -14,6 +18,8 @@ const literal=(value:string)=>`'${value.replaceAll("'","''")}'`;
 const inside=(column:string, values:string[])=>values.length?`${column} IN (${values.map(literal).join(',')})`:'0';
 function condition(table:string,columns:string[],t:Targets) {
  const clauses=columns.filter(c=>t[c]?.length).map(c=>inside(c,t[c]));
+ if(historicalContent.has(table)&&columns.includes('event_slug')){const date=['updated_at','created_at','published_at','suspended_at','decided_at','answered_at'].find(c=>columns.includes(c));if(date)clauses.push(`(event_slug=${literal(convertedSlug)} AND datetime(${date}) < datetime(${literal(convertedAt)}))`);}
+ if(table==='product_metrics_daily')clauses.push(`(event_slug=${literal(convertedSlug)} AND day<'2026-09-08')`);
  if(columns.includes('id')&&primary[table]) clauses.push(inside('id',t[primary[table]]??[]));
  if(table==='reconciliation_runs')clauses.push(inside('id',t.run_id??[]));
  if(table==='booking_fee_rules')clauses.push(`(scope='event' AND ${inside('scope_id',t.event_slug)})`);
@@ -42,6 +48,8 @@ export async function planPreviewCleanup(db:D1Database):Promise<Plan> {
  const names=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name<>'d1_migrations'").all<{name:string}>();
  for(const {name} of names.results){if(!/^[a-z_]+$/.test(name))continue;const cols=await db.prepare(`PRAGMA table_info(${name})`).all<{name:string}>();tables[name]=cols.results.map(c=>c.name);}
  const targets:Targets={event_slug:retired,host_id:['host:becore-preview-desk']};
+ const legacy=await db.prepare('SELECT id,created_at,event_slug,paystack_transaction_id,paystack_status,provider_transaction_id,payment_environment FROM orders WHERE id=?').bind(legacyPreviewOrder).first<Record<string,unknown>>();
+ if(legacy){if(legacy.event_slug!==convertedSlug||legacy.created_at!=='2026-08-11T03:51:30.480Z'||legacy.paystack_transaction_id||legacy.paystack_status||legacy.provider_transaction_id||legacy.payment_environment==='live')throw new Error('The legacy preview booking changed. Cleanup stopped.');add(targets,'order_id',[legacyPreviewOrder]);}
  const testOrders=await db.prepare("SELECT id FROM orders WHERE payment_environment IN ('test','sandbox')").all<{id:string}>();add(targets,'order_id',testOrders.results.map(r=>r.id));
  // Resolve parent IDs before deletion. This also covers test orders on a real listing.
  for(let pass=0;pass<4;pass++)for(const [table,key] of Object.entries(primary)){
@@ -72,8 +80,8 @@ export async function planPreviewCleanup(db:D1Database):Promise<Plan> {
  }
  const grants=await db.prepare(`SELECT id FROM attendee_recovery_grants WHERE ${inside('normalized_email',targets.orphan_email??[])}`).all<{id:string}>();add(targets,'recovery_grant_id',grants.results.map(r=>r.id));
  add(targets,'subject_id',[...(targets.order_id??[]),...(targets.registration_id??[]),...(targets.attendee_id??[]),...(targets.submission_id??[])]);
- const previewRooms=await db.prepare(`SELECT DISTINCT event_slug AS slug FROM orders o WHERE ${inside('id',targets.order_id??[])} AND event_slug NOT IN (${retired.map(literal).join(',')}) AND NOT EXISTS(SELECT 1 FROM orders live WHERE live.event_slug=o.event_slug AND (COALESCE(live.payment_environment,'unknown') NOT IN ('test','sandbox') OR live.payment_provider='rsvp')) AND NOT EXISTS(SELECT 1 FROM event_registrations r WHERE r.event_slug=o.event_slug)`).all<{slug:string}>();
- const extraPreviewRooms=previewRooms.results.map(row=>row.slug);
+ // The converted listing keeps its current Room and settings. Only pre-publication content is removed.
+ const extraPreviewRooms=[convertedSlug];
  const counts:Record<string,number>={};
  for(const [table,cols] of Object.entries(tables)){const where=condition(table,cols,targets);if(where==='0')continue;const row=await db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`).first<{count:number}>();if(row?.count)counts[table]=row.count;}
  return {targets,tables,counts,extraPreviewRooms};
@@ -88,11 +96,7 @@ export async function runPreviewCleanup(env:Pick<Cloudflare.Env,'DB'|'THE_ROOM'>
  await env.DB.prepare("UPDATE operational_audit_events SET outcome='running',detail=? WHERE id=?").bind(JSON.stringify(plan),previewCleanupId).run();
  await env.DB.batch(retired.map(slug=>env.DB.prepare("UPDATE curated_event_records SET status='unpublished',removed_at=COALESCE(removed_at,?) WHERE slug=?").bind(new Date().toISOString(),slug)));
  for(const slug of retired)await env.THE_ROOM.getByName(slug).removeEventContent();
- for(const slug of plan.extraPreviewRooms??[]){
-  const real=await env.DB.prepare("SELECT 1 FROM orders WHERE event_slug=? AND (COALESCE(payment_environment,'unknown') NOT IN ('test','sandbox') OR payment_provider='rsvp') UNION ALL SELECT 1 FROM event_registrations WHERE event_slug=? LIMIT 1").bind(slug,slug).first();
-  if(real)throw new Error('Real guests arrived in a former preview Room. Cleanup stopped for review.');
-  await env.THE_ROOM.getByName(slug).removeEventContent();
- }
+ for(const slug of plan.extraPreviewRooms??[]){if(slug!==convertedSlug)throw new Error('Unknown converted preview Room.');await env.THE_ROOM.getByName(slug).removePreviewContentBefore(convertedAt);}
  const statements=[];
  for(const [table,cols] of Object.entries(plan.tables)){
   const where=condition(table,cols,plan.targets);if(where==='0')continue;
