@@ -81,11 +81,11 @@ test('back restores discovery position and edge gestures distinguish scrolling',
   await page.getByRole('heading', { name: braai.title }).click();
   await expect(page.getByRole('heading', { level: 1, name: braai.title })).toBeFocused();
   const content = page.locator('main');
-  await content.dispatchEvent('touchstart', { touches: [{ clientX: 10, clientY: 180 }] });
-  await content.dispatchEvent('touchend', { changedTouches: [{ clientX: 120, clientY: 310 }] });
+  await content.dispatchEvent('touchstart', { touches: [{ identifier: 0, clientX: 10, clientY: 180 }] });
+  await content.dispatchEvent('touchend', { changedTouches: [{ identifier: 0, clientX: 120, clientY: 310 }] });
   await expect(page.getByRole('heading', { level: 1, name: braai.title })).toBeVisible();
-  await content.dispatchEvent('touchstart', { touches: [{ clientX: 10, clientY: 180 }] });
-  await content.dispatchEvent('touchend', { changedTouches: [{ clientX: 140, clientY: 190 }] });
+  await content.dispatchEvent('touchstart', { touches: [{ identifier: 0, clientX: 10, clientY: 180 }] });
+  await content.dispatchEvent('touchend', { changedTouches: [{ identifier: 0, clientX: 140, clientY: 190 }] });
   await expect(page.getByRole('heading', { level: 1, name: 'The Drop' })).toBeFocused();
   await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(position, 0);
   await page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('button', { name: 'The Drop', exact: true }).click();
