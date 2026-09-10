@@ -22,7 +22,10 @@ it('fully removes preview relationships and test purchases while preserving live
   env.DB.prepare("INSERT INTO delivery_events(id,kind,recipient,status,payload_json,created_at,updated_at) VALUES('preview-email','registration_update','someone@example.com','failed','{\"text\":\"after-dark-osu\"}',?,?)").bind(now,now),
  ]);
  await env.DB.prepare("INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,created_at) VALUES('88ad9bcd-2c2c-49f9-8115-ec982bd9a3c4','legacy-preview','sun-chasers-labadi',1,15000,1125,16125,'GHS','old-preview@example.com','','mobile_money:mtn','paid','2026-08-11T03:51:30.480Z')").run();
- const plan=await planPreviewCleanup(env.DB);expect(plan.counts.orders).toBe(4);expect(plan.targets.attendee_id).toContain('preview-only');expect(plan.targets.attendee_id).not.toContain('shared-person');
+ // Exceed both production's 100-node expression limit and SQLite's default 1000-node limit.
+ await env.DB.batch(Array.from({length:600},(_,i)=>env.DB.prepare("INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,created_at) VALUES(?,?,'after-dark-osu',1,100,0,100,'GHS','preview-load@example.com','','momo','paid',?)").bind(`preview-load-${i}`,`ref-preview-load-${i}`,now)));
+ await env.DB.prepare("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES ('deep-preview-audit','owner','test','maintenance','unrelated-id','success','Verified ref-preview-load-599',?)").bind(now).run();
+ const plan=await planPreviewCleanup(env.DB);expect(plan.counts.orders).toBe(604);expect(plan.targets.attendee_id).toContain('preview-only');expect(plan.targets.attendee_id).not.toContain('shared-person');
  const removeEventContent=vi.fn().mockResolvedValue(undefined);const removePreviewContentBefore=vi.fn().mockResolvedValue(undefined);const room={getByName:vi.fn(()=>({removeEventContent,removePreviewContentBefore}))} as unknown as Cloudflare.Env['THE_ROOM'];
  await runPreviewCleanup({DB:env.DB,THE_ROOM:room});
  for(const [table,id] of [['orders','preview-order'],['orders','current-test'],['tickets','preview-ticket'],['support_cases','preview-case'],['support_messages','preview-message'],['attendee_profiles','preview-only'],['attendee_sessions','preview-session'],['payment_events','preview-payment-event'],['delivery_events','preview-email'],['consent_records','preview-consent']])expect(await env.DB.prepare(`SELECT 1 FROM ${table} WHERE id=?`).bind(id).first(),table).toBeNull();
@@ -30,6 +33,8 @@ it('fully removes preview relationships and test purchases while preserving live
  expect(await env.DB.prepare("SELECT id FROM booking_fee_rules WHERE id='preview-fee'").first()).toBeNull();
  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM curated_event_records WHERE slug IN ('the-weekend-braai','sun-chasers-labadi')").first()).toEqual({count:2});
  expect(await env.DB.prepare("SELECT id FROM orders WHERE id='live-order'").first()).toBeTruthy();expect(await env.DB.prepare("SELECT id FROM attendee_profiles WHERE id='shared-person'").first()).toBeTruthy();expect(await env.DB.prepare("SELECT status FROM event_registrations WHERE id='live-rsvp'").first()).toEqual({status:'requested'});
+ expect(await env.DB.prepare("SELECT id FROM operational_audit_events WHERE id='deep-preview-audit'").first()).toBeNull();
+ expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug='after-dark-osu'").first()).toEqual({count:0});
  expect(removeEventContent).toHaveBeenCalledTimes(3);
  expect(removePreviewContentBefore).toHaveBeenCalledWith('2026-09-08T09:59:19.000Z');
  await runPreviewCleanup({DB:env.DB,THE_ROOM:room});expect(removeEventContent).toHaveBeenCalledTimes(3);
