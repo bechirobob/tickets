@@ -16,6 +16,7 @@ function condition(table:string,columns:string[],t:Targets) {
  const clauses=columns.filter(c=>t[c]?.length).map(c=>inside(c,t[c]));
  if(columns.includes('id')&&primary[table]) clauses.push(inside('id',t[primary[table]]??[]));
  if(table==='reconciliation_runs')clauses.push(inside('id',t.run_id??[]));
+ if(table==='booking_fee_rules')clauses.push(`(scope='event' AND ${inside('scope_id',t.event_slug)})`);
  if(table==='curated_event_records')clauses.push(inside('slug',t.event_slug));
 
  if(table==='attendee_profiles'||table==='attendee_recovery_grants')clauses.push(inside('normalized_email',t.orphan_email??[]));

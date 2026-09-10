@@ -3,6 +3,7 @@ import {expect,it,vi} from 'vitest';
 import {planPreviewCleanup,previewCleanupId,runPreviewCleanup} from '../lib/preview-cleanup';
 it('fully removes preview relationships and test purchases while preserving live events, guests, accounts and a shared customer',async()=>{
  const now=new Date().toISOString();
+ await env.DB.prepare("INSERT INTO booking_fee_rules(id,percentage_basis_points,scope,scope_id,effective_at,created_at,created_by) VALUES ('preview-fee',100,'event','after-dark-osu',?,?, 'test')").bind(now,now).run();
  await env.DB.prepare("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,created_at) VALUES (?,'owner','preview.cleanup','maintenance','preview-cases','pending',?)").bind(previewCleanupId,now).run();
  for(const [id,email] of [['preview-only','preview-only@example.com'],['shared-person','shared@example.com']])await env.DB.prepare("INSERT INTO attendee_profiles(id,normalized_email,display_name,created_at,updated_at) VALUES(?,?,?, ?,?)").bind(id,email,id,now,now).run();
  for(const [id,slug,mode,email] of [['preview-order','after-dark-osu','test','preview-only@example.com'],['shared-preview','noir-room-labone','test','shared@example.com'],['current-test','sun-chasers-labadi','sandbox','test-current@example.com'],['live-order','the-weekend-braai','live','shared@example.com']])await env.DB.prepare(`INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,payment_environment,created_at) VALUES(?,?,?,1,100,0,100,'GHS',?,'','momo','paid',?,?)`).bind(id,`ref-${id}`,slug,email,mode,now).run();
@@ -25,6 +26,7 @@ it('fully removes preview relationships and test purchases while preserving live
  await runPreviewCleanup({DB:env.DB,THE_ROOM:room});
  for(const [table,id] of [['orders','preview-order'],['orders','current-test'],['tickets','preview-ticket'],['support_cases','preview-case'],['support_messages','preview-message'],['attendee_profiles','preview-only'],['attendee_sessions','preview-session'],['payment_events','preview-payment-event'],['delivery_events','preview-email'],['consent_records','preview-consent']])expect(await env.DB.prepare(`SELECT 1 FROM ${table} WHERE id=?`).bind(id).first(),table).toBeNull();
  for(const table of ['ticket_assignments','ticket_gate_credentials'])expect(await env.DB.prepare(`SELECT 1 FROM ${table} WHERE ticket_id='preview-ticket'`).first()).toBeNull();
+ expect(await env.DB.prepare("SELECT id FROM booking_fee_rules WHERE id='preview-fee'").first()).toBeNull();
  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM curated_event_records WHERE slug IN ('the-weekend-braai','sun-chasers-labadi')").first()).toEqual({count:2});
  expect(await env.DB.prepare("SELECT id FROM orders WHERE id='live-order'").first()).toBeTruthy();expect(await env.DB.prepare("SELECT id FROM attendee_profiles WHERE id='shared-person'").first()).toBeTruthy();expect(await env.DB.prepare("SELECT status FROM event_registrations WHERE id='live-rsvp'").first()).toEqual({status:'requested'});
  expect(removeEventContent).toHaveBeenCalledTimes(4);

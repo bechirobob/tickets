@@ -31,6 +31,8 @@ for (const [path, heading] of [
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     expect(overflow, `${path} document overflow`).toBe(false);
     expect(errors).toEqual([]); expect(apiErrors).toEqual([]);
+    if(path!=='/admin/account' && (page.viewportSize()?.width??1280)<=900){const gap=await page.evaluate(()=>{const nav=document.querySelector('.curation-nav')!.getBoundingClientRect();const content=document.querySelector('.ops-main,.curation-main,.room-ops > section')!.getBoundingClientRect();return content.top-nav.bottom;});expect(gap,`${path} space below mobile navigation`).toBeLessThan(40);}
+
     for(const summary of await page.locator('details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
