@@ -14,6 +14,9 @@ async function query(sql) {
 }
 const report = {
   revision: process.env.GITHUB_SHA,
+  cleanup: await query("SELECT outcome,created_at FROM operational_audit_events WHERE id='operator:preview-cleanup-2026-09-10'"),
+  cleanupAlerts: await query("SELECT source,message,detail,created_at FROM system_alerts WHERE source='preview-cleanup' ORDER BY created_at DESC LIMIT 3"),
+  currentRegistration: await query("SELECT event_slug,mode,capacity,approval_required,closes_at FROM event_registration_settings WHERE event_slug='the-weekend-braai'"),
   events: await query(`SELECT id,submission_id,slug,title,status,is_test_event,removed_at,
     (SELECT COUNT(*) FROM orders o WHERE o.event_slug=e.slug) AS orders,
     (SELECT COUNT(*) FROM orders o WHERE o.event_slug=e.slug AND payment_environment='live' AND payment_provider<>'rsvp' AND status IN ('paid','refund_pending','refunded','requires_refund','disputed')) AS live_paid_orders,
