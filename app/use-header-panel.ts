@@ -1,10 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
+
+const subscribeToReadiness = () => () => {};
+const clientIsReady = () => true;
+const serverIsReady = () => false;
 
 /** One non-modal header disclosure at a time, with a reversible exit. */
 export function useHeaderPanel() {
+  const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const id = useId();
   const pathname = usePathname();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -50,5 +55,5 @@ export function useHeaderPanel() {
       window.removeEventListener("becore:header-panel", other);
     };
   }, [close, id, phase]);
-  return { id, trigger, panel, phase, open: phase === "open", mounted: phase !== "closed", toggle, close };
+  return { id, trigger, panel, ready, phase, open: phase === "open", mounted: phase !== "closed", toggle, close };
 }

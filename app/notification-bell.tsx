@@ -10,7 +10,7 @@ import { useHeaderPanel } from "./use-header-panel";
 
 export default function NotificationBell() {
   const feed = useNotifications();
-  const { id, trigger, panel, mounted, open, phase, toggle, close } = useHeaderPanel();
+  const { id, trigger, panel, mounted, open, phase, ready, toggle, close } = useHeaderPanel();
   const [position, setPosition] = useState({ top: 64, right: 12 });
   const anchor = trigger;
   useLayoutEffect(() => {
@@ -24,7 +24,7 @@ export default function NotificationBell() {
     window.addEventListener("scroll", place, true);
     return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
   }, [anchor, mounted]);
-  return <><button ref={trigger} type="button" className="notification-bell" aria-label={feed.unread ? `${feed.unread} unread notifications` : "Notifications"} aria-haspopup="dialog" aria-controls={id} aria-expanded={open} onClick={(event) => { toggle(event.detail === 0); if (!open) void feed.load(); }}><Bell size={17} aria-hidden="true" />{feed.unread ? <b>{feed.unread > 9 ? "9+" : feed.unread}</b> : null}</button>
+  return <><button ref={trigger} type="button" className="notification-bell" disabled={!ready} aria-busy={!ready} aria-label={feed.unread ? `${feed.unread} unread notifications` : "Notifications"} aria-haspopup="dialog" aria-controls={id} aria-expanded={open} onClick={(event) => { toggle(event.detail === 0); if (!open) void feed.load(); }}><Bell size={17} aria-hidden="true" />{feed.unread ? <b>{feed.unread > 9 ? "9+" : feed.unread}</b> : null}</button>
     {mounted && createPortal(<section ref={panel} id={id} onKeyDown={(event) => {
       if (event.key !== "Tab") return;
       const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], summary')].filter((element) => element.getClientRects().length && !element.closest('[inert]'));
