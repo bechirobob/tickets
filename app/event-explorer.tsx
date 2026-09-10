@@ -8,7 +8,7 @@ import { eventImageLoader, eventImageUrl } from "./event-images";
 import type { CuratedEvent } from "./events";
 import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
 import { ActionLink } from "./action";
-import { discoveryPrice } from "../lib/event-pricing";
+import { discoveryOffer } from "../lib/event-pricing";
 import PosterLink from "./poster-link";
 import { eventColourScheme, eventPresentationStyle } from "../lib/event-presentation";
 
@@ -66,7 +66,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
     </div>
 
     <div className="drop-vibes" role="group" aria-label="Music and mood">
-      {vibes.map((item) => <button key={item.value} type="button" aria-pressed={vibe === item.value} onClick={() => { setVibe(item.value); setPage(0); }}><b>{item.label}</b></button>)}
+      {vibes.map((item) => <button key={item.value} type="button" disabled={!ready} aria-pressed={vibe === item.value} onClick={() => { setVibe(item.value); setPage(0); }}><b>{item.label}</b></button>)}
     </div>
 
     <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
@@ -84,7 +84,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
           <h3><Link href={`/event/${event.slug}`}>{event.title}</Link></h3>
           <small>{event.venue} · {event.area}</small>
           <p className="drop-card__quip" aria-hidden={event.quip ? undefined : true}>{event.quip}</p>
-          <div><span>{event.registrationMode === "rsvp" ? "RSVP" : event.registrationMode === "interest" ? "Keep me posted" : event.scheduleStatus === "coming_soon" ? "Tickets coming soon" : event.scheduleStatus === "end_pending" ? `GH₵${discoveryPrice(event)} · Sales soon` : event.ticketTiers.some((tier) => tier.status === "available") ? `From GH₵${discoveryPrice(event)}` : event.eventState === "sold_out" ? "Sold out" : event.ticketTiers.some((tier) => tier.status === "upcoming") ? "Sales soon" : "Sales closed"}</span></div><p className="drop-card__verification" aria-hidden={event.isVerified ? undefined : true}>{event.isVerified ? <span className="drop-card__verified"><BadgeCheck size={13} aria-hidden="true" /> Verified event</span> : null}</p>
+          <div><span>{discoveryOffer(event).label}</span></div><p className="drop-card__verification" aria-hidden={event.isVerified ? undefined : true}>{event.isVerified ? <span className="drop-card__verified"><BadgeCheck size={13} aria-hidden="true" /> Verified event</span> : null}</p>
           <ActionLink href={`/event/${event.slug}`} variant="text" aria-label={`See ${event.title}`}>View event</ActionLink>
         </div>
       </article>)}

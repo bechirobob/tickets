@@ -49,6 +49,16 @@ async function seedPendingOrder(suffix: string, quantity = 2, capacity = 10) {
 }
 
 describe("payment fulfilment operations", () => {
+  it("sends a payment confirmed after cancellation to refund review without issuing tickets", async () => {
+    const seeded = await seedPendingOrder(`late-cancel-${crypto.randomUUID()}`, 1);
+    await env.DB.prepare("UPDATE curated_event_records SET event_state='cancelled' WHERE slug=?").bind(seeded.eventSlug).run();
+    const result = await fulfillVerifiedPayment(env.DB, { id: 9090, reference: seeded.reference, status: 'success', amount: seeded.amount, currency: 'GHS', paidAt: new Date().toISOString(), channel: 'card', gatewayResponse: 'Approved' });
+    expect(result.result).toBe('requires_refund');
+    expect(await env.DB.prepare('SELECT status FROM orders WHERE id=?').bind(seeded.orderId).first()).toEqual({ status: 'requires_refund' });
+    expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM tickets WHERE order_id=?').bind(seeded.orderId).first()).toEqual({ count: 0 });
+    expect(await env.DB.prepare('SELECT status FROM inventory_reservations WHERE order_id=?').bind(seeded.orderId).first()).toEqual({ status: 'released' });
+  });
+
   it("fulfils callback and webhook races without issuing duplicate admissions", async () => {
     const seeded = await seedPendingOrder("idempotent");
     const verification = { id: 98765, reference: seeded.reference, status: "success", amount: seeded.amount, currency: "GHS", paidAt: new Date().toISOString(), channel: "mobile_money", gatewayResponse: "Approved" };
