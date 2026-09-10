@@ -37,7 +37,7 @@ export function registrationShareState(settings: RegistrationSettings | null) {
 function signature(s: RegistrationSettings) { return JSON.stringify([s.scheduleStatus, s.startsAt, s.endsAt, s.eventState, s.mode]); }
 export async function readRegistration(db: D1Database, id: string) { return db.prepare(`SELECT ${fields} FROM event_registrations WHERE id = ?`).bind(id).first<Registration>(); }
 
-export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean }, origin: string) {
+export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean }, origin: string, directRsvp = false) {
   const settings = await registrationSettings(db, input.eventSlug);
   if (!settings || !registrationsOpen(settings) || settings.mode === 'paid') throw new Error('Registration is not open for this event.');
   if (settings.mode === 'rsvp' && !registrationStartConfirmed(settings)) throw new Error('RSVP opens when the event date is confirmed.');
@@ -48,7 +48,18 @@ export async function requestRegistration(db: D1Database, input: { eventSlug: st
   const reg = await db.prepare(`SELECT ${fields} FROM event_registrations WHERE event_slug = ? AND normalized_email = ?`).bind(input.eventSlug, input.email).first<Registration>();
   if (!reg) throw new Error('Registration could not be saved. Try again.');
   await recordPolicyConsents({ db, subjectType: 'registration', subjectId: reg.id, actorEmail: input.email, policyKeys: ['purchase', 'privacy'] });
+  if (directRsvp && settings.mode === 'rsvp') {
+    // Submission is a guest request, not proof of email ownership. Keep the
+    // existing identity and consent on retries; never create an account here.
+    await db.prepare(`UPDATE event_registrations SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND status = 'unverified'`)
+      .bind(settings.approvalRequired ? 'requested' : 'waitlisted', now, reg.id).run();
+    await promoteRegistrations(db, reg.eventSlug);
+    const current = await readRegistration(db, reg.id);
+    if (current) await notifyRegistrationHosts(db, { eventSlug: reg.eventSlug, sourceId: reg.id, guestName: reg.guestName, status: current.status, guests: reg.partySize });
+    return { mode: settings.mode };
+  }
   await sendRegistrationAccess(db, reg, settings.title, origin);
+  return { mode: settings.mode };
 }
 export async function sendRegistrationAccess(db: D1Database, reg: Registration, title: string, origin: string) {
   const recent = await db.prepare(`SELECT COUNT(*) AS count FROM registration_access_grants WHERE registration_id = ? AND created_at > ?`).bind(reg.id, new Date(Date.now() - 15 * 60000).toISOString()).first<{ count: number }>();
@@ -62,16 +73,17 @@ export async function sendRegistrationAccess(db: D1Database, reg: Registration, 
   await sendEmail({ db, kind: 'registration_access', recipient: reg.email, subject, text, html: `<p>Hi ${escape(reg.guestName)},</p><p>Confirm your email to continue with ${escape(title)}.</p><p><a href="${escape(url)}">View my registration</a></p><p>This link expires in 20 minutes. A place is only reserved after your RSVP is confirmed.</p>`, idempotencyKey: `registration-access/${await hashToken(token)}` });
 }
 
-// Allocation and the complete admission bundle share one atomic D1 batch.
+// Capacity is reserved atomically, including guests who have not verified an
+// email. Account passes are issued only after ownership is independently proven.
 // A unique order and deterministic ticket IDs make retries harmless.
 export async function confirmRegistration(db: D1Database, id: string) {
   const reg = await readRegistration(db, id);
-  if (!reg || !reg.attendeeId) return false;
+  if (!reg) return false;
   const now = timestamp();
   const orderId = `rsvp_${reg.id}`;
-  const confirmed = `EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL)`;
-  const statements = [db.prepare(`UPDATE event_registrations SET status = 'confirmed', order_id = ?, version = version + 1, updated_at = ?
-    WHERE id = ? AND kind = 'rsvp' AND status = 'waitlisted' AND verified_at IS NOT NULL
+  const confirmed = `EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND verified_at IS NOT NULL)`;
+  const statements = [db.prepare(`UPDATE event_registrations SET status = 'confirmed', version = version + 1, updated_at = ?
+    WHERE id = ? AND kind = 'rsvp' AND status = 'waitlisted'
     AND EXISTS (SELECT 1 FROM event_registration_settings s JOIN curated_event_records e ON e.slug = s.event_slug
       WHERE s.event_slug = event_registrations.event_slug AND s.mode = 'rsvp' AND e.status = 'published' AND e.schedule_status IN ('confirmed', 'end_pending')
       AND e.event_state IN ('on_sale', 'sold_out', 'rescheduled') AND e.starts_at > ?
@@ -82,9 +94,10 @@ export async function confirmRegistration(db: D1Database, id: string) {
       WHERE earlier.event_slug = event_registrations.event_slug AND earlier.status = 'waitlisted'
       AND (s.approval_required = 0 OR earlier.approved_at IS NOT NULL)
       AND (earlier.created_at < event_registrations.created_at OR (earlier.created_at = event_registrations.created_at AND earlier.id < event_registrations.id)))`)
-    .bind(orderId, now, id, now),
+    .bind(now, id, now),
+    db.prepare(`UPDATE event_registrations SET order_id = ? WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND verified_at IS NOT NULL`).bind(orderId, id),
     db.prepare(`INSERT OR IGNORE INTO orders (id, reference, event_slug, ticket_type, quantity, unit_quantity, face_amount_minor, booking_fee_minor, total_amount_minor, currency, customer_email, customer_phone, customer_name, payment_channel, payment_provider, status, created_at, paid_at)
-      SELECT ?, ?, event_slug, 'RSVP', party_size, party_size, 0, 0, 0, 'GHS', normalized_email, phone, guest_name, 'rsvp', 'rsvp', 'paid', ?, ? FROM event_registrations WHERE id = ? AND status = 'confirmed'`)
+      SELECT ?, ?, event_slug, 'RSVP', party_size, party_size, 0, 0, 0, 'GHS', normalized_email, phone, guest_name, 'rsvp', 'rsvp', 'paid', ?, ? FROM event_registrations WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND verified_at IS NOT NULL`)
       .bind(orderId, `RSVP-${reg.id}`, now, now, id),
   ];
   for (let index = 0; index < reg.partySize; index++) {
@@ -135,6 +148,8 @@ export async function claimRegistration(db: D1Database, token: string) {
   const consent = await db.prepare('SELECT announcements_opt_in AS optedIn, created_at AS createdAt FROM event_registrations WHERE id=?').bind(reg.id).first<{optedIn:number;createdAt:string}>();
   await rememberEventContact(db,{eventSlug:reg.eventSlug,email:reg.email,guestName:reg.guestName,source:reg.kind,consentedAt:consent?.optedIn ? consent.createdAt : null});
   await promoteRegistrations(db, reg.eventSlug);
+  // A host may already have reserved a place before this legacy access claim.
+  if (reg.status === 'confirmed') await confirmRegistration(db, reg.id);
   const registration=await readRegistration(db,reg.id);
   if(registration) await notifyRegistrationHosts(db,{eventSlug:reg.eventSlug,sourceId:reg.id,guestName:reg.guestName,status:registration.status,guests:reg.partySize});
   return { registration, cookie: attendeeCookieHeader(sessionToken) };

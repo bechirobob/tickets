@@ -23,7 +23,7 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
     const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string}[]};
     const mode=catalogue.events.find(event=>event.slug===slug)?.registrationMode;
     if (mode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
-    else if (mode === 'rsvp') await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP — free entry)$/})).toBeVisible();
+    else if (mode === 'rsvp') await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP)$/})).toBeVisible();
     else await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
     await expect(page.locator(".event-detail-preview")).toHaveCount(0);
     await expect(page.locator(".event-detail-verified")).toContainText("Verified event");

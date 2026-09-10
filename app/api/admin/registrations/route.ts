@@ -11,9 +11,9 @@ export async function GET(request: Request) {
   if (!session) return Response.json({ error: 'This event is not assigned to your account.' }, { status: 403 });
   if (url.searchParams.get('live') === '1') {
     const [counts, paid, latest] = await Promise.all([
-      env.DB.prepare("SELECT status,SUM(party_size) AS guests FROM event_registrations WHERE event_slug=? AND verified_at IS NOT NULL GROUP BY status").bind(slug).all<{status:string;guests:number}>(),
+      env.DB.prepare("SELECT status,SUM(party_size) AS guests FROM event_registrations WHERE event_slug=? AND status <> 'unverified' GROUP BY status").bind(slug).all<{status:string;guests:number}>(),
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS guests FROM orders WHERE event_slug=? AND payment_provider <> 'rsvp' AND status='paid'").bind(slug).first<{guests:number}>(),
-      env.DB.prepare(`SELECT * FROM (SELECT id,guest_name AS name,status,party_size AS guests,updated_at AS updatedAt FROM event_registrations WHERE event_slug=? AND verified_at IS NOT NULL
+      env.DB.prepare(`SELECT * FROM (SELECT id,guest_name AS name,status,party_size AS guests,updated_at AS updatedAt FROM event_registrations WHERE event_slug=? AND status <> 'unverified'
         UNION ALL SELECT id,COALESCE(customer_name,'Guest') AS name,status,quantity AS guests,paid_at AS updatedAt FROM orders WHERE event_slug=? AND payment_provider <> 'rsvp' AND status='paid') ORDER BY updatedAt DESC,id DESC LIMIT 10`).bind(slug,slug).all(),
     ]);
     const count=(status:string)=>counts.results.find(row=>row.status===status)?.guests??0;

@@ -1,7 +1,8 @@
 import {env} from 'cloudflare:test';
 import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import {adminCookieHeader,createStaffSession} from '../lib/admin-session';
-import {requestRegistration,claimRegistration,registrationSettings,registrationShareState} from '../lib/registrations';
+import {requestRegistration,claimRegistration,registrationSettings,registrationShareState,cancelRegistration,processRegistrations} from '../lib/registrations';
+import {POST as submitRsvp} from '../app/api/registrations/route';
 import {rememberEventContact,processEventAnnouncements,notifyRegistrationHosts} from '../lib/event-audience';
 import {retryFailedDeliveries,applyDeliveryWebhook} from '../lib/email-delivery';
 import {fulfillVerifiedPayment} from '../lib/payment-operations';
@@ -35,6 +36,42 @@ beforeEach(async()=>{
  expect((await settings()).status).toBe(200);
 });
 afterEach(()=>vi.restoreAllMocks());
+async function directSignup(email:string,extra:Record<string,unknown>={}) {
+ return submitRsvp(post('/api/registrations',{eventSlug:slug,email,guestName:'Party Guest',phone:'',partySize:1,acceptedTerms:true,announcementsOptIn:true,...extra},''));
+}
+it('takes RSVP requests straight to host review and guest emails without sending confirmation or creating an account',async()=>{
+ await settings({capacity:100,approvalRequired:true});
+ const email='direct-party@example.com';
+ const response=await directSignup(email);expect(response.status).toBe(202);expect(response.headers.get('set-cookie')).toBeNull();
+ expect(await response.json()).toEqual({message:'RSVP received. Outfit planning starts now.'});
+ const reg=await env.DB.prepare('SELECT id,status,attendee_id,verified_at,announcements_opt_in FROM event_registrations WHERE event_slug=? AND normalized_email=?').bind(slug,email).first<{id:string}>();
+ expect(reg).toMatchObject({status:'requested',attendee_id:null,verified_at:null,announcements_opt_in:1});
+ expect(await env.DB.prepare('SELECT id FROM attendee_profiles WHERE normalized_email=?').bind(email).first()).toBeNull();
+ expect(await env.DB.prepare('SELECT id FROM registration_access_grants WHERE registration_id=?').bind(reg!.id).first()).toBeNull();
+ expect(await env.DB.prepare('SELECT id FROM delivery_events WHERE recipient=?').bind(email).first()).toBeNull();
+ expect(await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&live=1`))).json()).toMatchObject({requested:1,confirmed:0,latest:[{name:'Party Guest',status:'requested'}]});
+ expect(await (await audience(get(`/api/admin/audience?eventSlug=${slug}`))).json()).toMatchObject({total:1,subscribers:0,contacts:[{email,subscribed:0}]});
+ expect(await (await audience(get(`/api/admin/audience?eventSlug=${slug}&export=csv`))).text()).toContain(email);
+ expect((await configure(post('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id}))).status).toBe(200);
+ expect(await env.DB.prepare('SELECT status,attendee_id,verified_at,order_id FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({status:'confirmed',attendee_id:null,verified_at:null,order_id:null});
+ await processRegistrations(env,origin);
+ expect(await env.DB.prepare('SELECT id FROM delivery_events WHERE recipient=?').bind(email).first()).toBeNull();
+ expect((await directSignup(email,{guestName:'Someone else',partySize:2,announcementsOptIn:false})).status).toBe(202);
+ expect(await env.DB.prepare('SELECT guest_name,party_size,announcements_opt_in,status FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({guest_name:'Party Guest',party_size:1,announcements_opt_in:1,status:'confirmed'});
+});
+it('reserves capacity without email verification, waitlists overflow and reuses the reservation after a later verified claim',async()=>{
+ await settings({capacity:1,maxPartySize:1});
+ await directSignup('first-party@example.com');await directSignup('second-party@example.com');
+ const rows=await env.DB.prepare('SELECT id,status,normalized_email AS email FROM event_registrations WHERE event_slug=? ORDER BY created_at,id').bind(slug).all<{id:string;status:string;email:string}>();
+ expect(rows.results.map(r=>r.status)).toEqual(['confirmed','waitlisted']);
+ await cancelRegistration(env.DB,rows.results[0].id);
+ expect(await env.DB.prepare('SELECT status FROM event_registrations WHERE id=?').bind(rows.results[1].id).first()).toEqual({status:'confirmed'});
+ // Existing access links remain compatible, but ordinary public signup never sends one.
+ const claimed=await signup('second-party@example.com');expect(claimed.registration?.status).toBe('confirmed');
+ expect(claimed.registration?.attendeeId).toBeTruthy();
+ expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM tickets WHERE order_id=?').bind(claimed.registration!.orderId).first()).toEqual({count:1});
+ await settings({capacity:1,maxPartySize:1,accepting:false});expect((await directSignup('closed-party@example.com')).status).toBe(400);
+});
 it('only advertises links for saved, published and open registration',async()=>{
  const s=(await registrationSettings(env.DB,slug))!;
  expect(registrationShareState(s)).toMatchObject({ready:true,mode:'rsvp'});

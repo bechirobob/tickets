@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
 test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{
-  await page.goto('/rsvp/the-weekend-braai');await expect(page.getByText('Paid registration',{exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
-  await page.goto('/rsvp/sun-chasers-labadi');await expect(page.getByLabel('Your name')).toBeInViewport();await expect(page.getByText('Email updates · no admission included')).toBeVisible();
+  await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'Registration has not opened yet. The host is confirming the event schedule.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
+  await page.goto('/rsvp/sun-chasers-labadi');await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.getByText('Email updates · no admission included')).toBeVisible();
 });
 test('free RSVP preserves form details on failure and submits the selected party without checkout', async ({ page }) => {
   await page.goto('/event/after-dark-osu');
-  await page.getByRole('button', { name: 'RSVP — free entry' }).click();
+  await page.getByRole('button', { name: 'RSVP' }).click();
   await page.getByLabel('Your name').fill('Registration Guest');
   await page.getByLabel('Email address').fill('registration@example.com');
   await page.getByLabel('Guests, including you').selectOption('3');
@@ -16,9 +16,9 @@ test('free RSVP preserves form details on failure and submits the selected party
   await page.route('**/api/registrations', async route => {
     expect(route.request().postDataJSON()).toMatchObject({ eventSlug: 'after-dark-osu', partySize: 3, acceptedTerms: true });
     attempts++;
-    await route.fulfill({ status: attempts === 1 ? 503 : 202, contentType: 'application/json', body: JSON.stringify(attempts === 1 ? { error: 'Please try again.' } : { message: 'Check your email to confirm your registration.' }) });
+    await route.fulfill({ status: attempts === 1 ? 503 : 202, contentType: 'application/json', body: JSON.stringify(attempts === 1 ? { error: 'Please try again.' } : { message: 'RSVP received. Outfit planning starts now.' }) });
   });
-  const send = page.getByRole('button', { name: 'Send my confirmation link' });
+  const send = page.getByRole('button', { name: 'Send RSVP' });
   await send.click();
   await expect(page.getByRole('status')).toHaveText('Please try again.');
   await expect(page.getByLabel('Your name')).toHaveValue('Registration Guest');
@@ -26,7 +26,7 @@ test('free RSVP preserves form details on failure and submits the selected party
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: `test-results/rsvp-${test.info().project.name}.png`, fullPage: true });
   await send.click();
-  await expect(page.getByRole('status')).toHaveText('Check your email to confirm your registration.');
+  await expect(page.getByRole('status')).toContainText('RSVP received.');
   await expect(page.getByLabel('Email address')).toHaveCount(0);
   await page.goto('/checkout/after-dark-osu');
   await expect(page).toHaveURL(/\/event\/after-dark-osu$/);
