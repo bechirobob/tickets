@@ -4,6 +4,7 @@ import { App as NativeApp } from '@capacitor/app';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { Browser } from '@capacitor/browser';
+import { eventPresentationStyle } from '../../lib/event-presentation';
 import { RefreshCw } from 'lucide-react';
 import '../../styles/customer.css';
 import HomeScreen from '../../app/home-screen';
@@ -128,7 +129,7 @@ function App() {
   const events = catalogue?.screens.map(item => item.event) ?? [];
 
   return <Navigation.Provider value={{ pathname, navigate }}><CustomerRuntimeProvider value={runtime}>
-    <div className="packaged-customer" onTouchStart={event => {
+    <div className="packaged-customer" style={current ? { ...eventPresentationStyle(current.event), backgroundColor: "var(--event-field)" } : undefined} onTouchStart={event => {
       const touch = event.touches[0];
       swipe.current = pathname.startsWith('/event/') && touch.clientX < 24 ? { x: touch.clientX, y: touch.clientY, time: Date.now() } : null;
     }} onTouchEnd={event => {
