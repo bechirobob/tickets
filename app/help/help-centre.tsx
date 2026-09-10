@@ -21,6 +21,18 @@ const audiences: Audience[] = ["Everyone", "Going out", "Organising", "At the do
 
 const guides: Guide[] = [
   {
+    id: "rsvp-guest", audience: "Going out", category: "RSVP", title: "RSVP for a Night",
+    summary: "Found your plans? Put your name down.",
+    steps: ["Open the RSVP link or choose RSVP on the event page.", "Add your details and send your request. You’ll see a message when it lands.", "If the host is reviewing requests, your spot still needs their nod. Paid registration takes you to checkout."],
+    action: { href: "/events", label: "Find your Night" },
+  },
+  {
+    id: "rsvp-host", audience: "Organising", category: "RSVP", title: "Set up RSVPs and share your link",
+    summary: "Your guest list, your rules. Get the link ready in one place.",
+    steps: ["Choose your event and open RSVP & guests. Pick RSVP, Paid registration or Email list only.", "Set the guest limit and closing time. Turn on review if you want to approve each request.", "Choose Save & copy link and send it to your guests. New requests appear automatically in Guest list.", "Guest emails shows your saved contacts. Search for someone or open the list when you need it."],
+    action: { href: "/organizer/workspace", label: "Set up RSVPs" },
+  },
+  {
     id: "find-ticket",
     audience: "Going out",
     category: "Tickets",

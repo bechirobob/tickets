@@ -73,6 +73,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [view, setView] = useState("guests");
+  const [historyPage, setHistoryPage] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -172,12 +173,13 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
 
         <section className="organizer-history" aria-labelledby="organizer-history-title">
           <header><div><p>Submitted to BeCore</p><h2 id="organizer-history-title">Your submissions</h2></div><Link href="/organizer/submit">Submit another Night <ArrowUpRight size={15} /></Link></header>
-          {data.submissions.length ? <div>{data.submissions.map((submission) => <article key={submission.id}>
+          {data.submissions.length ? <div>{data.submissions.slice(historyPage*10,historyPage*10+10).map((submission) => <article key={submission.id}>
             <time>{date(submission.createdAt)}</time>
             <div><h3>{submission.title}</h3><p>{submission.organizerName} · Event date {date(submission.startsAt)}</p>{submission.reviewNote ? <small>{submission.reviewNote}</small> : null}</div>
             <span data-status={submission.status}>{readable(submission.status)}</span>
             {submission.eventSlug ? <button type="button" onClick={() => { setSelectedSlug(submission.eventSlug ?? ""); document.getElementById("organizer-event-detail")?.scrollIntoView({ behavior: "smooth" }); }}>Manage event</button> : <i>Ref {submission.id.slice(0, 8).toUpperCase()}</i>}
           </article>)}</div> : <div className="organizer-history__empty"><History size={22} /><p>Your submissions will appear here. Use the same email when you send us an event.</p></div>}
+          {data.submissions.length>10?<nav className="audience-pagination" aria-label="Submission history pages"><button disabled={historyPage===0} onClick={()=>setHistoryPage(historyPage-1)}>Previous</button><span>{historyPage*10+1}–{Math.min(historyPage*10+10,data.submissions.length)} of {data.submissions.length}</span><button disabled={(historyPage+1)*10>=data.submissions.length} onClick={()=>setHistoryPage(historyPage+1)}>Next</button></nav>:null}
         </section>
 
         </details>

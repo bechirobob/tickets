@@ -19,6 +19,7 @@ const report = {
     (SELECT COUNT(*) FROM orders o WHERE o.event_slug=e.slug AND payment_environment='live' AND payment_provider<>'rsvp' AND status IN ('paid','refund_pending','refunded','requires_refund','disputed')) AS live_paid_orders,
     (SELECT COUNT(*) FROM event_registrations r WHERE r.event_slug=e.slug) AS registrations
     FROM curated_event_records e ORDER BY slug`),
+  payments: await query(`SELECT event_slug,payment_environment,payment_provider,status,paystack_status,provider_status,COUNT(*) AS count,MIN(created_at) AS first_created,MAX(created_at) AS last_created FROM orders GROUP BY event_slug,payment_environment,payment_provider,status,paystack_status,provider_status`),
   submissions: await query(`SELECT id,event_slug,title,status FROM party_submissions ORDER BY created_at`),
   hosts: await query('SELECT id,slug,name FROM hosts'),
   tables: await query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"),

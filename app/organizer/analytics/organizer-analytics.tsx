@@ -113,7 +113,7 @@ export default function OrganizerAnalytics({ actor, role }: { actor: string; rol
     </header>
 
     <section className="analytics-heading">
-      <div><p className="night-kicker"><span /> Organiser analytics</p><h1>Know what<br />moved the Night.</h1></div>
+      <div><p className="night-kicker"><span /> Organiser analytics</p><h1>How your nights are doing.</h1></div>
       <p>See ticket sales, promoter results and when your guests arrived.</p>
     </section>
 

@@ -16,12 +16,12 @@ Read-only production inventory: Actions run 34426444988. Retired previews are `a
 - Plain public/organizer guidance replaces technical descriptions of internal processing. Staff account, login and Room labels use neutral task names. Help instructions match the new organizer views.
 - Removed the Drop's decorative radial colour glow. Artwork remains complete and its softened backdrop stays within the flier frame. Expanded help and guest support use complete surfaces instead of curved partial outlines.
 - Owner-only account removal deletes credentials, sessions, recovery access and event assignments. Self-removal and removing the last active owner are blocked. Past operational work remains attributable in the audit history.
-- One-time preview cleanup runs only after the release job records the owner's authorization. It erases the retired event graphs, test purchases on current listings, unused hidden preview tiers, associated media/Room stores and unshared preview customer accounts. Shared customers and real bookings remain. The temporary retry manifest is replaced with aggregate counts after success. No messages are sent to guests.
+- One-time preview cleanup runs only after the release job records the owner's authorization. It erases the retired event graphs, test purchases on current listings, retired preview ticket tiers, associated media/Room stores and unshared preview customer accounts. Shared customers and real bookings remain. The temporary retry manifest is replaced with aggregate counts after success. No messages are sent to guests.
 - The production schedule no longer refreshes preview event dates.
 
 ## Coverage map
 
-| Area | Views/states checked |
+| Area | Views/states covered by the audit suite |
 | --- | --- |
 | Public discovery | Home, Drop, both real event pages, Hosts, host detail/empty state, About |
 | Public forms | RSVP form/success/failure, checkout availability, submission fields, ticket recovery, privacy and terms |

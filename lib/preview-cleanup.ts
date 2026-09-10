@@ -19,7 +19,7 @@ function condition(table:string,columns:string[],t:Targets) {
  if(table==='curated_event_records')clauses.push(inside('slug',t.event_slug));
 
  if(table==='attendee_profiles'||table==='attendee_recovery_grants')clauses.push(inside('normalized_email',t.orphan_email??[]));
- if(table==='consent_records')clauses.push(inside('subject_id',t.subject_id??[]),inside('actor_email',t.orphan_email??[]));
+ if(table==='consent_records')clauses.push(inside('subject_id',t.subject_id??[]));
  if(table==='delivery_events'){
   clauses.push(inside('recipient',t.orphan_email??[]));
   for(const key of [...t.event_slug,...(t.registration_id??[]),...(t.campaign_id??[])])clauses.push(`instr(COALESCE(payload_json,''),${literal(key)})>0`);
@@ -41,8 +41,7 @@ export async function planPreviewCleanup(db:D1Database):Promise<Plan> {
  const names=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name<>'d1_migrations'").all<{name:string}>();
  for(const {name} of names.results){if(!/^[a-z_]+$/.test(name))continue;const cols=await db.prepare(`PRAGMA table_info(${name})`).all<{name:string}>();tables[name]=cols.results.map(c=>c.name);}
  const targets:Targets={event_slug:retired,host_id:['host:becore-preview-desk']};
- const testOrders=await db.prepare("SELECT id FROM orders WHERE payment_environment='test'").all<{id:string}>();add(targets,'order_id',testOrders.results.map(r=>r.id));
- const unusedPreviewTiers=await db.prepare("SELECT id FROM event_ticket_tiers t WHERE id LIKE 'preview:tier:%' AND status='hidden' AND NOT EXISTS(SELECT 1 FROM orders o WHERE o.ticket_tier_id=t.id AND o.payment_environment<>'test')").all<{id:string}>();add(targets,'ticket_tier_id',unusedPreviewTiers.results.map(r=>r.id));
+ const testOrders=await db.prepare("SELECT id FROM orders WHERE payment_environment IN ('test','sandbox')").all<{id:string}>();add(targets,'order_id',testOrders.results.map(r=>r.id));
  // Resolve parent IDs before deletion. This also covers test orders on a real listing.
  for(let pass=0;pass<4;pass++)for(const [table,key] of Object.entries(primary)){
   if(table==='attendee_profiles'||table==='attendee_recovery_grants'||!tables[table])continue;
@@ -53,20 +52,26 @@ export async function planPreviewCleanup(db:D1Database):Promise<Plan> {
  }
  const runs=await db.prepare(`SELECT DISTINCT run_id FROM reconciliation_entries WHERE ${condition('reconciliation_entries',tables.reconciliation_entries,targets)}`).all<{run_id:string}>();
  for(const run of runs.results){const other=await db.prepare(`SELECT 1 FROM reconciliation_entries WHERE run_id=? AND NOT ${condition('reconciliation_entries',tables.reconciliation_entries,targets)} LIMIT 1`).bind(run.run_id).first();if(!other)add(targets,'run_id',[run.run_id]);}
- const candidateIds:string[]=[];
+ const customerProfiles=await db.prepare(`SELECT id FROM attendee_profiles WHERE normalized_email IN (SELECT LOWER(customer_email) FROM orders WHERE ${condition('orders',tables.orders,targets)})`).all<{id:string}>();
+ const candidateIds:string[]=customerProfiles.results.map(row=>row.id);
  for(const [table,cols] of Object.entries(tables))if(cols.includes('attendee_id')&&condition(table,cols,targets)!=='0'){
   const rows=await db.prepare(`SELECT DISTINCT attendee_id AS id FROM ${table} WHERE ${condition(table,cols,targets)}`).all<{id:string}>();candidateIds.push(...rows.results.map(r=>r.id));
  }
  // Keep shared customer accounts if any real event, ticket, host or support relationship remains.
  const relationshipTables=['ticket_assignments','event_registrations','support_cases','attendee_event_decisions','attendee_event_preferences','attendee_host_follows','attendee_question_answers','attendee_notifications','notification_preferences','room_flashes','room_suspensions','vip_concierge_requests'];
  for(const id of new Set(candidateIds.filter(Boolean))){
+  const profile=await db.prepare('SELECT normalized_email FROM attendee_profiles WHERE id=?').bind(id).first<{normalized_email:string}>();
   let shared=false;
+  if(profile){
+   const related=await db.prepare(`SELECT 1 FROM orders WHERE LOWER(customer_email)=? AND NOT ${condition('orders',tables.orders,targets)} UNION ALL SELECT 1 FROM event_registrations WHERE normalized_email=? AND NOT ${condition('event_registrations',tables.event_registrations,targets)} UNION ALL SELECT 1 FROM event_audience_contacts WHERE email=? AND NOT ${condition('event_audience_contacts',tables.event_audience_contacts,targets)} LIMIT 1`).bind(profile.normalized_email,profile.normalized_email,profile.normalized_email).first();
+   if(related)continue;
+  }
   for(const table of relationshipTables){const other=await db.prepare(`SELECT 1 FROM ${table} WHERE attendee_id=? AND NOT ${condition(table,tables[table],targets)} LIMIT 1`).bind(id).first();if(other){shared=true;break;}}
-  if(!shared){const profile=await db.prepare('SELECT normalized_email FROM attendee_profiles WHERE id=?').bind(id).first<{normalized_email:string}>();add(targets,'attendee_id',[id]);if(profile)add(targets,'orphan_email',[profile.normalized_email]);}
+  if(!shared){add(targets,'attendee_id',[id]);if(profile)add(targets,'orphan_email',[profile.normalized_email]);}
  }
  const grants=await db.prepare(`SELECT id FROM attendee_recovery_grants WHERE ${inside('normalized_email',targets.orphan_email??[])}`).all<{id:string}>();add(targets,'recovery_grant_id',grants.results.map(r=>r.id));
  add(targets,'subject_id',[...(targets.order_id??[]),...(targets.registration_id??[]),...(targets.attendee_id??[]),...(targets.submission_id??[])]);
- const previewRooms=await db.prepare(`SELECT DISTINCT event_slug AS slug FROM orders o WHERE ${inside('id',targets.order_id??[])} AND event_slug NOT IN (${retired.map(literal).join(',')}) AND NOT EXISTS(SELECT 1 FROM orders live WHERE live.event_slug=o.event_slug AND (live.payment_environment<>'test' OR live.payment_provider='rsvp')) AND NOT EXISTS(SELECT 1 FROM event_registrations r WHERE r.event_slug=o.event_slug)`).all<{slug:string}>();
+ const previewRooms=await db.prepare(`SELECT DISTINCT event_slug AS slug FROM orders o WHERE ${inside('id',targets.order_id??[])} AND event_slug NOT IN (${retired.map(literal).join(',')}) AND NOT EXISTS(SELECT 1 FROM orders live WHERE live.event_slug=o.event_slug AND (COALESCE(live.payment_environment,'unknown') NOT IN ('test','sandbox') OR live.payment_provider='rsvp')) AND NOT EXISTS(SELECT 1 FROM event_registrations r WHERE r.event_slug=o.event_slug)`).all<{slug:string}>();
  const extraPreviewRooms=previewRooms.results.map(row=>row.slug);
  const counts:Record<string,number>={};
  for(const [table,cols] of Object.entries(tables)){const where=condition(table,cols,targets);if(where==='0')continue;const row=await db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`).first<{count:number}>();if(row?.count)counts[table]=row.count;}
@@ -83,7 +88,7 @@ export async function runPreviewCleanup(env:Pick<Cloudflare.Env,'DB'|'THE_ROOM'>
  await env.DB.batch(retired.map(slug=>env.DB.prepare("UPDATE curated_event_records SET status='unpublished',removed_at=COALESCE(removed_at,?) WHERE slug=?").bind(new Date().toISOString(),slug)));
  for(const slug of retired)await env.THE_ROOM.getByName(slug).removeEventContent();
  for(const slug of plan.extraPreviewRooms??[]){
-  const real=await env.DB.prepare("SELECT 1 FROM orders WHERE event_slug=? AND (payment_environment<>'test' OR payment_provider='rsvp') UNION ALL SELECT 1 FROM event_registrations WHERE event_slug=? LIMIT 1").bind(slug,slug).first();
+  const real=await env.DB.prepare("SELECT 1 FROM orders WHERE event_slug=? AND (COALESCE(payment_environment,'unknown') NOT IN ('test','sandbox') OR payment_provider='rsvp') UNION ALL SELECT 1 FROM event_registrations WHERE event_slug=? LIMIT 1").bind(slug,slug).first();
   if(real)throw new Error('Real guests arrived in a former preview Room. Cleanup stopped for review.');
   await env.THE_ROOM.getByName(slug).removeEventContent();
  }

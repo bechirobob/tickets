@@ -1,5 +1,7 @@
 "use client";
 
+import { ActionButton } from "../../action";
+
 import { operationsFetch } from "../../../lib/operations-client";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -76,17 +78,17 @@ export default function AccountSecurity({ mustChangePassword }: { mustChangePass
     }
   }
 
-  return <div className="account-security-stack"><section className="passkey-security"><header><div><b>Passkeys & devices</b><small>{passkeys.length ? "You can sign in with your passkey." : "Use your device to sign in with a passkey."}</small></div><button type="button" onClick={() => void addPasskey()} disabled={busy}>{busy ? "Opening device…" : passkeys.length ? "Add another" : "Add passkey"}</button></header>
+  return <div className="account-security-stack"><section className="passkey-security"><header><div><b>Passkeys & devices</b><small>{passkeys.length ? "You can sign in with your passkey." : "Use your device to sign in with a passkey."}</small></div><ActionButton type="button" onClick={() => void addPasskey()} disabled={busy}>{busy ? "Opening device…" : passkeys.length ? "Add another" : "Add passkey"}</ActionButton></header>
     {passkeys.map((passkey) => <article key={passkey.id}><span><b>{passkey.label}</b><small>{passkey.backedUp ? "Synced passkey" : passkey.deviceType.replaceAll("-", " ")} · Added {new Date(passkey.createdAt).toLocaleDateString("en-GH")}</small></span><i>{passkey.lastUsedAt ? `Used ${new Date(passkey.lastUsedAt).toLocaleDateString("en-GH")}` : "New"}</i></article>)}
-    <details><summary>Active devices · {sessions.length}</summary>{sessions.map((item) => <article key={item.id}><span><b>{item.id === currentSessionId ? "This device" : item.deviceLabel ?? "Staff device"}</b><small>Seen {new Date(item.lastSeenAt).toLocaleString("en-GH")} · {item.mfaVerifiedAt ? "Passkey verified" : "Password sign-in"}</small></span>{item.id !== currentSessionId ? <button type="button" onClick={() => void revokeSession(item.id)}>Sign out</button> : null}</article>)}</details>
+    <details><summary>Active devices · {sessions.length}</summary>{sessions.map((item) => <article key={item.id}><span><b>{item.id === currentSessionId ? "This device" : item.deviceLabel ?? "Staff device"}</b><small>Seen {new Date(item.lastSeenAt).toLocaleString("en-GH")} · {item.mfaVerifiedAt ? "Passkey verified" : "Password sign-in"}</small></span>{item.id !== currentSessionId ? <ActionButton type="button" onClick={() => void revokeSession(item.id)}>Sign out</ActionButton> : null}</article>)}</details>
     <p>{recoveryCodesRemaining} unused recovery codes</p>
   </section>
-  {recoveryCodes.length ? <section className="recovery-codes"><header><b>Save these once</b><button type="button" onClick={() => setRecoveryCodes([])}>I saved them</button></header><p>Each code works once. Keep a copy where you can find it.</p><div>{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div></section> : null}
+  {recoveryCodes.length ? <section className="recovery-codes"><header><b>Save these once</b><ActionButton type="button" onClick={() => setRecoveryCodes([])}>I saved them</ActionButton></header><p>Each code works once. Keep a copy where you can find it.</p><div>{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div></section> : null}
   <form className="account-security" onSubmit={submit}>
     {mustChangePassword ? <p className="ops-message">Change the temporary password before opening your workspace.</p> : null}
     <label>Current password<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
     <label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
     <small>Use 12 or more characters with upper-case, lower-case and a number.</small>
-    <button disabled={busy}>{busy ? "Changing…" : "Change password"}</button>
+    <ActionButton type="submit" disabled={busy}>{busy ? "Changing…" : "Change password"}</ActionButton>
   </form>{message ? <p className="ops-message" role="status">{message}</p> : null}</div>;
 }

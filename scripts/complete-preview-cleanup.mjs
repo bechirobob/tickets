@@ -15,7 +15,7 @@ for(let attempt=0;attempt<18;attempt++){
  await new Promise(resolve=>setTimeout(resolve,10000));
 }
 if(job?.outcome!=='success')throw new Error('Preview cleanup has not completed. Inspect the Worker cleanup alert.');
-const remaining=await query(`SELECT slug FROM curated_event_records WHERE slug IN ('after-dark-osu','noir-room-labone','longitude-spintex') UNION ALL SELECT 'test-order' FROM orders WHERE payment_environment='test'`);
+const remaining=await query(`SELECT slug FROM curated_event_records WHERE slug IN ('after-dark-osu','noir-room-labone','longitude-spintex') UNION ALL SELECT 'test-order' FROM orders WHERE payment_environment IN ('test','sandbox')`);
 if(remaining.length)throw new Error('Preview records remain after cleanup.');
 const real=await query("SELECT slug,status FROM curated_event_records WHERE slug IN ('the-weekend-braai','sun-chasers-labadi') ORDER BY slug");
 if(real.length!==2||real.some(row=>row.status!=='published'))throw new Error('Real event listing verification failed.');

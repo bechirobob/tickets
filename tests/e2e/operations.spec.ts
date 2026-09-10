@@ -298,11 +298,11 @@ test('every organizer task and expanded panel remains compact and readable',asyn
   for(const summary of await page.locator('.organizer-dashboard details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
   await expectVisibleLettering(page,'.organizer-dashboard');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
-  const axe=await new AxeBuilder({page}).include('.organizer-dashboard').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),name).toEqual([]);
+  const axe=await new AxeBuilder({page}).include('.organizer-dashboard').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),name).toEqual([]);
   await page.screenshot({path:info.outputPath(`organizer-${name.replaceAll(/[^a-z]/gi,'-')}.png`),fullPage:true});
  }
  await tabs.getByRole('button',{name:'Event & sales',exact:true}).click();await page.getByLabel('Venue',{exact:true}).fill('Keep my venue draft');await tabs.getByRole('button',{name:'Room & VIP',exact:true}).click();await tabs.getByRole('button',{name:'Event & sales',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
- await page.goto('/organizer/analytics');await expect(page.locator('.analytics-overview')).toBeVisible();await expectVisibleLettering(page,'.organizer-analytics');await page.screenshot({path:info.outputPath('organizer-analytics.png'),fullPage:true});
+ await page.goto('/organizer/analytics');await expect(page.locator('.analytics-overview')).toBeVisible();await expectVisibleLettering(page,'.organizer-analytics');const analyticsAxe=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(analyticsAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),'Analytics').toEqual([]);await page.screenshot({path:info.outputPath('organizer-analytics.png'),fullPage:true});
 });
 
 test('email list stays closed by default and paginates compact search results',async({page},info)=>{
