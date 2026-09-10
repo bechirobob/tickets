@@ -49,6 +49,23 @@ test('event save survives a dropped connection and retains the draft', async ({ 
   await expect(page.getByRole('status')).toContainText('Connection lost'); await expect(save).toBeEnabled();
   await expect(title).toHaveValue(`${original} revised`);
 });
+test('guest tools wait for initial settings before accepting a tab change', async ({ page }) => {
+  let release: (() => Promise<void>) | undefined;
+  await page.route('**/api/admin/registrations?**', route => {
+    if (new URL(route.request().url()).searchParams.has('live')) return route.continue();
+    release = () => route.continue();
+  });
+  await page.goto('/admin/registrations?event=rsvp-browser');
+  const manager = page.locator('.registration-manager');
+  const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
+  await expect(announcements).toBeDisabled();
+  await expect.poll(() => Boolean(release)).toBe(true);
+  await release!();
+  await expect(announcements).toBeEnabled();
+  await announcements.click();
+  await expect(announcements).toHaveAttribute('aria-pressed', 'true');
+  await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
+});
 test('RSVP save and copy retains the draft after a failed save', async ({ page }) => {
   await page.goto('/admin/registrations?event=rsvp-browser');
   const manager = page.locator('.registration-manager');
@@ -242,7 +259,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  test('announcement preview preserves a failed send and owner sees organiser actions',async({page,context,baseURL},info)=>{
   await page.route('**/api/admin/audience?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,emailConfigured:true}});});
   await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
-  await manager.getByRole('button',{name:'Announcements',exact:true}).click();
+  const announcements=manager.getByRole('button',{name:'Announcements',exact:true});await announcements.click();await expect(announcements).toHaveAttribute('aria-pressed','true');
   await manager.getByLabel('Subject',{exact:true}).fill('Doors open at eight');await manager.getByLabel('Announcement',{exact:true}).fill('Please bring your QR pass. See you at the event.');
   await manager.getByRole('button',{name:'Preview announcement'}).click();await expect(manager.locator('.announcement-preview')).toContainText('1 subscribed guest emails');
   await page.route('**/api/admin/audience',route=>route.abort('failed'));await manager.getByRole('button',{name:'Send announcement'}).click();
