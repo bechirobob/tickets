@@ -1,3 +1,4 @@
+import { paystackAvailable } from "../../../lib/paystack-environment";
 import { registrationSettings, registrationsOpen } from "../../../lib/registrations";
 import { seevAvailable } from "../../../lib/seevplus";
 import CheckoutForm from "./checkout-form";
@@ -14,5 +15,5 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
   if (!registration || registration.mode !== "paid" || !registrationsOpen(registration)) redirect(`/event/${slug}`);
   if (!event.ticketTiers.some((tier) => tier.status === "available")) redirect(`/event/${slug}`);
   const { env } = await import("cloudflare:workers");
-  return <CheckoutForm seevEnabled={seevAvailable(env, event.isTestEvent)} slug={slug} event={event} feeBasisPoints={await resolveBookingFee(slug)} />;
+  return <CheckoutForm paystackEnabled={paystackAvailable(env,event.isTestEvent)} seevEnabled={seevAvailable(env, event.isTestEvent)} slug={slug} event={event} feeBasisPoints={await resolveBookingFee(slug)} />;
 }

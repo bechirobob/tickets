@@ -244,6 +244,7 @@ export const ticketTransfers = sqliteTable("ticket_transfers", {
   acceptedAt: text("accepted_at"),
   cancelledAt: text("cancelled_at"),
   recipientAttendeeId: text("recipient_attendee_id"),
+  claimedSessionId: text("claimed_session_id"),
 }, (table) => [
   uniqueIndex("ticket_transfers_token_unique").on(table.tokenHash),
   index("ticket_transfers_ticket_status_idx").on(table.ticketId, table.status, table.expiresAt),
@@ -592,6 +593,8 @@ export const paymentRefunds = sqliteTable("payment_refunds", {
   failureReason: text("failure_reason"),
   ticketIdsJson: text("ticket_ids_json"),
   batchId: text("batch_id"),
+  transitionId: text("transition_id"),
+  previousOrderStatus: text("previous_order_status"),
 }, (table) => [
   index("payment_refunds_order_idx").on(table.orderId, table.status),
   index("payment_refunds_batch_idx").on(table.batchId, table.status),
@@ -667,6 +670,7 @@ export const attendeeRecoveryGrants = sqliteTable("attendee_recovery_grants", {
   tokenHash: text("token_hash").notNull(),
   expiresAt: text("expires_at").notNull(),
   usedAt: text("used_at"),
+  claimedSessionId: text("claimed_session_id"),
   createdAt: text("created_at").notNull(),
   requestedIpHash: text("requested_ip_hash"),
 }, (table) => [
@@ -1048,7 +1052,7 @@ export const payoutTransfers = sqliteTable("payout_transfers", {
   paidAt: text("paid_at"),
 }, (table) => [
   uniqueIndex("payout_transfers_reference_unique").on(table.reference),
-  uniqueIndex("payout_transfers_settlement_unique").on(table.settlementId),
+  index("payout_transfers_settlement_idx").on(table.settlementId),
   index("payout_transfers_event_idx").on(table.eventSlug, table.status),
 ]);
 

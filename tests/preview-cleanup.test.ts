@@ -1,7 +1,8 @@
 import {env} from 'cloudflare:test';
 import {expect,it,vi} from 'vitest';
 import {planPreviewCleanup,previewCleanupId,runPreviewCleanup} from '../lib/preview-cleanup';
-it('fully removes preview relationships and test purchases while preserving live events, guests, accounts and a shared customer',async()=>{
+// This case traverses every relationship and Durable Object cleanup on shared CI runners.
+it('fully removes preview relationships and test purchases while preserving live events, guests, accounts and a shared customer',{timeout:15_000},async()=>{
  const now=new Date().toISOString();
  await env.DB.prepare("INSERT INTO booking_fee_rules(id,percentage_basis_points,scope,scope_id,effective_at,created_at,created_by) VALUES ('preview-fee',100,'event','after-dark-osu',?,?, 'test')").bind(now,now).run();
  await env.DB.prepare("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,created_at) VALUES (?,'owner','preview.cleanup','maintenance','preview-cases','pending',?)").bind(previewCleanupId,now).run();

@@ -120,3 +120,34 @@ body :is(a, button).ticket-action[data-variant][aria-busy="true"] { cursor: prog
 .night-support__threads details,.night-support__new { border:0; border-radius:10px; padding:14px 16px; background:#fffdfa; margin:10px 0; }.night-support__threads summary,.night-support__new summary { min-height:42px; cursor:pointer; font-size:14px; }.night-support__threads details > div { margin-top:12px; }.night-support__threads form { display:flex; gap:8px; }.night-support__new label { display:grid; gap:7px; margin-top:14px; }
 @media(max-width:700px){.help-page .help-guide { padding-inline:16px; }.help-page .help-guide summary b { font-size:16px; }}
 @media(prefers-reduced-motion:reduce){.help-page .help-guide > summary > svg { transition:none; }}
+
+.ticket-access{min-height:100svh;background:#f7f3ef;color:#301e30;padding:24px clamp(20px,5vw,72px)}
+.ticket-access>header{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1180px;margin:auto}
+.ticket-access>header>a:first-child{display:inline-flex;align-items:center;gap:8px;font-size:14px}
+.ticket-access>section{max-width:480px;margin:clamp(56px,12vh,120px) auto 48px}
+.ticket-access .eyebrow{margin:20px 0 12px;color:#68465d}
+.ticket-access h1{font-size:clamp(32px,5vw,48px);line-height:1.12;letter-spacing:-.035em;font-weight:550;margin:0 0 20px}
+.ticket-access section>p:not(.eyebrow){font-size:16px;line-height:1.6;margin:0 0 24px}
+.ticket-access .ticket-access__message{margin-top:20px;color:#922f36}
+.ticket-access__help{display:block;width:fit-content;margin-top:24px;font-size:14px;text-decoration:underline;text-underline-offset:4px}
+
+.checkout-unavailable{margin-top:28px;padding:24px;border-radius:18px;background:#f3eee6}.checkout-unavailable h2{font-size:24px;margin:0 0 10px}.checkout-unavailable p{line-height:1.6;max-width:45ch}.checkout-unavailable a{display:inline-flex;min-height:44px;align-items:center;font-weight:700;text-decoration:underline;text-underline-offset:4px}
+/* Gate status and search must remain readable on the scanner's dark canvas. */
+.scanner-actor,.scanner-event p,.scanner-event label,.scanner-event>div>span,.manual-entry small,.scan-surface p,.scanner-stats{color:#bfc4b6}
+.scanner-event small{color:#f0b991}
+.scanner-header>div.online{color:#b2d68e}.scanner-header>div.offline{color:#f0b991}
+.manual-entry,.gate-search{width:min(860px,calc(100% - 32px));max-width:860px;margin-left:auto;margin-right:auto;border:1px solid #41453b;border-radius:18px;background:#181b16;color:#f6f2e9}
+.gate-search>header small,.gate-search article small{color:#bfc4b6}
+.gate-search input{min-width:0;border-color:#64705a;background:#20251c;color:#f6f2e9}
+.gate-search input::placeholder,.manual-entry input::placeholder,.door-desk input::placeholder{color:#bfc4b6;opacity:1}
+.gate-search form button{min-height:44px;background:#d7f45b;color:#171b0c;font-weight:750}
+.gate-search>div,.gate-search article{border-color:#41453b}
+.gate-search article>span{min-width:0;overflow-wrap:anywhere}
+.scanner-stats{padding:18px 16px}.scanner-stats button{min-height:44px}
+.scan-frame>i:nth-of-type(1){inset:0 auto auto 0;border-width:4px 0 0 4px}
+.scan-frame>i:nth-of-type(2){inset:0 0 auto auto;border-width:4px 4px 0 0}
+.scan-frame>i:nth-of-type(3){inset:auto auto 0 0;border-width:0 0 4px 4px}
+.scan-frame>i:nth-of-type(4){inset:auto 0 0 auto;border-width:0 4px 4px 0}
+.door-desk>header>button{margin-left:auto;min-width:44px;min-height:44px;display:grid;place-items:center;background:#eeeae3;border:0;border-radius:12px;color:#222}.door-desk__search{display:flex;align-items:center;gap:10px;margin:16px 0;padding:0 12px;background:#fff;border:1px solid #d9d5ce;border-radius:12px}.door-desk__search input{min-width:0;flex:1;border:0;background:none;min-height:46px;color:#242320}.door-desk__pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0}.door-desk__pagination button{min-height:44px;padding:8px 14px;border:0;border-radius:10px;background:#ece8e1;color:#242320;font-weight:650}.door-desk__pagination button:disabled{opacity:.45}.door-desk>details{margin-top:18px;padding:16px;background:#f4f0e9;border-radius:14px}.door-desk>details summary{cursor:pointer;min-height:28px;font-weight:650}.door-desk>details form{display:flex;gap:10px;margin-top:16px}.door-desk>details form input{min-width:0;flex:1}.door-desk__empty{padding:16px 0;color:#5a5750}.door-desk__list article>span{min-width:0}.door-desk__list article b{overflow-wrap:anywhere}
+/* The gate workspace keeps a dark, high-contrast surface for door staff. */
+.door-desk{padding:22px;border:1px solid #41453b;border-radius:18px;background:#181b16;color:#f6f2e9}.door-desk header small,.door-desk__list small,.door-desk__empty{color:#bfc4b6}.door-desk>header>button,.door-desk__pagination button{background:#30362a;color:#f6f2e9}.door-desk__search{background:#20251c;border-color:#64705a;color:#f6f2e9}.door-desk__search input{background:transparent;color:#f6f2e9}.door-desk>details{background:#252b20;color:#f6f2e9}.door-desk>details form input{border-color:#64705a;border-radius:10px;background:#161a13;color:#fff;min-height:46px}.door-desk>details form button{min-height:46px;border-radius:10px}.door-desk__list article{margin:8px 0;padding:12px;border:0;border-radius:12px;background:#24291f;gap:12px}.door-desk__list button{min-height:44px;padding:8px 16px;border:0;border-radius:10px;background:#d7f45b;color:#171b0c;font-weight:750;flex-shrink:0}.door-desk__message{padding:12px;border-radius:10px;line-height:1.5}.door-desk__walkup{border:0}.door-desk__walkup a{min-height:44px;display:inline-flex;align-items:center;border-radius:10px}

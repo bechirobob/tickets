@@ -316,3 +316,22 @@ test('email list stays closed by default and paginates compact search results',a
  await page.getByRole('button',{name:'View guest emails',exact:true}).click();await expect(page.locator('.audience-table tbody tr')).toHaveCount(10);await page.locator('.audience-pagination').getByRole('button',{name:'Next'}).click();await expect(page.getByText('11–20 of 23')).toBeVisible();
  await page.getByLabel('Search guest emails',{exact:true}).fill('guest-22');await expect(page.locator('.audience-table tbody tr')).toHaveCount(1);await expect(page.getByText('guest-22@example.com')).toBeVisible();await expectVisibleLettering(page,'.event-audience');await page.screenshot({path:info.outputPath('guest-email-search.png'),fullPage:true});
 });
+
+test('the door desk keeps a large RSVP list compact and retains a failed guest addition',async({page},info)=>{
+  await page.route('**/api/admin/door?**',route=>{
+    const url=new URL(route.request().url()),q=url.searchParams.get('q')??'',offset=Number(url.searchParams.get('offset')??0);
+    const all=Array.from({length:31},(_,i)=>({id:`rsvp:guest-${i}`,guestName:`Party Guest ${String(i+1).padStart(2,'0')}`,admissionCount:1,kind:'guest_list',note:'RSVP',status:'expected'})).filter(g=>g.guestName.toLowerCase().includes(q.toLowerCase()));
+    return route.fulfill({json:{guests:all.slice(offset,offset+10),tiers:[],total:all.length,expected:31,admitted:0}});
+  });
+  await page.route('**/api/admin/door',route=>route.abort('failed'));
+  await page.goto('/scan');const desk=page.locator('.door-desk');
+  await expect(desk.getByText('31 expected · 0 admitted')).toBeVisible();await expect(desk.locator('.door-desk__list article')).toHaveCount(10);
+  await desk.getByRole('button',{name:'Next',exact:true}).click();await expect(desk.getByText('Party Guest 11',{exact:true})).toBeVisible();
+  await desk.getByRole('searchbox',{name:'Search RSVP and door guests'}).fill('Guest 31');await expect(desk.locator('.door-desk__list article')).toHaveCount(1);
+  await desk.getByText('Add a guest or take a walk-up sale',{exact:true}).click();await desk.getByRole('textbox',{name:'New door guest name'}).fill('Guest at the door');
+  await desk.getByRole('button',{name:'Add',exact:true}).click();await expect(desk.getByRole('status')).toContainText('Connection lost');
+  await expect(desk.getByRole('textbox',{name:'New door guest name'})).toHaveValue('Guest at the door');await expect(desk.getByRole('button',{name:'Add',exact:true})).toBeEnabled();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+  const axe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+  await page.screenshot({path:info.outputPath('door-desk.png'),fullPage:true});
+});

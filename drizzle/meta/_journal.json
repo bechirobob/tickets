@@ -288,6 +288,20 @@
       "when": 1788989030366,
       "tag": "0040_registration_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1789032663703,
+      "tag": "0041_system_audit_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1789033954375,
+      "tag": "0042_payout_balance_guards",
+      "breakpoints": true
     }
   ]
 }

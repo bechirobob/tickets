@@ -1,3 +1,4 @@
+import { paystackAvailable, paystackEnvironment } from "../../../../lib/paystack-environment";
 import { registrationSettings, registrationsOpen } from "../../../../lib/registrations";
 import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
 import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
@@ -83,10 +84,7 @@ export async function POST(request: Request) {
   const requestedPromoterCode = body.promoterCode?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const promoter = requestedPromoterCode ? await env.DB.prepare(`SELECT code FROM event_promoter_codes WHERE event_slug = ? AND code = ? AND status = 'active' LIMIT 1`)
     .bind(eventSlug, requestedPromoterCode).first<{ code: string }>() : null;
-  if (paymentProvider === "paystack" && !env.PAYSTACK_SECRET_KEY) return Response.json({ error: "Live Paystack credentials have not been connected yet." }, { status: 503 });
-  if (paymentProvider === "paystack" && event.isTestEvent && !env.PAYSTACK_SECRET_KEY.startsWith("sk_test_")) {
-    return Response.json({ error: "Preview events can only use Paystack test mode. No live payment was started." }, { status: 503 });
-  }
+  if (paymentProvider === "paystack" && !paystackAvailable(env,event.isTestEvent)) return Response.json({error:"Paystack isn't taking payments for this event yet. Choose another available method."},{status:503});
   const now = new Date();
   const createdAt = now.toISOString();
   const expiresAt = new Date(now.getTime() + RESERVATION_MINUTES * 60 * 1000).toISOString();
@@ -156,7 +154,7 @@ export async function POST(request: Request) {
       id, reference, eventSlug, selection.tier.id, selection.tier.recordId,
       selection.unitQuantity, selection.ticketCount, faceAmountMinor, bookingFeeMinor,
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
-      paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : null, expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
+      paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
     ),
     env.DB.prepare("UPDATE orders SET announcements_opt_in=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,id),
     env.DB.prepare(`

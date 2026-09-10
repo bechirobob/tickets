@@ -1,3 +1,4 @@
+import { paystackEnvironment } from "../../../../lib/paystack-environment";
 import {
   applyRefundWebhook,
   deliverConfirmedOrder,
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
 
   if (eventType === "charge.success") {
     const result = await fulfillVerifiedPayment(env.DB, {
+      environment: payload.data?.domain === "test" || payload.data?.domain === "live" ? payload.data.domain : paystackEnvironment(env.PAYSTACK_SECRET_KEY) ?? undefined,
       id: String(payload.data?.id ?? ""),
       reference,
       status: String(payload.data?.status ?? "success"),

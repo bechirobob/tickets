@@ -888,7 +888,7 @@ test("launch inventory is database-backed and public defects stay closed", async
   assert.match(previewMigration, /'sun-chasers-labadi'/u);
   assert.match(previewMigration, /'longitude-spintex'/u);
   assert.match(previewMigration, /`is_test_event`/u);
-  assert.match(paymentRoute, /event\.isTestEvent && !env\.PAYSTACK_SECRET_KEY\.startsWith\("sk_test_"\)/u);
+  assert.match(paymentRoute, /!paystackAvailable\(env,event\.isTestEvent\)/u);
   assert.match(eventPage, /if \(!event\) notFound\(\)/u);
   assert.match(eventPage, /<EventActions/u);
   assert.match(eventPage, /event\.venueMapUrl/u);

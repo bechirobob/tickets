@@ -17,14 +17,14 @@ const paymentNetworks = [
   { id: "at", label: "AT Money", icon: "/payment-providers/at-money.svg" },
 ] as const;
 
-export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled = false }: { seevEnabled?: boolean; slug: string; event: CuratedEvent; feeBasisPoints: number }) {
+export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled = false, paystackEnabled = true }: { paystackEnabled?: boolean; seevEnabled?: boolean; slug: string; event: CuratedEvent; feeBasisPoints: number }) {
   const params = useSearchParams();
   const [quantity, setQuantity] = useState(1);
   const [selectedTierId, setSelectedTierId] = useState(() => {
     const requested = params.get("tier");
     return event.ticketTiers.find((tier) => tier.status === "available" && (!requested || tier.id === requested))?.id ?? event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id;
   });
-  const [momoProvider, setMomoProvider] = useState<"paystack" | "seevplus">("paystack");
+  const [momoProvider, setMomoProvider] = useState<"paystack" | "seevplus">(paystackEnabled ? "paystack" : "seevplus");
   const [network, setNetwork] = useState("mtn");
   const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | null>(null);
   const [message, setMessage] = useState("");
@@ -57,9 +57,9 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   }, [slug]);
 
   async function continueToPay() {
-    if (paying.current) return;
+    if (paying.current || (!paystackEnabled && !seevEnabled)) return;
     if (!paymentMethod) {
-      setMessage("Choose Mobile Money or card before continuing.");
+      setMessage("Choose a payment method before continuing.");
       return;
     }
     if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim()) || phone.trim().length < 7) {
@@ -122,7 +122,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
       <header className="checkout-header">
         <Link href={`/event/${slug}`}><ArrowLeft size={17} /> Back to event</Link>
         <Link href="/" className="brand-mark"><BrandLogo /></Link>
-        <span><LockKeyhole size={15} /> Secure, not dramatic</span>
+        <span><LockKeyhole size={15} /> Good plans. Safe payment.</span>
       </header>
       <div className="checkout-layout">
         <section className="checkout-main">
@@ -161,6 +161,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             })}
           </div>
 
+          {!paystackEnabled && !seevEnabled ? <div className="checkout-unavailable" role="status"><h2>Tickets are taking a breather.</h2><p>Checkout will be back soon. Your next move? Keep this night on your radar.</p><Link href={`/event/${slug}`}>Back to the event</Link></div> : <>
           <div className="checkout-step checkout-step--second">
             <span>2</span><div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
           </div>
@@ -181,7 +182,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                 <Smartphone size={20} aria-hidden="true" /><span>Mobile Money<small>MTN MoMo, Telecel Cash or AT Money</small></span>
               </label>
               {paymentMethod === "mobile_money" ? <div className="payment-method-detail">
-                {seevEnabled ? <fieldset className="checkout-provider-choice" disabled={isPaying}>
+                {seevEnabled && paystackEnabled ? <fieldset className="checkout-provider-choice" disabled={isPaying}>
                   <legend>Pay through</legend>
                   <label><input type="radio" name="momoProvider" value="paystack" checked={momoProvider === "paystack"} onChange={() => { setMomoProvider("paystack"); setMessage(""); }} />Paystack</label>
                   <label><input type="radio" name="momoProvider" value="seevplus" checked={momoProvider === "seevplus"} onChange={() => { setMomoProvider("seevplus"); setMessage(""); }} />SeevPlus</label>
@@ -196,7 +197,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                 ))}
               </div>}</div> : null}
             </section>
-            <section className={`payment-option${paymentMethod === "card" ? " selected" : ""}`}>
+            {paystackEnabled ? <section className={`payment-option${paymentMethod === "card" ? " selected" : ""}`}>
               <label className="payment-method-choice">
                 <input type="radio" name="paymentMethod" value="card" checked={paymentMethod === "card"} onChange={() => { setPaymentMethod("card"); setMessage(""); }} />
                 <CreditCard size={20} aria-hidden="true" /><span>Card<small>Visa or Mastercard through Paystack</small></span>
@@ -204,10 +205,11 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
               {paymentMethod === "card" ? <div className="payment-method-detail"><div className="card-payment-detail">
                 <div><strong>Secure card checkout</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
               </div></div> : null}
-            </section>
+            </section> : null}
           </fieldset>
           <label className="checkout-consent"><input type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label>
-          <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>. The accepted versions stay attached to this order.</span></label>
+          <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
+          </>}
         </section>
 
         <aside className="order-summary">
@@ -220,9 +222,9 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <ActionButton type="button" className="pay-button" aria-busy={isPaying} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={isPaying || !acceptedPolicies || !paymentMethod}>{isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
+          <ActionButton type="button" className="pay-button" aria-busy={isPaying} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={isPaying || !acceptedPolicies || !paymentMethod || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
           {message && <p className="payment-message" role="status">{message}</p>}
-          <p className="secure-note"><ShieldCheck size={15} /> {paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.</p>
+          {paystackEnabled || seevEnabled ? <p className="secure-note"><ShieldCheck size={15} /> {paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.</p> : null}
         </aside>
       </div>
     </main>

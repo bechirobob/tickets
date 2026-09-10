@@ -5,7 +5,8 @@ import { hashToken } from "../../../lib/attendee-auth";
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This waitlist request was not accepted." }, { status: 403 });
   const { env } = await import("cloudflare:workers");
-  const body = await request.json() as { eventSlug?: string; ticketTierId?: string; email?: string; phone?: string };
+  const body = await request.json().catch(()=>null) as { eventSlug?: string; ticketTierId?: string; email?: string; phone?: string } | null;
+  if (!body || [body.eventSlug,body.ticketTierId,body.email].some(v=>typeof v!=="string" || v.length>320) || (body.phone!=null && typeof body.phone!=="string")) return Response.json({error:"Add your email and choose a ticket."},{status:400});
   const eventSlug = body.eventSlug?.trim() ?? "";
   const ticketTierId = body.ticketTierId?.trim() ?? "";
   const email = body.email?.trim().toLowerCase() ?? "";
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
         (reservation.status = 'held' AND reservation.expires_at > ?) THEN reservation.admission_count ELSE 0 END), 0) AS allocated
     FROM event_ticket_tiers tier JOIN curated_event_records event ON event.slug = tier.event_slug
     LEFT JOIN inventory_reservations reservation ON reservation.ticket_tier_id = tier.id
-    WHERE tier.id = ? AND tier.event_slug = ? GROUP BY tier.id LIMIT 1
+    WHERE tier.id = ? AND tier.event_slug = ? AND tier.status<>'hidden' AND event.removed_at IS NULL AND event.status='published' AND event.event_state NOT IN ('cancelled','postponed') GROUP BY tier.id LIMIT 1
   `).bind(new Date().toISOString(), ticketTierId, eventSlug).first<{ id: string; status: string; capacity: number; eventState: string; startsAt: string; allocated: number }>();
   if (!tier || new Date(tier.startsAt).getTime() <= Date.now()) return Response.json({ error: "That waitlist is closed." }, { status: 404 });
   const soldOut = tier.status === "sold_out" || tier.eventState === "sold_out" || Number(tier.allocated) >= Number(tier.capacity);

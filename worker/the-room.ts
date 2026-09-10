@@ -5,6 +5,7 @@ import { notifyRoomMessage } from "../lib/notifications";
 type RoomRole = "attendee" | "organizer" | "moderator";
 
 type ConnectionState = {
+  sessionId: string;
   attendeeId: string;
   displayName: string;
   role: RoomRole;
@@ -137,6 +138,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       const [client, server] = Object.values(pair);
       const attachment: ConnectionState = {
         attendeeId,
+        sessionId: requiredHeader(request,"x-bct-session-id"),
         displayName: displayName.slice(0, 50),
         role: "attendee",
         roomBadge,
@@ -187,6 +189,21 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       return;
     }
 
+    if (input.type === "message" || input.type === "reaction") {
+      const now=Date.now();
+      if (now - state.rateWindowStartedAt >= 10_000) {
+        state.rateWindowStartedAt = now;
+        state.rateCount = 0;
+      }
+      state.rateCount += 1;
+      socket.serializeAttachment(state);
+      if (state.rateCount > 5) {
+        socket.send(JSON.stringify({ type: "error", error: "Slow down for a moment before posting again." }));
+        return;
+      }
+      const session=state.sessionId && await this.env.DB.prepare("SELECT 1 FROM attendee_sessions WHERE id=? AND attendee_id=? AND revoked_at IS NULL AND expires_at>?").bind(state.sessionId,state.attendeeId,new Date().toISOString()).first();
+      if (!session || await this.currentRoomBadge(state.attendeeId) === undefined) {socket.close(4003,"Room access changed");return;}
+    }
     if (input.type === "message") {
       if (readOnly) {
         socket.send(JSON.stringify({ type: "error", error: "This Room is now read-only." }));
@@ -196,16 +213,6 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       if (state.slowModeSeconds > 0 && now - state.lastMessageAt < state.slowModeSeconds * 1000) {
         const wait = Math.ceil((state.slowModeSeconds * 1000 - (now - state.lastMessageAt)) / 1000);
         socket.send(JSON.stringify({ type: "error", error: `Slow mode is on. Give it ${wait}s.` }));
-        return;
-      }
-      if (now - state.rateWindowStartedAt >= 10_000) {
-        state.rateWindowStartedAt = now;
-        state.rateCount = 0;
-      }
-      state.rateCount += 1;
-      socket.serializeAttachment(state);
-      if (state.rateCount > 5) {
-        socket.send(JSON.stringify({ type: "error", error: "Slow down for a moment before posting again." }));
         return;
       }
       const content = typeof input.content === "string" ? input.content.trim() : "";
@@ -448,8 +455,11 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       FROM ticket_assignments assignment
       JOIN tickets ticket ON ticket.id = assignment.ticket_id
       JOIN orders orders ON orders.id = ticket.order_id
+      JOIN attendee_profiles profile ON profile.id=assignment.attendee_id
       LEFT JOIN event_ticket_tiers tier ON tier.id = orders.ticket_tier_id
-      WHERE assignment.attendee_id = ? AND assignment.status = 'active'
+      WHERE assignment.attendee_id = ? AND assignment.status = 'active' AND profile.status='active' AND orders.status='paid'
+        AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug=ticket.event_slug AND (e.removed_at IS NOT NULL OR e.event_state IN ('cancelled','postponed')))
+        AND NOT EXISTS (SELECT 1 FROM room_suspensions r WHERE r.attendee_id=assignment.attendee_id AND r.event_slug=ticket.event_slug AND r.restored_at IS NULL)
         AND ticket.event_slug = ? AND ticket.status IN ('issued', 'checked_in')
         AND (orders.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = orders.id AND r.status = 'confirmed' AND rs.room_access = 1))
       ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC

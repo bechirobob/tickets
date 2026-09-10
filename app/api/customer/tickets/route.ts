@@ -74,11 +74,18 @@ export async function POST(request: Request) {
     if (ticket.gateToken) { activeCodes.set(ticket.ticketId, ticket.gateToken); continue; }
     const token = createGateToken();
     const now = new Date().toISOString();
-    const [updated, inserted] = await env.DB.batch([
-      env.DB.prepare("UPDATE tickets SET qr_token_hash = ? WHERE id = ? AND status = 'issued'").bind(await hashGateToken(token), ticket.ticketId),
-      env.DB.prepare("INSERT OR IGNORE INTO ticket_gate_credentials (ticket_id, token, issued_at) VALUES (?, ?, ?)").bind(ticket.ticketId, token, now),
+    await env.DB.batch([
+      env.DB.prepare(`INSERT OR IGNORE INTO ticket_gate_credentials (ticket_id,token,issued_at)
+        SELECT t.id,?,? FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id
+        WHERE t.id=? AND t.status='issued' AND a.attendee_id=? AND a.status='active'`).bind(token,now,ticket.ticketId,identity.attendeeId),
+      env.DB.prepare(`UPDATE tickets SET qr_token_hash=? WHERE id=? AND status='issued'
+        AND EXISTS (SELECT 1 FROM ticket_gate_credentials WHERE ticket_id=tickets.id AND token=?)
+        AND EXISTS (SELECT 1 FROM ticket_assignments WHERE ticket_id=tickets.id AND attendee_id=? AND status='active')`)
+        .bind(await hashGateToken(token),ticket.ticketId,token,identity.attendeeId),
     ]);
-    if (updated.meta.changes === 1 && inserted.meta.changes === 1) activeCodes.set(ticket.ticketId, token);
+    const saved = await env.DB.prepare(`SELECT c.token FROM ticket_gate_credentials c JOIN ticket_assignments a ON a.ticket_id=c.ticket_id
+      WHERE c.ticket_id=? AND a.attendee_id=? AND a.status='active'`).bind(ticket.ticketId,identity.attendeeId).first<{token:string}>();
+    if (saved) activeCodes.set(ticket.ticketId, saved.token);
   }
 
   const orderMap = new Map<string, {

@@ -1,3 +1,4 @@
+import { paystackEnvironment } from "./paystack-environment";
 import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { sendOrderConfirmation } from "./email-delivery";
 import { recordProductMetric } from "./product-analytics";
@@ -5,6 +6,7 @@ import { recordProductMetric } from "./product-analytics";
 export type PaystackVerification = {
   provider?: "paystack" | "seevplus";
   providerReference?: string;
+  environment?: "test" | "live";
   id: number | string;
   reference: string;
   status: string;
@@ -33,6 +35,7 @@ type OrderRecord = {
   status: string;
   paidAt: string | null;
   paymentProvider: string;
+  paymentEnvironment: string | null;
   providerReference: string | null;
 };
 
@@ -68,12 +71,15 @@ export async function verifyPaystackTransaction(reference: string, secret: strin
   const payload = await response.json() as {
     status?: boolean;
     message?: string;
-    data?: { id?: number | string; reference?: string; status?: string; amount?: number; currency?: string; paid_at?: string | null; channel?: string | null; gateway_response?: string | null };
+    data?: { domain?: string; id?: number | string; reference?: string; status?: string; amount?: number; currency?: string; paid_at?: string | null; channel?: string | null; gateway_response?: string | null };
   };
   if (!response.ok || !payload.status || !payload.data?.reference || !payload.data.status || typeof payload.data.amount !== "number" || !payload.data.currency) {
     throw new Error(payload.message ?? "Paystack could not verify this transaction.");
   }
+  const environment=paystackEnvironment(secret);
+  if (payload.data.reference !== reference || !environment || (payload.data.domain != null && payload.data.domain !== environment)) throw new Error("Paystack verification did not match the requested payment.");
   return {
+    environment,
     id: payload.data.id ?? "",
     reference: payload.data.reference,
     status: payload.data.status,
@@ -92,7 +98,7 @@ async function readOrder(db: D1Database, reference: string) {
            booking_fee_minor AS bookingFeeMinor, total_amount_minor AS totalAmountMinor,
            currency, customer_email AS customerEmail, customer_phone AS customerPhone,
            customer_name AS customerName, payment_channel AS paymentChannel,
-           status, paid_at AS paidAt, payment_provider AS paymentProvider, provider_reference AS providerReference
+           status, paid_at AS paidAt, payment_provider AS paymentProvider, payment_environment AS paymentEnvironment, provider_reference AS providerReference
     FROM orders WHERE reference = ? LIMIT 1
   `).bind(reference).first<OrderRecord>();
 }
@@ -115,6 +121,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
   const order = await readOrder(db, verification.reference);
   if (!order) return { result: "unknown_order" as const };
   if (order.paymentProvider !== (verification.provider ?? "paystack") || (order.paymentProvider === "seevplus" && (!order.providerReference || verification.providerReference !== order.providerReference))) return { result: "mismatch" as const, order };
+  if (order.paymentProvider==='paystack' && order.paymentEnvironment && order.paymentEnvironment!==verification.environment) return {result:'mismatch' as const,order};
   const statusColumn = order.paymentProvider === "seevplus" ? "provider_status" : "paystack_status";
   const referenceColumn = order.paymentProvider === "seevplus" ? "provider_reference" : "paystack_reference";
   const transactionColumn = order.paymentProvider === "seevplus" ? "provider_transaction_id" : "paystack_transaction_id";
@@ -130,7 +137,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
   if (verification.status !== "success") {
     if (["abandoned", "failed", "reversed"].includes(verification.status)) {
       const [failedOrder] = await db.batch([
-        db.prepare(`UPDATE orders SET status = 'failed', ${statusColumn} = ?, payment_updated_at = ?, failure_reason = ? WHERE id = ? AND status = 'payment_pending'`)
+        db.prepare(`UPDATE orders SET status = 'failed', ${statusColumn} = ?, payment_updated_at = ?, failure_reason = ? WHERE id = ? AND status IN ('payment_pending','expired')`)
           .bind(verification.status, now, verification.gatewayResponse ?? `Payment ${verification.status}.`, order.id),
         db.prepare(`UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ? AND status = 'held'`).bind(now, order.id),
       ]);
@@ -207,96 +214,99 @@ export async function deliverConfirmedOrder(db: D1Database, order: OrderRecord, 
 }
 
 export async function initiatePaystackRefund(db: D1Database, input: { orderId: string; actor: string; reason: string; secret: string; amountMinor?: number; ticketIds?: string[]; batchId?: string }) {
-  const order = await db.prepare(`
-    SELECT id, reference, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor, status, payment_provider AS provider
-    FROM orders WHERE id = ? LIMIT 1
-  `).bind(input.orderId).first<{ id: string; reference: string; totalAmountMinor: number; refundedAmountMinor: number; status: string; provider: string }>();
-  if (!order) throw new Error("Order not found.");
-  if (order.provider !== "paystack") throw new Error("SeevPlus refunds require finance review with SeevPlus. No Paystack refund was started.");
-  if (!["paid", "requires_refund", "refund_pending"].includes(order.status)) throw new Error("Only a paid order can be refunded.");
-  const ticketIds = [...new Set((input.ticketIds ?? []).filter((value) => typeof value === "string" && value.length > 0))];
-  const ticketFilter = ticketIds.length ? `AND id IN (${ticketIds.map(() => "?").join(",")})` : "";
-  const checkedIn = await db.prepare(`SELECT COUNT(*) AS count FROM tickets WHERE order_id = ? AND status = 'checked_in' ${ticketFilter}`)
-    .bind(order.id, ...ticketIds).first<{ count: number }>();
-  if ((checkedIn?.count ?? 0) > 0 && order.status !== "requires_refund") throw new Error("A checked-in order needs finance review before refunding.");
-  if (ticketIds.length) {
-    const matched = await db.prepare(`SELECT COUNT(*) AS count FROM tickets WHERE order_id = ? AND id IN (${ticketIds.map(() => "?").join(",")}) AND status IN ('issued', 'voided')`)
-      .bind(order.id, ...ticketIds).first<{ count: number }>();
-    if ((matched?.count ?? 0) !== ticketIds.length) throw new Error("One of the selected tickets cannot be refunded.");
-  }
-  const reason = input.reason.trim().slice(0, 500);
-  if (reason.length < 8) throw new Error("Add a clear refund reason.");
-  const remaining = Math.max(0, order.totalAmountMinor - order.refundedAmountMinor);
-  const amountMinor = input.amountMinor ?? remaining;
-  if (!Number.isInteger(amountMinor) || amountMinor < 1 || amountMinor > remaining) throw new Error("Choose a refund amount within the remaining paid balance.");
-  const fullRemainingRefund = amountMinor === remaining;
-  const refundId = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const response = await fetch("https://api.paystack.co/refund", {
-    method: "POST",
-    headers: { authorization: `Bearer ${input.secret}`, "content-type": "application/json" },
-    body: JSON.stringify({ transaction: order.reference, amount: amountMinor, currency: "GHS", customer_note: reason, merchant_note: `${input.actor}: ${reason}` }),
-  });
-  const payload = await response.json() as { status?: boolean; message?: string; data?: { id?: number | string; status?: string } };
-  if (!response.ok || !payload.status) {
-    await db.prepare(`
-      INSERT INTO payment_refunds (id, order_id, amount_minor, status, reason, requested_by, requested_at, updated_at, failure_reason, ticket_ids_json, batch_id)
-      VALUES (?, ?, ?, 'failed', ?, ?, ?, ?, ?, ?, ?)
-    `).bind(refundId, order.id, amountMinor, reason, input.actor, now, now, payload.message ?? "Paystack rejected the refund.", ticketIds.length ? JSON.stringify(ticketIds) : null, input.batchId ?? null).run();
-    throw new Error(payload.message ?? "Paystack rejected the refund.");
-  }
-  const providerStatus = payload.data?.status === "processed" ? "processed" : payload.data?.status === "processing" ? "processing" : "pending";
-  await db.batch([
-    db.prepare(`
-      INSERT INTO payment_refunds (id, order_id, paystack_refund_id, amount_minor, status, reason, requested_by, requested_at, updated_at, ticket_ids_json, batch_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(refundId, order.id, payload.data?.id ? String(payload.data.id) : null, amountMinor, providerStatus, reason, input.actor, now, now, ticketIds.length ? JSON.stringify(ticketIds) : null, input.batchId ?? null),
-    db.prepare("UPDATE orders SET status = CASE WHEN ? THEN 'refund_pending' ELSE status END, refund_status = ?, payment_updated_at = ? WHERE id = ?")
-      .bind(fullRemainingRefund ? 1 : 0, providerStatus, now, order.id),
-    ticketIds.length
-      ? db.prepare(`UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued' AND id IN (${ticketIds.map(() => "?").join(",")})`).bind(order.id, ...ticketIds)
-      : fullRemainingRefund ? db.prepare("UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'").bind(order.id) : db.prepare("SELECT 1"),
+  const order = await db.prepare(`SELECT id, reference, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor, status, payment_provider AS provider FROM orders WHERE id = ?`)
+    .bind(input.orderId).first<{id:string;reference:string;totalAmountMinor:number;refundedAmountMinor:number;status:string;provider:string}>();
+  if (!order) throw new Error('Order not found.');
+  if (order.provider !== 'paystack') throw new Error('SeevPlus refunds require finance review with SeevPlus.');
+  if (!['paid','requires_refund'].includes(order.status)) throw new Error('This order is not available for another refund.');
+  const reason = input.reason.trim().slice(0,500);
+  if (reason.length < 8) throw new Error('Add a clear refund reason.');
+  const remaining = order.totalAmountMinor - order.refundedAmountMinor, amountMinor = input.amountMinor ?? remaining;
+  if (!Number.isInteger(amountMinor) || amountMinor < 1 || amountMinor > remaining) throw new Error('Choose a refund amount within the remaining paid balance.');
+  const full = amountMinor === remaining;
+  const selected = [...new Set(input.ticketIds ?? [])];
+  const filter = selected.length ? `AND id IN (${selected.map(()=>'?').join(',')})` : '';
+  const tickets = await db.prepare(`SELECT id,status FROM tickets WHERE order_id=? ${filter}`).bind(order.id,...selected).all<{id:string;status:string}>();
+  if (selected.length && (tickets.results.length !== selected.length || tickets.results.some(t=>!['issued','voided'].includes(t.status)))) throw new Error('One of the selected tickets cannot be refunded.');
+  if (order.status !== 'requires_refund' && tickets.results.some(t=>t.status==='checked_in')) throw new Error('A checked-in order needs finance review before refunding.');
+  // Remember only admissions this request disables, so failure cannot revive an
+  // earlier refund, dispute or event removal.
+  const disabled = (full || selected.length ? tickets.results : []).filter(t=>t.status==='issued').map(t=>t.id);
+  const refundId=crypto.randomUUID(), now=new Date().toISOString();
+  const reserved = `EXISTS (SELECT 1 FROM payment_refunds WHERE id=?)`;
+  const [claim] = await db.batch([
+    db.prepare(`INSERT INTO payment_refunds (id,order_id,amount_minor,status,reason,requested_by,requested_at,updated_at,ticket_ids_json,batch_id,previous_order_status)
+      SELECT ?,id,?,'pending',?,?,?,?,?,?,status FROM orders WHERE id=? AND status IN ('paid','requires_refund')
+        AND refunded_amount_minor=? AND total_amount_minor-refunded_amount_minor>=?
+        AND NOT EXISTS (SELECT 1 FROM payment_refunds r WHERE r.order_id=orders.id AND r.status IN ('pending','processing'))
+        AND (status='requires_refund' OR NOT EXISTS (SELECT 1 FROM tickets WHERE order_id=orders.id AND status='checked_in' ${filter}))`)
+      .bind(refundId,amountMinor,reason,input.actor,now,now,JSON.stringify(disabled),input.batchId??null,order.id,order.refundedAmountMinor,amountMinor,...selected),
+    db.prepare(`UPDATE orders SET status=CASE WHEN ? THEN 'refund_pending' ELSE status END,refund_status='pending',payment_updated_at=? WHERE id=? AND ${reserved}`).bind(full?1:0,now,order.id,refundId),
+    db.prepare(`UPDATE tickets SET status='voided' WHERE order_id=? AND status='issued' AND id IN (SELECT value FROM json_each(?)) AND ${reserved}`).bind(order.id,JSON.stringify(disabled),refundId),
   ]);
-  return { refundId, status: providerStatus, amountMinor, full: fullRemainingRefund };
+  if (!claim.meta.changes) throw new Error('A refund is already underway or this order has changed. Refresh before continuing.');
+  let response: Response, payload: {status?:boolean;message?:string;data?:{id?:number|string;status?:string}};
+  try {
+    response=await fetch('https://api.paystack.co/refund',{method:'POST',headers:{authorization:`Bearer ${input.secret}`,'content-type':'application/json'},signal:AbortSignal.timeout(10_000),
+      body:JSON.stringify({transaction:order.reference,amount:amountMinor,currency:'GHS',customer_note:reason,merchant_note:`${input.actor}: ${reason}`})});
+    payload=await response.json() as typeof payload;
+    if (response.status >= 500) throw new Error('Provider response is uncertain.');
+  } catch {
+    await db.prepare("UPDATE payment_refunds SET failure_reason='Provider response was not received. Verify with Paystack before retrying.',updated_at=? WHERE id=? AND status='pending'").bind(new Date().toISOString(),refundId).run();
+    throw new Error('The refund is awaiting Paystack confirmation. Check its status before making another request.');
+  }
+  if (!response.ok || !payload.status) {
+    await applyRefundWebhook(db,{eventType:'refund.failed',reference:order.reference,amountMinor,refundId,failureReason:payload.message??'Paystack rejected the refund.'});
+    throw new Error(payload.message??'Paystack rejected the refund.');
+  }
+  const providerId=payload.data?.id == null ? null : String(payload.data.id);
+  await db.prepare('UPDATE payment_refunds SET paystack_refund_id=COALESCE(paystack_refund_id,?),updated_at=? WHERE id=?').bind(providerId,new Date().toISOString(),refundId).run();
+  const status=['processed','processing','failed'].includes(payload.data?.status??'') ? payload.data!.status! : 'pending';
+  await applyRefundWebhook(db,{eventType:`refund.${status}`,reference:order.reference,amountMinor,providerRefundId:providerId,refundId});
+  const current=await db.prepare('SELECT status FROM payment_refunds WHERE id=?').bind(refundId).first<{status:string}>();
+  return {refundId,status:current?.status??status,amountMinor,full};
 }
 
-export async function applyRefundWebhook(db: D1Database, input: { eventType: string; reference: string; amountMinor: number; providerRefundId?: string | null; failureReason?: string | null }) {
-  const now = new Date().toISOString();
-  const order = await db.prepare("SELECT id, total_amount_minor AS totalAmountMinor, refunded_amount_minor AS refundedAmountMinor FROM orders WHERE reference = ? AND payment_provider = 'paystack' LIMIT 1")
-    .bind(input.reference).first<{ id: string; totalAmountMinor: number; refundedAmountMinor: number }>();
+export async function applyRefundWebhook(db: D1Database, input: { eventType: string; reference: string; amountMinor: number; providerRefundId?: string | null; failureReason?: string | null; refundId?: string }) {
+  if (!['refund.pending','refund.processing','refund.processed','refund.failed'].includes(input.eventType)) return;
+  const order=await db.prepare("SELECT id FROM orders WHERE reference=? AND payment_provider='paystack'").bind(input.reference).first<{id:string}>();
   if (!order) return;
-  const refund = await db.prepare(`
-    SELECT id, amount_minor AS amountMinor, ticket_ids_json AS ticketIdsJson
-    FROM payment_refunds WHERE order_id = ?
-      AND (? IS NULL OR paystack_refund_id = ?)
-      AND status IN ('pending', 'processing')
-    ORDER BY requested_at DESC LIMIT 1
-  `).bind(order.id, input.providerRefundId ?? null, input.providerRefundId ?? null).first<{ id: string; amountMinor: number; ticketIdsJson: string | null }>();
-  const appliedAmount = Math.min(input.amountMinor || refund?.amountMinor || order.totalAmountMinor, order.totalAmountMinor - order.refundedAmountMinor);
-  const ticketIds = refund?.ticketIdsJson ? JSON.parse(refund.ticketIdsJson) as string[] : [];
-  const next = input.eventType === "refund.processed" ? "processed" : input.eventType === "refund.failed" ? "failed" : input.eventType === "refund.processing" ? "processing" : "pending";
-  const statements: D1PreparedStatement[] = [
-    db.prepare(`UPDATE payment_refunds SET status = ?, failure_reason = ?, updated_at = ? WHERE id = COALESCE(?, id) AND order_id = ? AND status IN ('pending', 'processing')`)
-      .bind(next, input.failureReason ?? null, now, refund?.id ?? null, order.id),
-    db.prepare("UPDATE orders SET refund_status = ?, payment_updated_at = ? WHERE id = ?").bind(next, now, order.id),
+  // Match an exact refund, or the sole reservation whose provider response has
+  // not arrived yet. Unknown callbacks must never apply to another refund.
+  const rows=await db.prepare(`SELECT id,amount_minor AS amountMinor,status FROM payment_refunds WHERE order_id=? AND (
+      (? IS NOT NULL AND id=?) OR (? IS NULL AND ? IS NOT NULL AND paystack_refund_id=?)
+      OR (? IS NULL AND status IN ('pending','processing') AND (? IS NULL OR paystack_refund_id IS NULL) AND amount_minor=?))`)
+    .bind(order.id,input.refundId??null,input.refundId??null,input.refundId??null,input.providerRefundId??null,input.providerRefundId??null,input.refundId??null,input.providerRefundId??null,input.amountMinor).all<{id:string;amountMinor:number;status:string}>();
+  if (rows.results.length!==1) {
+    await db.prepare(`INSERT INTO system_alerts (id,source,severity,message,detail,status,created_at)
+      SELECT ?,'refund-match','warning',?,?,'open',? WHERE NOT EXISTS (SELECT 1 FROM system_alerts WHERE source='refund-match' AND message=? AND status<>'resolved')`)
+      .bind(crypto.randomUUID(),`Refund needs review: ${input.reference}`,`Paystack refund ${input.providerRefundId??'without ID'} could not be matched to one request. Verify the provider record before changing the order.`,new Date().toISOString(),`Refund needs review: ${input.reference}`).run();
+    return;
+  }
+  const refund=rows.results[0],next=input.eventType.slice(7);
+  if (['processed','failed'].includes(refund.status) || (next==='pending' && refund.status==='processing')) return;
+  if (!Number.isInteger(input.amountMinor) || input.amountMinor!==refund.amountMinor) return;
+  const transition=crypto.randomUUID(),now=new Date().toISOString();
+  const guard=`EXISTS (SELECT 1 FROM payment_refunds r WHERE r.id=? AND r.transition_id=?)`;
+  const statements=[
+    db.prepare(`UPDATE payment_refunds SET status=?,transition_id=?,paystack_refund_id=COALESCE(paystack_refund_id,?),failure_reason=?,updated_at=? WHERE id=? AND status IN ('pending','processing') AND NOT (status='processing' AND ?='pending')`)
+      .bind(next,transition,input.providerRefundId??null,input.failureReason??null,now,refund.id,next),
+    db.prepare(`UPDATE orders SET refund_status=?,payment_updated_at=? WHERE id=? AND ${guard}`).bind(next,now,order.id,refund.id,transition),
   ];
-  if (next === "processed") {
+  if (next==='processed') {
     statements.push(
-      db.prepare("UPDATE orders SET status = CASE WHEN refunded_amount_minor + ? >= total_amount_minor THEN 'refunded' ELSE 'paid' END, refunded_amount_minor = MIN(total_amount_minor, refunded_amount_minor + ?), refund_status = 'processed' WHERE id = ?")
-        .bind(appliedAmount, appliedAmount, order.id),
-      ticketIds.length
-        ? db.prepare(`UPDATE tickets SET status = 'refunded' WHERE order_id = ? AND id IN (${ticketIds.map(() => "?").join(",")}) AND status <> 'checked_in'`).bind(order.id, ...ticketIds)
-        : appliedAmount + order.refundedAmountMinor >= order.totalAmountMinor ? db.prepare("UPDATE tickets SET status = 'refunded' WHERE order_id = ? AND status <> 'checked_in'").bind(order.id) : db.prepare("SELECT 1"),
-      appliedAmount + order.refundedAmountMinor >= order.totalAmountMinor
-        ? db.prepare("UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ?").bind(now, order.id)
-        : db.prepare("SELECT 1"),
+      db.prepare(`UPDATE orders SET status=CASE WHEN refunded_amount_minor+?>=total_amount_minor THEN 'refunded' WHEN status='refund_pending' THEN COALESCE((SELECT previous_order_status FROM payment_refunds WHERE id=?),'requires_refund') ELSE status END,
+        refunded_amount_minor=MIN(total_amount_minor,refunded_amount_minor+?) WHERE id=? AND ${guard}`).bind(refund.amountMinor,refund.id,refund.amountMinor,order.id,refund.id,transition),
+      db.prepare(`UPDATE tickets SET status='refunded' WHERE order_id=? AND status<>'checked_in' AND (id IN (SELECT value FROM json_each((SELECT ticket_ids_json FROM payment_refunds WHERE id=?))) OR EXISTS (SELECT 1 FROM orders WHERE id=? AND status='refunded')) AND ${guard}`).bind(order.id,refund.id,order.id,refund.id,transition),
+      db.prepare(`UPDATE inventory_reservations SET status='released',updated_at=? WHERE order_id=? AND EXISTS (SELECT 1 FROM orders WHERE id=? AND status='refunded') AND ${guard}`).bind(now,order.id,order.id,refund.id,transition),
     );
-  } else if (next === "failed") {
+  } else if (next==='failed') {
     statements.push(
-      db.prepare("UPDATE orders SET status = 'paid', refund_status = 'failed' WHERE id = ?").bind(order.id),
-      ticketIds.length
-        ? db.prepare(`UPDATE tickets SET status = 'issued' WHERE order_id = ? AND id IN (${ticketIds.map(() => "?").join(",")}) AND status = 'voided'`).bind(order.id, ...ticketIds)
-        : db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided'").bind(order.id),
+      db.prepare(`UPDATE orders SET status=CASE WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug=orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state='cancelled')) THEN 'requires_refund' ELSE COALESCE((SELECT previous_order_status FROM payment_refunds WHERE id=?),'requires_refund') END
+        WHERE id=? AND status='refund_pending' AND ${guard}`).bind(refund.id,order.id,refund.id,transition),
+      db.prepare(`UPDATE tickets SET status='issued' WHERE order_id=? AND status='voided'
+        AND id IN (SELECT value FROM json_each((SELECT ticket_ids_json FROM payment_refunds WHERE id=?)))
+        AND EXISTS (SELECT 1 FROM orders o JOIN curated_event_records e ON e.slug=o.event_slug WHERE o.id=? AND o.status='paid' AND e.removed_at IS NULL AND e.event_state NOT IN ('cancelled','postponed')) AND ${guard}`).bind(order.id,refund.id,order.id,refund.id,transition),
     );
   }
   await db.batch(statements);
@@ -336,8 +346,8 @@ export async function recordDisputeWebhook(db: D1Database, input: { eventType: s
     );
   } else if (order) {
     statements.push(
-      db.prepare("UPDATE orders SET status = 'paid', dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status <> 'refunded'").bind(status, now, order.id),
-      db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided'").bind(order.id),
+      db.prepare("UPDATE orders SET status = CASE WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug=orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state='cancelled')) THEN 'requires_refund' WHEN EXISTS (SELECT 1 FROM payment_refunds r WHERE r.order_id=orders.id AND r.status IN ('pending','processing') AND r.amount_minor>=orders.total_amount_minor-orders.refunded_amount_minor) THEN 'refund_pending' ELSE 'paid' END, dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status='disputed'").bind(status, now, order.id),
+      db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided' AND EXISTS (SELECT 1 FROM orders o JOIN curated_event_records e ON e.slug=o.event_slug WHERE o.id=tickets.order_id AND o.status='paid' AND e.removed_at IS NULL AND e.event_state NOT IN ('cancelled','postponed')) AND NOT EXISTS (SELECT 1 FROM payment_refunds r,json_each(r.ticket_ids_json) j WHERE r.order_id=tickets.order_id AND r.status IN ('pending','processing','processed') AND j.value=tickets.id)").bind(order.id),
     );
   }
   await db.batch(statements);
@@ -353,7 +363,7 @@ async function listPaystackTransactions(secret: string, from: string, to: string
     url.searchParams.set("to", to);
     url.searchParams.set("perPage", "100");
     url.searchParams.set("page", String(page));
-    const response = await fetch(url, { headers: { authorization: `Bearer ${secret}` } });
+    const response = await fetch(url, { headers: { authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(10_000) });
     const payload = await response.json() as { status?: boolean; message?: string; data?: ProviderTransaction[]; meta?: { page?: number; pageCount?: number } };
     if (!response.ok || !payload.status || !Array.isArray(payload.data)) throw new Error(payload.message ?? "Paystack transaction list failed.");
     transactions.push(...payload.data);
