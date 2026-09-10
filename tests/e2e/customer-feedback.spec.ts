@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 // A controlling service worker can bypass Playwright routes in WebKit.
@@ -105,5 +106,6 @@ for (const kind of ['recovery','transfer'] as const) test(`${kind} link waits fo
   await accept.click();await expect(page.getByRole('alert')).toContainText('another moment');await expect(accept).toBeEnabled();
   await accept.click();await expect.poll(()=>attempts).toBe(2);await expect(accept).toBeEnabled();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+  expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   await page.screenshot({path:info.outputPath(`${kind}-access.png`),fullPage:true});
 });
