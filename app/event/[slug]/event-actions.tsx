@@ -54,7 +54,7 @@ export default function EventActions({ title, eventSlug }: { title: string; even
     <button ref={copyButton} type="button" className="icon-text" onClick={() => void share(true)} disabled={busy} aria-busy={busy && lastAction === "copy"}><Link2 size={17} /> {busy && lastAction === "copy" ? "Copying…" : "Copy Link"}</button>
     <button ref={shareButton} type="button" className="icon-text" onClick={() => void share()} disabled={busy} aria-busy={busy} aria-expanded={outcome !== null} aria-controls={outcome ? "event-share-feedback" : undefined}><Share2 size={17} /> {busy ? "Opening…" : "Share"}</button>
     {outcome && <div id="event-share-feedback" className="event-share__feedback">
-      <p role="status">{outcome === "copied" ? "Link copied. Send it to the usual suspects." : "The copy button’s sitting this one out. Your link is ready below."}</p>
+      <p role="status">{outcome === "copied" ? "Link copied. Send it to the usual suspects." : "The copy button’s sitting this one out. Select the link below to copy it."}</p>
       {outcome === "manual" && <label>Event link<input readOnly value={shareUrl} onFocus={(event) => event.currentTarget.select()} onClick={(event) => event.currentTarget.select()} /></label>}
       <button type="button" onClick={closeFeedback}>Got it</button>
     </div>}
