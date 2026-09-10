@@ -7,6 +7,8 @@ declare namespace Cloudflare {
     ASSETS: Fetcher;
     DB: D1Database;
     AI: Ai;
+    OPENAI_API_KEY?: string;
+    OPENAI_MODEL?: string;
     ENVIRONMENT?: string;
     RELEASE_SHA?: string;
     CF_VERSION_METADATA?: { id: string; tag: string; timestamp: string };
