@@ -1,0 +1,98 @@
+name: iPhone release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iphone-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Check Apple enrollment and signing inputs
+        env:
+          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          python3 -c 'import os; keys=["IOS_TEAM_ID","IOS_DISTRIBUTION_P12_BASE64","IOS_DISTRIBUTION_P12_PASSWORD","IOS_PROVISIONING_PROFILE_BASE64"]; missing=[k for k in keys if not os.environ.get(k)]; assert not missing, "Complete Apple enrollment and configure: " + ", ".join(missing)'
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm test
+      - run: python3 -m unittest discover -s tests -p 'test_ios_*.py'
+      - name: Validate release identity and version
+        run: |
+          python3 scripts/ios-release.py validate
+          PREVIOUS_TAG=$(git tag --list 'ios-v*' --sort=-version:refname | head -n 1)
+          if [ -n "$PREVIOUS_TAG" ]; then
+            git show "$PREVIOUS_TAG:mobile/ios/release.json" > "$RUNNER_TEMP/previous-ios-release.json"
+            python3 scripts/ios-release.py validate "$RUNNER_TEMP/previous-ios-release.json"
+          fi
+      - run: npx playwright install chromium webkit
+      - run: npm run test:browser
+      - run: npm run build && npx cap sync ios
+      - name: Prepare verified Apple distribution signing
+        env:
+          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: python3 scripts/ios-release.py prepare-signing
+      - name: Archive signed iPhone release
+        run: |
+          xcodebuild -quiet -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath ios/output/BeCore-Tickets.xcarchive BECORE_TEAM_ID="$IOS_TEAM_ID" BECORE_SIGN_STYLE=Manual BECORE_PROFILE_UUID="$BECORE_PROFILE_UUID" BECORE_SIGN_IDENTITY="$BECORE_SIGN_IDENTITY" archive
+          python3 scripts/ios-release.py verify-app ios/output/BeCore-Tickets.xcarchive/Products/Applications/App.app iphoneos --signed
+      - name: Export App Store IPA
+        run: xcodebuild -quiet -exportArchive -archivePath ios/output/BeCore-Tickets.xcarchive -exportOptionsPlist "$RUNNER_TEMP/becore-ios-signing/ExportOptions.plist" -exportPath ios/output/export
+      - name: Verify exported IPA and record source
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p ios/output/verified
+          ditto -x -k ios/output/export/App.ipa ios/output/verified
+          python3 scripts/ios-release.py verify-app ios/output/verified/Payload/App.app iphoneos --signed
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          release=json.loads(pathlib.Path('ios/release.json').read_text())
+          release.update(sourceCommit=os.environ['SOURCE_SHA'],sha256=hashlib.sha256(pathlib.Path('ios/output/export/App.ipa').read_bytes()).hexdigest(),distribution='app-store-connect')
+          pathlib.Path('ios/output/export/release-manifest.json').write_text(json.dumps(release,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: BeCore-Tickets-iPhone-signed-${{ github.run_id }}
+          path: |
+            mobile/ios/output/export/*.ipa
+            mobile/ios/output/export/release-manifest.json
+            mobile/ios/output/BeCore-Tickets.xcarchive/dSYMs
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove Apple signing material
+        if: always()
+        run: python3 scripts/ios-release.py cleanup
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: iPhone-browser-evidence-${{ github.run_id }}
+          path: |
+            mobile/playwright-report
+            mobile/test-results
+          retention-days: 14

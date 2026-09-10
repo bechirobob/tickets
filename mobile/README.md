@@ -25,9 +25,9 @@ npm run sync
 
 Android: Java 21 and Android SDK/build-tools 36.0.0. Use the **Android release** workflow for signed APK/AAB distribution; [signing setup](android/SIGNING.md) documents activation, recovery and update checks. Releases fail without the permanent signing credentials. Development builds use a separate `.dev` app ID and are never delivered as customer releases.
 
-iOS: macOS with Xcode 26+, then `npm run ios`. The project uses Swift Package Manager. A simulator build does not need distribution signing; a physical iPhone/TestFlight build needs the Apple team, registered bundle ID and provisioning. Signing values are intentionally absent.
+iOS: [iPhone release preparation and signing](ios/RELEASE.md). macOS with Xcode 26+, then `npm run ios`. The project uses Swift Package Manager. A simulator build does not need distribution signing; a physical iPhone/TestFlight build needs the Apple team, registered bundle ID and provisioning. Signing values are intentionally absent.
 
-The **Native app builds** GitHub workflow runs client behavior tests, Android compilation/lint and unsigned iOS simulator compilation on the exact candidate commit. PR runs preserve an explicitly unsigned Android validation artifact, simulator app and browser evidence. Installable APKs come only from the separate signed release workflow, which also publishes durable GitHub Releases with a signature/version manifest.
+The **Native app builds** GitHub workflow runs client behavior tests, Android compilation/lint and iPhone Release simulator launch and unsigned hardware archiving on the exact candidate commit. PR runs preserve an explicitly unsigned Android validation artifact, simulator app and browser evidence. Installable APKs come only from the separate signed release workflow, which also publishes durable GitHub Releases with a signature/version manifest.
 
 Run the browser suite with `npx playwright install --with-deps chromium webkit` followed by `npm run test:browser`. It exercises the packaged production assets at 320px and standard phone sizes, including offline retry, event colours, full posters and browser handoff. It does not substitute for testing native plugins on devices.
 
