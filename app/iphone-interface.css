@@ -61,7 +61,7 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
     background: rgba(40,27,43,.94); border-top: 1px solid rgba(219,197,211,.18);
     backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
   }
-  .customer-dock a { min-height: 48px; gap: 3px; font-size: 11px; line-height: 1.35; font-weight: 500; padding: 3px 2px; }
+  .customer-dock a { min-height: 48px; gap: 3px; font-size: 12px; line-height: 1.35; font-weight: 500; padding: 3px 2px; }
   .customer-dock a[aria-current=page] { font-weight: 600; }
   .customer-dock svg { width: 23px; height: 23px; stroke-width: 1.7; transition: transform var(--ui-press); }
   .customer-dock a:active svg { transform: scale(.9); }
