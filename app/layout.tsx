@@ -18,6 +18,7 @@ import "./event-artwork.css";
 import "./notifications/notifications.css";
 import "./operations-layout.css";
 import "./rsvp-audience.css";
+import "./operations-design.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),

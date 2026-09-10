@@ -170,7 +170,7 @@ export async function cancelRegistration(db: D1Database, id: string) {
   if (reg.attendeeId) await env.THE_ROOM.getByName(reg.eventSlug).suspendAttendee(reg.attendeeId);
   await promoteRegistrations(db, reg.eventSlug);
 }
-export const registrationStatusText: Record<string, string> = { unverified: 'Check your email', interested: 'You’re on the announcement list. No admission reserved.', requested: 'Your RSVP is awaiting host approval.', waitlisted: 'You’re on the waitlist. We’ll email when a place opens.', confirmed: 'Your RSVP is confirmed. Your QR passes are in My Nights.', cancelled: 'Your registration is cancelled.', declined: 'The host could not confirm your RSVP.' };
+export const registrationStatusText: Record<string, string> = { unverified: 'Check your email', interested: 'You’re in for updates. Book a spot when the date drops.', requested: 'Waiting for the host’s nod.', waitlisted: 'Full house for now. You’re on the waitlist.', confirmed: 'You’re on the list. Your passes are in My Nights.', cancelled: 'Your RSVP is cancelled. Catch you at the next one.', declined: 'The host couldn’t fit you in this time.' };
 export async function processRegistrations(env: Cloudflare.Env, origin: string) {
   const events = await env.DB.prepare(`SELECT DISTINCT event_slug AS slug FROM event_registrations WHERE status IN ('waitlisted', 'interested')`).all<{ slug: string }>();
   for (const event of events.results) {

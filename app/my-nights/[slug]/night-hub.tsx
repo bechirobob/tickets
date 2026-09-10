@@ -152,7 +152,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(() =>
     params.get("welcome") === "1"
-      ? "Paid. Verified. This Night is officially yours."
+      ? "You’re going. Tell the group chat."
       : "",
   );
   const [locked, setLocked] = useState(false);
@@ -618,7 +618,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                   <small>
                     <Sparkles size={12} />{" "}
                     {order.roomBadge === "VIP"
-                      ? "VIP identity plus private Host concierge when services are open."
+                      ? "Your VIP badge and a private line to the host when concierge is open."
                       : "The Room, updates, Flashes and Before the Night are included."}
                   </small>
                 </article>
@@ -701,7 +701,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           <div className="night-details">
             <header>
               <p className="eyebrow">The practical bits</p>
-              <h2>Know where. Know when. Then overthink the outfit.</h2>
+              <h2>The plan’s below. The outfit is on you.</h2>
               {event.startsAt ? <div className="night-calendar-actions">
                 <a href={`/api/calendar/${encodeURIComponent(event.slug)}`}>
                   <CalendarDays size={14} /> Apple / Outlook calendar

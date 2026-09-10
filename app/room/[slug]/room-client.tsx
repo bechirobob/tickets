@@ -327,7 +327,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
   }
 
   if (status === "loading" || (status === "connecting" && !policy)) {
-    return <main className="room-gate"><MessageCircle aria-hidden="true" /><p>Opening your verified attendee Room…</p></main>;
+    return <main className="room-gate"><MessageCircle aria-hidden="true" /><p>Finding your people…</p></main>;
   }
   if (status === "denied") {
     return <main className="room-gate"><ShieldCheck aria-hidden="true" /><h1>This Room is ticket-locked.</h1><p>{notice}</p><Link href="/tickets">Open your ticket wallet</Link></main>;

@@ -57,3 +57,11 @@ The orange ticket and ivory B are the identity. Use the shared BrandLogo compone
 The Room has its own velvet, leather and smoked-glass atmosphere. Message surfaces protect readability; warm replies and a clearly marked Host announcement distinguish conversation from checkout. The iPhone previews use the same materials. Generic rendered atmosphere is decoration, never evidence of a particular Host, venue or attendee. No invented social proof.
 
 Notification bells open compact panels beside their trigger. The Buzz uses slim rows, small timestamps, quiet unread dots and one shared read action. Show the event name, never its URL slug. Longer updates open in place with every word available; lists reveal more in batches. Keep the full inbox compact too. Room notification settings use the same small surface, with the night toggle and device delivery kept distinct. Opening, closing, loading and failed updates must remain clear, with keyboard focus restored to the bell.
+
+## Operations and guest management — 10 September 2026
+
+Guest-facing copy keeps the same party voice through registration, recovery, errors and confirmations. An RSVP request must remain clearly pending where host approval is required, without sounding like a conference admission notice. Public RSVP submission sends no confirmation email. Staff and Operations use concise, neutral language.
+
+Operations uses a warm canvas, contained white panels, a dark aubergine navigator, compact native controls and the public site's shared action buttons. Group metrics with their labels. Keep distinct tasks behind named views; keep sharing visible and save changed settings before copying a link. Pause refresh work in background tabs.
+
+Event stories use short paragraphs, explicitly credited hosts and participants, and a separate tappable enquiry number. Never infer a participant's role from a name.

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 type Registration = { id: string; eventSlug: string; title: string; kind: string; status: string; partySize: number; maxPartySize: number; mode: string; roomAccess: number };
-const labels: Record<string, string> = { interested: 'Announcements only · no admission reserved', requested: 'Awaiting host approval', waitlisted: 'On the waitlist · no admission reserved', confirmed: 'RSVP confirmed', cancelled: 'Cancelled', declined: 'Not confirmed by the host' };
+const labels: Record<string, string> = { interested: 'Here for the updates', requested: 'Waiting for the host’s nod', waitlisted: 'On the waitlist · your spot isn’t confirmed yet', confirmed: 'RSVP confirmed', cancelled: 'Cancelled', declined: 'No spot this time' };
 export default function MyRegistrations() {
   const [rows, setRows] = useState<Registration[]>([]), [message, setMessage] = useState(''), [busy, setBusy] = useState(''), [loading, setLoading] = useState(true);
   const load = useCallback(() => fetch('/api/customer/registrations', { cache: 'no-store' }).then(async response => {

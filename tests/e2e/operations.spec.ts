@@ -10,7 +10,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 });
 for (const [path, heading] of [
   ['/admin','Submission queue'], ['/admin/operations','Event operations'], ['/admin/events','Events & inventory'],
-  ['/admin/orders','Orders & payments'], ['/admin/support','Ticket support'], ['/admin/promoters','Promoter links'],
+  ['/admin/registrations','RSVP & guests'], ['/admin/orders','Orders & payments'], ['/admin/support','Ticket support'], ['/admin/promoters','Promoter links'],
   ['/admin/rooms','The Room'], ['/admin/fees','Fees & charges'], ['/admin/accounts','People & permissions'], ['/admin/account','My account'],
 ]) {
   test(`owner can open ${path} with readable controls`, async ({ page }, info) => {
@@ -48,6 +48,36 @@ test('event save survives a dropped connection and retains the draft', async ({ 
   const save = page.getByRole('button', { name: 'Save event & inventory', exact: true }); await save.click();
   await expect(page.getByRole('status')).toContainText('Connection lost'); await expect(save).toBeEnabled();
   await expect(title).toHaveValue(`${original} revised`);
+});
+test('RSVP save and copy retains the draft after a failed save', async ({ page }) => {
+  await page.goto('/admin/registrations?event=rsvp-browser');
+  const manager = page.locator('.registration-manager');
+  await expect(manager.getByLabel('RSVP link', { exact: true })).toHaveValue(/\/rsvp\/rsvp-browser$/);
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => { throw new Error('A failed save must not copy'); } } }));
+  await manager.getByLabel('Guest capacity', { exact: true }).fill('77');
+  await page.route('**/api/admin/registrations', route => route.request().method() === 'POST' ? route.abort('failed') : route.continue());
+  const copy = manager.getByRole('button', { name: 'Save & copy link' });
+  await copy.click();
+  await expect(manager.locator('.ops-message')).toContainText('Connection lost');
+  await expect(copy).toBeEnabled();
+  await expect(manager.getByLabel('Guest capacity', { exact: true })).toHaveValue('77');
+  await expect(manager.getByText('Your link is selected. Copy it to share.')).toHaveCount(0);
+  await expect(manager.getByText('Link copied. Ready to share.')).toHaveCount(0);
+});
+test('Operations keeps checks, incidents and approvals in focused views', async ({ page }, info) => {
+  await page.goto('/admin/operations');
+  await expect(page.getByRole('heading', { name: 'Next actions' })).toBeVisible();
+  await expect(page.getByText('Doors & devices', { exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Event readiness', exact: true }).click();
+  await expect(page.getByText('Doors & devices', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Next actions' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Issues', exact: true }).click();
+  await expect(page.getByText('Incidents', { exact: true })).toBeVisible();
+  await expect(page.getByText('Doors & devices', { exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Approvals', exact: true }).click();
+  await expect(page.getByText('High-risk approvals', { exact: true })).toBeVisible();
+  await expect(page.getByText('Incidents', { exact: true })).not.toBeVisible();
+  await page.screenshot({path:info.outputPath('operations-approvals.png'),fullPage:true});
 });
 test('RSVP orders do not offer payment verification', async ({ page }) => {
   await page.goto('/admin/orders');
@@ -131,20 +161,22 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await manager.getByLabel('Guest capacity',{exact:true}).fill('');
   await expect(manager.getByLabel('Guest capacity',{exact:true})).toHaveValue('');
   await manager.getByRole('button',{name:'Save registration settings'}).click();
-  await expect(manager.getByRole('status')).toContainText('Enter a guest capacity');
-  await expect(manager.getByRole('button',{name:/^Copy .* link$/})).toBeDisabled();
+  await expect(manager.locator('.ops-message')).toContainText('Enter a guest capacity');
+  await expect(manager.getByRole('button',{name:'Save & copy link'})).toBeEnabled();
   await manager.getByLabel('Guest capacity',{exact:true}).pressSequentially('25');
-  await manager.getByRole('button',{name:/Paid registration Guests/}).click();
+  await manager.getByRole('button',{name:/Paid registration Tickets at checkout/}).click();
   const price=manager.getByLabel('Base registration price (GHS)');await price.fill('');await expect(price).toHaveValue('');
   await price.pressSequentially('75.50');await expect(price).toHaveValue('75.50');
-  await expect(manager.getByRole('button',{name:/^Copy .* link$/})).toBeDisabled();
+  await expect(manager.getByRole('button',{name:'Save & copy link'})).toBeEnabled();
   await price.fill('75');
   await manager.getByRole('button',{name:'Save registration settings'}).click();
-  await expect(manager.getByRole('status')).toContainText('Registration settings saved');
-  await manager.getByRole('button',{name:/Free RSVP Guests/}).click();
+  await expect(manager.locator('.ops-message')).toContainText('Registration settings saved');
+  await manager.getByRole('button',{name:/RSVP No ticket payment/}).click();
   await manager.getByLabel('Review requests before confirming guests').check();
-  await manager.getByRole('button',{name:'Save registration settings'}).click();
-  await expect(manager.getByRole('status')).toContainText('Registration settings saved');
+  await manager.getByRole('button',{name:'Midnight before the event'}).click();
+  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
+  await manager.getByRole('button',{name:'Save & copy link'}).click();
+  await expect(manager.locator('.ops-message')).toContainText('Registration settings saved');
   await expect(manager.getByRole('link',{name:'Preview guest page'})).toHaveAttribute('href','/rsvp/rsvp-browser');
   const axe=await new AxeBuilder({page}).include('.registration-manager').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
@@ -157,7 +189,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.locator('main')).not.toContainText(/free|no payment/i);
   const flier=page.getByRole('img',{name:'Event flier for RSVP browser gathering'});await expect(flier).toBeVisible();await expect(flier).toHaveCSS('object-fit','contain');
   await expect.poll(()=>flier.evaluate((img:HTMLImageElement)=>img.complete&&img.naturalWidth>0)).toBe(true);
-  await expect(page.getByLabel('Email me announcements')).not.toBeChecked();
+  await expect(page.getByLabel('Email me updates from this host')).not.toBeChecked();
   const guestAxe=await new AxeBuilder({page}).include('.registration-form').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(guestAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('guest-rsvp-form.png'),fullPage:true});
   await page.getByLabel('Your name').fill('Shared Link Guest');await page.getByLabel('Email address').fill('shared-link@example.com');
@@ -165,7 +197,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const submitted=page.waitForResponse(r=>r.url().endsWith('/api/registrations')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'Send RSVP'}).click();expect((await submitted).status()).toBe(202);
   await expect(page.getByRole('status')).toContainText('RSVP received.');
-  await expect(page.getByRole('status')).toContainText('Your request is with the host for approval.');
+  await expect(page.getByRole('status')).toContainText('Now we wait for the host’s nod.');
   await expect(page.getByRole('button',{name:/confirmation link/i})).toHaveCount(0);
   await page.screenshot({path:info.outputPath('guest-rsvp-success.png'),fullPage:true});
   await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeVisible();
@@ -174,15 +206,17 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
   await expect(manager.getByText('Live · refreshes every 5 seconds')).toBeVisible();
   await expect(manager.getByLabel('Live registrations')).toContainText('1');
-  await manager.getByText('Review free RSVP requests',{exact:true}).click();
+  await manager.getByRole('button',{name:/^Guest list/}).click();
   await expect(manager.getByText('shared-link@example.com',{exact:true})).toBeVisible();
+  await manager.getByRole('button',{name:'Setup',exact:true}).click();
   await manager.getByLabel('Guest capacity',{exact:true}).fill('31');
   const response=await page.request.post('/api/registrations/claim',{data:{token:fixture.registrationToken},headers:{origin:'https://127.0.0.1:8791'}});expect(response.ok(),await response.text()).toBe(true);
   await expect(manager.getByText('Guest activity updated.')).toBeVisible({timeout:12000});
   await expect(manager.getByLabel('Guest capacity',{exact:true})).toHaveValue('31');
   await manager.getByText('Recent signups & changes',{exact:true}).click();await expect(manager.getByLabel('Live registrations').getByText('Live RSVP Guest',{exact:true})).toBeVisible();
+  await manager.getByRole('button',{name:/^Guest list/}).click();
   const request=manager.locator('.registration-roster article').filter({hasText:'shared-link@example.com'});
-  await request.getByRole('button',{name:'Approve',exact:true}).click();await expect(request).toContainText('confirmed');
+  await request.getByRole('button',{name:'Approve',exact:true}).click();await expect(request).toContainText('Confirmed');
   await manager.getByRole('button',{name:'Guest emails',exact:true}).click();
   await expect(manager.getByText('rsvp-browser@example.com',{exact:true})).toBeVisible();
   const csv=await page.request.get('/api/admin/audience?eventSlug=rsvp-browser&export=csv');expect(await csv.text()).toContain('rsvp-browser@example.com');

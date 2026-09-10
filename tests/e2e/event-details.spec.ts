@@ -161,3 +161,13 @@ test("copying a promoter link does not open native sharing and restores focus", 
   await page.getByRole("button", { name: "Got it" }).click();
   await expect(copy).toBeFocused();
 });
+
+
+test("event story separates the hosts, guests and callable enquiry line",async({page})=>{
+ await page.goto('/event/the-weekend-braai');
+ await expect(page.getByRole('region',{name:'Your hosts',exact:true})).toContainText('Kofi Billz');
+ await expect(page.getByRole('region',{name:'With',exact:true})).toContainText('Accra Mayor');
+ const contact=page.getByRole('link',{name:'Call event enquiries +233 53 316 3613',exact:true});
+ await expect(contact).toHaveAttribute('href','tel:+233533163613');
+ await expect(page.locator('.event-story-intro')).not.toContainText('+233');
+});

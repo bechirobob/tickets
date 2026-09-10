@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { StaffRole } from "../../../lib/admin-session";
+import {ActionLink} from "../../action";
 import OperationsNav from "../operations-nav";
 import OrganizerActivity from "./organizer-activity";
 
@@ -151,6 +152,7 @@ export default function EventOperationsHub({
     returns: [],
   });
   const [selected, setSelected] = useState("");
+  const [view, setView] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
@@ -163,13 +165,13 @@ export default function EventOperationsHub({
       setMessage(next.error ?? "Operations could not be loaded.");
     else {
       setData(next);
-      setSelected((current) => current || next.events[0]?.slug || "");
+      setSelected((current) => next.events.some(event => event.slug === current) ? current : next.events[0]?.slug || "");
     }
     setLoading(false);
   }, []);
   useEffect(() => {
     const kick = window.setTimeout(() => void load(), 0);
-    const timer = window.setInterval(() => void load(), 30_000);
+    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 30_000);
     return () => {
       window.clearTimeout(kick);
       window.clearInterval(timer);
@@ -247,8 +249,8 @@ export default function EventOperationsHub({
           <div>
             <p>
               {role === "finance"
-                ? "Money without guesswork"
-                : "Live truth, one page"}
+                ? "Finance"
+                : "Operations overview"}
             </p>
             <h1>
               {role === "finance" ? "Finance overview" : "Event operations"}
@@ -261,12 +263,12 @@ export default function EventOperationsHub({
         {role === "owner" ? <OrganizerActivity /> : null}
         {loading ? (
           <div className="curation-empty">
-            <Loader2 className="spin" /> Checking every moving part…
+            <Loader2 className="spin" /> Loading operations…
           </div>
         ) : (
           <>
             <div className="workspace-event-picker">
-              <label htmlFor="operations-event">Night</label>
+              <label htmlFor="operations-event">Event</label>
               <select
                 id="operations-event"
                 value={selected}
@@ -281,7 +283,7 @@ export default function EventOperationsHub({
               <span>
                 {event
                   ? `${new Date(event.startsAt).toLocaleDateString("en-GH", { dateStyle: "medium" })} · ${event.eventState.replaceAll("_", " ")}`
-                  : "Choose a Night to inspect."}
+                  : "Choose an event."}
               </span>
             </div>
             {event && metric ? (
@@ -338,14 +340,16 @@ export default function EventOperationsHub({
                     </b>
                     <span>
                       {role === "owner"
-                        ? "open human issues"
+                        ? "items need attention"
                         : canFinance
                           ? "open support cases"
                           : "open Room reports & incidents"}
                     </span>
                   </article>
                 </div>
-                {journey ? (
+                <nav className="ops-tabs operations-views" aria-label="Operations views">{[['overview','Overview'],...(canEvents?[['readiness','Event readiness']]:[]),['issues','Issues'],['approvals','Approvals']].map(([key,label])=><button key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>
+                {view==='overview'?<section className="operations-next"><header><h3>Next actions</h3><span>Updates automatically</span></header><div>{canEvents?<><ActionLink href={`/admin/registrations?event=${selected}`} icon={<Users size={17}/>}>RSVP & guests</ActionLink><ActionLink href={`/admin/events?event=${selected}`} variant="secondary">Edit event</ActionLink></>:null}{canFinance?<ActionLink href="/admin/orders" variant="secondary">Orders & payments</ActionLink>:null}</div><div className="operations-attention">{canEvents&&readiness<100?<button onClick={()=>setView('readiness')}><ClipboardCheck size={18}/><span><b>Finish event checks</b><small>{checks.filter(c=>c.status!=='passed').length} checks remaining</small></span><span aria-hidden="true">→</span></button>:null}{incidents.length||data.alerts.length?<button onClick={()=>setView('issues')}><ShieldAlert size={18}/><span><b>Review open issues</b><small>{incidents.length} incidents · {data.alerts.length} system alerts</small></span><span aria-hidden="true">→</span></button>:null}{data.approvals.filter(a=>(!a.event_slug||a.event_slug===selected)&&a.status==='pending').length?<button onClick={()=>setView('approvals')}><Users size={18}/><span><b>Approvals waiting</b><small>Review requests from your team</small></span><span aria-hidden="true">→</span></button>:null}</div></section>:null}
+                {journey && view==='overview' ? (
                   <section className="operations-journey">
                     <header>
                       <div>
@@ -353,8 +357,7 @@ export default function EventOperationsHub({
                         <span>
                           <b>30-day ticket journey</b>
                           <small>
-                            First-party counts only—no customer tracking
-                            profile.
+                            Event views through to completed payments.
                           </small>
                         </span>
                       </div>
@@ -389,7 +392,7 @@ export default function EventOperationsHub({
                 ) : null}
                 <div className="operations-grid">
                   {canFinance ? (
-                    <section>
+                    <section hidden={view!=='overview'}>
                       <header>
                         <RefreshCw />
                         <div>
@@ -406,7 +409,7 @@ export default function EventOperationsHub({
                     </section>
                   ) : null}
                   {canEvents ? (
-                    <section>
+                    <section hidden={view!=='readiness'}>
                       <header>
                         <ClipboardCheck />
                         <div>
@@ -459,7 +462,7 @@ export default function EventOperationsHub({
                     </section>
                   ) : null}
                   {canEvents ? (
-                    <section>
+                    <section hidden={view!=='readiness'}>
                       <header>
                         <Radio />
                         <div>
@@ -496,7 +499,7 @@ export default function EventOperationsHub({
                     </section>
                   ) : null}
                   {canEvents ? (
-                    <section>
+                    <section hidden={view!=='issues'}>
                       <header>
                         <AlertTriangle />
                         <div>
@@ -528,11 +531,11 @@ export default function EventOperationsHub({
                           </article>
                         ))
                       ) : (
-                        <p>No open incident. Keep it boring.</p>
+                        <p>No open incidents.</p>
                       )}
                     </section>
                   ) : null}
-                  <section>
+                  <section hidden={view!=='approvals'}>
                     <header>
                       <Users />
                       <div>
@@ -606,7 +609,7 @@ export default function EventOperationsHub({
                   </section>
                 </div>
                 {data.alerts.length ? (
-                  <section className="operations-alerts">
+                  <section className="operations-alerts" hidden={view!=='issues'}>
                     <header>
                       <ShieldAlert />
                       <b>System alerts</b>

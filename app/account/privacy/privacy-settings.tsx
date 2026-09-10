@@ -19,7 +19,7 @@ export default function PrivacySettings() {
   const [ready, setReady] = useState(false);
   const busy = useRef(false);
   const load = useCallback(() => requestJson<{ defaultAttendeeVisible: boolean; allowHostUpdates: boolean }>("/api/customer/privacy").then((data) => {
-      if (typeof data.defaultAttendeeVisible !== "boolean" || typeof data.allowHostUpdates !== "boolean") throw new Error("Privacy choices could not be loaded. Please try again.");
+      if (typeof data.defaultAttendeeVisible !== "boolean" || typeof data.allowHostUpdates !== "boolean") throw new Error("Your settings didn’t load. Give that another go.");
       setVisible(data.defaultAttendeeVisible); setUpdates(data.allowHostUpdates); setReady(true); setLocked(false); setError("");
     }).catch((cause) => {
       if (cause instanceof RequestError && cause.status === 401) setLocked(true);

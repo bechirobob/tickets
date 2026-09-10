@@ -101,7 +101,7 @@ export default function PartySubmissionForm() {
         <CheckCircle2 size={37} />
         <p className="night-kicker"><span /> Safely in the queue</p>
         <h2>Your party has entered the group chat.</h2>
-        <p>Reference <b>{message}</b>. BeCore will review the concept, venue, organiser history and ticket terms before anything goes public.</p>
+        <p>Reference <b>{message}</b>. We’ll check the plan, venue and ticket details, then get back to you. Your event goes live after approval.</p>
         <button type="button" onClick={() => setState("idle")}>Submit another party</button>
       </section>
     );
