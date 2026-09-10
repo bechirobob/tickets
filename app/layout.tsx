@@ -1,26 +1,8 @@
 import type { Metadata } from "next";
+import "../styles/customer.css";
 import CustomerDock from "./customer-dock";
 import PwaRegistration from "./pwa-registration";
 import AnalyticsBeacon from "./analytics-beacon";
-import "./globals.css";
-import "./access-polish.css";
-import "./discovery.css";
-import "./room-experience.css";
-import "./interface-finish.css";
-import "./nightlife-details.css";
-import "./brand-identity.css";
-import "./backstage.css";
-import "./room-atmosphere.css";
-import "./your-nights.css";
-import "./room-conversation.css";
-import "./room-features.css";
-import "./event-artwork.css";
-import "./notifications/notifications.css";
-import "./operations-layout.css";
-import "./rsvp-audience.css";
-import "./operations-design.css";
-import "../styles/interface-tokens.css";
-import "./iphone-interface.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),

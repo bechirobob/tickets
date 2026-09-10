@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { eventImage, parseCatalogue, readCatalogue, saveCatalogue, ticketLabel } from '../src/catalogue.ts';
-import { customerUrl, routeFromUrl } from '../src/routes.ts';
+import { browserUrl, customerUrl, routeFromUrl } from '../src/routes.ts';
 import type { PublicEvent } from '../../lib/public-event.ts';
 
 const event: PublicEvent = { slug: 'test-event', title: 'A real title', image: '/events/test.jpeg', venue: 'Venue', area: 'Accra', vibe: 'Day party', fullDate: 'Coming soon', time: 'To be announced', startsAt: null, scheduleStatus: 'coming_soon', isVerified: true, eventState: 'on_sale', priceFromMinor: 35000, ticketsAvailable: false, colourScheme: 'blush', dressCode: null, guestPerk: null, awarenessNote: null, lineup: '', ageRestriction: '18+', note: '', quip: '' };
@@ -33,4 +33,10 @@ test('native entry links accept public intents and reject credentials or staff r
   for (const value of ['https://evil.test/events', 'becoretickets://admin', 'https://tickets.becoreops.com/api/customer/recovery/claim?token=x', 'https://user:password@tickets.becoreops.com/events', 'becoretickets://event/../../admin']) assert.equal(routeFromUrl(value), null);
   assert.equal(customerUrl('/my-nights'), 'https://tickets.becoreops.com/my-nights');
   for (const value of ['//evil.test', '/admin', '/api/customer/session', '/my-nights?token=secret', '/event/%2e%2e/admin']) assert.throws(() => customerUrl(value));
+});
+
+test('venue maps are isolated while arbitrary external destinations remain blocked', () => {
+  assert.match(browserUrl('https://www.google.com/maps?q=Accra'), /google.com/);
+  for (const url of ['https://www.google.com/accounts', 'https://evil.test/', 'javascript:alert(1)', 'https://user:pass@maps.google.com']) assert.throws(() => browserUrl(url));
+  assert.deepEqual(routeFromUrl('https://tickets.becoreops.com/'), { tab: 'home' });
 });

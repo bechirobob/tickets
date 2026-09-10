@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { EventState } from "../../events";
+import type { EventState } from "../../../lib/customer-screen";
 
 export default function EventCountdown({ startsAt, endsAt, eventState, isPreview }: {
   startsAt: string | null; endsAt: string | null; eventState: EventState; isPreview: boolean;

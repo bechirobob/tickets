@@ -78,8 +78,8 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .my-nights-locked h2 { font-size: 22px; }
   .my-nights-locked > p { font-size: 15px; }
   .event-detail-layout { gap: 22px; }
-  .event-detail-poster { max-height: 54svh; }
-  .event-detail-poster img { max-height: 54svh; }
+  .event-detail-poster { max-height: 54vh; max-height: 54svh; }
+  .event-detail-poster img { max-height: 54vh; max-height: 54svh; }
   .event-detail-overview h1 { font-size: 28px; }
   .event-detail-toolbar { padding-block: 4px 12px; }
   .event-date-display > b { font-size: 52px; }
@@ -104,4 +104,11 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .night-mobile-menu__panel, .notification-panel--dropdown { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .customer-dock { background: #281b2b; backdrop-filter: none; -webkit-backdrop-filter: none; }
   body:has(.poster-event-page) .customer-dock { background: var(--event-shell-paper); }
+}
+
+/* Older supported WebViews retain complete cards without subgrid. */
+@supports not (grid-template-rows: subgrid) {
+  .discovery-grid .drop-card { display: flex; flex-direction: column; grid-row: auto; }
+  .discovery-grid .drop-card__body { display: flex; flex-direction: column; flex: 1; grid-row: auto; }
+  .discovery-grid .drop-card__body > a:last-child { margin-top: auto; }
 }

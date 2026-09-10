@@ -1,11 +1,14 @@
 "use client";
 
+import { useCustomerRuntime } from "../../customer-runtime";
+import { ActionButton } from "../../action";
 import { BellRing, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 type Tier = { recordId: string; name: string; status: string };
 
 export default function WaitlistControl({ eventSlug, tiers }: { eventSlug: string; tiers: Tier[] }) {
+  const runtime = useCustomerRuntime();
   const sold = tiers.filter((tier) => tier.status === "sold_out");
   const [ticketTierId, setTicketTierId] = useState(sold[0]?.recordId ?? "");
   const [email, setEmail] = useState("");
@@ -13,6 +16,7 @@ export default function WaitlistControl({ eventSlug, tiers }: { eventSlug: strin
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   if (!sold.length) return null;
+  if (runtime.openSecurePage) return <section className="event-waitlist"><ActionButton onClick={() => void runtime.openSecurePage?.(`/event/${eventSlug}#register`)}>Catch a returned ticket</ActionButton></section>;
   async function join() {
     setBusy(true); setNotice("");
     const response = await fetch("/api/waitlist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventSlug, ticketTierId, email, phone }) });

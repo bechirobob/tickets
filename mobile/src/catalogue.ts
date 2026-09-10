@@ -2,7 +2,7 @@ import type { PublicCatalogue, PublicEvent } from '../../lib/public-event';
 
 export const WEB_ORIGIN = 'https://tickets.becoreops.com';
 export const CATALOGUE_URL = `${WEB_ORIGIN}/api/public/events`;
-const CACHE_KEY = 'becore.public-catalogue.v1';
+const CACHE_KEY = 'becore.public-catalogue.v2';
 const MAX_CACHE_AGE = 7 * 24 * 60 * 60 * 1000;
 
 export function eventImage(value: string): string | null {

@@ -2,9 +2,11 @@
 
 import { Link2, Share2 } from "lucide-react";
 import { useRef, useState } from "react";
+import { useCustomerRuntime } from "../../customer-runtime";
 import { trackProductMetric } from "../../../lib/client-analytics";
 
 export default function EventActions({ title, eventSlug }: { title: string; eventSlug: string }) {
+  const runtime = useCustomerRuntime();
   const [outcome, setOutcome] = useState<"copied" | "manual" | null>(null);
   const [busy, setBusy] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
@@ -24,14 +26,14 @@ export default function EventActions({ title, eventSlug }: { title: string; even
     setLastAction(copyOnly ? "copy" : "share");
     setBusy(true);
     setOutcome(null);
-    const url = window.location.href;
+    const url = runtime.openSecurePage ? `https://tickets.becoreops.com/event/${encodeURIComponent(eventSlug)}` : window.location.href;
     setShareUrl(url);
     try {
-      trackProductMetric("share_started", eventSlug);
+      if (!runtime.openSecurePage) trackProductMetric("share_started", eventSlug);
       const data = { title: `${title} · BeCore Tickets`, text: `${title}. Shall we?`, url };
-      if (!copyOnly && navigator.share) {
+      if (!copyOnly && (runtime.share || navigator.share)) {
         try {
-          await navigator.share(data);
+          await (runtime.share ? runtime.share(data) : navigator.share(data));
           return;
         } catch (error) {
           // Closing the native sheet is a choice, not a failed share.

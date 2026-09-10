@@ -26,4 +26,4 @@ export type PublicEvent = {
   quip: string;
 };
 
-export type PublicCatalogue = { version: 1; events: PublicEvent[]; updatedAt: string };
+export type PublicCatalogue = { version: 1; events: PublicEvent[]; updatedAt: string; screens?: import("./customer-screen").CustomerEventScreen[] };

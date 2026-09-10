@@ -1,4 +1,4 @@
-import type { ProductMetric } from "./product-analytics";
+import type { ProductMetric } from "./product-metrics";
 
 export function trackProductMetric(metric: ProductMetric, eventSlug = "") {
   if (typeof window === "undefined") return;

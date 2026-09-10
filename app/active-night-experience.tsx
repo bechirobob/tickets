@@ -19,7 +19,7 @@ import type { CSSProperties, FocusEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import EventExplorer from "./event-explorer";
 import { eventImageUrl } from "./event-images";
-import type { CuratedEvent } from "./events";
+import type { CustomerEvent } from "../lib/customer-screen";
 import RoomPreviewCarousel from "./room-preview-carousel";
 import { FlashMarker, RoomComposeContent, RoomReaction } from "./room-chat-parts";
 import { ActionLink } from "./action";
@@ -28,7 +28,7 @@ import { discoveryOffer } from "../lib/event-pricing";
 const sceneInterval = 4_500;
 const fallbackImage = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
 
-const sceneThemes: Record<CuratedEvent["vibe"], { acid: string; signal: string; bone: string; dark: string }> = {
+const sceneThemes: Record<CustomerEvent["vibe"], { acid: string; signal: string; bone: string; dark: string }> = {
   "Late night": { acid: "#d7f45b", signal: "#bd3f11", bone: "#f1eee6", dark: "#10110f" },
   "Day party": { acid: "#f0d36d", signal: "#a94718", bone: "#f4efe2", dark: "#16130d" },
   "Alté": { acid: "#c8d9f2", signal: "#a74432", bone: "#edf0ef", dark: "#101216" },
@@ -45,7 +45,7 @@ function HostUpdate({ label, time, dateTime, title, detail, compact = false }: {
   </article>;
 }
 
-function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | null; heroImage: string; conversation: "arrival" | "inside" }) {
+function RoomPhone({ event, heroImage, conversation }: { event: CustomerEvent | null; heroImage: string; conversation: "arrival" | "inside" }) {
   const eventTitle = event?.title ?? "After Dark";
   const venue = event?.venue ?? "the venue";
 
@@ -76,7 +76,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CuratedEvent | n
   </article>;
 }
 
-export default function ActiveNightExperience({ events }: { events: CuratedEvent[] }) {
+export default function ActiveNightExperience({ events }: { events: CustomerEvent[] }) {
   const [observedAt] = useState(() => Date.now());
   const scenes = useMemo(() => events.filter((event) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > observedAt)).slice(0, 4), [events, observedAt]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -180,7 +180,7 @@ export default function ActiveNightExperience({ events }: { events: CuratedEvent
         <h1>{active?.title ?? "Plans, sorted."}</h1>
         <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · Coming soon` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
-        {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink><ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink></div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
+        {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink>{discoveryOffer(active).href !== `/event/${active.slug}` ? <ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink> : null}</div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
       </div>
       {active && active.scheduleStatus !== "coming_soon" ? <p className="compact-hero__price">{discoveryOffer(active).label}</p> : null}
       {hasScenes ? <button

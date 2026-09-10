@@ -4,7 +4,7 @@ Status: preparation started, 9 September 2026. No App Store or Google Play build
 
 ## First release
 
-The Drop finds events. My Nights owns tickets, entry passes and each event's Room. The Buzz opens an update at its actual destination. Privacy and Help remain secondary. Staff administration stays on the web; the customer app should not expose a competing operations menu.
+Home introduces the current events. The Drop finds events. My Nights owns tickets, entry passes and each event's Room. The Buzz opens an update at its actual destination. Privacy and Help remain secondary. Staff administration stays on the web; the customer app should not expose a competing operations menu.
 
 Keep the existing event palettes, compact type and navigation. Device-specific work must earn its place: reliable ticket access at the gate, native notification delivery, camera-backed Flashes, proper back navigation, sharing and returning from payment. The first submission must demonstrate these real journeys on devices.
 
@@ -23,7 +23,7 @@ Before adopting the runtime, prove one vertical journey: event discovery → ema
 | 3. Store candidate | Account deletion, moderation review, privacy/data disclosures, permission copy, age rating, reviewer access, store artwork, signed builds | TestFlight and Play internal tests complete; launch checklist has evidence; no credentials or placeholders in submission assets |
 | 4. Release | Closed testing where required; final metadata and compliance review; staged rollout with error monitoring | Store approval and real production payment acceptance; rollback/incident ownership documented |
 
-Stage 1 is implemented. Stage 2 has started in `mobile/`: packaged discovery/detail screens, native sharing and lifecycle hooks, public offline catalogue, Android/iOS projects and native build pipelines. Android release signing is configured around a permanent certificate with version checks, fail-closed signing and a private recovery backup; repository secret activation and the first signed release/device upgrade verification remain pending. See `mobile/android/SIGNING.md`. My Nights, recovery and checkout still use the secure browser flow; native session handoff and private passes remain pending. Build results and artifact links are recorded in the implementation PR. Stages 3–4, native push registration and verified universal/app-link association files remain pending. See [app build instructions](../../mobile/README.md).
+Stage 1 is implemented. Shared Home, Drop, event screens, styles and navigation now render in both the packaged app and mobile website; see [shared screen contract](shared-customer-screens.md). Stage 2 has started in `mobile/`: packaged discovery/detail screens, native sharing and lifecycle hooks, public offline catalogue, Android/iOS projects and native build pipelines. Android release signing is configured around a permanent certificate with version checks, fail-closed signing and a private recovery backup; repository secret activation and the first signed release/device upgrade verification remain pending. See `mobile/android/SIGNING.md`. My Nights, recovery and checkout still use the secure browser flow; native session handoff and private passes remain pending. Build results and artifact links are recorded in the implementation PR. Stages 3–4, native push registration and verified universal/app-link association files remain pending. See [app build instructions](../../mobile/README.md).
 
 ## Launch dependencies
 

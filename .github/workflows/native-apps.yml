@@ -3,7 +3,7 @@ name: Native app builds
 on:
   pull_request:
     branches: [main]
-    paths: ['mobile/**', 'styles/**', 'lib/public-event.ts', 'lib/event-presentation.ts', 'lib/event-palette.ts', 'app/api/public/**', '.github/workflows/native-apps.yml', '.github/workflows/android-release.yml', '.github/workflows/ios-release.yml']
+    paths: ['mobile/**', 'styles/**', 'app/**', 'lib/**', '.github/workflows/native-apps.yml', '.github/workflows/android-release.yml', '.github/workflows/ios-release.yml']
   workflow_dispatch:
 
 permissions:

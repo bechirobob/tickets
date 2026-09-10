@@ -1,9 +1,11 @@
 "use client";
 
+import { useCustomerRuntime } from "./customer-runtime";
 import { Bell, Check, Loader2, UserRoundPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: string; hostSlug?: string }) {
+  const runtime = useCustomerRuntime();
   const [member, setMember] = useState<boolean | null>(null);
   const [keepPosted, setKeepPosted] = useState(false);
   const [followingHost, setFollowingHost] = useState(false);
@@ -11,6 +13,7 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    if (runtime.openSecurePage) return;
     const query = new URLSearchParams();
     if (eventSlug) query.set("event", eventSlug);
     if (hostSlug) query.set("host", hostSlug);
@@ -22,7 +25,7 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
         setFollowingHost(Boolean(data.followingHost));
       })
       .catch(() => setMember(false));
-  }, [eventSlug, hostSlug]);
+  }, [eventSlug, hostSlug, runtime.openSecurePage]);
 
   async function update(kind: "event" | "host") {
     setWorking(kind);
@@ -40,8 +43,8 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
     }
   }
 
-  if (member === null) return <div className="member-actions member-actions--loading"><Loader2 className="spin" size={15} /> Checking member access</div>;
-  if (!member) return <p className="member-locked-note">Got a BeCore ticket? Open My Nights to follow your favourite hosts.</p>;
+  if (!runtime.openSecurePage && member === null) return <div className="member-actions member-actions--loading"><Loader2 className="spin" size={15} /> Checking member access</div>;
+  if (runtime.openSecurePage || !member) return <p className="member-locked-note">Got a BeCore ticket? Open My Nights to follow your favourite hosts.</p>;
   return <div className="member-actions">
     {eventSlug ? <button type="button" onClick={() => update("event")} disabled={working !== null}>{working === "event" ? <Loader2 className="spin" size={14} /> : keepPosted ? <Check size={14} /> : <Bell size={14} />}{keepPosted ? "Keeping you posted" : "Keep me posted"}</button> : null}
     {hostSlug ? <button type="button" onClick={() => update("host")} disabled={working !== null}>{working === "host" ? <Loader2 className="spin" size={14} /> : followingHost ? <Check size={14} /> : <UserRoundPlus size={14} />}{followingHost ? "Following Host" : "Follow Host"}</button> : null}

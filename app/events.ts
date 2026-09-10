@@ -1,44 +1,7 @@
 import type { TicketTier } from "../lib/ticket-tiers";
 
-export type EventState = "on_sale" | "sold_out" | "cancelled" | "postponed" | "rescheduled";
-
-export type CuratedEvent = {
-  registrationMode?: 'paid' | 'rsvp' | 'interest';
-  slug: string;
-  title: string;
-  shortDate: string;
-  fullDate: string;
-  day: string;
-  time: string;
-  startsAt: string | null;
-  endsAt: string | null;
-  scheduleStatus?: "confirmed" | "coming_soon" | "end_pending";
-  isVerified?: boolean;
-  venue: string;
-  venueMapUrl: string | null;
-  area: string;
-  vibe: "Late night" | "Day party" | "Alté" | "Amapiano";
-  price: number;
-  priceFromMinor: number;
-  bookingFeeBasisPoints: number;
-  capacity: number;
-  ageRestriction: string;
-  lineup: string;
-  eventState: EventState;
-  isTestEvent: boolean;
-  dressCode?: string | null;
-  colourScheme?: string | null;
-  awarenessNote?: string | null;
-  guestPerk?: string | null;
-  rescheduledFrom: string | null;
-  salesOpenAt: string | null;
-  salesCloseAt: string | null;
-  ticketTiers: TicketTier[];
-  image: string;
-  note: string;
-  quip: string;
-  sequence: string;
-};
+import type { CuratedEvent, EventState } from "../lib/customer-screen";
+export type { CuratedEvent, EventState } from "../lib/customer-screen";
 
 type EventRecord = {
   registrationMode: 'paid' | 'rsvp' | 'interest';
