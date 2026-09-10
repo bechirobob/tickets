@@ -1,6 +1,6 @@
 import type { CustomerEventScreen, CustomerEvent } from '../../lib/customer-screen';
 import type { PublicCatalogue } from '../../lib/public-event';
-import { parseCatalogue } from './catalogue.ts';
+import { WEB_ORIGIN, parseCatalogue } from './catalogue.ts';
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): RecordValue {
@@ -51,7 +51,7 @@ function event(value: unknown): CustomerEvent {
   const e = record(value);
   if (!Array.isArray(e.ticketTiers) || e.ticketTiers.length > 100 || e.isTestEvent !== false) throw new Error('Invalid public event');
   return {
-    slug: slug(e.slug), title: text(e.title), image: text(e.image), venue: text(e.venue), venueMapUrl: https(e.venueMapUrl), area: text(e.area),
+    slug: slug(e.slug), title: text(e.title), image: https(new URL(text(e.image), WEB_ORIGIN).href)!, venue: text(e.venue), venueMapUrl: https(e.venueMapUrl), area: text(e.area),
     shortDate: text(e.shortDate), fullDate: text(e.fullDate), day: text(e.day), time: text(e.time), startsAt: date(e.startsAt), endsAt: date(e.endsAt),
     scheduleStatus: choice(e.scheduleStatus, ['confirmed', 'coming_soon', 'end_pending']),
     vibe: choice(e.vibe, ['Late night', 'Day party', 'Alté', 'Amapiano']),

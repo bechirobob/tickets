@@ -60,7 +60,7 @@ export function customerEvent(e: CuratedEvent): CustomerEvent {
     ageRestriction: e.ageRestriction, lineup: e.lineup, eventState: e.eventState, isTestEvent: e.isTestEvent,
     dressCode: e.dressCode, colourScheme: e.colourScheme, awarenessNote: e.awarenessNote, guestPerk: e.guestPerk,
     rescheduledFrom: e.rescheduledFrom, salesOpenAt: e.salesOpenAt, salesCloseAt: e.salesCloseAt,
-    image: e.image.startsWith("/") ? `https://tickets.becoreops.com${e.image}` : e.image, note: e.note, quip: e.quip, sequence: e.sequence, registrationMode: e.registrationMode,
+    image: e.image, note: e.note, quip: e.quip, sequence: e.sequence, registrationMode: e.registrationMode,
     ticketTiers: e.ticketTiers.filter(tier => tier.status !== 'hidden').map(tier => ({
       id: tier.id, recordId: tier.recordId, name: tier.name, description: tier.description,
       priceMinor: tier.priceMinor, status: tier.status, roomBadge: tier.roomBadge,
