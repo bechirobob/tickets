@@ -3,7 +3,7 @@
 import BrandLogo from "../../brand-logo";
 import WorkspaceJump from "../../admin/workspace-jump";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowUp, BadgeCheck, Loader2, LogOut } from "lucide-react";
 import type { StaffRole } from "../../../lib/admin-session";
@@ -34,7 +34,6 @@ const readable = (value: string) => value.replaceAll("_", " ");
 
 export default function OrganizerAssistant({ actor, role }: { actor: string; role: StaffRole }) {
   const router = useRouter();
-  const search = useSearchParams();
   const [events, setEvents] = useState<EventOption[]>([]);
   const [selectedSlug, setSelectedSlug] = useState("");
   const [question, setQuestion] = useState("");
@@ -51,7 +50,7 @@ export default function OrganizerAssistant({ actor, role }: { actor: string; rol
         if (!response.ok) throw new Error(result.error ?? "Your events could not be loaded.");
         const nextEvents = result.events ?? [];
         setEvents(nextEvents);
-        const requested = search.get("event");
+        const requested = new URLSearchParams(location.search).get("event");
         setSelectedSlug(nextEvents.some((event) => event.slug === requested) ? requested ?? "" : nextEvents[0]?.slug ?? "");
       })
       .catch((reason) => {
@@ -60,7 +59,7 @@ export default function OrganizerAssistant({ actor, role }: { actor: string; rol
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [search]);
+  }, []);
 
   const selected = useMemo(() => events.find((event) => event.slug === selectedSlug) ?? null, [events, selectedSlug]);
 
