@@ -25,6 +25,7 @@ it('fully removes preview relationships and test purchases while preserving live
  // Exceed both production's 100-node expression limit and SQLite's default 1000-node limit.
  await env.DB.batch(Array.from({length:600},(_,i)=>env.DB.prepare("INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,created_at) VALUES(?,?,'after-dark-osu',1,100,0,100,'GHS','preview-load@example.com','','momo','paid',?)").bind(`preview-load-${i}`,`ref-preview-load-${i}`,now)));
  await env.DB.prepare("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES ('deep-preview-audit','owner','test','maintenance','unrelated-id','success','Verified ref-preview-load-599',?)").bind(now).run();
+ await env.DB.prepare("INSERT INTO system_alerts(id,source,severity,message,detail,status,created_at) VALUES('cleanup-retry-alert','preview-cleanup','critical','Cleanup failed','Expression depth exceeded','open',?)").bind(now).run();
  const plan=await planPreviewCleanup(env.DB);expect(plan.counts.orders).toBe(604);expect(plan.targets.attendee_id).toContain('preview-only');expect(plan.targets.attendee_id).not.toContain('shared-person');
  const removeEventContent=vi.fn().mockResolvedValue(undefined);const removePreviewContentBefore=vi.fn().mockResolvedValue(undefined);const room={getByName:vi.fn(()=>({removeEventContent,removePreviewContentBefore}))} as unknown as Cloudflare.Env['THE_ROOM'];
  await runPreviewCleanup({DB:env.DB,THE_ROOM:room});
@@ -36,6 +37,7 @@ it('fully removes preview relationships and test purchases while preserving live
  expect(await env.DB.prepare("SELECT id FROM operational_audit_events WHERE id='deep-preview-audit'").first()).toBeNull();
  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug='after-dark-osu'").first()).toEqual({count:0});
  expect(removeEventContent).toHaveBeenCalledTimes(3);
+ expect(await env.DB.prepare("SELECT status FROM system_alerts WHERE id='cleanup-retry-alert'").first()).toEqual({status:'resolved'});
  expect(removePreviewContentBefore).toHaveBeenCalledWith('2026-09-08T09:59:19.000Z');
  await runPreviewCleanup({DB:env.DB,THE_ROOM:room});expect(removeEventContent).toHaveBeenCalledTimes(3);
  const receipt=await env.DB.prepare('SELECT outcome,detail FROM operational_audit_events WHERE id=?').bind(previewCleanupId).first<{outcome:string;detail:string}>();expect(receipt?.outcome).toBe('success');expect(receipt?.detail).not.toContain('preview-only@example.com');

@@ -104,6 +104,7 @@ export async function runPreviewCleanup(env:Pick<Cloudflare.Env,'DB'|'THE_ROOM'>
   const where=condition(table,cols,plan.targets);if(where==='0')continue;
   statements.push(env.DB.prepare(`DELETE FROM ${table} WHERE ${where}${table==='operational_audit_events'?' AND id<>?':''}`).bind(...(table==='operational_audit_events'?[previewCleanupId]:[])));
  }
+ statements.push(env.DB.prepare("UPDATE system_alerts SET status='resolved',resolved_at=?,resolved_by='system:preview-cleanup' WHERE source='preview-cleanup' AND status='open'").bind(new Date().toISOString()));
  statements.push(env.DB.prepare("UPDATE operational_audit_events SET outcome='success',detail=? WHERE id=?").bind(JSON.stringify({removed:plan.counts,roomStores:retired.length+(plan.extraPreviewRooms?.length??0)}),previewCleanupId));
  await env.DB.batch(statements);
  return plan.counts;
