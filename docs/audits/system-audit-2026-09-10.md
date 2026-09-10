@@ -24,6 +24,7 @@ Additional confirmed fixes:
 - Concurrent wallet generation uses one stored QR credential.
 - Approved RSVP requests automatically enter the staff door list without creating accounts or sending guest email. Admission remains single-use if a guest later opens My Nights. Cancellation removes door access.
 - Door desk is searchable and paginated at ten entries, refreshes automatically, retains failed drafts and handles connection errors.
+- Expanded scanner accessibility checks exposed low-contrast status/help text and a white search panel inheriting white text. The full gate workspace now uses readable dark surfaces and consistent controls.
 - Registration settings reject deadlines after the start and capacity below allocated paid admissions.
 - Expired payments can become verified failures, allowing a later provider choice. Payment-return polling has cancellation and time limits.
 - Email retries retain the original provider key, claim work once and do not downgrade delivered messages on older callbacks. Payment confirmation delivery has a stable database identity.
