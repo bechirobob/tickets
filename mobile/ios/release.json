@@ -1,6 +1,6 @@
 {
   "bundleId": "com.becoreops.tickets",
-  "version": "0.1.1",
-  "build": 2,
+  "version": "0.1.2",
+  "build": 3,
   "minimumIOS": "15.0"
 }

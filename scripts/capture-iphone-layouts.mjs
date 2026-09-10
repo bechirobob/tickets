@@ -8,6 +8,10 @@ import {tmpdir} from 'node:os';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = process.env.LAYOUT_OUTPUT || path.join(tmpdir(), 'becore-iphone-layouts');
 await mkdir(out, {recursive:true});
+const webVersionResponse = await fetch('https://tickets.becoreops.com/api/version', {signal:AbortSignal.timeout(30000)});
+if(!webVersionResponse.ok) throw new Error('Website release identity unavailable');
+const webVersion = await webVersionResponse.json();
+if(process.env.LAYOUT_WEB_SHA && webVersion.revision !== process.env.LAYOUT_WEB_SHA) throw new Error('Website capture does not match the deployed release');
 const response = await fetch('https://tickets.becoreops.com/api/public/events', {signal:AbortSignal.timeout(30000)});
 if(!response.ok) throw new Error('Public catalogue unavailable');
 const catalogue = await response.json();
@@ -25,13 +29,24 @@ await page.route(`${origin}/events/*`, async route => {
 });
 const pages=[];
 async function capture(title,kind='App screen',single=false) {
-  await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(img=>img.decode().catch(()=>{})))});
+  await page.evaluate(async()=>{
+    await document.fonts.ready;
+    // Home artwork below the fold is lazy-loaded. Request it before decoding;
+    // waiting for a deferred image without scrolling can otherwise never settle.
+    const images=[...document.images];
+    images.forEach(img=>{img.loading='eager'});
+    await Promise.race([
+      Promise.all(images.map(img=>img.decode().catch(()=>{}))),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Image loading timed out')),15000)),
+    ]);
+  });
   await page.waitForTimeout(250);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
   if(overflow) throw new Error(`Horizontal clipping: ${title}`);
   const max=await page.evaluate(()=>Math.max(0,document.documentElement.scrollHeight-innerHeight));
   const positions=[0];
-  if(!single) {for(let y=600;y<max;y+=600)positions.push(y);if(max>0)positions.push(max);}
+  const stride=Math.max(200, page.viewportSize().height-260);
+  if(!single) {for(let y=stride;y<max;y+=stride)positions.push(y);if(max>0)positions.push(max);}
   const files=[];
   for(const [i,y] of positions.entries()) {
     await page.evaluate(y=>scrollTo(0,y),y);await page.waitForTimeout(180);
@@ -39,7 +54,7 @@ async function capture(title,kind='App screen',single=false) {
     await page.screenshot({path:path.join(out,file)});files.push(file);
   }
   pages.push({title,kind,files,url:page.url()});
-  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.GITHUB_SHA||null,viewport:page.viewportSize(),engine:'Playwright WebKit, iPhone 13 emulation',pages},null,2));
+  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.LAYOUT_SOURCE_SHA||process.env.GITHUB_SHA||null,websiteCommit:webVersion.revision,viewport:page.viewportSize(),engine:'Playwright WebKit on macOS, iPhone 13 viewport',pages},null,2));
   console.log(`${title}: ${files.length} screenshots`);
   await page.evaluate(()=>scrollTo(0,0));
 }
@@ -70,7 +85,7 @@ try {
   await page.route(`${origin}/api/public/events`,route=>route.fulfill({json:{...catalogue,events:[]},headers:{'access-control-allow-origin':'*'}}));
   await page.reload();await page.getByRole('heading',{name:'The next good plan is on its way.'}).waitFor();
   await capture('No events yet','App state');
-  for(const [title,route] of [['Help','/help'],['Privacy','/account/privacy'],['My Nights access','/my-nights'],['The Buzz access','/notifications'],['Weekend Braai RSVP','/event/the-weekend-braai']]) {
+  for(const [title,route] of [['Website home','/'],['Website The Drop','/events'],['Help','/help'],['Privacy','/account/privacy'],['My Nights access','/my-nights'],['The Buzz access','/notifications'],...catalogue.events.map(event=>[event.title+' website', '/event/'+event.slug])]) {
     await page.goto(origin+route,{waitUntil:'domcontentloaded',timeout:45000});
     await page.waitForTimeout(1500);
     await capture(title,'Secure browser destination');
