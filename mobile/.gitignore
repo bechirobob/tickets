@@ -12,3 +12,11 @@ BeCore-Tickets-*.zip
 *.p12
 *signing-secret*
 *signing-backup*
+
+# Apple distribution credentials and local outputs.
+*.mobileprovision
+*.p8
+*.ipa
+*.xcarchive/
+__pycache__/
+ios/output/

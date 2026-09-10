@@ -1,1 +1,3 @@
+#include "release.xcconfig"
 CAPACITOR_DEBUG = true
+BECORE_SIGN_IDENTITY = Apple Development

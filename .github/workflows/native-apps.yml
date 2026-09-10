@@ -3,7 +3,7 @@ name: Native app builds
 on:
   pull_request:
     branches: [main]
-    paths: ['mobile/**', 'lib/public-event.ts', 'lib/event-presentation.ts', 'lib/event-palette.ts', 'app/api/public/**', '.github/workflows/native-apps.yml', '.github/workflows/android-release.yml']
+    paths: ['mobile/**', 'lib/public-event.ts', 'lib/event-presentation.ts', 'lib/event-palette.ts', 'app/api/public/**', '.github/workflows/native-apps.yml', '.github/workflows/android-release.yml', '.github/workflows/ios-release.yml']
   workflow_dispatch:
 
 permissions:
@@ -33,12 +33,14 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=moderate
       - run: npm test
+      - run: python3 -m unittest discover -s tests -p 'test_ios_*.py'
+      - run: python3 scripts/ios-release.py validate
       - name: Validate Android release version
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           node scripts/android-release.mjs validate
-          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:mobile/android/release.json" 2>/dev/null; then
+          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:mobile/android/release.json" 2>/dev/null && ! git diff --quiet "$BASE_SHA" HEAD -- android/release.json; then
             git show "$BASE_SHA:mobile/android/release.json" > "$RUNNER_TEMP/base-android-release.json"
             node scripts/android-release.mjs validate "$RUNNER_TEMP/base-android-release.json"
           fi
@@ -111,10 +113,43 @@ jobs:
           xcodebuild -showsdks
       - run: npm ci
       - run: npm run sync
-      - name: Compile iOS simulator
-        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO build
+      - run: python3 scripts/ios-release.py validate
+      - name: Compile iPhone release for simulator
+        run: xcodebuild -quiet -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO build
+      - name: Verify simulator release bundle
+        run: python3 scripts/ios-release.py verify-app ios/DerivedData/Build/Products/Release-iphonesimulator/App.app iphonesimulator
+      - name: Launch on iPhone simulator and capture evidence
+        run: |
+          mkdir -p ios/output
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(d["udid"] for devices in json.load(sys.stdin)["devices"].values() for d in devices if "iPhone" in d["name"]))')
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl install "$DEVICE_ID" ios/DerivedData/Build/Products/Release-iphonesimulator/App.app
+          xcrun simctl launch "$DEVICE_ID" com.becoreops.tickets
+          sleep 10
+          xcrun simctl io "$DEVICE_ID" screenshot ios/output/iphone-launch.png
+          xcrun simctl openurl "$DEVICE_ID" 'becoretickets://event/the-weekend-braai'
+          sleep 3
+          xcrun simctl io "$DEVICE_ID" screenshot ios/output/iphone-event.png
+          xcrun simctl terminate "$DEVICE_ID" com.becoreops.tickets
+          xcrun simctl shutdown "$DEVICE_ID"
+      - name: Archive for real iPhone hardware without signing
+        run: xcodebuild -quiet -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath ios/output/BeCore-Tickets-unsigned.xcarchive CODE_SIGNING_ALLOWED=NO archive
+      - name: Verify hardware archive
+        run: |
+          python3 scripts/ios-release.py verify-app ios/output/BeCore-Tickets-unsigned.xcarchive/Products/Applications/App.app iphoneos
+          ditto -c -k --sequesterRsrc --keepParent ios/output/BeCore-Tickets-unsigned.xcarchive ios/output/BeCore-Tickets-unsigned-archive.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: iPhone-release-validation-${{ github.run_id }}
+          path: |
+            mobile/ios/output/*.png
+            mobile/ios/output/*.zip
+          if-no-files-found: warn
+          retention-days: 30
       - name: Package simulator app
-        run: ditto -c -k --sequesterRsrc --keepParent ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app BeCore-Tickets-iOS-simulator.zip
+        run: ditto -c -k --sequesterRsrc --keepParent ios/DerivedData/Build/Products/Release-iphonesimulator/App.app BeCore-Tickets-iOS-simulator.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: BeCore-Tickets-iOS-simulator-${{ github.run_id }}

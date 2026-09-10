@@ -1,0 +1,8 @@
+// Keep in sync with release.json; checked before every build.
+BECORE_BUNDLE_ID = com.becoreops.tickets
+BECORE_VERSION = 0.1.1
+BECORE_BUILD = 2
+BECORE_MINIMUM_IOS = 15.0
+BECORE_SIGN_STYLE = Automatic
+BECORE_SIGN_IDENTITY = Apple Distribution
+CAPACITOR_DEBUG = false
