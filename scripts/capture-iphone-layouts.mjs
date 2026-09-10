@@ -68,7 +68,7 @@ async function capture(title,kind='App screen',single=false) {
   const route = new URL(page.url()).pathname;
   if (['/', '/events', ...catalogue.events.map(event => '/event/' + event.slug)].includes(route)) {
     const snapshot = await page.evaluate(() => {
-      const selector = 'main h1, .drop-card h3, .drop-card__schedule, .event-detail-facts, .event-story-content, .customer-dock';
+      const selector = 'main h1, .drop-card h3, .drop-card__schedule, .event-detail-facts, .event-story-content, .compact-ticket-panel, .event-detail-toolbar, .customer-dock';
       return [...document.querySelectorAll(selector)].map(element => {
         const style = getComputedStyle(element);
         return { tag: element.tagName, text: element.textContent.replace(/\s+/g, ' ').trim(), font: style.fontFamily, size: style.fontSize, color: style.color };
