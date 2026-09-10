@@ -12,6 +12,7 @@ export default function WorkspaceJump({ active, role, compact = false }: { activ
 
   if (role === "organizer" || role === "owner") {
     links.push({ href: "/organizer/workspace", label: "Organiser workspace" });
+    links.push({ href: "/organizer/assistant", label: "Event desk" });
     links.push({ href: "/organizer/analytics", label: "Organiser analytics" });
   }
   links.push({ href: "/admin/account", label: "My account" });
