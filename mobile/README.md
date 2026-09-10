@@ -44,3 +44,5 @@ npx @capacitor/assets@3.0.5 generate --assetPath assets --ios --android --iconBa
 Native secure sign-in → My Nights → entry pass → background/resume on physical iPhone and Android, followed by payment return, APNs/FCM, camera-backed Flashes, account deletion and store review. See [launch plan](../docs/mobile/launch-plan.md).
 
 References: [Capacitor setup](https://capacitorjs.com/docs/getting-started/environment-setup), [packaged assets](https://capacitorjs.com/docs/config), [GitHub macOS build environment](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
+
+Shared app/mobile-web screens and remaining session boundaries: [customer continuity](../docs/mobile/shared-customer-screens.md).

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile as readSource } from "node:fs/promises";
 import test from "node:test";
+
+// Keep the existing source contracts over the server entrypoint and shared view.
+async function readFile(url, encoding) {
+  const source = await readSource(url, encoding);
+  const views = { '/app/page.tsx': 'home-screen.tsx', '/app/events/page.tsx': 'events-screen.tsx', '/app/event/[slug]/page.tsx': 'event-screen.tsx' };
+  const view = Object.entries(views).find(([suffix]) => decodeURI(url.pathname).endsWith(suffix))?.[1];
+  return view ? source + '\n' + await readSource(new URL(view, url), encoding) : source;
+}
 
 const cssUrl = new URL("../app/globals.css", import.meta.url);
 const discoveryUrl = new URL("../app/discovery.css", import.meta.url);

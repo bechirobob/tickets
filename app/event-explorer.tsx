@@ -1,11 +1,12 @@
 "use client";
 
+import { useDiscoveryState } from "./discovery-state";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, MapPin, Search, Ticket } from "lucide-react";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { eventImageLoader, eventImageUrl } from "./event-images";
-import type { CuratedEvent } from "./events";
+import type { CustomerEvent } from "../lib/customer-screen";
 import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
 import { ActionLink } from "./action";
 import { discoveryOffer } from "../lib/event-pricing";
@@ -13,7 +14,7 @@ import PosterLink from "./poster-link";
 import { eventColourScheme, eventPresentationStyle } from "../lib/event-presentation";
 
 type WindowFilter = EventWindow;
-type VibeFilter = CuratedEvent["vibe"] | "All";
+type VibeFilter = CustomerEvent["vibe"] | "All";
 
 const subscribeToClient = () => () => {};
 const clientReady = () => true;
@@ -27,14 +28,10 @@ const vibes: Array<{ value: VibeFilter; label: string }> = [
   { value: "Amapiano", label: "Amapiano" },
 ];
 
-export default function EventExplorer({ events, full = false, featuredSlug }: { events: CuratedEvent[]; full?: boolean; featuredSlug?: string }) {
+export default function EventExplorer({ events, full = false, featuredSlug }: { events: CustomerEvent[]; full?: boolean; featuredSlug?: string }) {
   // SSR can appear before React attaches handlers. Do not accept and lose input.
   const ready = useSyncExternalStore(subscribeToClient, clientReady, serverReady);
-  const [windowFilter, setWindowFilter] = useState<WindowFilter>("next");
-  const [area, setArea] = useState("All areas");
-  const [vibe, setVibe] = useState<VibeFilter>("All");
-  const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
+  const { windowFilter, area, vibe, page, search, setWindowFilter, setArea, setVibe, setPage, setSearch } = useDiscoveryState(full);
   const [now] = useState(() => Date.now());
   const pageSize = full ? 12 : 6;
   const areas = useMemo(() => ["All areas", ...new Set(events.map((event) => event.area))], [events]);

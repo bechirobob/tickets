@@ -10,7 +10,8 @@ on:
     paths:
       - mobile/src/**
       - styles/**
-      - app/iphone-interface.css
+      - app/**
+      - lib/**
       - scripts/capture-iphone-layouts.mjs
       - .github/workflows/iphone-layouts.yml
 
@@ -35,6 +36,15 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
+      - name: Prepare the candidate website for app/browser parity
+        if: github.event_name == 'pull_request'
+        env:
+          BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          npm ci
+          npm run build
+          node scripts/prepare-deploy.mjs
+          npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
       - run: npm ci
         working-directory: mobile
       - run: npx playwright install webkit
@@ -43,6 +53,7 @@ jobs:
         working-directory: mobile
       - name: Capture every app screen and public browser destination
         env:
+          LAYOUT_CANDIDATE: ${{ github.event_name == 'pull_request' && '1' || '' }}
           LAYOUT_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha || github.sha }}
           LAYOUT_WEB_SHA: ${{ github.event.workflow_run.head_sha }}
           LAYOUT_OUTPUT: ${{ runner.temp }}/becore-iphone-layouts

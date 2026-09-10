@@ -1,4 +1,4 @@
-import type { CuratedEvent } from "../app/events";
+import type { CuratedEvent } from "./customer-screen";
 
 export type EventWindow = "tonight" | "weekend" | "next";
 

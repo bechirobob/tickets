@@ -1,3 +1,5 @@
+import { findPrimaryHost } from "../../../../lib/event-experience";
+import { customerEvent, type CustomerEventScreen } from "../../../../lib/customer-screen";
 import { registrationSettings, registrationsOpen } from '../../../../lib/registrations';
 import { getPublicEvents } from '../../../events';
 import type { PublicCatalogue, PublicEvent } from '../../../../lib/public-event';
@@ -25,7 +27,16 @@ export async function GET() {
       guestPerk: event.guestPerk ?? null, awarenessNote: event.awarenessNote ?? null,
       lineup: event.lineup, ageRestriction: event.ageRestriction, note: event.note, quip: event.quip,
     }));
-    return Response.json({ version: 1, events, updatedAt: new Date().toISOString() } satisfies PublicCatalogue, { headers });
+    const screens: CustomerEventScreen[] = await Promise.all(records.filter(event => !event.isTestEvent).map(async event => {
+      const host = await findPrimaryHost(env.DB, event.slug);
+      const registration = settings.get(event.slug);
+      return {
+        event: customerEvent(event),
+        host: host ? { slug: host.slug, name: host.name, role: host.role, city: host.city, verificationStatus: host.verificationStatus } : null,
+        registration: registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), deadline: registration.closesAt ?? null } : null,
+      };
+    }));
+    return Response.json({ version: 1, events, screens, updatedAt: new Date().toISOString() } satisfies PublicCatalogue, { headers });
   } catch {
     return Response.json({ error: 'The Drop is taking a breather. Try again shortly.' }, {
       status: 503, headers: { ...headers, 'cache-control': 'no-store', 'retry-after': '30' },

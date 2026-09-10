@@ -1,9 +1,12 @@
 "use client";
 
+import { useCustomerRuntime } from "./customer-runtime";
+import Link from "next/link";
 import { Bell, Check, Loader2, UserRoundPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: string; hostSlug?: string }) {
+  const runtime = useCustomerRuntime();
   const [member, setMember] = useState<boolean | null>(null);
   const [keepPosted, setKeepPosted] = useState(false);
   const [followingHost, setFollowingHost] = useState(false);
@@ -11,6 +14,7 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    if (runtime.openSecurePage) return;
     const query = new URLSearchParams();
     if (eventSlug) query.set("event", eventSlug);
     if (hostSlug) query.set("host", hostSlug);
@@ -22,7 +26,7 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
         setFollowingHost(Boolean(data.followingHost));
       })
       .catch(() => setMember(false));
-  }, [eventSlug, hostSlug]);
+  }, [eventSlug, hostSlug, runtime.openSecurePage]);
 
   async function update(kind: "event" | "host") {
     setWorking(kind);
@@ -40,6 +44,7 @@ export default function MemberActions({ eventSlug, hostSlug }: { eventSlug?: str
     }
   }
 
+  if (runtime.openSecurePage) return <p className="member-locked-note"><Link href={`/event/${eventSlug ?? ""}#register`}>Open your event preferences</Link></p>;
   if (member === null) return <div className="member-actions member-actions--loading"><Loader2 className="spin" size={15} /> Checking member access</div>;
   if (!member) return <p className="member-locked-note">Got a BeCore ticket? Open My Nights to follow your favourite hosts.</p>;
   return <div className="member-actions">
