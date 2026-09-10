@@ -16,7 +16,7 @@ const links = [
 ];
 
 export default function MobileNavigation({ primaryVisible = false }: { primaryVisible?: boolean }) {
-  const { open, phase, trigger, panel, id: panelId, toggle, close } = useHeaderPanel();
+  const { open, phase, ready, trigger, panel, id: panelId, toggle, close } = useHeaderPanel();
   const pathname = usePathname();
 
   return <div className={`night-mobile-menu${open ? " is-open" : ""}${primaryVisible ? " has-primary-nav" : ""}`}>
@@ -27,6 +27,8 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
       aria-expanded={open}
       aria-controls={panelId}
       aria-label={open ? "Close navigation" : "Open navigation"}
+      disabled={!ready}
+      aria-busy={!ready}
       onClick={(event) => {
         toggle(event.detail === 0);
       }}
