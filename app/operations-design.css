@@ -58,7 +58,7 @@
 :is(.ops-main,.curation-main,.organizer-dashboard,.organizer-record-fold,.room-ops > section) :is(input:not([type='checkbox']):not([type='radio']),select,textarea) { width:100%; border:1px solid #bbb5bf; border-radius:8px; background:#fffdfa; color:#29242c; padding:10px 12px; font-size:16px; min-height:42px; max-width:100%; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) label:has(>input[type='checkbox']) { display:flex; align-items:center; flex-wrap:nowrap; gap:10px; min-height:44px; text-transform:none; letter-spacing:0; font-size:13px; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) label:has(>input[type='checkbox']) small { font-size:12px; }
-:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) :is(input,select,textarea,button,summary,a):focus-visible { outline:2px solid #795585; outline-offset:3px; }
+:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) :is(input,select,textarea,button,summary,a,[tabindex="0"]):focus-visible { outline:2px solid #795585; outline-offset:3px; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) details { border:0; min-width:0; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) details > summary { display:flex; align-items:center; justify-content:space-between; gap:14px; list-style:none; cursor:pointer; min-height:44px; padding:10px 0; font-size:14px; font-weight:650; line-height:1.45; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) details > summary::-webkit-details-marker { display:none; }
