@@ -29,7 +29,17 @@ await page.route(`${origin}/events/*`, async route => {
 });
 const pages=[];
 async function capture(title,kind='App screen',single=false) {
-  await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(img=>img.decode().catch(()=>{})))});
+  await page.evaluate(async()=>{
+    await document.fonts.ready;
+    // Home artwork below the fold is lazy-loaded. Request it before decoding;
+    // waiting for a deferred image without scrolling can otherwise never settle.
+    const images=[...document.images];
+    images.forEach(img=>{img.loading='eager'});
+    await Promise.race([
+      Promise.all(images.map(img=>img.decode().catch(()=>{}))),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Image loading timed out')),15000)),
+    ]);
+  });
   await page.waitForTimeout(250);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
   if(overflow) throw new Error(`Horizontal clipping: ${title}`);
