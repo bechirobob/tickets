@@ -31,6 +31,17 @@ test("keeps the production Worker configuration portable and preserves The Room"
   });
   assert.deepEqual(config.images, { binding: "IMAGES" });
   assert.deepEqual(config.ai, { binding: "AI" });
+  assert.deepEqual(config.queues, {
+    producers: [{ binding: "EMAIL_DELIVERY_QUEUE", queue: "becore-tickets-email-delivery" }],
+    consumers: [{
+      queue: "becore-tickets-email-delivery",
+      max_batch_size: 10,
+      max_batch_timeout: 5,
+      max_retries: 2,
+      max_concurrency: 1,
+      retry_delay: 60,
+    }],
+  });
   assert.equal(config.r2_buckets, undefined);
   assert.deepEqual(config.durable_objects, { bindings: [{ name: "THE_ROOM", class_name: "TheRoom" }] });
   assert.deepEqual(config.migrations, [{ tag: "v1", new_sqlite_classes: ["TheRoom"] }]);
@@ -50,6 +61,9 @@ test("the Worker applies the production browser security baseline", async () => 
   assert.match(worker, /display-capture=\(\)/u);
   assert.match(worker, /recordSecurityEvent/u);
   assert.match(worker, /sendOperationalAlert/u);
+  assert.match(worker, /async queue\(/u);
+  assert.match(worker, /deliverQueuedEventAnnouncement/u);
+  assert.match(worker, /message\.retry\(\{ delaySeconds: 60 \}\)/u);
 });
 
 test("does not ship editor preview metadata or workspace paths in customer assets", async () => {
