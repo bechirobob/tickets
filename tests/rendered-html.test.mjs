@@ -13,6 +13,8 @@ test("keeps the production Worker configuration portable and preserves The Room"
   assert.equal(config.vars.EMAIL_FROM, "BeCore Tickets <tickets@tickets.becoreops.com>");
   assert.equal(config.vars.OPS_ALERT_EMAIL, "tickets@becoreops.com");
   assert.equal(config.vars.ENVIRONMENT, "production");
+  assert.equal(config.vars.AI_COST_CONTROL_REQUIRED, "true");
+  assert.equal(config.vars.OPENAI_GATEWAY_BASE_URL, "https://gateway.ai.cloudflare.com/v1/af75a230de2eea882606db8d9acce473/becore-tickets-ai/openai");
   assert.deepEqual(config.version_metadata, { binding: "CF_VERSION_METADATA" });
   assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA ?? process.env.GITHUB_SHA);
   assert.deepEqual(config.ratelimits.map(({ name, simple }) => ({ name, simple })), [
@@ -20,6 +22,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
     { name: "PUBLIC_WRITE_RATE_LIMITER", simple: { limit: 12, period: 60 } },
     { name: "PAYMENT_RATE_LIMITER", simple: { limit: 10, period: 60 } },
     { name: "ANALYTICS_RATE_LIMITER", simple: { limit: 60, period: 60 } },
+    { name: "AI_RATE_LIMITER", simple: { limit: 6, period: 60 } },
   ]);
   assert.deepEqual(config.observability, {
     enabled: true,
