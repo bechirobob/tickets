@@ -170,6 +170,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "The event assistant is not available right now." }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 
+  const costControlRequired = env.AI_COST_CONTROL_REQUIRED?.trim().toLowerCase() === "true";
+  if (costControlRequired && !env.OPENAI_GATEWAY_BASE_URL?.trim()) {
+    return Response.json({ error: "The event assistant is not available right now." }, { status: 503, headers: { "cache-control": "no-store" } });
+  }
+
   try {
     const body = await request.json() as { message?: unknown; eventSlug?: unknown };
     const message = String(body.message ?? "").trim();
