@@ -19,6 +19,7 @@ declare namespace Cloudflare {
     PAYMENT_RATE_LIMITER: RateLimit;
     ANALYTICS_RATE_LIMITER: RateLimit;
     AI_RATE_LIMITER: RateLimit;
+    EMAIL_DELIVERY_QUEUE?: Queue<{ deliveryId: string }>;
     IMAGES: ImagesBinding;
     PAYSTACK_SECRET_KEY: string;
     SEEV_ENABLED?: string;
