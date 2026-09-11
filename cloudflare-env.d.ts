@@ -39,6 +39,9 @@ declare namespace Cloudflare {
     GOOGLE_WALLET_PRIVATE_KEY?: string;
     APPLE_WALLET_SIGNER_URL?: string;
     APPLE_WALLET_SIGNER_TOKEN?: string;
+    APPLE_WALLET_AUTH_SECRET?: string;
+    APPLE_WALLET_PASS_TYPE_IDENTIFIER?: string;
+    APPLE_WALLET_PUSH_URL?: string;
     THE_ROOM: DurableObjectNamespace<import("./worker/index").TheRoom>;
   }
 }
