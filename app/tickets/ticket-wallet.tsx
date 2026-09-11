@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, Loader2, LogOut, Mail, MapPin, MessageCircle, ReceiptText, Ticket } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import QrPass from "./qr-pass";
+import WalletProviderActions from "./wallet-provider-actions";
 import PublicNavigation from "../mobile-navigation";
 import LoadingSkeleton from "../loading-skeleton";
 import { clearOfflineTickets, reconcileOfflineTickets } from "../../lib/offline-tickets";
@@ -108,7 +109,7 @@ export default function TicketWallet() {
           <div className="wallet-passes">
             {order.tickets.map((ticketItem, index) => <section className={`wallet-pass wallet-pass--${ticketItem.status}`} key={ticketItem.id}>
               <div><span>Pass {index + 1} of {order.tickets.length}</span><b>{ticketItem.ticketType.replaceAll("-", " ")}</b></div>
-              {ticketItem.qrPayload && ticketItem.gateCode ? <><QrPass payload={ticketItem.qrPayload} label={`Entry QR code for pass ${index + 1}`} /><code>{ticketItem.gateCode}</code><p>Brightness up. Screenshot confidence down. Opening the wallet refreshes this moving pass.</p></> : ticketItem.status === "checked_in" ? <div className="wallet-admitted"><CheckCircle2 size={34} /><b>You&apos;re in</b><span>{ticketItem.checkedInAt ? paidDate(ticketItem.checkedInAt) : "Entry recorded. Go enjoy yourself."}</span></div> : ticketItem.status === "unavailable" ? <p className="wallet-pass-error">This pass is paused because the event is {detail.state}. Watch your email; the Host owes you the next move.</p> : <p className="wallet-pass-error">This pass is being dramatic. Reload before arriving at the gate.</p>}
+              {ticketItem.qrPayload && ticketItem.gateCode ? <><QrPass payload={ticketItem.qrPayload} label={`Entry QR code for pass ${index + 1}`} /><code>{ticketItem.gateCode}</code><p>Brightness up. Screenshot confidence down. Opening the wallet refreshes this moving pass.</p><WalletProviderActions ticketId={ticketItem.id} /></> : ticketItem.status === "checked_in" ? <div className="wallet-admitted"><CheckCircle2 size={34} /><b>You&apos;re in</b><span>{ticketItem.checkedInAt ? paidDate(ticketItem.checkedInAt) : "Entry recorded. Go enjoy yourself."}</span></div> : ticketItem.status === "unavailable" ? <p className="wallet-pass-error">This pass is paused because the event is {detail.state}. Watch your email; the Host owes you the next move.</p> : <p className="wallet-pass-error">This pass is being dramatic. Reload before arriving at the gate.</p>}
             </section>)}
           </div>
           <section className="wallet-receipt">
