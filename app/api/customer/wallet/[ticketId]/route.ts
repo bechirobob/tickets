@@ -70,6 +70,7 @@ export async function GET(
       env,
       { ...ticket, qrPayload: gateQrPayload(ticket.gateToken) },
       new URL(request.url).origin,
+      identity.attendeeId,
     );
     if (!response)
       return Response.json(
