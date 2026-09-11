@@ -1,6 +1,12 @@
+import {
+  TICKETS_AI_GATEWAY_ID,
+  TICKETS_AI_SPEND_LIMITS,
+  hasRequiredTicketsSpendLimits,
+} from "./ai-gateway-policy.mjs";
+
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
 const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
-const gatewayId = "becore-tickets-ai";
+const gatewayId = TICKETS_AI_GATEWAY_ID;
 const apiRoot = "https://api.cloudflare.com/client/v4";
 
 if (!accountId || !token) {
@@ -11,39 +17,6 @@ if (!accountId || !token) {
 const headers = {
   authorization: `Bearer ${token}`,
   "content-type": "application/json",
-};
-
-const spendLimits = {
-  enabled: true,
-  rules: [
-    {
-      id: "tickets-ai-daily",
-      enabled: true,
-      limitType: "cost",
-      limit: 5,
-      window: 86_400,
-      technique: "sliding",
-    },
-    {
-      id: "tickets-ai-30-day",
-      enabled: true,
-      limitType: "cost",
-      limit: 25,
-      window: 2_592_000,
-      technique: "sliding",
-    },
-    {
-      id: "tickets-ai-user-daily",
-      enabled: true,
-      limitType: "cost",
-      limit: 1,
-      window: 86_400,
-      technique: "sliding",
-      metadata: {
-        user_id: { mode: "partition" },
-      },
-    },
-  ],
 };
 
 const desired = {
@@ -62,7 +35,7 @@ const desired = {
   // never reuse the broader deployment token at runtime.
   authentication: false,
   workers_ai_billing_mode: "postpaid",
-  spend_limits: spendLimits,
+  spend_limits: TICKETS_AI_SPEND_LIMITS,
 };
 
 async function cloudflare(path, init = {}) {
@@ -109,21 +82,32 @@ if (!configured.response.ok || configured.payload?.success !== true) {
   process.exit(1);
 }
 
-const result = configured.payload.result ?? {};
-const rules = result.spend_limits?.rules ?? [];
-const expected = new Map(spendLimits.rules.map((rule) => [rule.id, rule]));
-const valid = result.id === gatewayId
-  && result.spend_limits?.enabled === true
-  && [...expected.entries()].every(([id, rule]) => {
-    const actual = rules.find((candidate) => candidate.id === id);
-    return actual?.enabled === true
-      && actual?.limitType === "cost"
-      && Number(actual?.limit) === rule.limit
-      && Number(actual?.window) === rule.window;
-  });
+// Cloudflare's create/update response is not guaranteed to echo all nested spend
+// rules. Re-read the persisted Gateway and validate the state that will actually
+// serve production traffic. A few short reads tolerate control-plane propagation
+// without ever weakening the fail-closed budget requirement.
+let verified = false;
+let lastVerification = null;
+for (const delayMs of [0, 250, 750, 1_500]) {
+  if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+  const verification = await cloudflare(gatewayPath, { method: "GET" });
+  lastVerification = verification;
+  if (
+    verification.response.ok
+    && verification.payload?.success === true
+    && hasRequiredTicketsSpendLimits(verification.payload.result)
+  ) {
+    verified = true;
+    break;
+  }
+}
 
-if (!valid) {
-  console.error("Tickets AI Gateway returned without the required spend limits; refusing to continue deployment.");
+if (!verified) {
+  console.error(JSON.stringify({
+    message: "Tickets AI Gateway persisted without the required spend limits; refusing to continue deployment.",
+    status: lastVerification?.response?.status ?? null,
+    errors: lastVerification?.payload?.errors ?? [],
+  }));
   process.exit(1);
 }
 
