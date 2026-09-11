@@ -11,6 +11,15 @@ AI_COST_CONTROL_REQUIRED=false
 # https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway_id>/openai
 OPENAI_GATEWAY_BASE_URL=
 
+# Apple Wallet signing is server-side only. Dynamic updates remain disabled until
+# the signer can both sign passes and send update pushes with the same Pass Type ID certificate.
+APPLE_WALLET_SIGNER_URL=
+APPLE_WALLET_SIGNER_TOKEN=
+APPLE_WALLET_PASS_TYPE_IDENTIFIER=
+APPLE_WALLET_PUSH_URL=
+# Production creates this secret automatically. Use a long local-only value for development.
+APPLE_WALLET_AUTH_SECRET=replace-with-a-long-local-wallet-auth-secret
+
 # Optional SeevPlus sandbox integration (server-side only)
 SEEV_ENABLED=false
 SEEV_ENVIRONMENT=sandbox

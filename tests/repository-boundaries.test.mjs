@@ -64,3 +64,22 @@ test("AI Gateway verification checks persisted budget semantics rather than resp
     },
   }), false);
 });
+
+test("Apple Wallet refresh state follows all authoritative ticket state", async () => {
+  const migration = await readFile(new URL("../drizzle/0043_apple_wallet_updates.sql", import.meta.url), "utf8");
+  assert.match(migration, /apple_wallet_update_clock/u);
+  assert.match(migration, /SET value=value\+1/u);
+  assert.match(migration, /update_tag=\(SELECT value FROM apple_wallet_update_clock/u);
+  assert.match(migration, /apple_wallet_event_refresh/u);
+  assert.match(migration, /UPDATE OF `title`,`venue`,`area`,`starts_at`,`ends_at`,`event_state`,`schedule_status`,`removed_at`/u);
+  assert.match(migration, /apple_wallet_ticket_refresh/u);
+  assert.match(migration, /AFTER UPDATE OF `status` ON `tickets`/u);
+  assert.match(migration, /apple_wallet_assignment_refresh/u);
+  assert.match(migration, /apple_wallet_assignment_insert_refresh/u);
+  assert.match(migration, /apple_wallet_assignment_delete_refresh/u);
+  assert.match(migration, /attendee_id=OLD\.attendee_id/u);
+  assert.match(migration, /apple_wallet_gate_update_refresh/u);
+  assert.match(migration, /apple_wallet_gate_insert_refresh/u);
+  assert.match(migration, /apple_wallet_gate_delete_refresh/u);
+  assert.match(migration, /last_pushed_tag/u);
+});
