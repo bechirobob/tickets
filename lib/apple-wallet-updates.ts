@@ -195,49 +195,74 @@ export async function listUpdatedAppleWalletPasses(env: AppleWalletEnv, input: {
 
 async function removeInvalidPushTokens(env: AppleWalletEnv, tokens: string[]) {
   if (!tokens.length) return;
-  const placeholders = tokens.map(() => "?").join(",");
-  const devices = await env.DB.prepare(`SELECT device_library_id AS id FROM apple_wallet_devices WHERE push_token IN (${placeholders})`)
-    .bind(...tokens).all<{ id: string }>();
-  for (const device of devices.results) {
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM apple_wallet_registrations WHERE device_library_id=?").bind(device.id),
-      env.DB.prepare("DELETE FROM apple_wallet_devices WHERE device_library_id=?").bind(device.id),
-    ]);
+  for (let index = 0; index < tokens.length; index += 100) {
+    const batch = tokens.slice(index, index + 100);
+    const placeholders = batch.map(() => "?").join(",");
+    const devices = await env.DB.prepare(`SELECT device_library_id AS id FROM apple_wallet_devices WHERE push_token IN (${placeholders})`)
+      .bind(...batch).all<{ id: string }>();
+    for (const device of devices.results) {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM apple_wallet_registrations WHERE device_library_id=?").bind(device.id),
+        env.DB.prepare("DELETE FROM apple_wallet_devices WHERE device_library_id=?").bind(device.id),
+      ]);
+    }
   }
 }
 
 export async function processAppleWalletUpdatePushes(env: AppleWalletEnv) {
   if (!appleWalletUpdatesConfigured(env)) return { pending: 0, pushed: 0 };
-  const pending = await env.DB.prepare("SELECT id FROM apple_wallet_passes WHERE update_tag>last_pushed_tag ORDER BY updated_at LIMIT 500")
-    .all<{ id: string }>();
+  const pending = await env.DB.prepare(`
+    SELECT id,update_tag AS updateTag
+    FROM apple_wallet_passes
+    WHERE update_tag>last_pushed_tag
+    ORDER BY updated_at,id
+    LIMIT 100
+  `).all<{ id: string; updateTag: number }>();
   if (!pending.results.length) return { pending: 0, pushed: 0 };
-  const devices = await env.DB.prepare(`
-    SELECT DISTINCT device.push_token AS pushToken
-    FROM apple_wallet_passes pass
-    JOIN apple_wallet_registrations registration ON registration.pass_id=pass.id
-    JOIN apple_wallet_devices device ON device.device_library_id=registration.device_library_id
-    WHERE pass.update_tag>pass.last_pushed_tag
-    LIMIT 1000
-  `).all<{ pushToken: string }>();
-  let pushed = 0;
-  for (let index = 0; index < devices.results.length; index += 100) {
-    const pushTokens = devices.results.slice(index, index + 100).map((item) => item.pushToken);
-    const response = await fetch(env.APPLE_WALLET_PUSH_URL!, {
-      method: "POST",
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        authorization: `Bearer ${env.APPLE_WALLET_SIGNER_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ passTypeIdentifier: env.APPLE_WALLET_PASS_TYPE_IDENTIFIER, pushTokens }),
-    });
-    if (!response.ok) throw new Error(`Apple Wallet push service returned ${response.status}.`);
-    const result = await response.json().catch(() => ({})) as { invalidPushTokens?: string[] };
-    await removeInvalidPushTokens(env, Array.isArray(result.invalidPushTokens) ? result.invalidPushTokens : []);
-    pushed += pushTokens.length;
-  }
+
   const ids = pending.results.map((item) => item.id);
   const placeholders = ids.map(() => "?").join(",");
-  await env.DB.prepare(`UPDATE apple_wallet_passes SET last_pushed_tag=update_tag WHERE id IN (${placeholders})`).bind(...ids).run();
+  const invalidTokens = new Set<string>();
+  let pushed = 0;
+  let after = "";
+
+  while (true) {
+    const devices = await env.DB.prepare(`
+      SELECT DISTINCT device.push_token AS pushToken
+      FROM apple_wallet_registrations registration
+      JOIN apple_wallet_devices device ON device.device_library_id=registration.device_library_id
+      WHERE registration.pass_id IN (${placeholders}) AND device.push_token>?
+      ORDER BY device.push_token
+      LIMIT 500
+    `).bind(...ids, after).all<{ pushToken: string }>();
+    if (!devices.results.length) break;
+
+    for (let index = 0; index < devices.results.length; index += 100) {
+      const pushTokens = devices.results.slice(index, index + 100).map((item) => item.pushToken);
+      const response = await fetch(env.APPLE_WALLET_PUSH_URL!, {
+        method: "POST",
+        signal: AbortSignal.timeout(10_000),
+        headers: {
+          authorization: `Bearer ${env.APPLE_WALLET_SIGNER_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ passTypeIdentifier: env.APPLE_WALLET_PASS_TYPE_IDENTIFIER, pushTokens }),
+      });
+      if (!response.ok) throw new Error(`Apple Wallet push service returned ${response.status}.`);
+      const result = await response.json().catch(() => ({})) as { invalidPushTokens?: string[] };
+      for (const token of Array.isArray(result.invalidPushTokens) ? result.invalidPushTokens : []) invalidTokens.add(token);
+      pushed += pushTokens.length;
+    }
+
+    after = devices.results.at(-1)!.pushToken;
+    if (devices.results.length < 500) break;
+  }
+
+  await removeInvalidPushTokens(env, [...invalidTokens]);
+  await env.DB.batch(pending.results.map((item) => env.DB.prepare(`
+    UPDATE apple_wallet_passes
+    SET last_pushed_tag=?
+    WHERE id=? AND last_pushed_tag<?
+  `).bind(item.updateTag, item.id, item.updateTag)));
   return { pending: ids.length, pushed };
 }
