@@ -177,13 +177,14 @@ export async function listUpdatedAppleWalletPasses(env: AppleWalletEnv, input: {
   passTypeIdentifier: string;
   updatedSince: number;
 }) {
+  // Apple has no page cursor here: truncating a shared update tag permanently
+  // skips the remaining passes when the device advances lastUpdated.
   const result = await env.DB.prepare(`
     SELECT pass.serial_number AS serialNumber, pass.update_tag AS updateTag
     FROM apple_wallet_registrations registration
     JOIN apple_wallet_passes pass ON pass.id=registration.pass_id
     WHERE registration.device_library_id=? AND pass.pass_type_identifier=? AND pass.update_tag>?
     ORDER BY pass.update_tag,pass.serial_number
-    LIMIT 200
   `).bind(input.deviceLibraryId, input.passTypeIdentifier, input.updatedSince)
     .all<{ serialNumber: string; updateTag: number }>();
   if (!result.results.length) return null;
@@ -211,12 +212,13 @@ async function removeInvalidPushTokens(env: AppleWalletEnv, tokens: string[]) {
 
 export async function processAppleWalletUpdatePushes(env: AppleWalletEnv) {
   if (!appleWalletUpdatesConfigured(env)) return { pending: 0, pushed: 0 };
+  // Leave one of D1's 100 bound parameters for the device pagination cursor.
   const pending = await env.DB.prepare(`
     SELECT id,update_tag AS updateTag
     FROM apple_wallet_passes
     WHERE update_tag>last_pushed_tag
     ORDER BY updated_at,id
-    LIMIT 100
+    LIMIT 99
   `).all<{ id: string; updateTag: number }>();
   if (!pending.results.length) return { pending: 0, pushed: 0 };
 

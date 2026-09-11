@@ -82,3 +82,35 @@ it("registers a device and retries stale pass pushes until the signer accepts th
   expect(await listUpdatedAppleWalletPasses(configured, { deviceLibraryId: "device-library-123", passTypeIdentifier: "pass.com.becoreops.tickets", updatedSince: 1 }))
     .toEqual({ serialNumbers: [serial], lastUpdated: "2" });
 });
+
+it("returns every changed pass when more than 200 share an update tag", async () => {
+  const configured = walletEnv();
+  const serials = Array.from({ length: 205 }, (_, index) => `bulk-${String(index).padStart(3, "0")}`);
+  await env.DB.batch(serials.flatMap(serial => [
+    env.DB.prepare("INSERT INTO apple_wallet_passes (id,ticket_id,attendee_id,event_slug,pass_type_identifier,serial_number,update_tag,last_pushed_tag,created_at,updated_at) VALUES (?,?,?,'bulk-night',?,?,7,7,'now','now')").bind(serial, serial, "bulk-owner", configured.APPLE_WALLET_PASS_TYPE_IDENTIFIER!, serial),
+    env.DB.prepare("INSERT INTO apple_wallet_registrations (device_library_id,pass_id,created_at) VALUES ('bulk-device',?,'now')").bind(serial),
+  ]));
+  const changed = await listUpdatedAppleWalletPasses(configured, { deviceLibraryId: "bulk-device", passTypeIdentifier: configured.APPLE_WALLET_PASS_TYPE_IDENTIFIER!, updatedSince: 1 });
+  expect(changed?.serialNumbers).toEqual(serials);
+  expect(changed?.lastUpdated).toBe("7");
+  expect(await listUpdatedAppleWalletPasses(configured, { deviceLibraryId: "bulk-device", passTypeIdentifier: configured.APPLE_WALLET_PASS_TYPE_IDENTIFIER!, updatedSince: 7 })).toBeNull();
+});
+
+it("delivers a hundred stale passes across bounded queries without losing the remainder", async () => {
+  const configured = walletEnv();
+  const serials = Array.from({ length: 100 }, (_, index) => `push-bulk-${String(index).padStart(3, "0")}`);
+  await env.DB.batch(serials.flatMap(serial => [
+    env.DB.prepare("INSERT INTO apple_wallet_passes (id,ticket_id,attendee_id,event_slug,pass_type_identifier,serial_number,update_tag,last_pushed_tag,created_at,updated_at) VALUES (?,?,?,'push-night',?,?,9,1,'now','now')").bind(serial, serial, "push-owner", configured.APPLE_WALLET_PASS_TYPE_IDENTIFIER!, serial),
+    env.DB.prepare("INSERT INTO apple_wallet_devices (device_library_id,push_token,created_at,updated_at) VALUES (?,?,'now','now')").bind(serial, serial),
+    env.DB.prepare("INSERT INTO apple_wallet_registrations (device_library_id,pass_id,created_at) VALUES (?,?,'now')").bind(serial, serial),
+  ]));
+  const delivered: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+    delivered.push(...JSON.parse(String(init?.body)).pushTokens);
+    return Response.json({ invalidPushTokens: [] });
+  }));
+  await processAppleWalletUpdatePushes(configured);
+  await processAppleWalletUpdatePushes(configured);
+  expect(delivered.sort()).toEqual(serials);
+  expect(await processAppleWalletUpdatePushes(configured)).toEqual({ pending: 0, pushed: 0 });
+});
