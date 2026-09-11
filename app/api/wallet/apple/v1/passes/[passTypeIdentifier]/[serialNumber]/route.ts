@@ -5,6 +5,12 @@ function validIdentifier(value: string, max = 180) {
   return value.length > 0 && value.length <= max && /^[A-Za-z0-9._:-]+$/u.test(value);
 }
 
+function passLastModified(updateTag: number) {
+  // A synthetic HTTP date based on the global Wallet sequence is strictly
+  // monotonic and avoids wall-clock/same-second races in If-Modified-Since.
+  return new Date(Date.UTC(2026, 0, 1) + Math.max(1, updateTag) * 1000).toUTCString();
+}
+
 type UpdatedWalletTicket = {
   id: string;
   eventSlug: string;
@@ -33,6 +39,12 @@ export async function GET(
   const pass = await readAppleWalletPass(env, passTypeIdentifier, serialNumber);
   if (!pass) return new Response(null, { status: 404 });
   if (!(await appleWalletRequestAuthorized(env, serialNumber, request.headers.get("authorization")))) return new Response(null, { status: 401 });
+
+  const lastModified = passLastModified(pass.updateTag);
+  const ifModifiedSince = Date.parse(request.headers.get("if-modified-since") ?? "");
+  if (Number.isFinite(ifModifiedSince) && ifModifiedSince >= Date.parse(lastModified)) {
+    return new Response(null, { status: 304, headers: { "last-modified": lastModified, "cache-control": "private, no-cache" } });
+  }
 
   const ticket = await env.DB.prepare(`
     SELECT ticket.id,ticket.event_slug AS eventSlug,ticket.ticket_type AS ticketType,
@@ -78,7 +90,8 @@ export async function GET(
     status: 200,
     headers: {
       "content-type": "application/vnd.apple.pkpass",
-      "cache-control": "no-store",
+      "cache-control": "private, no-cache",
+      "last-modified": lastModified,
     },
   });
 }
