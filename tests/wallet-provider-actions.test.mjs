@@ -1,6 +1,29 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
+
+for (const existing of [true, false]) {
+  test(`Wallet secret preparation returns to its importing build (${existing ? "existing" : "new"} secret)`, async (context) => {
+    const calls = [];
+    context.mock.method(childProcess, "spawnSync", (_command, args) => {
+      calls.push(args);
+      return { status: 0, stdout: args.includes("list") ? JSON.stringify(existing ? [{ name: "APPLE_WALLET_AUTH_SECRET" }] : []) : "" };
+    });
+    context.mock.method(process, "exit", (code) => {
+      throw new Error(`Wallet preparation terminated its importing build with exit ${code}`);
+    });
+    syncBuiltinESMExports();
+    try {
+      await import(new URL(`../scripts/ensure-apple-wallet-secret.mjs?existing=${existing}`, import.meta.url));
+      assert.equal(calls.filter((args) => args.includes("put")).length, existing ? 0 : 1);
+    } finally {
+      context.mock.restoreAll();
+      syncBuiltinESMExports();
+    }
+  });
+}
 
 test("ticket Wallet actions stay provider-aware and off invalid passes", async () => {
   const [actions, ticketWallet, configRoute] = await Promise.all([
