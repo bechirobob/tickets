@@ -10,6 +10,7 @@ if (
 ) {
   await import("./ensure-ai-gateway.mjs");
   await import("./ensure-email-queue.mjs");
+  await import("./ensure-apple-wallet-secret.mjs");
 }
 
 const generatedConfigPath = new URL("../dist/server/wrangler.json", import.meta.url);
