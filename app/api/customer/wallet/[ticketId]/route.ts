@@ -1,9 +1,11 @@
 import { readAttendeeIdentity } from "../../../../../lib/attendee-auth";
 import { gateQrPayload } from "../../../../../lib/gate-pass";
+import { signAppleWalletPass } from "../../../../../lib/apple-wallet-updates";
 import { googleWalletUrl } from "../../../../../lib/wallet-passes";
 
 type WalletTicket = {
   id: string;
+  eventSlug: string;
   ticketType: string;
   holder: string;
   title: string;
@@ -30,7 +32,7 @@ export async function GET(
     );
   const { ticketId } = await context.params;
   const ticket = await env.DB.prepare(
-    `SELECT ticket.id, ticket.ticket_type AS ticketType, attendee.display_name AS holder, event.title, event.starts_at AS startsAt, event.ends_at AS endsAt, event.venue, event.area, credential.token AS gateToken FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id JOIN attendee_accounts attendee ON attendee.id = assignment.attendee_id JOIN curated_event_records event ON event.slug = ticket.event_slug JOIN ticket_gate_credentials credential ON credential.ticket_id = ticket.id WHERE ticket.id = ? AND assignment.attendee_id = ? AND assignment.status = 'active' AND ticket.status = 'issued' AND event.event_state IN ('on_sale','rescheduled') LIMIT 1`,
+    `SELECT ticket.id, ticket.event_slug AS eventSlug, ticket.ticket_type AS ticketType, attendee.display_name AS holder, event.title, event.starts_at AS startsAt, event.ends_at AS endsAt, event.venue, event.area, credential.token AS gateToken FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id JOIN attendee_accounts attendee ON attendee.id = assignment.attendee_id JOIN curated_event_records event ON event.slug = ticket.event_slug JOIN ticket_gate_credentials credential ON credential.ticket_id = ticket.id WHERE ticket.id = ? AND assignment.attendee_id = ? AND assignment.status = 'active' AND ticket.status = 'issued' AND event.event_state IN ('on_sale','rescheduled') LIMIT 1`,
   )
     .bind(ticketId, identity.attendeeId)
     .first<WalletTicket>();
@@ -64,18 +66,12 @@ export async function GET(
     env.APPLE_WALLET_SIGNER_URL &&
     env.APPLE_WALLET_SIGNER_TOKEN
   ) {
-    const response = await fetch(env.APPLE_WALLET_SIGNER_URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.APPLE_WALLET_SIGNER_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        ...ticket,
-        qrPayload: gateQrPayload(ticket.gateToken),
-      }),
-    });
-    if (!response.ok)
+    const response = await signAppleWalletPass(
+      env,
+      { ...ticket, qrPayload: gateQrPayload(ticket.gateToken) },
+      new URL(request.url).origin,
+    );
+    if (!response)
       return Response.json(
         { error: "Apple Wallet could not prepare this pass." },
         { status: 502 },
