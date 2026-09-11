@@ -59,3 +59,34 @@ BEGIN
   UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=NEW.ticket_id AND attendee_id=OLD.attendee_id);
   UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.ticket_id AND attendee_id=OLD.attendee_id;
 END;
+--> statement-breakpoint
+CREATE TRIGGER `apple_wallet_assignment_insert_refresh` AFTER INSERT ON `ticket_assignments`
+BEGIN
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=NEW.ticket_id AND attendee_id=NEW.attendee_id);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.ticket_id AND attendee_id=NEW.attendee_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `apple_wallet_assignment_delete_refresh` AFTER DELETE ON `ticket_assignments`
+BEGIN
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=OLD.ticket_id AND attendee_id=OLD.attendee_id);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=OLD.ticket_id AND attendee_id=OLD.attendee_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `apple_wallet_gate_update_refresh` AFTER UPDATE OF `token` ON `ticket_gate_credentials`
+WHEN OLD.token <> NEW.token
+BEGIN
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=NEW.ticket_id);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.ticket_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `apple_wallet_gate_insert_refresh` AFTER INSERT ON `ticket_gate_credentials`
+BEGIN
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=NEW.ticket_id);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.ticket_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `apple_wallet_gate_delete_refresh` AFTER DELETE ON `ticket_gate_credentials`
+BEGIN
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=OLD.ticket_id);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=OLD.ticket_id;
+END;
