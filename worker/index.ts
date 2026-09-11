@@ -268,4 +268,4 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
   }
 }
 
-export default worker satisfies ExportedHandler<Cloudflare.Env>;
+export default worker satisfies ExportedHandler<Cloudflare.Env, { deliveryId: string }>;
