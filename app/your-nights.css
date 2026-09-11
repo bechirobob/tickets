@@ -34,6 +34,8 @@
 .my-nights-list article > div > span, .my-nights-list small, .my-nights-list aside > span { color: #dbc5d3; }
 .my-nights-list .my-nights-actions > a:last-child { color: #e7d1df; border-color: #bb97af; min-height: 44px; display: inline-flex; align-items: center; }
 .my-nights-list aside > a { color: #e4f18b; }
+.my-nights-actions > a { gap: 7px; }
+.night-hub__retry { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 18px; margin: 12px; border: 1px solid currentColor; border-radius: 10px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .my-nights-empty { color: #ddc5d4; }
 .my-nights-empty h2 { color: #f8eee7; }
 .my-nights-recovered { background: #344130; color: #edf2d9; border-color: #849467; }

@@ -10,6 +10,7 @@ import Link from "next/link";
 import { ActionButton, ActionLink } from "../action";
 import { ArrowLeft, ArrowUpRight, Bell, CalendarDays, CheckCircle2, Loader2, LockKeyhole, Mail, MapPin, MessageCircle, QrCode, Ticket } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCurrentTime } from "../use-current-time";
 import LoadingSkeleton from "../loading-skeleton";
 import { requestJson, requestErrorMessage, RequestError } from "../../lib/client-request";
 
@@ -23,15 +24,11 @@ type View = "upcoming" | "past" | "following";
 
 function nextAction(night: Night, now: number) {
   if (!night.startsAt || !night.endsAt) return { href: `/my-nights/${night.eventSlug}?view=details`, label: "See event details", icon: Bell };
-  const startsIn = new Date(night.startsAt).getTime() - now;
   const ended = new Date(night.endsAt).getTime() < now;
   if (["cancelled", "postponed"].includes(night.eventState)) return { href: `/my-nights/${night.eventSlug}?view=details`, label: "See what changed", icon: Bell };
   if (ended) return { href: `/my-nights/${night.eventSlug}?view=details`, label: "Look back", icon: ArrowUpRight };
   if (night.roomAccess === false) return { href: `/my-nights/${night.eventSlug}?view=passes`, label: "Show my RSVP pass", icon: QrCode };
-  if (startsIn <= 0) return { href: `/room/${night.eventSlug}`, label: "Enter the live Room", icon: MessageCircle };
-  if (startsIn <= 6 * 60 * 60 * 1000) return { href: `/my-nights/${night.eventSlug}?view=passes`, label: "Show my ticket", icon: QrCode };
-  if (startsIn <= 48 * 60 * 60 * 1000) return { href: `/room/${night.eventSlug}`, label: "Enter the Room", icon: MessageCircle };
-  return { href: `/my-nights/${night.eventSlug}`, label: "Open my Night", icon: ArrowUpRight };
+  return { href: `/my-nights/${night.eventSlug}?view=passes`, label: "Show my ticket", icon: QrCode };
 }
 
 export default function MyNightsClient() {
@@ -40,7 +37,7 @@ export default function MyNightsClient() {
   const [locked, setLocked] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [view, setView] = useState<View>("upcoming");
-  const [now] = useState(() => Date.now());
+  const now = useCurrentTime();
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
   const [recoveryError, setRecoveryError] = useState("");
@@ -50,9 +47,9 @@ export default function MyNightsClient() {
   const load = useCallback(() => requestJson<Payload>("/api/customer/my-nights", { cache: "no-store" })
     .then((data) => {
       if (!data.attendee || !Array.isArray(data.nights)) throw new Error("My Nights could not be prepared. Please try again.");
-      setPayload(data); setLocked(false);
+      setPayload(data); setLocked(false); setLoadError("");
     }).catch((error) => {
-      if (error instanceof RequestError && error.status === 401) setLocked(true);
+      if (error instanceof RequestError && error.status === 401) { setPayload(null); setLocked(true); }
       else setLoadError(requestErrorMessage(error));
     }).finally(() => setLoading(false)), []);
 
@@ -81,7 +78,11 @@ export default function MyNightsClient() {
     return (payload?.nights ?? []).filter((night) => {
       if (view === "following") return night.keepPosted || !night.purchased;
       if (!night.purchased) return false;
-      return view === "past" ? Boolean(night.endsAt && Date.parse(night.endsAt) < now) : !night.endsAt || Date.parse(night.endsAt) >= now;
+      return view === "past" ? Boolean(night.endsAt && Date.parse(night.endsAt) <= now) : !night.endsAt || Date.parse(night.endsAt) > now;
+    }).sort((a, b) => {
+      const aTime = a.startsAt ? Date.parse(a.startsAt) : Infinity;
+      const bTime = b.startsAt ? Date.parse(b.startsAt) : Infinity;
+      return view === "past" ? bTime - aTime : aTime - bTime;
     });
   }, [now, payload, view]);
 
@@ -99,7 +100,8 @@ export default function MyNightsClient() {
         {nights.length ? <div className="my-nights-list">{nights.map((night) => {
           const action = nextAction(night, now);
           const ActionIcon = action.icon;
-          return <article key={night.eventSlug}><img src={night.imageUrl} alt={`Atmosphere for ${night.title}`} /><div><p>{night.isTestEvent ? "Working preview" : night.purchased ? `${night.ticketCount} ${night.ticketCount === 1 ? "ticket" : "tickets"}` : "Following"}</p><h2>{night.title}</h2><span><CalendarDays size={13} /> {night.startsAt ? new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(night.startsAt)) : "Coming soon"}</span><span><MapPin size={13} /> {night.venue}, {night.area}</span>{night.hostName ? <small>Hosted by {night.hostName}</small> : null}</div><aside>{night.updateCount ? <span><Bell size={12} /> {night.updateCount} {night.updateCount === 1 ? "update" : "updates"}</span> : null}{night.purchased ? <div className="my-nights-actions"><ActionLink href={action.href} icon={<ActionIcon size={17} />}>{action.label}</ActionLink><Link href={`/my-nights/${night.eventSlug}?view=perks`}>Ticket &amp; perks</Link></div> : <Link href={`/event/${night.eventSlug}`}>View event <ArrowUpRight size={14} /></Link>}</aside></article>;
+          const canEnterRoom = night.roomAccess !== false && !["cancelled", "postponed"].includes(night.eventState) && (!night.endsAt || Date.parse(night.endsAt) > now);
+          return <article key={night.eventSlug}><img src={night.imageUrl} alt={`Atmosphere for ${night.title}`} /><div><p>{night.isTestEvent ? "Working preview" : night.purchased ? `${night.ticketCount} ${night.ticketCount === 1 ? "ticket" : "tickets"}` : "Following"}</p><h2>{night.title}</h2><span><CalendarDays size={13} /> {night.startsAt ? new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(night.startsAt)) : "Coming soon"}</span><span><MapPin size={13} /> {night.venue}, {night.area}</span>{night.hostName ? <small>Hosted by {night.hostName}</small> : null}</div><aside>{night.updateCount ? <span><Bell size={12} /> {night.updateCount} {night.updateCount === 1 ? "update" : "updates"}</span> : null}{night.purchased ? <div className="my-nights-actions"><ActionLink href={action.href} icon={<ActionIcon size={17} />}>{action.label}</ActionLink><Link href={canEnterRoom ? `/room/${night.eventSlug}` : `/my-nights/${night.eventSlug}?view=details`}>{canEnterRoom ? <><MessageCircle size={14} /> The Room</> : "Event details"}</Link></div> : <Link href={`/event/${night.eventSlug}`}>View event <ArrowUpRight size={14} /></Link>}</aside></article>;
         })}</div> : <section className="my-nights-empty"><h2>This tab is suspiciously tidy.</h2><p>{view === "following" ? "Use Keep me posted on an event or follow a Host. A little anticipation is healthy." : view === "past" ? "Your attended nights will gather here, evidence and all." : "Your next ticket lands here. All you need to bring is yourself."}</p><Link href="/events">Find a night</Link></section>}
       </>}
     </section>

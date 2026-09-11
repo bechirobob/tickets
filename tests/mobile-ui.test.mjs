@@ -397,8 +397,9 @@ test("returning buyers recover and manage the whole purchase through My Nights",
   ]);
   assert.match(myNights, /Bring back my Nights/u);
   assert.match(myNights, /Use your booking email/u);
-  assert.match(myNights, /Ticket &amp; perks/u);
-  assert.match(myNights, /Enter the live Room/u);
+  assert.match(myNights, /Show my ticket/u);
+  assert.match(myNights, /The Room/u);
+  assert.match(myNights, /canEnterRoom/u);
   assert.match(hub, />Ticket \(\{tickets\.length\}\)</u);
   assert.match(hub, />Perks</u);
   assert.match(hub, />Details</u);
