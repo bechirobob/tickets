@@ -19,6 +19,16 @@ export type AppleWalletTicketPayload = {
   eventState?: string;
 };
 
+export type AppleWalletPassRecord = {
+  id: string;
+  ticketId: string;
+  attendeeId: string;
+  eventSlug: string;
+  passTypeIdentifier: string;
+  serialNumber: string;
+  updateTag: number;
+};
+
 const encoder = new TextEncoder();
 
 function base64Url(bytes: Uint8Array) {
@@ -34,6 +44,11 @@ function safeEqual(left: string, right: string) {
   return difference === 0;
 }
 
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function appleWalletUpdatesConfigured(env: AppleWalletEnv) {
   return Boolean(
     env.APPLE_WALLET_SIGNER_URL
@@ -44,7 +59,11 @@ export function appleWalletUpdatesConfigured(env: AppleWalletEnv) {
   );
 }
 
-export async function appleWalletAuthenticationToken(env: AppleWalletEnv, ticketId: string) {
+export async function appleWalletPassSerial(ticketId: string, attendeeId: string) {
+  return `bct-${(await sha256Hex(`${ticketId}|${attendeeId}`)).slice(0, 40)}`;
+}
+
+export async function appleWalletAuthenticationToken(env: AppleWalletEnv, serialNumber: string) {
   if (!env.APPLE_WALLET_AUTH_SECRET) throw new Error("Apple Wallet update authentication is not configured.");
   const key = await crypto.subtle.importKey(
     "raw",
@@ -53,29 +72,39 @@ export async function appleWalletAuthenticationToken(env: AppleWalletEnv, ticket
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`becore-tickets/apple-wallet/${ticketId}`));
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`becore-tickets/apple-wallet/${serialNumber}`));
   return base64Url(new Uint8Array(signature));
 }
 
-export async function appleWalletRequestAuthorized(env: AppleWalletEnv, ticketId: string, authorization: string | null) {
+export async function appleWalletRequestAuthorized(env: AppleWalletEnv, serialNumber: string, authorization: string | null) {
   if (!authorization?.startsWith("ApplePass ")) return false;
   const presented = authorization.slice("ApplePass ".length).trim();
   if (!presented) return false;
-  return safeEqual(presented, await appleWalletAuthenticationToken(env, ticketId));
+  return safeEqual(presented, await appleWalletAuthenticationToken(env, serialNumber));
 }
 
-export async function recordAppleWalletPass(env: AppleWalletEnv, ticket: Pick<AppleWalletTicketPayload, "id" | "eventSlug">) {
+export async function readAppleWalletPass(env: AppleWalletEnv, passTypeIdentifier: string, serialNumber: string) {
+  return env.DB.prepare(`
+    SELECT id,ticket_id AS ticketId,attendee_id AS attendeeId,event_slug AS eventSlug,
+      pass_type_identifier AS passTypeIdentifier,serial_number AS serialNumber,update_tag AS updateTag
+    FROM apple_wallet_passes WHERE pass_type_identifier=? AND serial_number=? LIMIT 1
+  `).bind(passTypeIdentifier, serialNumber).first<AppleWalletPassRecord>();
+}
+
+export async function recordAppleWalletPass(
+  env: AppleWalletEnv,
+  ticket: Pick<AppleWalletTicketPayload, "id" | "eventSlug">,
+  attendeeId: string,
+  serialNumber: string,
+) {
   if (!appleWalletUpdatesConfigured(env)) return false;
   const now = new Date().toISOString();
   await env.DB.prepare(`
     INSERT INTO apple_wallet_passes (
-      ticket_id,event_slug,pass_type_identifier,serial_number,update_tag,created_at,updated_at
-    ) VALUES (?,?,?,?,1,?,?)
-    ON CONFLICT(ticket_id) DO UPDATE SET
-      event_slug=excluded.event_slug,
-      pass_type_identifier=excluded.pass_type_identifier,
-      serial_number=excluded.serial_number
-  `).bind(ticket.id, ticket.eventSlug, env.APPLE_WALLET_PASS_TYPE_IDENTIFIER!, ticket.id, now, now).run();
+      id,ticket_id,attendee_id,event_slug,pass_type_identifier,serial_number,update_tag,created_at,updated_at
+    ) VALUES (?,?,?,?,?,?,1,?,?)
+    ON CONFLICT(id) DO UPDATE SET event_slug=excluded.event_slug
+  `).bind(serialNumber, ticket.id, attendeeId, ticket.eventSlug, env.APPLE_WALLET_PASS_TYPE_IDENTIFIER!, serialNumber, now, now).run();
   return true;
 }
 
@@ -83,14 +112,17 @@ export async function signAppleWalletPass(
   env: AppleWalletEnv,
   ticket: AppleWalletTicketPayload,
   origin: string,
+  attendeeId: string,
   authenticationToken?: string,
+  serialOverride?: string,
 ) {
   if (!env.APPLE_WALLET_SIGNER_URL || !env.APPLE_WALLET_SIGNER_TOKEN) return null;
   const dynamic = appleWalletUpdatesConfigured(env);
-  const authToken = dynamic ? (authenticationToken ?? await appleWalletAuthenticationToken(env, ticket.id)) : null;
+  const serialNumber = dynamic ? (serialOverride ?? await appleWalletPassSerial(ticket.id, attendeeId)) : ticket.id;
+  const authToken = dynamic ? (authenticationToken ?? await appleWalletAuthenticationToken(env, serialNumber)) : null;
   const body = dynamic ? {
     ...ticket,
-    serialNumber: ticket.id,
+    serialNumber,
     passTypeIdentifier: env.APPLE_WALLET_PASS_TYPE_IDENTIFIER,
     webServiceURL: `${origin}/api/wallet/apple`,
     authenticationToken: authToken,
@@ -105,36 +137,35 @@ export async function signAppleWalletPass(
     body: JSON.stringify(body),
   });
   if (!response.ok) return null;
-  if (dynamic) await recordAppleWalletPass(env, ticket);
+  if (dynamic) await recordAppleWalletPass(env, ticket, attendeeId, serialNumber);
   return response;
 }
 
 export async function registerAppleWalletDevice(env: AppleWalletEnv, input: {
-  ticketId: string;
+  passId: string;
   deviceLibraryId: string;
   pushToken: string;
 }) {
-  const pass = await env.DB.prepare("SELECT ticket_id FROM apple_wallet_passes WHERE ticket_id=? LIMIT 1")
-    .bind(input.ticketId).first();
+  const pass = await env.DB.prepare("SELECT id FROM apple_wallet_passes WHERE id=? LIMIT 1").bind(input.passId).first();
   if (!pass) return "missing" as const;
   const now = new Date().toISOString();
-  const existing = await env.DB.prepare("SELECT 1 AS found FROM apple_wallet_registrations WHERE device_library_id=? AND ticket_id=? LIMIT 1")
-    .bind(input.deviceLibraryId, input.ticketId).first();
+  const existing = await env.DB.prepare("SELECT 1 AS found FROM apple_wallet_registrations WHERE device_library_id=? AND pass_id=? LIMIT 1")
+    .bind(input.deviceLibraryId, input.passId).first();
   await env.DB.batch([
     env.DB.prepare(`
       INSERT INTO apple_wallet_devices (device_library_id,push_token,created_at,updated_at)
       VALUES (?,?,?,?)
       ON CONFLICT(device_library_id) DO UPDATE SET push_token=excluded.push_token,updated_at=excluded.updated_at
     `).bind(input.deviceLibraryId, input.pushToken, now, now),
-    env.DB.prepare("INSERT OR IGNORE INTO apple_wallet_registrations (device_library_id,ticket_id,created_at) VALUES (?,?,?)")
-      .bind(input.deviceLibraryId, input.ticketId, now),
+    env.DB.prepare("INSERT OR IGNORE INTO apple_wallet_registrations (device_library_id,pass_id,created_at) VALUES (?,?,?)")
+      .bind(input.deviceLibraryId, input.passId, now),
   ]);
   return existing ? "existing" as const : "created" as const;
 }
 
-export async function unregisterAppleWalletDevice(env: AppleWalletEnv, input: { ticketId: string; deviceLibraryId: string }) {
-  await env.DB.prepare("DELETE FROM apple_wallet_registrations WHERE device_library_id=? AND ticket_id=?")
-    .bind(input.deviceLibraryId, input.ticketId).run();
+export async function unregisterAppleWalletDevice(env: AppleWalletEnv, input: { passId: string; deviceLibraryId: string }) {
+  await env.DB.prepare("DELETE FROM apple_wallet_registrations WHERE device_library_id=? AND pass_id=?")
+    .bind(input.deviceLibraryId, input.passId).run();
   await env.DB.prepare(`
     DELETE FROM apple_wallet_devices WHERE device_library_id=?
       AND NOT EXISTS (SELECT 1 FROM apple_wallet_registrations WHERE device_library_id=?)
@@ -149,7 +180,7 @@ export async function listUpdatedAppleWalletPasses(env: AppleWalletEnv, input: {
   const result = await env.DB.prepare(`
     SELECT pass.serial_number AS serialNumber, pass.update_tag AS updateTag
     FROM apple_wallet_registrations registration
-    JOIN apple_wallet_passes pass ON pass.ticket_id=registration.ticket_id
+    JOIN apple_wallet_passes pass ON pass.id=registration.pass_id
     WHERE registration.device_library_id=? AND pass.pass_type_identifier=? AND pass.update_tag>?
     ORDER BY pass.update_tag,pass.serial_number
     LIMIT 200
@@ -184,7 +215,7 @@ export async function markAppleWalletEventUpdated(env: AppleWalletEnv, eventSlug
   const devices = await env.DB.prepare(`
     SELECT DISTINCT device.push_token AS pushToken
     FROM apple_wallet_passes pass
-    JOIN apple_wallet_registrations registration ON registration.ticket_id=pass.ticket_id
+    JOIN apple_wallet_registrations registration ON registration.pass_id=pass.id
     JOIN apple_wallet_devices device ON device.device_library_id=registration.device_library_id
     WHERE pass.event_slug=?
     LIMIT 1000
