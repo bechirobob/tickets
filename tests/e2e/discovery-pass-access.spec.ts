@@ -13,7 +13,10 @@ test("date selection survives an event visit and clearing restores the catalogue
   await date.fill(new Date(start!).toISOString().slice(0, 10));
   await expect(page.locator(`.drop-card[data-event-slug="${slug}"]`)).toBeVisible();
   await page.locator(`.drop-card[data-event-slug="${slug}"] h3 a`).click();
+  await expect(page).toHaveURL(new RegExp(`/event/${slug}$`));
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.goBack();
+  await expect(page).toHaveURL(/\/events$/);
   await expect(date).toHaveValue(new Date(start!).toISOString().slice(0, 10));
   await date.fill("2099-12-31");
   await expect(page.getByRole("heading", { name: "Even Accra has a quiet corner." })).toBeVisible();

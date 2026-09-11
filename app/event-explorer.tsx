@@ -69,7 +69,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
       <details className="discovery-filters">
         <summary>Filters{area !== "All areas" || vibe !== "All" ? ` (${Number(area !== "All areas") + Number(vibe !== "All")})` : ""}<ChevronDown size={16} aria-hidden="true" /></summary>
         <div className="discovery-filters__body">
-          <label><MapPin size={16} aria-hidden="true" /><span className="sr-only">Area</span><select disabled={!ready} value={area} onChange={(event) => setArea(event.target.value)}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label><MapPin size={16} aria-hidden="true" /><span className="sr-only">Area</span><select aria-label="Area" disabled={!ready} value={area} onChange={(event) => setArea(event.target.value)}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
           <div className="drop-vibes" role="group" aria-label="Music and mood">
             {vibes.map((item) => <button key={item.value} type="button" disabled={!ready} aria-pressed={vibe === item.value} onClick={() => setVibe(item.value)}><b>{item.label}</b></button>)}
           </div>
