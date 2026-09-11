@@ -1,14 +1,15 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 
-// Production releases own the dedicated AI Gateway configuration. Running this
-// only on main prevents pull-request builds from changing live cost controls.
+// Production releases own external cost/reliability resources. Running these
+// only on main prevents pull-request builds from mutating live infrastructure.
 if (
   process.env.GITHUB_REF_NAME === "main"
   && process.env.CLOUDFLARE_API_TOKEN
   && process.env.CLOUDFLARE_ACCOUNT_ID
 ) {
   await import("./ensure-ai-gateway.mjs");
+  await import("./ensure-email-queue.mjs");
 }
 
 const generatedConfigPath = new URL("../dist/server/wrangler.json", import.meta.url);
@@ -40,6 +41,7 @@ generatedConfig.ratelimits = sourceConfig.ratelimits;
 generatedConfig.observability = sourceConfig.observability;
 generatedConfig.images = sourceConfig.images;
 generatedConfig.ai = sourceConfig.ai;
+generatedConfig.queues = sourceConfig.queues;
 delete generatedConfig.r2_buckets;
 generatedConfig.durable_objects = sourceConfig.durable_objects;
 generatedConfig.migrations = sourceConfig.migrations;

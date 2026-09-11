@@ -1,5 +1,6 @@
 import { createSecureToken } from './attendee-auth';
 import { sendEmail, retryFailedDeliveries } from './email-delivery';
+import { queueEventAnnouncement } from './event-announcement-queue';
 
 const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 export async function rememberEventContact(db: D1Database, input: { eventSlug: string; email: string; guestName: string; source: string; consentedAt?: string | null }) {
@@ -35,10 +36,14 @@ export async function processEventAnnouncements(env: Cloudflare.Env, origin: str
     const existing = await env.DB.prepare("SELECT id FROM delivery_events WHERE kind='event_announcement' AND json_extract(payload_json,'$.idempotencyKey')=? LIMIT 1").bind(key).first<{id:string}>();
     if (!existing) {
       const unsubscribe = `${origin}/announcements/unsubscribe?token=${encodeURIComponent(row.unsubscribeToken)}`;
-      await sendEmail({ db:env.DB,kind:'event_announcement',deliveryId:key,recipient:row.email,subject:`${row.title} · ${row.subject}`,
+      await queueEventAnnouncement(env, {
+        deliveryId:key,
+        recipient:row.email,
+        subject:`${row.title} · ${row.subject}`,
         text:`${row.body}\n\n${origin}/event/${row.eventSlug}\n\nYou subscribed to announcements from this event's organiser. Unsubscribe: ${unsubscribe}`,
-        html:`<h2>${escape(row.subject)}</h2><p>${escape(row.body).replaceAll('\n','<br />')}</p><p><a href="${origin}/event/${encodeURIComponent(row.eventSlug)}">${escape(row.title)}</a></p><p>You subscribed to announcements from this event's organiser. <a href="${escape(unsubscribe)}">Unsubscribe</a></p>`,idempotencyKey:key });
-      await new Promise(resolve=>setTimeout(resolve,200));
+        html:`<h2>${escape(row.subject)}</h2><p>${escape(row.body).replaceAll('\n','<br />')}</p><p><a href="${origin}/event/${encodeURIComponent(row.eventSlug)}">${escape(row.title)}</a></p><p>You subscribed to announcements from this event's organiser. <a href="${escape(unsubscribe)}">Unsubscribe</a></p>`,
+        idempotencyKey:key,
+      });
     }
     await env.DB.prepare("UPDATE event_announcement_recipients SET status='queued',delivery_id=(SELECT id FROM delivery_events WHERE kind='event_announcement' AND json_extract(payload_json,'$.idempotencyKey')=? LIMIT 1) WHERE campaign_id=? AND contact_id=?").bind(key,row.campaignId,row.contactId).run();
   }

@@ -1,5 +1,6 @@
 import { runPreviewCleanup } from "../lib/preview-cleanup";
 import { processEventAnnouncements } from "../lib/event-audience";
+import { deliverQueuedEventAnnouncement } from "../lib/event-announcement-queue";
 import { retryEventRemovals } from "../lib/event-removal";
 import { processRegistrations } from "../lib/registrations";
 import { recoverSeevPayments } from "../lib/seevplus";
@@ -147,6 +148,21 @@ const worker = {
       return securityResponse(Response.json({ error: "The service could not complete this request." }, { status: 500 }));
     }
   },
+  async queue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env, _ctx: ExecutionContext): Promise<void> {
+    for (const message of batch.messages) {
+      try {
+        await deliverQueuedEventAnnouncement(env, message.body?.deliveryId ?? "");
+        message.ack();
+      } catch (error) {
+        console.error(JSON.stringify({
+          message: "queued announcement delivery failed",
+          deliveryId: message.body?.deliveryId ?? null,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        message.retry({ delaySeconds: 60 });
+      }
+    }
+  },
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runScheduledOperations(controller, env));
   },
@@ -252,4 +268,4 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
   }
 }
 
-export default worker satisfies ExportedHandler<Cloudflare.Env>;
+export default worker satisfies ExportedHandler<Cloudflare.Env, { deliveryId: string }>;
