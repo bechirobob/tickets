@@ -162,7 +162,7 @@ export async function POST(request: Request) {
 
   const metadata = requestMetadata(request);
   const rateKey = `organizer-ai:${await hashToken(session.accountId)}`;
-  if (!(await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, rateKey))) {
+  if (!(await enforceRateLimit(env.AI_RATE_LIMITER, rateKey))) {
     return Response.json({ error: "Too many assistant requests. Wait a minute and try again." }, { status: 429, headers: { "cache-control": "no-store" } });
   }
 
@@ -202,8 +202,14 @@ export async function POST(request: Request) {
       model: env.OPENAI_MODEL,
       instructions: INSTRUCTIONS,
       prompt: `Authorised BeCore Tickets event context:\n${JSON.stringify(context)}\n\nOrganiser question:\n${message}`,
-      maxOutputTokens: 650,
+      maxOutputTokens: 500,
       safetyIdentifier,
+      gatewayBaseUrl: env.OPENAI_GATEWAY_BASE_URL,
+      gatewayMetadata: {
+        application: "becore-tickets",
+        feature: "organizer-event-desk",
+        user_id: safetyIdentifier,
+      },
     });
 
     await recordAudit(env.DB, {
@@ -219,7 +225,8 @@ export async function POST(request: Request) {
     return Response.json({ answer: result.text, model: result.model }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof OpenAIResponseError) {
-      return Response.json({ error: error.message }, { status: error.status >= 500 ? error.status : 502, headers: { "cache-control": "no-store" } });
+      const status = error.status === 429 ? 429 : error.status >= 500 ? error.status : 502;
+      return Response.json({ error: error.message }, { status, headers: { "cache-control": "no-store" } });
     }
     return Response.json({ error: error instanceof Error ? error.message : "The assistant request could not be completed." }, { status: 400, headers: { "cache-control": "no-store" } });
   }
