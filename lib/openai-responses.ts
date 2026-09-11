@@ -1,5 +1,7 @@
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const DIRECT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-5.6-luna";
+const DEFAULT_MAX_OUTPUT_TOKENS = 450;
+const HARD_MAX_OUTPUT_TOKENS = 800;
 
 type OpenAIOutputContent = {
   type?: string;
@@ -21,6 +23,8 @@ type OpenAIResponsePayload = {
     total_tokens?: number;
   };
 };
+
+type GatewayMetadataValue = string | number | boolean;
 
 export type OpenAITextResult = {
   text: string;
@@ -53,6 +57,32 @@ function outputText(payload: OpenAIResponsePayload): string {
     .trim();
 }
 
+function responsesEndpoint(gatewayBaseUrl?: string) {
+  const configuredBaseUrl = gatewayBaseUrl?.trim();
+  const baseUrl = configuredBaseUrl || DIRECT_OPENAI_BASE_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new OpenAIResponseError(503, "AI gateway configuration is invalid.");
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new OpenAIResponseError(503, "AI gateway configuration is invalid.");
+  }
+
+  const directOpenAI = parsed.hostname === "api.openai.com";
+  const cloudflareGateway = parsed.hostname === "gateway.ai.cloudflare.com";
+  if (!directOpenAI && !cloudflareGateway) {
+    throw new OpenAIResponseError(503, "AI gateway configuration is invalid.");
+  }
+
+  return {
+    url: `${baseUrl.replace(/\/+$/u, "")}/responses`,
+    cloudflareGateway,
+  };
+}
+
 export async function generateOpenAIText(input: {
   apiKey: string;
   model?: string;
@@ -60,27 +90,36 @@ export async function generateOpenAIText(input: {
   prompt: string;
   maxOutputTokens?: number;
   safetyIdentifier?: string;
+  gatewayBaseUrl?: string;
+  gatewayMetadata?: Record<string, GatewayMetadataValue>;
   fetchImpl?: typeof fetch;
 }): Promise<OpenAITextResult> {
   const apiKey = input.apiKey.trim();
   if (!apiKey) throw new OpenAIResponseError(503, "AI is not configured.");
 
+  const endpoint = responsesEndpoint(input.gatewayBaseUrl);
   const fetchImpl = input.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
+  const requestedMaxOutputTokens = input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+  const maxOutputTokens = Math.min(HARD_MAX_OUTPUT_TOKENS, Math.max(80, requestedMaxOutputTokens));
 
   try {
-    const response = await fetchImpl(OPENAI_RESPONSES_URL, {
+    const response = await fetchImpl(endpoint.url, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
+        ...(endpoint.cloudflareGateway ? {
+          "cf-aig-collect-log-payload": "false",
+          ...(input.gatewayMetadata ? { "cf-aig-metadata": JSON.stringify(input.gatewayMetadata) } : {}),
+        } : {}),
       },
       body: JSON.stringify({
         model: input.model?.trim() || DEFAULT_MODEL,
         instructions: input.instructions,
         input: input.prompt,
-        max_output_tokens: Math.min(1200, Math.max(80, input.maxOutputTokens ?? 650)),
+        max_output_tokens: maxOutputTokens,
         store: false,
         ...(input.safetyIdentifier ? { safety_identifier: input.safetyIdentifier } : {}),
       }),

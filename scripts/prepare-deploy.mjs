@@ -1,6 +1,16 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 
+// Production releases own the dedicated AI Gateway configuration. Running this
+// only on main prevents pull-request builds from changing live cost controls.
+if (
+  process.env.GITHUB_REF_NAME === "main"
+  && process.env.CLOUDFLARE_API_TOKEN
+  && process.env.CLOUDFLARE_ACCOUNT_ID
+) {
+  await import("./ensure-ai-gateway.mjs");
+}
+
 const generatedConfigPath = new URL("../dist/server/wrangler.json", import.meta.url);
 const generatedConfig = JSON.parse(await readFile(generatedConfigPath, "utf8"));
 const sourceConfigPath = new URL("../wrangler.jsonc", import.meta.url);
