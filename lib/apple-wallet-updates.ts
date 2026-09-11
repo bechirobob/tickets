@@ -101,8 +101,8 @@ export async function recordAppleWalletPass(
   const now = new Date().toISOString();
   await env.DB.prepare(`
     INSERT INTO apple_wallet_passes (
-      id,ticket_id,attendee_id,event_slug,pass_type_identifier,serial_number,update_tag,created_at,updated_at
-    ) VALUES (?,?,?,?,?,?,1,?,?)
+      id,ticket_id,attendee_id,event_slug,pass_type_identifier,serial_number,update_tag,last_pushed_tag,created_at,updated_at
+    ) VALUES (?,?,?,?,?,?,1,1,?,?)
     ON CONFLICT(id) DO UPDATE SET event_slug=excluded.event_slug
   `).bind(serialNumber, ticket.id, attendeeId, ticket.eventSlug, env.APPLE_WALLET_PASS_TYPE_IDENTIFIER!, serialNumber, now, now).run();
   return true;
@@ -206,20 +206,19 @@ async function removeInvalidPushTokens(env: AppleWalletEnv, tokens: string[]) {
   }
 }
 
-export async function markAppleWalletEventUpdated(env: AppleWalletEnv, eventSlug: string) {
-  if (!appleWalletUpdatesConfigured(env)) return { updated: 0, pushed: 0 };
-  const now = new Date().toISOString();
-  const updated = await env.DB.prepare("UPDATE apple_wallet_passes SET update_tag=update_tag+1,updated_at=? WHERE event_slug=?")
-    .bind(now, eventSlug).run();
-  if (!updated.meta.changes) return { updated: 0, pushed: 0 };
+export async function processAppleWalletUpdatePushes(env: AppleWalletEnv) {
+  if (!appleWalletUpdatesConfigured(env)) return { pending: 0, pushed: 0 };
+  const pending = await env.DB.prepare("SELECT id FROM apple_wallet_passes WHERE update_tag>last_pushed_tag ORDER BY updated_at LIMIT 500")
+    .all<{ id: string }>();
+  if (!pending.results.length) return { pending: 0, pushed: 0 };
   const devices = await env.DB.prepare(`
     SELECT DISTINCT device.push_token AS pushToken
     FROM apple_wallet_passes pass
     JOIN apple_wallet_registrations registration ON registration.pass_id=pass.id
     JOIN apple_wallet_devices device ON device.device_library_id=registration.device_library_id
-    WHERE pass.event_slug=?
+    WHERE pass.update_tag>pass.last_pushed_tag
     LIMIT 1000
-  `).bind(eventSlug).all<{ pushToken: string }>();
+  `).all<{ pushToken: string }>();
   let pushed = 0;
   for (let index = 0; index < devices.results.length; index += 100) {
     const pushTokens = devices.results.slice(index, index + 100).map((item) => item.pushToken);
@@ -237,5 +236,8 @@ export async function markAppleWalletEventUpdated(env: AppleWalletEnv, eventSlug
     await removeInvalidPushTokens(env, Array.isArray(result.invalidPushTokens) ? result.invalidPushTokens : []);
     pushed += pushTokens.length;
   }
-  return { updated: Number(updated.meta.changes), pushed };
+  const ids = pending.results.map((item) => item.id);
+  const placeholders = ids.map(() => "?").join(",");
+  await env.DB.prepare(`UPDATE apple_wallet_passes SET last_pushed_tag=update_tag WHERE id IN (${placeholders})`).bind(...ids).run();
+  return { pending: ids.length, pushed };
 }
