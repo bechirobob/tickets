@@ -9,6 +9,7 @@ declare namespace Cloudflare {
     AI: Ai;
     OPENAI_API_KEY?: string;
     OPENAI_MODEL?: string;
+    OPENAI_GATEWAY_BASE_URL?: string;
     ENVIRONMENT?: string;
     RELEASE_SHA?: string;
     CF_VERSION_METADATA?: { id: string; tag: string; timestamp: string };
@@ -16,6 +17,7 @@ declare namespace Cloudflare {
     PUBLIC_WRITE_RATE_LIMITER: RateLimit;
     PAYMENT_RATE_LIMITER: RateLimit;
     ANALYTICS_RATE_LIMITER: RateLimit;
+    AI_RATE_LIMITER: RateLimit;
     IMAGES: ImagesBinding;
     PAYSTACK_SECRET_KEY: string;
     SEEV_ENABLED?: string;
