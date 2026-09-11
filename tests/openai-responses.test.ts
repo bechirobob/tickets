@@ -34,7 +34,61 @@ describe("OpenAI Responses client", () => {
       store: false,
       safety_identifier: "organizer-safe-id",
       input: "What needs attention?",
+      max_output_tokens: 450,
     });
+  });
+
+  it("routes through Cloudflare AI Gateway with cost-control metadata and a hard output cap", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: "resp_gateway",
+      model: "gpt-5.6-luna",
+      output: [{ type: "message", content: [{ type: "output_text", text: "Gateway response." }] }],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    await generateOpenAIText({
+      apiKey: "sk-test-private",
+      gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/account/tickets-ai/openai/",
+      gatewayMetadata: {
+        application: "becore-tickets",
+        feature: "organizer-event-desk",
+        user_id: "hashed-user",
+      },
+      instructions: "Read-only.",
+      prompt: "Status?",
+      maxOutputTokens: 5_000,
+      fetchImpl: fetchMock as typeof fetch,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("https://gateway.ai.cloudflare.com/v1/account/tickets-ai/openai/responses");
+    expect(init?.headers).toMatchObject({
+      authorization: "Bearer sk-test-private",
+      "content-type": "application/json",
+      "cf-aig-metadata": JSON.stringify({
+        application: "becore-tickets",
+        feature: "organizer-event-desk",
+        user_id: "hashed-user",
+      }),
+    });
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(body.max_output_tokens).toBe(800);
+  });
+
+  it("rejects untrusted AI base URLs before sending the API key", async () => {
+    const fetchMock = vi.fn();
+
+    await expect(generateOpenAIText({
+      apiKey: "sk-never-send-this",
+      gatewayBaseUrl: "https://example.com/openai",
+      instructions: "Read-only.",
+      prompt: "Status?",
+      fetchImpl: fetchMock as typeof fetch,
+    })).rejects.toEqual(expect.objectContaining<Partial<OpenAIResponseError>>({
+      name: "OpenAIResponseError",
+      status: 503,
+      message: "AI gateway configuration is invalid.",
+    }));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not expose provider error bodies or secrets when the provider rejects a request", async () => {
