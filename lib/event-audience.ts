@@ -1,4 +1,5 @@
 import { createSecureToken } from './attendee-auth';
+import { processAppleWalletUpdatePushes } from './apple-wallet-updates';
 import { sendEmail, retryFailedDeliveries } from './email-delivery';
 import { queueEventAnnouncement } from './event-announcement-queue';
 
@@ -13,6 +14,11 @@ export async function rememberEventContact(db: D1Database, input: { eventSlug: s
 
 /** Queue individual deliveries; provider retry and idempotency remain in the shared delivery service. */
 export async function processEventAnnouncements(env: Cloudflare.Env, origin: string) {
+  try {
+    await processAppleWalletUpdatePushes(env);
+  } catch (error) {
+    console.error(JSON.stringify({ message: 'apple wallet update push failed', error: error instanceof Error ? error.message : String(error) }));
+  }
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return;
   // A dedicated invocation keeps audience retries out of the operational cron's query budget.
   const retried = await retryFailedDeliveries(env, 8, 'audience');
