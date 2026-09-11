@@ -5,6 +5,11 @@ RESEND_API_KEY=re_replace_me
 # OpenAI event desk (server-side only; never expose this in browser/mobile code)
 OPENAI_API_KEY=sk_replace_me
 OPENAI_MODEL=gpt-5.6-luna
+# Production requires the Gateway path. Local development may use direct OpenAI.
+AI_COST_CONTROL_REQUIRED=false
+# Optional Cloudflare AI Gateway provider base URL, for example:
+# https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway_id>/openai
+OPENAI_GATEWAY_BASE_URL=
 
 # Optional SeevPlus sandbox integration (server-side only)
 SEEV_ENABLED=false
