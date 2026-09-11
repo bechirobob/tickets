@@ -5,9 +5,15 @@ import {
   registerAppleWalletDevice,
   unregisterAppleWalletDevice,
 } from "@/lib/apple-wallet-updates";
+import { hashToken } from "@/lib/attendee-auth";
+import { enforceRateLimit } from "@/lib/security-controls";
 
 function validIdentifier(value: string, max = 180) {
   return value.length > 0 && value.length <= max && /^[A-Za-z0-9._:-]+$/u.test(value);
+}
+
+async function walletWriteAllowed(env: Cloudflare.Env, deviceLibraryId: string) {
+  return enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `apple-wallet:${await hashToken(deviceLibraryId)}`);
 }
 
 export async function POST(
@@ -18,6 +24,7 @@ export async function POST(
   if (!appleWalletUpdatesConfigured(env)) return new Response(null, { status: 404 });
   const { deviceLibraryId, passTypeIdentifier, serialNumber } = await context.params;
   if (![deviceLibraryId, passTypeIdentifier, serialNumber].every((value) => validIdentifier(value))) return new Response(null, { status: 400 });
+  if (!(await walletWriteAllowed(env, deviceLibraryId))) return new Response(null, { status: 429 });
   if (passTypeIdentifier !== env.APPLE_WALLET_PASS_TYPE_IDENTIFIER) return new Response(null, { status: 404 });
   const pass = await readAppleWalletPass(env, passTypeIdentifier, serialNumber);
   if (!pass) return new Response(null, { status: 404 });
@@ -38,6 +45,7 @@ export async function DELETE(
   if (!appleWalletUpdatesConfigured(env)) return new Response(null, { status: 404 });
   const { deviceLibraryId, passTypeIdentifier, serialNumber } = await context.params;
   if (![deviceLibraryId, passTypeIdentifier, serialNumber].every((value) => validIdentifier(value))) return new Response(null, { status: 400 });
+  if (!(await walletWriteAllowed(env, deviceLibraryId))) return new Response(null, { status: 429 });
   if (passTypeIdentifier !== env.APPLE_WALLET_PASS_TYPE_IDENTIFIER) return new Response(null, { status: 404 });
   const pass = await readAppleWalletPass(env, passTypeIdentifier, serialNumber);
   if (!pass) return new Response(null, { status: 404 });
