@@ -38,7 +38,7 @@ describe("OpenAI Responses client", () => {
     });
   });
 
-  it("routes through Cloudflare AI Gateway with cost-control metadata and a hard output cap", async () => {
+  it("routes through Cloudflare AI Gateway with cost-control metadata, private payloads and a hard output cap", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       id: "resp_gateway",
       model: "gpt-5.6-luna",
@@ -64,6 +64,7 @@ describe("OpenAI Responses client", () => {
     expect(init?.headers).toMatchObject({
       authorization: "Bearer sk-test-private",
       "content-type": "application/json",
+      "cf-aig-collect-log-payload": "false",
       "cf-aig-metadata": JSON.stringify({
         application: "becore-tickets",
         feature: "organizer-event-desk",
