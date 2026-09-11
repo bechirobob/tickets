@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
+import { hasRequiredTicketsSpendLimits } from "../scripts/ai-gateway-policy.mjs";
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 
@@ -31,4 +32,35 @@ test("Tickets automation remains scoped to the Tickets product", async () => {
       );
     }
   }
+});
+
+test("AI Gateway verification checks persisted budget semantics rather than response-generated rule ids", () => {
+  const persisted = {
+    id: "becore-tickets-ai",
+    spend_limits: {
+      enabled: true,
+      rules: [
+        { id: "cloudflare-rule-a", enabled: true, limitType: "cost", limit: 5, window: 86_400, technique: "sliding" },
+        { id: "cloudflare-rule-b", enabled: true, limit_type: "cost", limit: 25, window: 2_592_000, technique: "sliding" },
+        { id: "cloudflare-rule-c", enabled: true, limitType: "cost", limit: 1, window: 86_400, technique: "sliding", metadata: { user_id: { mode: "partition" } } },
+      ],
+    },
+  };
+
+  assert.equal(hasRequiredTicketsSpendLimits(persisted), true);
+  assert.equal(hasRequiredTicketsSpendLimits({ ...persisted, spend_limits: { ...persisted.spend_limits, enabled: false } }), false);
+  assert.equal(hasRequiredTicketsSpendLimits({
+    ...persisted,
+    spend_limits: {
+      ...persisted.spend_limits,
+      rules: persisted.spend_limits.rules.map((rule) => rule.limit === 25 ? { ...rule, limit: 250 } : rule),
+    },
+  }), false);
+  assert.equal(hasRequiredTicketsSpendLimits({
+    ...persisted,
+    spend_limits: {
+      ...persisted.spend_limits,
+      rules: persisted.spend_limits.rules.map((rule) => rule.limit === 1 ? { ...rule, metadata: {} } : rule),
+    },
+  }), false);
 });
