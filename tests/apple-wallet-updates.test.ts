@@ -15,7 +15,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 function walletEnv() {
   return {
-    ...env,
+    DB: env.DB,
     APPLE_WALLET_SIGNER_URL: "https://signer.example/pass",
     APPLE_WALLET_SIGNER_TOKEN: "signer-secret",
     APPLE_WALLET_AUTH_SECRET: "wallet-auth-secret-at-least-32-characters",
