@@ -1,3 +1,10 @@
+CREATE TABLE `apple_wallet_update_clock` (
+  `id` integer PRIMARY KEY NOT NULL CHECK (`id` = 1),
+  `value` integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+INSERT INTO `apple_wallet_update_clock` (`id`,`value`) VALUES (1,1);
+--> statement-breakpoint
 CREATE TABLE `apple_wallet_passes` (
   `id` text PRIMARY KEY NOT NULL,
   `ticket_id` text NOT NULL,
@@ -35,17 +42,20 @@ CREATE INDEX `apple_wallet_registration_pass_idx` ON `apple_wallet_registrations
 --> statement-breakpoint
 CREATE TRIGGER `apple_wallet_event_refresh` AFTER UPDATE OF `title`,`venue`,`area`,`starts_at`,`ends_at`,`event_state`,`schedule_status`,`removed_at` ON `curated_event_records`
 BEGIN
-  UPDATE apple_wallet_passes SET update_tag=update_tag+1,updated_at=CURRENT_TIMESTAMP WHERE event_slug=NEW.slug;
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE event_slug=NEW.slug);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE event_slug=NEW.slug;
 END;
 --> statement-breakpoint
 CREATE TRIGGER `apple_wallet_ticket_refresh` AFTER UPDATE OF `status` ON `tickets`
 WHEN OLD.status <> NEW.status
 BEGIN
-  UPDATE apple_wallet_passes SET update_tag=update_tag+1,updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.id;
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=NEW.id);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.id;
 END;
 --> statement-breakpoint
 CREATE TRIGGER `apple_wallet_assignment_refresh` AFTER UPDATE OF `status` ON `ticket_assignments`
 WHEN OLD.status <> NEW.status
 BEGIN
-  UPDATE apple_wallet_passes SET update_tag=update_tag+1,updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.ticket_id AND attendee_id=OLD.attendee_id;
+  UPDATE apple_wallet_update_clock SET value=value+1 WHERE id=1 AND EXISTS (SELECT 1 FROM apple_wallet_passes WHERE ticket_id=NEW.ticket_id AND attendee_id=OLD.attendee_id);
+  UPDATE apple_wallet_passes SET update_tag=(SELECT value FROM apple_wallet_update_clock WHERE id=1),updated_at=CURRENT_TIMESTAMP WHERE ticket_id=NEW.ticket_id AND attendee_id=OLD.attendee_id;
 END;
