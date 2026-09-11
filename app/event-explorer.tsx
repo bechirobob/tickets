@@ -3,7 +3,7 @@
 import { useDiscoveryState } from "./discovery-state";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, MapPin, Search, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, MapPin, Search, Ticket } from "lucide-react";
 import { useMemo, useSyncExternalStore } from "react";
 import { useCurrentTime } from "./use-current-time";
 import { eventImageLoader, eventImageUrl } from "./event-images";
@@ -63,12 +63,18 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "weekend"} onClick={() => changeWindow("weekend")}>This weekend</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
       </div>
-      {full ? <label className="discovery-date"><CalendarDays size={16} aria-hidden="true" /><span>Pick a date</span><input type="date" disabled={!ready} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label> : null}
-      <label><MapPin size={13} /><span className="sr-only">Area</span><select disabled={!ready} value={area} onChange={(event) => { setArea(event.target.value); setPage(0); }}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
     </div>
-
-    <div className="drop-vibes" role="group" aria-label="Music and mood">
-      {vibes.map((item) => <button key={item.value} type="button" disabled={!ready} aria-pressed={vibe === item.value} onClick={() => { setVibe(item.value); setPage(0); }}><b>{item.label}</b></button>)}
+    <div className="discovery-refinements">
+      {full ? <label className="discovery-date"><CalendarDays size={16} aria-hidden="true" /><span>{selectedDate ? new Intl.DateTimeFormat("en-GH", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Accra" }).format(new Date(`${selectedDate}T00:00:00Z`)) : "Pick a date"}</span><input aria-label="Pick a date" type="date" disabled={!ready} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label> : null}
+      <details className="discovery-filters">
+        <summary>Filters{area !== "All areas" || vibe !== "All" ? ` (${Number(area !== "All areas") + Number(vibe !== "All")})` : ""}<ChevronDown size={16} aria-hidden="true" /></summary>
+        <div className="discovery-filters__body">
+          <label><MapPin size={16} aria-hidden="true" /><span className="sr-only">Area</span><select disabled={!ready} value={area} onChange={(event) => setArea(event.target.value)}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <div className="drop-vibes" role="group" aria-label="Music and mood">
+            {vibes.map((item) => <button key={item.value} type="button" disabled={!ready} aria-pressed={vibe === item.value} onClick={() => setVibe(item.value)}><b>{item.label}</b></button>)}
+          </div>
+        </div>
+      </details>
     </div>
 
     <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>

@@ -23,6 +23,12 @@ test("date selection survives an event visit and clearing restores the catalogue
   await expect(page.locator('.drop-card').first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("discovery-dates.png"), fullPage: true });
+  await page.locator(".discovery-filters summary").click();
+  await expect(page.getByLabel("Area", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Amapiano", exact: true }).click();
+  await expect(page.locator(".discovery-filters summary")).toContainText("Filters (1)");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: info.outputPath("discovery-filters-expanded.png"), fullPage: true });
 });
 
 test("an active night leads with its pass and keeps the Room within reach", async ({ page }, info) => {
