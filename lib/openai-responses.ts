@@ -110,9 +110,10 @@ export async function generateOpenAIText(input: {
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
-        ...(endpoint.cloudflareGateway && input.gatewayMetadata
-          ? { "cf-aig-metadata": JSON.stringify(input.gatewayMetadata) }
-          : {}),
+        ...(endpoint.cloudflareGateway ? {
+          "cf-aig-collect-log-payload": "false",
+          ...(input.gatewayMetadata ? { "cf-aig-metadata": JSON.stringify(input.gatewayMetadata) } : {}),
+        } : {}),
       },
       body: JSON.stringify({
         model: input.model?.trim() || DEFAULT_MODEL,
