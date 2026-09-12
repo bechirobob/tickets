@@ -907,13 +907,17 @@ test("launch inventory is database-backed and public defects stay closed", async
 });
 
 test("public browsing is edge-cached without caching private customer journeys", async () => {
-  const worker = await readFile(workerUrl, "utf8");
-  assert.match(worker, /path === "\/" \|\| path === "\/about" \|\| path === "\/events" \|\| path === "\/hosts"/u);
-  assert.match(worker, /\^\\\/event\\\//u);
-  assert.match(worker, /headers\.delete\("set-cookie"\)/u);
+  const [worker, cache] = await Promise.all([
+    readFile(workerUrl, "utf8"),
+    readFile(new URL("../worker/public-page-cache.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(cache, /path === "\/" \|\| path === "\/about" \|\| path === "\/events" \|\| path === "\/hosts"/u);
+  assert.match(cache, /\^\\\/event\\\//u);
+  assert.match(cache, /headers\.delete\("set-cookie"\)/u);
   assert.match(worker, /ctx\.waitUntil\(edgeCache\.put\(cacheKey, secured\.clone\(\)\)\)/u);
-  assert.match(worker, /x-becore-edge-cache/u);
-  assert.doesNotMatch(worker, /eligible[^;]+(?:checkout|payment|tickets|my-nights|room)/su);
+  assert.match(worker, /publicPageCacheKey\(request, url, env\.CF_VERSION_METADATA\?\.id \?\? env\.RELEASE_SHA\)/u);
+  assert.match(cache, /x-becore-edge-cache/u);
+  assert.doesNotMatch(cache, /eligible[^;]+(?:checkout|payment|tickets|my-nights|room)/su);
 });
 
 test("homepage footer stays useful without duplicating the customer dock", async () => {

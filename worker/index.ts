@@ -4,6 +4,7 @@ import { deliverQueuedEventAnnouncement } from "../lib/event-announcement-queue"
 import { retryEventRemovals } from "../lib/event-removal";
 import { processRegistrations } from "../lib/registrations";
 import { recoverSeevPayments } from "../lib/seevplus";
+import { publicPageCacheKey, publicCacheResponse } from "./public-page-cache";
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
@@ -18,7 +19,6 @@ import { purgeExpiredFlashes } from "../lib/flashes";
 import { recoverAbandonedPayments, releaseWaitlistOffers } from "../lib/sales-recovery";
 export { TheRoom } from "./the-room";
 
-const PUBLIC_PAGE_CACHE_SECONDS = 45;
 const edgeCache = (caches as CacheStorage & { readonly default: Cache }).default;
 
 function requestNonce(): string {
@@ -30,23 +30,6 @@ function requestNonce(): string {
 
 function contentSecurityPolicy(nonce: string): string {
   return `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; media-src 'self' blob:; worker-src 'self' blob:`;
-}
-
-function publicPageCacheKey(request: Request, url: URL): Request | null {
-  if (request.method !== "GET" || url.search || !request.headers.get("accept")?.includes("text/html")) return null;
-  const path = url.pathname;
-  const eligible = path === "/" || path === "/about" || path === "/events" || path === "/hosts"
-    || /^\/event\/[a-z0-9-]{1,80}$/u.test(path)
-    || /^\/hosts\/[a-z0-9-]{1,80}$/u.test(path);
-  return eligible ? new Request(`${url.origin}${path}`, { method: "GET", headers: { accept: "text/html" } }) : null;
-}
-
-function publicCacheResponse(response: Response, state: "HIT" | "MISS"): Response {
-  const headers = new Headers(response.headers);
-  headers.delete("set-cookie");
-  headers.set("cache-control", `public, max-age=15, s-maxage=${PUBLIC_PAGE_CACHE_SECONDS}`);
-  headers.set("x-becore-edge-cache", state);
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function supportedImageFormat(format: string): "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif" {
@@ -111,7 +94,7 @@ const worker = {
     const url = new URL(request.url);
     const nonce = requestNonce();
     try {
-      const cacheKey = publicPageCacheKey(request, url);
+      const cacheKey = publicPageCacheKey(request, url, env.CF_VERSION_METADATA?.id ?? env.RELEASE_SHA);
       if (cacheKey) {
         const cached = await edgeCache.match(cacheKey);
         if (cached) return securityResponse(publicCacheResponse(cached, "HIT"));
