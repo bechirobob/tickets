@@ -3,8 +3,9 @@
 import { useDiscoveryState } from "./discovery-state";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, MapPin, Search, Ticket } from "lucide-react";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, MapPin, Search, Ticket } from "lucide-react";
+import { useMemo, useSyncExternalStore } from "react";
+import { useCurrentTime } from "./use-current-time";
 import { eventImageLoader, eventImageUrl } from "./event-images";
 import type { CustomerEvent } from "../lib/customer-screen";
 import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
@@ -31,16 +32,18 @@ const vibes: Array<{ value: VibeFilter; label: string }> = [
 export default function EventExplorer({ events, full = false, featuredSlug }: { events: CustomerEvent[]; full?: boolean; featuredSlug?: string }) {
   // SSR can appear before React attaches handlers. Do not accept and lose input.
   const ready = useSyncExternalStore(subscribeToClient, clientReady, serverReady);
-  const { windowFilter, area, vibe, page, search, setWindowFilter, setArea, setVibe, setPage, setSearch } = useDiscoveryState(full);
-  const [now] = useState(() => Date.now());
+  const { windowFilter, selectedDate, area, vibe, page, search, setWindowFilter, setSelectedDate, setArea, setVibe, setPage, setSearch } = useDiscoveryState(full);
+  const now = useCurrentTime();
   const pageSize = full ? 12 : 6;
   const areas = useMemo(() => ["All areas", ...new Set(events.map((event) => event.area))], [events]);
-  const visible = useMemo(() => events.filter((event) => matchesEventWindow(event, windowFilter, now)
+  const visible = useMemo(() => events.filter((event) => matchesEventWindow(event, windowFilter, now, selectedDate)
     && (area === "All areas" || event.area === area)
     && (vibe === "All" || event.vibe === vibe)
-    && `${event.title} ${event.venue} ${event.area} ${event.lineup}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())), [area, events, now, search, vibe, windowFilter]);
+    && `${event.title} ${event.venue} ${event.area} ${event.lineup}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    .sort((a, b) => (a.startsAt ? Date.parse(a.startsAt) : Infinity) - (b.startsAt ? Date.parse(b.startsAt) : Infinity)), [area, events, now, search, selectedDate, vibe, windowFilter]);
   const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
-  const pageEvents = visible.slice(page * pageSize, page * pageSize + pageSize);
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageEvents = visible.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
 
   function changeWindow(value: WindowFilter) {
     setWindowFilter(value);
@@ -56,19 +59,27 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
     <div className="drop-controls" aria-label="Filter The Drop">
       <div role="group" aria-label="When">
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "tonight"} onClick={() => changeWindow("tonight")}>Tonight</button>
+        <button type="button" disabled={!ready} aria-pressed={windowFilter === "tomorrow"} onClick={() => changeWindow("tomorrow")}>Tomorrow</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "weekend"} onClick={() => changeWindow("weekend")}>This weekend</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
       </div>
-      <label><MapPin size={13} /><span className="sr-only">Area</span><select disabled={!ready} value={area} onChange={(event) => { setArea(event.target.value); setPage(0); }}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
     </div>
-
-    <div className="drop-vibes" role="group" aria-label="Music and mood">
-      {vibes.map((item) => <button key={item.value} type="button" disabled={!ready} aria-pressed={vibe === item.value} onClick={() => { setVibe(item.value); setPage(0); }}><b>{item.label}</b></button>)}
+    <div className="discovery-refinements">
+      {full ? <label className="discovery-date"><CalendarDays size={16} aria-hidden="true" /><span>{selectedDate ? new Intl.DateTimeFormat("en-GH", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Accra" }).format(new Date(`${selectedDate}T00:00:00Z`)) : "Pick a date"}</span><input aria-label="Pick a date" type="date" disabled={!ready} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label> : null}
+      <details className="discovery-filters">
+        <summary>Filters{area !== "All areas" || vibe !== "All" ? ` (${Number(area !== "All areas") + Number(vibe !== "All")})` : ""}<ChevronDown size={16} aria-hidden="true" /></summary>
+        <div className="discovery-filters__body">
+          <label><MapPin size={16} aria-hidden="true" /><span className="sr-only">Area</span><select aria-label="Area" disabled={!ready} value={area} onChange={(event) => setArea(event.target.value)}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <div className="drop-vibes" role="group" aria-label="Music and mood">
+            {vibes.map((item) => <button key={item.value} type="button" disabled={!ready} aria-pressed={vibe === item.value} onClick={() => setVibe(item.value)}><b>{item.label}</b></button>)}
+          </div>
+        </div>
+      </details>
     </div>
 
     <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
 
-    {pageEvents.length ? <div key={`${windowFilter}:${area}:${vibe}:${page}:${search}`} className={`drop-grid discovery-grid${full ? " drop-grid--full" : ""}`} data-count={pageEvents.length}>
+    {pageEvents.length ? <div key={`${windowFilter}:${selectedDate}:${area}:${vibe}:${currentPage}:${search}`} className={`drop-grid discovery-grid${full ? " drop-grid--full" : ""}`} data-count={pageEvents.length}>
       {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-colour-scheme={eventColourScheme(event)} style={eventPresentationStyle(event)} data-featured={event.slug === featuredSlug ? "true" : undefined}>
         <PosterLink href={`/event/${event.slug}`} className="drop-card__image">
           <div className="drop-card__artwork-wash" aria-hidden="true" style={{ backgroundImage: `url(${JSON.stringify(eventImageUrl(event.image, 96, 25))})` }} />
@@ -87,6 +98,6 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
       </article>)}
     </div> : <div className="drop-no-match"><CalendarDays size={22} /><h3>Even Accra has a quiet corner.</h3><p>No nights match just yet. Try another date, area or music style.</p><button type="button" onClick={() => { setWindowFilter("next"); setArea("All areas"); setVibe("All"); setSearch(""); setPage(0); }}>Clear filters</button></div>}
 
-    {full && pageCount > 1 ? <nav className="drop-pagination" aria-label="Event pages"><button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}><ArrowLeft size={15} /> Previous</button><span>{page + 1} of {pageCount}</span><button type="button" disabled={page >= pageCount - 1} onClick={() => setPage((value) => value + 1)}>Next <ArrowRight size={15} /></button></nav> : null}
+    {full && pageCount > 1 ? <nav className="drop-pagination" aria-label="Event pages"><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><ArrowLeft size={15} /> Previous</button><span>{currentPage + 1} of {pageCount}</span><button type="button" disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)}>Next <ArrowRight size={15} /></button></nav> : null}
   </div>;
 }

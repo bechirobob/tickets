@@ -112,3 +112,8 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .discovery-grid .drop-card__body { display: flex; flex-direction: column; flex: 1; grid-row: auto; }
   .discovery-grid .drop-card__body > a:last-child { margin-top: auto; }
 }
+
+/* Keep the first poster within reach; secondary filters expand in normal flow. */
+.discovery-directory .directory-intro { grid-template-columns: 1fr; gap: 12px; padding-top: 24px; padding-bottom: 18px; }
+.discovery-directory .directory-intro h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.12; }
+.discovery-directory .discovery-search { margin-bottom: 12px; }

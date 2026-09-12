@@ -29,7 +29,9 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { requestJson, requestErrorMessage, RequestError } from "../../../lib/client-request";
+import { useCurrentTime } from "../../use-current-time";
 import QrPass from "../../tickets/qr-pass";
 import OfflineTicketSaver from "../../offline-ticket-saver";
 import { clearOfflineTickets, reconcileOfflineTickets } from "../../../lib/offline-tickets";
@@ -157,68 +159,40 @@ export default function NightHub({ event }: { event: EventSummary }) {
   );
   const [locked, setLocked] = useState(false);
   const [offlineOwnerId, setOfflineOwnerId] = useState("");
-  const [now, setNow] = useState(() => Date.now());
+  const now = useCurrentTime();
+  const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const saveBusy = useRef(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const options = { cache: "no-store" as const, signal: controller.signal };
     Promise.all([
-      fetch(`/api/customer/experience/${encodeURIComponent(event.slug)}`, {
-        cache: "no-store",
-      }),
-      fetch("/api/customer/tickets", { method: "POST", cache: "no-store" }),
-      fetch("/api/customer/wallet/config", { cache: "no-store" }),
-    ])
-      .then(
-        async ([
-          experienceResponse,
-          ticketsResponse,
-          walletResponse,
-        ]) => {
-          if (experienceResponse.status === 401) {
-            clearOfflineTickets();
-            setLocked(true);
-            return;
-          }
-          const experienceData =
-            (await experienceResponse.json()) as Experience;
-          const ticketsData = (await ticketsResponse.json()) as {
-            orders?: TicketOrder[];
-            attendee?: { attendeeId: string };
-          };
-          if (ticketsResponse.status === 401) clearOfflineTickets();
-          if (ticketsResponse.ok && ticketsData.attendee) {
-            setOfflineOwnerId(ticketsData.attendee.attendeeId);
-            reconcileOfflineTickets(ticketsData.attendee.attendeeId, (ticketsData.orders ?? []).flatMap((order) => order.tickets.filter((ticket) => ticket.status === "issued" && ticket.qrPayload).map((ticket) => ticket.id)));
-          }
-          setExperience(experienceData);
-          setAnswers(
-            Object.fromEntries(
-              experienceData.questions.map((question) => [
-                question.id,
-                question.answer,
-              ]),
-            ),
-          );
-          setOrders(
-            (ticketsData.orders ?? []).filter(
-              (order) => order.eventSlug === event.slug,
-            ),
-          );
-          if (walletResponse.ok)
-            setWallet(
-              (await walletResponse.json()) as {
-                apple: boolean;
-                google: boolean;
-              },
-            );
-        },
-      )
-      .catch(() => setLocked(true));
-  }, [event.slug]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
+      requestJson<Experience>(`/api/customer/experience/${encodeURIComponent(event.slug)}`, options),
+      requestJson<{ orders: TicketOrder[]; attendee: { attendeeId: string } }>("/api/customer/tickets", { ...options, method: "POST" }),
+      // An optional Wallet provider outage must not hide the guest's entry pass.
+      requestJson<{ apple: boolean; google: boolean }>("/api/customer/wallet/config", options)
+        .catch(() => ({ apple: false, google: false })),
+    ]).then(([experienceData, ticketsData, walletData]) => {
+      if (controller.signal.aborted) return;
+      if (!Array.isArray(experienceData.questions) || !Array.isArray(experienceData.updates) || !Array.isArray(ticketsData.orders) || !ticketsData.attendee?.attendeeId) {
+        throw new Error("We couldn't load your night. Try again.");
+      }
+      reconcileOfflineTickets(ticketsData.attendee.attendeeId, ticketsData.orders.flatMap((order) => order.tickets.filter((ticket) => ticket.status === "issued" && ticket.qrPayload).map((ticket) => ticket.id)));
+      setOfflineOwnerId(ticketsData.attendee.attendeeId);
+      setExperience(experienceData);
+      setAnswers(Object.fromEntries(experienceData.questions.map((question) => [question.id, question.answer])));
+      setOrders(ticketsData.orders.filter((order) => order.eventSlug === event.slug));
+      setWallet(walletData);
+    }).catch((error) => {
+      if (controller.signal.aborted) return;
+      if (error instanceof RequestError && [401, 403].includes(error.status ?? 0)) {
+        if (error.status === 401) clearOfflineTickets();
+        setLocked(true);
+      } else setLoadError("We couldn't load your night. Check your connection and try again.");
+    });
+    return () => controller.abort();
+  }, [event.slug, retry]);
 
   const tickets = useMemo(
     () => orders.flatMap((order) => order.tickets),
@@ -243,7 +217,8 @@ export default function NightHub({ event }: { event: EventSummary }) {
     keepPosted?: boolean;
     includeAnswers?: boolean;
   }) {
-    if (!experience || saving) return;
+    if (!experience || saveBusy.current) return;
+    saveBusy.current = true;
     setSaving(true);
     setNotice("");
     const body = {
@@ -257,45 +232,31 @@ export default function NightHub({ event }: { event: EventSummary }) {
           }))
         : [],
     };
-    const response = await fetch(
-      `/api/customer/experience/${encodeURIComponent(event.slug)}`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    );
-    const data = (await response.json()) as {
-      error?: string;
-      preference?: Experience["preference"];
-    };
-    if (response.ok) {
+    try {
+      const data = await requestJson<{ preference?: Experience["preference"] }>(
+        `/api/customer/experience/${encodeURIComponent(event.slug)}`,
+        { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+      );
       setExperience((current) => {
         if (!current) return current;
         const preference = data.preference ?? current.preference;
-        const visibilityChange =
-          Number(preference.attendeeVisible) -
-          Number(current.preference.attendeeVisible);
-        return {
-          ...current,
-          preference,
-          visibleAttendees: Math.max(
-            0,
-            current.visibleAttendees + visibilityChange,
-          ),
-        };
+        const visibilityChange = Number(preference.attendeeVisible) - Number(current.preference.attendeeVisible);
+        return { ...current, preference, visibleAttendees: Math.max(0, current.visibleAttendees + visibilityChange) };
       });
-      setNotice(
-        input.includeAnswers
-          ? "Saved. The Host can stop guessing now."
-          : "Preference saved. Boundaries looking excellent.",
-      );
-    } else
-      setNotice(
-        data.error ?? "That change refused to cooperate. Try once more.",
-      );
-    setSaving(false);
+      setNotice(input.includeAnswers ? "Saved. The Host can stop guessing now." : "Preference saved.");
+    } catch (error) {
+      setNotice(requestErrorMessage(error));
+    } finally {
+      saveBusy.current = false;
+      setSaving(false);
+    }
   }
+
+  if (loadError) return <main className="night-hub night-hub--locked"><section>
+    <h1>Your night is taking a moment.</h1><p role="alert">{loadError}</p>
+    <button className="night-hub__retry" type="button" onClick={() => { setLoadError(""); setRetry((value) => value + 1); }}>Try again</button>
+    <Link href="/my-nights">Back to My Nights</Link>
+  </section></main>;
 
   if (locked)
     return (
@@ -304,8 +265,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           <LockKeyhole size={30} />
           <h1>This night needs its ticket.</h1>
           <p>
-            Use My Nights to recover every paid purchase on your checkout email.
-            Use your booking email. We’ll send you a link.
+            Use your booking or registration email in My Nights to recover access.
           </p>
           <Link href="/my-nights">Bring back My Nights</Link>
         </section>
@@ -354,7 +314,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </span>
         </div>
         <p className="night-hub__countdown">
-          {!event.startsAt ? "Coming soon" : hoursUntil > 24
+          {["cancelled", "postponed"].includes(event.eventState) ? (event.eventState === "cancelled" ? "Event cancelled" : "New date coming") : event.endsAt && Date.parse(event.endsAt) <= now ? "That was a night." : !event.startsAt ? "Coming soon" : hoursUntil > 24
             ? `${Math.ceil(hoursUntil / 24)} days to go`
             : hoursUntil > 0
               ? `${hoursUntil} hours to go`

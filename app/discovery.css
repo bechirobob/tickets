@@ -147,6 +147,21 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-search { background: #3b2a3e; border-color: #9b829f; color: #d0c5d0; }
 .discovery-search input { color: #f4f1ea; }
 .discovery-search input::placeholder { color: #b8b8ac; }
+.discovery-explorer .drop-controls { flex-wrap: wrap; }
+.discovery-explorer .drop-controls > div { flex: 1 0 100%; gap: 8px 24px; }
+.discovery-refinements { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 4px 16px; color: #f4f1ea; }
+.discovery-date { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 16px; }
+.discovery-date input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; opacity: 0; cursor: pointer; }
+.discovery-date:focus-within { outline: 2px solid var(--focus-ring, #666); outline-offset: 2px; }
+.discovery-filters { min-width: 0; max-width: 100%; }
+.discovery-filters[open] { flex-basis: 100%; }
+.discovery-filters summary { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; font-size: 14px; list-style: none; }
+.discovery-filters summary::-webkit-details-marker { display: none; }
+.discovery-filters[open] summary > svg { transform: rotate(180deg); }
+.discovery-filters summary:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 2px; }
+.discovery-filters__body { padding: 8px 0; border-top: 1px solid #645269; }
+.discovery-filters__body > label { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.discovery-filters select { min-width: 0; width: 100%; min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 16px; }
 .discovery-search:focus-within { outline-color: var(--focus-ring, #666); }
 .discovery-home .room-product-scene { position: relative; isolation: isolate; border-top: 0; background: #252038; }
 .room-product-scene__atmosphere { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .72; z-index: -2; pointer-events: none; }
