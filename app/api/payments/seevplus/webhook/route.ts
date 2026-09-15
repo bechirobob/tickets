@@ -9,7 +9,7 @@ export async function POST(request: Request) {
 
   const eventId = request.headers.get("x-seev-event-id") ?? "";
   const headerEventType = request.headers.get("x-seev-event-type") ?? "";
-  if (!/^[A-Za-z0-9._:-]{1,200}$/u.test(eventId)) return new Response("Invalid event id", { status: 400 });
+  if (eventId && !/^[A-Za-z0-9._:-]{1,200}$/u.test(eventId)) return new Response("Invalid event id", { status: 400 });
 
   let payload: { event?: string; env?: string; data?: { transaction?: { reference?: string; env?: string } } };
   try { payload = JSON.parse(raw); } catch { return new Response("Invalid payload", { status: 400 }); }
@@ -26,8 +26,9 @@ export async function POST(request: Request) {
 
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
   const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const replayKey = eventId ? `seevplus:${eventId}` : `seevplus:sha256:${hash}`;
   const recorded = await env.DB.prepare(`INSERT OR IGNORE INTO payment_events (id, event_type, reference, received_at, payload_hash) VALUES (?, ?, ?, ?, ?)`)
-    .bind(`seevplus:${eventId}`, `seevplus.${payload.event}`, order.reference, new Date().toISOString(), hash).run();
+    .bind(replayKey, `seevplus.${payload.event}`, order.reference, new Date().toISOString(), hash).run();
   if (!recorded.meta.changes) return new Response("OK");
 
   try {
