@@ -36,8 +36,13 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const [announcementsOptIn, setAnnouncementsOptIn] = useState(false);
   const [acceptedPolicies, setAcceptedPolicies] = useState(false);
   const paying = useRef(false);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const emailInput = useRef<HTMLInputElement>(null);
+  const phoneInput = useRef<HTMLInputElement>(null);
+  const paymentChoice = useRef<HTMLInputElement>(null);
+  const policyChoice = useRef<HTMLInputElement>(null);
   const paymentAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
-  const paymentProvider = paymentMethod === "mobile_money" ? momoProvider : "paystack";
+  const paymentProvider = paymentMethod === "card" ? "paystack" : momoProvider;
   const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
   const ticketTotalMinor = quantity * selectedTier.priceMinor;
   const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
@@ -60,14 +65,28 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
     if (paying.current || (!paystackEnabled && !seevEnabled)) return;
     if (!paymentMethod) {
       setMessage("Choose a payment method before continuing.");
+      paymentChoice.current?.focus();
       return;
     }
-    if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim()) || phone.trim().length < 7) {
-      setMessage("Enter your name, a valid email and a reachable phone number.");
+    if (!fullName.trim()) {
+      setMessage("Add your full name so we know who the ticket belongs to.");
+      nameInput.current?.focus();
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim())) {
+      setMessage("Add a valid email for your ticket and receipt.");
+      emailInput.current?.focus();
+      return;
+    }
+    const normalizedPhone = phone.replace(/[^\d+]/gu, "");
+    if (normalizedPhone.length < 7 || normalizedPhone.length > 40) {
+      setMessage("Add a reachable phone number before continuing.");
+      phoneInput.current?.focus();
       return;
     }
     if (!acceptedPolicies) {
-      setMessage("Accept the ticket and refund terms before payment.");
+      setMessage("Tick the ticket terms, refund rules and privacy checkbox to continue.");
+      policyChoice.current?.focus();
       return;
     }
     setIsPaying(true);
@@ -166,9 +185,9 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <span>2</span><div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
           </div>
           <div className="form-grid">
-            <label>Full name<input type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
-            <label>Phone number<input type="tel" placeholder="024 000 0000" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-            <label className="full-field">Email address<input type="email" placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+            <label>Full name<input ref={nameInput} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); }} /></label>
+            <label>Phone number<input ref={phoneInput} type="tel" placeholder="024 000 0000" autoComplete="tel" value={phone} onChange={(event) => { setPhone(event.target.value); setMessage(""); }} /></label>
+            <label className="full-field">Email address<input ref={emailInput} type="email" placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); }} /></label>
           </div>
 
           <div className="checkout-step checkout-step--second">
@@ -178,7 +197,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <legend className="sr-only">Choose payment method</legend>
             <section className={`payment-option${paymentMethod === "mobile_money" ? " selected" : ""}`}>
               <label className="payment-method-choice">
-                <input type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={() => { setPaymentMethod("mobile_money"); setMessage(""); }} />
+                <input ref={paymentChoice} type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={() => { setPaymentMethod("mobile_money"); setMessage(""); }} />
                 <Smartphone size={20} aria-hidden="true" /><span>Mobile Money<small>MTN MoMo, Telecel Cash or AT Money</small></span>
               </label>
               {paymentMethod === "mobile_money" ? <div className="payment-method-detail">
@@ -208,7 +227,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             </section> : null}
           </fieldset>
           <label className="checkout-consent"><input type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label>
-          <label className="checkout-consent"><input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
+          <label className="checkout-consent"><input ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
           </>}
         </section>
 
@@ -222,8 +241,8 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <ActionButton type="button" className="pay-button" aria-busy={isPaying} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={isPaying || !acceptedPolicies || !paymentMethod || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
-          {message && <p className="payment-message" role="status">{message}</p>}
+          <ActionButton type="button" className="pay-button" aria-busy={isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
+          <p id="checkout-payment-message" className="payment-message" role="status" aria-atomic="true">{message}</p>
           {paystackEnabled || seevEnabled ? <p className="secure-note"><ShieldCheck size={15} /> {paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.</p> : null}
         </aside>
       </div>

@@ -3,24 +3,44 @@ import AxeBuilder from "@axe-core/playwright";
 
 test("SeevPlus stays compact and sends the selected provider without exposing credentials", async ({ page }) => {
   test.skip(!test.info().config.configFile?.endsWith("playwright.seev.config.ts"), "Requires the isolated SeevPlus UI configuration.");
+  let paymentRequests = 0;
+  await page.route("**/api/payments/initialize", async (route) => {
+    paymentRequests += 1;
+    expect(route.request().postDataJSON()).toMatchObject({ paymentProvider: "seevplus", paymentMethod: "mobile_money", acceptedPolicies: true });
+    expect(route.request().headers()["idempotency-key"]).toBeTruthy();
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Test payment stopped before contacting SeevPlus." }) });
+  });
   await page.goto("/checkout/after-dark-osu");
+  // Filling buyer details alone must produce guidance, not a silently disabled button.
+  await page.getByLabel("Full name").fill("Test Buyer");
+  await page.getByLabel("Phone number").fill("0240000000");
+  await page.getByLabel("Email address").fill("test@example.com");
+  await page.getByRole("button", { name: "Choose a payment method", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Choose a payment method before continuing.");
+  await expect(page.getByRole("radio", { name: "Mobile Money", exact: false })).toBeFocused();
+  expect(paymentRequests).toBe(0);
   await page.getByRole("radio", { name: "Mobile Money", exact: false }).check();
   const chooser = page.getByRole("group", { name: "Pay through" });
   await expect(chooser).toBeVisible();
   await chooser.getByRole("radio", { name: "SeevPlus", exact: true }).check();
   await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toHaveCount(0);
   await expect(page.getByText("Choose your network and approve payment on SeevPlus.")).toBeVisible();
-  await page.getByLabel("Full name").fill("Test Buyer");
-  await page.getByLabel("Phone number").fill("0240000000");
-  await page.getByLabel("Email address").fill("test@example.com");
+  await page.getByRole("button", { name: /Pay with MoMo/ }).click();
+  await expect(page.getByRole("status")).toHaveText("Tick the ticket terms, refund rules and privacy checkbox to continue.");
+  await expect(page.getByRole("checkbox", { name: /I accept the ticket terms/ })).toBeFocused();
+  expect(paymentRequests).toBe(0);
   await page.getByRole("checkbox", { name: /I accept the ticket terms/ }).check();
-  await page.route("**/api/payments/initialize", async (route) => {
-    expect(route.request().postDataJSON()).toMatchObject({ paymentProvider: "seevplus", paymentMethod: "mobile_money" });
-    expect(route.request().headers()["idempotency-key"]).toBeTruthy();
-    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Test payment stopped before contacting SeevPlus." }) });
-  });
+  await page.getByLabel("Email address").fill("invalid-email");
+  await page.getByRole("button", { name: /Pay with MoMo/ }).click();
+  await expect(page.getByRole("status")).toHaveText("Add a valid email for your ticket and receipt.");
+  await expect(page.getByLabel("Email address")).toBeFocused();
+  expect(paymentRequests).toBe(0);
+  await page.getByLabel("Email address").fill("test@example.com");
   await page.getByRole("button", { name: /Pay with MoMo/ }).click();
   await expect(page.getByRole("status")).toHaveText("Test payment stopped before contacting SeevPlus.");
+  expect(paymentRequests).toBe(1);
+  await expect(page.getByLabel("Full name")).toHaveValue("Test Buyer");
+  await expect(page.getByLabel("Email address")).toHaveValue("test@example.com");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   expect(await page.content()).not.toContain("ui-test-only");
   const a11y = await new AxeBuilder({ page }).include(".checkout-provider-choice").analyze();
