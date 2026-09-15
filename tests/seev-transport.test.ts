@@ -82,7 +82,7 @@ describe("SeeV Worker TLS fallback", () => {
     expect(response.status).toBe(201);
     expect(first).toHaveBeenCalledTimes(1);
     expect(fallback).toHaveBeenCalledExactlyOnceWith(api, options);
-    expect(socket.open).toHaveBeenCalledExactlyOnceWith({ hostname: "api.seevplus.com", port: 443 }, { secureTransport: "on" });
+    expect(socket.open).toHaveBeenCalledExactlyOnceWith({ hostname: "api.seevplus.com", port: 443 }, { secureTransport: "on", allowHalfOpen: false });
     const sent = new TextDecoder().decode(socket.written[0]);
     expect(sent).toContain("idempotency-key: original-order\r\n");
     expect(sent).toContain(`Content-Length: ${encode(options.body).length}\r\n`);
