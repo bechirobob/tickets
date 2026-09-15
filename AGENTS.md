@@ -10,3 +10,14 @@ Verify the actual release configuration and exact commit. State incomplete
 customer journeys and external account dependencies plainly; a successful build
 alone does not establish store or product readiness. Use the existing shared
 event presentation rules for current and future events.
+
+## Cloudflare access
+
+Use the existing GitHub Actions `CLOUDFLARE_API_TOKEN` to manage this project's
+Cloudflare resources through the API or Wrangler. The deployment workflow is the
+verified access path; the token need not be available in the local shell.
+Do not send the owner through the Cloudflare cloud-browser security challenge:
+it repeatedly blocks this environment. Inspect the existing workflow and API
+permissions first. Keep tokens and payment credentials in secret stores, never
+source, logs, artifacts, or chat. Missing new provider credentials are separate
+from missing Cloudflare access.
