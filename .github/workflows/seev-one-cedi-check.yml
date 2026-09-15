@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
-      - name: Prepare or inspect the owner-authorized one-cedi check
+      - name: Inspect the owner-authorized one-cedi checkout handoff
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CHECK_MODE: ${{ inputs.operation || 'status' }}
