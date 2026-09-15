@@ -39,8 +39,8 @@ async function socketProbe(host='api.seevplus.com'){
  }finally{clearTimeout(timer);await s.close().catch(()=>{});}
 }
 async function invalidCertificateProbe(host){
- try {await socketProbe(host);return {host,certificateRejected:false};}
- catch(error){return {host,certificateRejected:true,error:String(error)};}
+ try {await socketProbe(host);return {host,connectionRejected:false};}
+ catch(error){return {host,connectionRejected:true,error:String(error)};}
 }
 async function candidateProbe(method){
  const response=await requestSeev(api+(method==='GET'?'/PAY-transport-probe':''), method==='POST'?{method:'POST',headers:{'content-type':'application/json','idempotency-key':'transport-probe-no-credentials'},body:'{}'}:{});
