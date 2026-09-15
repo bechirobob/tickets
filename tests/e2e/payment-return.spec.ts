@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 
+// These cases simulate provider timing through intercepted responses. WebKit
+// service workers otherwise take over after the first poll and bypass routing.
+test.use({ serviceWorkers: "block" });
+
 const reference = "BCT-RETURN-REGRESSION";
 const claim = "browser-regression-claim-with-more-than-forty-characters";
 const returnPath = `/payment/return?reference=${reference}&claim=${claim}`;
