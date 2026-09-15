@@ -24,19 +24,23 @@ async function probe(method){
  const body=await res.text();
  return {transport:'fetch',method,status:res.status,contentType:res.headers.get('content-type'),server:res.headers.get('server'),ray:res.headers.get('cf-ray'),body:body.slice(0,350)};
 }
-async function socketProbe(){
- const s=connect({hostname:'api.seevplus.com',port:443},{secureTransport:'on'});
+async function socketProbe(host='api.seevplus.com'){
+ const s=connect({hostname:host,port:443},{secureTransport:'on'});
  let timer;
  try{
   return await Promise.race([(async()=>{
    await s.opened;
    const writer=s.writable.getWriter();
-   await writer.write(new TextEncoder().encode('GET /api/v1/developer/payments/NOT-A-PAYMENT HTTP/1.1\r\nHost: api.seevplus.com\r\nAccept: application/json\r\nConnection: close\r\n\r\n'));
+   await writer.write(new TextEncoder().encode('GET /api/v1/developer/payments/NOT-A-PAYMENT HTTP/1.1\r\nHost: '+host+'\r\nAccept: application/json\r\nConnection: close\r\n\r\n'));
    const reader=s.readable.getReader();let text='';
    while(text.length<8192){const chunk=await reader.read();if(chunk.done)break;text+=new TextDecoder().decode(chunk.value);}
    return {transport:'tls-socket',response:text.slice(0,1500)};
   })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('TLS probe timeout')),12000)})]);
  }finally{clearTimeout(timer);await s.close().catch(()=>{});}
+}
+async function invalidCertificateProbe(host){
+ try {await socketProbe(host);return {host,certificateRejected:false};}
+ catch(error){return {host,certificateRejected:true,error:String(error)};}
 }
 async function candidateProbe(method){
  const response=await requestSeev(api+(method==='GET'?'/PAY-transport-probe':''), method==='POST'?{method:'POST',headers:{'content-type':'application/json','idempotency-key':'transport-probe-no-credentials'},body:'{}'}:{});
@@ -44,7 +48,7 @@ async function candidateProbe(method){
 }
 export default {async fetch(req,env){
  if(req.headers.get('authorization')!=='Bearer '+env.DIAGNOSTIC_TOKEN)return new Response('Not found',{status:404});
- const results=await Promise.allSettled([probe('GET'),probe('POST'),socketProbe(),candidateProbe('GET'),candidateProbe('POST')]);
+ const results=await Promise.allSettled([probe('GET'),probe('POST'),socketProbe(),candidateProbe('GET'),candidateProbe('POST'),invalidCertificateProbe('expired.badssl.com'),invalidCertificateProbe('wrong.host.badssl.com')]);
  return Response.json({colo:req.cf?.colo,results:results.map(r=>r.status==='fulfilled'?r.value:{error:String(r.reason)})});
 }};
 `;
