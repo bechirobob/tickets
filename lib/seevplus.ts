@@ -1,4 +1,5 @@
 import { deliverConfirmedOrder, fulfillVerifiedPayment, verifyAndFulfill } from "./payment-operations";
+import { requestSeev } from "./seev-transport";
 
 const API = "https://api.seevplus.com/api/v1/developer/payments";
 export type SeevEnvironment = "sandbox" | "production";
@@ -54,9 +55,9 @@ export async function createSeevCheckout(db: D1Database, reference: string, conf
   if (!order || order.environment !== seevEnvironment(config) || !config.SEEV_CHECKOUT_API_KEY) throw new Error("SeevPlus credentials do not match this order.");
   if (order.providerReference && validSeevCheckoutUrl(order.checkoutUrl)) return order.checkoutUrl;
   if (!order.requestJson || order.status !== "payment_pending" || Date.parse(order.expiresAt) <= Date.now()) throw new Error("This SeevPlus payment needs a status review before retrying.");
-  const response = await fetch(API, {
+  const response = await requestSeev(API, {
     method: "POST", headers: { authorization: `Bearer ${config.SEEV_CHECKOUT_API_KEY}`, "content-type": "application/json", "idempotency-key": order.orderId },
-    body: order.requestJson, signal: AbortSignal.timeout(10_000), redirect: "manual",
+    body: order.requestJson,
   });
   // Even a 502 can mask a gateway conflict; never assume it means no payment.
   const payload = await response.json() as { success?: boolean; data?: { reference?: unknown; checkout_url?: unknown; amount?: unknown; currency?: unknown; env?: unknown } };
@@ -83,7 +84,7 @@ export async function verifySeevPayment(db: D1Database, reference: string, confi
   const order = await readSession(db, reference);
   if (!order || order.environment !== seevEnvironment(config)) throw new Error("SeevPlus environment does not match this order.");
   if (!order.providerReference) return { result: "pending" as const };
-  const response = await fetch(`${API}/${encodeURIComponent(order.providerReference)}`, { signal: AbortSignal.timeout(10_000), redirect: "manual" });
+  const response = await requestSeev(`${API}/${encodeURIComponent(order.providerReference)}`);
   const payload = await response.json() as { success?: boolean; data?: { id?: unknown; reference?: unknown; status?: unknown; amount?: unknown; final_amount?: unknown; currency?: unknown; env?: unknown } };
   const data = payload.data;
   // Some verification responses omit env; the stored reference was bound to a
