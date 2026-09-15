@@ -8,7 +8,7 @@ on:
       operation:
         description: Scoped live-check operation
         type: choice
-        options: [status, prepare, close]
+        options: [status, prepare, close, reopen]
         default: status
 permissions:
   contents: read
@@ -25,8 +25,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
-      - name: Inspect the original one-cedi order after recovery
+      - name: Reopen the owner checkout form while preserving pending payment
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CHECK_MODE: ${{ inputs.operation || 'status' }}
+          CHECK_MODE: ${{ inputs.operation || 'reopen' }}
         run: node scripts/seev-one-cedi-check.mjs
