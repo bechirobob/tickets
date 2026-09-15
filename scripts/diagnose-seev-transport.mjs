@@ -1,4 +1,6 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import {stripTypeScriptTypes} from 'node:module';
 const account='af75a230de2eea882606db8d9acce473';
 const token=process.env.CLOUDFLARE_API_TOKEN;
 const name='becore-seev-diagnostic-'+process.env.GITHUB_RUN_ID;
@@ -15,6 +17,7 @@ const scriptPath='/accounts/'+account+'/workers/scripts/'+name;
 const guard=randomBytes(32).toString('hex');
 const worker=String.raw`
 import {connect} from 'cloudflare:sockets';
+import {requestSeev} from './seev-transport.mjs';
 const api='https://api.seevplus.com/api/v1/developer/payments';
 async function probe(method){
  const res=await fetch(api+(method==='GET'?'/NOT-A-PAYMENT':''),{method,headers:method==='POST'?{'content-type':'application/json'}:{},body:method==='POST'?'{}':undefined,signal:AbortSignal.timeout(12000),redirect:'manual'});
@@ -35,9 +38,13 @@ async function socketProbe(){
   })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('TLS probe timeout')),12000)})]);
  }finally{clearTimeout(timer);await s.close().catch(()=>{});}
 }
+async function candidateProbe(method){
+ const response=await requestSeev(api+(method==='GET'?'/PAY-transport-probe':''), method==='POST'?{method:'POST',headers:{'content-type':'application/json','idempotency-key':'transport-probe-no-credentials'},body:'{}'}:{});
+ return {transport:'candidate',method,status:response.status,contentType:response.headers.get('content-type'),body:(await response.text()).slice(0,350)};
+}
 export default {async fetch(req,env){
  if(req.headers.get('authorization')!=='Bearer '+env.DIAGNOSTIC_TOKEN)return new Response('Not found',{status:404});
- const results=await Promise.allSettled([probe('GET'),probe('POST'),socketProbe()]);
+ const results=await Promise.allSettled([probe('GET'),probe('POST'),socketProbe(),candidateProbe('GET'),candidateProbe('POST')]);
  return Response.json({colo:req.cf?.colo,results:results.map(r=>r.status==='fulfilled'?r.value:{error:String(r.reason)})});
 }};
 `;
@@ -61,6 +68,9 @@ try{
  const form=new FormData();
  form.set('metadata',JSON.stringify({main_module:'diagnostic.mjs',compatibility_date:'2026-08-11',compatibility_flags:['nodejs_compat'],bindings:[{type:'secret_text',name:'DIAGNOSTIC_TOKEN',text:guard}]}));
  form.set('diagnostic.mjs',new Blob([worker],{type:'application/javascript+module'}),'diagnostic.mjs');
+ const source=await readFile('scripts/seev-transport-candidate.ts','utf8');
+ console.log(JSON.stringify({candidateSha256:createHash('sha256').update(source).digest('hex')}));
+ form.set('seev-transport.mjs',new Blob([stripTypeScriptTypes(source)],{type:'application/javascript+module'}),'seev-transport.mjs');
  await cf(scriptPath,'PUT',form);created=true;
  await cf(scriptPath+'/subdomain','POST',{enabled:true,previews_enabled:false});
  const baseline=await fetch('https://api.seevplus.com/api/v1/developer/payments/NOT-A-PAYMENT',{signal:AbortSignal.timeout(15000)});
