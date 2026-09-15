@@ -7,6 +7,9 @@ import { useSearchParams } from "next/navigation";
 
 export default function PaymentReturn() {
   const params = useSearchParams();
+  const reference = params.get("reference") ?? "";
+  const claim = params.get("claim") ?? "";
+  const resumeCheckout = params.get("pending") === "1";
   const [state, setState] = useState<"checking" | "ready" | "failed">("checking");
   const [eventSlug, setEventSlug] = useState("");
   const [message, setMessage] = useState(() => params.get("pending") === "1"
@@ -16,16 +19,10 @@ export default function PaymentReturn() {
     : "Checking your payment. Nearly time to tell the group chat.");
 
   useEffect(() => {
-    const reference = params.get("reference") ?? "";
-    const claim = params.get("claim") ?? "";
-    if (!reference || !claim) {
-      const timer = window.setTimeout(() => {
-        setState("failed");
-        setMessage("This link came back incomplete. Open your checkout tab or ask us for help.");
-      }, 0);
-      return () => window.clearTimeout(timer);
-    }
-    window.history.replaceState({}, "", "/payment/return");
+    // Keep the one-time claim in the URL until verification completes. Clearing
+    // it updates useSearchParams, aborts this effect and loses the return context.
+    // The final location.replace removes it from history; Referrer-Policy is
+    // no-referrer. A refresh while checking can therefore safely resume.
     let cancelled = false;
     let attempt = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -33,11 +30,14 @@ export default function PaymentReturn() {
     const check = async () => {
       attempt += 1;
       try {
-        const response = await fetch("/api/customer/session", {
+        const response = await fetch(!reference || !claim ? "/api/customer/session?paymentReturn=1" : "/api/customer/session", !reference || !claim ? {
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
+          cache: "no-store",
+        } : {
           method: "POST",
           signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ reference, claim, resumeCheckout: params.get("pending") === "1" }),
+          body: JSON.stringify({ reference, claim, resumeCheckout }),
         });
         const result = await response.json() as { pending?: boolean; authorizationUrl?: string; signedIn?: boolean; eventSlug?: string; error?: string };
         if (cancelled) return;
@@ -74,7 +74,7 @@ export default function PaymentReturn() {
     };
     void check();
     return () => { cancelled = true; controller.abort(); clearTimeout(timer); };
-  }, [params]);
+  }, [reference, claim, resumeCheckout]);
 
   return (
     <main className="payment-return"><div>
