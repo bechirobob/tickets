@@ -65,6 +65,14 @@ test("AI Gateway verification checks persisted budget semantics rather than resp
   }), false);
 });
 
+test("SeeV readiness never terminates an importing production preparation process", async () => {
+  const source = await readFile(new URL("../scripts/verify-seev-production-readiness.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /process\.exit\s*\(/u);
+  assert.match(source, /if \(!enabled\)/u);
+  assert.match(source, /SEEV_CHECKOUT_API_KEY/u);
+  assert.match(source, /SEEV_WEBHOOK_SECRET/u);
+});
+
 test("Apple Wallet refresh state follows all authoritative ticket state", async () => {
   const migration = await readFile(new URL("../drizzle/0043_apple_wallet_updates.sql", import.meta.url), "utf8");
   assert.match(migration, /apple_wallet_update_clock/u);
