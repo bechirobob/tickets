@@ -109,6 +109,28 @@ It requires the normal isolated local fixture migrations and a future-dated
   completion before adjusting customer access; do not mark an order refunded
   merely because a refund was requested.
 
+## Cloudflare outbound TLS recovery
+
+The 2026-09-15 live check returned HTTP 525 from Worker `fetch` to Seev,
+although Node HTTPS and a verified TLS socket from the same Worker reached the
+official API. Reproduce connection failures from the actual Worker runtime before
+attributing them to the provider or changing credentials.
+
+`lib/seev-transport.ts` permits one fallback for HTTP 525 to
+`api.seevplus.com:443` using `cloudflare:sockets` with TLS enabled. It preserves
+the original body and idempotency key, limits time and response size, and rejects
+ambiguous HTTP framing. It never changes the destination, disables certificate
+verification, follows redirects or retries ordinary API errors. Both checkout
+creation and verification use it; payment validation remains unchanged.
+
+If both transports fail, preserve the order and inspect the sanitized session
+error. Do not create a replacement payment or mark an unknown payment failed.
+An expired reservation must be reacquired safely before any operator-approved
+recovery, using the same request/key within the provider's deduplication window.
+
+Targeted regression checks:
+`npx vitest run tests/seev-transport.test.ts tests/seevplus.test.ts`.
+
 ## Integration references
 
 - https://docs.seevcash.com/docs/payments/checkout
