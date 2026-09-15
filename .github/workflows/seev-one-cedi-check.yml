@@ -1,0 +1,32 @@
+name: Owner one-cedi live check
+on:
+  push:
+    branches: [ops/seev-one-cedi-check]
+    paths: ['.github/workflows/seev-one-cedi-check.yml']
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Scoped live-check operation
+        type: choice
+        options: [status, prepare, close]
+        default: status
+permissions:
+  contents: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  live-check:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/seev-one-cedi-check'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Prepare or inspect the owner-authorized one-cedi check
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CHECK_MODE: ${{ inputs.operation || 'prepare' }}
+        run: node scripts/seev-one-cedi-check.mjs
