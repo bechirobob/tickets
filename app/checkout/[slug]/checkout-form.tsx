@@ -24,7 +24,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
     const requested = params.get("tier");
     return event.ticketTiers.find((tier) => tier.status === "available" && (!requested || tier.id === requested))?.id ?? event.ticketTiers.find((tier) => tier.status === "available")?.id ?? event.ticketTiers[0].id;
   });
-  const [momoProvider, setMomoProvider] = useState<"paystack" | "seevplus">(paystackEnabled ? "paystack" : "seevplus");
+  const [momoProvider, setMomoProvider] = useState<"paystack" | "seevplus">(seevEnabled ? "seevplus" : "paystack");
   const [network, setNetwork] = useState("mtn");
   const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | null>(null);
   const [message, setMessage] = useState("");
