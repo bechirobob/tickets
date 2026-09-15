@@ -19,17 +19,14 @@ jobs:
   live-check:
     if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/seev-one-cedi-check'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
-      - name: Resume the original one-cedi order after verified deployment
+      - name: Inspect the original one-cedi order after recovery
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CHECK_MODE: ${{ inputs.operation || 'status' }}
-          RESUME_RELEASE_SHA: 4f68c81cb1a4e81d5944b7b0139942f7107e692d
-        run: |
-          node scripts/resume-seev-one-cedi.mjs
-          node scripts/seev-one-cedi-check.mjs
+        run: node scripts/seev-one-cedi-check.mjs
