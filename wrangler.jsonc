@@ -17,7 +17,9 @@
     "ENVIRONMENT": "production",
     "AI_COST_CONTROL_REQUIRED": "true",
     "OPENAI_GATEWAY_BASE_URL": "https://gateway.ai.cloudflare.com/v1/af75a230de2eea882606db8d9acce473/becore-tickets-ai/openai",
-    "VAPID_SUBJECT": "mailto:tickets@tickets.becoreops.com"
+    "VAPID_SUBJECT": "mailto:tickets@tickets.becoreops.com",
+    "SEEV_ENABLED": "false",
+    "SEEV_ENVIRONMENT": "production"
   },
   "triggers": {
     "crons": ["* * * * *", "*/5 * * * *", "15 3 * * *"]
