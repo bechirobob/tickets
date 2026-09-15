@@ -8,6 +8,12 @@ test("payment return keeps its claim through pending verification and refresh", 
   let requests = 0;
   let paid = false;
   await page.route("**/api/customer/session", async (route) => {
+    // The shared navigation also reads the current session. Only the return
+    // page's POST carries the one-time payment claim.
+    if (route.request().method() !== "POST") {
+      await route.fulfill({ status: 401, json: { signedIn: false } });
+      return;
+    }
     expect(route.request().postDataJSON()).toEqual({ reference, claim, resumeCheckout: false });
     requests += 1;
     await route.fulfill({ status: paid ? 200 : 202, json: paid ? { signedIn: true, eventSlug: "after-dark-osu" } : { pending: true } });
