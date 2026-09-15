@@ -33,7 +33,7 @@ export function closure(now = new Date().toISOString()) {
 
 async function main() {
   const mode = process.env.CHECK_MODE || 'status';
-  if (!['prepare','status','close'].includes(mode)) throw new Error('Unsupported check operation.');
+  if (!['prepare','status','close','reopen'].includes(mode)) throw new Error('Unsupported check operation.');
   const account = 'af75a230de2eea882606db8d9acce473';
   const token = process.env.CLOUDFLARE_API_TOKEN;
   if (!token) throw new Error('Cloudflare API token is required.');
@@ -56,6 +56,22 @@ async function main() {
   if (mode === 'prepare') {
     const existing = (await query({sql:'SELECT id FROM operational_audit_events WHERE id=?',params:[marker]}))[0].results;
     if (!existing.length) await query({batch:preparation()});
+  } else if (mode === 'reopen') {
+    const reopenMarker = marker + ':checkout-form-reopen';
+    const already = (await query({sql:'SELECT id FROM operational_audit_events WHERE id=?',params:[reopenMarker]}))[0].results;
+    if (!already.length) {
+      const eligible = (await query({sql:`SELECT e.id FROM curated_event_records e JOIN event_ticket_tiers t ON t.id=e.id WHERE e.id=? AND e.slug=? AND e.status='published' AND t.capacity_admissions=1 AND t.price_minor=100 AND t.max_units_per_order=1 AND (SELECT COUNT(*) FROM orders WHERE event_slug=e.slug)=1 AND EXISTS(SELECT 1 FROM orders WHERE id='606c91fc-c279-4583-aed9-603eea4a2c7c' AND event_slug=e.slug AND status='payment_pending' AND total_amount_minor=100 AND payment_provider='seevplus') AND NOT EXISTS(SELECT 1 FROM tickets WHERE event_slug=e.slug)`,params:[marker,slug]}))[0].results;
+      if (eligible.length!==1) throw new Error('Checkout reopen conditions changed; inspect before changing inventory.');
+      const now = new Date().toISOString();
+      const closes = new Date(Date.now()+2*60*60*1000).toISOString();
+      await query({batch:[
+        {sql:"UPDATE curated_event_records SET capacity=2,sales_close_at=?,updated_at=? WHERE id=? AND slug=?",params:[closes,now,marker,slug]},
+        {sql:"UPDATE party_submissions SET capacity=2,updated_at=? WHERE id=? AND event_slug=?",params:[now,marker,slug]},
+        {sql:"UPDATE event_ticket_tiers SET capacity_admissions=2,sales_close_at=?,updated_at=? WHERE id=? AND event_slug=?",params:[closes,now,marker,slug]},
+        {sql:"UPDATE event_registration_settings SET capacity=2,closes_at=?,updated_at=? WHERE event_slug=?",params:[closes,now,slug]},
+        {sql:"INSERT INTO operational_audit_events (id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES (?,'owner','payment.live-check.reopen','event',?,'success','Owner requested checkout-form test after transport repair. One additional test admission available; existing pending payment and reservation preserved. GHS1 total, zero booking fee, max one per order. Close fixture after verification.',?)",params:[reopenMarker,slug,now]}
+      ]});
+    }
   } else if (mode === 'close') {
     const existing = (await query({sql:'SELECT id FROM curated_event_records WHERE id=? AND slug=?',params:[marker,slug]}))[0].results;
     if (existing.length !== 1) throw new Error('Expected live-check fixture not found.');
