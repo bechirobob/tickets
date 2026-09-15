@@ -33,7 +33,7 @@ export function closure(now = new Date().toISOString()) {
 
 async function main() {
   const mode = process.env.CHECK_MODE || 'status';
-  if (!['prepare','status','close','reopen'].includes(mode)) throw new Error('Unsupported check operation.');
+  if (!['prepare','status','close','reopen','stop-sales'].includes(mode)) throw new Error('Unsupported check operation.');
   const account = 'af75a230de2eea882606db8d9acce473';
   const token = process.env.CLOUDFLARE_API_TOKEN;
   if (!token) throw new Error('Cloudflare API token is required.');
@@ -72,6 +72,16 @@ async function main() {
         {sql:"INSERT INTO operational_audit_events (id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES (?,'owner','payment.live-check.reopen','event',?,'success','Owner requested checkout-form test after transport repair. One additional test admission available; existing pending payment and reservation preserved. GHS1 total, zero booking fee, max one per order. Close fixture after verification.',?)",params:[reopenMarker,slug,now]}
       ]});
     }
+  } else if (mode === 'stop-sales') {
+    const paid=(await query({sql:"SELECT COUNT(*) AS count FROM orders WHERE event_slug=? AND status='paid' AND total_amount_minor=100",params:[slug]}))[0].results[0];
+    if(paid.count!==1)throw new Error('Expected exactly one successful owner payment before stopping sales.');
+    const now=new Date().toISOString();
+    await query({batch:[
+      {sql:"UPDATE curated_event_records SET sales_close_at=?,updated_at=? WHERE id=? AND slug=?",params:[now,now,marker,slug]},
+      {sql:"UPDATE event_ticket_tiers SET sales_close_at=?,updated_at=? WHERE id=? AND event_slug=?",params:[now,now,marker,slug]},
+      {sql:"UPDATE event_registration_settings SET accepting=0,closes_at=?,updated_at=? WHERE event_slug=?",params:[now,now,slug]},
+      {sql:"INSERT OR IGNORE INTO operational_audit_events (id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES (?,'owner','payment.live-check.stop-sales','event',?,'success','One paid test ticket verified. Stop further checkout while preserving the published ticket and Room pages for the owner to verify access. Unpublish after that check; retain payment evidence.',?)",params:[marker+':sales-stopped',slug,now]}
+    ]});
   } else if (mode === 'close') {
     const existing = (await query({sql:'SELECT id FROM curated_event_records WHERE id=? AND slug=?',params:[marker,slug]}))[0].results;
     if (existing.length !== 1) throw new Error('Expected live-check fixture not found.');
