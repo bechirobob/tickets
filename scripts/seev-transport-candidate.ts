@@ -102,7 +102,7 @@ export async function seevTlsRequest(url: string, options: Options, openSocket: 
   request.set(head); request.set(body, head.length);
   // The official hostname supplies SNI and certificate verification. Never use
   // an IP override, plaintext socket, alternate host or disabled TLS validation.
-  const socket = openSocket({ hostname: target.hostname, port: 443 }, { secureTransport: "on" });
+  const socket = openSocket({ hostname: target.hostname, port: 443 }, { secureTransport: "on", allowHalfOpen: false });
   void socket.closed.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
