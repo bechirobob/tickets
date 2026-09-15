@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { POST as claimAttendeeSession } from "../app/api/customer/session/route";
+import { GET as readAttendeeSession, POST as claimAttendeeSession } from "../app/api/customer/session/route";
 import { POST as preparePasses } from "../app/api/customer/tickets/route";
 import { hashToken } from "../lib/attendee-auth";
 
@@ -47,6 +47,21 @@ describe("attendee ticket claims", () => {
       "SELECT COUNT(*) AS count FROM attendee_sessions",
     ).first<{ count: number }>();
     expect(sessionCount?.count).toBe(1);
+
+    // A refresh after the response set its cookie must not strand a paid buyer.
+    const cookie = responses.find((response) => response.status === 200)!.headers.get("set-cookie")!.split(";")[0];
+    const retry = makeRequest();
+    retry.headers.set("cookie", cookie);
+    expect(await (await claimAttendeeSession(retry)).json()).toEqual({ signedIn: true, eventSlug: "after-dark-osu" });
+    const recoveryRequest = () => new Request("https://tickets.becoreops.com/api/customer/session?paymentReturn=1", { headers: { cookie } });
+    expect(await (await readAttendeeSession(recoveryRequest())).json()).toEqual({ signedIn: true, eventSlug: "after-dark-osu" });
+    expect((await claimAttendeeSession(makeRequest())).status).toBe(401);
+    expect((await readAttendeeSession(new Request("https://tickets.becoreops.com/api/customer/session?paymentReturn=1"))).status).toBe(401);
+    await env.DB.prepare("UPDATE attendee_sessions SET revoked_at=?").bind(now).run();
+    expect((await readAttendeeSession(recoveryRequest())).status).toBe(401);
+    const revoked = makeRequest();
+    revoked.headers.set("cookie", cookie);
+    expect((await claimAttendeeSession(revoked)).status).toBe(401);
   });
 
   it("keeps a newly paid order isolated until the checkout email is verified", async () => {
