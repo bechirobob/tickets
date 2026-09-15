@@ -6,9 +6,16 @@ export async function POST(request: Request) {
   const raw = await request.text();
   if (raw.length > 65_536) return new Response("Payload too large", { status: 413 });
   if (!(await validSeevSignature(raw, request.headers, env.SEEV_WEBHOOK_SECRET))) return new Response("Invalid signature", { status: 401 });
+
+  const eventId = request.headers.get("x-seev-event-id") ?? "";
+  const headerEventType = request.headers.get("x-seev-event-type") ?? "";
+  if (eventId && !/^[A-Za-z0-9._:-]{1,200}$/u.test(eventId)) return new Response("Invalid event id", { status: 400 });
+
   let payload: { event?: string; env?: string; data?: { transaction?: { reference?: string; env?: string } } };
   try { payload = JSON.parse(raw); } catch { return new Response("Invalid payload", { status: 400 }); }
   if (!payload || typeof payload !== "object" || !payload.data?.transaction) return new Response("Invalid payload", { status: 400 });
+  if (headerEventType && headerEventType !== payload.event) return new Response("Event type mismatch", { status: 400 });
+
   const tx = payload.data.transaction;
   if (payload.env !== seevEnvironment(env) || tx.env !== payload.env) return new Response("Wrong environment", { status: 400 });
   if (!["payment.succeeded", "payment.failed"].includes(payload.event ?? "")) return new Response("OK");
@@ -16,10 +23,14 @@ export async function POST(request: Request) {
   const order = await env.DB.prepare(`SELECT reference FROM orders WHERE payment_provider = 'seevplus' AND provider_reference = ? AND payment_environment = ?`)
     .bind(tx.reference, payload.env).first<{ reference: string }>();
   if (!order) return new Response("OK");
+
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
   const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  await env.DB.prepare(`INSERT OR IGNORE INTO payment_events (id, event_type, reference, received_at, payload_hash) VALUES (?, ?, ?, ?, ?)`)
-    .bind(crypto.randomUUID(), `seevplus.${payload.event}`, order.reference, new Date().toISOString(), hash).run();
+  const replayKey = eventId ? `seevplus:${eventId}` : `seevplus:sha256:${hash}`;
+  const recorded = await env.DB.prepare(`INSERT OR IGNORE INTO payment_events (id, event_type, reference, received_at, payload_hash) VALUES (?, ?, ?, ?, ?)`)
+    .bind(replayKey, `seevplus.${payload.event}`, order.reference, new Date().toISOString(), hash).run();
+  if (!recorded.meta.changes) return new Response("OK");
+
   try {
     // Re-read current status from Seev. A replay or out-of-order failure cannot
     // override a newer successful payment, and webhook major units are never
