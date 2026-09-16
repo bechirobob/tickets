@@ -78,3 +78,124 @@
   .buzz-page > .directory-header { padding-inline: 16px; }
   .buzz-page > .directory-header > a:first-child { font-size: 0; }
 }
+
+/* A night has three destinations. Supporting tools live with the thing they manage. */
+.my-nights-shell { max-width: 1320px; margin-inline: auto; }
+.my-nights-page .my-nights-shell > header { padding-block: 0 18px; align-items: center; }
+.my-nights-shell > header .eyebrow { margin-bottom: 12px; color: #e4f18b; font-size: 12px; letter-spacing: .12em; }
+.my-nights-intro { margin: 12px 0 0; font-size: 16px; }
+.my-nights-page .my-nights-tabs { min-height: 52px; margin-top: 18px; border-top: 0; gap: 32px; }
+.my-nights-tabs button { min-height: 48px; font-weight: 500; }
+.my-nights-list article { gap: 28px; }
+.my-nights-list img { object-fit: contain; background: #211624; height: 178px; }
+.my-nights-list h2 { max-width: 600px; font-size: clamp(25px, 2.8vw, 36px); line-height: 1.12; letter-spacing: -.035em; }
+.my-nights-list article > div > p { margin-top: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+.my-nights-list aside { min-width: 180px; }
+.my-nights-actions { gap: 14px; }
+.my-nights-page .my-nights-list .my-nights-actions > a:last-child:not(.ticket-action) { border: 0; color: #e4f18b; }
+.night-hub--member { --ink: #342333; --orange: #794e68; background: #f8f0e7; color: #342333; padding-bottom: 50px; }
+.night-hub--member .night-hub__hero { height: auto; min-height: 220px; padding: 30px max(24px, calc((100vw - 1120px) / 2)); display: grid; grid-template-columns: minmax(0, 1fr) 140px; grid-template-rows: 1fr auto; gap: 12px 40px; background: #281b2b url('/textures/print-grain.svg') repeat; }
+.night-hub--member .night-hub__hero::after { display: none; }
+.night-hub--member .night-hub__hero img { grid-column: 2; grid-row: 1 / 3; align-self: center; width: 140px; height: 174px; object-fit: contain; border-radius: 8px; filter: none; }
+.night-hub--member .night-hub__hero > div { position: static; align-self: end; min-width: 0; }
+.night-hub--member .night-hub__hero .eyebrow { margin: 0 0 12px; color: #e4f18b; font-size: 12px; letter-spacing: .1em; }
+.night-hub--member .night-hub__hero h1 { max-width: 780px; font-size: clamp(28px, 4vw, 48px); line-height: 1.1; letter-spacing: -.04em; overflow-wrap: anywhere; }
+.night-hub--member .night-hub__hero div > span { color: #dbc5d3; font-size: 15px; margin-top: 12px; }
+.night-hub--member .night-hub__hero .night-hub__countdown { position: static; grid-column: 1; padding: 0; margin: 0; border: 0; color: #e7bf9f; font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.night-hub--member .night-hub__tabs { padding-inline: max(24px, calc((100vw - 1120px) / 2)); gap: 36px; min-height: 60px; overflow: visible; }
+.night-hub--member .night-hub__tabs :is(button, a) { min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 550; white-space: nowrap; }
+.night-hub--member .night-hub__tabs > a { color: #ddc7d5; border: 0; }
+.night-hub--member .night-hub__tabs button > span { font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; }
+.night-hub--member .night-hub__view { max-width: 1120px; min-height: 340px; margin: auto; padding: 32px 0 52px; }
+.night-hub--member :is(h2, h3) { letter-spacing: -.03em; font-weight: 600; }
+.night-hub--member :is(.night-passes, .night-details) > header h2 { font-size: 30px; line-height: 1.15; }
+.night-hub--member .night-passes > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 26px; }
+.night-hub--member .night-passes__offline { margin: 0; min-height: 44px; display: inline-flex; align-items: center; color: #64435b; font-size: 14px; }
+.night-hub--member .night-passes__tickets { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); align-items: start; gap: 20px; }
+.night-hub--member .night-passes__tickets > article { position: relative; max-width: 430px; padding: 24px; background: #fffdfa; border: 1px solid #d8c8d1; border-top: 4px solid #64435b; border-radius: 12px; box-shadow: none; }
+.night-hub--member .night-passes__tickets > article > span { color: #75566b; font-size: 12px; }
+.night-hub--member .night-passes__tickets > article > b { font-size: 24px; font-weight: 600; }
+.night-hub--member .night-passes__tickets > article > code { display: block; margin-block: 8px 20px; color: #342333; font-size: 18px; letter-spacing: .14em; }
+.night-hub--member .night-passes__empty { font-size: 16px; color: #644f5c; }
+.night-hub--member .night-hub__disclosure { margin-top: 22px; border: 0; border-top: 1px solid #d0c0c8; background: transparent; }
+.night-hub__disclosure > summary { min-height: 64px; display: flex; align-items: center; gap: 10px; list-style: none; cursor: pointer; font-size: 16px; font-weight: 550; }
+.night-hub__disclosure > summary::-webkit-details-marker { display: none; }
+.night-hub__disclosure > summary::after { content: '+'; margin-left: auto; color: #75566b; font-size: 24px; font-weight: 400; }
+.night-hub__disclosure[open] > summary::after { content: '−'; }
+.night-hub--member .night-perks__tiers { margin: 0 0 24px; gap: 24px; }
+.night-hub--member .night-perks__tiers article { border: 0; border-left: 2px solid #a38296; padding: 4px 0 4px 20px; background: transparent; }
+.night-hub--member .night-perks__tiers article > svg { display: none; }
+.night-hub--member .night-perks__tiers h3 { margin: 8px 0; font-size: 22px; }
+.night-hub--member .night-perks__tiers :is(p, small) { color: #644f5c; font-size: 14px; line-height: 1.6; }
+.night-hub--member .night-details > header { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.night-hub--member .night-details > header .eyebrow { width: 100%; margin-bottom: -6px; }
+.night-hub--member .night-details > dl { margin-top: 26px; }
+.night-hub--member .night-details > dl > div { border-color: #d0c0c8; }
+.night-hub--member .night-details dd { font-size: 16px; color: #342333; }
+.night-hub--member .night-details dt { color: #75566b; font-size: 13px; }
+.night-hub--member .night-calendar-actions { margin: 0; gap: 18px; }
+.night-hub--member .night-calendar-actions a { min-height: 44px; font-size: 13px; }
+.night-attendance { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 20px; padding-block: 26px; margin-top: 20px; border-block: 1px solid #d0c0c8; }
+.night-attendance h3 { margin: 0; font-size: 20px; }
+.night-attendance p { margin: 7px 0 0; color: #644f5c; font-size: 14px; line-height: 1.5; }
+.night-attendance > span { grid-column: 1 / -1; font-size: 13px; color: #75566b; }
+.night-attendance button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 16px; border: 1px solid #64435b; border-radius: 10px; color: #342333; background: transparent; font: inherit; font-size: 14px; cursor: pointer; }
+.night-attendance button[aria-checked='true'] { background: #342333; color: #f8f0e7; }
+.night-hub--member .night-updates { margin-top: 32px; }
+.night-hub--member .night-updates h2, .night-hub--member .before-night h2 { font-size: 24px; line-height: 1.2; }
+.night-hub--member .night-updates h3 { font-size: 20px; }
+.night-hub--member .night-updates article p { font-size: 15px; color: #644f5c; }
+.night-hub--member .night-updates__empty { color: #644f5c; font-size: 15px; }
+.night-hub--member .before-night { margin-top: 32px; }
+.night-hub--member .before-night :is(textarea, select) { font-size: 16px; }
+.night-hub--member .night-purchase > article { margin-top: 12px; border-color: #d0c0c8; }
+.night-hub--member .night-purchase__transferred { font-size: 15px; color: #644f5c; }
+.night-hub--member :is(button, a, summary):focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.night-hub--member button:disabled { opacity: .6; cursor: wait; }
+@media (max-width: 1200px) {
+  .night-hub--member .night-hub__view { margin-inline: 24px; }
+}
+@media (max-width: 700px) {
+  .my-nights-page .my-nights-shell { padding-top: 26px; }
+  .my-nights-page .my-nights-shell > header { padding-top: 0; }
+  .my-nights-list article { gap: 18px; padding-block: 24px; }
+  .my-nights-list img { width: 90px; height: 124px; }
+  .my-nights-list aside { min-width: 0; width: 100%; }
+  .my-nights-actions { width: 100%; align-items: center; }
+  .my-nights-list h2 { font-size: 25px; }
+  .night-hub--member .night-hub__hero { padding: 24px 20px; min-height: 170px; grid-template-columns: minmax(0, 1fr) 80px; gap: 10px 18px; }
+  .night-hub--member .night-hub__hero img { width: 80px; height: 108px; border-radius: 6px; }
+  .night-hub--member .night-hub__hero h1 { font-size: 28px; }
+  .night-hub--member .night-hub__hero div > span { font-size: 13px; }
+  .night-hub--member .night-hub__hero .eyebrow { font-size: 11px; }
+  .night-hub--member .night-hub__tabs { padding-inline: 20px; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 14px; min-height: 56px; }
+  .night-hub--member .night-hub__tabs :is(button, a) { font-size: 14px; gap: 6px; min-width: 0; }
+  .night-hub--member .night-hub__view { margin-inline: 20px; padding-block: 26px 70px; }
+  .night-hub--member .night-passes > header { gap: 8px; margin-bottom: 20px; }
+  .night-hub--member :is(.night-passes, .night-details) > header h2 { font-size: 26px; }
+  .night-hub--member .night-passes__tickets > article { max-width: none; padding: 20px; }
+  .night-attendance { grid-template-columns: 1fr; gap: 14px; }
+  .night-attendance button { justify-self: start; }
+  .night-attendance > span { grid-column: 1; }
+}
+@media print {
+  .night-hub--member .night-hub__tabs, .night-hub__disclosure > summary { display: none; }
+  .night-hub--member .night-hub__view { max-width: none; margin: 0; padding: 0; }
+}
+.night-hub--member .night-hub__header-actions { display: flex; align-items: center; gap: 10px; margin: 0; }
+.night-hub--member .night-updates article :is(time, small) { color: #644f5c; font-size: 13px; }
+.night-ticket-layout { display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 1fr); gap: 48px; align-items: start; }
+.night-ticket-extras { min-width: 0; padding-top: 12px; }
+.night-hub--member .night-ticket-extras .night-hub__disclosure { margin-top: 0; }
+.night-hub--member .night-passes > header { align-items: start; flex-direction: column; }
+.night-hub--member .night-passes__offline { border: 0; padding-inline: 0; font-weight: 500; }
+.my-nights-page .my-nights-list .my-nights-actions > .ticket-action[data-variant='primary'] { background: #e4f18b; color: #281b2b; border: 0; }
+@media (max-width: 800px) {
+  .night-ticket-layout { grid-template-columns: 1fr; gap: 22px; }
+  .night-ticket-extras { padding-top: 0; }
+  .night-hub--member .night-passes__tickets > article { max-width: none; }
+}
+.night-hub--member .night-passes > .night-passes__offline { margin-top: 14px; }
+.night-hub--member .night-purchase :is(small, dt) { color: #644f5c; }
+.night-hub--member .night-perks__tiers article > span { color: #644f5c; }
+.night-ticket-extras .night-perks__tiers { grid-template-columns: 1fr; }
