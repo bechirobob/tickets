@@ -26,3 +26,8 @@ Dynadot account dashboard works. Its separate webmail.dynadot.com panel is block
 Once Pro and mailbox are active, use provider-verified settings: Gmail app Add another account > Other > Personal(IMAP); username tickets@becoreops.com; incoming webhost.dynadot.com:993 SSL; outgoing webhost.dynadot.com:587 STARTTLS. Mailbox/app password must use secure handling. Do not expose credentials or claim the user's phone is configured. Test inbound mail and reply after account creation.
 
 Official references: https://www.dynadot.com/email ; https://www.dynadot.com/help/question/basic-email-outlook ; https://support.google.com/mail/answer/6078445
+
+## Owner decision: Cloudflare alternative
+The owner declined Dynadot's paid upgrade and asked to use Cloudflare for email. The unpurchased upgrade was removed; Dynadot cart confirmed empty. Do not purchase or re-propose this upgrade as approved.
+
+Cloudflare Email Routing can forward tickets@becoreops.com to the owner's Gmail for free, while the verified Resend integration continues sending receipts. Routing alone does not provide a separate IMAP mailbox or branded Gmail replies. Google's third-party Send As feature is being retired in January2027, so do not present that workaround as durable. No incoming MX changes have been made: existing Dynadot mail addresses must be identified/preserved before moving root-domain mail routing.
