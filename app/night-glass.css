@@ -208,6 +208,8 @@
   .my-registrations--studio > article { grid-template-columns: 1fr; gap: 16px; }
   .my-registrations--studio .registration-actions { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: start; }
   .registration-manage { flex: 1; min-width: 110px; }
+  .registration-manage[open] { flex-basis: 100%; max-width: none; text-align: left; }
+  .registration-manage[open] summary { display: flex; justify-content: space-between; }
   .night-hub--member .night-hub__hero { min-height: 170px; padding: 22px 20px 40px; grid-template-columns: minmax(0, 1fr) 74px; }
   .night-hub--member .night-hub__hero img { width: 74px; height: 100px; }
   .night-hub--member .night-hub__tabs { width: calc(100% - 40px); display: flex; justify-content: center; gap: 3px; }
