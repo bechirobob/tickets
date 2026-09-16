@@ -474,7 +474,7 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(checkout, /Mobile Money<small>MTN MoMo, Telecel Cash or AT Money/u);
   assert.match(checkout, /Card<small>Visa or Mastercard through Paystack/u);
   assert.match(checkout, /useState<"mobile_money" \| "card" \| null>\(null\)/u);
-  assert.match(checkout, /<fieldset className="payment-methods">/u);
+  assert.match(checkout, /<fieldset className="payment-methods"[^>]*>/u);
   assert.match(checkout, /type="radio" name="paymentMethod"/u);
   assert.match(checkout, /paymentMethod === "mobile_money" \? <div className="payment-method-detail">/u);
   assert.match(checkout, /Paystack to enter your card details securely/u);

@@ -19,7 +19,7 @@ sent to production. Provider calls in new regression tests are isolated mocks.
 
 ## Findings and remediation
 
-Four medium findings and one low maintenance finding; no new critical/high
+Five medium findings and two low findings; no new critical/high
 finding was established in this audit. This is not a guarantee of absence.
 
 | Severity | Finding and root cause | Remediation and verification |
@@ -28,7 +28,9 @@ finding was established in this audit. This is not a guarantee of absence.
 | Medium | Initial Wallet export and Apple refresh queried nonexistent `attendee_accounts`, excluded valid sold-out events, and omitted current payment/holder state. Payment and holder changes did not invalidate Apple's cached pass. | Use `attendee_profiles`, allow existing paid admissions at sold-out events, and check current payment, holder, ownership, event removal and credential state. Apple refresh produces a void pass when access ends. Additive migration `0044_wallet_lifecycle.sql` advances update tags for order, holder and transfer changes. An actual route test reproduces the missing-table failure and verifies issuance plus conditional refresh after dispute. Live signing/physical Wallet acceptance remains a provider/device check. |
 | Medium | Transactional mail treated quota rejection as an ordinary failure and exhausted its three attempts before a daily quota reset. Later retries could also send cancelled/expired private invitations. | All 429 responses preserve the retry budget and respect quota/reset delay. Recovery, transfer, waitlist and registration access retries check the current grant before sending; obsolete links are suppressed. Tests cover receipt quota/retry/delivery and missing grants for all four access-message kinds. No token lifetime is extended. Receipt links keep their original expiry. |
 | Medium | Five Operations searches allowed 100–120 character input but used SQLite LIKE, whose D1 pattern limit is 50 bytes. A real long-name regression threw `LIKE or GLOB pattern too complex`. `%`/`_` also acted as wildcards instead of literal input. | Use parameterized, case-insensitive literal substring queries for audience, RSVP, orders, door list and ticket lookup. Long-name and literal-percent regressions verify results and counts without changing staff/event authorization. |
+| Medium | The first Safari Seev checkout attempt lost the buyer name during hydration and passed only on retry. Controls accepted input before React could retain it. | Keep checkout controls disabled until client initialization completes, with a brief preparing label. The provider browser test now deliberately holds JavaScript, checks disabled controls, releases scripts and verifies the full existing validation/payment-failure journey without losing buyer details. |
 | Low | Unused queue callback parameter generated a persistent lint warning. | Remove the unused parameter; no queue behavior changes. |
+| Low | The actual iPhone simulator launch render exposed white status icons over the pale body background, unlike the browser-only layouts. | Give the native top safe area a fixed dark surface across event themes while retaining the existing light iOS icons. The region ignores touches and has zero height when there is no native inset. Verify the fresh simulator render. |
 
 The Worker test config now resolves the existing `@/` source alias so route-level
 Wallet tests exercise the real modules. The recovery fixture now includes real
@@ -83,6 +85,9 @@ Final affected-route verification and candidate CI are recorded in the PR.
   native push/background/resume, secure native account handoff, native private
   offline passes, permanent release signing and store review need their specific
   acceptance. Browser/simulator builds do not establish them.
+- The first native event-link screenshot stops at iOS's “Open” confirmation.
+  Simulator launch is verified; that capture does not prove completed deep-link
+  navigation. Treat native deep-link/device acceptance as outstanding.
 - Production delivery backlog, real-time provider latency, billing quotas and
   private operational alert contents were not inspected. No claim is made that
   they are empty or healthy solely because CI is green.

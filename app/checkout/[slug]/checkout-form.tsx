@@ -4,12 +4,16 @@ import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { ActionButton } from "../../action";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import { trackProductMetric } from "../../../lib/client-analytics";
+
+const subscribeToReadiness = () => () => {};
+const clientIsReady = () => true;
+const serverIsReady = () => false;
 
 const paymentNetworks = [
   { id: "mtn", label: "MTN MoMo", icon: "/payment-providers/mtn-momo.svg" },
@@ -19,6 +23,7 @@ const paymentNetworks = [
 
 export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled = false, paystackEnabled = true }: { paystackEnabled?: boolean; seevEnabled?: boolean; slug: string; event: CuratedEvent; feeBasisPoints: number }) {
   const params = useSearchParams();
+  const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const [quantity, setQuantity] = useState(1);
   const [selectedTierId, setSelectedTierId] = useState(() => {
     const requested = params.get("tier");
@@ -62,7 +67,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   }, [slug]);
 
   async function continueToPay() {
-    if (paying.current || (!paystackEnabled && !seevEnabled)) return;
+    if (!ready || paying.current || (!paystackEnabled && !seevEnabled)) return;
     if (!paymentMethod) {
       setMessage("Choose a payment method before continuing.");
       paymentChoice.current?.focus();
@@ -160,7 +165,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                     className="checkout-tier__choice"
                     role="radio"
                     aria-checked={selected}
-                    disabled={soldOut}
+                    disabled={!ready || soldOut}
                     onClick={() => chooseTier(tier.id)}
                   >
                     <i aria-hidden="true" />
@@ -169,9 +174,9 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                   </button>
                   {selected && !soldOut && (
                     <div className="quantity-control" aria-label={`${tier.name} quantity`}>
-                      <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label={`Remove ${tier.name}`}><Minus size={15} /></button>
+                      <button type="button" disabled={!ready} onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label={`Remove ${tier.name}`}><Minus size={15} /></button>
                       <b>{quantity}</b>
-                      <button type="button" onClick={() => setQuantity((value) => Math.min(maxPurchasableUnits, value + 1))} disabled={quantity >= maxPurchasableUnits} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
+                      <button type="button" onClick={() => setQuantity((value) => Math.min(maxPurchasableUnits, value + 1))} disabled={!ready || quantity >= maxPurchasableUnits} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
                     </div>
                   )}
                   {selected && !soldOut ? <small className="tier-availability">{tier.remainingAdmissions} admissions currently available</small> : null}
@@ -185,15 +190,15 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <span>2</span><div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
           </div>
           <div className="form-grid">
-            <label>Full name<input ref={nameInput} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); }} /></label>
-            <label>Phone number<input ref={phoneInput} type="tel" placeholder="024 000 0000" autoComplete="tel" value={phone} onChange={(event) => { setPhone(event.target.value); setMessage(""); }} /></label>
-            <label className="full-field">Email address<input ref={emailInput} type="email" placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); }} /></label>
+            <label>Full name<input disabled={!ready} ref={nameInput} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); }} /></label>
+            <label>Phone number<input disabled={!ready} ref={phoneInput} type="tel" placeholder="024 000 0000" autoComplete="tel" value={phone} onChange={(event) => { setPhone(event.target.value); setMessage(""); }} /></label>
+            <label className="full-field">Email address<input disabled={!ready} ref={emailInput} type="email" placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); }} /></label>
           </div>
 
           <div className="checkout-step checkout-step--second">
             <span>3</span><div><small>Payment</small><h2>Let’s make it official.</h2></div>
           </div>
-          <fieldset className="payment-methods">
+          <fieldset className="payment-methods" disabled={!ready}>
             <legend className="sr-only">Choose payment method</legend>
             <section className={`payment-option${paymentMethod === "mobile_money" ? " selected" : ""}`}>
               <label className="payment-method-choice">
@@ -226,8 +231,8 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
               </div></div> : null}
             </section> : null}
           </fieldset>
-          <label className="checkout-consent"><input type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label>
-          <label className="checkout-consent"><input ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
+          <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label>
+          <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
           </>}
         </section>
 
@@ -241,7 +246,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <ActionButton type="button" className="pay-button" aria-busy={isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
+          <ActionButton type="button" className="pay-button" aria-busy={!ready || isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={!ready || isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : !ready ? "Preparing checkout…" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
           <p id="checkout-payment-message" className="payment-message" role="status" aria-atomic="true">{message}</p>
           {paystackEnabled || seevEnabled ? <p className="secure-note"><ShieldCheck size={15} /> {paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.</p> : null}
         </aside>
