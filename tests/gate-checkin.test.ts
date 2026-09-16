@@ -53,6 +53,26 @@ async function ownerCookie(suffix: string) {
 }
 
 describe("secure gate passes", () => {
+  it("rechecks gate assignment, event state and staff restrictions on every scan", async () => {
+    const cookie = await ownerCookie("access");
+    const slug = "capacity-gate-access", now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO curated_event_records(id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,event_state,image_url,curation_note,status,published_at,created_at,updated_at) VALUES (?,?,?,'Access test','Test','Accra',?,?,'Late night',10000,400,'on_sale','https://example.com/test.jpg','Gate access fixture.','published',?,?,?)`).bind(slug,slug,slug,now,now,now,now,now).run();
+    await env.DB.prepare("UPDATE staff_accounts SET role = 'gate' WHERE id = 'owner-access'").run();
+    const scan = () => checkIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
+      method: "POST", headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
+      body: JSON.stringify({ code: "BCT-2345-6789-ABCD-EFGH", eventSlug: slug }),
+    }));
+    expect((await scan()).status).toBe(403);
+    await env.DB.prepare("INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES ('owner-access',?,'test',?)").bind(slug,now).run();
+    expect((await scan()).status).toBe(404); // Authorized, but the pass does not exist.
+    await env.DB.prepare("UPDATE curated_event_records SET event_state = 'postponed' WHERE slug = ?").bind(slug).run();
+    expect((await scan()).status).toBe(409);
+    await env.DB.prepare("UPDATE curated_event_records SET removed_at = ? WHERE slug = ?").bind(now,slug).run();
+    expect((await scan()).status).toBe(403);
+    await env.DB.prepare("UPDATE staff_accounts SET must_change_password = 1 WHERE id = 'owner-access'").run();
+    expect((await scan()).status).toBe(401);
+  });
+
   it("prepares an opaque QR pass and admits it exactly once", async () => {
     const { attendeeToken, ticketId } = await seedIssuedTicket("once");
     const passesResponse = await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
