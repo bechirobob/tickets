@@ -33,7 +33,7 @@ if(posts.some(r=>records.some(e=>e.name===r.name&&e.type===r.type&&e.content===r
 const mergedSpf=oldSpf[0].content.replace("v=spf1 ","v=spf1 include:_spf.mx.cloudflare.net ");
 const changes=await api(zone+"/dns_records/batch","POST",{deletes:oldMx.map(r=>({id:r.id})),patches:[{id:oldSpf[0].id,content:mergedSpf}],posts});
 try{
- const enabled=await api(zone+"/email/routing/dns","POST",{name:domain});
+ const enabled=await api(zone+"/email/routing/dns","POST",{});
  console.log(JSON.stringify({enableResult:enabled,settings:await api(zone+"/email/routing"),rules:await api(zone+"/email/routing/rules")}));
 }catch(error){
  // Restore only this operation's public DNS changes if provider activation fails.
