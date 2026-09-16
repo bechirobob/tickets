@@ -8,5 +8,5 @@ export default defineConfig({
     miniflare: { bindings: { TEST_MIGRATIONS: await readD1Migrations('./drizzle'), ENVIRONMENT: 'test',
       PAYSTACK_SECRET_KEY: 'sk_test_capacity', RESEND_API_KEY: 're_test_capacity', STAFF_LOGIN_DECOY_SECRET: 'test-only-capacity-key-at-least-32-characters' } },
   })],
-  test: { include: ['tests/capacity/*.capacity.ts'], setupFiles: ['./tests/apply-migrations.ts'], fileParallelism: false, testTimeout: 300_000, hookTimeout: 120_000 },
+  test: { reporters: ['default', './scripts/capacity/reporter.ts'], silent: false, include: ['tests/capacity/*.capacity.ts'], setupFiles: ['./tests/apply-migrations.ts'], fileParallelism: false, testTimeout: 300_000, hookTimeout: 120_000 },
 });

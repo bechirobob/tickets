@@ -34,6 +34,8 @@ async function burst<T>(name: string, n: number, action: (i: number) => Promise<
   const result = { name, operations: n, concurrency: n, elapsedMs: Math.round(elapsed), p50Ms: percentile(times,.5), p95Ms: percentile(times,.95), p99Ms: percentile(times,.99), operationsPerSecond: +(n/(elapsed/1000)).toFixed(1), failures: errors.length, firstErrors: errors.slice(0,3) };
   metrics.push(result); console.log(`CAPACITY_PHASE ${JSON.stringify(result)}`);
   expect(errors, name).toEqual([]);
+  const budgetMs = name.startsWith('my-nights') || name.startsWith('room-') || name.startsWith('wallet') || name.startsWith('gate') ? 5000 : 10000;
+  expect(result.p95Ms, `${name}: p95 latency budget`).toBeLessThan(budgetMs);
   return output as T[];
 }
 async function signed(reference: string, amount: number) {
@@ -49,7 +51,8 @@ afterAll(() => {
   console.log(`CAPACITY_RESULTS ${JSON.stringify({ environment:'isolated local workerd and D1 on CI runner', attendees:count, provider:'in-process Seev and Resend mocks; no external calls', productionQuotasEnforced:false, metrics })}`);
 });
 
-it('400 distinct buyers: shared-IP checkout burst, signed callback replay, private passes and gate races', async () => {
+it('400 distinct buyers: shared-IP checkout burst, signed callback replay, private passes and gate races', async ({ task }) => {
+  (task.meta as { capacity?: unknown }).capacity = { environment: 'isolated local workerd and D1', attendees: count, provider: 'mocked Seev and Resend', productionQuotasEnforced: false, metrics };
   runtime.SEEV_ENABLED='true'; runtime.SEEV_ENVIRONMENT='sandbox'; runtime.SEEV_CHECKOUT_API_KEY='capacity-test-only'; runtime.SEEV_WEBHOOK_SECRET='capacity-test-only';
   vi.stubGlobal('fetch',vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     if (String(url)===provider) {
@@ -68,10 +71,12 @@ it('400 distinct buyers: shared-IP checkout burst, signed callback replay, priva
     env.DB.prepare(`INSERT INTO event_ticket_tiers(id,event_slug,code,name,description,price_minor,admissions_per_unit,capacity_admissions,max_units_per_order,status,sort_order,created_at,updated_at) VALUES (?,?,'general','General','One admission',10000,1,400,1,'available',0,?,?)`).bind(slug,slug,now,now),
   ]);
   const checkout = (i: number) => initialize(req('/api/payments/initialize',{eventSlug:slug,ticketTierId:'general',quantity:1,fullName:`Guest ${i}`,email:`capacity-${i}@example.com`,phone:'0240000000',paymentMethod:'mobile_money',paymentProvider:'seevplus',network:'mtn',acceptedPolicies:true},undefined,{'idempotency-key':crypto.randomUUID(),'cf-connecting-ip':'192.0.2.40'}));
-  await burst('checkout-400-shared-ip',count,async i=>{const response=await checkout(i);expect(response.status,await response.clone().text()).toBe(200);return response.json();});
+  const attempts = await burst('checkout-500-race-for-400-shared-ip',500,async i=>{const response=await checkout(i);expect([200,400,409],await response.clone().text()).toContain(response.status);return response.status;});
+  expect(attempts.filter(status=>status===200)).toHaveLength(count);
+  expect(attempts.filter(status=>status!==200)).toHaveLength(100);
   expect(providers.size).toBe(count);
   // Full event: further attempts must not reserve or issue extra admissions.
-  await burst('sold-out-100-race',100,async i=>{const r=await checkout(i+count);expect(r.status,await r.clone().text()).toBe(400);expect((await r.json() as {error:string}).error).toMatch(/available|sold|left|ticket|admission/i);});
+  await burst('sold-out-100-race',100,async i=>{const r=await checkout(i+500);expect(r.status,await r.clone().text()).toBe(400);expect((await r.json() as {error:string}).error).toMatch(/available|sold|left|ticket|admission/i);});
   expect(await env.DB.prepare("SELECT SUM(admission_count) AS total FROM inventory_reservations WHERE event_slug=? AND status='held'").bind(slug).first()).toEqual({total:count});
   const entries=[...providers.entries()];
   await burst('signed-webhooks-800-with-replays',count*2,async i=>{const [ref,data]=entries[i%count];const r=await webhook(await signed(ref,data.amount));expect(r.status).toBe(200);});
@@ -86,6 +91,11 @@ it('400 distinct buyers: shared-IP checkout burst, signed callback replay, priva
   const outcomes=await burst('gate-800-simultaneous-double-scans',count*2,async i=>{const r=await scan(req('/api/admin/check-in',{code:qr[i%count],eventSlug:slug,gate:`Gate ${i%4}`},staffCookie));expect([200,409]).toContain(r.status);return r.status;});
   expect(outcomes.filter(s=>s===200)).toHaveLength(count);expect(outcomes.filter(s=>s===409)).toHaveLength(count);
   expect(await env.DB.prepare('SELECT COUNT(*) AS total FROM gate_checkin_events WHERE event_slug=?').bind(slug).first()).toEqual({total:count});
+  // Fresh reads must not write session activity on every request.
+  const fresh = await env.DB.prepare('SELECT last_seen_at FROM attendee_sessions WHERE id=(SELECT claimed_session_id FROM order_access_grants WHERE order_id=?)').bind(entries[0][1].meta.orderId).first<{last_seen_at:string}>();
+  await Promise.all(Array.from({length:25},()=>nights(req('/api/customer/my-nights',undefined,cookies[0]))));
+  expect(await env.DB.prepare('SELECT last_seen_at FROM attendee_sessions WHERE id=(SELECT claimed_session_id FROM order_access_grants WHERE order_id=?)').bind(entries[0][1].meta.orderId).first()).toEqual(fresh);
+  metrics.push({name:'session-activity-coalescing',repeatReads:25,activityTimestampUnchanged:true});
   await roomLoad();
 });
 
@@ -95,20 +105,22 @@ async function roomLoad() {
   const access=await Promise.all(cookies.map(cookie=>readAttendeeRoomAccess(env.DB,cookie,slug)));
   const received=Array.from({length:count},()=>new Set<string>()), sent=new Map<string,number>(), deliveryTimes:number[]=[];
   let connectionErrors=0;
-  await burst('room-connect-400',count,async i=>{
-    const identity=access[i]!;expect(identity).toBeTruthy();
+  const connect = async (i: number) => {
+    const identity=(await readAttendeeRoomAccess(env.DB,cookies[i],slug))!;expect(identity).toBeTruthy();
     const r=await room.fetch(new Request('https://room.internal/socket',{headers:{upgrade:'websocket','x-bct-room-authorized':'1','x-bct-session-id':identity.sessionId!,'x-bct-attendee-id':identity.attendeeId,'x-bct-display-name':`Guest ${i}`,'x-bct-event-slug':slug,'x-bct-event-title':'Capacity fixture','x-bct-starts-at':now,'x-bct-ends-at':future,'x-bct-read-only-at':future}}));
     expect(r.status).toBe(101);const socket=r.webSocket!;sockets[i]=socket;
     socket.addEventListener('message',event=>{const data=JSON.parse(String(event.data));if(data.type==='error')connectionErrors++;if(data.type==='message' && sent.has(data.message.content)){received[i].add(data.message.content);deliveryTimes.push(performance.now()-sent.get(data.message.content)!);}});
-    socket.addEventListener('error',()=>connectionErrors++);socket.accept();
-  });
+    socket.addEventListener('error',()=>{connectionErrors++;});socket.accept();
+  };
+  await burst('room-connect-400',count,connect);
   // 2 messages/sec for 60s, delivered to all 400 recipients: 48,000 deliveries.
   const started=performance.now();
   for(let n=0;n<120;n++){const content=`load-message-${n}`;sent.set(content,performance.now());sockets[n%count].send(JSON.stringify({type:'message',content}));await new Promise(resolve=>setTimeout(resolve,500));}
   const deadline=performance.now()+30_000;
   while(received.some(messages=>messages.size<120) && performance.now()<deadline) await new Promise(resolve=>setTimeout(resolve,50));
   const deliveries=received.reduce((sum,messages)=>sum+messages.size,0);
-  const result={name:'room-400-sustained-60s',messages:120,expectedDeliveries:48000,deliveries,elapsedMs:Math.round(performance.now()-started),p95DeliveryMs:percentile(deliveryTimes,.95),p99DeliveryMs:percentile(deliveryTimes,.99),connectionErrors};metrics.push(result);console.log(`CAPACITY_PHASE ${JSON.stringify(result)}`);
+  const notificationRows=await env.DB.prepare("SELECT COUNT(*) AS total FROM attendee_notifications WHERE event_slug=? AND kind='room_message'").bind(slug).first<{total:number}>();
+  const result={name:'room-400-sustained-60s',notificationRows:notificationRows?.total,messages:120,expectedDeliveries:48000,deliveries,elapsedMs:Math.round(performance.now()-started),p95DeliveryMs:percentile(deliveryTimes,.95),p99DeliveryMs:percentile(deliveryTimes,.99),connectionErrors};metrics.push(result);console.log(`CAPACITY_PHASE ${JSON.stringify(result)}`);
   expect(deliveries).toBe(48000);expect(connectionErrors).toBe(0);expect(result.p95DeliveryMs).toBeLessThan(5000);
   const revoked=sockets[399];let leaked=false;
   const closed=new Promise<number>(resolve=>revoked.addEventListener('close',e=>resolve(e.code),{once:true}));
@@ -117,4 +129,16 @@ async function roomLoad() {
   sockets[0].send(JSON.stringify({type:'message',content:'after-revocation'}));
   expect(await closed).toBe(4003);expect(leaked).toBe(false);
   metrics.push({name:'room-revocation-under-load',privateLeak:false,closeCode:4003});
+  await Promise.all(sockets.slice(0,399).map(socket=>new Promise<void>(resolve=>{
+    socket.addEventListener('close',()=>resolve(),{once:true});socket.close(1000,'Simulated reconnect');
+  })));
+  await burst('room-reconnect-399',399,connect);
+  expect(await readAttendeeRoomAccess(env.DB,cookies[399],slug)).toBeNull();
+  // Check recovery after the burst, not merely that all upgrades returned 101.
+  const marker='after-reconnect';sent.set(marker,performance.now());
+  sockets[0].send(JSON.stringify({type:'message',content:marker}));
+  const recoveryDeadline=performance.now()+10_000;
+  while(received.slice(0,399).some(messages=>!messages.has(marker)) && performance.now()<recoveryDeadline) await new Promise(resolve=>setTimeout(resolve,25));
+  expect(received.slice(0,399).filter(messages=>messages.has(marker))).toHaveLength(399);
+  metrics.push({name:'room-reconnect-delivery',expected:399,delivered:399,revokedGuestDenied:true});
 }

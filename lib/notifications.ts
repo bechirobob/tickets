@@ -70,15 +70,18 @@ async function persistAndPush(env: Cloudflare.Env, recipients: PushRow[], payloa
   const now = new Date().toISOString();
   const uniqueAttendees = [...new Set(recipients.map((row) => row.attendeeId))];
   for (const batch of chunks(uniqueAttendees, 50)) {
-    await env.DB.batch(batch.map((attendeeId) => env.DB.prepare(`
+    // One statement per audience chunk, not one D1 query per guest. This keeps
+    // a 400-person Room fanout below per-invocation query limits.
+    await env.DB.prepare(`
       INSERT OR IGNORE INTO attendee_notifications
         (id, attendee_id, event_slug, kind, title, body, url, source_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      SELECT json_extract(value, '$.id'), json_extract(value, '$.attendeeId'), ?, ?, ?, ?, ?, ?, ?
+      FROM json_each(?)
     `).bind(
-      crypto.randomUUID(), attendeeId, payload.eventSlug ?? null, payload.kind,
-      payload.title.slice(0, 120), payload.body.slice(0, 280), payload.url.slice(0, 300),
-      payload.sourceId ?? null, now,
-    )));
+      payload.eventSlug ?? null, payload.kind, payload.title.slice(0, 120),
+      payload.body.slice(0, 280), payload.url.slice(0, 300), payload.sourceId ?? null, now,
+      JSON.stringify(batch.map(attendeeId => ({ id: crypto.randomUUID(), attendeeId }))),
+    ).run();
   }
   let delivered = 0;
   for (const batch of chunks(recipients.filter((row) => row.subscriptionId), 20)) {

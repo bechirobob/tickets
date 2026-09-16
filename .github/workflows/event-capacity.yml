@@ -29,6 +29,12 @@ jobs:
           node -e 'console.log(JSON.stringify({revision:process.env.GITHUB_SHA,node:process.version,platform:process.platform,cpus:require("os").cpus().length,memoryBytes:require("os").totalmem()}))' > capacity-results/environment.json
           set -o pipefail
           npm run test:capacity 2>&1 | tee capacity-results/run.log
+      - name: Build the real HTTP application
+        run: npm run build && node scripts/prepare-deploy.mjs
+      - name: HTTP bursts and sustained arrivals against isolated local Worker
+        run: |
+          set -o pipefail
+          node scripts/capacity/http.mjs 2>&1 | tee capacity-results/http-run.log
       - name: Preserve measured results including failures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
