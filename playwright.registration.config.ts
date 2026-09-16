@@ -5,7 +5,7 @@ export default defineConfig({
   testMatch: 'registration.spec.ts',
   use: { ...base.use, baseURL: 'http://127.0.0.1:8790', serviceWorkers: 'block' },
   webServer: {
-    command: 'npx wrangler dev --config dist/server/wrangler.json --port 8790 --local --persist-to .wrangler/state --var ENVIRONMENT:test',
+    command: 'node scripts/browser-worker.mjs registration',
     url: 'http://127.0.0.1:8790', reuseExistingServer: false, timeout: 120_000,
   },
 });
