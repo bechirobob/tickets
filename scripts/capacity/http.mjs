@@ -15,7 +15,7 @@ config.name='becore-tickets-capacity-http';config.routes=[];config.workers_dev=f
 config.vars={ENVIRONMENT:'test'};delete config.triggers;delete config.queues;delete config.ai;delete config.images;delete config.observability;
 config.d1_databases=[{binding:'DB',database_name:'capacity-local-only',database_id:'00000000-0000-0000-0000-000000000000',migrations_dir:'../../drizzle'}];
 writeFileSync(configPath,JSON.stringify(config));
-const childEnv={...process.env};
+const childEnv={...process.env, WRANGLER_LOG:'debug'};
 for(const key of Object.keys(childEnv)) if(/CLOUDFLARE|SEEV_|RESEND_|PAYSTACK_|OPENAI_|ADMIN_ACCESS|VAPID_/u.test(key))delete childEnv[key];
 const wrangler=args=>execFileSync('npx',['wrangler',...args,'--config',configPath],{env:childEnv,stdio:'pipe'});
 wrangler(['d1','migrations','apply','DB','--local','--persist-to',state]);
@@ -35,11 +35,13 @@ writeFileSync(`${state}/fixture.sql`,sql.join('\n'));wrangler(['d1','execute','D
 const log=createWriteStream(`${output}/http-worker.log`);
 const server=spawn('npx',['wrangler','dev','--config',configPath,'--local','--persist-to',state,'--port','8797'],{env:childEnv,stdio:['ignore','pipe','pipe'],detached:true});
 server.stdout.pipe(log);server.stderr.pipe(log);
+const serverExit = { code: null, signal: null };
+server.on('exit',(code,signal)=>{serverExit.code=code;serverExit.signal=signal;console.log(JSON.stringify({name:'local-server-exit',code,signal}));});
 const metrics=[];
 const percentile=(values,p)=>Math.round([...values].sort((a,b)=>a-b)[Math.max(0,Math.ceil(values.length*p)-1)]??0);
 async function request(i,path='/api/customer/my-nights'){
   const start=performance.now();
-  const response=await fetch(`${base}${path}`,{headers:{cookie:`bct_attendee=${tokens[i%400]}`},signal:AbortSignal.timeout(30000)});
+  const response=await fetch(`${base}${path}`,{headers:{cookie:`bct_attendee=${tokens[i%400]}`},signal:AbortSignal.timeout(30000)}).catch(error=>{throw Error(`${error.message}; cause: ${error.cause?.code ?? ''} ${error.cause?.message ?? ''}`);});
   const data=await response.json();
   if(response.status!==200 || data.attendee?.displayName!==`Guest ${i%400}` || data.nights?.length!==1 || data.nights[0]?.eventSlug!==slug || data.nights[0]?.ticketCount!==1)throw Error(`Unexpected/private data response: ${response.status}`);
   return performance.now()-start;
@@ -52,7 +54,7 @@ try{
     const start=performance.now();const results=await Promise.allSettled(Array.from({length:concurrency},(_,i)=>request(i)));
     const times=results.filter(r=>r.status==='fulfilled').map(r=>r.value),errors=results.filter(r=>r.status==='rejected');
     const duration=performance.now()-start;
-    const result={name:'HTTP My Nights burst',concurrency,distinctAttendees:Math.min(concurrency,400),requests:concurrency,errors:errors.length,p50Ms:percentile(times,.5),p95Ms:percentile(times,.95),p99Ms:percentile(times,.99),elapsedMs:Math.round(duration),requestsPerSecond:+(concurrency/(duration/1000)).toFixed(1),meetsTarget:errors.length===0&&percentile(times,.95)<5000};
+    const result={name:'HTTP My Nights burst',concurrency,distinctAttendees:Math.min(concurrency,400),requests:concurrency,errors:errors.length,firstErrors:errors.slice(0,3).map(r=>String(r.reason)),p50Ms:percentile(times,.5),p95Ms:percentile(times,.95),p99Ms:percentile(times,.99),elapsedMs:Math.round(duration),requestsPerSecond:+(concurrency/(duration/1000)).toFixed(1),meetsTarget:errors.length===0&&percentile(times,.95)<5000};
     metrics.push(result);console.log(JSON.stringify(result));
     if(concurrency<=400&&!result.meetsTarget)throw Error(`Target capacity failed at ${concurrency}`);
     if(errors.length)break;
@@ -70,7 +72,7 @@ try{
   if(sustained.errors||sustained.p95Ms>3000||sustained.p95ArrivalLatenessMs>250)throw Error('Sustained HTTP load or load-generator timing failed');
   await request(0);metrics.push({name:'post-load recovery',passed:true});
 }finally{
-  writeFileSync(`${output}/http-measurements.json`,JSON.stringify({revision:process.env.GITHUB_SHA??'local-uncommitted',environment:'built application through loopback HTTP; local workerd and isolated D1',productionQuotasEnforced:false,metrics},null,2));
+  writeFileSync(`${output}/http-measurements.json`,JSON.stringify({revision:process.env.GITHUB_SHA??'local-uncommitted',environment:'built application through loopback HTTP; local workerd and isolated D1',productionQuotasEnforced:false,serverExit,metrics},null,2));
   try{process.kill(-server.pid,'SIGTERM');}catch{/* already stopped */}
   if(server.exitCode===null)await Promise.race([once(server,'exit'),new Promise(r=>setTimeout(r,3000))]);
   log.end();
