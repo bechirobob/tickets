@@ -28,7 +28,7 @@ const required=await api(zone+"/email/routing/dns");
 if(!Array.isArray(required)||required.filter(r=>r.type==="MX").length!==3)throw new Error("Unexpected required DNS");
 const body=r=>({name:r.name,type:r.type,content:r.content,ttl:r.ttl||1,...(r.priority!==undefined?{priority:r.priority}:{})});
 console.log(JSON.stringify({rollbackSnapshot:[...oldMx,...oldSpf].map(r=>({id:r.id,...body(r)}))}));
-const norm=value=>value.replaceAll('"',"").replace(/\\.$/,"");
+const norm=value=>{const clean=value.replaceAll('"',"");return clean.endsWith(".")?clean.slice(0,-1):clean;};
 const posts=required.filter(r=>r.type!=="TXT"||!r.content.replaceAll('"',"").startsWith("v=spf1 ")).map(body).filter(r=>!records.some(e=>norm(e.name)===norm(r.name)&&e.type===r.type&&norm(e.content)===norm(r.content)));
 const mergedSpf=oldSpf[0].content.replace("v=spf1 ","v=spf1 include:_spf.mx.cloudflare.net ");
 const changes=await api(zone+"/dns_records/batch","POST",{deletes:oldMx.map(r=>({id:r.id})),patches:[{id:oldSpf[0].id,content:mergedSpf}],posts});
