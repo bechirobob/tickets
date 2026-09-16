@@ -58,7 +58,7 @@ export default function MyNightsClient() {
   const [recoveryError, setRecoveryError] = useState("");
   const recoveryBusy = useRef(false);
   const recovered = params.get("recovered") === "1";
-  const activeView = locked && registrationCount > 0 && view === "upcoming" ? "rsvps" : view;
+  const activeView = locked && registrationCount > 0 && view === "upcoming" && !params.has("view") ? "rsvps" : view;
 
   const load = useCallback(() => requestJson<Payload>("/api/customer/my-nights", { cache: "no-store" })
     .then((data) => {

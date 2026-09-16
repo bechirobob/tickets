@@ -68,7 +68,7 @@ test("registration-only guests keep access and cancellation is deliberate", asyn
   expect(cancellations).toBe(1);
 });
 
-test("recovery remains usable with reduced motion and without transparency", async ({ page }, info) => {
+test("recovery remains usable with reduced motion", async ({ page }, info) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/my-nights");
   await expect(page.getByRole("heading", { name: "Your plans are still here." })).toBeVisible();

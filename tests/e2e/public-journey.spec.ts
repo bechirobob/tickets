@@ -145,7 +145,7 @@ test("featured motion continues in the Room and resumes after returning to the h
 
 test("My Nights exposes secure recovery to a signed-out customer", async ({ page }) => {
   await page.goto("/my-nights");
-  await expect(page.getByRole("heading", { name: "Let’s find your plans." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your plans are still here." })).toBeVisible();
   await expect(page.getByLabel("Booking or registration email")).toBeVisible();
   await expect(page.getByRole("button", { name: "Bring back my Nights" })).toHaveAttribute("type", "submit");
 });
@@ -264,7 +264,7 @@ test("customer controls use neutral keyboard focus without halos", async ({ page
       // that React is still taking over on a slower runner.
       if (await playback.count()) await expect(playback).toBeDisabled();
     }
-    const controls = path === "/" ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : path === "/my-nights" && page.viewportSize()!.width <= 700 ? page.locator('.customer-dock a[aria-current="page"]') : page.locator('.account-navigation a[aria-current="page"]');
+    const controls = path === "/" ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
     await page.keyboard.press("Tab");
     await controls.focus();
     await expect(controls).toBeFocused();

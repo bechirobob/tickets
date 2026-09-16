@@ -70,9 +70,8 @@ export default function TicketReturn({
             <p className="eyebrow">Official return queue</p>
             <h3>Can’t make it?</h3>
             <p>
-              We first look for a verified buyer at the same ticket value. Your
-              ticket remains valid—and entirely yours—until the replacement
-              payment and your refund are confirmed.
+              We look for a verified buyer at the same ticket price. Your ticket
+              stays valid until their payment and your refund are confirmed.
             </p>
             <small>
               Requests close 24 hours before the Night. Joining the queue does

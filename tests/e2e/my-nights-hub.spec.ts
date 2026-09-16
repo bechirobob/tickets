@@ -86,11 +86,11 @@ test("group passes stay separate and support drafts survive view changes", async
   await page.getByText("Booking & help", { exact: true }).click();
   await page.getByText("Start a support conversation", { exact: true }).click();
   await page.getByLabel("Subject", { exact: true }).fill("Arrival question");
-  await page.getByLabel("Message", { exact: true }).fill("Where should our group meet?");
+  await page.getByRole("textbox", { name: "Message", exact: true }).fill("Where should our group meet?");
   await page.getByRole("button", { name: "The Night", exact: true }).click();
   await page.getByRole("button", { name: "Ticket 3", exact: true }).click();
   await expect(page.getByLabel("Subject", { exact: true })).toHaveValue("Arrival question");
-  await expect(page.getByLabel("Message", { exact: true })).toHaveValue("Where should our group meet?");
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue("Where should our group meet?");
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
   await page.screenshot({ path: info.outputPath("my-nights-group-support.png"), fullPage: true });
 });
