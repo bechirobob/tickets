@@ -45,3 +45,5 @@ worker-configuration.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+/capacity-results/

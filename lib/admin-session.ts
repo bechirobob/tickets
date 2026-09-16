@@ -256,11 +256,11 @@ export function mutationHasValidOrigin(request: Request): boolean {
   return Boolean(origin && origin === new URL(request.url).origin);
 }
 
-export async function recordAudit(
+export function prepareAudit(
   db: D1Database,
   input: { session?: AdminSession | null; action: string; targetType: string; targetId?: string | null; outcome: "success" | "denied" | "failed"; detail?: string | null; requestId?: string | null },
-): Promise<void> {
-  await db.prepare(`
+) {
+  return db.prepare(`
     INSERT INTO operational_audit_events (
       id, actor_account_id, actor_email, actor_role, action, target_type, target_id, outcome, detail, request_id, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -268,7 +268,11 @@ export async function recordAudit(
     crypto.randomUUID(), input.session?.accountId ?? null, input.session?.email ?? null, input.session?.role ?? null,
     input.action, input.targetType, input.targetId ?? null, input.outcome, input.detail?.slice(0, 1000) ?? null,
     input.requestId ?? null, new Date().toISOString(),
-  ).run();
+  );
+}
+
+export async function recordAudit(db: D1Database, input: Parameters<typeof prepareAudit>[1]): Promise<void> {
+  await prepareAudit(db, input).run();
 }
 
 export async function recordSecurityEvent(

@@ -2,8 +2,6 @@ import { paystackAvailable, paystackEnvironment } from "../../../../lib/paystack
 import { registrationSettings, registrationsOpen } from "../../../../lib/registrations";
 import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
 import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
-import { resolveBookingFee } from "../../../../lib/booking-fees";
-import { expireReservations } from "../../../../lib/payment-operations";
 import { resolveTicketSelection } from "../../../../lib/ticket-selection";
 import { findCuratedEvent } from "../../../events";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
@@ -38,7 +36,7 @@ export async function POST(request: Request) {
   const phone = body.phone?.replace(/[^\d+]/gu, "") ?? "";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) || phone.length < 7 || phone.length > 40) return Response.json({ error: "A valid email and phone number are required." }, { status: 400 });
   const [ipRateAllowed, customerRateAllowed] = await Promise.all([
-    enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
+    enforceRateLimit(env.PAYMENT_NETWORK_RATE_LIMITER, `payment-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
     enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-customer:${await hashStaffToken(email)}`),
   ]);
   if (!ipRateAllowed || !customerRateAllowed) {
@@ -88,9 +86,9 @@ export async function POST(request: Request) {
   const now = new Date();
   const createdAt = now.toISOString();
   const expiresAt = new Date(now.getTime() + RESERVATION_MINUTES * 60 * 1000).toISOString();
-  await expireReservations(env.DB, createdAt);
-
-  const feeBasisPoints = await resolveBookingFee(eventSlug);
+  // Availability checks already exclude expired holds. Global expiry/cleanup is
+  // performed by the scheduled worker, not repeated by every buyer in a burst.
+  const feeBasisPoints = event.bookingFeeBasisPoints;
   const faceAmountMinor = selection.faceAmountMinor;
   const bookingFeeMinor = Math.round(faceAmountMinor * feeBasisPoints / 10000);
   const totalAmountMinor = faceAmountMinor + bookingFeeMinor;

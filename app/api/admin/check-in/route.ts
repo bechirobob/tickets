@@ -1,4 +1,4 @@
-import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
+import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, prepareAudit, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { hashGateToken, normalizeGateToken } from "../../../../lib/gate-pass";
 
 type TicketAtGate = {
@@ -115,9 +115,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "That QR or ticket code is not valid." }, { status: 400, headers: { "cache-control": "no-store" } });
   }
 
-  if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
-  const unavailable = await env.DB.prepare("SELECT 1 FROM curated_event_records WHERE slug = ? AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')").bind(eventSlug).first();
-  if (unavailable) return Response.json({ result: "invalid", error: "Entry is paused for this event. Check its latest status." }, { status: 409 });
+  // Evaluate current assignment and event state together; no authorization cache.
+  const eventAccess = await env.DB.prepare(`
+    SELECT
+      EXISTS(SELECT 1 FROM curated_event_records WHERE slug = ? AND removed_at IS NOT NULL) AS removed,
+      (? = 'owner' OR EXISTS(SELECT 1 FROM staff_event_assignments WHERE account_id = ? AND event_slug = ?)) AS assigned,
+      EXISTS(SELECT 1 FROM curated_event_records WHERE slug = ? AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')) AS unavailable
+  `).bind(eventSlug, session.role, session.accountId, eventSlug, eventSlug).first<{removed: number; assigned: number; unavailable: number}>();
+  if (!eventAccess || eventAccess.removed || !eventAccess.assigned) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
+  if (eventAccess.unavailable) return Response.json({ result: "invalid", error: "Entry is paused for this event. Check its latest status." }, { status: 409 });
   if (clientScanId) {
     const replay = await env.DB.prepare(`
       SELECT ticket.id AS ticketId, ticket.event_slug AS eventSlug, ticket.ticket_type AS ticketType,
@@ -149,11 +155,13 @@ export async function POST(request: Request) {
     const current = await findTicket(env.DB, tokenHash);
     return Response.json({ result: "duplicate", ticket: current, error: "This ticket was admitted by another gate." }, { status: 409, headers: { "cache-control": "no-store" } });
   }
-  await recordAudit(env.DB, { session, action: "gate.ticket_checked_in", targetType: "ticket", targetId: ticket.ticketId, outcome: "success", detail: `${eventSlug}:${gate}`, requestId: requestMetadata(request).requestId });
-  await env.DB.prepare(`
+  await env.DB.batch([
+    prepareAudit(env.DB, { session, action: "gate.ticket_checked_in", targetType: "ticket", targetId: ticket.ticketId, outcome: "success", detail: `${eventSlug}:${gate}`, requestId: requestMetadata(request).requestId }),
+    env.DB.prepare(`
     INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, device_id, client_scan_id, created_at)
     VALUES (?, ?, ?, 'check_in', ?, ?, ?, ?, ?, ?)
-  `).bind(crypto.randomUUID(), ticket.ticketId, eventSlug, gate, session.accountId, session.email, deviceId, clientScanId, checkedInAt).run();
+  `).bind(crypto.randomUUID(), ticket.ticketId, eventSlug, gate, session.accountId, session.email, deviceId, clientScanId, checkedInAt),
+  ]);
   return Response.json({ result: "valid", ticket: { ...ticket, status: "checked_in", checkedInAt, checkedInGate: gate } }, { headers: { "cache-control": "no-store" } });
 }
 

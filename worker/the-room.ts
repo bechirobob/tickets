@@ -293,7 +293,9 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }
   }
 
-  async webSocketClose(): Promise<void> {
+  async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
+    // Complete the closing handshake explicitly, including local runtimes.
+    socket.close([1005, 1006, 1015].includes(code) ? 1000 : code, reason);
     this.broadcast({ type: "presence", online: this.ctx.getWebSockets().length });
   }
 

@@ -86,16 +86,17 @@ export async function readAttendeeIdentity(
   const now = new Date().toISOString();
   const identity = await db.prepare(`
     SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
-           p.email_verified_at IS NOT NULL AS emailVerified
+           p.email_verified_at IS NOT NULL AS emailVerified, s.last_seen_at AS lastSeenAt
     FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id = s.attendee_id
     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
     LIMIT 1
-  `).bind(tokenHash, now).first<AttendeeIdentity>();
+  `).bind(tokenHash, now).first<AttendeeIdentity & { lastSeenAt: string }>();
   if (!identity) return null;
-  await db.prepare("UPDATE attendee_sessions SET last_seen_at = ? WHERE token_hash = ?")
-    .bind(now, tokenHash).run();
-  return { ...identity, emailVerified: Boolean(identity.emailVerified) };
+  await touchSession(db, tokenHash, identity.lastSeenAt, now);
+  const { lastSeenAt: _lastSeenAt, ...profile } = identity;
+  void _lastSeenAt;
+  return { ...profile, emailVerified: Boolean(identity.emailVerified) };
 }
 
 export async function readAttendeeRoomAccess(
@@ -111,7 +112,7 @@ export async function readAttendeeRoomAccess(
   const access = await db.prepare(`
     SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
            p.email_verified_at IS NOT NULL AS emailVerified,
-           s.id AS sessionId, t.event_slug AS eventSlug, t.id AS ticketId, tier.room_badge AS roomBadge
+           s.id AS sessionId, s.last_seen_at AS lastSeenAt, t.event_slug AS eventSlug, t.id AS ticketId, tier.room_badge AS roomBadge
     FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id = s.attendee_id
     JOIN ticket_assignments a ON a.attendee_id = p.id AND a.status = 'active'
@@ -126,11 +127,12 @@ export async function readAttendeeRoomAccess(
       AND (? = 0 OR NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.event_state IN ('cancelled', 'postponed')))
     ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
     LIMIT 1
-  `).bind(tokenHash, now, eventSlug, requireRoom ? 1 : 0, requireRoom ? 1 : 0, requireRoom ? 1 : 0).first<AttendeeRoomAccess>();
+  `).bind(tokenHash, now, eventSlug, requireRoom ? 1 : 0, requireRoom ? 1 : 0, requireRoom ? 1 : 0).first<AttendeeRoomAccess & { lastSeenAt: string }>();
   if (!access) return null;
-  await db.prepare("UPDATE attendee_sessions SET last_seen_at = ? WHERE token_hash = ?")
-    .bind(now, tokenHash).run();
-  return { ...access, emailVerified: Boolean(access.emailVerified) };
+  await touchSession(db, tokenHash, access.lastSeenAt, now);
+  const { lastSeenAt: _lastSeenAt, ...profile } = access;
+  void _lastSeenAt;
+  return { ...profile, emailVerified: Boolean(access.emailVerified) };
 }
 
 export async function listAttendeeEvents(
@@ -146,4 +148,12 @@ export async function listAttendeeEvents(
     ORDER BY MIN(t.issued_at)
   `).bind(attendeeId).all<{ eventSlug: string; ticketCount: number }>();
   return result.results;
+}
+
+// Authorization is checked on every request; only activity bookkeeping is coalesced.
+async function touchSession(db: D1Database, tokenHash: string, lastSeenAt: string, now: string) {
+  const cutoff = new Date(Date.parse(now) - 5 * 60_000).toISOString();
+  if (lastSeenAt >= cutoff) return;
+  await db.prepare("UPDATE attendee_sessions SET last_seen_at = ? WHERE token_hash = ? AND last_seen_at < ?")
+    .bind(now, tokenHash, cutoff).run();
 }
