@@ -197,3 +197,5 @@
 }
 .night-hub--member .night-passes > .night-passes__offline { margin-top: 14px; }
 .night-hub--member .night-purchase :is(small, dt) { color: #644f5c; }
+.night-hub--member .night-perks__tiers article > span { color: #644f5c; }
+.night-ticket-extras .night-perks__tiers { grid-template-columns: 1fr; }
