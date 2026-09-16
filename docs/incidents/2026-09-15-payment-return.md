@@ -21,7 +21,11 @@ The payment_confirmation delivery failed with Transactional email is not configu
 ## Release evidence
 
 Previous production revision: 4f68c81cb1a4e81d5944b7b0139942f7107e692d.
-Candidate revision: 13e88745d55712f2adaf8ebe9ad4a9d2eb82228c.
+Final candidate revision: 78343698f22dd7cf9f3f7e30f27d827d7d25a66f.
 PR: https://github.com/bechirobob/tickets/pull/148.
-Candidate run: 35037117137. Native run: 35037117112.
-Release and customer-visible access must still be verified before closing the incident.
+Final candidate run: 35037775560. Native run: 35037775607. All desktop Chromium, mobile Chromium, mobile WebKit, Android, iOS and packaged web-client jobs passed. Payment-return mocks explicitly block service workers: the WebKit trace showed a service worker bypassing the second intercepted poll and reaching the real server with the dummy reference.
+Deployed revision: 20eef5865316e68c700bd41f7fe7e7d08179615a.
+Cloudflare version: e671e06c-c9e2-4feb-8cd2-3c3e776ab530.
+Deploy run: 35038481980, job 104612824292, success. The custom-domain version matches; release smoke checks passed public routes, privacy checks and unsigned webhook rejection. The new unauthenticated return recovery correctly returns 401 and the live page shows its recovery guidance. The owner's replacement paid-ticket link remains unconsumed so the owner can claim it on their own device. Customer-visible QR/Room access still requires that click; do not claim it already happened.
+
+Resend sign-in succeeded through the owner's chosen GitHub method. No sender domains exist. Automatic approval review explicitly rejected adding tickets.becoreops.com because persistent sender-domain registration needs the user's explicit approval. Do not retry through another route. Ask for that domain registration and verification DNS setup after delivering the completed checkout fix. No domain or sending key has been created. Once sender setup is approved and verified, configure a sending-only key in encrypted secrets and retry only the failed receipt through the normal delivery path (its not-configured failure currently has no next_attempt_at).
