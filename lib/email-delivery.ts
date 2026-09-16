@@ -75,7 +75,7 @@ export async function sendEmail(input: {
       body: JSON.stringify({ from: env.EMAIL_FROM, to: [input.recipient], subject: input.subject, html: input.html, text: input.text }),
     });
     const result = await response.json() as { id?: string; name?: string; message?: string; error?: { message?: string } };
-    if(response.status===429 && ['event_announcement','organizer_signup'].includes(input.kind)) {
+    if(response.status===429) {
       await input.db.prepare("UPDATE delivery_events SET status='failed',attempt_count=0,next_attempt_at=?,failure_reason=?,updated_at=? WHERE id=?").bind(quotaRetryAt(response,result.name),result.message??'Email provider quota reached.',now,deliveryId).run();
       return {sent:false,reason:'provider_quota' as const};
     }
@@ -125,11 +125,11 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return { attempted: 0, delivered: 0 };
   const scopeSql = scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
   const due = await env.DB.prepare(`
-    SELECT id, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
+    SELECT id, kind, recovery_grant_id AS grantId, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
     WHERE (${scopeSql}) AND ((status='failed' AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (status='queued' AND julianday(updated_at) < julianday('now','-5 minutes')))
     ORDER BY next_attempt_at LIMIT ?
-  `).bind(new Date().toISOString(), limit).all<{ id: string; recipient: string; payloadJson: string | null; attemptCount: number }>();
+  `).bind(new Date().toISOString(), limit).all<{ id: string; kind: DeliveryKind; grantId: string | null; recipient: string; payloadJson: string | null; attemptCount: number }>();
   let delivered = 0;
   for (const item of due.results) {
     const lease=await env.DB.prepare("UPDATE delivery_events SET status='queued',updated_at=?,next_attempt_at=NULL WHERE id=? AND ((status='failed' AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now')) OR (status='queued' AND julianday(updated_at)<julianday('now','-5 minutes'))) ").bind(new Date().toISOString(),item.id).run();
@@ -137,6 +137,18 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
     try {
       const payload = JSON.parse(item.payloadJson ?? "{}") as { subject?: string; html?: string; text?: string; idempotencyKey?: string };
       if (!payload.subject || !payload.html || !payload.text || !payload.idempotencyKey) throw new Error("Saved delivery payload is incomplete.");
+      // Quota deferral must not send expired or cancelled invitations later.
+      let accessValid = true;
+      const now = new Date().toISOString();
+      if (item.kind === "ticket_recovery" && item.grantId) accessValid = Boolean(await env.DB.prepare("SELECT 1 FROM attendee_recovery_grants WHERE id=? AND used_at IS NULL AND expires_at>?").bind(item.grantId, now).first());
+      if (item.kind === "ticket_transfer") accessValid = Boolean(await env.DB.prepare("SELECT 1 FROM ticket_transfers WHERE id=? AND status='pending' AND expires_at>?").bind(item.grantId, now).first());
+      if (item.kind === "waitlist_offer") accessValid = Boolean(await env.DB.prepare("SELECT 1 FROM event_waitlist_entries WHERE id=? AND status='offered' AND offer_expires_at>?").bind(item.grantId, now).first());
+      if (item.kind === "registration_access") accessValid = Boolean(await env.DB.prepare("SELECT 1 FROM registration_access_grants WHERE token_hash=? AND claimed_session_id IS NULL AND expires_at>?").bind(payload.idempotencyKey.split('/')[1] ?? '', now).first());
+      if (!accessValid) {
+        await env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,failure_reason='The access link expired or was cancelled before delivery.',updated_at=? WHERE id=?").bind(now,item.id).run();
+        continue;
+      }
+
       if (payload.idempotencyKey.startsWith('event-announcement/')) {
         const [,campaignId,contactId]=payload.idempotencyKey.split('/');
         const allowed=await env.DB.prepare(`SELECT 1 FROM event_audience_contacts a JOIN curated_event_records e ON e.slug=a.event_slug WHERE a.id=? AND a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND e.removed_at IS NULL`).bind(contactId).first();
@@ -158,7 +170,7 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
         body: JSON.stringify({ from: env.EMAIL_FROM, to: [item.recipient], subject: payload.subject, html: payload.html, text: payload.text }),
       });
       const result = await response.json() as { id?: string; name?:string; message?: string };
-      if(response.status===429 && /^(event-announcement|organizer-signup)\//u.test(payload.idempotencyKey)) {
+      if(response.status===429) {
         await env.DB.prepare("UPDATE delivery_events SET status='failed',next_attempt_at=?,failure_reason=?,updated_at=? WHERE id=?").bind(quotaRetryAt(response,result.name),result.message??'Email provider quota reached.',new Date().toISOString(),item.id).run();continue;
       }
       if (!response.ok || !result.id) throw new Error(result.message ?? "Email retry was rejected.");

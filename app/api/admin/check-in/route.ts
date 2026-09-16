@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
   const query = url.searchParams.get("q")?.trim().slice(0, 100) ?? "";
   if (query) {
-    const like = `%${query.replaceAll("%", "").replaceAll("_", "")}%`;
+    const search = query;
     const matches = await env.DB.prepare(`
       SELECT t.id AS ticketId, t.ticket_type AS ticketType, t.status,
              t.checked_in_at AS checkedInAt, t.checked_in_gate AS checkedInGate,
@@ -52,9 +52,9 @@ export async function GET(request: Request) {
       FROM tickets t JOIN orders o ON o.id = t.order_id
       LEFT JOIN ticket_assignments assignment ON assignment.ticket_id = t.id AND assignment.status = 'active'
       LEFT JOIN attendee_profiles profile ON profile.id = assignment.attendee_id
-      WHERE t.event_slug = ? AND (o.reference LIKE ? OR o.customer_name LIKE ? OR o.customer_email LIKE ? OR o.customer_phone LIKE ? OR profile.display_name LIKE ?)
+      WHERE t.event_slug = ? AND (instr(lower(o.reference), lower(?)) > 0 OR instr(lower(o.customer_name), lower(?)) > 0 OR instr(lower(o.customer_email), lower(?)) > 0 OR instr(lower(o.customer_phone), lower(?)) > 0 OR instr(lower(profile.display_name), lower(?)) > 0)
       ORDER BY o.paid_at DESC, t.admission_number LIMIT 20
-    `).bind(eventSlug, like, like, like, like, like).all();
+    `).bind(eventSlug, search, search, search, search, search).all();
     return Response.json({ matches: matches.results, canUndo: hasPermission(session, "gate.undo") }, { headers: { "cache-control": "no-store" } });
   }
   const stats = await env.DB.prepare(`

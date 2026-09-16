@@ -23,8 +23,8 @@ export async function GET(request: Request) {
   const offset = Math.max(0, Math.min(100000, Math.floor(Number(url.searchParams.get('offset'))) || 0));
   const status = url.searchParams.get('status') ?? '', query = (url.searchParams.get('q') ?? '').trim().slice(0, 120);
   if (status && !['requested','confirmed','waitlisted','declined','cancelled','interested'].includes(status)) return Response.json({error:'Choose a guest status.'},{status:400});
-  const filter = `event_slug = ? AND status <> 'unverified' AND (? = '' OR status = ?) AND (? = '' OR guest_name LIKE ? OR normalized_email LIKE ?)`;
-  const values = [slug, status, status, query, `%${query}%`, `%${query}%`];
+  const filter = `event_slug = ? AND status <> 'unverified' AND (? = '' OR status = ?) AND (? = '' OR instr(lower(guest_name), lower(?)) > 0 OR instr(lower(normalized_email), lower(?)) > 0)`;
+  const values = [slug, status, status, query, query, query];
   const [settings, rows, counts, pricing, total] = await Promise.all([registrationSettings(env.DB, slug),
     env.DB.prepare(`SELECT id, guest_name AS guestName, normalized_email AS email, party_size AS partySize, kind, status, created_at AS createdAt FROM event_registrations WHERE ${filter} ORDER BY created_at DESC, id LIMIT 50 OFFSET ?`).bind(...values, offset).all(),
     env.DB.prepare(`SELECT status, COUNT(*) AS registrations, SUM(party_size) AS guests FROM event_registrations WHERE event_slug = ? AND status <> 'unverified' GROUP BY status`).bind(slug).all(),

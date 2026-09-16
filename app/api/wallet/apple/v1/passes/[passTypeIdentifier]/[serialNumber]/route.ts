@@ -25,6 +25,9 @@ type UpdatedWalletTicket = {
   ticketStatus: string;
   assignmentStatus: string | null;
   eventState: string;
+  orderStatus: string;
+  attendeeStatus: string | null;
+  removedAt: string | null;
 };
 
 export async function GET(
@@ -50,19 +53,22 @@ export async function GET(
     SELECT ticket.id,ticket.event_slug AS eventSlug,ticket.ticket_type AS ticketType,
       attendee.display_name AS holder,event.title,event.starts_at AS startsAt,event.ends_at AS endsAt,
       event.venue,event.area,credential.token AS gateToken,ticket.status AS ticketStatus,
-      assignment.status AS assignmentStatus,event.event_state AS eventState
+      assignment.status AS assignmentStatus,event.event_state AS eventState,
+      o.status AS orderStatus, attendee.status AS attendeeStatus, event.removed_at AS removedAt
     FROM tickets ticket
+    JOIN orders o ON o.id=ticket.order_id
     JOIN curated_event_records event ON event.slug=ticket.event_slug
-    JOIN ticket_gate_credentials credential ON credential.ticket_id=ticket.id
+    LEFT JOIN ticket_gate_credentials credential ON credential.ticket_id=ticket.id
     LEFT JOIN ticket_assignments assignment ON assignment.ticket_id=ticket.id AND assignment.attendee_id=?
-    LEFT JOIN attendee_accounts attendee ON attendee.id=?
+    LEFT JOIN attendee_profiles attendee ON attendee.id=?
     WHERE ticket.id=? LIMIT 1
   `).bind(pass.attendeeId, pass.attendeeId, pass.ticketId).first<UpdatedWalletTicket>();
   if (!ticket) return new Response(null, { status: 404 });
 
   const active = ticket.assignmentStatus === "active"
     && ticket.ticketStatus === "issued"
-    && ["on_sale", "rescheduled"].includes(ticket.eventState);
+    && ticket.orderStatus === "paid" && ticket.attendeeStatus === "active" && !ticket.removedAt
+    && Boolean(ticket.gateToken) && ["on_sale", "sold_out", "rescheduled"].includes(ticket.eventState);
   const authenticationToken = await appleWalletAuthenticationToken(env, serialNumber);
   const response = await signAppleWalletPass(
     env,

@@ -2,6 +2,8 @@ import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 
 type NightRecord = {
   roomAccess: number;
+  admissionActive: number;
+  registrationMode: string;
   eventSlug: string;
   title: string;
   startsAt: string | null;
@@ -28,7 +30,8 @@ export async function GET(request: Request) {
   }
   const rows = await env.DB.prepare(`
     WITH owned AS MATERIALIZED (
-      SELECT ticket.event_slug, COUNT(*) AS ticketCount
+      SELECT ticket.event_slug, COUNT(*) AS ticketCount,
+        MAX(CASE WHEN orders.status='paid' AND ticket.status IN ('issued','checked_in') THEN 1 ELSE 0 END) AS activeAdmission
       FROM ticket_assignments assignment
       JOIN tickets ticket ON ticket.id = assignment.ticket_id
       JOIN orders orders ON orders.id = ticket.order_id
@@ -38,7 +41,9 @@ export async function GET(request: Request) {
       GROUP BY ticket.event_slug
     )
     SELECT event.slug AS eventSlug, event.title,
-           CASE WHEN COALESCE((SELECT mode FROM event_registration_settings WHERE event_slug = event.slug), 'paid') <> 'rsvp' THEN 1 ELSE COALESCE((SELECT room_access FROM event_registration_settings WHERE event_slug = event.slug), 0) END AS roomAccess,
+           COALESCE(owned.activeAdmission,0) AS admissionActive,
+           COALESCE((SELECT mode FROM event_registration_settings WHERE event_slug=event.slug),'paid') AS registrationMode,
+           CASE WHEN COALESCE(owned.activeAdmission,0)=0 OR event.event_state NOT IN ('on_sale','sold_out','rescheduled') THEN 0 WHEN COALESCE((SELECT mode FROM event_registration_settings WHERE event_slug = event.slug), 'paid') <> 'rsvp' THEN 1 ELSE COALESCE((SELECT room_access FROM event_registration_settings WHERE event_slug = event.slug), 0) END AS roomAccess,
            CASE WHEN event.schedule_status != 'coming_soon' THEN event.starts_at END AS startsAt,
            CASE WHEN event.schedule_status = 'confirmed' THEN event.ends_at END AS endsAt,
            event.venue, event.area, event.image_url AS imageUrl,
@@ -75,6 +80,7 @@ export async function GET(request: Request) {
       return {
         ...row,
         roomAccess: Boolean(row.roomAccess),
+        admissionActive: Boolean(row.admissionActive),
         ticketCount,
         purchased,
         keepPosted: Boolean(row.keepPosted),

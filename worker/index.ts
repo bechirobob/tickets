@@ -131,7 +131,7 @@ const worker = {
       return securityResponse(Response.json({ error: "The service could not complete this request." }, { status: 500 }));
     }
   },
-  async queue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env, _ctx: ExecutionContext): Promise<void> {
+  async queue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env): Promise<void> {
     for (const message of batch.messages) {
       try {
         await deliverQueuedEventAnnouncement(env, message.body?.deliveryId ?? "");

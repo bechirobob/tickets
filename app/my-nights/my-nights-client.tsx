@@ -15,7 +15,7 @@ import LoadingSkeleton from "../loading-skeleton";
 import { requestJson, requestErrorMessage, RequestError } from "../../lib/client-request";
 
 type Night = {
-  roomAccess?: boolean; eventSlug: string; title: string; startsAt: string | null; endsAt: string | null; venue: string; area: string; imageUrl: string;
+  admissionActive?: boolean; registrationMode?: string; roomAccess?: boolean; eventSlug: string; title: string; startsAt: string | null; endsAt: string | null; venue: string; area: string; imageUrl: string;
   eventState: string; isTestEvent: boolean; ticketCount: number; purchased: boolean; keepPosted: boolean;
   attendeeVisible: boolean; hostSlug: string | null; hostName: string | null; updateCount: number; questionCount: number;
 };
@@ -31,10 +31,11 @@ function belongs(night: Night, view: View, now: number) {
 }
 function nextAction(night: Night, now: number) {
   const base = `/my-nights/${night.eventSlug}`;
+  if (night.admissionActive === false) return { href: `${base}?view=purchase`, label: "View booking", icon: Ticket };
   if (!night.startsAt || !night.endsAt) return { href: `${base}?view=details`, label: "See event details", icon: Bell };
   if (["cancelled", "postponed"].includes(night.eventState)) return { href: `${base}?view=details`, label: "See what changed", icon: Bell };
   if (ended(night, now)) return { href: `${base}?view=details`, label: "Look back", icon: ArrowUpRight };
-  return { href: `${base}?view=passes`, label: night.roomAccess === false ? "Show my RSVP pass" : "Show my ticket", icon: QrCode };
+  return { href: `${base}?view=passes`, label: (night.registrationMode === "rsvp" || (!night.registrationMode && night.roomAccess === false)) ? "Show my RSVP pass" : "Show my ticket", icon: QrCode };
 }
 function datePart(value: string, options: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat("en-GH", { ...options, timeZone: "Africa/Accra" }).format(new Date(value));
@@ -113,7 +114,7 @@ export default function MyNightsClient() {
           const featured = activeView === "upcoming" && index === 0 && !query.trim();
           return <article className={`night-listing${featured ? " night-listing--next" : ""}`} key={night.eventSlug}>
             <Link href={night.purchased ? `/my-nights/${night.eventSlug}?view=details` : `/event/${night.eventSlug}`} className="night-listing__art" tabIndex={-1} aria-hidden="true"><img src={night.imageUrl} alt="" loading={index ? "lazy" : "eager"} /></Link>
-            <div className="night-listing__body"><div className="night-listing__status"><span>{night.isTestEvent ? "Preview" : changed ? night.eventState === "cancelled" ? "Cancelled" : "Date to be confirmed" : live ? "Happening now" : featured ? "Up next" : activeView === "past" ? "Past night" : night.purchased ? "You’re going" : "On your radar"}</span>{night.purchased ? <span><Ticket size={13} />{night.ticketCount} {night.ticketCount === 1 ? "pass" : "passes"}</span> : null}</div>
+            <div className="night-listing__body"><div className="night-listing__status"><span>{night.isTestEvent ? "Preview" : night.purchased && night.admissionActive === false ? "Booking history" : changed ? night.eventState === "cancelled" ? "Cancelled" : "Date to be confirmed" : live ? "Happening now" : featured ? "Up next" : activeView === "past" ? "Past night" : night.purchased ? "You’re going" : "On your radar"}</span>{night.purchased ? <span><Ticket size={13} />{night.ticketCount} {night.ticketCount === 1 ? "pass" : "passes"}</span> : null}</div>
             <h2><Link href={night.purchased ? `/my-nights/${night.eventSlug}?view=details` : `/event/${night.eventSlug}`}>{night.title}<ChevronRight size={20} aria-hidden="true" /></Link></h2>
             <div className="night-listing__when">{night.startsAt ? <time dateTime={night.startsAt}>{datePart(night.startsAt, { weekday: "short", day: "numeric", month: "short" })}<span> · {datePart(night.startsAt, { hour: "numeric", minute: "2-digit" })}</span></time> : "Date coming soon"}</div>
             <p className="night-listing__venue"><MapPin size={15} />{night.venue}{night.area ? `, ${night.area}` : ""}</p>

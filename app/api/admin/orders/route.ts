@@ -33,15 +33,15 @@ export async function GET(request: Request) {
   const eventSlug = url.searchParams.get("event") ?? "";
   const includeRemoved = url.searchParams.get("removed") === "1" ? 1 : 0;
   if (provider && !["paystack", "seevplus", "rsvp"].includes(provider)) return Response.json({ error: "Choose a valid payment method." }, { status: 400 });
-  const wildcard = `%${query}%`;
+  const search = query;
   const totalRow = await env.DB.prepare(`
     SELECT COUNT(*) AS total
     FROM orders
-    WHERE (? = '' OR orders.reference LIKE ? OR orders.customer_email LIKE ? OR orders.customer_phone LIKE ? OR orders.customer_name LIKE ?)
+    WHERE (? = '' OR instr(lower(orders.reference), lower(?)) > 0 OR instr(lower(orders.customer_email), lower(?)) > 0 OR instr(lower(orders.customer_phone), lower(?)) > 0 OR instr(lower(orders.customer_name), lower(?)) > 0)
       AND (? = '' OR orders.status = ?)
       AND (? = '' OR orders.payment_provider = ?) AND (? = '' OR orders.event_slug = ?)
       AND (? = 1 OR NOT EXISTS (SELECT 1 FROM curated_event_records removed WHERE removed.slug = orders.event_slug AND removed.removed_at IS NOT NULL))
-  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status, provider, provider, eventSlug, eventSlug, includeRemoved).first<{ total: number }>();
+  `).bind(query, search, search, search, search, status, status, provider, provider, eventSlug, eventSlug, includeRemoved).first<{ total: number }>();
   const total = Number(totalRow?.total ?? 0);
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize)));
   const offset = (page - 1) * pageSize;
@@ -63,12 +63,12 @@ export async function GET(request: Request) {
            (SELECT COUNT(*) FROM tickets WHERE tickets.order_id = orders.id AND tickets.status = 'checked_in') AS checkedInCount,
            (SELECT status FROM payment_refunds WHERE payment_refunds.order_id = orders.id ORDER BY requested_at DESC LIMIT 1) AS latestRefundStatus
     FROM orders LEFT JOIN curated_event_records event ON event.slug = orders.event_slug
-    WHERE (? = '' OR orders.reference LIKE ? OR orders.customer_email LIKE ? OR orders.customer_phone LIKE ? OR orders.customer_name LIKE ?)
+    WHERE (? = '' OR instr(lower(orders.reference), lower(?)) > 0 OR instr(lower(orders.customer_email), lower(?)) > 0 OR instr(lower(orders.customer_phone), lower(?)) > 0 OR instr(lower(orders.customer_name), lower(?)) > 0)
       AND (? = '' OR orders.status = ?)
       AND (? = '' OR orders.payment_provider = ?) AND (? = '' OR orders.event_slug = ?)
       AND (? = 1 OR NOT EXISTS (SELECT 1 FROM curated_event_records removed WHERE removed.slug = orders.event_slug AND removed.removed_at IS NOT NULL))
     ORDER BY orders.created_at DESC LIMIT ? OFFSET ?
-  `).bind(query, wildcard, wildcard, wildcard, wildcard, status, status, provider, provider, eventSlug, eventSlug, includeRemoved, pageSize, offset).all<Record<string, unknown>>(),
+  `).bind(query, search, search, search, search, status, status, provider, provider, eventSlug, eventSlug, includeRemoved, pageSize, offset).all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM reconciliation_runs ORDER BY created_at DESC LIMIT 20").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM payment_disputes WHERE status NOT IN ('resolved', 'accepted') ORDER BY updated_at DESC LIMIT 50").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM event_settlements ORDER BY period_end DESC, event_slug LIMIT 100").all<Record<string, unknown>>(),

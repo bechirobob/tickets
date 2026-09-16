@@ -16,6 +16,11 @@ describe("ticket email delivery and recovery", () => {
     const secondTicketId = `recover-ticket-second-${suffix}`;
     const now = new Date().toISOString();
     const later = new Date(Date.now() + 1_000).toISOString();
+    // A valid entry pass requires a real, active event as well as a paid order.
+    for (const slug of ['recovery-event','second-recovery-event']) await env.DB.prepare(`
+      INSERT INTO curated_event_records (id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,event_state,image_url,curation_note,status,published_at,created_at,updated_at)
+      SELECT ?,?,?,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,'on_sale',image_url,curation_note,'published',published_at,created_at,updated_at FROM curated_event_records WHERE slug='after-dark-osu'
+    `).bind(slug,slug,slug).run();
     await env.DB.batch([
       env.DB.prepare(`
         INSERT INTO orders (
