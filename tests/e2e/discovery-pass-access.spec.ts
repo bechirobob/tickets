@@ -40,7 +40,7 @@ test("an active night leads with its pass and keeps the Room within reach", asyn
   await page.route("**/api/customer/my-nights", route => route.fulfill({ json: {
     attendee: { displayName: "Ama" }, nights: [{
       eventSlug: "the-weekend-braai", title: "Tonight in Accra", startsAt: new Date(now - 3600000).toISOString(), endsAt: new Date(now + 3600000).toISOString(),
-      venue: "The venue", area: "Osu", imageUrl: "/icons/icon-192.png", eventState: "on_sale", isTestEvent: false,
+      venue: "The venue", area: "Osu", imageUrl: "/atmospheres/behind-the-night.webp", eventState: "on_sale", isTestEvent: false,
       ticketCount: 1, purchased: true, roomAccess: true, keepPosted: false, updateCount: 0,
     }],
   } }));

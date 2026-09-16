@@ -18,6 +18,8 @@ test.beforeEach(async ({ page }) => {
       tickets: [{ id: "isolated-pass", ticketType: "general", status: "issued", checkedInAt: null, gateCode: "FIXTURE", qrPayload: "isolated-visual-fixture-not-valid-for-entry" }],
     }],
   } }));
+  await page.route("**/api/customer/returns", route => route.fulfill({ json: { returns: [] } }));
+  await page.route("**/api/customer/support/the-weekend-braai", route => route.fulfill({ json: { orders: [], cases: [] } }));
   await page.route("**/api/customer/wallet/config", route => route.fulfill({ json: { apple: false, google: false } }));
 });
 
@@ -32,11 +34,13 @@ test("the pass leads, supporting tools expand, and the plan preserves answers", 
   await expect(page.locator(".night-purchase")).not.toHaveAttribute("open", "");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   expect(await nav.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
   await page.screenshot({ path: info.outputPath("my-nights-ticket.png"), fullPage: true });
   await page.getByText("What comes with it", { exact: true }).click();
   await expect(page.getByText("Grills, drinks and an afternoon with your people.")).toBeVisible();
   await page.getByText("Booking & help", { exact: true }).click();
   await expect(page.getByText("BECORE-FIXTURE", { exact: true })).toBeVisible();
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
   await page.screenshot({ path: info.outputPath("my-nights-booking-expanded.png"), fullPage: true });
   await nav.getByRole("button", { name: "The Night", exact: true }).click();
   await expect(page).toHaveURL(/view=details$/);

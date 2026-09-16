@@ -150,7 +150,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
     setView(next);
     const url = new URL(window.location.href);
     url.searchParams.set("view", next);
-    window.history.replaceState(null, "", url);
+    window.history.replaceState(window.history.state, "", url);
   }
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -302,7 +302,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
       <section className="night-hub__hero">
         <img src={event.image} alt={`Atmosphere for ${event.title}`} />
         <div>
-          <p className="eyebrow">You’re on the list</p>
+          <p className="eyebrow">Your night, sorted</p>
           <h1>{event.title}</h1>
           <span>
             {event.venue} · {event.area}
@@ -334,16 +334,8 @@ export default function NightHub({ event }: { event: EventSummary }) {
         ) : null}
 
         {view === "passes" ? (
+          <div className="night-ticket-layout">
           <div className="night-passes">
-            <header>
-              <div><p className="eyebrow">Skip the rummaging</p><h2>You’re good to go.</h2></div>
-              <Link
-                className="night-passes__offline"
-                href="/offline-ticket.html"
-              >
-                <WalletCards size={15} /> Open offline door pass
-              </Link>
-            </header>
             <div className="night-passes__tickets">
               {!tickets.length ? <p className="night-passes__empty">No entry passes here yet. Your booking details are below.</p> : null}
               {tickets.map((ticket, index) => (
@@ -396,10 +388,14 @@ export default function NightHub({ event }: { event: EventSummary }) {
                 </article>
               ))}
             </div>
+              <Link
+                className="night-passes__offline"
+                href="/offline-ticket.html"
+              >
+                <WalletCards size={15} /> Open offline door pass
+              </Link>
           </div>
-        ) : null}
-
-        {view === "passes" ? (
+            <aside className="night-ticket-extras" aria-label="Your booking">
           <details className="night-perks night-hub__disclosure" open={perksOpen} onToggle={(event) => setPerksOpen(event.currentTarget.open)}>
             <summary><Crown size={18} /> What comes with it</summary>
             <div className="night-perks__tiers">
@@ -428,6 +424,69 @@ export default function NightHub({ event }: { event: EventSummary }) {
               ))}
             </div>
           </details>
+          <details className="night-purchase night-hub__disclosure" open={bookingOpen} onToggle={(event) => setBookingOpen(event.currentTarget.open)}>
+            <summary><CircleDollarSign size={18} /> Booking &amp; help</summary>
+            {orders.some((order) => order.canViewPurchase) ? (
+              orders
+                .filter((order) => order.canViewPurchase)
+                .map((order) => (
+                  <article key={order.orderId}>
+                    <header>
+                      <div>
+                        <CircleDollarSign />
+                        <span>
+                          <b>
+                            {order.tierName ??
+                              humanTicket(
+                                order.tickets[0]?.ticketType ?? "Admission",
+                              )}
+                          </b>
+                          <small>{order.reference}</small>
+                        </span>
+                      </div>
+                      <button type="button" onClick={() => window.print()}>
+                        <Download size={14} /> Print / save
+                      </button>
+                    </header>
+                    <dl>
+                      <div>
+                        <dt>Ticket subtotal</dt>
+                        <dd>{money(order.faceAmountMinor, order.currency)}</dd>
+                      </div>
+                      <div>
+                        <dt>Booking fee</dt>
+                        <dd>{money(order.bookingFeeMinor, order.currency)}</dd>
+                      </div>
+                      <div>
+                        <dt>Total paid</dt>
+                        <dd>{money(order.totalAmountMinor, order.currency)}</dd>
+                      </div>
+                      <div>
+                        <dt>Confirmed</dt>
+                        <dd>
+                          {order.paidAt
+                            ? new Intl.DateTimeFormat("en-GH", {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                                timeZone: "Africa/Accra",
+                              }).format(new Date(order.paidAt))
+                            : "Payment confirmed"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))
+            ) : (
+              <p className="night-purchase__transferred">
+                This ticket was transferred to you. Admission, The Room and
+                ticket-linked perks came along; the purchaser’s receipt stayed
+                private.
+              </p>
+            )}
+            <SupportCentre slug={event.slug} />
+          </details>
+            </aside>
+          </div>
         ) : null}
 
         {view === "details" ? (
@@ -639,69 +698,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </div>
         ) : null}
 
-        {view === "passes" ? (
-          <details className="night-purchase night-hub__disclosure" open={bookingOpen} onToggle={(event) => setBookingOpen(event.currentTarget.open)}>
-            <summary><CircleDollarSign size={18} /> Booking &amp; help</summary>
-            {orders.some((order) => order.canViewPurchase) ? (
-              orders
-                .filter((order) => order.canViewPurchase)
-                .map((order) => (
-                  <article key={order.orderId}>
-                    <header>
-                      <div>
-                        <CircleDollarSign />
-                        <span>
-                          <b>
-                            {order.tierName ??
-                              humanTicket(
-                                order.tickets[0]?.ticketType ?? "Admission",
-                              )}
-                          </b>
-                          <small>{order.reference}</small>
-                        </span>
-                      </div>
-                      <button type="button" onClick={() => window.print()}>
-                        <Download size={14} /> Print / save
-                      </button>
-                    </header>
-                    <dl>
-                      <div>
-                        <dt>Ticket subtotal</dt>
-                        <dd>{money(order.faceAmountMinor, order.currency)}</dd>
-                      </div>
-                      <div>
-                        <dt>Booking fee</dt>
-                        <dd>{money(order.bookingFeeMinor, order.currency)}</dd>
-                      </div>
-                      <div>
-                        <dt>Total paid</dt>
-                        <dd>{money(order.totalAmountMinor, order.currency)}</dd>
-                      </div>
-                      <div>
-                        <dt>Confirmed</dt>
-                        <dd>
-                          {order.paidAt
-                            ? new Intl.DateTimeFormat("en-GH", {
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                                timeZone: "Africa/Accra",
-                              }).format(new Date(order.paidAt))
-                            : "Payment confirmed"}
-                        </dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))
-            ) : (
-              <p className="night-purchase__transferred">
-                This ticket was transferred to you. Admission, The Room and
-                ticket-linked perks came along; the purchaser’s receipt stayed
-                private.
-              </p>
-            )}
-            <SupportCentre slug={event.slug} />
-          </details>
-        ) : null}
+
       </section>
 
     </main>
