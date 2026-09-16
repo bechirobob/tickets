@@ -23,6 +23,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
     { name: "PAYMENT_RATE_LIMITER", simple: { limit: 10, period: 60 } },
     { name: "ANALYTICS_RATE_LIMITER", simple: { limit: 60, period: 60 } },
     { name: "AI_RATE_LIMITER", simple: { limit: 6, period: 60 } },
+    { name: "PAYMENT_NETWORK_RATE_LIMITER", simple: { limit: 600, period: 60 } },
   ]);
   assert.deepEqual(config.observability, {
     enabled: true,

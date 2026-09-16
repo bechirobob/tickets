@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const phone = body.phone?.replace(/[^\d+]/gu, "") ?? "";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) || phone.length < 7 || phone.length > 40) return Response.json({ error: "A valid email and phone number are required." }, { status: 400 });
   const [ipRateAllowed, customerRateAllowed] = await Promise.all([
-    enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
+    enforceRateLimit(env.PAYMENT_NETWORK_RATE_LIMITER, `payment-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
     enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-customer:${await hashStaffToken(email)}`),
   ]);
   if (!ipRateAllowed || !customerRateAllowed) {

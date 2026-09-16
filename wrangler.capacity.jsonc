@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "becore-tickets-test",
+  "name": "becore-tickets-capacity",
   "main": "./worker/the-room.ts",
   "compatibility_date": "2026-08-11",
   "compatibility_flags": [
@@ -39,7 +39,7 @@
       "name": "PAYMENT_RATE_LIMITER",
       "namespace_id": "93103",
       "simple": {
-        "limit": 1000,
+        "limit": 10,
         "period": 60
       }
     },

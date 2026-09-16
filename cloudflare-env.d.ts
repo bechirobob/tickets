@@ -17,6 +17,7 @@ declare namespace Cloudflare {
     LOGIN_RATE_LIMITER: RateLimit;
     PUBLIC_WRITE_RATE_LIMITER: RateLimit;
     PAYMENT_RATE_LIMITER: RateLimit;
+    PAYMENT_NETWORK_RATE_LIMITER: RateLimit;
     ANALYTICS_RATE_LIMITER: RateLimit;
     AI_RATE_LIMITER: RateLimit;
     EMAIL_DELIVERY_QUEUE?: Queue<{ deliveryId: string }>;

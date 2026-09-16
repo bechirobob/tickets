@@ -1,0 +1,38 @@
+name: Event capacity verification
+
+on:
+  push:
+    branches: ['perf/event-capacity-400']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capacity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Isolated 400-person event stress test (no production credentials)
+        run: |
+          mkdir -p capacity-results
+          node -e 'console.log(JSON.stringify({revision:process.env.GITHUB_SHA,node:process.version,platform:process.platform,cpus:require("os").cpus().length,memoryBytes:require("os").totalmem()}))' > capacity-results/environment.json
+          set -o pipefail
+          npm run test:capacity 2>&1 | tee capacity-results/run.log
+      - name: Preserve measured results including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: event-capacity-${{ github.run_id }}
+          path: capacity-results
+          retention-days: 30
