@@ -10,7 +10,8 @@ or physical scanning devices. No customer data or live providers are used.
 Run `npm run test:capacity` for real workerd route handlers, isolated D1 and
 Durable Object WebSockets. Run `npm run build`, `node scripts/prepare-deploy.mjs`,
 then `node scripts/capacity/http.mjs` for the compiled application over actual
-loopback HTTP. The latter deliberately has no configurable destination URL and
+loopback HTTP using the compiled Worker in Miniflare/workerd directly, without
+Wrangler’s development inspector/proxy. The latter deliberately has no configurable destination URL and
 strips provider/Cloudflare credentials from its child processes.
 
 The **Event capacity verification** GitHub Actions workflow runs both sequentially
@@ -56,6 +57,9 @@ below 250 ms. A 60-second run is **not** an event-length soak test.
 - Checkout reuses the fresh server-side fee quote and leaves global expired-hold
   cleanup to the scheduled worker. Atomic inventory checks still exclude expired
   holds and protect the last available admission.
+- Gate scans read current assignment and event availability together, and batch
+  the two successful-entry audit writes. Atomic duplicate-entry protection stays
+  in place.
 - Notification insertion uses one SQL statement per 50 recipients rather than
   one statement per person. This reduces query count, **not** the number of rows
   stored or the external push/email workload.
@@ -67,6 +71,15 @@ The initial isolated measurements had no request failures but My Nights p95 was
 alone was therefore insufficient. Explicit latency thresholds now block release
 if this slowdown returns. The report in each workflow artifact supersedes earlier
 measurements; local and CI hardware timings must not be treated as production SLAs.
+
+An earlier compiled HTTP run through `wrangler dev` served 400 requests at
+p95 2,364 ms and 800 at 4,817 ms with zero errors, but its local serving process
+exited during 1,600 simultaneous requests and failed recovery. Diagnostic logs
+reported a disconnected development proxy stream. Direct workerd testing of the
+same compiled application survived that overload and served the next request,
+although the 1,600-request burst still had connection errors. The canonical HTTP
+harness now excludes that development proxy. This distinction does not establish
+Cloudflare production capacity or promise reliable operation at 1,600 requests.
 
 ## Limits requiring separate verification
 

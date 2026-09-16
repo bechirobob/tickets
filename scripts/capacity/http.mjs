@@ -33,7 +33,7 @@ for(let i=0;i<400;i++){
 }
 writeFileSync(`${state}/fixture.sql`,sql.join('\n'));wrangler(['d1','execute','DB','--local','--persist-to',state,'--file',`${state}/fixture.sql`]);
 const log=createWriteStream(`${output}/http-worker.log`);
-const server=spawn('npx',['wrangler','dev','--config',configPath,'--local','--persist-to',state,'--port','8797'],{env:childEnv,stdio:['ignore','pipe','pipe'],detached:true});
+const server=spawn(process.execPath,['scripts/capacity/server.mjs'],{env:childEnv,stdio:['ignore','pipe','pipe'],detached:true});
 server.stdout.pipe(log);server.stderr.pipe(log);
 const serverExit = { code: null, signal: null };
 server.on('exit',(code,signal)=>{serverExit.code=code;serverExit.signal=signal;console.log(JSON.stringify({name:'local-server-exit',code,signal}));});
@@ -72,7 +72,7 @@ try{
   if(sustained.errors||sustained.p95Ms>3000||sustained.p95ArrivalLatenessMs>250)throw Error('Sustained HTTP load or load-generator timing failed');
   await request(0);metrics.push({name:'post-load recovery',passed:true});
 }finally{
-  writeFileSync(`${output}/http-measurements.json`,JSON.stringify({revision:process.env.GITHUB_SHA??'local-uncommitted',environment:'built application through loopback HTTP; local workerd and isolated D1',productionQuotasEnforced:false,serverExit,metrics},null,2));
+  writeFileSync(`${output}/http-measurements.json`,JSON.stringify({revision:process.env.GITHUB_SHA??'local-uncommitted',environment:'built application through loopback HTTP; direct local workerd and isolated D1 (no development inspector/proxy)',productionQuotasEnforced:false,serverExit,metrics},null,2));
   try{process.kill(-server.pid,'SIGTERM');}catch{/* already stopped */}
   if(server.exitCode===null)await Promise.race([once(server,'exit'),new Promise(r=>setTimeout(r,3000))]);
   log.end();
