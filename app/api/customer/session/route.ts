@@ -29,6 +29,25 @@ async function runtimeDb(): Promise<D1Database> {
   return env.DB;
 }
 
+// Recover only the paid order claimed by this exact, still-active browser
+// session. A matching email or a public payment reference is not ownership.
+async function claimedPayment(db: D1Database, request: Request, reference?: string) {
+  const token = readCookie(request.headers.get("cookie"));
+  if (!token) return null;
+  return db.prepare(`
+    SELECT o.event_slug AS eventSlug FROM attendee_sessions s
+    JOIN attendee_profiles p ON p.id=s.attendee_id AND p.status='active'
+    JOIN order_access_grants g ON g.claimed_session_id=s.id
+    JOIN orders o ON o.id=g.order_id AND o.status='paid'
+    WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?
+      AND (? IS NULL OR o.reference=?)
+      AND EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id
+        WHERE t.order_id=o.id AND t.status IN ('issued','checked_in')
+          AND a.attendee_id=s.attendee_id AND a.status='active')
+    ORDER BY g.claimed_at DESC LIMIT 1
+  `).bind(await hashToken(token), new Date().toISOString(), reference ?? null, reference ?? null).first<{ eventSlug: string }>();
+}
+
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) {
     return Response.json({ error: "This ticket request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
@@ -54,6 +73,11 @@ export async function POST(request: Request) {
     LIMIT 1
   `).bind(reference, claimHash).first<ClaimRecord>();
   let record = await findClaimRecord();
+
+  if (record?.claimedAt) {
+    const existing = await claimedPayment(db, request, reference);
+    if (existing) return Response.json({ signedIn: true, eventSlug: existing.eventSlug }, { headers: { "cache-control": "no-store" } });
+  }
 
   if (!record || record.expiresAt <= now || record.claimedAt) {
     return Response.json({ error: "That ticket link already did its one job—or took too long getting here." }, { status: 401 });
@@ -149,6 +173,12 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const db = await runtimeDb();
+  if (new URL(request.url).searchParams.get("paymentReturn") === "1") {
+    const payment = await claimedPayment(db, request);
+    return payment
+      ? Response.json({ signedIn: true, eventSlug: payment.eventSlug }, { headers: { "cache-control": "no-store" } })
+      : Response.json({ error: "We couldn’t reopen this payment. Open My Nights to recover your ticket using your booking email. Don’t pay again." }, { status: 401, headers: { "cache-control": "no-store" } });
+  }
   const identity = await readAttendeeIdentity(db, request.headers.get("cookie"));
   if (!identity) {
     return Response.json({ signedIn: false }, { status: 401, headers: { "cache-control": "no-store" } });
