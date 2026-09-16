@@ -12,12 +12,12 @@
     }
   ],
   "vars": {
-    "EMAIL_FROM": "BeCore Tickets <tickets@tickets.becoreops.com>",
+    "EMAIL_FROM": "BeCore Tickets <tickets@becoreops.com>",
     "OPS_ALERT_EMAIL": "tickets@becoreops.com",
     "ENVIRONMENT": "production",
     "AI_COST_CONTROL_REQUIRED": "true",
     "OPENAI_GATEWAY_BASE_URL": "https://gateway.ai.cloudflare.com/v1/af75a230de2eea882606db8d9acce473/becore-tickets-ai/openai",
-    "VAPID_SUBJECT": "mailto:tickets@tickets.becoreops.com",
+    "VAPID_SUBJECT": "mailto:tickets@becoreops.com",
     "SEEV_ENABLED": "true",
     "SEEV_ENVIRONMENT": "production"
   },
