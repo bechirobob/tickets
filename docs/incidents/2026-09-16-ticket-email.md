@@ -31,3 +31,39 @@ Official references: https://www.dynadot.com/email ; https://www.dynadot.com/hel
 The owner declined Dynadot's paid upgrade and asked to use Cloudflare for email. The unpurchased upgrade was removed; Dynadot cart confirmed empty. Do not purchase or re-propose this upgrade as approved.
 
 Cloudflare Email Routing can forward tickets@becoreops.com to the owner's Gmail for free, while the verified Resend integration continues sending receipts. Routing alone does not provide a separate IMAP mailbox or branded Gmail replies. Google's third-party Send As feature is being retired in January2027, so do not present that workaround as durable. No incoming MX changes have been made: existing Dynadot mail addresses must be identified/preserved before moving root-domain mail routing.
+
+
+## Approved free routing and Gmail setup — completed
+The owner explicitly authorized moving both tickets@becoreops.com and bechirobob@becoreops.com to free Cloudflare forwarding, destination bechirobob@gmail.com. The owner accepts Gmail third-party Send As as a temporary arrangement until January 2027. This supersedes the earlier pending Dynadot Pro plan. No paid plan was purchased; old stored Dynadot mail was not deleted or imported.
+
+Cloudflare destination 1e226dc891164089bc57e7b4d47fa832 was verified at 2026-09-16T01:19:11.960018Z. Exact enabled forwarding rules:
+- tickets@becoreops.com -> bechirobob@gmail.com: e87ac284b0fb471b92ae2337523ee5d0, priority 0.
+- bechirobob@becoreops.com -> bechirobob@gmail.com: 21bb8bbbfd774d569bffbbc87c4fc9ad, priority 1.
+The catch-all remains disabled.
+
+Migration used the existing CLOUDFLARE_API_TOKEN through GitHub Actions, never the Cloudflare browser dashboard. Initial activation rejected the root domain in its optional subdomain name parameter. The script restored root MX/SPF. Subsequent attempts safely rejected duplicate DKIM records until quoted/split TXT normalization was corrected. Final run 35044547375/job104631445260 succeeded at 2026-09-16T01:33:28Z: Email Routing enabled=true,status=ready. Public Google DNS confirmed root MX route1/route2/route3.mx.cloudflare.net priorities 69/52/86; root SPF is one record with include:_spf.mx.cloudflare.net plus the existing Dynadot authorizations. Cloudflare cf2024-1 DKIM installed. Resend DNS/sending and production Worker unchanged.
+
+Rollback source root mail DNS:
+- MX becoreops.com -> webhost.dynadot.com, priority0, TTLauto.
+- TXT becoreops.com -> v=spf1 mx include:webhost-mail-out.dynadot.com include:spf.webhost.dynadot.com ~all, TTLauto.
+To roll back deliberately, first unlock routing DNS and restore these root records; preserve Resend selectors/subdomains. Do not rerun migration to roll back.
+
+Gmail bechirobob@gmail.com now has two confirmed Send As identities:
+- BeCore Tickets <tickets@becoreops.com>
+- Benjamin Bob Bechiro <bechirobob@becoreops.com>
+Both use smtp.resend.com:587 TLS, username resend. Dedicated sending-only Resend key restricted to becoreops.com named BeCore Gmail SMTP is configured in Gmail and encrypted as GMAIL_SMTP_RESEND_API_KEY in GitHub Actions. Production RESEND_API_KEY was not replaced. No credential values are recorded here.
+Reply setting changed and rechecked: Reply from the same address the message was sent to. Existing personal Gmail default sender preserved.
+
+Inbound end-to-end evidence:
+- Google confirmation to tickets@becoreops.com reached owner Gmail through cloudflare-email.net, Gmail message1a0a7d99deaff4ef at01:34UTC.
+- Google confirmation to bechirobob@becoreops.com reached owner Gmail through Cloudflare, message1a0a7db9b107ff1a at01:36UTC.
+- Both incoming messages passed SPF/DKIM/DMARC at Gmail. Both confirmation links completed; Gmail settings lists both active SMTP identities.
+
+Outbound end-to-end tests from Gmail to owner Gmail:
+- BeCore Tickets — Gmail sender test: Gmail1a0a7dd4b683c50a; Resend d48732ca-564a-48a6-a245-4e0749b253cf, delivered.
+- BeCore personal email — Gmail sender test: Gmail1a0a7dd9c0705257; Resend bcbed806-4030-43ab-a879-6704bb215e99, delivered.
+Resend Emails page confirmed both delivered alongside the recovered paid ticket receipt. No messages sent to third parties.
+
+Ops workflow restored to original read-only status in commit eb51545d67c900d922cf0c904d804dda4e65b270, blob2207b32b2e4c5528dac38c3e6fe98d0991569c1a. Migration script remains on ops branch for audit evidence; avoid rerunning without reading current configuration.
+
+Gmail mobile handoff: use existing Google account bechirobob@gmail.com, refresh inbox, Compose > From dropdown to choose either BeCore address. These are forwarding/send-as identities within Gmail, not standalone IMAP accounts. The user's actual phone UI has not been inspected. Historical Dynadot mail remains there; only new incoming mail now forwards.
