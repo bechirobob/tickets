@@ -400,12 +400,11 @@ test("returning buyers recover and manage the whole purchase through My Nights",
   assert.match(myNights, /Show my ticket/u);
   assert.match(myNights, /The Room/u);
   assert.match(myNights, /canEnterRoom/u);
-  assert.match(hub, />Ticket \(\{tickets\.length\}\)</u);
-  assert.match(hub, />Perks</u);
-  assert.match(hub, />Details</u);
-  assert.match(hub, />Purchase</u);
+  assert.match(hub, /Ticket <span>\{tickets\.length\}/u);
+  assert.match(hub, /The Night<\/button>/u);
+  assert.match(hub, /What comes with it/u);
+  assert.match(hub, /Booking &amp; help/u);
   assert.match(hub, /tierDescription/u);
-  assert.match(hub, /Payment reference, totals and support/u);
   assert.match(recoveryClaim, /\/my-nights\?recovered=1/u);
   assert.match(paymentReturn, /\/my-nights\/\$\{encodeURIComponent/u);
 });

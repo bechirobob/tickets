@@ -20,9 +20,7 @@ import {
   MapPin,
   MessageCircle,
   QrCode,
-  ReceiptText,
   Save,
-  ShieldCheck,
   Sparkles,
   Ticket,
   Users,
@@ -110,17 +108,13 @@ type TicketOrder = {
   roomBadge: "VIP" | null;
   tickets: GateTicket[];
 };
-type View =
-  "overview" | "tonight" | "passes" | "perks" | "details" | "purchase";
+type View = "passes" | "details";
 
-const views: View[] = [
-  "overview",
-  "tonight",
-  "passes",
-  "perks",
-  "details",
-  "purchase",
-];
+// Preserve links in receipts, notifications and already-installed apps.
+function resolveView(requested: string | null): View {
+  return requested === "details" || requested === "overview" || requested === "tonight"
+    ? "details" : "passes";
+}
 
 function money(minor: number, currency: string) {
   return new Intl.NumberFormat("en-GH", {
@@ -141,15 +135,23 @@ export default function NightHub({ event }: { event: EventSummary }) {
   const [experience, setExperience] = useState<Experience | null>(null);
   const [orders, setOrders] = useState<TicketOrder[]>([]);
   const [wallet, setWallet] = useState({ apple: false, google: false });
-  const [view, setView] = useState<View>(() => {
-    const requested = params.get("view") as View | null;
-    if (requested && views.includes(requested)) return requested;
-    const start = event.startsAt ? Date.parse(event.startsAt) : Infinity;
-    const end = event.endsAt ? Date.parse(event.endsAt) : -Infinity;
-    return Date.now() >= start - 86_400_000 && Date.now() <= end + 21_600_000
-      ? "tonight"
-      : "overview";
-  });
+  const [view, setView] = useState<View>(() => resolveView(params.get("view")));
+  const [bookingOpen, setBookingOpen] = useState(() => params.get("view") === "purchase");
+  const [perksOpen, setPerksOpen] = useState(() => params.get("view") === "perks");
+  const requestedView = params.get("view");
+  const [previousRequestedView, setPreviousRequestedView] = useState(requestedView);
+  if (requestedView !== previousRequestedView) {
+    setPreviousRequestedView(requestedView);
+    setView(resolveView(requestedView));
+    setBookingOpen(requestedView === "purchase");
+    setPerksOpen(requestedView === "perks");
+  }
+  function chooseView(next: View) {
+    setView(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", next);
+    window.history.replaceState(null, "", url);
+  }
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(() =>
@@ -201,13 +203,6 @@ export default function NightHub({ event }: { event: EventSummary }) {
   const hoursUntil = Math.ceil(
     ((event.startsAt ? Date.parse(event.startsAt) : Infinity) - now) / (60 * 60 * 1000),
   );
-  const tonightAvailable =
-    event.startsAt !== null && event.endsAt !== null &&
-    now >= Date.parse(event.startsAt) - 86_400_000 &&
-    now <= Date.parse(event.endsAt) + 21_600_000;
-  const pinnedUpdate =
-    experience?.updates.find((update) => update.pinned) ??
-    experience?.updates[0];
   const compactDate = (value: string) =>
     new Date(value).toISOString().replace(/[-:]|\.\d{3}/gu, "");
   const googleCalendarUrl = event.startsAt && event.endsAt ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${compactDate(event.startsAt)}/${compactDate(event.endsAt)}&location=${encodeURIComponent(`${event.venue}, ${event.area}`)}&details=${encodeURIComponent(`Open My Nights for your ticket and live Host updates: https://tickets.becoreops.com/my-nights/${event.slug}`)}` : null;
@@ -280,7 +275,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
     );
 
   return (
-    <main className="night-hub">
+    <main className="night-hub night-hub--member">
       <OfflineTicketSaver
         ownerId={offlineOwnerId}
         event={{
@@ -307,10 +302,10 @@ export default function NightHub({ event }: { event: EventSummary }) {
       <section className="night-hub__hero">
         <img src={event.image} alt={`Atmosphere for ${event.title}`} />
         <div>
-          <p className="eyebrow">Your Night</p>
+          <p className="eyebrow">You’re on the list</p>
           <h1>{event.title}</h1>
           <span>
-            {event.fullDate} · {event.time} · {event.venue}, {event.area}
+            {event.venue} · {event.area}
           </span>
         </div>
         <p className="night-hub__countdown">
@@ -322,29 +317,9 @@ export default function NightHub({ event }: { event: EventSummary }) {
         </p>
       </section>
       <nav className="night-hub__tabs" aria-label="Night views">
-        <button
-          type="button"
-          aria-current={view === "overview" ? "page" : undefined}
-          onClick={() => setView("overview")}
-        >
-          Overview
-        </button>
-        {tonightAvailable ? (
-          <button
-            type="button"
-            aria-current={view === "tonight" ? "page" : undefined}
-            onClick={() => setView("tonight")}
-          >
-            <Sparkles size={13} /> Tonight
-          </button>
-        ) : null}
-        <button type="button" aria-current={view === "passes" ? "page" : undefined} onClick={() => setView("passes")}>Ticket ({tickets.length})</button>
-        {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}>
-          <MessageCircle size={13} /> Room
-        </Link> : null}
-        <button type="button" aria-current={view === "perks" ? "page" : undefined} onClick={() => setView("perks")}>Perks</button>
-        <button type="button" aria-current={view === "details" ? "page" : undefined} onClick={() => setView("details")}>Details</button>
-        <button type="button" aria-current={view === "purchase" ? "page" : undefined} onClick={() => setView("purchase")}>Purchase</button>
+        <button type="button" aria-current={view === "passes" ? "page" : undefined} onClick={() => chooseView("passes")}><QrCode size={17} /> Ticket <span>{tickets.length}</span></button>
+        <button type="button" aria-current={view === "details" ? "page" : undefined} onClick={() => chooseView("details")}><CalendarDays size={17} /> The Night</button>
+        {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}><MessageCircle size={17} /> Room</Link> : null}
       </nav>
       <section className="night-hub__view">
         {notice ? (
@@ -358,136 +333,10 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </button>
         ) : null}
 
-        {view === "tonight" ? (
-          <div className="night-tonight">
-            <header>
-              <p className="eyebrow">Tonight Mode</p>
-              <h2>
-                {!event.startsAt ? "Date to be announced." : hoursUntil > 0
-                  ? `Doors in ${hoursUntil} ${hoursUntil === 1 ? "hour" : "hours"}.`
-                  : "You are officially on the clock."}
-              </h2>
-              <p>
-                {event.time} · {event.venue}, {event.area}
-              </p>
-            </header>
-            {pinnedUpdate ? (
-              <article>
-                <span>
-                  {pinnedUpdate.pinned
-                    ? "Pinned by the Host"
-                    : "Latest from the Host"}
-                </span>
-                <h3>{pinnedUpdate.title}</h3>
-                <p>{pinnedUpdate.body}</p>
-              </article>
-            ) : null}
-            <div className="night-tonight__actions">
-              <button type="button" onClick={() => setView("passes")}>
-                <QrCode size={17} />
-                <span>
-                  <b>Show ticket</b>Gate-ready QR
-                </span>
-              </button>
-              {event.venueMapUrl ? (
-                <Link href={event.venueMapUrl} target="_blank" rel="noreferrer">
-                  <MapPin size={17} />
-                  <span>
-                    <b>Get directions</b>Open the venue map
-                  </span>
-                </Link>
-              ) : null}
-              <Link href="/offline-ticket.html">
-                <WalletCards size={17} />
-                <span>
-                  <b>Offline pass</b>No signal required
-                </span>
-              </Link>
-              {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}>
-                <MessageCircle size={17} />
-                <span>
-                  <b>Enter The Room</b>Updates and conversation
-                </span>
-              </Link> : null}
-            </div>
-          </div>
-        ) : null}
-
-        {view === "overview" ? (
-          <div className="night-overview">
-            <article>
-              <p className="eyebrow">Everything your ticket unlocked</p>
-              <h2>One Night. No scavenger hunt.</h2>
-              <div>
-                <button type="button" onClick={() => setView("passes")}>
-                  <QrCode />{" "}
-                  <span>
-                    <b>Show my ticket</b>Fresh moving passes for the gate
-                  </span>
-                </button>
-                {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}>
-                  <MessageCircle />{" "}
-                  <span>
-                    <b>Enter The Room</b>Chat, Host updates and Flashes—same
-                    conversation
-                  </span>
-                </Link> : null}
-                <button type="button" onClick={() => setView("perks")}>
-                  <Crown />{" "}
-                  <span>
-                    <b>See my perks</b>Your ticket tier and everything it
-                    includes
-                  </span>
-                </button>
-                <button type="button" onClick={() => setView("purchase")}>
-                  <ReceiptText />{" "}
-                  <span>
-                    <b>Receipt &amp; purchase</b>Payment reference, totals and support
-                  </span>
-                </button>
-              </div>
-            </article>
-            <aside>
-              <p className="eyebrow">I&apos;m in</p>
-              <h3>Choose whether other ticket holders can count you in.</h3>
-              <p>
-                Your name stays private. Turning this on adds one to the
-                count—not your biography.
-              </p>
-              <button
-                type="button"
-                onClick={() =>
-                  save({
-                    attendeeVisible: !experience.preference.attendeeVisible,
-                  })
-                }
-                disabled={saving}
-              >
-                {experience.preference.attendeeVisible ? (
-                  <Check size={15} />
-                ) : (
-                  <Users size={15} />
-                )}
-                {experience.preference.attendeeVisible
-                  ? "You’re visible as going"
-                  : "Count me in, quietly"}
-              </button>
-              <span>
-                {experience.visibleAttendees} people currently visible
-              </span>
-            </aside>
-          </div>
-        ) : null}
-
         {view === "passes" ? (
           <div className="night-passes">
             <header>
-              <p className="eyebrow">Gate access</p>
-              <h2>Your door-ready tickets.</h2>
-              <p>
-                The latest copy is now saved on this device. No signal at the
-                venue? Open the offline door pass and keep moving.
-              </p>
+              <div><p className="eyebrow">Skip the rummaging</p><h2>You’re good to go.</h2></div>
               <Link
                 className="night-passes__offline"
                 href="/offline-ticket.html"
@@ -495,7 +344,8 @@ export default function NightHub({ event }: { event: EventSummary }) {
                 <WalletCards size={15} /> Open offline door pass
               </Link>
             </header>
-            <div>
+            <div className="night-passes__tickets">
+              {!tickets.length ? <p className="night-passes__empty">No entry passes here yet. Your booking details are below.</p> : null}
               {tickets.map((ticket, index) => (
                 <article key={ticket.id}>
                   <span>Ticket {index + 1}</span>
@@ -549,16 +399,9 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </div>
         ) : null}
 
-        {view === "perks" ? (
-          <div className="night-perks">
-            <header>
-              <p className="eyebrow">Ticket-earned perks</p>
-              <h2>Your ticket pulled strings.</h2>
-              <p>
-                These are the exact inclusions attached to what you bought. No
-                suspiciously vague VIP energy.
-              </p>
-            </header>
+        {view === "passes" ? (
+          <details className="night-perks night-hub__disclosure" open={perksOpen} onToggle={(event) => setPerksOpen(event.currentTarget.open)}>
+            <summary><Crown size={18} /> What comes with it</summary>
             <div className="night-perks__tiers">
               {orders.map((order) => (
                 <article key={order.orderId}>
@@ -579,11 +422,83 @@ export default function NightHub({ event }: { event: EventSummary }) {
                     <Sparkles size={12} />{" "}
                     {order.roomBadge === "VIP"
                       ? "Your VIP badge and a private line to the host when concierge is open."
-                      : "The Room, updates, Flashes and Before the Night are included."}
+                      : order.roomAccess === false ? "Your RSVP gets you through the door." : "The Room, host updates and Flashes are yours."}
                   </small>
                 </article>
               ))}
             </div>
+          </details>
+        ) : null}
+
+        {view === "details" ? (
+          <div className="night-details">
+            <header>
+              <p className="eyebrow">Make an entrance</p>
+              <h2>The plan.</h2>
+              {event.startsAt ? <div className="night-calendar-actions">
+                <a href={`/api/calendar/${encodeURIComponent(event.slug)}`}>
+                  <CalendarDays size={14} /> Apple / Outlook calendar
+                </a>
+                {googleCalendarUrl ? <a href={googleCalendarUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} /> Google Calendar
+                </a> : null}
+              </div> : null}
+            </header>
+            <dl>
+              <div>
+                <dt>
+                  <CalendarDays /> Date
+                </dt>
+                <dd>{event.fullDate}</dd>
+              </div>
+              <div>
+                <dt>
+                  <Clock3 /> Time
+                </dt>
+                <dd>{event.time}</dd>
+              </div>
+              <div>
+                <dt>
+                  <MapPin /> Venue
+                </dt>
+                <dd>
+                  {event.venue}, {event.area}
+                  {event.venueMapUrl ? (
+                    <Link
+                      href={event.venueMapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open directions <ExternalLink size={12} />
+                    </Link>
+                  ) : null}
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  <Ticket /> Entry
+                </dt>
+                <dd>
+                  {event.ageRestriction} · Valid government-issued ID · One scan
+                  per admission
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  <Sparkles /> Line-up
+                </dt>
+                <dd>{event.lineup}</dd>
+              </div>
+            </dl>
+            <section className="night-attendance">
+              <div><h3>Count me in</h3><p>Add yourself to the crowd count. Your name stays private.</p></div>
+              <button type="button" role="switch" aria-label="Count me in" aria-checked={experience.preference.attendeeVisible} disabled={saving} onClick={() => void save({ attendeeVisible: !experience.preference.attendeeVisible })}>
+                {experience.preference.attendeeVisible ? <Check size={16} /> : <Users size={16} />}
+                {experience.preference.attendeeVisible ? "I’m in" : "Join the count"}
+              </button>
+              <span>{experience.visibleAttendees} {experience.visibleAttendees === 1 ? "person" : "people"} going</span>
+            </section>
+            {experience.questions.length ? (
             <form
               className="before-night"
               onSubmit={(submitEvent) => {
@@ -654,77 +569,15 @@ export default function NightHub({ event }: { event: EventSummary }) {
                 Save answers
               </button>
             </form>
-          </div>
-        ) : null}
-
-        {view === "details" ? (
-          <div className="night-details">
-            <header>
-              <p className="eyebrow">The practical bits</p>
-              <h2>The plan’s below. The outfit is on you.</h2>
-              {event.startsAt ? <div className="night-calendar-actions">
-                <a href={`/api/calendar/${encodeURIComponent(event.slug)}`}>
-                  <CalendarDays size={14} /> Apple / Outlook calendar
-                </a>
-                {googleCalendarUrl ? <a href={googleCalendarUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink size={14} /> Google Calendar
-                </a> : null}
-              </div> : null}
-            </header>
-            <dl>
-              <div>
-                <dt>
-                  <CalendarDays /> Date
-                </dt>
-                <dd>{event.fullDate}</dd>
-              </div>
-              <div>
-                <dt>
-                  <Clock3 /> Time
-                </dt>
-                <dd>{event.time}</dd>
-              </div>
-              <div>
-                <dt>
-                  <MapPin /> Venue
-                </dt>
-                <dd>
-                  {event.venue}, {event.area}
-                  {event.venueMapUrl ? (
-                    <Link
-                      href={event.venueMapUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open directions <ExternalLink size={12} />
-                    </Link>
-                  ) : null}
-                </dd>
-              </div>
-              <div>
-                <dt>
-                  <Ticket /> Entry
-                </dt>
-                <dd>
-                  {event.ageRestriction} · Valid government-issued ID · One scan
-                  per admission
-                </dd>
-              </div>
-              <div>
-                <dt>
-                  <Sparkles /> Line-up
-                </dt>
-                <dd>{event.lineup}</dd>
-              </div>
-            </dl>
+            ) : null}
             <section className="night-updates">
               <header>
                 <div>
-                  <p className="eyebrow">Night updates</p>
-                  <h2>Useful information, not noise.</h2>
+                  <h2>From the host</h2>
                 </div>
                 <button
                   type="button"
+                  disabled={saving}
                   onClick={() =>
                     save({ keepPosted: !experience.preference.keepPosted })
                   }
@@ -786,16 +639,9 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </div>
         ) : null}
 
-        {view === "purchase" ? (
-          <div className="night-purchase">
-            <header>
-              <p className="eyebrow">Receipts &amp; support</p>
-              <h2>The money trail, neatly behaved.</h2>
-              <p>
-                Receipts stay with the original purchaser. Ticket-linked perks
-                travel; someone else’s card statement does not.
-              </p>
-            </header>
+        {view === "passes" ? (
+          <details className="night-purchase night-hub__disclosure" open={bookingOpen} onToggle={(event) => setBookingOpen(event.currentTarget.open)}>
+            <summary><CircleDollarSign size={18} /> Booking &amp; help</summary>
             {orders.some((order) => order.canViewPurchase) ? (
               orders
                 .filter((order) => order.canViewPurchase)
@@ -854,13 +700,10 @@ export default function NightHub({ event }: { event: EventSummary }) {
               </p>
             )}
             <SupportCentre slug={event.slug} />
-          </div>
+          </details>
         ) : null}
       </section>
-      <footer className="night-hub__footer">
-        <ShieldCheck size={13} /> Every private request checks the ticket again.
-        Trust, with receipts.
-      </footer>
+
     </main>
   );
 }
