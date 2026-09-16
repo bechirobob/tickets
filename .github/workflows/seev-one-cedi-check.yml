@@ -25,8 +25,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
-      - name: Inspect paid test ticket after sales closure
+      - name: Inspect domain email routing
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CHECK_MODE: ${{ inputs.operation || 'status' }}
-        run: node scripts/seev-one-cedi-check.mjs
+        run: node scripts/inspect-domain-email-routing.mjs
