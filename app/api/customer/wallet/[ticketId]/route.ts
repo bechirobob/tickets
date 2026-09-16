@@ -32,7 +32,7 @@ export async function GET(
     );
   const { ticketId } = await context.params;
   const ticket = await env.DB.prepare(
-    `SELECT ticket.id, ticket.event_slug AS eventSlug, ticket.ticket_type AS ticketType, attendee.display_name AS holder, event.title, event.starts_at AS startsAt, event.ends_at AS endsAt, event.venue, event.area, credential.token AS gateToken FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id JOIN attendee_accounts attendee ON attendee.id = assignment.attendee_id JOIN curated_event_records event ON event.slug = ticket.event_slug JOIN ticket_gate_credentials credential ON credential.ticket_id = ticket.id WHERE ticket.id = ? AND assignment.attendee_id = ? AND assignment.status = 'active' AND ticket.status = 'issued' AND event.event_state IN ('on_sale','rescheduled') LIMIT 1`,
+    `SELECT ticket.id, ticket.event_slug AS eventSlug, ticket.ticket_type AS ticketType, attendee.display_name AS holder, event.title, event.starts_at AS startsAt, event.ends_at AS endsAt, event.venue, event.area, credential.token AS gateToken FROM ticket_assignments assignment JOIN tickets ticket ON ticket.id = assignment.ticket_id JOIN attendee_profiles attendee ON attendee.id = assignment.attendee_id JOIN orders o ON o.id = ticket.order_id JOIN curated_event_records event ON event.slug = ticket.event_slug JOIN ticket_gate_credentials credential ON credential.ticket_id = ticket.id WHERE ticket.id = ? AND assignment.attendee_id = ? AND assignment.status = 'active' AND ticket.status = 'issued' AND o.status = 'paid' AND attendee.status = 'active' AND event.removed_at IS NULL AND event.event_state IN ('on_sale','sold_out','rescheduled') LIMIT 1`,
   )
     .bind(ticketId, identity.attendeeId)
     .first<WalletTicket>();

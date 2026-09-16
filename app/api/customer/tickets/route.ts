@@ -10,6 +10,7 @@ type TicketRow = {
   eventSlug: string;
   ticketType: string;
   ticketStatus: string;
+  orderStatus: string;
   checkedInAt: string | null;
   faceAmountMinor: number;
   bookingFeeMinor: number;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
 
   const rows = await env.DB.prepare(`
     SELECT t.id AS ticketId, t.order_id AS orderId, o.reference, t.event_slug AS eventSlug,
-           t.ticket_type AS ticketType, t.status AS ticketStatus, t.checked_in_at AS checkedInAt,
+           t.ticket_type AS ticketType, t.status AS ticketStatus, o.status AS orderStatus, t.checked_in_at AS checkedInAt,
            o.face_amount_minor AS faceAmountMinor, o.booking_fee_minor AS bookingFeeMinor,
            o.total_amount_minor AS totalAmountMinor, o.currency, o.quantity, o.paid_at AS paidAt,
            o.customer_name AS customerName, o.customer_email AS customerEmail,
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
   `).bind(identity.attendeeId).all<TicketRow>();
 
   const activeCodes = new Map<string, string>();
-  const eligible = rows.results.filter((ticket) => ticket.ticketStatus === "issued" && ["on_sale", "sold_out", "rescheduled"].includes(ticket.eventState ?? "on_sale"));
+  const eligible = rows.results.filter((ticket) => ticket.orderStatus === "paid" && ticket.ticketStatus === "issued" && ["on_sale", "sold_out", "rescheduled"].includes(ticket.eventState ?? ""));
   for (const ticket of eligible) {
     if (ticket.gateToken) { activeCodes.set(ticket.ticketId, ticket.gateToken); continue; }
     const token = createGateToken();
@@ -77,7 +78,8 @@ export async function POST(request: Request) {
     await env.DB.batch([
       env.DB.prepare(`INSERT OR IGNORE INTO ticket_gate_credentials (ticket_id,token,issued_at)
         SELECT t.id,?,? FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id
-        WHERE t.id=? AND t.status='issued' AND a.attendee_id=? AND a.status='active'`).bind(token,now,ticket.ticketId,identity.attendeeId),
+        WHERE t.id=? AND t.status='issued' AND a.attendee_id=? AND a.status='active'
+          AND EXISTS (SELECT 1 FROM orders o JOIN curated_event_records e ON e.slug=o.event_slug WHERE o.id=t.order_id AND o.status='paid' AND e.removed_at IS NULL AND e.event_state IN ('on_sale','sold_out','rescheduled'))`).bind(token,now,ticket.ticketId,identity.attendeeId),
       env.DB.prepare(`UPDATE tickets SET qr_token_hash=? WHERE id=? AND status='issued'
         AND EXISTS (SELECT 1 FROM ticket_gate_credentials WHERE ticket_id=tickets.id AND token=?)
         AND EXISTS (SELECT 1 FROM ticket_assignments WHERE ticket_id=tickets.id AND attendee_id=? AND status='active')`)
@@ -97,6 +99,7 @@ export async function POST(request: Request) {
   }>();
   for (const ticket of rows.results) {
     const canViewPurchase = ticket.customerEmail === identity.normalizedEmail;
+    const canEnterRoom = ticket.orderStatus === "paid" && ["issued", "checked_in"].includes(ticket.ticketStatus) && ["on_sale", "sold_out", "rescheduled"].includes(ticket.eventState ?? "") && Boolean(ticket.roomAccess);
     const order = orderMap.get(ticket.orderId) ?? {
       orderId: ticket.orderId,
       reference: canViewPurchase ? ticket.reference : "Transferred ticket",
@@ -108,7 +111,7 @@ export async function POST(request: Request) {
       quantity: ticket.quantity,
       paidAt: ticket.paidAt,
       bookedFor: ticket.customerName,
-      roomAccess: Boolean(ticket.roomAccess),
+      roomAccess: canEnterRoom,
       canViewPurchase,
       tierName: ticket.tierName,
       tierDescription: ticket.tierDescription,
@@ -117,15 +120,16 @@ export async function POST(request: Request) {
         title: ticket.eventTitle,
         date: `${new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} · ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} — ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventEndsAt))}`,
         venue: `${ticket.eventVenue}, ${ticket.eventArea}`,
-        state: ticket.eventState ?? "on_sale",
+        state: ticket.eventState ?? "",
       } : null,
       tickets: [],
     };
+    order.roomAccess ||= canEnterRoom;
     const token = activeCodes.get(ticket.ticketId);
     order.tickets.push({
       id: ticket.ticketId,
       ticketType: ticket.ticketType,
-      status: token ? "issued" : ["cancelled", "postponed"].includes(ticket.eventState ?? "") ? "unavailable" : ticket.ticketStatus,
+      status: token ? "issued" : ticket.orderStatus !== "paid" || ["cancelled", "postponed"].includes(ticket.eventState ?? "") ? "unavailable" : ticket.ticketStatus,
       checkedInAt: ticket.checkedInAt,
       gateCode: token ? formatGateCode(token) : null,
       qrPayload: token ? gateQrPayload(token) : null,

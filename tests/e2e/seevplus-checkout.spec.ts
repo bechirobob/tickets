@@ -10,7 +10,16 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
     expect(route.request().headers()["idempotency-key"]).toBeTruthy();
     await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Test payment stopped before contacting SeevPlus." }) });
   });
-  await page.goto("/checkout/after-dark-osu");
+  // Slow script loading must not accept details before React can retain them.
+  let releaseScripts!: () => void;
+  const scriptsReady = new Promise<void>(resolve => { releaseScripts = resolve; });
+  await page.route(url => url.pathname.endsWith(".js"), async route => { await scriptsReady; await route.continue(); });
+  try {
+    await page.goto("/checkout/after-dark-osu", { waitUntil: "commit" });
+    await expect(page.getByLabel("Full name")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Preparing checkout…", exact: true })).toBeDisabled();
+  } finally { releaseScripts(); }
+  await expect(page.getByLabel("Full name")).toBeEnabled();
   // Filling buyer details alone must produce guidance, not a silently disabled button.
   await page.getByLabel("Full name").fill("Test Buyer");
   await page.getByLabel("Phone number").fill("0240000000");

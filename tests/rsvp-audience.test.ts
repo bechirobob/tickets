@@ -229,3 +229,14 @@ it('takes approved RSVP guests to the door and preserves their admission if they
  expect(await env.DB.prepare('SELECT status FROM tickets WHERE order_id=?').bind(`rsvp_${reg!.id}`).first()).toEqual({status:'checked_in'});
  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM delivery_events WHERE recipient=? AND kind='payment_confirmation'").bind(email).first()).toEqual({count:0});
 });
+
+it('searches long guest names literally across RSVP and audience views',async()=>{
+ const name='Guest_'+ 'a'.repeat(60);
+ await directSignup('long-search@example.com',{guestName:name});
+ for(const [route,handler] of [['registrations',registrations],['audience',audience]] as const){
+   const result=await handler(get(`/api/admin/${route}?eventSlug=${slug}&q=${encodeURIComponent(name)}`));
+   expect(result.status).toBe(200);expect(await result.json()).toMatchObject({total:1});
+   const wildcard=await handler(get(`/api/admin/${route}?eventSlug=${slug}&q=%25`));
+   expect(await wildcard.json()).toMatchObject({total:0});
+ }
+});

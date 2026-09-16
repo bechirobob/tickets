@@ -12,7 +12,7 @@ SELECT p.*,CASE WHEN ${subscriber} THEN 1 ELSE 0 END AS subscribed FROM people p
 export async function GET(request: Request) {
   const url=new URL(request.url),slug=url.searchParams.get('eventSlug') ?? '',query=(url.searchParams.get('q') ?? '').trim().slice(0,120),offset=Math.max(0,Number.parseInt(url.searchParams.get('offset') ?? '0') || 0);
   const {env,session}=await access(request,slug); if(!session) return Response.json({error:'This event is not assigned to your account.'},{status:403});
-  const filter=" WHERE (?='' OR p.email LIKE ? OR p.name LIKE ?)", search=`%${query}%`;
+  const filter=" WHERE (?='' OR instr(lower(p.email), lower(?)) > 0 OR instr(lower(p.name), lower(?)) > 0)", search=query;
   if(url.searchParams.get('export')==='csv') {
     const rows=await env.DB.prepare(`${audience}${filter} ORDER BY p.email LIMIT 50001`).bind(slug,slug,slug,query,search,search).all<Record<string,unknown>>();
     if(rows.results.length>50000) return Response.json({error:'Narrow the search before exporting this audience.'},{status:400});

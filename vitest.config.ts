@@ -1,9 +1,11 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 const migrations = await readD1Migrations("./drizzle");
 
 export default defineConfig({
+  resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   plugins: [
     cloudflareTest({
       main: "./worker/the-room.ts",

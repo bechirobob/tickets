@@ -2,6 +2,8 @@
 :root { --native-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); --native-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
 html { background: #281b2b; }
 .packaged-customer { padding-top: var(--native-top); min-height: 100dvh; }
+/* iOS uses light status icons; keep their safe area dark on every event theme. */
+.packaged-customer::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--native-top); background: #281b2b; z-index: 100; pointer-events: none; }
 .packaged-customer .customer-dock { padding-bottom: max(4px, var(--native-bottom)); min-height: calc(56px + var(--native-bottom)); }
 .catalogue-status { padding: 14px 20px; background: #281b2b; color: #f4f1ea; font-size: 14px; line-height: 1.5; }
 .catalogue-status p { margin-block: 4px; }

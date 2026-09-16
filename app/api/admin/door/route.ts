@@ -14,8 +14,8 @@ export async function GET(request: Request) {
   if (!session) return Response.json({ error: "This door list is not assigned to your account." }, { status: 403 });
   const params=new URL(request.url).searchParams,q=(params.get('q')??'').trim().slice(0,120),offset=Math.max(0,Math.min(50000,Math.floor(Number(params.get('offset')))||0));
   const base=`event_slug=? AND status<>'cancelled' AND (created_by<>'system:rsvp' OR EXISTS (SELECT 1 FROM event_registrations r WHERE 'rsvp:'||r.id=guest_entries.id AND r.status='confirmed' AND r.verified_at IS NULL))`;
-  const search=`AND (?='' OR guest_name LIKE ? OR guest_email LIKE ? OR guest_phone LIKE ?)`;
-  const terms=[q,`%${q}%`,`%${q}%`,`%${q}%`];
+  const search=`AND (?='' OR instr(lower(guest_name), lower(?)) > 0 OR instr(lower(guest_email), lower(?)) > 0 OR instr(lower(guest_phone), lower(?)) > 0)`;
+  const terms=[q,q,q,q];
   const [guests,tiers,total,counts]=await Promise.all([
     env.DB.prepare(`SELECT id,guest_name AS guestName,admission_count AS admissionCount,kind,note,status,checked_in_at AS checkedInAt FROM guest_entries WHERE ${base} ${search} ORDER BY status DESC,guest_name,id LIMIT 10 OFFSET ?`).bind(eventSlug,...terms,offset).all(),
     env.DB.prepare("SELECT id,code,name,price_minor AS priceMinor,admissions_per_unit AS admissionsPerUnit FROM event_ticket_tiers WHERE event_slug=? AND status='available' ORDER BY sort_order,name").bind(eventSlug).all(),

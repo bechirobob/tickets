@@ -85,3 +85,19 @@ test("recovery remains usable with reduced motion", async ({ page }, info) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Notifications", exact: true })).toBeFocused();
 });
+
+
+test("inactive payments remain booking history without entry or Room promises", async ({ page }, info) => {
+  await page.route("**/api/customer/my-nights", route => route.fulfill({ json: { attendee: { displayName: "Ama" }, nights: [{
+    eventSlug:"the-weekend-braai",title:"A previous booking",startsAt:new Date(Date.now()+86400000).toISOString(),endsAt:new Date(Date.now()+90000000).toISOString(),
+    venue:"Palm House",area:"Osu",imageUrl:"/atmospheres/behind-the-night.webp",eventState:"on_sale",ticketCount:1,purchased:true,
+    admissionActive:false,roomAccess:false,registrationMode:"paid",keepPosted:false,updateCount:0,questionCount:0,
+  }] } }));
+  await page.goto("/my-nights");
+  await expect(page.getByText("Booking history", { exact:true })).toBeVisible();
+  await expect(page.getByRole("link", { name:"View booking", exact:true })).toHaveAttribute("href","/my-nights/the-weekend-braai?view=purchase");
+  await expect(page.getByRole("link", { name:"The Room", exact:true })).toHaveCount(0);
+  await expect(page.getByText("You’re going", { exact:true })).toHaveCount(0);
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+  await page.screenshot({ path:info.outputPath("my-nights-inactive-booking.png"),fullPage:true });
+});
