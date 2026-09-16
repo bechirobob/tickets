@@ -9,6 +9,9 @@ import {
   ArrowLeft,
   Bell,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  X,
   Check,
   CircleDollarSign,
   Clock3,
@@ -134,6 +137,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
   const params = useSearchParams();
   const [experience, setExperience] = useState<Experience | null>(null);
   const [orders, setOrders] = useState<TicketOrder[]>([]);
+  const [selectedTicket, setSelectedTicket] = useState(0);
   const [wallet, setWallet] = useState({ apple: false, google: false });
   const [view, setView] = useState<View>(() => resolveView(params.get("view")));
   const [bookingOpen, setBookingOpen] = useState(() => params.get("view") === "purchase");
@@ -238,7 +242,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
         const visibilityChange = Number(preference.attendeeVisible) - Number(current.preference.attendeeVisible);
         return { ...current, preference, visibleAttendees: Math.max(0, current.visibleAttendees + visibilityChange) };
       });
-      setNotice(input.includeAnswers ? "Saved. The Host can stop guessing now." : "Preference saved.");
+      setNotice(input.includeAnswers ? "Answers saved." : "Preference saved.");
     } catch (error) {
       setNotice(requestErrorMessage(error));
     } finally {
@@ -302,7 +306,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
       <section className="night-hub__hero">
         <img src={event.image} alt={`Atmosphere for ${event.title}`} />
         <div>
-          <p className="eyebrow">Your night, sorted</p>
+          <p className="eyebrow">My Nights</p>
           <h1>{event.title}</h1>
           <span>
             {event.venue} · {event.area}
@@ -316,33 +320,25 @@ export default function NightHub({ event }: { event: EventSummary }) {
               : "The night is happening"}
         </p>
       </section>
-      <nav className="night-hub__tabs" aria-label="Night views">
+      <nav className="night-hub__tabs night-glass" aria-label="Night views">
         <button type="button" aria-current={view === "passes" ? "page" : undefined} onClick={() => chooseView("passes")}><QrCode size={17} /> Ticket <span>{tickets.length}</span></button>
         <button type="button" aria-current={view === "details" ? "page" : undefined} onClick={() => chooseView("details")}><CalendarDays size={17} /> The Night</button>
         {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}><MessageCircle size={17} /> Room</Link> : null}
       </nav>
       <section className="night-hub__view">
-        {notice ? (
-          <button
-            className="night-hub__notice"
-            type="button"
-            onClick={() => setNotice("")}
-          >
-            {notice}
-            <span>Tap to dismiss</span>
-          </button>
-        ) : null}
+        {notice ? <div className="night-hub__notice" role="status"><span>{notice}</span><button type="button" aria-label="Dismiss notice" onClick={() => setNotice("")}><X size={17} /></button></div> : null}
 
-        {view === "passes" ? (
+        <div hidden={view !== "passes"} className="night-view-panel">
           <div className="night-ticket-layout">
           <div className="night-passes">
+            <header className="night-pass-heading"><div><h2>{tickets.length > 1 ? "Your passes" : "Your pass"}</h2><p>Ready when you are.</p></div>{tickets.length > 1 ? <div className="night-pass-picker"><button type="button" aria-label="Previous ticket" disabled={selectedTicket === 0} onClick={() => setSelectedTicket(value => value - 1)}><ChevronLeft size={18} /></button><label><span className="sr-only">Choose ticket</span><select value={selectedTicket} onChange={e => setSelectedTicket(Number(e.target.value))}>{tickets.map((ticket, index) => <option key={ticket.id} value={index}>Ticket {index + 1} of {tickets.length}</option>)}</select></label><button type="button" aria-label="Next ticket" disabled={selectedTicket >= tickets.length - 1} onClick={() => setSelectedTicket(value => value + 1)}><ChevronRight size={18} /></button></div> : null}</header>
             <div className="night-passes__tickets">
               {!tickets.length ? <p className="night-passes__empty">No entry passes here yet. Your booking details are below.</p> : null}
               {tickets.map((ticket, index) => (
-                <article key={ticket.id}>
-                  <span>Ticket {index + 1}</span>
+                <article key={ticket.id} hidden={index !== selectedTicket} className="night-entry-pass">
+                  <header className="night-entry-pass__head"><span>Ticket {index + 1}</span><span className="night-entry-pass__state">{ticket.status === "issued" ? <><Check size={13} /> Ready for entry</> : humanTicket(ticket.status)}</span></header>
                   <b>{humanTicket(ticket.ticketType)}</b>
-                  {ticket.qrPayload && ticket.gateCode ? (
+                  {ticket.status === "issued" && ticket.qrPayload && ticket.gateCode ? (
                     <>
                       <QrPass
                         payload={ticket.qrPayload}
@@ -367,7 +363,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                           ) : null}
                         </div>
                       ) : null}
-                      {ticket.ticketType !== "RSVP" ? <>
+                      {ticket.ticketType !== "RSVP" ? <details className="night-pass-manage"><summary>Manage this ticket <ChevronRight size={15} /></summary><div>
                       <TicketTransfer
                         ticketId={ticket.id}
                         disabled={ticket.status !== "issued"}
@@ -376,13 +372,13 @@ export default function NightHub({ event }: { event: EventSummary }) {
                         ticketId={ticket.id}
                         disabled={ticket.status !== "issued"}
                       />
-                      </> : <Link href="/my-nights">Manage RSVP</Link>}
+                      </div></details> : <Link href="/my-nights?view=rsvps">Manage RSVP</Link>}
                     </>
                   ) : (
                     <p>
                       {ticket.status === "checked_in"
                         ? "Already inside. Excellent."
-                        : "This ticket is taking a moment."}
+                        : ticket.status === "issued" ? "Your entry code is taking a moment. Refresh to try again." : "This pass is no longer valid for entry."}
                     </p>
                   )}
                 </article>
@@ -487,13 +483,12 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </details>
             </aside>
           </div>
-        ) : null}
+        </div>
 
-        {view === "details" ? (
+        <div hidden={view !== "details"} className="night-view-panel">
           <div className="night-details">
             <header>
-              <p className="eyebrow">Make an entrance</p>
-              <h2>The plan.</h2>
+              <h2>The plan</h2>
               {event.startsAt ? <div className="night-calendar-actions">
                 <a href={`/api/calendar/${encodeURIComponent(event.slug)}`}>
                   <CalendarDays size={14} /> Apple / Outlook calendar
@@ -567,10 +562,9 @@ export default function NightHub({ event }: { event: EventSummary }) {
             >
               <header>
                 <p className="eyebrow">Before the Night</p>
-                <h2>Help the event team prepare.</h2>
+                <h2>A quick word before you arrive.</h2>
                 <p>
-                  Only the host’s event team can see these
-                  answers for this Night.
+                  Your answers go to the host’s event team.
                 </p>
               </header>
               {experience.questions.length ? (
@@ -629,7 +623,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
               </button>
             </form>
             ) : null}
-            <section className="night-updates">
+            <section className="night-updates" id="host-updates">
               <header>
                 <div>
                   <h2>From the host</h2>
@@ -671,7 +665,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                 ))
               ) : (
                 <p className="night-updates__empty">
-                  No update from the Host yet. Silence, but the calm kind.
+                  Nothing from the host yet. Updates will appear here.
                 </p>
               )}
             </section>
@@ -696,9 +690,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
               </section>
             ) : null}
           </div>
-        ) : null}
-
-
+        </div>
       </section>
 
     </main>

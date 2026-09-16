@@ -95,9 +95,15 @@ test("concierge belongs to the Room and preserves a failed request through recov
   await expect(sheet.locator(".room-sheet")).toHaveCSS("background-color", "rgb(48, 33, 44)");
   await sheet.getByRole("button", { name: /Suggest a song/u }).click();
   await expect(sheet.getByRole("textbox", { name: "Song and artist" })).toBeVisible();
+  await sheet.getByRole("textbox", { name: "Song and artist" }).fill("Sarkodie — Adonai");
   await sheet.getByRole("button", { name: /Bottle service/u }).click();
   await sheet.getByRole("textbox", { name: "Bottle or package" }).fill("Two bottles of water");
   await sheet.getByRole("textbox", { name: "Find me at" }).fill("Table 4");
+  await sheet.getByRole("button", { name: /Suggest a song/u }).click();
+  await expect(sheet.getByRole("textbox", { name: "Song and artist" })).toHaveValue("Sarkodie — Adonai");
+  await sheet.getByRole("button", { name: /Bottle service/u }).click();
+  await expect(sheet.getByRole("textbox", { name: "Bottle or package" })).toHaveValue("Two bottles of water");
+  await expect(sheet.getByRole("textbox", { name: "Find me at" })).toHaveValue("Table 4");
   await sheet.getByRole("button", { name: "Send privately" }).click();
   await expect(sheet.getByRole("alert")).toContainText("not sent");
   await expect(sheet.getByRole("textbox", { name: "Bottle or package" })).toHaveValue("Two bottles of water");
@@ -195,7 +201,7 @@ test("the camera closes safely when permission resolves after dismissal", async 
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("message actions animate in and out without a surrounding box", async ({ page }) => {
+test("message actions use a glass tray and preserve keyboard focus", async ({ page }, info) => {
   await roomFixture(page);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   const trigger = page.getByRole("button", { name: "Actions for Kofi's message" });
@@ -203,8 +209,10 @@ test("message actions animate in and out without a surrounding box", async ({ pa
   const actions = page.getByRole("toolbar", { name: "Actions for Kofi's message" });
   await expect(actions).toBeVisible();
   await expect(actions).toHaveCSS("animation-name", "room-actions-in");
-  await expect(actions).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  await expect(actions).toHaveCSS("border-top-width", "0px");
+  await expect(actions).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(actions).toHaveCSS("border-top-width", "1px");
+  await accessible(page);
+  await page.screenshot({ path: info.outputPath("room-message-actions.png") });
   await expect(actions.getByRole("button", { name: "React 🔥", exact: true })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(actions.getByRole("button", { name: "React ❤️", exact: true })).toBeFocused();

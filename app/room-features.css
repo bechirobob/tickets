@@ -18,8 +18,6 @@
 .chat-action-reactions button:nth-child(5) > span { animation-delay: 80ms; }
 .room-page .chat-action-links { margin: 0; border: 0; justify-content: space-evenly; gap: 0; }
 .room-page .chat-action-links button { gap: 4px; font-size: 12px; font-weight: 600; padding-inline: 8px; }
-/* Individual labels stay readable over another message without an enclosing panel. */
-.chat-action-links button { background: #30212c !important; clip-path: inset(7px 1px round 2px); }
 .room-page .chat-action-tray button:focus-visible { outline-color: #eee; outline-offset: -2px; clip-path: none; }
 .chat-action-feedback { font-size: 12px; margin: 0; padding: 5px; background: #30212c; }
 .chat-message-anchor.is-active > .room-bubble { outline: 1px solid #bca4b3; outline-offset: 2px; }

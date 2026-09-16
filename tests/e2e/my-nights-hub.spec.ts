@@ -63,3 +63,34 @@ test("existing receipt and perks links still open their content", async ({ page 
   await page.goto("/my-nights/the-weekend-braai?view=tonight");
   await expect(page.getByText("Meet us at the main gate", { exact: true })).toBeVisible();
 });
+
+test("group passes stay separate and support drafts survive view changes", async ({ page }, info) => {
+  await page.route("**/api/customer/tickets", route => route.fulfill({ json: {
+    attendee: { attendeeId: "isolated-group" }, orders: [{
+      roomAccess: true, orderId: "group-order", reference: "GROUP-FIXTURE", eventSlug: "the-weekend-braai",
+      faceAmountMinor: 30000, bookingFeeMinor: 1500, totalAmountMinor: 31500, currency: "GHS", paidAt: "2026-09-15T12:00:00Z", bookedFor: null,
+      canViewPurchase: true, tierName: "General admission", tierDescription: "An afternoon with your people.", roomBadge: null,
+      tickets: [1, 2, 3].map(number => ({ id: `group-${number}`, ticketType: "general", status: number === 3 ? "checked_in" : "issued", checkedInAt: number === 3 ? "2026-09-15T12:00:00Z" : null, gateCode: `PASS-${number}`, qrPayload: `isolated-qr-${number}` })),
+    }],
+  } }));
+  await page.goto("/my-nights/the-weekend-braai");
+  await expect(page.getByRole("img", { name: "Entry QR code for ticket 1" })).toBeVisible();
+  await page.getByRole("button", { name: "Next ticket" }).click();
+  await expect(page.getByRole("img", { name: "Entry QR code for ticket 2" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Entry QR code for ticket 1" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Next ticket" }).click();
+  await expect(page.getByText("Already inside. Excellent.")).toBeVisible();
+  await expect(page.getByRole("img", { name: /Entry QR code/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Next ticket" })).toBeDisabled();
+  await page.getByLabel("Choose ticket").selectOption("0");
+  await page.getByText("Booking & help", { exact: true }).click();
+  await page.getByText("Start a support conversation", { exact: true }).click();
+  await page.getByLabel("Subject", { exact: true }).fill("Arrival question");
+  await page.getByRole("textbox", { name: "Message", exact: true }).fill("Where should our group meet?");
+  await page.getByRole("button", { name: "The Night", exact: true }).click();
+  await page.getByRole("button", { name: "Ticket 3", exact: true }).click();
+  await expect(page.getByLabel("Subject", { exact: true })).toHaveValue("Arrival question");
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue("Where should our group meet?");
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath("my-nights-group-support.png"), fullPage: true });
+});

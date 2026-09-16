@@ -53,12 +53,14 @@ test("My Nights recovers from a service failure and keeps member navigation cons
   await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
   await expect(page.getByLabel("Booking or registration email")).toHaveCount(0);
   await page.getByRole("button", { name: "Try again" }).click();
-  await expect(page.getByRole("heading", { name: "Ama’s nights." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My Nights", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Show my ticket" })).toHaveAttribute("href", "/my-nights/after-dark-osu?view=passes");
   const account = page.getByRole("navigation", { name: "Your account", exact: true });
   const mobile = page.viewportSize()!.width <= 700;
-  await expect((mobile ? page.getByRole("navigation", { name: "Customer navigation" }) : account).getByRole("link", { name: "My Nights" })).toHaveAttribute("aria-current", "page");
-  await account.getByRole("link", { name: "The Buzz" }).click();
+  if (mobile) await expect(page.getByRole("navigation", { name: "Customer navigation" }).getByRole("link", { name: "My Nights" })).toHaveAttribute("aria-current", "page");
+  await expect(account).toHaveCount(0);
+  await page.getByRole("button", { name: "Notifications", exact: true }).click();
+  await page.getByRole("link", { name: "Open inbox" }).click();
   await expect(account.getByRole("link", { name: "The Buzz" })).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: "Open navigation" }).click();
   const menu = page.getByRole("navigation", { name: "Main navigation", exact: true });

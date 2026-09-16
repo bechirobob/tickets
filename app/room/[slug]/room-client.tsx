@@ -49,8 +49,11 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
   const [vipRequests, setVipRequests] = useState<VipRequest[]>([]);
   const [vipOpen, setVipOpen] = useState(false);
   const [vipKind, setVipKind] = useState<"bottle_service" | "song_suggestion" | "assistance">("bottle_service");
-  const [vipDetail, setVipDetail] = useState("");
-  const [vipLocation, setVipLocation] = useState("");
+  const [vipDrafts, setVipDrafts] = useState<Record<string, { detail: string; location: string }>>({});
+  const vipDetail = vipDrafts[vipKind]?.detail ?? "";
+  const vipLocation = vipDrafts[vipKind]?.location ?? "";
+  function setVipDetail(detail: string) { setVipDrafts(current => ({ ...current, [vipKind]: { detail, location: current[vipKind]?.location ?? "" } })); }
+  function setVipLocation(location: string) { setVipDrafts(current => ({ ...current, [vipKind]: { detail: current[vipKind]?.detail ?? "", location } })); }
   const [vipBusy, setVipBusy] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [formError, setFormError] = useState("");
@@ -316,7 +319,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ kind: vipKind, detail: vipDetail, location: vipLocation }),
     });
-      setVipSent(vipKind === "song_suggestion" ? "Your case is with the DJ. The aux is still theirs." : "The Host has your request. We’ll let them take it from here.");
+      setVipSent(vipKind === "song_suggestion" ? "Your song suggestion is with the DJ." : "The host has your request.");
       setVipDetail(""); setVipLocation("");
       // A successful request stays successful if refreshing its history fails.
       void requestJson<{ requests?: VipRequest[] }>(`/api/rooms/${encodeURIComponent(slug)}/vip`)
@@ -407,12 +410,12 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       </section>
       <FlashesPanel slug={slug} readOnly={Boolean(policy?.readOnly)} expiresAt={policy?.readOnlyAt ?? new Date().toISOString()} refreshKey={flashVersion} onCount={setFlashCount} onFlashes={setFlashes} galleryOpen={galleryOpen} onGalleryClose={() => setGalleryOpen(false)} selectedFlashId={selectedFlashId} onSelectedFlashClose={() => setSelectedFlashId(null)} captureRequest={captureRequest} />
       {vipOpen && vipSettings ? <RoomOverlay className="room-overlay--sheet" label="VIP concierge" busy={vipBusy} onClose={() => setVipOpen(false)}>{(dismiss) => <section className="room-sheet room-concierge-sheet">
-        <header className="room-sheet__header"><div><span className="room-surface-kicker"><ConciergeBell aria-hidden="true" size={19} /> VIP concierge</span><h2>A word with the Host.</h2><p>Stay where the night is good. We’ll pass it on.</p></div><button type="button" onClick={dismiss} disabled={vipBusy} aria-label="Close VIP concierge"><X aria-hidden="true" size={20} /></button></header>
+        <header className="room-sheet__header"><div><span className="room-surface-kicker"><ConciergeBell aria-hidden="true" size={19} /> VIP concierge</span><h2>Need something?</h2></div><button type="button" onClick={dismiss} disabled={vipBusy} aria-label="Close VIP concierge"><X aria-hidden="true" size={20} /></button></header>
         {formError && <p role="alert" className="room-surface-error">{formError}</p>}
         {vipSent ? <div className="room-concierge-sent" role="status"><BadgeCheck aria-hidden="true" size={30} /><h3>You’re on their radar.</h3><p>{vipSent}</p><button type="button" onClick={() => setVipSent("")}>Anything else?</button></div> : vipEnabled ? <><nav className="room-services" aria-label="VIP services">
-          {vipSettings.bottleServiceEnabled ? <button type="button" aria-pressed={vipKind === "bottle_service"} disabled={vipBusy} onClick={() => setVipKind("bottle_service")}><Wine aria-hidden="true" size={21} /><span><b>Bottle service</b><small>Keep the table in good company.</small></span><ArrowUp aria-hidden="true" size={15} /></button> : null}
-          {vipSettings.songSuggestionsEnabled ? <button type="button" aria-pressed={vipKind === "song_suggestion"} disabled={vipBusy} onClick={() => setVipKind("song_suggestion")}><Music2 aria-hidden="true" size={21} /><span><b>Suggest a song</b><small>You have one very good argument.</small></span><ArrowUp aria-hidden="true" size={15} /></button> : null}
-          {vipSettings.assistanceEnabled ? <button type="button" aria-pressed={vipKind === "assistance"} disabled={vipBusy} onClick={() => setVipKind("assistance")}><HandHelping aria-hidden="true" size={21} /><span><b>A little help</b><small>Find the right person, quietly.</small></span><ArrowUp aria-hidden="true" size={15} /></button> : null}
+          {vipSettings.bottleServiceEnabled ? <button type="button" aria-pressed={vipKind === "bottle_service"} disabled={vipBusy} onClick={() => setVipKind("bottle_service")}><Wine aria-hidden="true" size={21} /><span><b>Bottle service</b></span><ArrowUp aria-hidden="true" size={15} /></button> : null}
+          {vipSettings.songSuggestionsEnabled ? <button type="button" aria-pressed={vipKind === "song_suggestion"} disabled={vipBusy} onClick={() => setVipKind("song_suggestion")}><Music2 aria-hidden="true" size={21} /><span><b>Suggest a song</b></span><ArrowUp aria-hidden="true" size={15} /></button> : null}
+          {vipSettings.assistanceEnabled ? <button type="button" aria-pressed={vipKind === "assistance"} disabled={vipBusy} onClick={() => setVipKind("assistance")}><HandHelping aria-hidden="true" size={21} /><span><b>A little help</b></span><ArrowUp aria-hidden="true" size={15} /></button> : null}
         </nav>
         <form className="room-service-form" onSubmit={(event) => { event.preventDefault(); void submitVipRequest(); }}>
         {vipKind === "bottle_service" && vipSettings.bottleMenu ? <details className="room-service-menu"><summary>Tonight’s bottle menu <ChevronDown aria-hidden="true" size={14} /></summary><p>{vipSettings.bottleMenu}</p></details> : null}

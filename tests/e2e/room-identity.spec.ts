@@ -87,8 +87,8 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await trigger.click();
   const actions = page.getByRole("toolbar", { name: "Actions for Kofi's message" });
   await expect(actions).toBeVisible();
-  await expect(actions).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  await expect(actions).toHaveCSS("border-top-width", "0px");
+  await expect(actions).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(actions).toHaveCSS("border-top-width", "1px");
   await expect(actions.getByRole("button", { name: "React 🔥", exact: true })).toHaveCSS("font-size", "19px");
   expect(await page.locator("dialog[open]").count()).toBe(0);
   const anchored = await actions.evaluate((tray) => {
