@@ -53,6 +53,9 @@ below 250 ms. A 60-second run is **not** an event-length soak test.
   guard remains 10/minute. These are protective controls, not throughput promises.
 - My Nights aggregates the guest's own tickets once, avoiding a join against all
   event tickets and the cross-product of updates and host questions.
+- Checkout reuses the fresh server-side fee quote and leaves global expired-hold
+  cleanup to the scheduled worker. Atomic inventory checks still exclude expired
+  holds and protect the last available admission.
 - Notification insertion uses one SQL statement per 50 recipients rather than
   one statement per person. This reduces query count, **not** the number of rows
   stored or the external push/email workload.

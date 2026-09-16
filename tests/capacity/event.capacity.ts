@@ -14,6 +14,7 @@ const provider = 'https://api.seevplus.com/api/v1/developer/payments';
 const count = 400;
 const runtime = env as unknown as Cloudflare.Env;
 const metrics: Record<string, unknown>[] = [];
+const latencyFailures: string[] = [];
 const sockets: WebSocket[] = [];
 const providers = new Map<string, { amount: number; redirect_url: string; meta: { orderId: string } }>();
 const cookies: string[] = [], qr: string[] = [];
@@ -35,7 +36,7 @@ async function burst<T>(name: string, n: number, action: (i: number) => Promise<
   metrics.push(result); console.log(`CAPACITY_PHASE ${JSON.stringify(result)}`);
   expect(errors, name).toEqual([]);
   const budgetMs = name.startsWith('my-nights') || name.startsWith('room-') || name.startsWith('wallet') || name.startsWith('gate') ? 5000 : 10000;
-  expect(result.p95Ms, `${name}: p95 latency budget`).toBeLessThan(budgetMs);
+  if(result.p95Ms >= budgetMs) latencyFailures.push(`${name}: p95 ${result.p95Ms}ms exceeds ${budgetMs}ms`);
   return output as T[];
 }
 async function signed(reference: string, amount: number) {
@@ -97,6 +98,14 @@ it('400 distinct buyers: shared-IP checkout burst, signed callback replay, priva
   expect(await env.DB.prepare('SELECT last_seen_at FROM attendee_sessions WHERE id=(SELECT claimed_session_id FROM order_access_grants WHERE order_id=?)').bind(entries[0][1].meta.orderId).first()).toEqual(fresh);
   metrics.push({name:'session-activity-coalescing',repeatReads:25,activityTimestampUnchanged:true});
   await roomLoad();
+  const abuseStatuses: number[]=[];
+  for(let i=0;i<11;i++){
+    const response=await initialize(req('/api/payments/initialize',{eventSlug:'not-a-real-capacity-event',email:`${slug}-abuse@example.com`,phone:'0240000000',acceptedPolicies:true},undefined,{'cf-connecting-ip':'192.0.2.99'}));
+    abuseStatuses.push(response.status);
+  }
+  expect(abuseStatuses).toEqual([...Array(10).fill(400),429]);
+  metrics.push({name:'customer-abuse-guard',attempts:11,blockedAttempt:11});
+  expect(latencyFailures,'Latency budgets').toEqual([]);
 });
 
 async function roomLoad() {
@@ -129,9 +138,12 @@ async function roomLoad() {
   sockets[0].send(JSON.stringify({type:'message',content:'after-revocation'}));
   expect(await closed).toBe(4003);expect(leaked).toBe(false);
   metrics.push({name:'room-revocation-under-load',privateLeak:false,closeCode:4003});
-  await Promise.all(sockets.slice(0,399).map(socket=>new Promise<void>(resolve=>{
-    socket.addEventListener('close',()=>resolve(),{once:true});socket.close(1000,'Simulated reconnect');
+  const disconnectStart=performance.now();
+  await Promise.all(sockets.slice(0,399).map(socket=>new Promise<void>((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(Error('Room close handshake exceeded 10 seconds')),10_000);
+    socket.addEventListener('close',()=>{clearTimeout(timer);resolve();},{once:true});socket.close(1000,'Simulated reconnect');
   })));
+  metrics.push({name:'room-disconnect-399',elapsedMs:Math.round(performance.now()-disconnectStart)});
   await burst('room-reconnect-399',399,connect);
   expect(await readAttendeeRoomAccess(env.DB,cookies[399],slug)).toBeNull();
   // Check recovery after the burst, not merely that all upgrades returned 101.
