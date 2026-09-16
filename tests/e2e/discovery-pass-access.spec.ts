@@ -47,7 +47,7 @@ test("an active night leads with its pass and keeps the Room within reach", asyn
   await page.goto("/my-nights");
   const ticket = page.getByRole("link", { name: "Show my ticket", exact: true });
   await expect(ticket).toHaveAttribute("href", "/my-nights/the-weekend-braai?view=passes");
-  await expect(page.locator('.my-nights-actions').getByRole("link", { name: "The Room", exact: true })).toHaveAttribute("href", "/room/the-weekend-braai");
+  await expect(page.locator('.night-listing__actions').getByRole("link", { name: "The Room", exact: true })).toHaveAttribute("href", "/room/the-weekend-braai");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("my-nights-pass-access.png"), fullPage: true });
 });

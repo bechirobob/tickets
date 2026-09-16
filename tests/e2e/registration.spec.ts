@@ -57,13 +57,15 @@ test('My Nights distinguishes waitlisted guests from confirmed passes and suppor
     if (route.request().method() === 'POST') { expect(route.request().postDataJSON().action).toBe('cancel'); status = 'cancelled'; return route.fulfill({ json: { registration: { status } } }); }
     return route.fulfill({ json: { registrations: [{ id: 'browser-rsvp', eventSlug: 'after-dark-osu', title: 'After Dark: Osu', kind: 'rsvp', status, partySize: 2, maxPartySize: 3, mode: 'rsvp', roomAccess: 0 }] } });
   });
-  await page.goto('/my-nights');
+  await page.goto('/my-nights?view=rsvps');
   const section = page.locator('.my-registrations');
   await expect(section).toContainText('On the waitlist · your spot isn’t confirmed yet');
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
   status = 'confirmed'; await page.reload();
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
+  await section.locator('summary').click();
   await section.getByRole('button', { name: 'Cancel RSVP' }).click();
+  await section.getByRole('button', { name: 'Yes, cancel' }).click();
   await expect(section).toContainText('Cancelled');
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
   expect((await new AxeBuilder({ page }).include('.my-registrations').analyze()).violations).toEqual([]);

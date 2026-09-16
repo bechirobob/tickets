@@ -1,0 +1,243 @@
+/* Glass belongs to controls. Passes, messages and payment facts stay opaque. */
+:root {
+  --night-glass-solid: #372936;
+  --night-glass-fill: rgb(48 33 44 / .88);
+  --night-glass-edge: rgb(255 239 249 / .19);
+  --night-glass-light: inset 0 1px 0 rgb(255 255 255 / .15), 0 6px 20px rgb(0 0 0 / .1);
+}
+.night-glass,
+.room-page .chat-action-tray,
+.notification-panel--dropdown,
+.night-mobile-menu__panel {
+  background: var(--night-glass-solid);
+  border: 1px solid var(--night-glass-edge);
+  box-shadow: var(--night-glass-light);
+}
+@supports ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
+  .night-glass, .room-page .chat-action-tray, .notification-panel--dropdown, .night-mobile-menu__panel {
+    background: var(--night-glass-fill);
+    -webkit-backdrop-filter: blur(16px) saturate(115%);
+    backdrop-filter: blur(16px) saturate(115%);
+  }
+}
+.night-glass :is(button, a), .night-pass-picker button, .night-listing__room {
+  transition: background var(--ui-control) var(--ui-ease), color var(--ui-control) var(--ui-ease), transform var(--ui-press) var(--ui-ease);
+}
+.night-glass :is(button, a):active, .night-pass-picker button:active, .night-listing__room:active { transform: scale(.97); }
+.my-nights-page--studio { min-height: 100svh; }
+.my-nights-page--studio .my-nights-shell { max-width: 1180px; padding: 44px 32px 100px; }
+.my-nights-page--studio .nights-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 0 0 30px; }
+.my-nights-page--studio .nights-heading .eyebrow { margin: 0 0 8px; letter-spacing: .01em; text-transform: none; color: #dbc5d3; font-size: 15px; }
+.my-nights-page--studio .nights-heading h1 { margin: 0; font-size: clamp(36px, 5vw, 56px); font-weight: 600; line-height: 1.1; letter-spacing: -.055em; }
+.nights-heading h1 > span { color: #e4f18b; }
+.nights-privacy { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; color: #dbc5d3; font-size: 13px; }
+.nights-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 30px; }
+.my-nights-page--studio .my-nights-tabs { display: flex; width: fit-content; min-height: 0; margin: 0; padding: 5px; gap: 3px; border: 1px solid var(--night-glass-edge); border-radius: 16px; overflow: visible; }
+.my-nights-page--studio .my-nights-tabs button { display: inline-flex; gap: 9px; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 0; border-radius: 11px; color: #e5d4df; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.my-nights-page--studio .my-nights-tabs button[aria-current='page'] { background: #f4e9ee; color: #30212c; box-shadow: inset 0 1px 0 #fff9fc, 0 2px 6px rgb(0 0 0 / .12); }
+.my-nights-tabs button > span { font-size: 11px; font-variant-numeric: tabular-nums; opacity: .8; }
+.nights-search { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 230px; border-bottom: 1px solid #806778; color: #dbc5d3; }
+.nights-search input { background: transparent; border: 0; color: #fff1e9; width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; outline-offset: 2px; }
+.nights-search input::-webkit-search-cancel-button { display: none; }
+.nights-search input::placeholder { color: #dbc5d3; }
+.nights-search button { display: grid; place-items: center; min-width: 44px; min-height: 44px; color: inherit; border: 0; background: transparent; }
+.nights-collection { display: grid; gap: 0; }
+.night-listing { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 30px; padding: 28px 0; border-bottom: 1px solid #5b4156; align-items: center; }
+.night-listing__art { display: grid; min-width: 0; align-self: stretch; place-items: center; background: #211724; border-radius: 12px; overflow: hidden; }
+.night-listing__art img { width: 100%; height: 100%; max-height: 210px; object-fit: contain; }
+.night-listing__body { min-width: 0; }
+.night-listing__status { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 12px; font-size: 12px; font-weight: 500; color: #dbc5d3; }
+.night-listing__status > span { display: inline-flex; align-items: center; gap: 6px; }
+.night-listing__status > span:first-child { color: #e4f18b; }
+.night-listing h2 { margin: 0 0 12px; font-size: clamp(24px, 2.7vw, 34px); font-weight: 550; line-height: 1.17; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.night-listing h2 a { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #fff2e9; }
+.night-listing h2 svg { flex-shrink: 0; color: #c8a9bc; }
+.night-listing__when { font-size: 15px; color: #f3dfeb; }
+.night-listing__when span { color: #dbc5d3; }
+.night-listing__venue { display: flex; align-items: baseline; gap: 6px; font-size: 14px; color: #dbc5d3; margin: 8px 0 0; }
+.night-listing__venue svg { flex-shrink: 0; align-self: center; }
+.night-listing__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin-top: 22px; }
+.night-listing__actions .ticket-action[data-variant='primary'] { background: #e4f18b; color: #281b2b; border: 0; }
+.night-listing__room { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; font-weight: 500; color: #f4e8ef; }
+.night-listing__room > svg:last-child { color: #bfa5b7; }
+.night-listing__update { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; margin-top: 8px; color: #e3c0a5; font-size: 13px; }
+.night-listing--next { grid-template-columns: 230px minmax(0, 1fr); gap: 36px; padding: 26px; margin-bottom: 4px; border: 0; border-radius: 20px; background: #352439; }
+.night-listing--next .night-listing__art { background: #291c2b; }
+.night-listing--next .night-listing__art img { max-height: 290px; }
+.night-listing--next h2 { font-size: clamp(28px, 3.5vw, 42px); }
+.my-nights-page--studio .my-nights-empty { display: grid; justify-items: start; padding: 50px 0; text-align: left; min-height: 260px; align-content: start; }
+.my-nights-page--studio .my-nights-empty > svg { color: #e3c0a5; margin-bottom: 18px; }
+.my-nights-page--studio .my-nights-empty h2 { font-size: 26px; margin: 0; }
+.my-nights-page--studio .my-nights-empty p { max-width: 440px; margin: 12px 0; font-size: 15px; line-height: 1.6; }
+.my-nights-page--studio .my-nights-empty a, .my-nights-page--studio .my-nights-locked a { gap: 8px; border: 0; }
+.nights-text-button, .nights-recovery-sent button { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: transparent; color: #e4f18b; font: inherit; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.my-nights-page--studio .my-nights-locked { padding-block: 34px 80px; max-width: 570px; }
+.nights-recovery-sent { display: grid; justify-items: start; font-size: 14px; }
+.nights-registration-view[hidden], .night-view-panel[hidden], .night-entry-pass[hidden] { display: none !important; }
+.my-registrations--studio { margin: 0; padding: 0; border: 0; }
+.my-registrations--studio > article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: start; padding: 26px 0; border-top: 0; border-bottom: 1px solid #5b4156; background: transparent; }
+.my-registrations--studio .registration-kind { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #dbc5d3; }
+.my-registrations--studio h2 { margin: 10px 0; font-size: 24px; line-height: 1.25; font-weight: 550; letter-spacing: -.03em; }
+.my-registrations--studio h2 a { display: inline-flex; align-items: center; gap: 10px; font-size: inherit; color: #fff2e9; }
+.my-registrations--studio p { font-size: 14px; line-height: 1.5; color: #dbc5d3; margin: 0; }
+.my-registrations--studio p[data-status='confirmed'] { color: #e4f18b; }
+.my-registrations--studio .registration-actions { display: flex; flex-direction: column; align-items: end; gap: 6px; min-width: 0; }
+.my-registrations--studio .registration-actions > a, .my-registrations--studio .registration-actions > button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 0; border-radius: 12px; background: #e4f18b; color: #281b2b; font-size: 14px; font-weight: 550; }
+.registration-manage { max-width: 300px; text-align: right; }
+.registration-manage summary { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; list-style: none; font-size: 14px; cursor: pointer; color: #e7d4e0; }
+.registration-manage summary::-webkit-details-marker { display: none; }
+.registration-manage[open] summary svg { transform: rotate(180deg); }
+.my-registrations--studio .registration-manage button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #806778; border-radius: 10px; background: transparent; color: #f7e5ef; font: inherit; font-size: 14px; cursor: pointer; }
+.registration-confirm { padding: 12px 0; }
+.registration-confirm > div { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; margin-top: 12px; }
+.my-nights-page--studio :is(a, button, summary, input):focus-visible { outline: 2px solid #e4f18b; outline-offset: 4px; }
+.my-nights-page--studio .my-nights-tabs button:focus-visible { outline-offset: 1px; }
+
+/* One compact event header, one destination switch, one readable pass at a time. */
+.night-hub--member .night-hub__hero { min-height: 185px; padding-block: 26px 38px; }
+.night-hub--member .night-hub__hero h1 { font-size: clamp(27px, 3.5vw, 42px); }
+.night-hub--member .night-hub__hero img { width: 108px; height: 138px; justify-self: end; }
+.night-hub--member .night-hub__tabs { position: relative; z-index: 2; width: fit-content; max-width: calc(100% - 40px); margin: -22px auto 0; padding: 5px; gap: 4px; min-height: 0; border: 1px solid var(--night-glass-edge); border-radius: 16px; }
+.night-hub--member .night-hub__tabs :is(button, a) { min-height: 44px; padding: 10px 22px; border: 0; border-radius: 11px; color: #eee0e8; }
+.night-hub--member .night-hub__tabs button[aria-current='page'] { background: #f8f0e7; color: #342333; box-shadow: inset 0 1px 0 #fff; }
+.night-hub--member .night-hub__view { padding-top: 28px; }
+.night-hub--member .night-ticket-layout { grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: 60px; }
+.night-hub--member .night-pass-heading { flex-direction: row; align-items: center; margin-bottom: 20px; gap: 12px; }
+.night-hub--member .night-pass-heading h2 { font-size: 24px; margin: 0; }
+.night-pass-heading p { margin: 5px 0 0; font-size: 14px; color: #644f5c; }
+.night-pass-picker { display: inline-flex; align-items: center; gap: 2px; }
+.night-pass-picker :is(button, select) { min-height: 44px; background: transparent; color: #342333; border: 0; font: inherit; font-size: 14px; }
+.night-pass-picker button { display: grid; place-items: center; min-width: 36px; border-radius: 10px; cursor: pointer; }
+.night-pass-picker select { max-width: 155px; cursor: pointer; }
+.night-hub--member .night-passes__tickets { display: block; }
+.night-hub--member .night-passes__tickets > .night-entry-pass { max-width: none; padding: 24px; border: 1px solid #d5c8cf; border-radius: 18px; background: #fffdfa; }
+.night-entry-pass__head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 12px; color: #644f5c; }
+.night-entry-pass__state { display: inline-flex; align-items: center; gap: 5px; color: #466035; }
+.night-hub--member .night-entry-pass > b { font-size: 24px; line-height: 1.3; }
+.night-hub--member .night-entry-pass > code { margin: 10px 0 20px; font-size: 20px; text-align: center; }
+.night-entry-pass__head { align-self: stretch; }
+.night-hub--member .night-entry-pass canvas { width: 228px; height: 228px; max-width: 100%; margin-inline: auto; }
+.night-pass-manage { align-self: stretch; }
+.night-pass-manage { border-top: 1px dashed #c4b4be; padding-top: 6px; margin-top: 18px; }
+.night-pass-manage summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; list-style: none; font-size: 14px; color: #64435b; cursor: pointer; }
+.night-pass-manage summary::-webkit-details-marker { display: none; }
+.night-pass-manage[open] summary svg { transform: rotate(90deg); }
+.night-pass-manage > div { display: flex; flex-wrap: wrap; gap: 8px; padding-block: 8px; }
+.night-pass-manage :is(.ticket-transfer-trigger, .ticket-return-trigger) { min-height: 44px; margin: 0; }
+.night-hub--member .night-ticket-extras { padding-top: 64px; }
+.night-hub--member .night-hub__disclosure > summary { min-height: 60px; font-size: 16px; }
+.night-hub--member .night-hub__notice { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 22px; padding: 8px 14px; background: #e4ebd9; color: #34432c; font-size: 14px; line-height: 1.5; border: 0; border-radius: 10px; }
+.night-hub__notice > button { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.night-hub--member .night-details { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 64px; align-items: start; }
+.night-hub--member .night-details > header { grid-column: 1 / -1; align-items: center; margin-bottom: 10px; }
+.night-hub--member .night-details > header h2 { font-size: 26px; margin: 0; }
+.night-hub--member .night-details > dl { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; margin: 0; }
+.night-hub--member .night-details > dl > div { padding: 18px 0; min-width: 0; }
+.night-hub--member .night-details > dl > div:nth-child(n+3) { grid-column: 1 / -1; }
+.night-hub--member .night-details dd { margin-top: 8px; line-height: 1.55; }
+.night-hub--member .night-details > .night-updates { grid-column: 2; grid-row: 2 / span 3; margin-top: 0; padding-top: 18px; min-width: 0; scroll-margin-top: 24px; }
+.night-hub--member .night-details > .night-attendance, .night-hub--member .night-details > .before-night { grid-column: 1; }
+.night-hub--member .night-details > .night-memories { grid-column: 1 / -1; }
+.night-hub--member .night-updates > header { gap: 12px; flex-wrap: wrap; }
+.night-hub--member .night-updates h2 { font-size: 21px; }
+.night-hub--member .night-updates article { padding: 20px 0; border-color: #d0c0c8; }
+.night-hub--member .night-updates h3 { font-size: 18px; }
+.night-hub--member .night-updates article p { line-height: 1.65; }
+.night-hub--member .before-night { padding: 24px 0; border: 0; border-bottom: 1px solid #d0c0c8; }
+.night-hub--member .before-night h2 { font-size: 22px; }
+.night-hub--member .before-night header > p:not(.eyebrow) { font-size: 14px; color: #644f5c; line-height: 1.5; }
+.night-hub--member .before-night label { margin-top: 20px; }
+.night-hub--member .before-night :is(textarea, select) { border-radius: 10px; background: #fffdfa; border-color: #9c8795; }
+
+/* Compact touch feedback for the most-used Room controls. */
+.room-page .chat-action-tray { border-radius: 18px; padding: 5px; }
+.room-page .chat-action-tray button { border-radius: 11px; transition: background var(--ui-control), transform var(--ui-press); }
+.room-page .chat-action-tray button:active { transform: scale(.9); background: rgb(255 255 255 / .12); }
+.room-page .chat-action-tray button[aria-pressed='true'] { background: rgb(255 255 255 / .16); }
+.room-services { grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 6px; }
+.room-services > button { padding: 12px 8px; min-height: 74px; flex-direction: column; justify-content: center; text-align: center; gap: 8px; border-radius: 12px; border-bottom: 0; margin-bottom: 4px; transition: background var(--ui-control); }
+.room-services > button > span { flex: 0; }
+.room-services > button > svg:last-child { display: none; }
+.room-services b { font-size: 13px; }
+.room-services > button[aria-pressed='true'] { background: #46303f; box-shadow: inset 0 1px 0 rgb(255 255 255 / .1); }
+.room-sheet h2 { font-size: clamp(24px, 2.6vw, 30px); }
+.room-page .room-header__activity > button { transition: background var(--ui-control), transform var(--ui-press); }
+.room-page .room-header__activity > button:active { transform: scale(.94); }
+@media (hover: hover) {
+  .night-glass :is(button, a):not([aria-current='page']):hover { background: rgb(255 255 255 / .08); }
+  .night-listing h2 a:hover, .night-listing__room:hover { color: #e4f18b; }
+  .night-pass-picker button:not(:disabled):hover { background: #e8dce3; }
+}
+@media (max-width: 800px) {
+  .night-hub--member .night-ticket-layout { grid-template-columns: 1fr; gap: 24px; }
+  .night-hub--member .night-ticket-extras { padding-top: 0; }
+  .night-hub--member .night-details { grid-template-columns: 1fr; gap: 0; }
+  .night-hub--member .night-details > :is(header, dl, .night-updates, .night-attendance, .before-night, .night-memories) { grid-column: 1; grid-row: auto; }
+  .night-hub--member .night-details > .night-updates { margin-top: 24px; }
+}
+@media (max-width: 700px) {
+  .my-nights-page--studio .my-nights-shell { padding: 28px 20px 100px; }
+  .my-nights-page--studio .nights-heading { padding-bottom: 24px; }
+  .my-nights-page--studio .nights-heading h1 { font-size: 38px; }
+  .my-nights-page--studio .nights-heading .eyebrow { font-size: 14px; }
+  .nights-privacy { width: 44px; }
+  .nights-privacy span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .nights-toolbar { gap: 12px; margin-bottom: 22px; }
+  .my-nights-page--studio .my-nights-tabs { width: 100%; justify-content: space-between; gap: 0; padding: 4px; }
+  .my-nights-page--studio .my-nights-tabs button { flex: 1; min-width: 0; padding: 10px 7px; gap: 5px; font-size: 13px; }
+  .my-nights-tabs button > span { font-size: 10px; }
+  .nights-search { width: 100%; max-width: none; }
+  .night-listing, .night-listing--next { grid-template-columns: 82px minmax(0, 1fr); gap: 16px; padding: 24px 0; align-items: start; }
+  .night-listing--next { padding: 20px 16px; margin-inline: -4px; border-radius: 16px; }
+  .night-listing__art { align-self: start; height: 116px; border-radius: 8px; }
+  .night-listing__body { display: contents; }
+  .night-listing__status, .night-listing h2, .night-listing__when, .night-listing__venue { grid-column: 2; }
+  .night-listing__art { grid-row: 1 / span 4; }
+  .night-listing__status { margin-bottom: 0; gap: 6px 12px; font-size: 11px; }
+  .night-listing h2, .night-listing--next h2 { font-size: 24px; margin: 0; }
+  .night-listing h2 svg { display: none; }
+  .night-listing__when { font-size: 14px; }
+  .night-listing__when span { display: block; margin-top: 4px; }
+  .night-listing__venue { font-size: 13px; margin: 0; line-height: 1.45; }
+  .night-listing__actions { grid-column: 1 / -1; margin-top: 2px; justify-content: space-between; gap: 8px 12px; }
+  .night-listing__actions .ticket-action { font-size: 14px; min-height: 46px; }
+  .night-listing__room { font-size: 13px; gap: 6px; }
+  .night-listing__update { grid-column: 1 / -1; margin-top: -10px; }
+  .my-nights-page--studio .my-nights-locked { padding-block: 24px 60px; }
+  .my-registrations--studio > article { grid-template-columns: 1fr; gap: 16px; }
+  .my-registrations--studio .registration-actions { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: start; }
+  .registration-manage { flex: 1; min-width: 110px; }
+  .night-hub--member .night-hub__hero { min-height: 170px; padding: 22px 20px 40px; grid-template-columns: minmax(0, 1fr) 74px; }
+  .night-hub--member .night-hub__hero img { width: 74px; height: 100px; }
+  .night-hub--member .night-hub__tabs { width: calc(100% - 40px); display: flex; justify-content: center; gap: 3px; }
+  .night-hub--member .night-hub__tabs :is(button, a) { flex: 1; padding: 10px 8px; font-size: 14px; gap: 6px; }
+  .night-hub--member .night-pass-heading { flex-direction: row; }
+  .night-hub--member .night-pass-heading h2 { font-size: 22px; }
+  .night-pass-heading p { font-size: 13px; }
+  .night-hub--member .night-passes__tickets > .night-entry-pass { padding: 20px; }
+  .customer-dock { background: var(--night-glass-fill); -webkit-backdrop-filter: blur(16px) saturate(115%); backdrop-filter: blur(16px) saturate(115%); box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); }
+  .customer-dock a { margin: 2px 4px; border-radius: 12px; }
+  .customer-dock a[aria-current='page'] { background: rgb(255 255 255 / .09); }
+}
+@media (max-width: 370px) {
+  .my-nights-page--studio .my-nights-tabs button { padding-inline: 5px; font-size: 12px; }
+  .my-nights-page--studio .my-nights-tabs button > span { display: none; }
+  .night-listing--next { padding-inline: 12px; }
+  .night-listing__actions .ticket-action { width: 100%; }
+  .night-pass-picker button { min-width: 30px; }
+  .night-pass-picker select { max-width: 130px; font-size: 13px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .night-glass, .room-page .chat-action-tray, .notification-panel--dropdown, .night-mobile-menu__panel, .customer-dock { background: var(--night-glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .night-glass :is(button, a), .night-pass-picker button, .night-listing__room, .room-page .chat-action-tray button, .room-services > button { transition: none; transform: none; }
+}
+@media (forced-colors: active) {
+  .night-glass, .room-page .chat-action-tray, .notification-panel--dropdown, .night-mobile-menu__panel { background: Canvas; border-color: CanvasText; box-shadow: none; backdrop-filter: none; }
+  .my-nights-page--studio .my-nights-tabs button[aria-current='page'], .night-hub--member .night-hub__tabs button[aria-current='page'] { outline: 2px solid Highlight; }
+}
+@media print {
+  .night-hub--member .night-hub__tabs, .night-pass-picker, .night-pass-manage { display: none; }
+  .night-entry-pass[hidden] { display: block !important; break-inside: avoid; }
+}
