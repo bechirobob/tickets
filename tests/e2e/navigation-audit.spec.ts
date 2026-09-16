@@ -34,7 +34,7 @@ test("navigation exposes each destination once per menu and stays keyboard reach
 test('navigation waits for its handlers before accepting the first keypress', async ({ page }) => {
   let releaseScripts!: () => void;
   const scriptsReady = new Promise<void>(resolve => { releaseScripts = resolve; });
-  await page.route('**/_next/static/*.js', async route => { await scriptsReady; await route.continue(); });
+  await page.route(url => url.pathname.endsWith('.js'), async route => { await scriptsReady; await route.continue(); });
   try {
     await page.goto('/account/privacy', { waitUntil: 'commit' });
     const trigger = page.getByRole('button', { name: 'Open navigation', exact: true });

@@ -1,0 +1,41 @@
+name: Focused production browser regressions
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - tests/e2e/navigation-audit.spec.ts
+      - .github/workflows/browser-followup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      E2E_BASE_URL: https://tickets.becoreops.com
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # These existing journeys use anonymous reads or intercepted fixture APIs.
+      # No checkout, email, registration or customer-data writes reach production.
+      - name: Repeat the three affected mobile journeys with retries disabled
+        run: npx playwright test navigation-audit.spec.ts member-navigation.spec.ts public-journey.spec.ts --project mobile-chromium --grep 'navigation waits for its handlers|My Nights recovers from a service failure|My Nights exposes secure recovery' --workers=1 --retries=0 --repeat-each=5 --trace=on
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: focused-production-browser-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
