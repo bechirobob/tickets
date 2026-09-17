@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - tests/e2e/navigation-audit.spec.ts
+      - tests/e2e/discovery-pass-access.spec.ts
       - .github/workflows/browser-followup.yml
   workflow_dispatch:
 
@@ -31,6 +32,8 @@ jobs:
       # No checkout, email, registration or customer-data writes reach production.
       - name: Repeat the three affected mobile journeys with retries disabled
         run: npx playwright test navigation-audit.spec.ts member-navigation.spec.ts public-journey.spec.ts --project mobile-chromium --grep 'navigation waits for its handlers|My Nights recovers from a service failure|My Nights exposes secure recovery' --workers=1 --retries=0 --repeat-each=5 --trace=on
+      - name: Verify active-pass loading on desktop without retries
+        run: npx playwright test discovery-pass-access.spec.ts --project desktop-chromium --grep 'an active night leads' --workers=1 --retries=0 --repeat-each=5 --trace=on --output=test-results-pass-access
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -38,4 +41,5 @@ jobs:
           path: |
             playwright-report
             test-results
+            test-results-pass-access
           retention-days: 14

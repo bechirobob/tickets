@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App as NativeApp } from '@capacitor/app';
-import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
+import { Capacitor, SystemBars, SystemBarsStyle, SystemBarType } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { Browser } from '@capacitor/browser';
 import { eventPresentationStyle } from '../../lib/event-presentation';
@@ -123,7 +123,14 @@ function App() {
   const current = catalogue?.screens.find(item => `/event/${item.event.slug}` === pathname);
   useEffect(() => {
     document.title = `${current?.event.title ?? (pathname === '/' ? 'Home' : 'The Drop')} · BeCore Tickets`;
-    if (Capacitor.isNativePlatform()) void SystemBars.setStyle({ style: current ? SystemBarsStyle.Light : SystemBarsStyle.Dark }).catch(() => {});
+    if (Capacitor.isNativePlatform()) {
+      // The status safe area stays dark on every route. Capacitor's Dark style
+      // means light glyphs on a dark surface, not dark glyphs.
+      void SystemBars.setStyle({ style: SystemBarsStyle.Dark, bar: SystemBarType.StatusBar }).catch(() => {});
+      if (Capacitor.getPlatform() === 'android') {
+        void SystemBars.setStyle({ style: current ? SystemBarsStyle.Light : SystemBarsStyle.Dark, bar: SystemBarType.NavigationBar }).catch(() => {});
+      }
+    }
   }, [current, pathname]);
   const runtime = useMemo(() => ({ openSecurePage, share: shareCustomerEvent, stale }), [openSecurePage, stale]);
   const events = catalogue?.screens.map(item => item.event) ?? [];
