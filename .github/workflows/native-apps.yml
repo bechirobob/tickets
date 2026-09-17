@@ -133,8 +133,15 @@ jobs:
           sleep 10
           xcrun simctl io "$DEVICE_ID" screenshot ios/output/iphone-launch.png
           xcrun simctl terminate "$DEVICE_ID" com.becoreops.tickets
-          xcodebuild -quiet -project ios/App/App.xcodeproj -scheme NativeAcceptance -configuration Release -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath ios/DerivedData -resultBundlePath ios/output/event-links.xcresult CODE_SIGNING_ALLOWED=NO test
+          xcodebuild -quiet -project ios/App/App.xcodeproj -scheme NativeAcceptance -configuration Release -destination "platform=iOS Simulator,id=$DEVICE_ID" -parallel-testing-enabled NO -derivedDataPath ios/DerivedData -resultBundlePath ios/output/event-links.xcresult CODE_SIGNING_ALLOWED=NO test
           xcrun simctl shutdown "$DEVICE_ID"
+      - name: Export native link screenshots and test summary
+        if: always()
+        run: |
+          if [ -d ios/output/event-links.xcresult ]; then
+            xcrun xcresulttool export attachments --path ios/output/event-links.xcresult --output-path ios/output/event-link-screens
+            xcrun xcresulttool get test-results summary --path ios/output/event-links.xcresult > ios/output/event-link-summary.json
+          fi
       - name: Archive for real iPhone hardware without signing
         run: xcodebuild -quiet -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath ios/output/BeCore-Tickets-unsigned.xcarchive CODE_SIGNING_ALLOWED=NO archive
       - name: Verify hardware archive
@@ -149,6 +156,8 @@ jobs:
             mobile/ios/output/*.png
             mobile/ios/output/*.zip
             mobile/ios/output/*.xcresult
+            mobile/ios/output/event-link-screens
+            mobile/ios/output/event-link-summary.json
           if-no-files-found: warn
           retention-days: 30
       - name: Package simulator app

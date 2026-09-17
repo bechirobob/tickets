@@ -15,10 +15,12 @@ tests.build_configurations.each do |config|
   config.build_settings.merge!({
     'SWIFT_VERSION' => '5.0',
     'GENERATE_INFOPLIST_FILE' => 'YES',
+    'PRODUCT_NAME' => 'EventLinksUITests',
     'PRODUCT_BUNDLE_IDENTIFIER' => 'com.becoreops.tickets.uitests',
     'TEST_TARGET_NAME' => 'App',
     'TARGETED_DEVICE_FAMILY' => '1',
-    'CODE_SIGNING_ALLOWED' => 'NO'
+    'CODE_SIGNING_ALLOWED' => 'NO',
+    'ONLY_ACTIVE_ARCH' => 'YES'
   })
 end
 project.save
