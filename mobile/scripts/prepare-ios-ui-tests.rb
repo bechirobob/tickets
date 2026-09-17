@@ -25,6 +25,14 @@ tests.build_configurations.each do |config|
 end
 project.save
 
+# Adding a shared test scheme disables Xcode's implicit App scheme. Preserve
+# that app-only scheme for the existing, unchanged hardware archive command.
+release_scheme = Xcodeproj::XCScheme.new
+release_scheme.add_build_target(app)
+release_scheme.set_launch_target(app)
+release_scheme.archive_action.build_configuration = 'Release'
+release_scheme.save_as(project.path, 'App')
+
 scheme = Xcodeproj::XCScheme.new
 scheme.add_build_target(app)
 scheme.add_build_target(tests, false)
