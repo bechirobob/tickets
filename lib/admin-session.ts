@@ -218,7 +218,7 @@ export async function authenticateStaff(db: D1Database, email: string, passwordP
 
 export function safeReturnTo(value: string | null | undefined): string {
   if (!value?.startsWith("/") || value.startsWith("//")) return "/admin";
-  if (value.startsWith("/admin") || value === "/scan" || value.startsWith("/organizer/workspace") || value.startsWith("/organizer/analytics")) return value;
+  if (value.startsWith("/admin") || value === "/scan" || value.startsWith("/organizer/workspace") || value.startsWith("/organizer/analytics") || value.startsWith("/organizer/assistant")) return value;
   return "/admin";
 }
 

@@ -1,6 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import {expect,test} from '@playwright/test';
 
+// Keep the simulated upload responses visible to Playwright on every engine.
+test.use({serviceWorkers:'block'});
+
 test('organiser submission steps validate, retain drafts and recover from upload failure',async({page},info)=>{
  await page.emulateMedia({reducedMotion:'reduce'});
  await page.goto('/organizer/submit');
