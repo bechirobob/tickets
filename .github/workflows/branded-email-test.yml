@@ -1,0 +1,28 @@
+name: Branded test email
+on:
+  push:
+    branches: [ops/branded-email-tests]
+    paths: ['emails/tests/request.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: branded-email-test
+  cancel-in-progress: false
+jobs:
+  send-approved-test:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/branded-email-tests'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Verify recipient and replay protections
+        run: node --test scripts/tests/branded-test-email.test.mjs
+      - name: Queue the approved owner test through the existing Resend sender
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/send-branded-test-email.mjs

@@ -1,0 +1,7 @@
+{
+  "requestId": "october-rsvp-owner-20260918-v1",
+  "template": "october-rsvp",
+  "subject": "[TEST · BeCore sender] October is calling. Are you on the list?",
+  "recipientSha256": "d2afa7273a4645949d3f76e8691e3c20f14bcc2470002ecc128b56731af2772d",
+  "expiresAt": "2026-09-20T00:00:00.000Z"
+}
