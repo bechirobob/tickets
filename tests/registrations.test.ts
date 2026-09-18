@@ -154,3 +154,24 @@ describe('RSVP admission and interest registrations', () => {
     expect((await claimRegistration(env.DB, pending.token)).registration?.status).toBe('interested');
   });
 });
+
+it('allows explicitly enabled undated RSVP without exceeding capacity or unlocking other undated events', async () => {
+  await env.DB.prepare("UPDATE curated_event_records SET schedule_status='coming_soon' WHERE slug=?").bind(slug).run();
+  const input = (email: string) => ({eventSlug:slug,email,guestName:'October Guest',phone:'',partySize:1});
+  await expect(requestRegistration(env.DB,input('blocked@example.com'),origin,true)).rejects.toThrow('not open');
+  await env.DB.prepare('UPDATE event_registration_settings SET allow_undated_rsvp=1,capacity=1 WHERE event_slug=?').bind(slug).run();
+  try {
+    await Promise.all([
+      requestRegistration(env.DB,input('october-one@example.com'),origin,true),
+      requestRegistration(env.DB,input('october-two@example.com'),origin,true),
+    ]);
+    const counts = await env.DB.prepare('SELECT status,SUM(party_size) AS guests FROM event_registrations WHERE event_slug=? GROUP BY status').bind(slug).all<{status:string;guests:number}>();
+    expect(counts.results.find(r=>r.status==='confirmed')?.guests).toBe(1);
+    expect(counts.results.find(r=>r.status==='waitlisted')?.guests).toBe(1);
+    expect((await configure({capacity:2})).status).toBe(200);
+    await env.DB.prepare('UPDATE event_registration_settings SET accepting=0 WHERE event_slug=?').bind(slug).run();
+    await expect(requestRegistration(env.DB,input('closed@example.com'),origin,true)).rejects.toThrow('not open');
+  } finally {
+    await env.DB.prepare('UPDATE event_registration_settings SET allow_undated_rsvp=0,accepting=1 WHERE event_slug=?').bind(slug).run();
+  }
+});

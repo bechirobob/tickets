@@ -25,7 +25,7 @@ describe("launch event inventory", () => {
   });
   it("redacts Guest List dates and keeps coming-soon events discoverable", async () => {
     const event = await findCuratedEvent("sun-chasers-labadi");
-    expect(event).toMatchObject({ startsAt: null, endsAt: null, rescheduledFrom: null, salesOpenAt: null, salesCloseAt: null, fullDate: "Coming soon", scheduleStatus: "coming_soon", dressCode: "Light pink & white", isVerified: true });
+    expect(event).toMatchObject({ startsAt: null, endsAt: null, rescheduledFrom: null, salesOpenAt: null, salesCloseAt: null, fullDate: "October · Coming soon", scheduleStatus: "coming_soon", dressCode: "Light pink & white", isVerified: true });
     expect(JSON.stringify(event)).not.toMatch(/2026-10-04|2026-09-13/);
     expect(event?.note).not.toContain("first Sunday");
     expect(event?.ticketTiers.every((tier) => tier.status === "hidden")).toBe(true);

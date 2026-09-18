@@ -14,7 +14,7 @@ describe('packaged app public catalogue', () => {
     expect(catalogue.version).toBe(1);
     expect(catalogue.events.map(event => event.slug)).toEqual(['the-weekend-braai', 'sun-chasers-labadi']);
     expect(catalogue.events.every(event => event.isVerified)).toBe(true);
-    expect(catalogue.events[1]).toMatchObject({ startsAt: null, fullDate: 'Coming soon', ticketsAvailable: false });
+    expect(catalogue.events[1]).toMatchObject({ startsAt: null, fullDate: 'October · Coming soon', ticketsAvailable: false });
     expect(catalogue.events[0]).toMatchObject({ priceFromMinor: 35000, ticketsAvailable: false });
     expect(JSON.stringify(catalogue)).not.toMatch(/bookingFeeBasisPoints|remainingAdmissions|capacity|customer|token_hash|2026-10-04/);
   });

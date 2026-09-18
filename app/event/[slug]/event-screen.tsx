@@ -46,7 +46,7 @@ export default function EventScreen({ event, host, registration, promoterCode = 
           {start && event.startsAt ? <div className="event-date-line">
             <time className="event-date-display" dateTime={event.startsAt} aria-label={event.fullDate}><b>{calendarDay}</b><span><strong>{calendarMonth}</strong><small>{event.day} · {start.getUTCFullYear()}</small></span></time>
             <div className="event-hours" aria-label={`${formatTime(start)}${event.endsAt ? ` to ${formatTime(new Date(event.endsAt))}` : " onwards"}, Accra time`}><span><b>{formatTime(start)}</b><small>Doors open</small></span>{event.endsAt ? <><i aria-hidden="true">—</i><span><b>{formatTime(new Date(event.endsAt))}</b><small>Last dance</small></span></> : null}</div>
-          </div> : <div className="event-coming-soon"><h2>Coming soon</h2><p>Good plans take a minute. The date drops here first.</p></div>}
+          </div> : <div className="event-coming-soon"><h2>{event.fullDate}</h2><p>The exact date is still under wraps.</p></div>}
           {event.startsAt ? <a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}>Add to calendar <ArrowUpRight size={14} aria-hidden="true" /></a> : null}
           <dl className="event-practical-details">
             <div><dt>Find us</dt><dd>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer" className="event-detail-venue">{event.venue}<ArrowUpRight size={15} aria-hidden="true" /></Link> : <strong>{event.venue}</strong>}<span>{event.area}</span></dd></div>

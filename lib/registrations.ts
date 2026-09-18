@@ -5,7 +5,7 @@ import { sendEmail } from './email-delivery';
 import { recordPolicyConsents } from './policies';
 
 export type RegistrationMode = 'paid' | 'rsvp' | 'interest';
-export type RegistrationSettings = { eventSlug: string; title: string; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; closesAt?: string | null; notifyHost?: number };
+export type RegistrationSettings = { eventSlug: string; title: string; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
 export type Registration = { id: string; eventSlug: string; email: string; guestName: string; phone: string; partySize: number; kind: string; status: string; attendeeId: string | null; orderId: string | null; version: number; eventSignature: string | null };
 const fields = `id, event_slug AS eventSlug, normalized_email AS email, guest_name AS guestName, phone, party_size AS partySize, kind, status, attendee_id AS attendeeId, order_id AS orderId, version, event_signature AS eventSignature`;
 const timestamp = () => new Date().toISOString();
@@ -14,22 +14,25 @@ export async function registrationSettings(db: D1Database, slug: string) {
   return db.prepare(`SELECT e.slug AS eventSlug, e.title, e.schedule_status AS scheduleStatus, e.starts_at AS startsAt, e.ends_at AS endsAt, e.event_state AS eventState, e.status AS publication,
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.capacity, 0) AS capacity, COALESCE(s.max_party_size, 1) AS maxPartySize,
-    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, COALESCE(s.accepting,1) AS accepting, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost
+    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, COALESCE(s.accepting,1) AS accepting, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost, COALESCE(s.allow_undated_rsvp,0) AS allowUndatedRsvp
     FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(slug).first<RegistrationSettings>();
 }
 export function registrationStartConfirmed(settings: Pick<RegistrationSettings, 'scheduleStatus' | 'startsAt'>) {
   return ['confirmed', 'end_pending'].includes(settings.scheduleStatus) && Number.isFinite(Date.parse(settings.startsAt));
 }
+export function registrationScheduleReady(settings: RegistrationSettings) {
+  return registrationStartConfirmed(settings) || (settings.scheduleStatus === 'coming_soon' && settings.allowUndatedRsvp === 1);
+}
 export function registrationsOpen(settings: RegistrationSettings) {
   return settings.accepting !== 0 && (!settings.closesAt || settings.closesAt > timestamp()) && settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)
-    && (settings.mode === 'rsvp' ? registrationStartConfirmed(settings) && settings.startsAt > timestamp() : settings.scheduleStatus === 'coming_soon' || settings.endsAt > timestamp());
+    && (settings.mode === 'rsvp' ? registrationScheduleReady(settings) && (settings.scheduleStatus === 'coming_soon' || settings.startsAt > timestamp()) : settings.scheduleStatus === 'coming_soon' || settings.endsAt > timestamp());
 }
 export function registrationShareState(settings: RegistrationSettings | null) {
   if (!settings) return {ready:false,mode:'paid',reason:'Choose an available event.'};
   const mode=settings.mode;
   if (settings.publication !== 'published') return {ready:false,mode,reason:'Publish this event before sharing registration.'};
   if (['cancelled','postponed'].includes(settings.eventState)) return {ready:false,mode,reason:'Registration is unavailable while this event is cancelled or postponed.'};
-  if (mode === 'rsvp' && !registrationStartConfirmed(settings)) return {ready:false,mode,reason:'Confirm the event date and start time before opening RSVP.'};
+  if (mode === 'rsvp' && !registrationScheduleReady(settings)) return {ready:false,mode,reason:'Confirm the event date and start time before opening RSVP.'};
   if (mode === 'paid' && settings.scheduleStatus !== 'confirmed') return {ready:false,mode,reason:'Confirm the event date and end time before opening paid registration.'};
   if (!registrationsOpen(settings)) return {ready:false,mode,reason:'Registration is closed. Check the opening switch, deadline and event date.'};
   return {ready:true,mode,reason:''};
@@ -40,7 +43,7 @@ export async function readRegistration(db: D1Database, id: string) { return db.p
 export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean }, origin: string, directRsvp = false) {
   const settings = await registrationSettings(db, input.eventSlug);
   if (!settings || !registrationsOpen(settings) || settings.mode === 'paid') throw new Error('Registration is not open for this event.');
-  if (settings.mode === 'rsvp' && !registrationStartConfirmed(settings)) throw new Error('RSVP opens when the event date is confirmed.');
+  if (settings.mode === 'rsvp' && !registrationScheduleReady(settings)) throw new Error('RSVP opens when the event date is confirmed.');
   if (!Number.isInteger(input.partySize) || input.partySize < 1 || input.partySize > (settings.mode === 'interest' ? 1 : settings.maxPartySize)) throw new Error('Choose an allowed number of guests.');
   const now = timestamp();
   await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in)
@@ -87,8 +90,8 @@ export async function confirmRegistration(db: D1Database, id: string) {
   const statements = [db.prepare(`UPDATE event_registrations SET status = 'confirmed', version = version + 1, updated_at = ?
     WHERE id = ? AND kind = 'rsvp' AND status = 'waitlisted'
     AND EXISTS (SELECT 1 FROM event_registration_settings s JOIN curated_event_records e ON e.slug = s.event_slug
-      WHERE s.event_slug = event_registrations.event_slug AND s.mode = 'rsvp' AND e.status = 'published' AND e.schedule_status IN ('confirmed', 'end_pending')
-      AND e.event_state IN ('on_sale', 'sold_out', 'rescheduled') AND e.starts_at > ?
+      WHERE s.event_slug = event_registrations.event_slug AND s.mode = 'rsvp' AND e.status = 'published' AND ((e.schedule_status IN ('confirmed', 'end_pending') AND e.starts_at > ?) OR (e.schedule_status = 'coming_soon' AND s.allow_undated_rsvp = 1))
+      AND e.event_state IN ('on_sale', 'sold_out', 'rescheduled')
       AND (s.approval_required = 0 OR event_registrations.approved_at IS NOT NULL)
       AND event_registrations.party_size <= s.max_party_size
       AND (SELECT COALESCE(SUM(party_size), 0) FROM event_registrations r WHERE r.event_slug = s.event_slug AND r.status = 'confirmed') + event_registrations.party_size <= s.capacity)
