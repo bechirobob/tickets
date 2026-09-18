@@ -121,8 +121,8 @@ export default function OrganizerAnalytics({ actor, role }: { actor: string; rol
     </section>
 
     <section className="analytics-controls" aria-label="Analytics filters">
-      <label>Night<select value={eventSlug} onChange={(event) => { setLoading(true); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{data?.events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
-      <label>Period<select value={range} onChange={(event) => { setLoading(true); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
+      <label>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{data?.events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
+      <label>Period<select aria-label="Period" value={range} onChange={(event) => { setLoading(true); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
       <a href={exportUrl}><ArrowDownToLine size={15} /> Export CSV</a>
     </section>
 
