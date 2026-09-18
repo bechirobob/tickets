@@ -537,7 +537,10 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.match(submission, /className="submission-header__signin"/u);
   assert.match(submission, /aria-label="Organiser access"/u);
   assert.match(submission, /Organiser sign in/u);
-  assert.match(submission, /private workspace for tickets, guest updates, entry and sales/u);
+  assert.match(submission, /private organiser workspace/u);
+  assert.match(submission, /Tickets & RSVP/u);
+  assert.match(submission, /Guest updates, The Room and entry tools/u);
+  assert.match(submission, /Sales, promoter results and arrivals/u);
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
   assert.match(adminSubmissions, /if \(!actor\) return Response\.json\([^;]+status: 401/su);
 });
