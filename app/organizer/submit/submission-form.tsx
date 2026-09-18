@@ -2,8 +2,8 @@
 
 import { ActionButton } from "../../action";
 
-import { CheckCircle2, Loader2, Send, Upload } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Send, Upload } from "lucide-react";
+import { FormEvent, useRef, useState } from "react";
 
 const maximumSourceBytes = 8 * 1024 * 1024;
 const maximumPreparedBytes = 1_500_000;
@@ -69,9 +69,41 @@ async function preparePoster(file: File) {
 export default function PartySubmissionForm() {
   const [state, setState] = useState<"idle" | "preparing" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [step, setStep] = useState(0);
+  const [posterName, setPosterName] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const steps = ["The people", "The party", "The flyer"];
+  const busy = state === "preparing" || state === "sending";
+
+  function moveTo(next: number) {
+    setStep(next);
+    setMessage("");
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }
+
+  function validateStep(index: number) {
+    const fields = formRef.current?.querySelectorAll<HTMLInputElement>(`[data-step="${index}"] input, [data-step="${index}"] select, [data-step="${index}"] textarea`);
+    for (const field of fields ?? []) {
+      if (!field.checkValidity()) {
+        if (index !== step) {
+          setStep(index);
+          requestAnimationFrame(() => field.reportValidity());
+        } else field.reportValidity();
+        return false;
+      }
+    }
+    return true;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
+    if (step < 2) {
+      if (validateStep(step)) moveTo(step + 1);
+      return;
+    }
+    for (let index = 0; index < 3; index++) if (!validateStep(index)) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     setState("preparing");
@@ -102,27 +134,27 @@ export default function PartySubmissionForm() {
         <p className="night-kicker"><span /> Safely in the queue</p>
         <h2>Your party has entered the group chat.</h2>
         <p>Reference <b>{message}</b>. We’ll check the plan, venue and ticket details, then get back to you. Your event goes live after approval.</p>
-        <button type="button" onClick={() => setState("idle")}>Submit another party</button>
+        <button type="button" onClick={() => { setState("idle"); setStep(0); setPosterName(""); }}>Submit another party</button>
       </section>
     );
   }
 
   return (
-    <form className="submission-form" onSubmit={submit}>
+    <form ref={formRef} className="submission-form" onSubmit={submit} noValidate>
+      <nav className="submission-progress" aria-label="Submission steps">{steps.map((label, index) => <button key={label} type="button" aria-current={step === index ? "step" : undefined} disabled={busy || index > step} onClick={() => moveTo(index)}><span>{index < step ? <CheckCircle2 size={17} /> : `0${index + 1}`}</span>{label}</button>)}</nav>
+      <header className="submission-form-heading"><p>Step {step + 1} of 3</p><h2 ref={headingRef} tabIndex={-1}>{steps[step]}</h2><p>{["Who’s making this happen?", "Give us the details worth clearing the calendar for.", "One last look, then send it our way."][step]}</p></header>
       <input className="submission-honeypot" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
-      <section>
-        <div className="submission-step"><b>01</b><span>The people</span></div>
+      <section data-step="0" hidden={step !== 0}>
         <div className="submission-fields">
-          <label>Organiser or collective<input name="organizerName" required maxLength={120} placeholder="Nightlife Accra" /></label>
-          <label>Your name<input name="contactName" required maxLength={120} placeholder="Nana Mensah" /></label>
-          <label>Email<input name="contactEmail" type="email" required maxLength={180} placeholder="nana@example.com" /></label>
-          <label>Phone / WhatsApp<input name="contactPhone" type="tel" required maxLength={40} placeholder="+233 24 000 0000" /></label>
+          <label>Organiser or collective<input name="organizerName" required maxLength={120} autoComplete="organization" placeholder="Nightlife Accra" /></label>
+          <label>Your name<input name="contactName" autoComplete="name" required maxLength={120} placeholder="Nana Mensah" /></label>
+          <label>Email<input name="contactEmail" autoComplete="email" type="email" required maxLength={180} placeholder="nana@example.com" /></label>
+          <label>Phone / WhatsApp<input name="contactPhone" autoComplete="tel" type="tel" required maxLength={40} placeholder="+233 24 000 0000" /></label>
           <label className="wide">Social page <span>optional</span><input name="socialUrl" type="url" placeholder="https://instagram.com/..." /></label>
         </div>
       </section>
 
-      <section>
-        <div className="submission-step"><b>02</b><span>The party</span></div>
+      <section data-step="1" hidden={step !== 1}>
         <div className="submission-fields">
           <label className="wide">Party name<input name="title" required maxLength={120} placeholder="A name people will remember tomorrow" /></label>
           <label className="wide">The concept<textarea name="concept" required minLength={80} maxLength={1800} placeholder="What makes this worth dressing up and leaving the house for?" /></label>
@@ -139,15 +171,14 @@ export default function PartySubmissionForm() {
         </div>
       </section>
 
-      <section>
-        <div className="submission-step"><b>03</b><span>The flier</span></div>
-        <label className="poster-upload"><Upload size={20} /><span><b>Upload the poster or key visual</b><small>JPG, PNG or WebP · up to 8 MB · prepared automatically</small></span><input name="poster" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
+      <section data-step="2" hidden={step !== 2}>
+        <label className="poster-upload"><Upload size={20} /><span><b>{posterName || "Choose your flyer"}</b><small>JPG, PNG or WebP · up to 8 MB · prepared automatically</small></span><input name="poster" aria-label="Upload the poster or key visual" onChange={(event) => setPosterName(event.target.files?.[0]?.name ?? "")} type="file" accept="image/jpeg,image/png,image/webp" required /></label>
         <label className="submission-consent submission-consent--check"><input name="acceptedPolicies" value="yes" type="checkbox" required /><span>I accept the <a href="/terms#organizer" target="_blank">organiser agreement</a> and <a href="/privacy" target="_blank">privacy notice</a>. Submitting does not guarantee placement; the organiser remains responsible for accurate event, venue and refund information.</span></label>
       </section>
 
       <div className="submission-submit">
-        <p>Good concept? Clear venue? Real line-up? Lovely. Send it over.</p>
-        <ActionButton type="submit" disabled={state === "preparing" || state === "sending"} aria-busy={state === "preparing" || state === "sending"} icon={state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : <Send size={17} />}>{state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : "Submit for review"}</ActionButton>
+        {step > 0 ? <button className="submission-back" type="button" disabled={busy} onClick={() => moveTo(step - 1)}><ArrowLeft size={16} /> Back</button> : <p>Your event goes live after approval.</p>}
+        <ActionButton type="submit" disabled={state === "preparing" || state === "sending"} aria-busy={state === "preparing" || state === "sending"} icon={state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : step < 2 ? <ArrowRight size={17} /> : <Send size={17} />}>{state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : step < 2 ? "Continue" : "Submit for review"}</ActionButton>
       </div>
       {state === "error" && <p className="submission-error" role="alert">{message}</p>}
     </form>

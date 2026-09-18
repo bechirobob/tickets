@@ -9,6 +9,8 @@ import { GET as readOperations, POST as updateOperations } from "../app/api/admi
 import { GET as readSupport } from "../app/api/admin/support/route";
 import {
   adminCookieHeader,
+  allowedWorkspaceReturn,
+  safeReturnTo,
   authenticateStaff,
   createPasswordRecord,
   createStaffSession,
@@ -153,6 +155,13 @@ describe("named staff access", () => {
     expect(isWorkspacePathAllowed("moderator", "/admin/rooms")).toBe(true);
     expect(isWorkspacePathAllowed("moderator", "/admin/fees")).toBe(false);
     expect(isWorkspacePathAllowed("owner", "/organizer/workspace")).toBe(true);
+    for (const role of ["owner", "organizer"] as const) {
+      expect(allowedWorkspaceReturn(role, "/organizer/assistant")).toBe("/organizer/assistant");
+    }
+    for (const role of ["curator", "finance", "support", "gate", "moderator"] as const) {
+      expect(isWorkspacePathAllowed(role, "/organizer/assistant")).toBe(false);
+    }
+    expect(safeReturnTo("/organizer/assistant")).toBe("/organizer/assistant");
 
     const account = await staff("curator", crypto.randomUUID().slice(0, 8));
     const authenticated = await authenticateStaff(env.DB, account.email.toUpperCase(), passwordProof);

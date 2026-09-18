@@ -92,7 +92,7 @@ export default function OrganizerAssistant({ actor, role }: { actor: string; rol
     router.refresh();
   }
 
-  return <main className={styles.shell}>
+  return <main className={`${styles.shell} organizer-workspace organizer-desk`}>
     <header className={styles.topbar}>
       <Link href="/" className="night-brand-link"><BrandLogo /></Link>
       <WorkspaceJump active="/organizer/assistant" role={role} compact />
@@ -122,7 +122,7 @@ export default function OrganizerAssistant({ actor, role }: { actor: string; rol
             <label htmlFor="event-desk-question">Ask about {selected?.title ?? "this Night"}</label>
             <div><textarea id="event-desk-question" value={question} onChange={(event) => setQuestion(event.target.value)} minLength={2} maxLength={1500} placeholder="What should I be watching before doors open?" required /><button type="submit" aria-label="Ask event desk" disabled={busy || question.trim().length < 2}>{busy ? <Loader2 className="spin" size={18} /> : <ArrowUp size={19} />}</button></div>
           </form>
-          <p className={styles.boundary}>Read-only. It can explain your event data and recommend next steps, but it cannot change tickets, payments, permissions or event settings.</p>
+          <p className={styles.boundary}>Ask away. The desk can explain what’s happening and suggest your next move. Changes stay in your hands.</p>
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
         </div>
 

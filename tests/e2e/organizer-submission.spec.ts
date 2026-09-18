@@ -1,0 +1,54 @@
+import AxeBuilder from '@axe-core/playwright';
+import {expect,test} from '@playwright/test';
+
+// Keep the simulated upload responses visible to Playwright on every engine.
+test.use({serviceWorkers:'block'});
+
+test('organiser submission steps validate, retain drafts and recover from upload failure',async({page},info)=>{
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.goto('/organizer/submit');
+ const form=page.locator('.submission-form');
+ await expect(form.getByRole('heading',{name:'The people',exact:true})).toBeVisible();
+ await form.getByRole('button',{name:'Continue',exact:true}).click();
+ await expect(form.getByRole('heading',{name:'The people',exact:true})).toBeVisible();
+ await form.getByLabel('Organiser or collective').fill('Accra Collective');
+ await form.getByLabel('Your name',{exact:true}).fill('Ama Mensah');
+ await form.getByLabel('Email',{exact:true}).fill('ama@example.com');
+ await form.getByLabel('Phone / WhatsApp').fill('+233240000000');
+ await page.screenshot({path:info.outputPath('organizer-submit-people.png'),fullPage:true});
+ await form.getByRole('button',{name:'Continue',exact:true}).click();
+ await expect(form.getByRole('heading',{name:'The party',exact:true})).toBeFocused();
+ await form.getByLabel('Party name',{exact:true}).fill('An Accra Evening');
+ await form.getByLabel('The concept').fill('A considered evening of good music and familiar faces, with a confirmed venue, a welcoming crowd and a proper plan for entry.');
+ await form.getByLabel('Venue',{exact:true}).fill('Accra venue');
+ await form.getByLabel('Exact venue map link').fill('https://maps.google.com/?q=Accra');
+ await form.getByLabel('Area',{exact:true}).fill('Osu');
+ await form.getByLabel('Starts',{exact:true}).fill('2027-01-15T18:00');
+ await form.getByLabel('Ends',{exact:true}).fill('2027-01-16T02:00');
+ await form.getByLabel('Mood').selectOption('Late night');
+ await form.getByLabel('Expected capacity').fill('200');
+ await form.getByLabel('Tickets from').fill('120');
+ await form.getByLabel('DJs / hosts / line-up').fill('Confirmed local DJs');
+ await page.screenshot({path:info.outputPath('organizer-submit-party.png'),fullPage:true});
+ await form.getByRole('button',{name:'Back',exact:true}).click();
+ await expect(form.getByLabel('Your name',{exact:true})).toHaveValue('Ama Mensah');
+ await form.getByRole('button',{name:'Continue',exact:true}).click();
+ await expect(form.getByLabel('Party name',{exact:true})).toHaveValue('An Accra Evening');
+ await form.getByRole('button',{name:'Continue',exact:true}).click();
+ await form.getByLabel('Upload the poster or key visual',{exact:true}).setInputFiles({name:'event-flyer.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=','base64')});
+ await form.getByRole('checkbox').check();
+ await expect(form.locator('.poster-upload')).toContainText('event-flyer.png');
+ const axe=await new AxeBuilder({page}).include('.submission-page').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+ expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+ await page.screenshot({path:info.outputPath('organizer-submit-flyer.png'),fullPage:true});
+ await page.route('**/api/submissions',r=>r.fulfill({status:503,json:{error:'Please try again shortly.'}}));
+ await form.getByRole('button',{name:'Submit for review',exact:true}).click();
+ await expect(form.getByRole('alert')).toHaveText('Please try again shortly.');
+ await expect(form.locator('.poster-upload')).toContainText('event-flyer.png');
+ await page.unroute('**/api/submissions');
+ await page.route('**/api/submissions',r=>r.fulfill({status:200,json:{reference:'TEST-REVIEW'}}));
+ await form.getByRole('button',{name:'Submit for review',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Your party has entered the group chat.'})).toBeVisible();
+ await expect(page.locator('.submission-success')).toContainText('TEST-REVIEW');
+});
