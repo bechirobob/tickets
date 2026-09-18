@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, Share, X } from "lucide-react";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { trackProductMetric } from "../lib/client-analytics";
@@ -96,7 +97,7 @@ export default function PwaRegistration() {
 
   return <aside className="pwa-install" aria-label="Install BeCore Tickets">
     <button className="pwa-install__close" type="button" aria-label="Dismiss installation suggestion" onClick={dismiss}><X size={15} /></button>
-    <span className="pwa-install__mark" aria-hidden="true">B</span>
+    <Image className="pwa-install__mark" src="/brand/becore-ticket.webp" width={239} height={256} alt="" aria-hidden="true" unoptimized />
     <div><b>Keep My Nights close.</b><p>{iosGuide ? <>Tap <Share size={13} /> <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</> : "Install BeCore Tickets for faster tickets, Rooms and event updates."}</p></div>
     {iosGuide ? <button type="button" onClick={dismiss}>Got it</button> : <button type="button" onClick={() => void install()}><Download size={14} /> Install</button>}
   </aside>;

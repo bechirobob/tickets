@@ -27,5 +27,6 @@ body .brand-logo--prominent .brand-logo__type > b { font-size: 26px; }
 .admin-bootstrap__back .brand-logo { color: inherit; }
 .help-page > header > .night-brand-link, .policy-page > header > .night-brand-link { justify-self: center; }
 @media (max-width: 420px) {
-  .help-page > header > a:first-child, .policy-page > header > a:first-child { font-size: 0; gap: 0; }
+  .help-page > header > a:first-child, .policy-page > header > a:first-child { gap: 0; }
+  .support-back-label { display: none; }
 }

@@ -16,7 +16,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/offline-ticket.html")));
+    event.respondWith(fetch(event.request).catch(async () => {
+      const cached = await caches.match("/offline-ticket.html");
+      // Static hosting redirects .html to its clean URL. Rebuild the cached
+      // response so navigation can consume it without a redirected response flag.
+      return cached ? new Response(cached.body, { status: cached.status, headers: cached.headers }) : Response.error();
+    }));
   }
 });
 self.addEventListener("push", (event) => {
