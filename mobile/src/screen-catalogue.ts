@@ -85,7 +85,7 @@ export function parseScreenCatalogue(value: unknown): PublicCatalogue & { screen
     const r = s.registration === null ? null : record(s.registration);
     return {
       event: e,
-      host: h ? { slug: slug(h.slug), name: text(h.name), role: text(h.role), city: text(h.city), verificationStatus: text(h.verificationStatus) } : null,
+      host: h ? { slug: slug(h.slug), name: text(h.name), role: text(h.role), city: text(h.city), verificationStatus: text(h.verificationStatus), profileImageUrl: h.profileImageUrl == null ? null : https(new URL(text(h.profileImageUrl), WEB_ORIGIN).href) } : null,
       registration: r ? { mode: choice(r.mode, ['paid', 'rsvp', 'interest']), open: boolean(r.open), maxPartySize: integer(r.maxPartySize), approvalRequired: boolean(r.approvalRequired), deadline: date(r.deadline) } : null,
     };
   });

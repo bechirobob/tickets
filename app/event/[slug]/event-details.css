@@ -133,3 +133,9 @@ body:has(.poster-event-page) .customer-dock a[aria-current="page"] { color: var(
 .event-enquiries a { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: 15px; }.event-enquiries a span { display: grid; gap: 4px; }.event-enquiries a b { font-size: 12px; font-weight: 500; }
 .event-entry-note { font-size: 13px; line-height: 1.5; color: var(--event-muted); }
 @media(max-width:500px){.event-credits { gap: 18px; }.event-credits li { font-size: 18px; }.event-story-intro h2 { font-size: 23px; }}
+
+/* Keep host identity and its destination distinct at phone widths. */
+.event-host h2 + span { display: block; }
+.event-host .host-monogram:has(img) { height: auto; background: transparent; }
+.event-host .host-monogram img { display: block; width: 64px; height: auto; border-radius: 10px; }
+.event-host a { min-height: 44px; }

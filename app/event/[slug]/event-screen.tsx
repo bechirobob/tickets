@@ -60,7 +60,7 @@ export default function EventScreen({ event, host, registration, promoterCode = 
       </section>
       <article className="compact-event-main event-detail-story">
         <EventStory note={event.note} lineup={event.lineup} quip={event.quip} ageRestriction={event.ageRestriction} showEntry={!salesPending}/>
-        {host ? <section className="event-host"><div className="host-monogram">{host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div><div><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified Host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span><Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link></div></section> : null}
+        {host ? <section className="event-host"><div className="host-monogram">{host.profileImageUrl ? <Image src={host.profileImageUrl} alt={host.name} width={64} height={78} unoptimized /> : host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div><div><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified Host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span><Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link></div></section> : null}
       </article>
 
       <aside className="compact-ticket-panel" id="register" inert={runtime.stale || undefined} onClickCapture={e => { if (runtime.stale) { e.preventDefault(); e.stopPropagation(); } }}>

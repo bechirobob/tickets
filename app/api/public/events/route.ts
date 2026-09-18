@@ -32,7 +32,7 @@ export async function GET() {
       const registration = settings.get(event.slug);
       return {
         event: customerEvent(event),
-        host: host ? { slug: host.slug, name: host.name, role: host.role, city: host.city, verificationStatus: host.verificationStatus } : null,
+        host: host ? { slug: host.slug, name: host.name, role: host.role, city: host.city, verificationStatus: host.verificationStatus, profileImageUrl: host.profileImageUrl } : null,
         registration: registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), deadline: registration.closesAt ?? null } : null,
       };
     }));
