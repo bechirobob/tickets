@@ -284,3 +284,19 @@ test("the public shell stays inside a lean transfer budget", async ({ page }) =>
   }, 0));
   expect(bytes).toBeLessThan(2_500_000);
 });
+
+test("the offline door pass keeps the rendered identity without a network", async ({ page, context }, testInfo) => {
+  await page.goto("/");
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await context.setOffline(true);
+  try {
+    await page.goto("/offline-ticket.html", { waitUntil: "domcontentloaded" });
+    const mark = page.locator(".offline-brand img");
+    await expect(mark).toBeVisible();
+    await expect.poll(() => mark.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    await expect(page.getByText("Offline door pass", { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("brand-offline-pass.png"), fullPage: true });
+  } finally {
+    await context.setOffline(false);
+  }
+});
