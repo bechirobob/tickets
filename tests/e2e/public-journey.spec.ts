@@ -285,7 +285,20 @@ test("the public shell stays inside a lean transfer budget", async ({ page }) =>
   expect(bytes).toBeLessThan(2_500_000);
 });
 
-test("the offline door pass keeps the rendered identity without a network", async ({ page, context }, testInfo) => {
+test("the saved door pass displays the rendered identity", async ({ page }, testInfo) => {
+  await page.goto("/offline-ticket.html");
+  const mark = page.locator(".offline-brand img");
+  await expect(mark).toBeVisible();
+  await expect.poll(() => mark.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(page.getByText("Offline door pass", { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("brand-saved-pass.png"), fullPage: true });
+});
+
+test("the offline door pass keeps the rendered identity without a network", async ({ page, context, browserName }, testInfo) => {
+  // Playwright supports service-worker network instrumentation in Chromium only:
+  // https://playwright.dev/docs/service-workers
+  // The rendered pass above is still verified in every browser project.
+  test.skip(browserName !== "chromium", "Offline service-worker emulation requires Chromium");
   await page.goto("/");
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
   // A guest opens the saved pass before losing connectivity, then reopens it
