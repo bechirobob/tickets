@@ -11,19 +11,19 @@
 .host-profile__portrait img { display: block; width: 100%; height: auto; border-radius: 14px; }
 .host-profile__identity { padding-top: 12px; min-width: 0; }
 .host-profile--portrait h1 { font-size: clamp(36px, 4.6vw, 62px); line-height: 1.05; letter-spacing: -.055em; }
-.host-profile__full-name { margin: 10px 0 0; color: #55534c; font-size: 18px; }
-.host-profile__city { margin-top: 14px; display: flex; align-items: center; gap: 6px; color: #55534c; font-size: 14px; }
-.host-profile__bio { max-width: 620px; margin: 24px 0; color: #4f4d46; font-size: 17px; line-height: 1.7; }
+.host-profile__full-name { margin: 10px 0 0; color: #d9c7d2; font-size: 18px; }
+.host-profile__city { margin-top: 14px; display: flex; align-items: center; gap: 6px; color: #d9c7d2; font-size: 14px; }
+.host-profile__bio { max-width: 620px; margin: 24px 0; color: #e2d0da; font-size: 17px; line-height: 1.7; }
 .host-profile__socials { display: flex; flex-wrap: wrap; gap: 12px 26px; margin-bottom: 24px; }
-.host-profile__socials a { min-height: 48px; display: inline-flex; align-items: center; gap: 10px; color: #29271f; font-size: 15px; font-weight: 650; text-decoration: none; }
-.host-profile__socials small { display: block; margin-top: 4px; font-size: 13px; font-weight: 450; color: #55534c; overflow-wrap: anywhere; }
-.host-profile__socials a:hover { color: #447225; }
+.host-profile__socials a { min-height: 48px; display: inline-flex; align-items: center; gap: 10px; color: #f9eee6; font-size: 15px; font-weight: 650; text-decoration: none; }
+.host-profile__socials small { display: block; margin-top: 4px; font-size: 13px; font-weight: 450; color: #d9c7d2; overflow-wrap: anywhere; }
+.host-profile__socials a:hover { color: #d9e89a; }
 .host-profile__socials a:focus-visible, .host-directory-portrait:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; border-radius: 5px; }
 .hosts-list > article { grid-template-columns: 120px minmax(0, 1fr); align-items: start; }
 .hosts-list a.host-directory-portrait { padding: 0; border: 0; display: block; }
 .host-directory-portrait img { display: block; width: 120px; height: auto; border-radius: 10px; }
 .host-events > div.host-profile__empty { display: block; }
-.host-profile__empty p { margin: 0 0 12px; color: #55534c; font-size: 16px; line-height: 1.6; }
+.host-profile__empty p { margin: 0 0 12px; color: #d9c7d2; font-size: 16px; line-height: 1.6; }
 .host-profile__empty a { min-height: 44px; }
 .host-events article img { object-fit: contain; }
 @media (max-width: 600px) {
@@ -40,3 +40,5 @@
   .host-directory-portrait img { width: 82px; }
   .host-events > header h2 { font-size: 32px; }
 }
+
+.host-page .member-locked-note { color: #d9c7d2; }
