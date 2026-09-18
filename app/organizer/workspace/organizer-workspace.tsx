@@ -154,11 +154,12 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
       </header>
 
       <section className="organizer-workspace__intro">
-        <div><p className="night-kicker"><span /> Organiser workspace</p><h1>Manage your event</h1></div>
-        <p>Choose an event, share its registration link and keep up with your guests.</p>
+        <div><p className="night-kicker"><span /> Organiser workspace</p><h1>Your night, in hand.</h1></div>
+        <p>Guest list, sales and the details before doors open. It’s all here.</p>
       </section>
 
-      {loading ? <div className="organizer-empty"><Loader2 className="spin" /> Loading your record…</div> : <>
+      {message && !selected ? <div className="organizer-load-error" role="alert"><p>{message}</p><button type="button" onClick={() => { setMessage(""); setLoading(true); void load(); }}>Try again</button></div> : null}
+      {loading ? <div className="organizer-empty"><Loader2 className="spin" /> Loading your events…</div> : <>
         <details className="organizer-record-fold" open={data.events.length===0||undefined}><summary>Your events & submissions</summary>
         <section className="organizer-portfolio" aria-labelledby="organizer-record-title">
           <header><div><p>Across your events</p><h2 id="organizer-record-title">Your events so far</h2></div><div className="organizer-portfolio__actions"><Link href="/organizer/analytics">Open analytics <BarChart3 size={15} /></Link><Link href="/help">How this works <LifeBuoy size={15} /></Link></div></header>
