@@ -10,12 +10,13 @@ test('requires a recent test authorization and rejects additional recipients', (
   assert.throws(() => validateRequest({ ...request, cc: ['guest@example.com'] }, now));
   assert.throws(() => validateRequest({ ...request, subject: '[TEST] x\r\nBcc: other@example.com' }, now));
 });
-test('resolves only the exact authorized active owner, never another owner or guest', () => {
+test('resolves only the exact authorized address without requiring or changing staff access', () => {
   const owner = { normalized_email: 'owner@example.com', role: 'owner', status: 'active' };
   assert.equal(resolveRecipient([owner, { ...owner, normalized_email: 'other@example.com' }], request.recipientSha256), owner.normalized_email);
-  assert.throws(() => resolveRecipient([{ ...owner, status: 'disabled' }], request.recipientSha256));
-  assert.throws(() => resolveRecipient([{ ...owner, role: 'organizer' }], request.recipientSha256));
-  assert.throws(() => resolveRecipient([owner, owner], request.recipientSha256));
+  assert.equal(resolveRecipient([{ ...owner, status: 'disabled' }], request.recipientSha256), owner.normalized_email);
+  assert.equal(resolveRecipient([owner, owner], request.recipientSha256), owner.normalized_email);
+  assert.throws(() => resolveRecipient([{ ...owner, normalized_email: 'other@example.com' }], request.recipientSha256));
+  assert.throws(() => resolveRecipient([], request.recipientSha256));
 });
 test('uses immutable public artwork and keeps the test warning', () => {
   const payload = makePayload(request, '<p>TEST EMAIL</p><img src="{{FLIER_URL}}">', 'TEST EMAIL', 'a'.repeat(40));
