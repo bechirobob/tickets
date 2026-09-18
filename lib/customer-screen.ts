@@ -43,7 +43,7 @@ export type CuratedEvent = {
 /** Only fields rendered on the public website; never account or host contact data. */
 export type CustomerEventScreen = {
   event: CustomerEvent;
-  host: { slug: string; name: string; role: string; city: string; verificationStatus: string } | null;
+  host: { slug: string; name: string; role: string; city: string; verificationStatus: string; profileImageUrl?: string | null } | null;
   registration: { mode: 'paid' | 'rsvp' | 'interest'; open: boolean; maxPartySize: number; approvalRequired: boolean; deadline: string | null } | null;
 };
 

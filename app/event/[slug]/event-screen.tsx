@@ -46,7 +46,7 @@ export default function EventScreen({ event, host, registration, promoterCode = 
           {start && event.startsAt ? <div className="event-date-line">
             <time className="event-date-display" dateTime={event.startsAt} aria-label={event.fullDate}><b>{calendarDay}</b><span><strong>{calendarMonth}</strong><small>{event.day} · {start.getUTCFullYear()}</small></span></time>
             <div className="event-hours" aria-label={`${formatTime(start)}${event.endsAt ? ` to ${formatTime(new Date(event.endsAt))}` : " onwards"}, Accra time`}><span><b>{formatTime(start)}</b><small>Doors open</small></span>{event.endsAt ? <><i aria-hidden="true">—</i><span><b>{formatTime(new Date(event.endsAt))}</b><small>Last dance</small></span></> : null}</div>
-          </div> : <div className="event-coming-soon"><h2>Coming soon</h2><p>Good plans take a minute. The date drops here first.</p></div>}
+          </div> : <div className="event-coming-soon"><h2>{event.fullDate}</h2><p>The exact date is still under wraps.</p></div>}
           {event.startsAt ? <a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}>Add to calendar <ArrowUpRight size={14} aria-hidden="true" /></a> : null}
           <dl className="event-practical-details">
             <div><dt>Find us</dt><dd>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer" className="event-detail-venue">{event.venue}<ArrowUpRight size={15} aria-hidden="true" /></Link> : <strong>{event.venue}</strong>}<span>{event.area}</span></dd></div>
@@ -60,7 +60,7 @@ export default function EventScreen({ event, host, registration, promoterCode = 
       </section>
       <article className="compact-event-main event-detail-story">
         <EventStory note={event.note} lineup={event.lineup} quip={event.quip} ageRestriction={event.ageRestriction} showEntry={!salesPending}/>
-        {host ? <section className="event-host"><div className="host-monogram">{host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div><div><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified Host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span><Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link></div></section> : null}
+        {host ? <section className="event-host"><div className="host-monogram">{host.profileImageUrl ? <Image src={host.profileImageUrl} alt={host.name} width={64} height={78} unoptimized /> : host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div><div><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified Host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span><Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link></div></section> : null}
       </article>
 
       <aside className="compact-ticket-panel" id="register" inert={runtime.stale || undefined} onClickCapture={e => { if (runtime.stale) { e.preventDefault(); e.stopPropagation(); } }}>

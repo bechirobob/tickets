@@ -88,7 +88,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
           {event.isTestEvent ? <div className="event-artwork-type" aria-hidden="true"><small>{event.area} · Accra</small><b>{event.title}</b><em>{event.vibe}</em></div> : null}
         </PosterLink>
         <div className="drop-card__body">
-          <p className="drop-card__schedule">{event.startsAt ? <><time dateTime={event.startsAt}>{event.day.slice(0, 3)} {event.shortDate}</time> · {event.time.split(" — ")[0]}</> : "Coming soon"}</p>
+          <p className="drop-card__schedule">{event.startsAt ? <><time dateTime={event.startsAt}>{event.day.slice(0, 3)} {event.shortDate}</time> · {event.time.split(" — ")[0]}</> : event.shortDate}</p>
           <h3><Link href={`/event/${event.slug}`}>{event.title}</Link></h3>
           <small>{event.venue} · {event.area}</small>
           <p className="drop-card__quip" aria-hidden={event.quip ? undefined : true}>{event.quip}</p>

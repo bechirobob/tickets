@@ -23,6 +23,7 @@ type EventRecord = {
   eventState: EventState;
   isTestEvent: number;
   scheduleStatus: "confirmed" | "coming_soon" | "end_pending";
+  scheduleLabel: string | null;
   isVerified: number;
   dressCode: string | null;
   colourScheme: string | null;
@@ -60,8 +61,8 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     slug: record.slug,
     registrationMode: record.registrationMode,
     title: record.title,
-    shortDate: comingSoon ? "Coming soon" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" }).format(starts).toUpperCase(),
-    fullDate: comingSoon ? "Coming soon" : new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
+    shortDate: comingSoon ? record.scheduleLabel || "Coming soon" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" }).format(starts).toUpperCase(),
+    fullDate: comingSoon ? record.scheduleLabel || "Coming soon" : new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
     day: comingSoon ? "" : new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" }).format(starts),
     time: comingSoon ? "Time to be announced" : `${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(starts)}${endPending ? " onwards" : ` — ${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(ends)}`}`,
     startsAt: comingSoon ? null : record.startsAt,
@@ -124,7 +125,7 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
            sales_open_at AS salesOpenAt, sales_close_at AS salesCloseAt,
            age_restriction AS ageRestriction, lineup,
            event_state AS eventState, is_test_event AS isTestEvent,
-           schedule_status AS scheduleStatus, is_verified AS isVerified,
+           schedule_status AS scheduleStatus, schedule_label AS scheduleLabel, is_verified AS isVerified,
            dress_code AS dressCode, colour_scheme AS colourScheme, awareness_note AS awarenessNote,
            guest_perk AS guestPerk,
            rescheduled_from AS rescheduledFrom,

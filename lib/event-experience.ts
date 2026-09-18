@@ -8,6 +8,9 @@ export type PublicHost = {
   city: string;
   verificationStatus: "verified" | "reviewed" | "unverified";
   profileImageUrl: string | null;
+  fullName?: string | null;
+  instagramHandle?: string | null;
+  snapchatHandle?: string | null;
   role: string;
 };
 
@@ -61,7 +64,8 @@ export async function findHostBySlug(db: D1Database, slug: string): Promise<Publ
   if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return null;
   const host = await db.prepare(`
     SELECT id, slug, name, bio, city, verification_status AS verificationStatus,
-           profile_image_url AS profileImageUrl
+           profile_image_url AS profileImageUrl, full_name AS fullName,
+           instagram_handle AS instagramHandle, snapchat_handle AS snapchatHandle
     FROM hosts WHERE slug = ? LIMIT 1
   `).bind(slug).first<HostRecord>();
   return host ? { ...host, role: "Host" } : null;

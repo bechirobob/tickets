@@ -178,7 +178,7 @@ export default function ActiveNightExperience({ events }: { events: CustomerEven
       <div key={`copy-${active?.slug ?? "waiting"}`} className="compact-hero__copy" aria-live={autoplayRunning ? "off" : "polite"} aria-atomic="true">
         <p className="night-kicker hero-editor-note"><span /> {active ? active.quip : "Your next good excuse to go out."}{active?.isTestEvent ? <small> / Preview</small> : null}</p>
         <h1>{active?.title ?? "Plans, sorted."}</h1>
-        <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · Coming soon` : "Discover music, people and places worth going out for."}</p>
+        <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · ${active.shortDate}` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
         {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink>{discoveryOffer(active).href !== `/event/${active.slug}` ? <ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink> : null}</div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
       </div>

@@ -7,7 +7,7 @@ import {notFound} from 'next/navigation';
 import {findCuratedEvent} from '../../events';
 import RegistrationForm from '../../registration-form';
 import BrandLogo from '../../brand-logo';
-import {registrationSettings,registrationShareState,registrationStartConfirmed} from '../../../lib/registrations';
+import {registrationSettings,registrationShareState,registrationScheduleReady} from '../../../lib/registrations';
 
 export const dynamic='force-dynamic';
 export async function generateMetadata({params}:{params:Promise<{slug:string}>}) {
@@ -25,7 +25,7 @@ export default async function EventRegistrationPage({params}:{params:Promise<{sl
   if(!event||!settings||settings.publication!=='published')notFound();
   const sharing=registrationShareState(settings);
   const label=settings.mode==='rsvp'?'RSVP':settings.mode==='interest'?'Event updates':'Paid registration';
-  const schedulePending=settings.mode==='rsvp'?!registrationStartConfirmed(settings):settings.mode==='paid'&&settings.scheduleStatus!=='confirmed';
+  const schedulePending=settings.mode==='rsvp'?!registrationScheduleReady(settings):settings.mode==='paid'&&settings.scheduleStatus!=='confirmed';
   const unavailable=settings.eventState==='cancelled'?'This one’s been called off.':settings.eventState==='postponed'?'The date’s getting a remix. RSVPs are on pause.':schedulePending?'The host is putting the date together. RSVPs open soon.':'The guest list is closed for this one.';
   return <main className="rsvp-signup" id="register" style={eventPresentationStyle(event)}>
     <header><Link href="/events"><ArrowLeft size={16} aria-hidden="true"/>The Drop</Link><Link href="/" aria-label="BeCore Tickets"><BrandLogo/></Link><Link href={`/event/${encodeURIComponent(slug)}`}>Event details<ArrowUpRight size={15} aria-hidden="true"/></Link></header>
