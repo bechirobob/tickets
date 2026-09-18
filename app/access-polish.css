@@ -8,7 +8,7 @@
 
 .admin-bootstrap > section { width: min(620px, 100%); }
 .admin-bootstrap__back { display: flex; align-items: baseline; justify-content: space-between; }
-.admin-bootstrap__back span { color: #9b9b94; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.admin-bootstrap__back > span:last-child { color: #9b9b94; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .admin-bootstrap .admin-login__eyebrow { margin-top: 44px; }
 .admin-bootstrap h1 + p { margin-bottom: 28px; }
 .admin-bootstrap__form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 22px; border-top: 1px solid #343531; }

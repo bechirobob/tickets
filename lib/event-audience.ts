@@ -1,3 +1,4 @@
+import { emailBrand } from "./email-brand";
 import { createSecureToken } from './attendee-auth';
 import { processAppleWalletUpdatePushes } from './apple-wallet-updates';
 import { sendEmail, retryFailedDeliveries } from './email-delivery';
@@ -47,7 +48,7 @@ export async function processEventAnnouncements(env: Cloudflare.Env, origin: str
         recipient:row.email,
         subject:`${row.title} · ${row.subject}`,
         text:`${row.body}\n\n${origin}/event/${row.eventSlug}\n\nYou subscribed to announcements from this event's organiser. Unsubscribe: ${unsubscribe}`,
-        html:`<h2>${escape(row.subject)}</h2><p>${escape(row.body).replaceAll('\n','<br />')}</p><p><a href="${origin}/event/${encodeURIComponent(row.eventSlug)}">${escape(row.title)}</a></p><p>You subscribed to announcements from this event's organiser. <a href="${escape(unsubscribe)}">Unsubscribe</a></p>`,
+        html:`${emailBrand}<h2>${escape(row.subject)}</h2><p>${escape(row.body).replaceAll('\n','<br />')}</p><p><a href="${origin}/event/${encodeURIComponent(row.eventSlug)}">${escape(row.title)}</a></p><p>You subscribed to announcements from this event's organiser. <a href="${escape(unsubscribe)}">Unsubscribe</a></p>`,
         idempotencyKey:key,
       });
     }
@@ -66,6 +67,6 @@ export async function notifyRegistrationHosts(db:D1Database,input:{eventSlug:str
     const key=`organizer-signup/${input.eventSlug}/${input.sourceId}/${host.id}`,url=`${origin}/organizer/workspace?event=${encodeURIComponent(input.eventSlug)}`;
     const status=({confirmed:'joined the guest list',requested:'requested your approval',waitlisted:'joined the waitlist',interested:'joined your email list',paid:'completed paid registration'} as Record<string,string>)[input.status]??input.status;
     const text=`${input.guestName} ${status} for ${host.title} (${input.guests} ${input.guests===1?'guest':'guests'}).\n\nView guest activity: ${url}\n\nManage signup email alerts in your event's registration settings.`;
-    await sendEmail({db,kind:'organizer_signup',deliveryId:key,idempotencyKey:key,recipient:host.email,subject:`New signup · ${host.title}`,text,html:`<p>${escape(text).replaceAll('\n','<br />')}</p><p><a href="${escape(url)}">View guest activity</a></p>`});
+    await sendEmail({db,kind:'organizer_signup',deliveryId:key,idempotencyKey:key,recipient:host.email,subject:`New signup · ${host.title}`,text,html:`${emailBrand}<p>${escape(text).replaceAll('\n','<br />')}</p><p><a href="${escape(url)}">View guest activity</a></p>`});
   }
 }

@@ -20,3 +20,12 @@ body .brand-logo--prominent .brand-logo__type > b { font-size: 26px; }
   body .brand-logo__type > small { font-size: 12px; letter-spacing: .13em; }
   .scanner-header .brand-logo__type { display: none !important; }
 }
+
+/* Access and support pages use the same mark as the customer screens. */
+.admin-login > section > a.night-brand-link { display: inline-flex; color: #f7f4ec; }
+.admin-login > section > a.admin-bootstrap__back { display: flex; align-items: center; gap: 16px; }
+.admin-bootstrap__back .brand-logo { color: inherit; }
+.help-page > header > .night-brand-link, .policy-page > header > .night-brand-link { justify-self: center; }
+@media (max-width: 420px) {
+  .help-page > header > a:first-child, .policy-page > header > a:first-child { font-size: 0; gap: 0; }
+}

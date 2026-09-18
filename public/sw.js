@@ -1,5 +1,5 @@
-const CACHE = "becore-tickets-shell-v5";
-const SHELL = ["/offline-ticket.html", "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png"];
+const CACHE = "becore-tickets-shell-v6";
+const SHELL = ["/offline-ticket.html", "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/brand/becore-ticket.webp"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,6 +11,10 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname === "/brand/becore-ticket.webp") {
+    event.respondWith(caches.match(url.pathname).then((cached) => cached || fetch(event.request)));
+    return;
+  }
   if (event.request.mode === "navigate") {
     event.respondWith(fetch(event.request).catch(() => caches.match("/offline-ticket.html")));
   }
@@ -20,8 +24,8 @@ self.addEventListener("push", (event) => {
   try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
   event.waitUntil(self.registration.showNotification(data.title || "The Room moved", {
     body: data.body || "Open My Nights to see what happened.",
-    icon: "/apple-touch-icon.png",
-    badge: "/favicon-32x32.png",
+    icon: "/apple-touch-icon.png?v=5",
+    badge: "/favicon-32x32.png?v=5",
     tag: data.tag || "becore-tickets",
     renotify: false,
     data: { url: data.url || "/notifications", eventSlug: data.eventSlug || null },
