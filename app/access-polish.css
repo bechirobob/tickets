@@ -8,7 +8,7 @@
 
 .admin-bootstrap > section { width: min(620px, 100%); }
 .admin-bootstrap__back { display: flex; align-items: baseline; justify-content: space-between; }
-.admin-bootstrap__back span { color: #9b9b94; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.admin-bootstrap__back > span:last-child { color: #9b9b94; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .admin-bootstrap .admin-login__eyebrow { margin-top: 44px; }
 .admin-bootstrap h1 + p { margin-bottom: 28px; }
 .admin-bootstrap__form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 22px; border-top: 1px solid #343531; }
@@ -1239,7 +1239,7 @@
   background: #171713;
   color: #fffdf8;
 }
-.pwa-install__mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px; background: var(--orange); color: white; font-weight: 850; }
+.pwa-install__mark { width: 36px; height: 38px; display: block; flex: 0 0 auto; object-fit: contain; }
 .pwa-install b { font-size: 14px; }
 .pwa-install p { margin: 4px 0 0; color: #aaa99f; font-size: 12px; line-height: 1.45; }
 .pwa-install p svg { vertical-align: -2px; }

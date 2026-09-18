@@ -4,11 +4,11 @@ import { expect, test } from "@playwright/test";
 // The signed-in Room fixture never contacts live attendee APIs or a live socket.
 test.use({ serviceWorkers: "block" });
 
-test("the rendered identity stays legible and Hosts connect to the guest journey", async ({ page }) => {
+test("the rendered identity stays legible and Hosts connect to the guest journey", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const path of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/the-weekend-braai"]) {
+  for (const path of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/the-weekend-braai", "/help", "/terms", "/admin/login", "/admin/recover"]) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
-    const logo = page.locator("header .brand-logo").first();
+    const logo = page.locator(".brand-logo").first();
     await expect(logo).toBeVisible();
     await expect(logo).toHaveAccessibleName("BeCore Tickets");
     await expect(logo.locator("b")).toBeVisible();
@@ -16,6 +16,9 @@ test("the rendered identity stays legible and Hosts connect to the guest journey
     const bounds = await logo.boundingBox();
     expect(bounds?.height).toBeGreaterThanOrEqual(38);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    if (["/help", "/terms", "/admin/login", "/admin/recover"].includes(path)) {
+      await page.screenshot({ path: testInfo.outputPath(`brand-${path.replaceAll("/", "-")}.png`), fullPage: true });
+    }
   }
   await page.goto("/");
   const bridge = page.locator(".backstage-bridge");

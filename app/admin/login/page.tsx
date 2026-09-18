@@ -1,3 +1,4 @@
+import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import AdminLoginForm from "./login-form";
@@ -11,7 +12,7 @@ export default async function AdminLoginPage() {
   return (
     <main className="admin-login">
       <section>
-        <Link href="/">BeCore Tickets</Link>
+        <Link href="/" className="night-brand-link"><BrandLogo /></Link>
         <p className="admin-login__eyebrow">Private operations</p>
         <h1>Welcome back.</h1>
         <p>

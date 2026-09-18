@@ -1,3 +1,4 @@
+import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import type { Metadata } from "next";
 import RecoveryForm from "./recovery-form";
@@ -8,7 +9,7 @@ export const metadata: Metadata = { title: "Restore owner access · BeCore Ticke
 
 export default function RecoveryPage() {
   return <main className="admin-login admin-recovery"><section>
-    <Link href="/">BeCore Tickets</Link>
+    <Link href="/" className="night-brand-link"><BrandLogo /></Link>
     <p className="admin-login__eyebrow">Private owner setup</p>
     <h1>Back on the list.</h1>
     <p>Choose a fresh password for your owner account. Any old password and signed-in sessions won’t carry over.</p>

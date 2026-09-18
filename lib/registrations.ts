@@ -1,3 +1,4 @@
+import { emailBrand } from "./email-brand";
 import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from './attendee-auth';
 import { createGateToken, hashGateToken } from './gate-pass';
@@ -75,7 +76,7 @@ export async function sendRegistrationAccess(db: D1Database, reg: Registration, 
   const url = `${origin}/rsvp/access#token=${encodeURIComponent(token)}`;
   const subject = `Confirm your email · ${title}`;
   const text = `Hi ${reg.guestName},\n\nOpen this link to confirm your email and view your registration for ${title}:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.`;
-  await sendEmail({ db, kind: 'registration_access', recipient: reg.email, subject, text, html: `<p>Hi ${escape(reg.guestName)},</p><p>Confirm your email to continue with ${escape(title)}.</p><p><a href="${escape(url)}">View my registration</a></p><p>This link expires in 20 minutes. A place is only reserved after your RSVP is confirmed.</p>`, idempotencyKey: `registration-access/${await hashToken(token)}` });
+  await sendEmail({ db, kind: 'registration_access', recipient: reg.email, subject, text, html: `${emailBrand}<p>Hi ${escape(reg.guestName)},</p><p>Confirm your email to continue with ${escape(title)}.</p><p><a href="${escape(url)}">View my registration</a></p><p>This link expires in 20 minutes. A place is only reserved after your RSVP is confirmed.</p>`, idempotencyKey: `registration-access/${await hashToken(token)}` });
 }
 
 // Capacity is reserved atomically, including guests who have not verified an
@@ -203,7 +204,7 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string) 
     const detail = reg.status === 'interested' ? `${registrationStatusText.interested} ${s.scheduleStatus === 'coming_soon' ? 'The date is still to be announced.' : `The event is scheduled for ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(s.startsAt))}, Accra time.`} ${s.eventState === 'cancelled' ? 'The event has been cancelled.' : s.mode === 'rsvp' ? 'RSVP is now available on the event page.' : 'Check the event page for current booking details.'}` : registrationStatusText[reg.status];
     const key = `registration-update/${reg.id}/${reg.version}`;
     const queued = await env.DB.prepare(`SELECT 1 AS found FROM delivery_events WHERE kind = 'registration_update' AND json_extract(payload_json, '$.idempotencyKey') = ? LIMIT 1`).bind(key).first();
-    if (!queued) await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · Registration update`, text: `${detail}\n\n${origin}/event/${reg.eventSlug}\nManage your registration in My Nights.`, html: `<p>${escape(detail)}</p><p><a href="${origin}/event/${reg.eventSlug}">${escape(s.title)}</a></p><p>Manage your registration in My Nights.</p>`, idempotencyKey: key });
+    if (!queued) await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · Registration update`, text: `${detail}\n\n${origin}/event/${reg.eventSlug}\nManage your registration in My Nights.`, html: `${emailBrand}<p>${escape(detail)}</p><p><a href="${origin}/event/${reg.eventSlug}">${escape(s.title)}</a></p><p>Manage your registration in My Nights.</p>`, idempotencyKey: key });
     await env.DB.prepare('UPDATE event_registrations SET notified_version = ? WHERE id = ? AND notified_version < ?').bind(reg.version, reg.id, reg.version).run();
   }
 }
