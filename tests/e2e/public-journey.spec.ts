@@ -288,9 +288,13 @@ test("the public shell stays inside a lean transfer budget", async ({ page }) =>
 test("the offline door pass keeps the rendered identity without a network", async ({ page, context }, testInfo) => {
   await page.goto("/");
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  // A guest opens the saved pass before losing connectivity, then reopens it
+  // at the door. Keep the real document under service-worker control first.
+  await page.goto("/offline-ticket.html");
+  await expect(page.locator(".offline-brand img")).toBeVisible();
   await context.setOffline(true);
   try {
-    await page.goto("/offline-ticket.html", { waitUntil: "domcontentloaded" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     const mark = page.locator(".offline-brand img");
     await expect(mark).toBeVisible();
     await expect.poll(() => mark.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);

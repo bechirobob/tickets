@@ -1,5 +1,7 @@
 const CACHE = "becore-tickets-shell-v6";
-const SHELL = ["/offline-ticket.html", "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/brand/becore-ticket.webp"];
+// Cache the host's canonical URL, rather than a redirected .html response.
+const OFFLINE_PAGE = "/offline-ticket";
+const SHELL = [OFFLINE_PAGE, "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/brand/becore-ticket.webp"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,17 +13,16 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname === OFFLINE_PAGE || url.pathname === "/offline-ticket.html") {
+    event.respondWith(caches.match(OFFLINE_PAGE).then((cached) => cached || fetch(event.request)));
+    return;
+  }
   if (url.pathname === "/brand/becore-ticket.webp") {
     event.respondWith(caches.match(url.pathname).then((cached) => cached || fetch(event.request)));
     return;
   }
   if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(async () => {
-      const cached = await caches.match("/offline-ticket.html");
-      // Static hosting redirects .html to its clean URL. Rebuild the cached
-      // response so navigation can consume it without a redirected response flag.
-      return cached ? new Response(cached.body, { status: cached.status, headers: cached.headers }) : Response.error();
-    }));
+    event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE_PAGE)));
   }
 });
 self.addEventListener("push", (event) => {
