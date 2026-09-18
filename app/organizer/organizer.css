@@ -68,7 +68,7 @@
 .organizer-workspace .organizer-workspace__intro h1, .organizer-workspace .analytics-heading h1 { font-size:clamp(30px,3.2vw,44px); line-height:1.12; letter-spacing:-.045em; margin:10px 0 0; }
 .organizer-workspace .organizer-workspace__intro .night-kicker,.organizer-workspace .analytics-heading .night-kicker { color:#d9ef8b; font-size:12px; }
 .organizer-workspace .organizer-workspace__intro > p,.organizer-workspace .analytics-heading > p { color:#ddcfdf; border:0; padding:0; line-height:1.6; font-size:14px; }
-.organizer-workspace .organizer-record-fold { margin:0 6vw; padding:14px 0; border-bottom:1px solid #ded7de; }
+.organizer-workspace .organizer-record-fold { margin:0 6vw; padding:14px 0; border-bottom:1px solid #ded7de; border-radius:0; background:transparent; }
 .organizer-workspace .organizer-record-fold > summary { color:#5f4c68; font-weight:550; }
 .organizer-workspace .organizer-portfolio,.organizer-workspace .organizer-history { margin:0; padding:20px 0; background:transparent; }
 .organizer-workspace .organizer-portfolio > div { gap:0; }
@@ -183,3 +183,9 @@
 }
 .organizer-load-error { margin:24px 6vw; padding:16px 0; color:#862e25; }
 .organizer-load-error button { min-height:44px; padding:10px 16px; border:0; border-radius:9px; background:#e7ddea; color:#392b42; }
+.organizer-workspace .organizer-workspace__header .workspace-jump > span { color:#d4c4d8; }
+.organizer-workspace .organizer-workspace__header .night-brand { color:#faf5eb; }
+@media(max-width:600px) {
+ .submission-page .submission-submit > .ticket-action[data-variant] { width:auto; flex:0 1 auto; min-width:0; }
+ .submission-page .submission-submit > .submission-back { flex:none; }
+}

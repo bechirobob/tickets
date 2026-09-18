@@ -32,7 +32,7 @@ export default function SubmitPartyPage() {
       <div className="submission-body" id="submit-your-night">
         <aside className="submission-guide">
           <p className="night-kicker">Bring us your night</p>
-          <h2>A good plan<br />gets things moving.</h2>
+          <h2>A good plan<br /> gets things moving.</h2>
           <p>Have your venue, dates, line-up and flyer ready. We’ll review the details before anything goes live.</p>
           <ol><li><b>Send the plan</b><span>Tell us who’s behind it and what’s happening.</span></li><li><b>We’ll take a look</b><span>We’ll get in touch if anything needs clearing up.</span></li><li><b>Get ready for the drop</b><span>Approved events get a private organiser workspace.</span></li></ol>
           <Link href="/help">Need a hand? Visit help <ArrowUpRight size={15} /></Link>
