@@ -189,3 +189,5 @@
  .submission-page .submission-submit > .ticket-action[data-variant] { width:auto; flex:0 1 auto; min-width:0; }
  .submission-page .submission-submit > .submission-back { flex:none; }
 }
+.organizer-desk .workspace-jump > span { color:#6b606e; }
+.organizer-workspace .organizer-workspace__header .night-brand-link { color:#faf5eb; }
