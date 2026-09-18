@@ -1,5 +1,7 @@
 "use client";
 
+import RsvpReport from "./rsvp-analytics";
+import type { RsvpAnalytics } from "../../../lib/rsvp-analytics";
 import BrandLogo from "../../brand-logo";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -11,6 +13,7 @@ import WorkspaceJump from "../../admin/workspace-jump";
 type EventOption = { slug: string; title: string; startsAt: string; eventState: string };
 type Overview = { eventViews: number; checkoutViews: number; checkoutStarts: number; paymentAttempts: number; paymentsConfirmed: number; paymentFailed: number; shares: number; paidOrders: number; revenueMinor: number; faceValueMinor: number; bookingFeesMinor: number; refundsMinor: number; admissions: number; checkedIn: number; uniqueBuyers: number; repeatBuyers: number; averageOrderValueMinor: number };
 type AnalyticsData = {
+  rsvp: RsvpAnalytics;
   events: EventOption[];
   scope: { eventSlug: string; label: string; range: string; rangeLabel: string };
   overview: Overview;
@@ -114,7 +117,7 @@ export default function OrganizerAnalytics({ actor, role }: { actor: string; rol
 
     <section className="analytics-heading">
       <div><p className="night-kicker"><span /> Organiser analytics</p><h1>How your nights are doing.</h1></div>
-      <p>See ticket sales, promoter results and when your guests arrived.</p>
+      <p>Follow your guest list, ticket sales and who made it through the door.</p>
     </section>
 
     <section className="analytics-controls" aria-label="Analytics filters">
@@ -124,8 +127,9 @@ export default function OrganizerAnalytics({ actor, role }: { actor: string; rol
     </section>
 
     {loading ? <section className="analytics-loading" aria-label="Loading analytics"><Loader2 className="spin" /><div /><div /><div /></section> : error ? <section className="analytics-error" role="alert"><BarChart3 /><h2>Analytics did not load.</h2><p>{error}</p><button onClick={() => { setLoading(true); setError(""); setRetry((value) => value + 1); }}>Try again</button></section> : data && overview ? <>
+      <RsvpReport key={data.scope.eventSlug} data={data.rsvp} eventSlug={data.scope.eventSlug} />
       <section className="analytics-overview" aria-labelledby="analytics-overview-title">
-        <header><div><p>{data.scope.rangeLabel}</p><h2 id="analytics-overview-title">{data.scope.label}</h2></div><span>Latest event totals</span></header>
+        <header><div><p>{data.scope.rangeLabel}</p><h2 id="analytics-overview-title">{data.scope.label}</h2></div><span>Paid tickets · free RSVPs excluded</span></header>
         <div>
           <article><small>Gross collected</small><b>{money(overview.revenueMinor)}</b><Delta current={overview.revenueMinor} previous={data.comparison?.revenueMinor} /></article>
           <article><small>Paid orders</small><b>{overview.paidOrders}</b><Delta current={overview.paidOrders} previous={data.comparison?.paidOrders} /></article>

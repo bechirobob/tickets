@@ -43,7 +43,7 @@ async function directSignup(email:string,extra:Record<string,unknown>={}) {
 it('takes RSVP requests straight to host review and guest emails without sending confirmation or creating an account',async()=>{
  await settings({capacity:100,approvalRequired:true});
  const email='direct-party@example.com';
- const response=await directSignup(email);expect(response.status).toBe(202);expect(response.headers.get('set-cookie')).toBeNull();
+ const response=await directSignup(email,{source:"instagram"});expect(response.status).toBe(202);expect(response.headers.get('set-cookie')).toBeNull();
  expect(await response.json()).toEqual({message:'RSVP received. Outfit planning starts now.'});
  const reg=await env.DB.prepare('SELECT id,status,attendee_id,verified_at,announcements_opt_in FROM event_registrations WHERE event_slug=? AND normalized_email=?').bind(slug,email).first<{id:string}>();
  expect(reg).toMatchObject({status:'requested',attendee_id:null,verified_at:null,announcements_opt_in:1});
@@ -57,8 +57,9 @@ it('takes RSVP requests straight to host review and guest emails without sending
  expect(await env.DB.prepare('SELECT status,attendee_id,verified_at,order_id FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({status:'confirmed',attendee_id:null,verified_at:null,order_id:null});
  await processRegistrations(env,origin);
  expect(await env.DB.prepare('SELECT id FROM delivery_events WHERE recipient=?').bind(email).first()).toBeNull();
- expect((await directSignup(email,{guestName:'Someone else',partySize:2,announcementsOptIn:false})).status).toBe(202);
+ expect((await directSignup(email,{guestName:'Someone else',partySize:2,announcementsOptIn:false,source:'kofi-bills'})).status).toBe(202);
  expect(await env.DB.prepare('SELECT guest_name,party_size,announcements_opt_in,status FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({guest_name:'Party Guest',party_size:1,announcements_opt_in:1,status:'confirmed'});
+ expect(await env.DB.prepare('SELECT acquisition_source FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({acquisition_source:'instagram'});
 });
 it('reserves capacity without email verification, waitlists overflow and reuses the reservation after a later verified claim',async()=>{
  await settings({capacity:1,maxPartySize:1});

@@ -41,14 +41,14 @@ export function registrationShareState(settings: RegistrationSettings | null) {
 function signature(s: RegistrationSettings) { return JSON.stringify([s.scheduleStatus, s.startsAt, s.endsAt, s.eventState, s.mode]); }
 export async function readRegistration(db: D1Database, id: string) { return db.prepare(`SELECT ${fields} FROM event_registrations WHERE id = ?`).bind(id).first<Registration>(); }
 
-export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean }, origin: string, directRsvp = false) {
+export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean; acquisitionSource?: string }, origin: string, directRsvp = false) {
   const settings = await registrationSettings(db, input.eventSlug);
   if (!settings || !registrationsOpen(settings) || settings.mode === 'paid') throw new Error('Registration is not open for this event.');
   if (settings.mode === 'rsvp' && !registrationScheduleReady(settings)) throw new Error('RSVP opens when the event date is confirmed.');
   if (!Number.isInteger(input.partySize) || input.partySize < 1 || input.partySize > (settings.mode === 'interest' ? 1 : settings.maxPartySize)) throw new Error('Choose an allowed number of guests.');
   const now = timestamp();
-  await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?)`).bind(crypto.randomUUID(), input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0).run();
+  await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in, acquisition_source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0, input.acquisitionSource ?? 'untracked').run();
   const reg = await db.prepare(`SELECT ${fields} FROM event_registrations WHERE event_slug = ? AND normalized_email = ?`).bind(input.eventSlug, input.email).first<Registration>();
   if (!reg) throw new Error('Registration could not be saved. Try again.');
   await recordPolicyConsents({ db, subjectType: 'registration', subjectId: reg.id, actorEmail: input.email, policyKeys: ['purchase', 'privacy'] });

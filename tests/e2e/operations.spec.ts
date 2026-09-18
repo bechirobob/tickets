@@ -383,3 +383,23 @@ test('the door desk keeps a large RSVP list compact and retains a failed guest a
   const axe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('door-desk.png'),fullPage:true});
 });
+
+
+test('RSVP analytics filters, links and exports work without exposing guest contacts', async ({page}, info) => {
+ await page.goto('/organizer/analytics');
+ await expect(page.getByRole('heading', {name:'Who’s coming through?'})).toBeVisible();
+ await page.getByLabel('Night', {exact:true}).selectOption('rsvp-browser');
+ await expect(page.locator('.analytics-loading')).toHaveCount(0);
+ const report=page.locator('.rsvp-report');
+ await report.getByText('Share a link. See what it brings.',{exact:true}).click();
+ await report.getByLabel('Where you’ll share it').selectOption('instagram');
+ await expect(report.getByLabel('RSVP link',{exact:true})).toHaveValue('https://tickets.becoreops.com/rsvp/rsvp-browser?source=instagram');
+ await expect(report).not.toContainText('rsvp-browser@example.com');
+ await expect(report.getByRole('button',{name:'Copy link'})).toBeVisible();
+ const csv=await page.request.get('/api/organizer/analytics?eventSlug=rsvp-browser&range=all&format=csv');
+ expect(csv.ok()).toBeTruthy();expect(await csv.text()).toContain('RSVP link sources');
+ const axe=await new AxeBuilder({page}).include('.rsvp-report').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+ expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await page.screenshot({path:info.outputPath('rsvp-analytics-expanded.png'),fullPage:true});
+});
