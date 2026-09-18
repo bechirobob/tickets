@@ -1105,12 +1105,13 @@ export const eventRegistrations = sqliteTable("event_registrations", {
   kind: text("kind", { enum: ["rsvp", "interest"] }).notNull(),
   status: text("status", { enum: ["unverified", "interested", "requested", "waitlisted", "confirmed", "cancelled", "declined"] }).notNull(),
   announcementsOptIn: integer("announcements_opt_in").notNull().default(0),
+  acquisitionSource: text("acquisition_source").notNull().default("untracked"),
   attendeeId: text("attendee_id"), orderId: text("order_id"), verifiedAt: text("verified_at"),
   approvedAt: text("approved_at"), eventSignature: text("event_signature"),
   version: integer("version").notNull().default(0), notifiedVersion: integer("notified_version").notNull().default(0),
   createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
 }, table => [uniqueIndex("registrations_event_email_unique").on(table.eventSlug, table.normalizedEmail),
-  uniqueIndex("registrations_order_unique").on(table.orderId), index("registrations_queue_idx").on(table.eventSlug, table.status, table.createdAt)]);
+  uniqueIndex("registrations_order_unique").on(table.orderId), index("registrations_queue_idx").on(table.eventSlug, table.status, table.createdAt), index("registrations_analytics_idx").on(table.eventSlug, table.kind, table.createdAt)]);
 export const registrationAccessGrants = sqliteTable("registration_access_grants", {
   id: text("id").primaryKey(), registrationId: text("registration_id").notNull(),
   tokenHash: text("token_hash").notNull(), expiresAt: text("expires_at").notNull(),

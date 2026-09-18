@@ -80,10 +80,16 @@ describe("organiser analytics", () => {
         .bind(now.slice(0, 10), slug, metric, count, now).run();
     }
 
+    await env.DB.prepare(`INSERT INTO orders (id, reference, event_slug, ticket_type, quantity, face_amount_minor, booking_fee_minor, total_amount_minor, currency, customer_email, customer_phone, payment_channel, payment_provider, status, created_at, paid_at)
+      VALUES (?, ?, ?, 'RSVP', 5, 0, 0, 0, 'GHS', 'free@example.com', '', 'rsvp', 'rsvp', 'paid', ?, ?)`)
+      .bind(`free-${suffix}`, `FREE-${suffix}`, slug, now, now).run();
+    await env.DB.prepare(`INSERT INTO event_registrations (id,event_slug,normalized_email,guest_name,party_size,kind,status,created_at,updated_at,order_id)
+      VALUES (?,?, 'free@example.com','RSVP Guest',5,'rsvp','confirmed',?,?,?)`).bind(`reg-${suffix}`,slug,now,now,`free-${suffix}`).run();
     const response = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}&range=30`, { headers: { cookie: account.cookie } }));
     expect(response.status).toBe(200);
     const data = await response.json() as {
       events: Array<{ slug: string; title: string }>;
+      rsvp: { totals: { confirmedGuests: number } };
       overview: Record<string, number>;
       salesTrend: Array<{ day: string }>;
       ticketTiers: Array<Record<string, unknown>>;
@@ -91,6 +97,7 @@ describe("organiser analytics", () => {
       vipUsage: Array<Record<string, unknown>>;
     };
     expect(data.overview).toMatchObject({ eventViews: 20, checkoutStarts: 8, paymentAttempts: 4, paymentsConfirmed: 2, paidOrders: 2, revenueMinor: 39000, refundsMinor: 3000, admissions: 3, checkedIn: 2, uniqueBuyers: 1, repeatBuyers: 1 });
+    expect(data.rsvp.totals.confirmedGuests).toBe(5);
     expect(data.events.map((event) => event.slug)).toEqual([slug]);
     expect(data.ticketTiers).toEqual([expect.objectContaining({ name: "=General Admission", orders: 2, admissions: 3, revenueMinor: 39000 })]);
     expect(data.promoters).toEqual(expect.arrayContaining([expect.objectContaining({ code: "NANA", orders: 1 }), expect.objectContaining({ code: "direct", orders: 1 })]));
@@ -114,6 +121,7 @@ describe("organiser analytics", () => {
     expect(csv.headers.get("content-type")).toContain("text/csv");
     const exportText = await csv.text();
     expect(exportText).toContain("Analytics Night");
+    expect(exportText).toContain("Confirmed guests,5");
     expect(exportText).toContain('"\t=General Admission"');
     expect(exportText).toContain('"\t@Nana street team"');
     expect(exportText).not.toContain("repeat@example.com");

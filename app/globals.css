@@ -1828,3 +1828,30 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .registration-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .registration-actions button, .registration-actions a, .registration-settings button { min-height: 44px; padding: 8px 12px; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); cursor: pointer; }
 .my-registrations p { margin: 5px 0; font-size: 14px; }
+
+/* RSVP reporting follows the organiser workspace's existing type and palette. */
+.rsvp-report { padding: 32px clamp(16px, 4vw, 64px); color: #302133; background: #f7f4ed; }
+.rsvp-report > header { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.rsvp-report h2 { font-size: clamp(24px, 3vw, 34px); margin: 6px 0; }
+.rsvp-report h3 { font-size: 20px; margin: 0 0 16px; }
+.rsvp-report p, .rsvp-report small { color: #635766; font-size: 14px; line-height: 1.6; }
+.rsvp-report__totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 28px 0; }
+.rsvp-report__totals dt { font-size: 14px; }
+.rsvp-report__totals dd { font-size: 32px; font-weight: 650; margin: 8px 0 0; }
+.rsvp-report__columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+.rsvp-report__sources { list-style: none; padding: 0; margin: 0; max-height: 360px; overflow-y: auto; }
+.rsvp-report__sources li { margin-bottom: 18px; }
+.rsvp-report__sources li > div { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; font-size: 14px; }
+.rsvp-report__sources progress { width: 100%; height: 6px; accent-color: #582b5b; display: block; margin: 9px 0 5px; }
+.rsvp-report__links { border-top: 1px solid #d8d0d6; margin-top: 22px; padding-top: 10px; }
+.rsvp-report__links summary { cursor: pointer; padding: 14px 0; font-weight: 600; }
+.rsvp-report__links > div { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(200px, 2fr) auto; align-items: end; gap: 14px; }
+.rsvp-report__links label { display: grid; gap: 8px; font-size: 14px; min-width: 0; }
+.rsvp-report__links input, .rsvp-report__links select, .rsvp-report__links button { min-height: 46px; width: 100%; padding: 10px 12px; font: inherit; font-size: 16px; border-radius: 8px; border: 1px solid #b5a8b7; background: #fff; color: #302133; }
+.rsvp-report__links button { background: #472248; color: #fff; cursor: pointer; }
+.rsvp-report__links p { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 700px) {
+  .rsvp-report__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .rsvp-report__columns, .rsvp-report__links > div { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .rsvp-report .analytics-facts dd { text-align: right; }
+}
