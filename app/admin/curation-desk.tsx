@@ -1,6 +1,8 @@
 /* eslint-disable @next/next/no-img-element -- moderation images are private API responses and must bypass the public image optimizer. */
 "use client";
 
+import OrganizerAccess from "./organizer-access";
+
 import { operationsFetch } from "../../lib/operations-client";
 
 import { CalendarClock, Check, ChevronRight, Eye, RotateCcw, X } from "lucide-react";
@@ -70,9 +72,9 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
     if (!selected || working) return;
     setWorking(true); setError("");
     const response = await operationsFetch("/api/admin/submissions", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: selected.id, action, note, curationNote, tagline, scheduledPublishAt: scheduledAt ? `${scheduledAt}:00.000Z` : "" }) });
-    const result = await response.json() as { error?: string };
+    const result = await response.json() as { error?: string; accessNotice?: string };
     if (!response.ok) setError(result.error ?? "The review action failed.");
-    else { await load(); if (["approve", "reject", "archive", "publish", "schedule", "unpublish"].includes(action)) { setSelectedId(null); setNotice(action === "reject" ? "Submission rejected. Find it under Rejected." : action === "approve" ? "Submission approved. Find it under Accepted to publish or schedule it." : "Submission updated."); } }
+    else { await load(); if (["approve", "reject", "archive", "publish", "schedule", "unpublish"].includes(action)) { setSelectedId(null); setNotice(action === "reject" ? "Submission rejected. Find it under Rejected." : action === "approve" ? `Submission approved. ${result.accessNotice ?? "Find it under Accepted to publish or schedule it."}` : "Submission updated."); } }
     setWorking(false);
   }
 
@@ -99,6 +101,7 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
               <section><h3>The pitch</h3><p>{selected.concept}</p></section>
               <section><h3>Line-up</h3><p>{selected.lineup}</p></section>
               <section><h3>Contact</h3><p>{selected.contactName} · {selected.contactEmail} · {selected.contactPhone}</p></section>
+              {["approved","scheduled","published","unpublished"].includes(selected.status) ? <OrganizerAccess key={selected.id} submissionId={selected.id} /> : null}
               <label>Event line<input maxLength={100} value={tagline} onChange={(event) => setTagline(event.target.value)} placeholder="One original line, written for this event." /></label>
               <label>Why it made the list<textarea value={curationNote} onChange={(event) => setCurationNote(event.target.value)} placeholder="Customer-facing editorial note. Keep it specific and useful." /></label>
               <label>Private / organiser note<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Explain requested changes or rejection clearly." /></label>
