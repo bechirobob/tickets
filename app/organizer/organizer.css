@@ -228,3 +228,29 @@
  .organizer-workspace .analytics-controls { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
  .analytics-freshness { margin-inline:20px; }
 }
+
+/* Analytics keeps the summary stable while hosts choose one report at a time. */
+.organizer-analytics [hidden] { display:none !important; }
+.organizer-analytics .analytics-overview > div { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.analytics-automation { margin:0 6vw 20px; padding:18px 0; display:flex; align-items:center; justify-content:space-between; gap:16px; border-block:1px solid #ded7de; }
+.analytics-automation h2 { font-size:17px; margin:0 0 6px; }
+.analytics-automation p { margin:0; color:#655d60; font-size:14px; line-height:1.5; }
+.analytics-automation a { flex-shrink:0; display:inline-flex; align-items:center; min-height:44px; color:#472248; font-size:14px; font-weight:600; text-underline-offset:4px; }
+.analytics-views { margin:0 6vw; display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid #ded7de; }
+.analytics-views button { min-height:44px; padding:10px 16px; border:0; border-bottom:3px solid transparent; background:transparent; color:#655d60; font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+.analytics-views button[aria-pressed="true"] { color:#472248; border-bottom-color:#472248; }
+.organizer-analytics .rsvp-report { padding:24px 6vw 48px; background:transparent; }
+.organizer-analytics .rsvp-report h2 { font-size:22px; }
+.organizer-analytics .rsvp-report h3 { font-size:17px; }
+.rsvp-report__breakdown { border-top:1px solid #ded7de; }
+.rsvp-report__breakdown > summary { min-height:44px; padding:14px 0; font-size:14px; font-weight:600; cursor:pointer; }
+.rsvp-report__breakdown .rsvp-report__columns { padding:14px 0; }
+.organizer-analytics .analytics-section:first-child { background:transparent; border-radius:0; padding:22px 0; }
+@media(max-width:700px) {
+  .organizer-analytics .analytics-overview > div { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .analytics-automation,.analytics-views { margin-inline:20px; }
+  .analytics-automation { align-items:flex-start; flex-direction:column; gap:4px; }
+  .analytics-views { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .analytics-views button { padding-inline:8px; }
+  .organizer-analytics .rsvp-report { padding-inline:20px; }
+}

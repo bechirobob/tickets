@@ -397,15 +397,17 @@ test('RSVP analytics filters, links and exports work without exposing guest cont
  await page.reload();
  await expect(page.getByLabel('Night',{exact:true})).toHaveValue('rsvp-browser');
  await expect(page.getByLabel('Period',{exact:true})).toHaveValue('7');
- await expect(page.getByText('RSVP page views',{exact:true})).toBeVisible();
+ await expect(page.getByText('Confirmed RSVP guests',{exact:true})).toBeVisible();
  await page.route('**/api/organizer/analytics?**',route=>route.abort('failed'));
  await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(page.getByRole('alert')).toContainText('Showing the last loaded figures');
- await expect(page.getByText('RSVP page views',{exact:true})).toBeVisible();
+ await expect(page.getByText('Confirmed RSVP guests',{exact:true})).toBeVisible();
  await page.unroute('**/api/organizer/analytics?**');
  await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(page.getByRole('alert')).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('analytics-summary.png'),fullPage:true});
  const report=page.locator('.rsvp-report');
+ await report.getByText('Guest status & signup sources',{exact:true}).click();
  await report.getByText('Share a link. See what it brings.',{exact:true}).click();
  await report.getByLabel('Where you’ll share it').selectOption('instagram');
  await expect(report.getByLabel('RSVP link',{exact:true})).toHaveValue('https://tickets.becoreops.com/rsvp/rsvp-browser?source=instagram');
@@ -417,6 +419,27 @@ test('RSVP analytics filters, links and exports work without exposing guest cont
  expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('rsvp-analytics-expanded.png'),fullPage:true});
+ const views=page.getByRole('navigation',{name:'Analytics views'});
+ for(const [label,id] of [['Sales','sales'],['Reach','reach'],['Door & Room','door']]) {
+   await views.getByRole('button',{name:label,exact:true}).click();
+   await expect(page.locator(`#analytics-${id}`)).toBeVisible();
+   await expect(report).toBeHidden();
+   const check=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+   expect(check.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+   await page.screenshot({path:info.outputPath(`analytics-${id}.png`),fullPage:true});
+ }
+ await page.reload();
+ await expect(views.getByRole('button',{name:'Door & Room',exact:true})).toHaveAttribute('aria-pressed','true');
+ await views.getByRole('button',{name:'Guest list',exact:true}).click();
+ await report.getByText('Share a link. See what it brings.',{exact:true}).click();
+ await report.getByLabel('Where you’ll share it').selectOption('instagram');
+ await views.getByRole('button',{name:'Sales',exact:true}).click();
+ await views.getByRole('button',{name:'Guest list',exact:true}).click();
+ await expect(report.getByLabel('Where you’ll share it')).toHaveValue('instagram');
+ await page.getByRole('link',{name:'Email report settings',exact:true}).click();
+ await expect(page.locator('#organizer-event')).toHaveValue('rsvp-browser');
+ await expect(page.locator('#email-reports')).toHaveAttribute('open','');
 });
 
 test('host lands on their event with a useful overview and recoverable report preferences',async({page,context,baseURL},info)=>{
