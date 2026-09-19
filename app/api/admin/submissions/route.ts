@@ -1,3 +1,5 @@
+import { ensureOrganizerAccess } from "../../../../lib/organizer-invitations";
+import { retryFailedDeliveries } from "../../../../lib/email-delivery";
 import { normalizeEventTagline, assertOriginalEventTagline } from "../../../../lib/event-copy";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
@@ -88,6 +90,7 @@ export async function PATCH(request: Request) {
     await assertOriginalEventTagline(env.DB, tagline, eventSlug);
     const update = {
       tagline,
+      organizerAccessPending: ["approve", "schedule", "publish"].includes(body.action) ? 1 : 0,
       status: next,
       reviewNote,
       curationNote: curationNote || null,
@@ -182,7 +185,17 @@ export async function PATCH(request: Request) {
 
     await recordAudit(env.DB, { session: actor, action: `curation.${body.action}`, targetType: "submission", targetId: current.id, outcome: "success", detail: next, requestId: requestMetadata(request).requestId });
 
-    return Response.json({ id: current.id, status: next, scheduledPublishAt });
+    let accessNotice: string | undefined;
+    if (["approve", "schedule", "publish"].includes(body.action)) {
+      try {
+        const access = await ensureOrganizerAccess(env.DB, { submissionId: current.id }, actor.accountId);
+        accessNotice = access.state === "activated" ? "Their existing organiser login is ready." : "Password setup email queued. Check Organiser access for delivery and activation.";
+        await retryFailedDeliveries(env, 5, "invitations");
+      } catch {
+        accessNotice = "Approval saved. Organiser access needs attention—open Organiser access to retry.";
+      }
+    }
+    return Response.json({ id: current.id, status: next, scheduledPublishAt, accessNotice });
   } catch (error) {
     const message = error instanceof Error ? error.message : "The review action could not be saved.";
     return Response.json({ error: /curated_events_tagline_unique|UNIQUE constraint/iu.test(message) ? "That event line is already in use. Write one just for this event." : message }, { status: 400 });

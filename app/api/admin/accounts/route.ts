@@ -101,6 +101,7 @@ export async function PATCH(request: Request) {
         .bind(id, slug, session.accountId, now)),
     ];
     if (status === "disabled" || input.role !== current.role || input.email !== current.email || (typeof body.temporaryPassword === "string" && body.temporaryPassword.length > 0)) {
+      statements.push(env.DB.prepare("DELETE FROM organizer_invitations WHERE account_id=?").bind(id));
       statements.push(env.DB.prepare("UPDATE staff_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL").bind(now, id));
       statements.push(env.DB.prepare("UPDATE staff_auth_challenges SET used_at = ? WHERE account_id = ? AND used_at IS NULL").bind(now, id));
     }

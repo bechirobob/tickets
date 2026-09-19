@@ -453,6 +453,7 @@ export const partySubmissions = sqliteTable("party_submissions", {
   posterContentType: text("poster_content_type"),
   posterData: blob("poster_data", { mode: "buffer" }),
   status: text("status", { enum: ["submitted", "in_review", "changes_requested", "approved", "rejected", "scheduled", "published", "unpublished", "archived"] }).notNull(),
+  organizerAccessPending: integer("organizer_access_pending").notNull().default(0),
   reviewNote: text("review_note"),
   curationNote: text("curation_note"),
   tagline: text("tagline"),
@@ -462,10 +463,23 @@ export const partySubmissions = sqliteTable("party_submissions", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [
+  index("party_submissions_access_pending_idx").on(table.organizerAccessPending),
   index("party_submissions_status_idx").on(table.status, table.createdAt),
   index("party_submissions_contact_email_idx").on(table.contactEmail, table.createdAt),
   uniqueIndex("party_submissions_event_slug_unique").on(table.eventSlug),
 ]);
+
+export const organizerInvitations = sqliteTable("organizer_invitations", {
+  accountId: text("account_id").primaryKey().notNull().references(() => staffAccounts.id, { onDelete: "cascade" }),
+  id: text("id").notNull().unique(),
+  tokenHash: text("token_hash").notNull().unique(),
+  accountEmail: text("account_email").notNull(),
+  accountPasswordHash: text("account_password_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  usedAt: text("used_at"),
+  claimId: text("claim_id").unique(),
+});
 
 export const curatedEventRecords = sqliteTable("curated_event_records", {
   id: text("id").primaryKey(),

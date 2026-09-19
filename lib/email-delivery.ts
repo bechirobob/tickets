@@ -1,7 +1,7 @@
 import { emailBrand } from "./email-brand";
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
+type DeliveryKind = "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
   id: string;
@@ -122,9 +122,9 @@ export async function applyDeliveryWebhook(db: D1Database, input: {
   return { updated: result.meta.changes === 1, status };
 }
 
-export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, scope: 'all' | 'audience' | 'standard' = 'all') {
+export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, scope: 'all' | 'audience' | 'standard' | 'invitations' = 'all') {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return { attempted: 0, delivered: 0 };
-  const scopeSql = scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
+  const scopeSql = scope === 'invitations' ? "kind='organizer_invitation'" : scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
   const due = await env.DB.prepare(`
     SELECT id, kind, recovery_grant_id AS grantId, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
@@ -136,6 +136,17 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
     const lease=await env.DB.prepare("UPDATE delivery_events SET status='queued',updated_at=?,next_attempt_at=NULL WHERE id=? AND ((status='failed' AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now')) OR (status='queued' AND julianday(updated_at)<julianday('now','-5 minutes'))) ").bind(new Date().toISOString(),item.id).run();
     if (!lease.meta.changes) continue;
     try {
+      if (item.kind === "organizer_invitation") {
+        const valid = await env.DB.prepare(`SELECT 1 FROM organizer_invitations i JOIN staff_accounts a ON a.id=i.account_id
+          WHERE i.id=? AND i.used_at IS NULL AND i.expires_at>? AND a.status='active' AND a.role='organizer'
+            AND a.must_change_password=1 AND a.normalized_email=i.account_email AND a.normalized_email=?
+            AND a.password_hash=i.account_password_hash`).bind(item.grantId,new Date().toISOString(),item.recipient).first();
+        if (!valid) {
+          await env.DB.prepare("UPDATE delivery_events SET status='suppressed',payload_json=NULL,next_attempt_at=NULL,failure_reason='Invitation expired, replaced, used or access changed.',updated_at=? WHERE id=?")
+            .bind(new Date().toISOString(),item.id).run();
+          continue;
+        }
+      }
       const payload = JSON.parse(item.payloadJson ?? "{}") as { subject?: string; html?: string; text?: string; idempotencyKey?: string };
       if (!payload.subject || !payload.html || !payload.text || !payload.idempotencyKey) throw new Error("Saved delivery payload is incomplete.");
       // Quota deferral must not send expired or cancelled invitations later.
