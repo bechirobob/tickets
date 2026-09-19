@@ -33,6 +33,7 @@ beforeEach(async()=>{
 });
 afterEach(()=>vi.restoreAllMocks());
 it('imports only opted-in addresses and deduplicates across event lists without sending email',async()=>{
+ await env.DB.prepare("INSERT INTO curated_event_records(id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,image_url,curation_note,status,created_at,updated_at) SELECT 'another-event','another-event','another-event',title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,image_url,curation_note,status,created_at,updated_at FROM curated_event_records WHERE slug=?").bind(slug).run();
  await contact('YES@example.com');await contact('no@example.com',false);await contact('yes@example.com',true,'another-event');
  await sync();
  expect(calls.filter(c=>c.path==='/contacts'&&c.method==='POST')).toHaveLength(1);
@@ -132,3 +133,38 @@ it('prepares a full batch within the free query/subrequest budget and continues 
  expect(calls.some(c=>c.path.endsWith('/send'))).toBe(false);
  await processMarketing(env);expect(calls.filter(c=>c.path.endsWith('/send'))).toHaveLength(1);
 },15000);
+
+it('reclaims completed contact reservations after a fresh lower provider count',async()=>{
+ await contact();await processMarketing(env);
+ await env.DB.prepare("UPDATE marketing_state SET contact_count=1000,reserved_count=1000,checked_at=NULL").run();
+ await env.DB.prepare("INSERT INTO marketing_contacts(email,provider_id,reserved,updated_at) VALUES ('old@example.com','old-id',1,'2026-01-01')").run();
+ await processMarketing(env);
+ expect(await env.DB.prepare('SELECT contact_count,reserved_count FROM marketing_state').first()).toEqual({contact_count:0,reserved_count:0});
+ await processMarketing(env);
+ expect(contacts.has('yes@example.com')).toBe(true);
+});
+it('keeps unresolved reservations counted but reconciles an accepted contact after a lost response',async()=>{
+ await contact();await processMarketing(env);
+ await env.DB.prepare("INSERT INTO marketing_contacts(email,reserved,updated_at) VALUES ('unknown@example.com',1,'2026-01-01')").run();
+ const original=vi.mocked(fetch).getMockImplementation()!;
+ vi.mocked(fetch).mockImplementation(async(url,init)=>{const result=await original(url,init);if(String(url).endsWith('/contacts')&&init?.method==='POST')throw new Error('lost response');return result;});
+ await processMarketing(env);
+ expect(contacts.size).toBe(1);
+ await env.DB.prepare('UPDATE marketing_state SET checked_at=NULL').run();await processMarketing(env);
+ expect(await env.DB.prepare('SELECT contact_count,reserved_count FROM marketing_state').first()).toEqual({contact_count:1,reserved_count:2});
+ expect(await env.DB.prepare("SELECT provider_id FROM marketing_contacts WHERE email='yes@example.com'").first()).toMatchObject({provider_id:expect.any(String)});
+ expect(calls.filter(c=>c.path==='/contacts'&&c.method==='POST')).toHaveLength(1);
+});
+it('does not free capacity when the provider inventory fails halfway through',async()=>{
+ await env.DB.prepare('UPDATE marketing_state SET contact_count=1000,reserved_count=1000').run();
+ const original=vi.mocked(fetch).getMockImplementation()!;let page=0;
+ vi.mocked(fetch).mockImplementation(async(url,init)=>{
+  if(new URL(String(url)).pathname==='/contacts'&&(init?.method??'GET')==='GET'){
+   if(page++===0)return Response.json({data:[{id:'one',email:'one@example.com',unsubscribed:false}],has_more:true});
+   return Response.json({},{status:503});
+  }
+  return original(url,init);
+ });
+ await processMarketing(env);
+ expect(await env.DB.prepare('SELECT status,contact_count,reserved_count FROM marketing_state').first()).toEqual({status:'blocked',contact_count:1000,reserved_count:1000});
+});

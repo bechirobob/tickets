@@ -26,8 +26,9 @@ export async function reportDeliveryAllowed(db:D1Database,id:string|null,recipie
     LEFT JOIN organizer_report_preferences p ON p.account_id=a.id WHERE r.id=? AND r.recipient=? AND r.expires_at>?
     AND a.normalized_email=r.recipient AND a.role='organizer' AND a.status='active' AND a.must_change_password=0 AND COALESCE(p.enabled,1)=1
     AND NOT EXISTS (SELECT 1 FROM json_each(r.event_slugs_json) j WHERE NOT EXISTS
-      (SELECT 1 FROM curated_event_records e WHERE e.slug=j.value AND e.removed_at IS NULL AND e.event_state<>'cancelled' AND ${hostScope}))`)
-    .bind(id,recipient,now).first();
+      (SELECT 1 FROM curated_event_records e WHERE e.slug=j.value AND e.removed_at IS NULL AND e.event_state NOT IN ('cancelled','postponed') AND ${hostScope}
+        AND (r.kind<>'recap' OR (e.schedule_status='confirmed' AND julianday(e.ends_at)<julianday(?)))))`)
+    .bind(id,recipient,now,now).first();
   return Boolean(report);
 }
 
@@ -56,26 +57,26 @@ export async function processOrganizerReports(db:D1Database,clock=new Date()) {
   const monday=new Date(clock);monday.setUTCDate(monday.getUTCDate()-((monday.getUTCDay()+6)%7));monday.setUTCHours(8,0,0,0);
   const week=monday.toISOString(),horizon=new Date(clock.getTime()+30*86400000).toISOString(),recent=new Date(clock.getTime()-7*86400000).toISOString();
   const eligible=`a.role='organizer' AND a.status='active' AND a.must_change_password=0 AND COALESCE(p.enabled,1)=1`;
-  const activeEvents=`e.removed_at IS NULL AND e.status IN ('published','unpublished','scheduled') AND e.event_state<>'cancelled'`;
+  const activeEvents=`e.removed_at IS NULL AND e.status IN ('published','unpublished','scheduled') AND e.event_state NOT IN ('cancelled','postponed')`;
   const [weekly,recaps]=await Promise.all([
     db.prepare(`SELECT a.id,a.normalized_email AS email,a.display_name AS name FROM staff_accounts a LEFT JOIN organizer_report_preferences p ON p.account_id=a.id
       WHERE ${eligible} AND a.created_at<=? AND (SELECT started_at FROM organizer_report_rollout WHERE id=1)<=?
       AND NOT EXISTS(SELECT 1 FROM organizer_reports r WHERE r.account_id=a.id AND r.kind='weekly' AND r.period_key=?)
-      AND EXISTS(SELECT 1 FROM curated_event_records e WHERE ${activeEvents} AND ${hostScope} AND e.ends_at>=? AND e.starts_at<=?) ORDER BY a.id LIMIT 1`)
+      AND EXISTS(SELECT 1 FROM curated_event_records e WHERE ${activeEvents} AND ${hostScope} AND (e.schedule_status='coming_soon' OR (e.ends_at>=? AND e.starts_at<=?))) ORDER BY a.id LIMIT 1`)
       .bind(week,week,week,now,horizon).all<{id:string;email:string;name:string}>(),
-    db.prepare(`SELECT a.id,a.normalized_email AS email,a.display_name AS name,e.slug FROM staff_accounts a
+    db.prepare(`SELECT a.id,a.normalized_email AS email,a.display_name AS name,e.slug,e.ends_at AS endsAt FROM staff_accounts a
       JOIN curated_event_records e ON ${hostScope} LEFT JOIN organizer_report_preferences p ON p.account_id=a.id
-      WHERE ${eligible} AND e.removed_at IS NULL AND e.status IN ('published','unpublished','archived') AND e.event_state<>'cancelled' AND e.schedule_status='confirmed'
+      WHERE ${eligible} AND e.removed_at IS NULL AND e.status IN ('published','unpublished','archived') AND e.event_state NOT IN ('cancelled','postponed') AND e.schedule_status='confirmed'
       AND e.ends_at<(?||'T08:00:00.000Z') AND e.ends_at>=? AND e.ends_at>=(SELECT started_at FROM organizer_report_rollout WHERE id=1)
-      AND NOT EXISTS(SELECT 1 FROM organizer_reports r WHERE r.account_id=a.id AND r.kind='recap' AND r.period_key=e.slug) ORDER BY e.ends_at,a.id LIMIT 1`)
-      .bind(today,recent).all<{id:string;email:string;name:string;slug:string}>(),
+      AND NOT EXISTS(SELECT 1 FROM organizer_reports r WHERE r.account_id=a.id AND r.kind='recap' AND (r.period_key=e.slug||'/'||e.ends_at OR (r.period_key=e.slug AND julianday(r.created_at)>=julianday(e.ends_at)))) ORDER BY e.ends_at,a.id LIMIT 1`)
+      .bind(today,recent).all<{id:string;email:string;name:string;slug:string;endsAt:string}>(),
   ]);
   let queued=0;
   for(const account of weekly.results) {
     const events=await db.prepare(`SELECT e.slug FROM curated_event_records e JOIN staff_accounts a ON a.id=?
-      WHERE ${activeEvents} AND ${hostScope} AND e.ends_at>=? AND e.starts_at<=? ORDER BY e.starts_at,e.slug LIMIT 4`).bind(account.id,now,horizon).all<{slug:string}>();
+      WHERE ${activeEvents} AND ${hostScope} AND (e.schedule_status='coming_soon' OR (e.ends_at>=? AND e.starts_at<=?)) ORDER BY e.starts_at,e.slug LIMIT 4`).bind(account.id,now,horizon).all<{slug:string}>();
     if(await queueReport(db,account,'weekly',week,events.results.map(e=>e.slug),now))queued++;
   }
-  for(const account of recaps.results)if(await queueReport(db,account,'recap',account.slug,[account.slug],now))queued++;
+  for(const account of recaps.results)if(await queueReport(db,account,'recap',`${account.slug}/${account.endsAt}`,[account.slug],now))queued++;
   return {queued};
 }

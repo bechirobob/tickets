@@ -71,4 +71,39 @@ describe('host guidance and scheduled reports',()=>{
   const summary=await readHostSummary(env.DB,f.slug);expect(summary).toMatchObject({pending:1,expected:5,interest:1,checkedIn:2,manualGuests:2});
   const email=hostReportEmail('<img src=x>','weekly',[summary!],clock.toISOString());expect(email.html).toContain('&lt;img');expect(email.html).toContain('/brand/becore-ticket.png');expect(email.text).toContain('3 confirmed RSVP guests');expect(email.text).not.toContain('@example.com');expect(email.text).toContain(`event=${f.slug}&range=all`);
  });
+ it('does not queue a recap for a postponed event with an old confirmed end time',async()=>{
+  const f=await fixture('2026-10-05T02:00:00.000Z');
+  await env.DB.prepare("UPDATE curated_event_records SET event_state='postponed' WHERE slug=?").bind(f.slug).run();
+  await processOrganizerReports(env.DB,clock);
+  expect(await reports(f.id)).toHaveLength(0);
+ });
+ it.each(['postponed','coming_soon','rescheduled'])('suppresses a queued recap when the event becomes %s',async change=>{
+  const f=await fixture('2026-10-05T02:00:00.000Z');await processOrganizerReports(env.DB,clock);const [r]=await reports(f.id);
+  expect(await reportDeliveryAllowed(env.DB,r.id,f.email,clock.toISOString())).toBe(true);
+  const sql=change==='postponed'?"UPDATE curated_event_records SET event_state='postponed' WHERE slug=?":change==='coming_soon'?"UPDATE curated_event_records SET schedule_status='coming_soon' WHERE slug=?":"UPDATE curated_event_records SET ends_at='2026-10-20T22:00:00.000Z',event_state='rescheduled' WHERE slug=?";
+  await env.DB.prepare(sql).bind(f.slug).run();
+  expect(await reportDeliveryAllowed(env.DB,r.id,f.email,clock.toISOString())).toBe(false);
+ });
+
+ it('includes date-pending events without treating their placeholder dates as past',async()=>{
+  const f=await fixture('2020-01-01T22:00:00.000Z');
+  await env.DB.prepare("UPDATE curated_event_records SET starts_at='2020-01-01T18:00:00.000Z',schedule_status='coming_soon' WHERE slug=?").bind(f.slug).run();
+  await processOrganizerReports(env.DB,clock);
+  expect((await reports(f.id)).map(r=>r.kind)).toEqual(['weekly']);
+ });
+ it('queues a fresh recap after a postponed event actually finishes on its new date',async()=>{
+  const f=await fixture('2026-10-05T02:00:00.000Z');await processOrganizerReports(env.DB,clock);const [old]=await reports(f.id);
+  await env.DB.prepare("UPDATE curated_event_records SET starts_at='2026-10-06T18:00:00.000Z',ends_at='2026-10-07T02:00:00.000Z',event_state='rescheduled' WHERE slug=?").bind(f.slug).run();
+  expect(await reportDeliveryAllowed(env.DB,old.id,f.email,clock.toISOString())).toBe(false);
+  await processOrganizerReports(env.DB,new Date('2026-10-07T08:00:00.000Z'));
+  await processOrganizerReports(env.DB,new Date('2026-10-07T09:00:00.000Z'));
+  expect((await reports(f.id)).filter(r=>r.kind==='recap')).toHaveLength(2);
+ });
+ it('does not resend a legacy recap for an unchanged event',async()=>{
+  const f=await fixture('2026-10-05T02:00:00.000Z');await processOrganizerReports(env.DB,clock);
+  await env.DB.prepare('UPDATE organizer_reports SET period_key=? WHERE account_id=?').bind(f.slug,f.id).run();
+  await processOrganizerReports(env.DB,new Date('2026-10-06T08:00:00.000Z'));
+  expect(await reports(f.id)).toHaveLength(1);
+ });
+
 });
