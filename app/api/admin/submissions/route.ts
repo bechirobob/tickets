@@ -107,7 +107,7 @@ export async function PATCH(request: Request) {
       actor: actor.actor, createdAt: now,
     });
 
-    if (["schedule", "publish", "unpublish"].includes(body.action)) {
+    if (["approve", "schedule", "publish", "unpublish"].includes(body.action)) {
       const publicStatus = next === "published" ? "published" : next === "scheduled" ? "scheduled" : "unpublished";
       const publishEvent = db.insert(curatedEventRecords).values({
         id: current.id,
@@ -175,9 +175,9 @@ export async function PATCH(request: Request) {
         const connectOrganizer = db.insert(staffEventAssignments).values({
           accountId: linkedOrganizer.id, eventSlug, assignedBy: actor.accountId, assignedAt: now,
         }).onConflictDoNothing({ target: [staffEventAssignments.accountId, staffEventAssignments.eventSlug] });
-        await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, publishHost, connectHost, connectOrganizer]);
+        await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, ...(body.action === "approve" ? [] : [publishHost, connectHost]), connectOrganizer]);
       } else {
-        await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, publishHost, connectHost]);
+        await db.batch([updateSubmission, addAuditEvent, publishEvent, defaultTier, ...(body.action === "approve" ? [] : [publishHost, connectHost])]);
       }
     } else {
       await db.batch([updateSubmission, addAuditEvent]);

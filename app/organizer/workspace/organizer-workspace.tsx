@@ -1,5 +1,7 @@
 "use client";
 
+import HostStart from "./host-start";
+import { preferredHostEvent } from "../../../lib/host-guide";
 import { ActionButton } from "../../action";
 import RegistrationManager from "../../registration-manager";
 
@@ -72,7 +74,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [view, setView] = useState("guests");
+  const [view, setView] = useState("start");
   const [historyPage, setHistoryPage] = useState(0);
 
   const load = useCallback(async () => {
@@ -82,7 +84,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
       if (!response.ok) setMessage(result.error ?? "Workspace could not be loaded.");
       else {
         setData(result);
-        setSelectedSlug((current) => result.events.some((item) => item.slug === current) ? current : result.events[0]?.slug ?? "");
+        setSelectedSlug((current) => result.events.some((item) => item.slug === current) ? current : preferredHostEvent(result.events));
       }
     } catch {
       setMessage("Workspace could not be loaded.");
@@ -96,7 +98,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
       .then(async (response) => ({ response, result: await response.json() as WorkspaceData & { error?: string } }))
       .then(({ response, result }) => {
         if (!response.ok) setMessage(result.error ?? "Workspace could not be loaded.");
-        else { setData(result); setSelectedSlug(result.events.find(item=>item.slug===new URLSearchParams(location.search).get("event"))?.slug ?? result.events[0]?.slug ?? ""); }
+        else { setData(result); setSelectedSlug(preferredHostEvent(result.events,new URLSearchParams(location.search).get("event"))); }
         setLoading(false);
       })
       .catch(() => { setMessage("Workspace could not be loaded."); setLoading(false); });
@@ -187,14 +189,15 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
         {data.events.length === 0 ? <div className="organizer-empty"><CalendarRange /><h2>No approved Nights yet.</h2><p>We’ll review your submission. You can check its progress above.</p><Link href="/organizer/submit">Submit an event</Link></div> : <>
           <div className="workspace-event-picker organizer-event-picker">
             <label htmlFor="organizer-event">Choose an event</label>
-            <select id="organizer-event" value={selectedSlug} onChange={(event) => { setSelectedSlug(event.target.value); setMessage(""); }}>{data.events.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select>
+            <select id="organizer-event" value={selectedSlug} onChange={(event) => { setSelectedSlug(event.target.value); setView("start"); setMessage(""); }}>{data.events.map((item) => <option key={item.slug} value={item.slug}>{item.title}</option>)}</select>
             <span>{selected ? `${date(selected.startsAt)} · ${readable(selected.eventState)}` : "Choose one of your Nights."}</span>
           </div>
 
           {selected ? <section className="organizer-dashboard" id="organizer-event-detail">
-            <header><div><p>{selected.venue} · {selected.area}</p><h2>{selected.title}</h2></div><Link href={`/event/${selected.slug}`}>View event page <ArrowUpRight size={15} /></Link></header>
-            <nav className="ops-tabs organizer-task-tabs" aria-label="Event tools">{[['guests','RSVP & guests'],['details','Event & sales'],['room','Room & VIP'],['entry','Entry team'],['requests','Requests']].map(([id,label])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>setView(id)}>{label}</button>)}</nav>
-            <div hidden={view!=='guests'}><RegistrationManager key={selected.slug} eventSlug={selected.slug} expanded /></div><div className="organizer-tools" hidden={view==='guests'}><div className="organizer-metrics" hidden={view!=="details"}><article><TicketCheck /><small>Paid orders</small><b>{selected.paidOrders}</b></article><article><UsersRound /><small>Admissions issued</small><b>{selected.issuedAdmissions}</b></article><article><ScanLine /><small>Checked in</small><b>{selected.checkedInAdmissions}</b></article><article><CheckCircle2 /><small>Gross collected</small><b>{money(selected.grossMinor)}</b></article></div><div className="organizer-grid" data-view={view}>
+            <header><div><p>{selected.venue} · {selected.area}</p><h2>{selected.title}</h2></div>{selected.status === "published" && <Link href={`/event/${selected.slug}`}>View event page <ArrowUpRight size={15} /></Link>}</header>
+            <nav className="ops-tabs organizer-task-tabs" aria-label="Event tools">{[['start','At a glance'],['guests','RSVP & guests'],['details','Event & sales'],['room','Room & VIP'],['entry','Entry team'],['requests','Requests']].map(([id,label])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>setView(id)}>{label}</button>)}</nav>
+            <div hidden={view!=='start'}><HostStart key={selected.slug} eventSlug={selected.slug} onOpen={setView} active={view==='start'} /></div>
+            <div hidden={view!=='guests'}><RegistrationManager key={selected.slug} eventSlug={selected.slug} expanded /></div><div className="organizer-tools" hidden={view==='guests'||view==='start'}><div className="organizer-metrics" hidden={view!=="details"}><article><TicketCheck /><small>Paid orders</small><b>{selected.paidOrders}</b></article><article><UsersRound /><small>Admissions issued</small><b>{selected.issuedAdmissions}</b></article><article><ScanLine /><small>Checked in</small><b>{selected.checkedInAdmissions}</b></article><article><CheckCircle2 /><small>Gross collected</small><b>{money(selected.grossMinor)}</b></article></div><div className="organizer-grid" data-view={view}>
               <section hidden={view!=="details"} className="organizer-panel"><header><div><small>Ticket sales</small><h3>Ticket tiers</h3></div><ShieldCheck size={18} /></header><div className="organizer-tier-table">{tiers.map((tier) => <div key={tier.id}><span><b>{tier.name}</b><small>{money(tier.priceMinor)} · {tier.status}</small></span><strong>{tier.allocatedAdmissions} / {tier.capacityAdmissions}</strong><i><b style={{ width: `${Math.min(100, (tier.allocatedAdmissions / Math.max(1, tier.capacityAdmissions)) * 100)}%` }} /></i></div>)}</div></section>
               <form hidden={view!=="details"} key={`details-${selected.slug}`} className="organizer-panel" onSubmit={saveDetails}><header><div><small>On the event page</small><h3>Venue & line-up</h3></div><Save size={18} /></header><label>Venue<input name="venue" defaultValue={selected.venue} required /></label><label>Map link<input name="venueMapUrl" type="url" defaultValue={selected.venueMapUrl} required /></label><label>Line-up<textarea name="lineup" defaultValue={selected.lineup} required /></label><ActionButton type="submit" disabled={busy}>Save event details</ActionButton></form>
               <form hidden={view!=="room"} className="organizer-panel" onSubmit={submitAnnouncement}><header><div><small>The Room</small><h3>Post an update</h3></div><Megaphone size={18} /></header><label>Announcement<textarea name="content" minLength={2} maxLength={1000} placeholder="Doors, timing, entry or venue update…" required /></label><label className="organizer-check"><input name="pinned" type="checkbox" /> Pin this update</label><ActionButton type="submit" disabled={busy}>Post in The Room</ActionButton></form>

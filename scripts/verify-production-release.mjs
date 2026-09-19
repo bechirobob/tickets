@@ -18,7 +18,7 @@ const webhook = await fetch(`${origin}/api/payments/seevplus/webhook`, {
   method: "POST", headers: { "content-type": "application/json" }, body: "{}", signal: AbortSignal.timeout(15000),
 });
 if (![401, 503].includes(webhook.status)) throw new Error(`Unsigned Seev webhook returned ${webhook.status}`);
-for (const [path, expected] of [["/api/customer/registrations", 401], ["/api/admin/registrations?eventSlug=the-weekend-braai", 403]]) {
+for (const [path, expected] of [["/api/customer/registrations", 401], ["/api/organizer/reports?eventSlug=the-weekend-braai", 403], ["/api/admin/registrations?eventSlug=the-weekend-braai", 403]]) {
   const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(15000) });
   if (response.status !== expected) throw new Error(`Registration privacy check ${path} returned ${response.status}`);
 }

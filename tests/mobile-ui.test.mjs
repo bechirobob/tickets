@@ -1007,7 +1007,7 @@ test("organiser analytics has a dedicated compact responsive workspace", async (
     readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0023_organizer_analytics_hardening.sql", import.meta.url), "utf8"),
   ]);
-  assert.match(page, /requireAdminSession\("\/organizer\/analytics", "organizer\.workspace"\)/u);
+  assert.match(page, /requireAdminSession\(returnTo, "organizer\.workspace"\)/u);
   assert.match(client, /Last 7 days/u);
   assert.match(client, /Last 30 days/u);
   assert.match(client, /Last 90 days/u);

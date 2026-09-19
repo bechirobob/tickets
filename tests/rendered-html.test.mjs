@@ -36,7 +36,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
     producers: [{ binding: "EMAIL_DELIVERY_QUEUE", queue: "becore-tickets-email-delivery" }],
     consumers: [{
       queue: "becore-tickets-email-delivery",
-      max_batch_size: 10,
+      max_batch_size: 1,
       max_batch_timeout: 5,
       max_retries: 2,
       max_concurrency: 1,
