@@ -38,3 +38,13 @@ test('replays do not enqueue a second email and changed content cannot reuse an 
   await assert.rejects(enqueuePreview(query, request, 'owner@example.com', { ...payload, subject: '[TEST] Changed' }));
   await assert.rejects(enqueuePreview(query, request, 'other@example.com', payload));
 });
+
+test('host invitation needs test labels but does not inherit RSVP artwork or event requirements', () => {
+  const invite = { ...request, template: 'host-invitation' };
+  validateRequest(invite, now);
+  const payload = makePayload(invite, '<p>TEST EMAIL</p><p>Verified Host badge</p>', 'TEST EMAIL', 'b'.repeat(40));
+  assert.match(payload.html, /Verified Host badge/);
+  assert.throws(() => validateRequest({ ...invite, template: '../../outside' }, now));
+  assert.throws(() => makePayload(invite, '<p>Invitation</p>', 'TEST EMAIL', 'b'.repeat(40)));
+  assert.throws(() => makePayload(invite, 'TEST EMAIL', 'Invitation', 'b'.repeat(40)));
+});

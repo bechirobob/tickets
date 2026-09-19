@@ -1,7 +1,7 @@
 {
-  "requestId": "host-invitation-owner-20260919-v3",
+  "requestId": "host-invitation-kofi-20260919-v3",
   "template": "host-invitation",
   "subject": "[TEST] Your next event belongs on BeCore Tickets",
-  "recipientSha256": "d2afa7273a4645949d3f76e8691e3c20f14bcc2470002ecc128b56731af2772d",
+  "recipientSha256": "4f7dbfb1f2d7e0b0338a8f3352f6c62f7327272977695564372adef6e370951e",
   "expiresAt": "2026-09-20T09:53:00.438866+00:00"
 }

@@ -6,7 +6,7 @@ export const sha256 = value => createHash('sha256').update(value).digest('hex');
 export const expectedSender = 'BeCore Tickets <tickets@becoreops.com>';
 
 export function validateRequest(request, now = Date.now()) {
-  if (!/^[a-z0-9-]{8,90}$/.test(request.requestId ?? '') || request.template !== 'october-rsvp') throw new Error('Invalid test request.');
+  if (!/^[a-z0-9-]{8,90}$/.test(request.requestId ?? '') || !['october-rsvp', 'host-invitation'].includes(request.template)) throw new Error('Invalid test request.');
   if (!/^\[TEST[^\r\n]*\] .{3,110}$/u.test(request.subject ?? '') || /[\r\n]/u.test(request.subject)) throw new Error('A test-labelled subject is required.');
   if (!/^[a-f0-9]{64}$/.test(request.recipientSha256 ?? '')) throw new Error('An exact approved recipient fingerprint is required.');
   const expiry = Date.parse(request.expiresAt);
@@ -22,7 +22,7 @@ export function resolveRecipient(accounts, fingerprint) {
 
 export function makePayload(request, html, text, revision) {
   if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error('An immutable GitHub revision is required.');
-  if (!html.includes('TEST EMAIL') || !text.includes('TEST EMAIL') || !html.includes('{{FLIER_URL}}')) throw new Error('The approved test template is incomplete.');
+  if (!html.includes('TEST EMAIL') || !text.includes('TEST EMAIL') || (request.template === 'october-rsvp' && !html.includes('{{FLIER_URL}}'))) throw new Error('The approved test template is incomplete.');
   const flierUrl = `https://raw.githubusercontent.com/bechirobob/tickets/${revision}/emails/tests/on-the-guest-list.jpg`;
   return { subject: request.subject, html: html.replaceAll('{{FLIER_URL}}', flierUrl), text, idempotencyKey: `email-preview/${request.requestId}` };
 }
@@ -42,7 +42,9 @@ export async function enqueuePreview(query, request, recipient, payload) {
 }
 
 async function main() {
-  const request = JSON.parse(await readFile('emails/tests/request.json', 'utf8'));
+  const requestFile = process.env.PREVIEW_REQUEST_FILE ?? 'emails/tests/request.json';
+  if (!['emails/tests/request.json', 'emails/tests/request-second.json'].includes(requestFile)) throw new Error('Unknown preview request file.');
+  const request = JSON.parse(await readFile(requestFile, 'utf8'));
   validateRequest(request);
   const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
   if (config.vars?.EMAIL_FROM !== expectedSender) throw new Error('The production sender does not match BeCore Tickets.');
@@ -65,13 +67,18 @@ async function main() {
   // the explicit recipient against existing private records; never alter access.
   const accounts = await query('SELECT normalized_email FROM staff_accounts UNION SELECT recipient AS normalized_email FROM delivery_events');
   const recipient = resolveRecipient(accounts, request.recipientSha256);
-  const [event] = await query("SELECT schedule_status,status,removed_at FROM curated_event_records WHERE slug='sun-chasers-labadi'");
-  if (!event || event.status !== 'published' || event.removed_at || event.schedule_status !== 'coming_soon') throw new Error('The event has changed; review this reminder before sending.');
-  const [html, text] = await Promise.all(['html', 'txt'].map(extension => readFile(`emails/tests/october-rsvp.${extension}`, 'utf8')));
+  if (request.template === 'october-rsvp') {
+    const [event] = await query("SELECT schedule_status,status,removed_at FROM curated_event_records WHERE slug='sun-chasers-labadi'");
+    if (!event || event.status !== 'published' || event.removed_at || event.schedule_status !== 'coming_soon') throw new Error('The event has changed; review this reminder before sending.');
+  }
+  const [html, text] = await Promise.all(['html', 'txt'].map(extension => readFile(`emails/tests/${request.template}.${extension}`, 'utf8')));
   const payload = makePayload(request, html, text, process.env.GITHUB_SHA ?? '');
-  // Verify both image responses before queuing the message. Never log recipients.
-  for (const url of [payload.html.match(/src="(https:[^"]+\.png[^\"]*)"/)?.[1], payload.html.match(/src="(https:[^"]+\.jpg)"/)?.[1]]) {
-    if (!url) throw new Error('The branded email image URL is missing.');
+  // Check the hosted brand asset; the RSVP template additionally requires its flier.
+  const imageUrls = [...payload.html.matchAll(/src="(https:[^"]+)"/g)].map(match => match[1]);
+  if (!imageUrls.some(url => /\.png(?:[?]|$)/u.test(url)) ||
+      (request.template === 'october-rsvp' && !imageUrls.some(url => url.endsWith('.jpg'))) ||
+      /src="data:/u.test(payload.html)) throw new Error('The branded email image URL is missing or not inbox-compatible.');
+  for (const url of imageUrls) {
     const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) throw new Error('A branded email image is not available.');
     await response.arrayBuffer();
