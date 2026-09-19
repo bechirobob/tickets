@@ -387,6 +387,7 @@ test('the door desk keeps a large RSVP list compact and retains a failed guest a
 
 
 test('RSVP analytics filters, links and exports work without exposing guest contacts', async ({page}, info) => {
+ await page.clock.install();
  await page.goto('/organizer/analytics');
  await expect(page.getByRole('heading', {name:'Who’s coming through?'})).toBeVisible();
  await page.getByLabel('Night', {exact:true}).selectOption('rsvp-browser');
@@ -436,6 +437,10 @@ test('RSVP analytics filters, links and exports work without exposing guest cont
  await report.getByLabel('Where you’ll share it').selectOption('instagram');
  await views.getByRole('button',{name:'Sales',exact:true}).click();
  await views.getByRole('button',{name:'Guest list',exact:true}).click();
+ await expect(report.getByLabel('Where you’ll share it')).toHaveValue('instagram');
+ const automaticRefresh=page.waitForResponse(response=>response.url().includes('/api/organizer/analytics?')&&response.ok());
+ await page.clock.fastForward(60_000);
+ await automaticRefresh;
  await expect(report.getByLabel('Where you’ll share it')).toHaveValue('instagram');
  await page.getByRole('link',{name:'Email report settings',exact:true}).click();
  await expect(page.locator('#organizer-event')).toHaveValue('rsvp-browser');
