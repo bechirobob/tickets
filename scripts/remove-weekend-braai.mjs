@@ -29,7 +29,8 @@ async function main() {
   }
   async function rows(sql, params = []) { return (await query({ sql, params }))[0].results; }
   const [event] = await rows(`SELECT slug,title,status,removed_at FROM curated_event_records WHERE slug=?`, [slug]);
-  if (!event || event.title !== 'The Weekend Braai') throw new Error('Exact listing identity did not match.');
+  console.log(JSON.stringify({ resolvedEvent: event ?? null }));
+  if (!event || !['The Weekend Braai', 'The Weekend Braai — Birthday Edition'].includes(event.title)) throw new Error('Exact listing identity did not match.');
   const [impact] = await rows(`SELECT COUNT(*) AS paidBookings FROM orders WHERE event_slug=? AND payment_provider<>'rsvp' AND total_amount_minor>refunded_amount_minor AND status IN ('paid','refund_pending','requires_refund','disputed','payment_pending')`, [slug]);
   const otherListings = await rows(`SELECT slug,status,removed_at FROM curated_event_records WHERE slug<>? ORDER BY slug`, [slug]);
   const registrations = await rows(`SELECT status,COUNT(*) AS count FROM event_registrations WHERE event_slug=? GROUP BY status`, [slug]);
