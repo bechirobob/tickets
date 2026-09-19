@@ -21,6 +21,7 @@ jobs:
           const listed=await listing.json(),db=listed.result?.find(d=>d.name==='becore-tickets-db');
           if(!listing.ok||!listed.success||!db)throw new Error('Database lookup failed');
           const queries={
+            failures:"SELECT kind,attempt_count,next_attempt_at,CASE WHEN failure_reason LIKE '%configured%' THEN 'configuration' WHEN failure_reason LIKE '%quota%' THEN 'quota' ELSE 'other' END AS category,(json_extract(payload_json,'$.idempotencyKey') LIKE 'organizer-signup/the-weekend-braai/%') AS removed_event,COUNT(*) AS count FROM delivery_events WHERE status='failed' AND kind IN ('organizer_signup','organizer_invitation','organizer_report') GROUP BY kind,attempt_count,next_attempt_at,category,removed_event",
             marketing:"SELECT status,contact_count,reserved_count,checked_at,error FROM marketing_state WHERE id='resend'",
             audience:"SELECT COUNT(*) AS event_contacts,COUNT(DISTINCT email) AS unique_contacts,SUM(consented_at IS NOT NULL AND consented_at>COALESCE(unsubscribed_at,'')) AS opted_in FROM event_audience_contacts",
             sync:"SELECT COUNT(DISTINCT a.email) AS waiting FROM event_audience_contacts a LEFT JOIN marketing_contacts m ON m.email=a.email JOIN curated_event_records e ON e.slug=a.event_slug WHERE a.consented_at IS NOT NULL AND a.consented_at>COALESCE(a.unsubscribed_at,'') AND COALESCE(m.unsubscribed,0)=0 AND m.provider_id IS NULL AND e.removed_at IS NULL AND e.is_test_event=0",
