@@ -26,7 +26,7 @@ async function census(env:Cloudflare.Env) {
  }while(true);
  await resendRequest(env,'/segments?limit=1');
  await resendRequest(env,'/broadcasts?limit=1');
- await env.DB.prepare("UPDATE marketing_state SET status='ready',contact_count=?,reserved_count=MAX(reserved_count,?),checked_at=?,error=NULL WHERE id='resend'").bind(count,count,now()).run();
+ await env.DB.prepare("UPDATE marketing_state SET status='ready',contact_count=?,reserved_count=?+(SELECT COUNT(*) FROM marketing_contacts WHERE reserved=1 AND provider_id IS NULL),checked_at=?,error=NULL WHERE id='resend'").bind(count,count,now()).run();
  return count;
 }
 async function importContacts(env:Cloudflare.Env) {

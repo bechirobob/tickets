@@ -72,6 +72,6 @@ it.each(['rsvp','paid'])('rehearses approval → activation → %s admission →
  const summary=await readHostSummary(env.DB,slug);expect(summary).toMatchObject({expected:1,checkedIn:1,turnoutPercent:100});expect(summary!.sales.orders).toBe(mode==='paid'?1:0);
  const recapTime=new Date(Date.now()+3*86400000);recapTime.setUTCHours(8,10,0,0);
  await processOrganizerReports(env.DB,recapTime);
- const report=await env.DB.prepare("SELECT r.id,d.payload_json AS payload FROM organizer_reports r JOIN delivery_events d ON d.recovery_grant_id=r.id WHERE r.kind='recap' AND r.period_key=?").bind(slug).first<{id:string;payload:string}>();
+ const report=await env.DB.prepare("SELECT r.id,d.payload_json AS payload FROM organizer_reports r JOIN delivery_events d ON d.recovery_grant_id=r.id WHERE r.kind='recap' AND EXISTS (SELECT 1 FROM json_each(r.event_slugs_json) WHERE value=?)").bind(slug).first<{id:string;payload:string}>();
  expect(report).not.toBeNull();expect(JSON.parse(report!.payload).text).toContain('100% turnout');expect(JSON.parse(report!.payload).text).not.toContain(guest);
 });

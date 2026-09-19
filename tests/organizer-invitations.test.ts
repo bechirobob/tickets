@@ -147,3 +147,18 @@ describe("organiser approval invitations",()=>{
     expect(invitationEmail('<img src=x onerror="alert(1)">',origin).html).toContain("&lt;img");
   });
 });
+
+it('keeps blocked accounts from starving valid approvals in the automatic invitation queue',async()=>{
+ const blocked=await invited();
+ await env.DB.prepare("UPDATE staff_accounts SET role='finance' WHERE id=?").bind(blocked.accountId).run();
+ for(let i=0;i<20;i++){
+  const s=await submission('approved',blocked.email);
+  await env.DB.prepare("UPDATE party_submissions SET organizer_access_pending=1,updated_at='2000-01-01' WHERE id=?").bind(s.id).run();
+ }
+ const valid=await submission();
+ await env.DB.prepare('UPDATE party_submissions SET organizer_access_pending=1 WHERE id=?').bind(valid.id).run();
+ await processPendingOrganizerAccess(env.DB);
+ expect((await organizerAccessStatus(env.DB,{submissionId:valid.id})).state).toBe('invited');
+ expect(await env.DB.prepare('SELECT role FROM staff_accounts WHERE id=?').bind(blocked.accountId).first()).toEqual({role:'finance'});
+ expect(await env.DB.prepare('SELECT organizer_access_pending FROM party_submissions WHERE id=?').bind(valid.id).first()).toEqual({organizer_access_pending:0});
+});

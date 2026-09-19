@@ -110,7 +110,10 @@ export async function ensureOrganizerAccess(db: D1Database, target: InvitationTa
 }
 
 export async function processPendingOrganizerAccess(db: D1Database) {
-  const pending = await db.prepare(`SELECT id FROM party_submissions WHERE organizer_access_pending=1 AND status IN ${approved} ORDER BY updated_at LIMIT 20`).all<{ id: string }>();
+  const pending = await db.prepare(`SELECT s.id FROM party_submissions s WHERE s.organizer_access_pending=1 AND s.status IN ${approved}
+    AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.submission_id=s.id AND e.removed_at IS NOT NULL)
+    AND NOT EXISTS (SELECT 1 FROM staff_accounts a WHERE a.normalized_email=lower(trim(s.contact_email)) AND (a.role<>'organizer' OR a.status<>'active'))
+    ORDER BY s.updated_at LIMIT 20`).all<{ id: string }>();
   for (const item of pending.results) {
     try { await ensureOrganizerAccess(db, { submissionId: item.id }, "approval-automation"); }
     catch { /* Keep pending for operator correction and the next retry. */ }
