@@ -4,6 +4,7 @@ import { enforceRateLimit } from "../../../lib/security-controls";
 
 const clientMetrics = new Set([
   "event_view",
+  "rsvp_view",
   "checkout_view",
   "checkout_started",
   "share_started",
@@ -21,6 +22,10 @@ export async function POST(request: Request) {
   const metadata = requestMetadata(request);
   const allowed = await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `analytics:${await hashToken(metadata.ip || "anonymous")}`);
   if (!allowed) return new Response(null, { status: 204 });
-  await recordProductMetric(env.DB, body.metric, validAnalyticsSlug(body.eventSlug));
+  const slug = validAnalyticsSlug(body.eventSlug);
+  if (["event_view", "rsvp_view", "checkout_view", "checkout_started", "share_started"].includes(body.metric)) {
+    if (!slug || !await env.DB.prepare("SELECT 1 FROM curated_event_records WHERE slug=? AND status='published' AND removed_at IS NULL").bind(slug).first()) return new Response(null, { status: 204 });
+  }
+  await recordProductMetric(env.DB, body.metric, slug);
   return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
 }

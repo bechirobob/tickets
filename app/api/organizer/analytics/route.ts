@@ -8,19 +8,8 @@ import {
 } from "../../../../lib/admin-session";
 import { enforceRateLimit, type RateLimiter } from "../../../../lib/security-controls";
 
-type RangeKey = "7" | "30" | "90" | "all";
-
+import { analyticsPeriod, type AnalyticsRange as RangeKey } from "../../../../lib/analytics-period";
 const paidStatuses = "'paid','refund_pending','refunded','disputed'";
-
-function rangeWindow(value: string | null) {
-  const range: RangeKey = value === "7" || value === "90" || value === "all" ? value : "30";
-  const end = new Date();
-  if (range === "all") return { range, start: "2000-01-01T00:00:00.000Z", previousStart: null, previousEnd: null };
-  const days = Number(range);
-  const start = new Date(end.getTime() - days * 86_400_000);
-  const previousStart = new Date(start.getTime() - days * 86_400_000);
-  return { range, start: start.toISOString(), previousStart: previousStart.toISOString(), previousEnd: start.toISOString() };
-}
 
 function placeholders(values: readonly string[]) {
   return values.map(() => "?").join(",");
@@ -56,6 +45,10 @@ function analyticsCsv(data: Record<string, unknown>) {
     ["Overview"],
     ["Metric", "Value"],
     ["Tracked event views", overview.eventViews],
+    ["Tracked RSVP page views", overview.rsvpViews],
+    ["Ticket face value (minor units)", overview.faceValueMinor],
+    ["Booking fees (minor units)", overview.bookingFeesMinor],
+    ["Collected less refunds (minor units)", Number(overview.revenueMinor) - Number(overview.refundsMinor)],
     ["Checkout starts", overview.checkoutStarts],
     ["Paid orders", overview.paidOrders],
     ["Admissions sold", overview.admissions],
@@ -73,8 +66,8 @@ function analyticsCsv(data: Record<string, unknown>) {
     ["Turnout percent", rsvp.totals.turnoutPercent ?? ""],
     [],
     ["RSVP link sources"],
-    ["Source", "Requests", "Guests", "Confirmed guests", "Checked in"],
-    ...rsvp.sources.map(row => [row.label, row.requests, row.guests, row.confirmedGuests, row.checkedIn]),
+    ["Event", "Source", "Requests", "Guests", "Confirmed guests", "Checked in"],
+    ...rsvp.sources.map(row => [row.eventTitle, row.label, row.requests, row.guests, row.confirmedGuests, row.checkedIn]),
     [],
     ["Sales trend"],
     ["Day", "Orders", "Admissions", "Gross collected (minor units)"],
@@ -85,8 +78,8 @@ function analyticsCsv(data: Record<string, unknown>) {
     ...((data.ticketTiers as Array<Record<string, unknown>>).map((item) => [item.eventTitle, item.name, item.orders, item.admissions, item.capacityAdmissions, item.revenueMinor])),
     [],
     ["Promoter attribution"],
-    ["Code", "Label", "Orders", "Admissions", "Gross collected (minor units)"],
-    ...((data.promoters as Array<Record<string, unknown>>).map((item) => [item.code, item.label, item.orders, item.admissions, item.revenueMinor])),
+    ["Event", "Code", "Label", "Orders", "Admissions", "Gross collected (minor units)"],
+    ...((data.promoters as Array<Record<string, unknown>>).map((item) => [item.eventTitle, item.code, item.label, item.orders, item.admissions, item.revenueMinor])),
     [],
     ["Payment methods"],
     ["Channel", "Orders", "Gross collected (minor units)"],
@@ -133,14 +126,15 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const window = rangeWindow(url.searchParams.get("range"));
+  const window = analyticsPeriod(url.searchParams.get("range"));
   const eventStatement = env.DB.prepare(`
     SELECT event.slug, event.title, event.starts_at AS startsAt, event.event_state AS eventState
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    ${session.role === "owner" ? "" : `WHERE (
+    WHERE event.removed_at IS NULL
+    ${session.role === "owner" ? "" : `AND (
       EXISTS (SELECT 1 FROM staff_event_assignments assignment WHERE assignment.account_id = ? AND assignment.event_slug = event.slug)
-      OR submission.contact_email = ?
+      OR lower(trim(submission.contact_email)) = ?
     )`}
     ORDER BY event.starts_at DESC
   `);
@@ -169,7 +163,8 @@ export async function GET(request: Request) {
   const empty = {
     events: events.results,
     scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel },
-    overview: { eventViews: 0, checkoutViews: 0, checkoutStarts: 0, paymentAttempts: 0, paymentsConfirmed: 0, paymentFailed: 0, shares: 0, paidOrders: 0, revenueMinor: 0, faceValueMinor: 0, bookingFeesMinor: 0, refundsMinor: 0, admissions: 0, checkedIn: 0, uniqueBuyers: 0, repeatBuyers: 0, averageOrderValueMinor: 0 },
+    generatedAt: new Date().toISOString(),
+    overview: { rsvpViews: 0, eventViews: 0, checkoutViews: 0, checkoutStarts: 0, paymentAttempts: 0, paymentsConfirmed: 0, paymentFailed: 0, shares: 0, paidOrders: 0, revenueMinor: 0, faceValueMinor: 0, bookingFeesMinor: 0, refundsMinor: 0, admissions: 0, checkedIn: 0, uniqueBuyers: 0, repeatBuyers: 0, averageOrderValueMinor: 0 },
     comparison: null, rsvp: emptyRsvpAnalytics(),
     salesTrend: [], journeyTrend: [], ticketTiers: [], paymentMethods: [], promoters: [], checkIns: [], vipUsage: [],
   };
@@ -201,6 +196,7 @@ export async function GET(request: Request) {
     env.DB.prepare(`
       SELECT
         COALESCE(SUM(CASE WHEN metric = 'event_view' THEN count ELSE 0 END), 0) AS eventViews,
+        COALESCE(SUM(CASE WHEN metric = 'rsvp_view' THEN count ELSE 0 END), 0) AS rsvpViews,
         COALESCE(SUM(CASE WHEN metric = 'checkout_view' THEN count ELSE 0 END), 0) AS checkoutViews,
         COALESCE(SUM(CASE WHEN metric = 'checkout_started' THEN count ELSE 0 END), 0) AS checkoutStarts,
         COALESCE(SUM(CASE WHEN metric = 'payment_attempted' THEN count ELSE 0 END), 0) AS paymentAttempts,
@@ -218,6 +214,7 @@ export async function GET(request: Request) {
     env.DB.prepare(`
       SELECT ${metricTrendBucket} AS day,
         COALESCE(SUM(CASE WHEN metric = 'event_view' THEN count ELSE 0 END), 0) AS eventViews,
+        COALESCE(SUM(CASE WHEN metric = 'rsvp_view' THEN count ELSE 0 END), 0) AS rsvpViews,
         COALESCE(SUM(CASE WHEN metric = 'checkout_started' THEN count ELSE 0 END), 0) AS checkoutStarts,
         COALESCE(SUM(CASE WHEN metric = 'payment_attempted' THEN count ELSE 0 END), 0) AS paymentAttempts,
         COALESCE(SUM(CASE WHEN metric = 'payment_confirmed' THEN count ELSE 0 END), 0) AS paymentsConfirmed
@@ -237,12 +234,12 @@ export async function GET(request: Request) {
       GROUP BY payment_channel ORDER BY orders DESC
     `).bind(...orderBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
-      SELECT COALESCE(orders.promoter_code, 'direct') AS code,
+      SELECT orders.event_slug AS eventSlug, event.title AS eventTitle, COALESCE(orders.promoter_code, 'direct') AS code,
         COALESCE(MAX(promoter.label), 'Direct / untagged') AS label, COUNT(*) AS orders,
         COALESCE(SUM(orders.quantity), 0) AS admissions, COALESCE(SUM(orders.total_amount_minor), 0) AS revenueMinor
-      FROM orders LEFT JOIN event_promoter_codes promoter ON promoter.event_slug = orders.event_slug AND promoter.code = orders.promoter_code
+      FROM orders JOIN curated_event_records event ON event.slug = orders.event_slug LEFT JOIN event_promoter_codes promoter ON promoter.event_slug = orders.event_slug AND promoter.code = orders.promoter_code
       WHERE orders.event_slug IN (${marks}) AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') <> 'rsvp' AND COALESCE(orders.paid_at, orders.created_at) >= ?
-      GROUP BY COALESCE(orders.promoter_code, 'direct') ORDER BY orders DESC
+      GROUP BY orders.event_slug, COALESCE(orders.promoter_code, 'direct') ORDER BY orders DESC, orders.event_slug, code
     `).bind(...orderBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT substr(checked_in_at, 12, 2) AS hour, COUNT(*) AS admissions
@@ -265,7 +262,7 @@ export async function GET(request: Request) {
   const rsvp = await readRsvpAnalytics(env.DB, slugs, window.start);
 
   const overview = {
-    eventViews: number(product?.eventViews), checkoutViews: number(product?.checkoutViews), checkoutStarts: number(product?.checkoutStarts),
+    rsvpViews: number(product?.rsvpViews), eventViews: number(product?.eventViews), checkoutViews: number(product?.checkoutViews), checkoutStarts: number(product?.checkoutStarts),
     paymentAttempts: number(product?.paymentAttempts), paymentsConfirmed: number(product?.paymentsConfirmed), paymentFailed: number(product?.paymentFailed), shares: number(product?.shares),
     paidOrders: number(orders?.paidOrders), revenueMinor: number(orders?.revenueMinor), faceValueMinor: number(orders?.faceValueMinor),
     bookingFeesMinor: number(orders?.bookingFeesMinor), refundsMinor: number(orders?.refundsMinor), averageOrderValueMinor: number(orders?.averageOrderValueMinor),
@@ -288,6 +285,7 @@ export async function GET(request: Request) {
   const data = {
     events: events.results,
     scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel },
+    generatedAt: new Date().toISOString(),
     overview,
     rsvp,
     comparison,

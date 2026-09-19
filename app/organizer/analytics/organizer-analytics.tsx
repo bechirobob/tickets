@@ -1,18 +1,20 @@
 "use client";
 
+import { percentageChange } from "../../../lib/analytics-period";
 import RsvpReport from "./rsvp-analytics";
 import type { RsvpAnalytics } from "../../../lib/rsvp-analytics";
 import BrandLogo from "../../brand-logo";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, BadgeCheck, BarChart3, Loader2, LogOut, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowDownToLine, BadgeCheck, BarChart3, Loader2, LogOut, TrendingDown, TrendingUp, RefreshCw } from "lucide-react";
 import type { StaffRole } from "../../../lib/admin-session";
 import WorkspaceJump from "../../admin/workspace-jump";
 
 type EventOption = { slug: string; title: string; startsAt: string; eventState: string };
-type Overview = { eventViews: number; checkoutViews: number; checkoutStarts: number; paymentAttempts: number; paymentsConfirmed: number; paymentFailed: number; shares: number; paidOrders: number; revenueMinor: number; faceValueMinor: number; bookingFeesMinor: number; refundsMinor: number; admissions: number; checkedIn: number; uniqueBuyers: number; repeatBuyers: number; averageOrderValueMinor: number };
+type Overview = { rsvpViews: number; eventViews: number; checkoutViews: number; checkoutStarts: number; paymentAttempts: number; paymentsConfirmed: number; paymentFailed: number; shares: number; paidOrders: number; revenueMinor: number; faceValueMinor: number; bookingFeesMinor: number; refundsMinor: number; admissions: number; checkedIn: number; uniqueBuyers: number; repeatBuyers: number; averageOrderValueMinor: number };
 type AnalyticsData = {
+  generatedAt: string;
   rsvp: RsvpAnalytics;
   events: EventOption[];
   scope: { eventSlug: string; label: string; range: string; rangeLabel: string };
@@ -22,7 +24,7 @@ type AnalyticsData = {
   journeyTrend: Array<{ day: string; eventViews: number; checkoutStarts: number; paymentAttempts: number; paymentsConfirmed: number }>;
   ticketTiers: Array<{ id: string; eventTitle: string; name: string; priceMinor: number; capacityAdmissions: number; orders: number; admissions: number; revenueMinor: number }>;
   paymentMethods: Array<{ channel: string; orders: number; revenueMinor: number }>;
-  promoters: Array<{ code: string; label: string; orders: number; admissions: number; revenueMinor: number }>;
+  promoters: Array<{ eventSlug: string; eventTitle: string; code: string; label: string; orders: number; admissions: number; revenueMinor: number }>;
   checkIns: Array<{ hour: string; admissions: number }>;
   vipUsage: Array<{ kind: string; status: string; count: number }>;
 };
@@ -32,14 +34,11 @@ const shortDate = (value: string) => new Date(`${value}T00:00:00Z`).toLocaleDate
 const readable = (value: string) => value.replaceAll("_", " ").replaceAll(":", " · ");
 const rate = (part: number, total: number) => total > 0 ? Math.round((part / total) * 1000) / 10 : 0;
 
-function delta(current: number, previous: number) {
-  if (!previous) return current ? 100 : 0;
-  return Math.round(((current - previous) / previous) * 100);
-}
-
 function Delta({ current, previous }: { current: number; previous?: number }) {
   if (previous === undefined) return <small>All available data</small>;
-  const change = delta(current, previous);
+  const change = percentageChange(current, previous);
+  if (change === null) return <small>New activity · none in the previous period</small>;
+  if (change === 0) return <small>No change vs previous period</small>;
   return <small className={change < 0 ? "is-down" : "is-up"}>{change < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}{Math.abs(change)}% vs previous period</small>;
 }
 
@@ -72,7 +71,7 @@ function BarList({ rows, value, label, detail }: { rows: Array<Record<string, un
   if (!rows.length) return <div className="analytics-empty">Nothing recorded in this period.</div>;
   return <div className="analytics-bar-list">{rows.map((item, index) => <div key={`${label(item)}-${index}`}>
     <span><b>{label(item)}</b><small>{detail(item)}</small></span>
-    <i aria-hidden="true"><b style={{ width: `${Math.max(2, (value(item) / maximum) * 100)}%` }} /></i>
+    <i aria-hidden="true"><b style={{ width: `${Math.max(0, (value(item) / maximum) * 100)}%` }} /></i>
   </div>)}</div>;
 }
 
@@ -80,20 +79,42 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
   const router = useRouter();
   const [eventSlug, setEventSlug] = useState(initialEvent);
   const [range, setRange] = useState(initialRange);
+  const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/organizer/analytics?eventSlug=${encodeURIComponent(eventSlug)}&range=${range}`, { cache: "no-store", signal: controller.signal })
-      .then(async (response) => ({ response, result: await response.json() as AnalyticsData & { error?: string } }))
-      .then(({ response, result }) => { if (!response.ok) throw new Error(result.error ?? "Analytics could not be loaded."); setData(result); })
-      .catch((reason) => { if (reason instanceof DOMException && reason.name === "AbortError") return; setError(reason instanceof Error ? reason.message : "Analytics could not be loaded."); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
+    let running = false;
+    async function load() {
+      if (running || controller.signal.aborted) return;
+      running = true;
+      setRefreshing(true);
+      try {
+        const response = await fetch(`/api/organizer/analytics?eventSlug=${encodeURIComponent(eventSlug)}&range=${range}`, { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+        const result = await response.json() as AnalyticsData & { error?: string };
+        if (!response.ok) throw new Error(result.error ?? "Analytics could not be loaded.");
+        if (!controller.signal.aborted) { setData(result); setEventOptions(result.events); setError(""); }
+      } catch (reason) {
+        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Analytics could not be loaded.");
+      } finally {
+        running = false;
+        if (!controller.signal.aborted) { setLoading(false); setRefreshing(false); }
+      }
+    }
+    void load();
+    const timer = setInterval(() => { if (!document.hidden) void load(); }, 60000);
+    return () => { controller.abort(); clearInterval(timer); };
   }, [eventSlug, range, retry]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("event", eventSlug); url.searchParams.set("range", range);
+    window.history.replaceState(window.history.state, "", url);
+  }, [eventSlug, range]);
 
   const overview = data?.overview;
   const funnel = useMemo(() => overview ? [
@@ -121,33 +142,36 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
     </section>
 
     <section className="analytics-controls" aria-label="Analytics filters">
-      <label>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{data?.events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
-      <label>Period<select aria-label="Period" value={range} onChange={(event) => { setLoading(true); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
+      <label>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setData(null); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{eventOptions.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
+      <label>Period<select aria-label="Period" value={range} onChange={(event) => { setLoading(true); setData(null); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
+      <button type="button" disabled={refreshing} onClick={() => setRetry(value => value + 1)}><RefreshCw size={16} />{refreshing ? "Updating…" : "Refresh"}</button>
       <a href={exportUrl}><ArrowDownToLine size={15} /> Export CSV</a>
     </section>
 
-    {loading ? <section className="analytics-loading" aria-label="Loading analytics"><Loader2 className="spin" /><div /><div /><div /></section> : error ? <section className="analytics-error" role="alert"><BarChart3 /><h2>Analytics did not load.</h2><p>{error}</p><button onClick={() => { setLoading(true); setError(""); setRetry((value) => value + 1); }}>Try again</button></section> : data && overview ? <>
+    {loading ? <section className="analytics-loading" aria-label="Loading analytics"><Loader2 className="spin" /><div /><div /><div /></section> : error && !data ? <section className="analytics-error" role="alert"><BarChart3 /><h2>Analytics did not load.</h2><p>{error}</p><button onClick={() => { setLoading(true); setError(""); setRetry((value) => value + 1); }}>Try again</button></section> : data && overview ? <>
+      <div className="analytics-freshness"><span>Updated {new Date(data.generatedAt).toLocaleTimeString("en-GH", {hour:"2-digit",minute:"2-digit",timeZone:"Africa/Accra"})} · Accra time. Refreshes every minute while open.</span><span>Periods include today so far. RSVP page views start with this update.</span>{error ? <p role="alert">Couldn’t refresh. Showing the last loaded figures. {error}</p> : null}</div>
+      {!data.events.length ? <section className="analytics-freshness"><h2>Your first night starts here.</h2><p>Once your event is approved, its guest list and numbers will appear here.</p><Link href="/organizer/submit">Submit your event</Link></section> : null}
       <RsvpReport key={data.scope.eventSlug} data={data.rsvp} eventSlug={data.scope.eventSlug} />
       <section className="analytics-overview" aria-labelledby="analytics-overview-title">
-        <header><div><p>{data.scope.rangeLabel}</p><h2 id="analytics-overview-title">{data.scope.label}</h2></div><span>Paid tickets · free RSVPs excluded</span></header>
+        <header><div><p>{data.scope.rangeLabel}</p><h2 id="analytics-overview-title">{data.scope.label}</h2></div><span>Visits and paid tickets · RSVPs shown above</span></header>
         <div>
-          <article><small>Gross collected</small><b>{money(overview.revenueMinor)}</b><Delta current={overview.revenueMinor} previous={data.comparison?.revenueMinor} /></article>
+          <article><small>Ticket face value</small><b>{money(overview.faceValueMinor)}</b><small>Before refunds · booking fees excluded</small></article>
           <article><small>Paid orders</small><b>{overview.paidOrders}</b><Delta current={overview.paidOrders} previous={data.comparison?.paidOrders} /></article>
-          <article><small>Admissions sold</small><b>{overview.admissions}</b><small>{rate(overview.checkedIn, overview.admissions)}% checked in</small></article>
+          <article><small>Active paid passes</small><b>{overview.admissions}</b><small>{rate(overview.checkedIn, overview.admissions)}% checked in</small></article>
           <article><small>Event views</small><b>{overview.eventViews}</b><Delta current={overview.eventViews} previous={data.comparison?.eventViews} /></article>
-          <article><small>View to payment</small><b>{rate(overview.paymentsConfirmed, overview.eventViews)}%</b><small>{overview.paymentsConfirmed} confirmed payments</small></article>
-          <article><small>Average order</small><b>{money(overview.averageOrderValueMinor)}</b><small>{overview.uniqueBuyers} unique buyers</small></article>
+          <article><small>RSVP page views</small><b>{overview.rsvpViews}</b><small>Direct guest-list visits</small></article>
+          <article><small>Gross collected</small><b>{money(overview.revenueMinor)}</b><Delta current={overview.revenueMinor} previous={data.comparison?.revenueMinor} /></article>
         </div>
       </section>
 
       <section className="analytics-layout">
         <article className="analytics-section analytics-section--wide"><header><div><small>Sales</small><h2>Gross sales over time</h2></div><b>{money(overview.revenueMinor)}</b></header><TrendChart rows={data.salesTrend} /></article>
-        <article className="analytics-section"><header><div><small>Conversion</small><h2>From browsing to booking</h2></div><b>{rate(overview.paymentsConfirmed, overview.eventViews)}%</b></header><BarList rows={funnel as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.value)} label={(item) => String(item.label)} detail={(item) => `${Number(item.value).toLocaleString("en-GH")} tracked`} /><p>Views are counted once per browser session per Night each day.</p></article>
-        <article className="analytics-section"><header><div><small>Audience</small><h2>Your crowd</h2></div><b>{overview.uniqueBuyers}</b></header><dl className="analytics-facts"><div><dt>Repeat buyers</dt><dd>{overview.repeatBuyers}</dd></div><div><dt>Shares started</dt><dd>{overview.shares}</dd></div><div><dt>Payment failures</dt><dd>{overview.paymentFailed}</dd></div><div><dt>Refunded</dt><dd>{money(overview.refundsMinor)}</dd></div></dl></article>
+        <article className="analytics-section"><header><div><small>Booking activity</small><h2>From browsing to booking</h2></div></header><BarList rows={funnel as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.value)} label={(item) => String(item.label)} detail={(item) => `${Number(item.value).toLocaleString("en-GH")} tracked`} /><p>Views count once per tab session, per page type, each day where storage is available. These are activity counts, not a joined visitor funnel; browser privacy settings can leave gaps.</p></article>
+        <article className="analytics-section"><header><div><small>Audience</small><h2>Your crowd</h2></div><b>{overview.uniqueBuyers}</b></header><dl className="analytics-facts"><div><dt>Repeat buyers</dt><dd>{overview.repeatBuyers}</dd></div><div><dt>Shares started</dt><dd>{overview.shares}</dd></div><div><dt>Payment failures</dt><dd>{overview.paymentFailed}</dd></div><div><dt>Refunded</dt><dd>{money(overview.refundsMinor)}</dd></div><div><dt>Collected less refunds</dt><dd>{money(overview.revenueMinor - overview.refundsMinor)}</dd></div><div><dt>Booking fees collected</dt><dd>{money(overview.bookingFeesMinor)}</dd></div><div><dt>Average paid order</dt><dd>{money(overview.averageOrderValueMinor)}</dd></div></dl><p>These figures are not a payout balance. Payment charges, holds and settlements are under Event & sales.</p></article>
         <article className="analytics-section analytics-section--wide"><header><div><small>Inventory</small><h2>Ticket sales</h2></div><b>{overview.admissions} sold</b></header><div className="analytics-table"><div><b>Night / tier</b><b>Orders</b><b>Admissions</b><b>Sold</b><b>Gross</b></div>{data.ticketTiers.map((tier) => <div key={tier.id}><span><b>{tier.name}</b><small>{tier.eventTitle} · {money(tier.priceMinor)}</small></span><span><small className="analytics-cell-label">Orders</small>{tier.orders}</span><span><small className="analytics-cell-label">Admissions</small>{tier.admissions}</span><span><small className="analytics-cell-label">Sold</small>{rate(tier.admissions, tier.capacityAdmissions)}%</span><strong><small className="analytics-cell-label">Gross</small>{money(tier.revenueMinor)}</strong></div>)}</div></article>
-        <article className="analytics-section"><header><div><small>Promoter links</small><h2>Promoter performance</h2></div></header><BarList rows={data.promoters as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.revenueMinor)} label={(item) => String(item.label)} detail={(item) => `${item.orders} orders · ${money(Number(item.revenueMinor))}`} /></article>
+        <article className="analytics-section"><header><div><small>Promoter links</small><h2>Promoter performance</h2></div></header><BarList rows={data.promoters as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.revenueMinor)} label={(item) => `${item.label} · ${item.eventTitle}`} detail={(item) => `${item.orders} orders · ${money(Number(item.revenueMinor))}`} /></article>
         <article className="analytics-section"><header><div><small>Checkout</small><h2>Payment methods</h2></div></header><BarList rows={data.paymentMethods as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.orders)} label={(item) => readable(String(item.channel))} detail={(item) => `${item.orders} orders · ${money(Number(item.revenueMinor))}`} /></article>
-        <article className="analytics-section"><header><div><small>At the door</small><h2>Check-in timing</h2></div><b>{overview.checkedIn}</b></header><BarList rows={data.checkIns as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.admissions)} label={(item) => `${String(item.hour).padStart(2, "0")}:00`} detail={(item) => `${item.admissions} admitted`} /></article>
+        <article className="analytics-section"><header><div><small>At the door</small><h2>Paid check-ins · Accra time</h2></div><b>{overview.checkedIn}</b></header><BarList rows={data.checkIns as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.admissions)} label={(item) => `${String(item.hour).padStart(2, "0")}:00`} detail={(item) => `${item.admissions} admitted`} /></article>
         <article className="analytics-section"><header><div><small>The Room · VIP</small><h2>Concierge usage</h2></div><b>{totalVip}</b></header><BarList rows={data.vipUsage as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.count)} label={(item) => readable(String(item.kind))} detail={(item) => `${readable(String(item.status))} · ${item.count}`} /></article>
       </section>
     </> : null}
