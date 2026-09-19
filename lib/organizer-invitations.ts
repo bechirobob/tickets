@@ -91,8 +91,10 @@ export async function ensureOrganizerAccess(db: D1Database, target: InvitationTa
           AND normalized_email=? AND password_hash=?
         ON CONFLICT(account_id) DO UPDATE SET id=excluded.id,token_hash=excluded.token_hash,account_email=excluded.account_email,
           account_password_hash=excluded.account_password_hash,expires_at=excluded.expires_at,created_at=excluded.created_at,used_at=NULL,claim_id=NULL
-        WHERE ?=1 AND organizer_invitations.created_at<=?`)
-        .bind(id,hash,account.email,account.passwordHash,expiresAt,now,account.id,account.email,account.passwordHash,resend ? 1 : 0,cooldown),
+        WHERE (?=1 AND organizer_invitations.created_at<=?) OR organizer_invitations.expires_at<=?
+          OR organizer_invitations.used_at IS NOT NULL OR organizer_invitations.account_email<>excluded.account_email
+          OR organizer_invitations.account_password_hash<>excluded.account_password_hash`)
+        .bind(id,hash,account.email,account.passwordHash,expiresAt,now,account.id,account.email,account.passwordHash,resend ? 1 : 0,cooldown,now),
       db.prepare(`INSERT INTO delivery_events(id,recovery_grant_id,kind,recipient,status,attempt_count,payload_json,next_attempt_at,created_at,updated_at)
         SELECT ?,id,'organizer_invitation',account_email,'failed',0,?,?,?,? FROM organizer_invitations WHERE id=? AND EXISTS (${eligible})`)
         .bind(deliveryId,JSON.stringify({ ...email, idempotencyKey: deliveryId }),now,now,now,id),

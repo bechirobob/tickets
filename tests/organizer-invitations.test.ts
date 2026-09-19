@@ -59,6 +59,16 @@ describe("organiser approval invitations",()=>{
     expect(await inspectOrganizerInvitation(env.DB,item.token)).not.toBeNull();
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
+  it("a later approval replaces an expired setup link without requiring manual resend",async()=>{
+    const item=await invited();
+    await env.DB.prepare("UPDATE organizer_invitations SET expires_at='2000-01-01' WHERE account_id=?").bind(item.accountId).run();
+    const next=await submission("approved",item.email);
+    await ensureOrganizerAccess(env.DB,{submissionId:next.id},"test");
+    const fresh=await storedInvite(item.email);
+    expect(fresh.inviteId).not.toBe(item.inviteId);
+    expect(await inspectOrganizerInvitation(env.DB,fresh.token)).not.toBeNull();
+    expect(await inspectOrganizerInvitation(env.DB,item.token)).toBeNull();
+  });
   it("claims once under concurrency, revokes old sessions, and preserves unrelated access",async()=>{
     const item=await invited();const other=await invited();
     const oldCookie=adminCookieHeader(await createStaffSession(env.DB,{id:item.accountId}));
