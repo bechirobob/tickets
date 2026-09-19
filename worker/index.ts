@@ -1,4 +1,5 @@
 import { processMarketing } from "../lib/marketing-delivery";
+import { processOrganizerReports } from "../lib/organizer-reports";
 import { processPendingOrganizerAccess } from "../lib/organizer-invitations";
 import { runPreviewCleanup } from "../lib/preview-cleanup";
 import { processEventAnnouncements } from "../lib/event-audience";
@@ -136,12 +137,13 @@ const worker = {
   async queue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env): Promise<void> {
     for (const message of batch.messages) {
       try {
-        if(message.body?.deliveryId === "marketing-sync") await processMarketing(env);
+        if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
+        else if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
         else await deliverQueuedEventAnnouncement(env, message.body?.deliveryId ?? "");
         message.ack();
       } catch (error) {
         console.error(JSON.stringify({
-          message: "queued announcement delivery failed",
+          message: "queued delivery task failed",
           deliveryId: message.body?.deliveryId ?? null,
           error: error instanceof Error ? error.message : String(error),
         }));
@@ -204,6 +206,14 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
     await recordSystemAlert(env, "waitlist-offers", error);
   }
   try {
+    if (new Date(controller.scheduledTime).getUTCHours() < 8) { /* Reports begin at 8am Accra time. */ }
+    else if (env.EMAIL_DELIVERY_QUEUE) await env.EMAIL_DELIVERY_QUEUE.send({ deliveryId:"organizer-reports:tick" });
+    else if (env.ENVIRONMENT !== "production") await processOrganizerReports(env.DB);
+    else throw new Error("Host report queue is not configured.");
+  } catch (error) {
+    await recordSystemAlert(env, "organizer-reports", error);
+  }
+  try {
     await processPendingOrganizerAccess(env.DB);
     await retryFailedDeliveries(env, 20, 'standard');
   } catch (error) {
@@ -256,4 +266,3 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
 }
 
 export default worker satisfies ExportedHandler<Cloudflare.Env, { deliveryId: string }>;
-

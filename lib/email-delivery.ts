@@ -1,7 +1,8 @@
+import { reportDeliveryAllowed } from "./organizer-reports";
 import { emailBrand } from "./email-brand";
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
+type DeliveryKind = "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
   id: string;
@@ -136,6 +137,11 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
     const lease=await env.DB.prepare("UPDATE delivery_events SET status='queued',updated_at=?,next_attempt_at=NULL WHERE id=? AND ((status='failed' AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now')) OR (status='queued' AND julianday(updated_at)<julianday('now','-5 minutes'))) ").bind(new Date().toISOString(),item.id).run();
     if (!lease.meta.changes) continue;
     try {
+      if (item.kind === "organizer_report" && !await reportDeliveryAllowed(env.DB,item.grantId,item.recipient)) {
+        await env.DB.prepare("UPDATE delivery_events SET status='suppressed',payload_json=NULL,next_attempt_at=NULL,failure_reason='Report expired or access/preferences changed.',updated_at=? WHERE id=?")
+          .bind(new Date().toISOString(),item.id).run();
+        continue;
+      }
       if (item.kind === "organizer_invitation") {
         const valid = await env.DB.prepare(`SELECT 1 FROM organizer_invitations i JOIN staff_accounts a ON a.id=i.account_id
           WHERE i.id=? AND i.used_at IS NULL AND i.expires_at>? AND a.status='active' AND a.role='organizer'
@@ -324,4 +330,3 @@ export async function sendSupportUpdateEmail(input: { db: D1Database; caseId: st
   const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">Support wrote back.</h1><p>${escapeHtml(input.body)}</p><p style="margin:28px 0"><a href="${escapeHtml(input.url)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open the conversation</a></p></div>`;
   return sendEmail({ db: input.db, kind: "support_update", recipient: input.recipient, subject, html, text: `${input.body}\n\n${input.url}`, idempotencyKey: `support/${input.caseId}/${await hashToken(input.body)}`, recoveryGrantId: input.caseId });
 }
-

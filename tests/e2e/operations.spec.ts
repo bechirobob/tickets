@@ -80,7 +80,7 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
     await route.continue();
   });
   try {
-    await page.goto('/organizer/workspace?event=rsvp-browser');
+    await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();
     const manager = page.locator('.registration-manager');
     const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
     await expect(announcements).toBeEnabled();
@@ -104,6 +104,7 @@ test('registration tabs accept the first click after scrolling to them', async (
   for (const path of ['/admin/registrations?event=rsvp-browser', '/organizer/workspace?event=rsvp-browser']) {
     for (let attempt = 0; attempt < 2; attempt++) {
       await page.goto(path);
+      if(path.startsWith('/organizer/'))await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();
       const manager = page.locator('.registration-manager');
       await manager.getByRole('button', { name: 'Save registration settings', exact: true }).scrollIntoViewIfNeeded();
       const emails = manager.getByRole('button', { name: 'Guest emails', exact: true });
@@ -243,7 +244,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  test.describe.configure({retries:0});
  test.beforeEach(async({context,baseURL})=>{await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);});
  test('organiser chooses free or paid entry and previews a direct registration link',async({page},info)=>{
-  await page.goto('/organizer/workspace?event=rsvp-browser');
+  await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();
   const manager=page.locator('.registration-manager');await expect(manager).toBeVisible();
   await expect(manager.getByText('Updates automatically')).toBeVisible();
   await manager.getByLabel('Guest capacity',{exact:true}).fill('');
@@ -291,7 +292,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeVisible();
  });
  test('verified signup appears without refreshing the organiser dashboard and joins guest emails',async({page})=>{
-  await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
+  await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();const manager=page.locator('.registration-manager');
   await expect(manager.getByText('Updates automatically')).toBeVisible();
   await expect(manager.getByLabel('Live registrations')).toContainText('1');
   await manager.getByRole('button',{name:/^Guest list/}).click();
@@ -313,7 +314,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  });
  test('announcement preview preserves a failed send and owner sees organiser actions',async({page,context,baseURL},info)=>{
   await page.route('**/api/admin/campaigns?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,configured:true,state:{...data.state,status:'ready'}}});});
-  await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
+  await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();const manager=page.locator('.registration-manager');
   const announcements=manager.getByRole('button',{name:'Announcements',exact:true});await announcements.click();await expect(announcements).toHaveAttribute('aria-pressed','true');
   await manager.getByLabel('Subject',{exact:true}).fill('Doors open at eight');await manager.getByLabel('Announcement',{exact:true}).fill('Please bring your QR pass. See you at the event.');
   await manager.getByRole('button',{name:'Preview announcement'}).click();await expect(manager.locator('.announcement-preview')).toContainText('1 subscribed guest emails');
@@ -337,12 +338,12 @@ test('master account can remove staff and keeps its own account',async({page},in
 });
 
 test('every organizer task and expanded panel remains compact and readable',async({page},info)=>{
- await page.goto('/organizer/workspace?event=rsvp-browser');await expect(page.locator('#organizer-event')).toHaveValue('rsvp-browser');
+ await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();await expect(page.locator('#organizer-event')).toHaveValue('rsvp-browser');
  await page.getByText('Your events & submissions',{exact:true}).click();
  await expectVisibleLettering(page,'.organizer-record-fold');await page.screenshot({path:info.outputPath('organizer-history-expanded.png'),fullPage:true});
  await page.getByText('Your events & submissions',{exact:true}).click();
  const tabs=page.getByRole('navigation',{name:'Event tools'});
- for(const name of ['Event & sales','Room & VIP','Entry team','Requests','RSVP & guests']){
+ for(const name of ['At a glance','Event & sales','Room & VIP','Entry team','Requests','RSVP & guests']){
   await tabs.getByRole('button',{name,exact:true}).click();
   for(const summary of await page.locator('.organizer-dashboard details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
   await expectVisibleLettering(page,'.organizer-dashboard');
@@ -402,4 +403,32 @@ test('RSVP analytics filters, links and exports work without exposing guest cont
  expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('rsvp-analytics-expanded.png'),fullPage:true});
+});
+
+test('host lands on their event with a useful overview and recoverable report preferences',async({page,context,baseURL},info)=>{
+ await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
+ await page.goto('/organizer/workspace');
+ await expect(page.locator('#organizer-event')).toHaveValue('rsvp-browser');
+ const overview=page.getByRole('region',{name:'Your event at a glance'});
+ await expect(overview.getByText('Confirmed RSVP guests',{exact:true})).toBeVisible();
+ await expect(page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'At a glance',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(overview.getByLabel('Guest link')).toHaveValue('https://tickets.becoreops.com/rsvp/rsvp-browser');
+ await overview.getByText('Email reports',{exact:true}).click();
+ const reports=overview.getByRole('switch',{name:'Email me my host reports'});await expect(reports).toBeChecked();
+ await page.route('**/api/organizer/reports',route=>route.request().method()==='PATCH'?route.abort('failed'):route.continue());
+ await reports.click();await expect(overview.getByRole('alert')).toBeVisible();await expect(reports).toBeChecked();
+ await page.unroute('**/api/organizer/reports');await reports.click();await expect(reports).not.toBeChecked();
+ await page.reload();await overview.getByText('Email reports',{exact:true}).click();await expect(reports).not.toBeChecked();
+ await reports.click();await expect(reports).toBeChecked();
+ const axe=await new AxeBuilder({page}).include('.host-start').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ await expectVisibleLettering(page,'.host-start');expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ await page.screenshot({path:info.outputPath('host-first-login.png'),fullPage:true});
+ await overview.getByRole('button',{name:'Review Guest setup',exact:true}).click();await expect(page.locator('.registration-manager')).toBeVisible();
+ await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'At a glance',exact:true}).click();
+ await page.route('**/api/organizer/reports?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,summary:{...data.summary,event:{...data.summary.event,status:'unpublished'}}}});});
+ await overview.getByRole('button',{name:'Refresh event summary'}).click();await expect(overview.getByText('Your public link is waiting',{exact:true})).toBeVisible();await expect(overview.getByLabel('Guest link')).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('host-private-preparation.png'),fullPage:true});
+ await overview.getByRole('link',{name:'View analytics & tracked links'}).click();
+ await expect(page.getByRole('combobox',{name:'Night',exact:true})).toHaveValue('rsvp-browser');
+ await expect(page.getByRole('combobox',{name:'Period',exact:true})).toHaveValue('all');
 });

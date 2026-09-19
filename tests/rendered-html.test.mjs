@@ -36,7 +36,6 @@ test("keeps the production Worker configuration portable and preserves The Room"
     producers: [{ binding: "EMAIL_DELIVERY_QUEUE", queue: "becore-tickets-email-delivery" }],
     consumers: [{
       queue: "becore-tickets-email-delivery",
-      // A marketing message prepares multiple contacts; isolate each Queue invocation.
       max_batch_size: 1,
       max_batch_timeout: 5,
       max_retries: 2,

@@ -155,6 +155,12 @@ describe("named staff access", () => {
     expect(isWorkspacePathAllowed("moderator", "/admin/rooms")).toBe(true);
     expect(isWorkspacePathAllowed("moderator", "/admin/fees")).toBe(false);
     expect(isWorkspacePathAllowed("owner", "/organizer/workspace")).toBe(true);
+    const reportLink = "/organizer/analytics?event=rsvp-browser&range=all";
+    for (const role of ["owner", "organizer"] as const) expect(allowedWorkspaceReturn(role, reportLink)).toBe(reportLink);
+    expect(allowedWorkspaceReturn("gate", reportLink)).toBe("/scan");
+    expect(allowedWorkspaceReturn("organizer", "/admin/accounts?event=rsvp-browser")).toBe("/organizer/workspace");
+    expect(allowedWorkspaceReturn("organizer", "//evil.example/organizer/analytics?event=x")).toBe("/organizer/workspace");
+    expect(allowedWorkspaceReturn("organizer", "/organizer/analytics/../admin?event=x")).toBe("/organizer/workspace");
     for (const role of ["owner", "organizer"] as const) {
       expect(allowedWorkspaceReturn(role, "/organizer/assistant")).toBe("/organizer/assistant");
     }

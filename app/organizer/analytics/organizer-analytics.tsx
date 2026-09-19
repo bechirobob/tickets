@@ -76,10 +76,10 @@ function BarList({ rows, value, label, detail }: { rows: Array<Record<string, un
   </div>)}</div>;
 }
 
-export default function OrganizerAnalytics({ actor, role }: { actor: string; role: StaffRole }) {
+export default function OrganizerAnalytics({ actor, role, initialEvent = "all", initialRange = "30" }: { actor: string; role: StaffRole; initialEvent?: string; initialRange?: string }) {
   const router = useRouter();
-  const [eventSlug, setEventSlug] = useState("all");
-  const [range, setRange] = useState("30");
+  const [eventSlug, setEventSlug] = useState(initialEvent);
+  const [range, setRange] = useState(initialRange);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
