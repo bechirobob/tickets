@@ -94,6 +94,7 @@ it('does not resend after the provider accepts a request but its response is los
  await contact();await sync();await POST(request({}));const original=vi.mocked(fetch).getMockImplementation()!;
  vi.mocked(fetch).mockImplementation(async(url,init)=>{const result=await original(url,init);if(String(url).endsWith('/send'))throw new Error('connection lost');return result;});
  await processMarketing(env);expect(await env.DB.prepare('SELECT status FROM marketing_campaigns').first()).toEqual({status:'review'});
+ await env.DB.prepare('UPDATE curated_event_records SET removed_at=? WHERE slug=?').bind(new Date().toISOString(),slug).run();
  await processMarketing(env);expect(await env.DB.prepare('SELECT status FROM marketing_campaigns').first()).toEqual({status:'sent'});
  expect(calls.filter(c=>c.path.endsWith('/send'))).toHaveLength(1);
 });

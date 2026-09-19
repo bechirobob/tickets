@@ -31,7 +31,7 @@ async function census(env:Cloudflare.Env) {
 }
 async function importContacts(env:Cloudflare.Env) {
  let progressed=false;
- const rows=await env.DB.prepare(`SELECT a.email,MAX(a.guest_name) AS name FROM event_audience_contacts a LEFT JOIN marketing_contacts m ON m.email=a.email JOIN curated_event_records e ON e.slug=a.event_slug WHERE ${marketingConsent} AND e.removed_at IS NULL AND m.provider_id IS NULL GROUP BY a.email ORDER BY MIN(a.confirmed_at) LIMIT 4`).all<{email:string;name:string}>();
+ const rows=await env.DB.prepare(`SELECT a.email,MAX(a.guest_name) AS name FROM event_audience_contacts a LEFT JOIN marketing_contacts m ON m.email=a.email JOIN curated_event_records e ON e.slug=a.event_slug WHERE ${marketingConsent} AND e.removed_at IS NULL AND e.is_test_event=0 AND m.provider_id IS NULL GROUP BY a.email ORDER BY MIN(a.confirmed_at) LIMIT 4`).all<{email:string;name:string}>();
  for(const row of rows.results){
   let contact:ProviderContact|null=null;
   try{contact=await resendRequest<ProviderContact>(env,`/contacts/${encodeURIComponent(row.email)}`);}catch(error){if(!(error instanceof ResendError)||error.status!==404)throw error;}
@@ -58,15 +58,15 @@ async function importContacts(env:Cloudflare.Env) {
  return progressed;
 }
 async function prepareCampaign(env:Cloudflare.Env,c:Campaign) {
- const event=await env.DB.prepare('SELECT removed_at AS removedAt,status FROM curated_event_records WHERE slug=?').bind(c.event_slug).first<{removedAt:string|null;status:string}>();
- if(!event||event.removedAt||event.status!=='published'){
-  await env.DB.prepare("UPDATE marketing_campaigns SET status='cancelled',error='The event is no longer published.' WHERE id=?").bind(c.id).run();return;
- }
  if(c.status==='sending'||c.status==='review'){
   if(!c.broadcast_id)return;
   const remote=await resendRequest<{status:string;sent_at?:string}>(env,`/broadcasts/${c.broadcast_id}`);
   const accepted=['sent','sending','queued','scheduled'].includes(remote.status);
   await env.DB.prepare('UPDATE marketing_campaigns SET status=?,sent_at=?,error=?,metrics_at=? WHERE id=?').bind(accepted?'sent':'review',remote.sent_at??null,accepted?null:'Delivery was not confirmed. An owner must check this draft in Resend before any retry.',now(),c.id).run();return;
+ }
+ const event=await env.DB.prepare('SELECT removed_at AS removedAt,status FROM curated_event_records WHERE slug=?').bind(c.event_slug).first<{removedAt:string|null;status:string}>();
+ if(!event||event.removedAt||event.status!=='published'){
+  await env.DB.prepare("UPDATE marketing_campaigns SET status='cancelled',error='The event is no longer published.' WHERE id=?").bind(c.id).run();return;
  }
  if(!c.segment_id){
   const segments=await resendRequest<Page<{id:string;name:string}>>(env,'/segments?limit=100');
@@ -153,7 +153,7 @@ export async function processMarketing(env:Cloudflare.Env) {
   if(await releaseFinishedSegment(env)){more=true;return;}
   const campaign=await env.DB.prepare("SELECT * FROM marketing_campaigns WHERE (status IN ('queued','preparing','sending') OR (status='review' AND (metrics_at IS NULL OR metrics_at<strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 minutes')))) AND scheduled_at<=? ORDER BY CASE WHEN status IN ('sending','review') THEN 0 ELSE 1 END,scheduled_at LIMIT 1").bind(now()).first<Campaign>();
   if(campaign){try{await prepareCampaign(env,campaign);more=Boolean(await env.DB.prepare("SELECT 1 FROM marketing_campaigns WHERE id=? AND status IN ('queued','preparing','sending')").bind(campaign.id).first());}catch(error){await env.DB.prepare('UPDATE marketing_campaigns SET error=? WHERE id=?').bind(error instanceof ResendError?error.message:'Delivery is waiting for Resend. It will retry.',campaign.id).run();throw error;}return;}
-  const pending=await env.DB.prepare(`SELECT 1 AS n FROM event_audience_contacts a LEFT JOIN marketing_contacts m ON m.email=a.email JOIN curated_event_records e ON e.slug=a.event_slug WHERE ${marketingConsent} AND e.removed_at IS NULL AND m.provider_id IS NULL AND (COALESCE(m.reserved,0)=1 OR (SELECT MAX(contact_count,reserved_count) FROM marketing_state WHERE id='resend')<1000) LIMIT 1`).first();
+  const pending=await env.DB.prepare(`SELECT 1 AS n FROM event_audience_contacts a LEFT JOIN marketing_contacts m ON m.email=a.email JOIN curated_event_records e ON e.slug=a.event_slug WHERE ${marketingConsent} AND e.removed_at IS NULL AND e.is_test_event=0 AND m.provider_id IS NULL AND (COALESCE(m.reserved,0)=1 OR (SELECT MAX(contact_count,reserved_count) FROM marketing_state WHERE id='resend')<1000) LIMIT 1`).first();
   if(pending)more=await importContacts(env);
   else await refreshResults(env);
  }catch(error){
