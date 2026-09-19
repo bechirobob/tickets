@@ -1164,3 +1164,16 @@ export const organizerReports = sqliteTable("organizer_reports", {
   kind:text("kind").notNull(),periodKey:text("period_key").notNull(),recipient:text("recipient").notNull(),
   eventSlugsJson:text("event_slugs_json").notNull(),createdAt:text("created_at").notNull(),expiresAt:text("expires_at").notNull(),
 },table=>[uniqueIndex("organizer_reports_account_kind_period_unique").on(table.accountId,table.kind,table.periodKey),index("organizer_reports_account_created_idx").on(table.accountId,table.createdAt)]);
+
+export const marketingContacts = sqliteTable("marketing_contacts", {
+ email:text("email").primaryKey(),providerId:text("provider_id"),unsubscribed:integer("unsubscribed").notNull().default(0),reserved:integer("reserved").notNull().default(0),updatedAt:text("updated_at").notNull(),
+});
+export const marketingState = sqliteTable("marketing_state", {
+ id:text("id").primaryKey(),status:text("status").notNull().default("checking"),contactCount:integer("contact_count").notNull().default(0),reservedCount:integer("reserved_count").notNull().default(0),checkedAt:text("checked_at"),error:text("error"),leaseToken:text("lease_token"),leaseUntil:text("lease_until"),
+});
+export const marketingCampaigns = sqliteTable("marketing_campaigns", {
+ id:text("id").primaryKey(),eventSlug:text("event_slug").notNull(),subject:text("subject").notNull(),body:text("body").notNull(),template:text("template").notNull(),audience:text("audience").notNull(),scheduledAt:text("scheduled_at").notNull(),status:text("status").notNull().default("queued"),createdBy:text("created_by").notNull(),createdAt:text("created_at").notNull(),recipientCount:integer("recipient_count").notNull(),segmentId:text("segment_id"),broadcastId:text("broadcast_id"),html:text("html").notNull(),textBody:text("text_body").notNull(),error:text("error"),sentAt:text("sent_at"),metricsAt:text("metrics_at"),metricsJson:text("metrics_json").notNull().default("{}"),
+},t=>[index("marketing_campaigns_status_schedule").on(t.status,t.scheduledAt),index("marketing_campaigns_event_created").on(t.eventSlug,t.createdAt)]);
+export const marketingRecipients = sqliteTable("marketing_recipients", {
+ campaignId:text("campaign_id").notNull(),contactId:text("contact_id").notNull(),status:text("status").notNull().default("pending"),
+},t=>[primaryKey({columns:[t.campaignId,t.contactId]})]);

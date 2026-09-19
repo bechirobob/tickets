@@ -1,5 +1,5 @@
 import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit } from '../../../../lib/admin-session';
-const subscriber = "a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'')";
+const subscriber = "a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND NOT EXISTS (SELECT 1 FROM marketing_contacts mc WHERE mc.email=a.email AND mc.unsubscribed=1)";
 async function access(request: Request, slug: string) {
   const { env } = await import('cloudflare:workers'); const session = await readAdminSession(request.headers.get('cookie'), env.DB);
   return { env, session: session && (hasPermission(session,'events.manage') || hasPermission(session,'organizer.workspace')) && await hasEventAssignment(env.DB,session,slug) ? session : null };

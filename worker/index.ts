@@ -1,3 +1,4 @@
+import { processMarketing } from "../lib/marketing-delivery";
 import { processOrganizerReports } from "../lib/organizer-reports";
 import { processPendingOrganizerAccess } from "../lib/organizer-invitations";
 import { runPreviewCleanup } from "../lib/preview-cleanup";
@@ -136,7 +137,8 @@ const worker = {
   async queue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env): Promise<void> {
     for (const message of batch.messages) {
       try {
-        if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
+        if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
+        else if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
         else await deliverQueuedEventAnnouncement(env, message.body?.deliveryId ?? "");
         message.ack();
       } catch (error) {
@@ -185,7 +187,7 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
 
 async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
   if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
-  if(controller.cron === "* * * * *"){try { await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
+  if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
   try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
   try {

@@ -169,7 +169,7 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
 
       if (payload.idempotencyKey.startsWith('event-announcement/')) {
         const [,campaignId,contactId]=payload.idempotencyKey.split('/');
-        const allowed=await env.DB.prepare(`SELECT 1 FROM event_audience_contacts a JOIN curated_event_records e ON e.slug=a.event_slug WHERE a.id=? AND a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND e.removed_at IS NULL`).bind(contactId).first();
+        const allowed=await env.DB.prepare(`SELECT 1 FROM event_audience_contacts a JOIN curated_event_records e ON e.slug=a.event_slug WHERE a.id=? AND a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND NOT EXISTS (SELECT 1 FROM marketing_contacts mc WHERE mc.email=a.email AND mc.unsubscribed=1) AND e.removed_at IS NULL`).bind(contactId).first();
         if(!allowed){await env.DB.batch([
           env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,updated_at=? WHERE id=?").bind(new Date().toISOString(),item.id),
           env.DB.prepare("UPDATE event_announcement_recipients SET status='skipped' WHERE campaign_id=? AND contact_id=?").bind(campaignId,contactId),
