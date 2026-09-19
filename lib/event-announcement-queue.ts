@@ -142,7 +142,7 @@ export async function deliverQueuedEventAnnouncement(env: Cloudflare.Env, delive
     JOIN curated_event_records e ON e.slug=a.event_slug
     WHERE a.id=?
       AND a.consented_at IS NOT NULL
-      AND a.consented_at > COALESCE(a.unsubscribed_at,'')
+      AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND NOT EXISTS (SELECT 1 FROM marketing_contacts mc WHERE mc.email=a.email AND mc.unsubscribed=1)
       AND e.removed_at IS NULL
   `).bind(contactId).first();
 

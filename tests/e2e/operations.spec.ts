@@ -312,12 +312,12 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const csv=await page.request.get('/api/admin/audience?eventSlug=rsvp-browser&export=csv');expect(await csv.text()).toContain('rsvp-browser@example.com');
  });
  test('announcement preview preserves a failed send and owner sees organiser actions',async({page,context,baseURL},info)=>{
-  await page.route('**/api/admin/audience?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,emailConfigured:true}});});
+  await page.route('**/api/admin/campaigns?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,configured:true,state:{...data.state,status:'ready'}}});});
   await page.goto('/organizer/workspace?event=rsvp-browser');const manager=page.locator('.registration-manager');
   const announcements=manager.getByRole('button',{name:'Announcements',exact:true});await announcements.click();await expect(announcements).toHaveAttribute('aria-pressed','true');
   await manager.getByLabel('Subject',{exact:true}).fill('Doors open at eight');await manager.getByLabel('Announcement',{exact:true}).fill('Please bring your QR pass. See you at the event.');
   await manager.getByRole('button',{name:'Preview announcement'}).click();await expect(manager.locator('.announcement-preview')).toContainText('1 subscribed guest emails');
-  await page.route('**/api/admin/audience',route=>route.abort('failed'));await manager.getByRole('button',{name:'Send announcement'}).click();
+  await page.route('**/api/admin/campaigns',route=>route.abort('failed'));await manager.getByRole('button',{name:'Send announcement'}).click();
   await expect(manager.getByRole('button',{name:'Send announcement'})).toBeEnabled();await expect(manager.getByLabel('Subject',{exact:true})).toHaveValue('Doors open at eight');
   const axe=await new AxeBuilder({page}).include('.registration-manager').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('announcement-preview.png'),fullPage:true});

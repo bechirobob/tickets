@@ -27,7 +27,7 @@ export async function processEventAnnouncements(env: Cloudflare.Env, origin: str
   const now = new Date().toISOString(), stale = new Date(Date.now() - 5 * 60000).toISOString();
   const rows = await env.DB.prepare(`SELECT r.campaign_id AS campaignId,r.contact_id AS contactId,c.subject,c.body,c.event_slug AS eventSlug,
       a.email,a.guest_name AS guestName,a.unsubscribe_token AS unsubscribeToken,
-      (a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'')) AS subscribed,
+      (a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND NOT EXISTS (SELECT 1 FROM marketing_contacts mc WHERE mc.email=a.email AND mc.unsubscribed=1)) AS subscribed,
       e.title,e.removed_at AS removedAt
     FROM event_announcement_recipients r JOIN event_announcement_campaigns c ON c.id=r.campaign_id
     JOIN event_audience_contacts a ON a.id=r.contact_id JOIN curated_event_records e ON e.slug=c.event_slug
