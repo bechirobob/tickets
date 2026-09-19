@@ -77,12 +77,13 @@ async function prepareCampaign(env:Cloudflare.Env,c:Campaign) {
   await env.DB.prepare("UPDATE marketing_campaigns SET segment_id=?,status=CASE WHEN status='queued' THEN 'preparing' ELSE status END,error=NULL WHERE id=?").bind(segment.id,c.id).run();
  }
  // Only the immutable, event-scoped snapshot can enter this private campaign segment.
- const rows=await env.DB.prepare(`SELECT r.contact_id AS contactId,a.email,m.provider_id AS providerId,(${marketingConsent}) AS subscribed FROM marketing_recipients r JOIN event_audience_contacts a ON a.id=r.contact_id LEFT JOIN marketing_contacts m ON m.email=a.email WHERE r.campaign_id=? AND r.status='pending' LIMIT 4`).bind(c.id).all<{contactId:string;email:string;providerId:string|null;subscribed:number}>();
+ const rows=await env.DB.prepare(`SELECT r.contact_id AS contactId,a.email,m.provider_id AS providerId,(${marketingConsent}) AS subscribed FROM marketing_recipients r JOIN event_audience_contacts a ON a.id=r.contact_id LEFT JOIN marketing_contacts m ON m.email=a.email WHERE r.campaign_id=? AND r.status='pending' LIMIT 16`).bind(c.id).all<{contactId:string;email:string;providerId:string|null;subscribed:number}>();
  for(const row of rows.results){
   if(row.subscribed&&!row.providerId)continue;
   if(row.subscribed)await resendRequest(env,`/contacts/${encodeURIComponent(row.providerId!)}/segments/${c.segment_id}`,'POST');
   await env.DB.prepare('UPDATE marketing_recipients SET status=? WHERE campaign_id=? AND contact_id=?').bind(row.subscribed?'ready':'skipped',c.id,row.contactId).run();
  }
+ if(rows.results.length>=8)return;
  const pending=await env.DB.prepare("SELECT COUNT(*) AS n FROM marketing_recipients WHERE campaign_id=? AND status='pending'").bind(c.id).first<{n:number}>();
  if(pending?.n)return;
  // Remove locally revoked consents immediately before handing the broadcast off.

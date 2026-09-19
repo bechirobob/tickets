@@ -111,3 +111,23 @@ it('uses coming-soon copy without inventing a confirmed date or accepting unsafe
  const rendered=renderAnnouncement({title:'Next event',slug:'next',venue:'Accra',startsAt:'2026-01-01',scheduleStatus:'coming_soon',scheduleLabel:'October · coming soon',imageUrl:'javascript:alert(1)'},'Update','A simple guest update.','update');
  expect(rendered.html).toContain('October · coming soon');expect(rendered.html).not.toContain('January');expect(rendered.html).not.toContain('javascript:');
 });
+it('selects registration groups without including guests from another event',async()=>{
+ const stamp=new Date().toISOString();
+ for(const status of ['confirmed','waitlisted','interested','requested']){
+  const email=`${status}@example.com`;await contact(email);
+  await env.DB.prepare('INSERT INTO event_registrations(id,event_slug,normalized_email,guest_name,kind,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),slug,email,'Guest',status==='interested'?'interest':'rsvp',status,stamp,stamp).run();
+ }
+ for(const audience of ['confirmed','waitlisted','interested'])expect(await (await POST(request({action:'preview',audience}))).json()).toMatchObject({recipients:1});
+ expect(await (await POST(request({action:'preview',audience:'all'}))).json()).toMatchObject({recipients:4});
+});
+it('prepares a full batch within the free query/subrequest budget and continues through the queue',async()=>{
+ for(let i=0;i<20;i++)await contact(`batch${i}@example.com`);
+ await processMarketing(env);for(let i=0;i<5;i++)await processMarketing(env);
+ expect((await POST(request({recipients:20}))).status).toBe(202);
+ const send=vi.fn().mockResolvedValue(undefined),queuedEnv={...env,EMAIL_DELIVERY_QUEUE:{send}} as unknown as Cloudflare.Env;
+ const prepare=vi.spyOn(env.DB,'prepare');const before=calls.length;await processMarketing(queuedEnv);
+ expect(prepare.mock.calls.length+calls.length-before+1).toBeLessThanOrEqual(50);prepare.mockRestore();
+ expect(send).toHaveBeenCalledWith({deliveryId:'marketing-sync'},{delaySeconds:15});
+ expect(calls.some(c=>c.path.endsWith('/send'))).toBe(false);
+ await processMarketing(env);expect(calls.filter(c=>c.path.endsWith('/send'))).toHaveLength(1);
+},15000);
