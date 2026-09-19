@@ -1,5 +1,6 @@
 export const productMetrics = [
   "event_view",
+  "rsvp_view",
   "checkout_view",
   "checkout_started",
   "payment_attempted",

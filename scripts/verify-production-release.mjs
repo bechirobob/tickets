@@ -10,7 +10,7 @@ for (let attempt = 0; attempt < 12; attempt++) {
   console.log("Waiting for the published revision to reach this edge.");
   await wait(5000);
 }
-for (const path of ["/", "/events", "/my-nights", "/notifications", "/event/the-weekend-braai", "/rsvp/access", "/rsvp/the-weekend-braai", "/announcements/unsubscribe"]) {
+for (const path of ["/", "/events", "/my-nights", "/notifications", "/rsvp/access", "/announcements/unsubscribe"]) {
   const page = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(15000) });
   if (!page.ok) throw new Error(`Production route ${path} returned ${page.status}`);
 }
@@ -44,4 +44,5 @@ if (invalidSetup.status !== 400 || invalidSetup.headers.get("cache-control") !==
 const catalogueResponse = await fetch(`${origin}/api/public/events`, { signal: AbortSignal.timeout(15000) });
 const catalogue = await catalogueResponse.json();
 if (!catalogueResponse.ok || !catalogue.events?.length || catalogue.events.some(event => !['paid', 'rsvp', 'interest'].includes(event.registrationMode))) throw new Error('Production registration catalogue is not ready');
+if (catalogue.events.some(event => event.slug === 'the-weekend-braai')) throw new Error('Removed Weekend Braai event reappeared in the public catalogue');
 console.log(JSON.stringify({ ...version, operationsPrivacy: 'passed', organizerActivation: 'passed', registrationPrivacy: 'passed', registrationCatalogue: 'passed', publicRoutes: "passed", unsignedSeevWebhook: "rejected" }));

@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { enforceAnalyticsReadLimit, GET as readAnalytics } from "../app/api/organizer/analytics/route";
 import { adminCookieHeader, createPasswordRecord, createStaffSession } from "../lib/admin-session";
+import { POST as recordVisit } from "../app/api/analytics/route";
 import { PASSWORD_ITERATIONS } from "../lib/staff-password-policy";
 
 const passwordRecord = {
@@ -75,7 +76,7 @@ describe("organiser analytics", () => {
       env.DB.prepare("INSERT INTO vip_concierge_requests (id, event_slug, attendee_id, ticket_id, kind, detail, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'bottle_service', 'Table bottle', 'confirmed', ?, ?)")
         .bind(`vip-${suffix}`, slug, `attendee-${suffix}`, `ticket-a1-${suffix}`, now, now),
     ]);
-    for (const [metric, count] of [["event_view", 20], ["checkout_view", 12], ["checkout_started", 8], ["payment_attempted", 4], ["payment_confirmed", 2], ["payment_failed", 1], ["share_started", 3]] as const) {
+    for (const [metric, count] of [["rsvp_view", 11], ["event_view", 20], ["checkout_view", 12], ["checkout_started", 8], ["payment_attempted", 4], ["payment_confirmed", 2], ["payment_failed", 1], ["share_started", 3]] as const) {
       await env.DB.prepare("INSERT INTO product_metrics_daily (day, event_slug, metric, count, updated_at) VALUES (?, ?, ?, ?, ?)")
         .bind(now.slice(0, 10), slug, metric, count, now).run();
     }
@@ -96,7 +97,7 @@ describe("organiser analytics", () => {
       promoters: Array<Record<string, unknown>>;
       vipUsage: Array<Record<string, unknown>>;
     };
-    expect(data.overview).toMatchObject({ eventViews: 20, checkoutStarts: 8, paymentAttempts: 4, paymentsConfirmed: 2, paidOrders: 2, revenueMinor: 39000, refundsMinor: 3000, admissions: 3, checkedIn: 2, uniqueBuyers: 1, repeatBuyers: 1 });
+    expect(data.overview).toMatchObject({ rsvpViews: 11, eventViews: 20, checkoutStarts: 8, paymentAttempts: 4, paymentsConfirmed: 2, paidOrders: 2, revenueMinor: 39000, refundsMinor: 3000, admissions: 3, checkedIn: 2, uniqueBuyers: 1, repeatBuyers: 1 });
     expect(data.rsvp.totals.confirmedGuests).toBe(5);
     expect(data.events.map((event) => event.slug)).toEqual([slug]);
     expect(data.ticketTiers).toEqual([expect.objectContaining({ name: "=General Admission", orders: 2, admissions: 3, revenueMinor: 39000 })]);
@@ -129,6 +130,19 @@ describe("organiser analytics", () => {
       .bind(account.id).first<{ outcome: string; targetId: string; detail: string }>();
     expect(exportAudit).toMatchObject({ outcome: "success", targetId: slug, detail: "range=30;events=1" });
 
+    // Identical promoter codes belong to distinct Nights, not one combined promoter.
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES(?,?,'test',?)").bind(account.id,otherSlug,now),
+      env.DB.prepare("UPDATE orders SET promoter_code='NANA' WHERE id=?").bind(`order-private-${suffix}`),
+      env.DB.prepare("INSERT INTO event_promoter_codes(id,event_slug,code,label,status,created_at,created_by) VALUES(?,?,'NANA','Other team','active',?,'test')").bind(`other-promoter-${suffix}`,otherSlug,now),
+    ]);
+    const combined = await (await readAnalytics(new Request('https://tickets.becoreops.com/api/organizer/analytics?range=all', {headers:{cookie:account.cookie}}))).json() as {promoters:Array<{eventSlug:string;code:string;orders:number}>};
+    expect(combined.promoters.filter(row=>row.code==='NANA')).toEqual(expect.arrayContaining([expect.objectContaining({eventSlug:slug,orders:1}),expect.objectContaining({eventSlug:otherSlug,orders:1})]));
+    await env.DB.prepare("UPDATE curated_event_records SET removed_at=? WHERE slug=?").bind(now,otherSlug).run();
+    const active = await (await readAnalytics(new Request('https://tickets.becoreops.com/api/organizer/analytics?range=all', {headers:{cookie:account.cookie}}))).json() as {events:Array<{slug:string}>;overview:{paidOrders:number}};
+    expect(active.events.map(row=>row.slug)).toEqual([slug]);expect(active.overview.paidOrders).toBe(2);
+    expect((await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${otherSlug}`,{headers:{cookie:account.cookie}}))).status).toBe(403);
+
     await env.DB.prepare("DELETE FROM staff_event_assignments WHERE account_id = ? AND event_slug = ?").bind(account.id, slug).run();
     const revoked = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}`, { headers: { cookie: account.cookie } }));
     expect(revoked.status).toBe(403);
@@ -151,4 +165,15 @@ describe("organiser analytics", () => {
     expect(allowed).toBe(false);
     expect(keys).toEqual(["organizer-analytics:organizer-123"]);
   });
+});
+
+it('counts direct RSVP visits only for published, non-removed events and rejects forged payment metrics',async()=>{
+ const slug=`visits-${crypto.randomUUID().slice(0,8)}`;await seedNight(slug,'Visit tracking');
+ const request=(metric:string,eventSlug=slug)=>new Request('https://tickets.becoreops.com/api/analytics',{method:'POST',headers:{origin:'https://tickets.becoreops.com','content-type':'application/json'},body:JSON.stringify({metric,eventSlug})});
+ await recordVisit(request('rsvp_view'));await recordVisit(request('payment_confirmed'));await recordVisit(request('rsvp_view','does-not-exist'));
+ await env.DB.prepare("UPDATE curated_event_records SET removed_at=? WHERE slug=?").bind(new Date().toISOString(),slug).run();
+ await recordVisit(request('rsvp_view'));
+ const rows=await env.DB.prepare('SELECT metric,count FROM product_metrics_daily WHERE event_slug=?').bind(slug).all();
+ expect(rows.results).toEqual([{metric:'rsvp_view',count:1}]);
+ expect(await env.DB.prepare("SELECT count FROM product_metrics_daily WHERE event_slug='does-not-exist'").first()).toBeNull();
 });

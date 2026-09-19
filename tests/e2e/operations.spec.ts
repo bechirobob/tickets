@@ -387,11 +387,28 @@ test('the door desk keeps a large RSVP list compact and retains a failed guest a
 
 
 test('RSVP analytics filters, links and exports work without exposing guest contacts', async ({page}, info) => {
+ await page.clock.install();
  await page.goto('/organizer/analytics');
  await expect(page.getByRole('heading', {name:'Who’s coming through?'})).toBeVisible();
  await page.getByLabel('Night', {exact:true}).selectOption('rsvp-browser');
  await expect(page.locator('.analytics-loading')).toHaveCount(0);
+ await expect(page).toHaveURL(/event=rsvp-browser/);
+ await page.getByLabel('Period',{exact:true}).selectOption('7');
+ await expect(page.locator('.analytics-loading')).toHaveCount(0);
+ await page.reload();
+ await expect(page.getByLabel('Night',{exact:true})).toHaveValue('rsvp-browser');
+ await expect(page.getByLabel('Period',{exact:true})).toHaveValue('7');
+ await expect(page.getByText('Confirmed RSVP guests',{exact:true})).toBeVisible();
+ await page.route('**/api/organizer/analytics?**',route=>route.abort('failed'));
+ await page.getByRole('button',{name:'Refresh',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('Showing the last loaded figures');
+ await expect(page.getByText('Confirmed RSVP guests',{exact:true})).toBeVisible();
+ await page.unroute('**/api/organizer/analytics?**');
+ await page.getByRole('button',{name:'Refresh',exact:true}).click();
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('analytics-summary.png'),fullPage:true});
  const report=page.locator('.rsvp-report');
+ await report.getByText('Guest status & signup sources',{exact:true}).click();
  await report.getByText('Share a link. See what it brings.',{exact:true}).click();
  await report.getByLabel('Where you’ll share it').selectOption('instagram');
  await expect(report.getByLabel('RSVP link',{exact:true})).toHaveValue('https://tickets.becoreops.com/rsvp/rsvp-browser?source=instagram');
@@ -399,10 +416,35 @@ test('RSVP analytics filters, links and exports work without exposing guest cont
  await expect(report.getByRole('button',{name:'Copy link'})).toBeVisible();
  const csv=await page.request.get('/api/organizer/analytics?eventSlug=rsvp-browser&range=all&format=csv');
  expect(csv.ok()).toBeTruthy();expect(await csv.text()).toContain('RSVP link sources');
- const axe=await new AxeBuilder({page}).include('.rsvp-report').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+ const axe=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
  expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('rsvp-analytics-expanded.png'),fullPage:true});
+ const views=page.getByRole('navigation',{name:'Analytics views'});
+ for(const [label,id] of [['Sales','sales'],['Reach','reach'],['Door & Room','door']]) {
+   await views.getByRole('button',{name:label,exact:true}).click();
+   await expect(page.locator(`#analytics-${id}`)).toBeVisible();
+   await expect(report).toBeHidden();
+   const check=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+   expect(check.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+   await page.screenshot({path:info.outputPath(`analytics-${id}.png`),fullPage:true});
+ }
+ await page.reload();
+ await expect(views.getByRole('button',{name:'Door & Room',exact:true})).toHaveAttribute('aria-pressed','true');
+ await views.getByRole('button',{name:'Guest list',exact:true}).click();
+ await report.getByText('Share a link. See what it brings.',{exact:true}).click();
+ await report.getByLabel('Where you’ll share it').selectOption('instagram');
+ await views.getByRole('button',{name:'Sales',exact:true}).click();
+ await views.getByRole('button',{name:'Guest list',exact:true}).click();
+ await expect(report.getByLabel('Where you’ll share it')).toHaveValue('instagram');
+ const automaticRefresh=page.waitForResponse(response=>response.url().includes('/api/organizer/analytics?')&&response.ok());
+ await page.clock.fastForward(60_000);
+ await automaticRefresh;
+ await expect(report.getByLabel('Where you’ll share it')).toHaveValue('instagram');
+ await page.getByRole('link',{name:'Email report settings',exact:true}).click();
+ await expect(page.locator('#organizer-event')).toHaveValue('rsvp-browser');
+ await expect(page.locator('#email-reports')).toHaveAttribute('open','');
 });
 
 test('host lands on their event with a useful overview and recoverable report preferences',async({page,context,baseURL},info)=>{
@@ -425,6 +467,12 @@ test('host lands on their event with a useful overview and recoverable report pr
  await page.screenshot({path:info.outputPath('host-first-login.png'),fullPage:true});
  await overview.getByRole('button',{name:'Review Guest setup',exact:true}).click();await expect(page.locator('.registration-manager')).toBeVisible();
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'At a glance',exact:true}).click();
+ await page.route('**/api/organizer/reports?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,summary:{...data.summary,interest:12,event:{...data.summary.event,mode:'interest',scheduleStatus:'coming_soon',endsAt:'2020-01-01T00:00:00.000Z'}}}});});
+ await overview.getByRole('button',{name:'Refresh event summary'}).click();
+ await expect(overview.getByText('Interest sign-ups',{exact:true})).toBeVisible();
+ await expect(overview.getByLabel('Guest link')).toBeVisible();
+ await expect(overview.getByText('This event has ended',{exact:true})).toHaveCount(0);
+ await page.unroute('**/api/organizer/reports?**');
  await page.route('**/api/organizer/reports?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,summary:{...data.summary,event:{...data.summary.event,status:'unpublished'}}}});});
  await overview.getByRole('button',{name:'Refresh event summary'}).click();await expect(overview.getByText('Your public link is waiting',{exact:true})).toBeVisible();await expect(overview.getByLabel('Guest link')).toHaveCount(0);
  await page.screenshot({path:info.outputPath('host-private-preparation.png'),fullPage:true});

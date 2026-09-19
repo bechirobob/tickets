@@ -29,13 +29,15 @@ export default function RsvpReport({ data, eventSlug }: { data: RsvpAnalytics; e
       <div><dt>Turnout so far</dt><dd>{data.totals.turnoutPercent === null ? '—' : `${data.totals.turnoutPercent}%`}</dd></div>
     </dl>
     {!data.totals.requests ? <p className="analytics-empty">No RSVP requests in this period. Your guest list will show up here as people sign up.</p> : null}
+    <details className="rsvp-report__breakdown"><summary>Guest status & signup sources</summary>
     <div className="rsvp-report__columns">
       <article><h3>The guest-list picture</h3><dl className="analytics-facts">{statuses.map(status => {
         const row = data.statuses.find(item => item.status === status);
         return <div key={status}><dt>{statusLabels[status]}</dt><dd>{row?.requests ?? 0}<small> · {row?.guests ?? 0} guests</small></dd></div>;
       })}</dl><p>Checked-in guests are already included in confirmed totals. Not checked in doesn’t mean a no-show while the event is still ahead or underway.</p></article>
-      <article><h3>Where the crowd found you</h3>{data.sources.length ? <ul className="rsvp-report__sources">{data.sources.map(row => <li key={row.source}><div><b>{row.label}</b><span>{row.requests} requests · {row.guests} guests</span></div><progress max={data.totals.requests || 1} value={row.requests} aria-label={`${row.label}: ${row.requests} of ${data.totals.requests} requests`} /><small>{row.confirmedGuests} confirmed guests · {row.checkedIn} checked in</small></li>)}</ul> : <p>No sources recorded yet.</p>}<p>Sources come from the signup link. Older requests and untagged links stay untracked; forwarded links keep their original label.</p></article>
+      <article><h3>Where the crowd found you</h3>{data.sources.length ? <ul className="rsvp-report__sources">{data.sources.map(row => <li key={`${row.eventSlug}:${row.source}`}><div><b>{row.label}</b>{eventSlug === 'all' && row.eventTitle ? <small>{row.eventTitle}</small> : null}<span>{row.requests} requests · {row.guests} guests</span></div><progress max={data.totals.requests || 1} value={row.requests} aria-label={`${row.label}: ${row.requests} of ${data.totals.requests} requests`} /><small>{row.confirmedGuests} confirmed guests · {row.checkedIn} checked in</small></li>)}</ul> : <p>No sources recorded yet.</p>}<p>Sources come from the signup link. Older requests and untagged links stay untracked; forwarded links keep their original label.</p></article>
     </div>
+    </details>
     <details className="rsvp-report__links"><summary>Share a link. See what it brings.</summary>{eventSlug === 'all' ? <p>Choose a Night above to get its tracked RSVP links.</p> : <div><label>Where you’ll share it<select aria-label="Where you’ll share it" value={selected} onChange={event => { setSource(event.target.value); setNotice(''); }}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>RSVP link<input aria-label="RSVP link" readOnly value={link} onFocus={event => event.target.select()} /></label><button type="button" onClick={() => void copy()}>Copy link</button><p role="status">{notice}</p></div>}</details>
   </section>;
 }

@@ -1015,7 +1015,7 @@ test("organiser analytics has a dedicated compact responsive workspace", async (
   assert.match(client, /From browsing to booking/u);
   assert.match(client, /Ticket sales/u);
   assert.match(client, /Promoter performance/u);
-  assert.match(client, /Check-in timing/u);
+  assert.match(client, /Paid check-ins · Accra time/u);
   assert.match(api, /This Night is not assigned to your organiser account/u);
   assert.match(api, /no-store, private/u);
   assert.match(api, /COUNT\(DISTINCT lower\(customer_email\)\)/u);

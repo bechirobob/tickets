@@ -14,7 +14,7 @@ export async function resolveRsvpSource(db: D1Database, eventSlug: string, sourc
 export type RsvpAnalytics = {
   totals: { requests: number; guests: number; confirmedGuests: number; checkedIn: number; awaitingArrival: number; turnoutPercent: number | null };
   statuses: Array<{ status: string; requests: number; guests: number }>;
-  sources: Array<{ source: string; label: string; requests: number; guests: number; confirmedGuests: number; checkedIn: number }>;
+  sources: Array<{ eventSlug?: string; eventTitle?: string; source: string; label: string; requests: number; guests: number; confirmedGuests: number; checkedIn: number }>;
   promoterLinks: Array<{ eventSlug: string; code: string; label: string }>;
 };
 export const emptyRsvpAnalytics = (): RsvpAnalytics => ({
@@ -28,20 +28,20 @@ export async function readRsvpAnalytics(db: D1Database, slugs: string[], start: 
   // One row per request. A guest-list check-in may later also have QR passes:
   // take the larger recorded count, never add the two representations together.
   const cohort = `WITH cohort AS (
-    SELECT r.status, r.party_size, r.acquisition_source,
+    SELECT r.event_slug AS eventSlug, COALESCE(e.title,r.event_slug) AS eventTitle, r.status, r.party_size, r.acquisition_source,
       CASE WHEN r.status = 'confirmed' THEN MIN(r.party_size, MAX(
         COALESCE((SELECT COUNT(*) FROM tickets t WHERE t.order_id = r.order_id AND t.event_slug = r.event_slug AND t.status = 'checked_in'), 0),
         COALESCE((SELECT g.admission_count FROM guest_entries g WHERE g.id = 'rsvp:' || r.id AND g.event_slug = r.event_slug AND g.status = 'checked_in'), 0)
       )) ELSE 0 END AS arrivals
-    FROM event_registrations r WHERE r.event_slug IN (${marks}) AND r.kind = 'rsvp' AND r.created_at >= ?
+    FROM event_registrations r LEFT JOIN curated_event_records e ON e.slug=r.event_slug WHERE r.event_slug IN (${marks}) AND r.kind = 'rsvp' AND r.created_at >= ?
   )`;
   const [statuses, sources, promoters] = await Promise.all([
     db.prepare(`${cohort} SELECT status, COUNT(*) AS requests, SUM(party_size) AS guests, SUM(arrivals) AS checkedIn FROM cohort GROUP BY status`)
       .bind(...slugs, start).all<{ status: string; requests: number; guests: number; checkedIn: number }>(),
-    db.prepare(`${cohort} SELECT acquisition_source AS source, COUNT(*) AS requests, SUM(party_size) AS guests,
+    db.prepare(`${cohort} SELECT eventSlug, MAX(eventTitle) AS eventTitle, acquisition_source AS source, COUNT(*) AS requests, SUM(party_size) AS guests,
       SUM(CASE WHEN status = 'confirmed' THEN party_size ELSE 0 END) AS confirmedGuests, SUM(arrivals) AS checkedIn
-      FROM cohort GROUP BY acquisition_source ORDER BY requests DESC, acquisition_source`)
-      .bind(...slugs, start).all<{ source: string; requests: number; guests: number; confirmedGuests: number; checkedIn: number }>(),
+      FROM cohort GROUP BY eventSlug, acquisition_source ORDER BY requests DESC, eventSlug, acquisition_source`)
+      .bind(...slugs, start).all<{ eventSlug: string; eventTitle: string; source: string; requests: number; guests: number; confirmedGuests: number; checkedIn: number }>(),
     db.prepare(`SELECT event_slug AS eventSlug, code, label FROM event_promoter_codes WHERE event_slug IN (${marks}) AND status = 'active' ORDER BY label, code`)
       .bind(...slugs).all<{ eventSlug: string; code: string; label: string }>(),
   ]);
