@@ -20,14 +20,22 @@ final class EventLinksUITests: XCTestCase {
 
     func testColdEventLink() {
         app.terminate()
-        app.open(URL(string: "becoretickets://event/the-weekend-braai")!)
-        assertEvent("The Weekend Braai — Birthday Edition", evidence: "iphone-cold-event-link")
+        app.open(URL(string: "becoretickets://event/sun-chasers-labadi")!)
+        assertEvent("On The Guest List", evidence: "iphone-cold-event-link")
     }
 
     func testWarmEventLinksChangeDestination() {
         app.launch()
+        app.open(URL(string: "becoretickets://event/sun-chasers-labadi")!)
+        assertEvent("On The Guest List", evidence: "iphone-warm-event-link")
         app.open(URL(string: "becoretickets://event/the-weekend-braai")!)
-        assertEvent("The Weekend Braai — Birthday Edition", evidence: "iphone-warm-event-link")
+        XCTAssertTrue(app.webViews.buttons["Back to The Drop"].waitForExistence(timeout: 30), "Removed event links must show the unavailable page")
+        XCTAssertFalse(app.webViews.images["Event poster for The Weekend Braai — Birthday Edition"].exists)
+        XCTAssertFalse(app.webViews.images["Event poster for On The Guest List"].exists, "The previous event must not remain on screen")
+        let removed = XCTAttachment(screenshot: app.screenshot())
+        removed.name = "iphone-removed-event-link"
+        removed.lifetime = .keepAlways
+        add(removed)
         app.open(URL(string: "becoretickets://event/sun-chasers-labadi")!)
         assertEvent("On The Guest List", evidence: "iphone-second-event-link")
         XCTAssertFalse(app.webViews.images["Event poster for The Weekend Braai — Birthday Edition"].exists)
