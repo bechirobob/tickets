@@ -232,7 +232,8 @@ export function defaultWorkspace(role: StaffRole): string {
 }
 
 export function allowedWorkspaceReturn(role: StaffRole, requested: string): string {
-  return isWorkspacePathAllowed(role, requested) ? requested : defaultWorkspace(role);
+  const pathname = requested.split(/[?#]/u, 1)[0];
+  return isWorkspacePathAllowed(role, pathname) ? requested : defaultWorkspace(role);
 }
 
 export function adminCookieHeader(value: string): string {

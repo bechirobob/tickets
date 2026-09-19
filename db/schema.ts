@@ -1151,3 +1151,16 @@ export const eventAnnouncementRecipients = sqliteTable("event_announcement_recip
 export const ownerActivityReads = sqliteTable("owner_activity_reads", {
   accountId: text("account_id").primaryKey(), seenAt: text("seen_at").notNull(),
 });
+
+export const organizerReportPreferences = sqliteTable("organizer_report_preferences", {
+  accountId: text("account_id").primaryKey().notNull().references(() => staffAccounts.id, { onDelete:"cascade" }),
+  enabled: integer("enabled").notNull().default(1), updatedAt:text("updated_at").notNull(),
+});
+export const organizerReportRollout = sqliteTable("organizer_report_rollout", {
+  id:integer("id").primaryKey(), startedAt:text("started_at").notNull(),
+});
+export const organizerReports = sqliteTable("organizer_reports", {
+  id:text("id").primaryKey().notNull(), accountId:text("account_id").notNull().references(() => staffAccounts.id, { onDelete:"cascade" }),
+  kind:text("kind").notNull(),periodKey:text("period_key").notNull(),recipient:text("recipient").notNull(),
+  eventSlugsJson:text("event_slugs_json").notNull(),createdAt:text("created_at").notNull(),expiresAt:text("expires_at").notNull(),
+},table=>[uniqueIndex("organizer_reports_account_kind_period_unique").on(table.accountId,table.kind,table.periodKey),index("organizer_reports_account_created_idx").on(table.accountId,table.createdAt)]);
