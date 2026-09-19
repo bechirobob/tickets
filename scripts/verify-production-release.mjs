@@ -30,7 +30,18 @@ for (const path of ["/admin/operations", "/admin/accounts", "/admin/events", "/a
   const response = await fetch(`${origin}${path}`, { redirect: "manual", signal: AbortSignal.timeout(15000) });
   if (![302, 303, 307, 308].includes(response.status) || !response.headers.get("location")?.includes("/admin/login")) throw new Error(`Operations route guard failed: ${path}`);
 }
+for (const path of ["/organizer/activate", "/api/admin/organizer-invitations?accountId=release-verification"]) {
+  const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(15000) });
+  const expected = path.startsWith("/api/") ? 403 : 200;
+  if (response.status !== expected || response.headers.get("cache-control") !== "no-store") throw new Error(`Organiser setup privacy check failed: ${path}`);
+  if (path === "/organizer/activate" && response.headers.get("referrer-policy") !== "no-referrer") throw new Error("Organiser setup referrer policy is missing");
+}
+const invalidSetup = await fetch(`${origin}/api/organizer/activate`, {
+  method: "POST", headers: { "content-type": "application/json", origin },
+  body: JSON.stringify({ action: "inspect", token: "Z".repeat(43) }), signal: AbortSignal.timeout(15000),
+});
+if (invalidSetup.status !== 400 || invalidSetup.headers.get("cache-control") !== "no-store" || !(await invalidSetup.json()).error?.includes("invalid, expired")) throw new Error("Organiser invitation validation is not ready");
 const catalogueResponse = await fetch(`${origin}/api/public/events`, { signal: AbortSignal.timeout(15000) });
 const catalogue = await catalogueResponse.json();
 if (!catalogueResponse.ok || !catalogue.events?.length || catalogue.events.some(event => !['paid', 'rsvp', 'interest'].includes(event.registrationMode))) throw new Error('Production registration catalogue is not ready');
-console.log(JSON.stringify({ ...version, operationsPrivacy: 'passed', registrationPrivacy: 'passed', registrationCatalogue: 'passed', publicRoutes: "passed", unsignedSeevWebhook: "rejected" }));
+console.log(JSON.stringify({ ...version, operationsPrivacy: 'passed', organizerActivation: 'passed', registrationPrivacy: 'passed', registrationCatalogue: 'passed', publicRoutes: "passed", unsignedSeevWebhook: "rejected" }));
