@@ -1,0 +1,32 @@
+name: Hosted capacity readiness
+on:
+  push:
+    branches: [ops/hosted-capacity-readiness]
+    paths: ['scripts/capacity/**', '.github/workflows/hosted-capacity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hosted-capacity-readiness
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Inspect account plans and aggregate production state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/inspect-hosted.mjs
+      - name: Preserve readiness evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-readiness-${{ github.run_id }}
+          path: capacity-results/hosted-readiness.json
+          retention-days: 30
