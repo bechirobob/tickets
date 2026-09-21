@@ -4,6 +4,9 @@ on:
   workflow_run:
     workflows: ["Deploy to Cloudflare"]
     types: [completed]
+  pull_request:
+    branches: [main]
+    paths: ["tests/e2e/**", ".github/workflows/browser-audit.yml"]
   workflow_dispatch:
 
 permissions:
@@ -11,16 +14,20 @@ permissions:
 
 jobs:
   browser-audit:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     # Fresh hosted runners may spend several minutes installing WebKit system
     # dependencies before the production checks can begin. Keep enough headroom
     # for all three browser projects and evidence upload on a slow mirror.
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
@@ -29,12 +36,12 @@ jobs:
       - name: Install real-browser engines
         run: npx playwright install --with-deps chromium webkit
       - name: Audit production in desktop Chrome, mobile Chrome and mobile WebKit
-        run: npm run test:e2e:production
+        run: npm run test:e2e:production -- --project ${{ matrix.browser }} --workers=1 --retries=0
       - name: Preserve browser results and isolated Room renders
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: production-browser-audit-${{ github.run_id }}
+          name: production-browser-audit-${{ github.run_id }}-${{ matrix.browser }}
           path: |
             playwright-report
             test-results

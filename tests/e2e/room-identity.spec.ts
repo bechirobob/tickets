@@ -1,12 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./catalogue";
 
 // The signed-in Room fixture never contacts live attendee APIs or a live socket.
 test.use({ serviceWorkers: "block" });
 
-test("the rendered identity stays legible and Hosts connect to the guest journey", async ({ page }, testInfo) => {
+test("the rendered identity stays legible and Hosts connect to the guest journey", async ({ page, eventSlug }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const path of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/the-weekend-braai", "/help", "/terms", "/admin/login", "/admin/recover"]) {
+  for (const path of ["/", "/events", "/hosts", "/organizer/submit", `/checkout/${eventSlug}`, "/help", "/terms", "/admin/login", "/admin/recover"]) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
     const logo = page.locator(".brand-logo").first();
     await expect(logo).toBeVisible();
@@ -27,7 +27,7 @@ test("the rendered identity stays legible and Hosts connect to the guest journey
   await expect(bridge.getByRole("link", { name: "List your event" })).toHaveAttribute("href", "/organizer/submit");
 });
 
-test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page }, testInfo) => {
+test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page, eventSlug }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const preview = page.locator(".room-product-phone").first();
@@ -47,7 +47,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   expect(phoneFit.bottom).toBeGreaterThanOrEqual(0);
   expect(phoneFit.bottom).toBeLessThan(10);
   await preview.screenshot({ path: testInfo.outputPath("homepage-room-phone.png") });
-  const room = { eventSlug: "the-weekend-braai", eventTitle: "After Dark: Osu", readOnlyAt: new Date(Date.now() + 86_400_000).toISOString(), readOnly: false };
+  const room = { eventSlug: `${eventSlug}`, eventTitle: "After Dark: Osu", readOnlyAt: new Date(Date.now() + 86_400_000).toISOString(), readOnly: false };
   const base = { sequence: 1, roomBadge: null, kind: "message", parentId: null, pinned: false, deletedAt: null, reactions: [], createdAt: new Date().toISOString() };
   const messages = [
     { ...base, id: "host-update", attendeeId: "fixture-host", displayName: "The Host", role: "organizer", kind: "announcement", pinned: true, content: "Gate 2 tonight. Have your ticket ready and we’ll see you inside." },
@@ -75,7 +75,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
       }
     });
   });
-  await page.goto("/room/the-weekend-braai");
+  await page.goto(`/room/${eventSlug}`);
   const setting = page.locator(".room-page");
   await expect(setting).toBeVisible();
   await expect(page.getByRole("button", { name: "Share a Flash", exact: true })).toBeVisible();
