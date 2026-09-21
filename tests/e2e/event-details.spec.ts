@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./catalogue";
 import { expectVisibleLettering } from "./text-visibility";
 test.use({ serviceWorkers: "block" });
+
+test.describe("fixed launch fixtures", () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(Boolean(process.env.E2E_BASE_URL), "Exact launch stories are covered by isolated candidate fixtures");
+    await page.clock.setFixedTime(new Date("2026-09-19T12:00:00Z"));
+  });
 
 test("poster, event facts and pending sales fit both launch events", async ({ page }, testInfo) => {
   const posterSizes: Array<{ width: number; height: number }> = [];
@@ -170,4 +176,6 @@ test("event story separates the hosts, guests and callable enquiry line",async({
  const contact=page.getByRole('link',{name:'Call event enquiries +233 53 316 3613',exact:true});
  await expect(contact).toHaveAttribute('href','tel:+233533163613');
  await expect(page.locator('.event-story-intro')).not.toContainText('+233');
+});
+
 });

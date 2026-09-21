@@ -104,3 +104,50 @@ on rollback. Do not restore production D1 to undo this code change.
 
 - [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/): bound parameters, LIKE pattern length, concurrency and Time Travel plan boundaries.
 - [Resend quotas](https://resend.com/docs/knowledge-base/account-quotas-and-limits): daily/monthly email limits; actual account allowance remains unverified here.
+
+
+## Browser and capacity follow-up — 21 September 2026
+
+Baseline: production/main `314e3a9949d4ffa1eea7bc34ab8a4a252c02702a`
+(automation PR #165). Branch `fix/browser-catalogue-readiness`.
+The owner authorised continuing launch verification; TestFlight distribution is
+pending paid Apple Developer membership and is excluded from this release.
+
+The prior production audit (35459678125) ended with 71 failed, 213 passed and 115
+skipped. Most failures used the removed Weekend Braai route, expected two published
+events or tried to rotate a one-event hero. Member/Room API mocks did not override
+the server-rendered page's event lookup, so those scenarios never opened.
+
+- Resolve the published event through the public catalogue before private API
+  mocks; preserve mocked writes/WebSockets and service-worker blocking.
+- Add catalogue-based public details, flyer/layout and removed-route verification.
+  Keep exact old story, countdown and two-card assertions in isolated fixtures.
+- Check single-event stability as well as multi-event motion. Keep deterministic
+  local clock coverage for the two launch fixtures; wait for interactive controls
+  before focusing or scrolling markup that is still hydrating.
+- Run the production browser matrix on the PR, with retries disabled, in addition
+  to its existing post-deployment trigger. Each browser retains its own evidence.
+
+Local dependency audit: zero vulnerabilities. Initial affected desktop run:
+69 passed, 2 failed (test navigation used a full document reload, and the clocked
+fixture's Room scroll raced hydration). Corrected both setups; focused rerun and
+exact-head CI results belong in the release PR. No product behaviour is changed
+or production event restored by these test changes.
+
+Fresh baseline isolated capacity route test passed: 500 checkout attempts admitted
+exactly 400 guests; 800 callbacks did not duplicate tickets; 400 accounts remained
+isolated; 800 scans admitted each ticket once. Room: 400 connections, 120 messages,
+48,000/48,000 deliveries, p95 delivery 53 ms, and successful revocation/reconnect.
+My Nights p95 at 400 in flight: 328 ms. The Room still produced 47,880 notification
+rows; free D1 quota suitability for a busy event is NOT established.
+
+Compiled baseline HTTP run: 400 concurrent requests, zero errors, p95 1,063 ms.
+The 60-second 40/sec phase FAILED: 5 errors, p95 6,400 ms; generator lateness p95
+63 ms. It overlapped other local verification work. Worker log has no recorded
+application exception; do not assume contention is the cause without a sequential
+rerun. Preserve this failed result alongside the rerun in PR evidence.
+
+Next: finish focused checks and reproduce the startup-focus timing; run the HTTP
+harness without competing local jobs; inspect exact-head candidate and production
+browser results; release only once required gates pass. Hosting/provider quotas,
+physical-device acceptance and commercial payout/refund rules remain separate.

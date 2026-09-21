@@ -1,14 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./catalogue";
 
 test.use({ serviceWorkers: "block" });
 
-async function roomFixture(page: Page, options: { vipFailure?: boolean; imageFailure?: boolean } = {}) {
+async function roomFixture(page: Page, eventSlug: string, options: { vipFailure?: boolean; imageFailure?: boolean } = {}) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const photo = await readFile(new URL("../../public/atmospheres/behind-the-night.webp", import.meta.url));
   const now = new Date().toISOString(); const future = new Date(Date.now() + 86_400_000).toISOString();
-  const room = { eventSlug: "the-weekend-braai", eventTitle: "After Dark: Osu", readOnly: false, readOnlyAt: future };
+  const room = { eventSlug: eventSlug, eventTitle: "After Dark: Osu", readOnly: false, readOnlyAt: future };
   const base = { sequence: 1, roomBadge: null, kind: "message", parentId: null, pinned: false, deletedAt: null, reactions: [], createdAt: now };
   const messages = [
     { ...base, id: "pin", attendeeId: "host", displayName: "The Host", role: "organizer", kind: "announcement", pinned: true, content: "Gate 2 tonight. The pin is right; the queue on the other side isn’t." },
@@ -66,7 +67,7 @@ async function roomFixture(page: Page, options: { vipFailure?: boolean; imageFai
     return route.fulfill({ status: 401, json: { error: "Isolated fixture: no real attendee API access" } });
   });
   await page.routeWebSocket(/\/api\/room\/socket/u, (socket) => socket.send(JSON.stringify({ type: "snapshot", messages, room, online: 4 })));
-  await page.goto("/room/the-weekend-braai", { waitUntil: "domcontentloaded" });
+  await page.goto(`/room/${eventSlug}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("textbox", { name: "Message The Room" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Flashes; 2 unopened" })).toBeVisible();
   return calls;
@@ -78,8 +79,8 @@ async function accessible(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 }
 
-test("concierge belongs to the Room and preserves a failed request through recovery", async ({ page }, info) => {
-  const calls = await roomFixture(page, { vipFailure: true });
+test("concierge belongs to the Room and preserves a failed request through recovery", async ({ page, eventSlug }, info) => {
+  const calls = await roomFixture(page, eventSlug, { vipFailure: true });
   const pin = page.locator(".room-pinned");
   expect((await pin.boundingBox())!.height).toBeLessThanOrEqual(44);
   await expect(page.locator(".room-stream")).not.toContainText("Gate 2 tonight");
@@ -117,8 +118,8 @@ test("concierge belongs to the Room and preserves a failed request through recov
   await expect(concierge).toBeFocused();
 });
 
-test("Flashes stay minimal until opened, retry the same session, and stay opened after refresh", async ({ page }, info) => {
-  const calls = await roomFixture(page, { imageFailure: true });
+test("Flashes stay minimal until opened, retry the same session, and stay opened after refresh", async ({ page, eventSlug }, info) => {
+  const calls = await roomFixture(page, eventSlug, { imageFailure: true });
   const marker = page.getByRole("button", { name: "Open Flash from Ama", exact: true });
   expect((await marker.boundingBox())!.height).toBeLessThanOrEqual(48);
   await expect(marker.locator("img")).toHaveCount(0);
@@ -145,8 +146,8 @@ test("Flashes stay minimal until opened, retry the same session, and stay opened
   expect(calls.images).toBe(2);
 });
 
-test("the Flash inbox supports expiry, private reports and owner removal without photo tiles", async ({ page }, info) => {
-  const calls = await roomFixture(page);
+test("the Flash inbox supports expiry, private reports and owner removal without photo tiles", async ({ page, eventSlug }, info) => {
+  const calls = await roomFixture(page, eventSlug);
   await page.getByRole("button", { name: "Open Flashes; 2 unopened" }).click();
   const inbox = page.getByRole("dialog", { name: "Room Flashes", exact: true });
   await expect(inbox.locator("img")).toHaveCount(0);
@@ -177,7 +178,7 @@ test("the Flash inbox supports expiry, private reports and owner removal without
   await expect(inbox).toBeVisible();
 });
 
-test("the camera closes safely when permission resolves after dismissal", async ({ page }) => {
+test("the camera closes safely when permission resolves after dismissal", async ({ page, eventSlug }) => {
   await page.addInitScript(() => {
     const state = { stopped: 0, requested: 0, resolve: null as null | ((stream: MediaStream) => void) };
     Object.defineProperty(window, "__roomCamera", { value: state });
@@ -186,7 +187,7 @@ test("the camera closes safely when permission resolves after dismissal", async 
     const mediaDevices = { getUserMedia: () => { state.requested++; return new Promise<MediaStream>((resolve) => { state.resolve = resolve; }); } };
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, get: () => mediaDevices });
   });
-  await roomFixture(page);
+  await roomFixture(page, eventSlug);
   const camera = page.getByRole("button", { name: "Share a Flash", exact: true });
   await camera.click();
   await expect(page.getByRole("dialog", { name: "Flash camera" })).toBeVisible();
@@ -201,8 +202,8 @@ test("the camera closes safely when permission resolves after dismissal", async 
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("message actions use a glass tray and preserve keyboard focus", async ({ page }, info) => {
-  await roomFixture(page);
+test("message actions use a glass tray and preserve keyboard focus", async ({ page, eventSlug }, info) => {
+  await roomFixture(page, eventSlug);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   const trigger = page.getByRole("button", { name: "Actions for Kofi's message" });
   await trigger.click();

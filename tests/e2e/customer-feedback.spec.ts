@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./catalogue";
 
 // A controlling service worker can bypass Playwright routes in WebKit.
 // These request-failure tests must always use their mocks, never a live write.
@@ -35,17 +35,17 @@ test("a failed recovery preserves the email and allows a successful retry", asyn
   expect(attempts).toBe(2);
 });
 
-test("sharing has a usable manual fallback when browser capabilities fail", async ({ page }) => {
+test("sharing has a usable manual fallback when browser capabilities fail", async ({ page, eventSlug }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "share", { configurable: true, value: async () => { throw new DOMException("Unavailable", "NotAllowedError"); } });
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new DOMException("Unavailable", "NotAllowedError"); } } });
   });
-  await page.goto("/event/the-weekend-braai");
+  await page.goto(`/event/${eventSlug}`);
   const share = page.getByRole("button", { name: "Share", exact: true });
   await share.click();
   await expect(page.getByRole("status")).toContainText("Select the link below");
   const link = page.getByLabel("Event link", { exact: true });
-  await expect(link).toHaveValue(/\/event\/the-weekend-braai$/u);
+  await expect(link).toHaveValue(new RegExp(`/event/${eventSlug}$`));
   await link.focus();
   const selection = await link.evaluate((element: HTMLInputElement) => ({ start: element.selectionStart, end: element.selectionEnd, length: element.value.length }));
   expect(selection).toEqual({ start: 0, end: selection.length, length: selection.length });
@@ -56,12 +56,12 @@ test("sharing has a usable manual fallback when browser capabilities fail", asyn
   await expect(share).toBeFocused();
 });
 
-test("a cancelled native share stays quiet and clipboard success is accurately labelled", async ({ page }) => {
+test("a cancelled native share stays quiet and clipboard success is accurately labelled", async ({ page, eventSlug }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "share", { configurable: true, value: async () => { throw new DOMException("Cancelled", "AbortError"); } });
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => undefined } });
   });
-  await page.goto("/event/the-weekend-braai");
+  await page.goto(`/event/${eventSlug}`);
   const share = page.getByRole("button", { name: "Share", exact: true });
   await share.click();
   await expect(share).toHaveAttribute("aria-busy", "false");

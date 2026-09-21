@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./catalogue";
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -18,8 +18,8 @@ const publicPages = [
   "/notifications",
   "/tickets",
   "/account/privacy",
-  "/event/the-weekend-braai",
-  "/checkout/the-weekend-braai",
+  "/event/$published",
+  "/checkout/$published",
   "/admin/login",
 ];
 
@@ -38,32 +38,38 @@ test("public navigation is usable without horizontal overflow", async ({ page })
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test("featured nights keep the hero, Drop and Room synchronized", async ({ page }) => {
+test("featured nights keep the hero, Drop and Room synchronized", async ({ page, catalogue }) => {
+  const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
+  if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date(now));
+  const scenes = catalogue.screens!.filter(({ event }) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
+  const multiple = scenes.length > 1;
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
+  await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
   const experience = page.locator(".active-night-experience");
   const hero = page.getByRole("region", { name: "Featured nights" });
   const firstSlug = await experience.getAttribute("data-active-night");
 
   await expect(hero.locator(".active-night-controls")).toHaveCount(0);
-  await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting", { timeout: 6_500 });
-
-  // Freeze the scene before comparing separate elements; another 4.5-second
-  // transition must not race these reads on a slower browser runner.
   const pause = hero.getByRole("button", { name: "Pause featured nights", exact: true });
-  await expect(pause).toHaveCSS("clip-path", "inset(50%)");
+  if (multiple) {
+    await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting", { timeout: 6_500 });
+    await expect(pause).toHaveCSS("clip-path", "inset(50%)");
+    await pause.focus();
+    await expect(pause).toHaveCSS("clip-path", "none");
+    await pause.click();
+    await expect(hero.getByRole("button", { name: "Resume featured nights", exact: true })).toHaveAttribute("aria-pressed", "true");
+  } else {
+    await expect(pause).toHaveCount(0);
+    await expect(experience).toHaveAttribute("data-active-night", scenes[0]?.event.slug ?? "waiting");
+  }
   await expect(hero).not.toContainText(/Motion on|Motion off/);
-  await pause.focus();
-  await expect(pause).toHaveCSS("clip-path", "none");
-  await pause.click();
-  await expect(hero.getByRole("button", { name: "Resume featured nights", exact: true })).toHaveAttribute("aria-pressed", "true");
   // Animated images may extend beyond the frame, but focusing the motion
   // control must never scroll the hero's own content away from its shade.
   expect(await hero.evaluate((element) => element.scrollTop)).toBe(0);
 
   const activeSlug = await experience.getAttribute("data-active-night");
   expect(activeSlug).toBeTruthy();
-  const catalogue = await (await page.request.get('/api/public/events')).json() as { events: { slug: string; registrationMode?: string; scheduleStatus: string }[] };
   const activeEvent = catalogue.events.find(event => event.slug === activeSlug);
   expect(activeEvent).toBeTruthy();
   await expect(page.locator('.drop-card[data-featured="true"]')).toHaveAttribute("data-event-slug", activeSlug!);
@@ -98,9 +104,14 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page 
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test("featured motion continues in the Room and resumes after returning to the hero", async ({ page }) => {
+test("featured motion continues in the Room and resumes after returning to the hero", async ({ page, catalogue }) => {
+  const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
+  if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date(now));
+  const scenes = catalogue.screens!.filter(({ event }) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
+  const multiple = scenes.length > 1;
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
+  await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
   const experience = page.locator(".active-night-experience");
   const room = page.locator("#the-room");
   const track = room.locator(".room-product-scene__phones");
@@ -109,16 +120,19 @@ test("featured motion continues in the Room and resumes after returning to the h
   await track.evaluate((element) => element.scrollTo({ left: element.scrollWidth, behavior: "instant" }));
   const offset = await track.evaluate((element) => element.scrollLeft);
   const roomSlug = await experience.getAttribute("data-active-night");
-  await expect(experience).not.toHaveAttribute("data-active-night", roomSlug ?? "waiting", { timeout: 6_500 });
+  if (multiple) await expect(experience).not.toHaveAttribute("data-active-night", roomSlug ?? "waiting", { timeout: 6_500 });
+  else { await page.waitForTimeout(5_000); await expect(experience).toHaveAttribute("data-active-night", roomSlug!); }
   expect(Math.abs(await track.evaluate((element) => element.scrollLeft) - offset)).toBeLessThanOrEqual(2);
 
   const hero = page.getByRole("region", { name: "Featured nights" });
   await hero.scrollIntoViewIfNeeded();
   await hero.hover();
   const heroSlug = await experience.getAttribute("data-active-night");
-  await expect(experience).not.toHaveAttribute("data-active-night", heroSlug ?? "waiting", { timeout: 6_500 });
+  if (multiple) await expect(experience).not.toHaveAttribute("data-active-night", heroSlug ?? "waiting", { timeout: 6_500 });
+  else await expect(experience).toHaveAttribute("data-active-night", heroSlug!);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(hero.getByRole("button", { name: "Pause featured nights", exact: true })).toBeDisabled();
+  if (multiple) await expect(hero.getByRole("button", { name: "Pause featured nights", exact: true })).toBeDisabled();
+  else await expect(hero.locator(".active-night-autoplay-toggle")).toHaveCount(0);
   // Host notices must remain inside the phone's visible conversation area.
   const hostNotices = await room.locator(".scene-host").evaluateAll((notices) => notices.map((notice) => {
     const noticeBounds = notice.getBoundingClientRect();
@@ -150,24 +164,26 @@ test("My Nights exposes secure recovery to a signed-out customer", async ({ page
   await expect(page.getByRole("button", { name: "Bring back my Nights" })).toHaveAttribute("type", "submit");
 });
 
-test("launch event sharing metadata stays complete", async ({ page }) => {
-  await page.goto("/event/the-weekend-braai");
-  await expect(page.getByRole("heading", { name: "The Weekend Braai — Birthday Edition" })).toBeVisible();
-  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /The Weekend Braai — Birthday Edition/u);
+test("published event sharing metadata stays complete", async ({ page, catalogue, eventSlug }) => {
+  await page.goto(`/event/${eventSlug}`);
+  await expect(page.getByRole("heading", { name: catalogue.events[0].title, exact: true })).toBeVisible();
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", expect.stringContaining(catalogue.events[0].title));
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /^https:\/\//u);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /index, follow/u);
 });
 
-test("checkout stays closed until launch inventory is confirmed", async ({ page }) => {
-  for (const slug of ["the-weekend-braai", "sun-chasers-labadi"]) {
-    await page.goto(`/checkout/${slug}`);
-    await expect(page).toHaveURL(new RegExp(`/event/${slug}$`));
-    await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
-    const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string}[]};
-    const mode=catalogue.events.find(event=>event.slug===slug)?.registrationMode;
-    if (mode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
-    else if (mode === 'rsvp') await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP)$/})).toBeVisible();
-    else await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
+test("checkout follows published availability", async ({ page, catalogue }) => {
+  for (const event of catalogue.events) {
+    await page.goto(`/checkout/${event.slug}`);
+    if (event.ticketsAvailable) {
+      await expect(page).toHaveURL(new RegExp(`/checkout/${event.slug}$`));
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    } else {
+      await expect(page).toHaveURL(new RegExp(`/event/${event.slug}$`));
+      await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
+      if (event.registrationOpen && event.registrationMode === "interest") await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
+      else if (event.registrationOpen && event.registrationMode === "rsvp") await expect(page.getByRole("button", { name: /^(Request an RSVP|RSVP)$/ })).toBeVisible();
+    }
   }
 });
 
@@ -184,8 +200,8 @@ test("the install manifest has complete app identity and adaptive icons", async 
 });
 
 for (const path of publicPages) {
-  test(`${path} has no automatically detectable serious accessibility violations`, async ({ page },info) => {
-    await page.goto(path);
+  test(`${path} has no automatically detectable serious accessibility violations`, async ({ page, eventSlug },info) => {
+    await page.goto(path.replace("$published", eventSlug));
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     for(const summary of await page.locator('details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
@@ -195,8 +211,8 @@ for (const path of publicPages) {
     expect(serious, serious.map((violation) => `${violation.id}: ${violation.help}`).join("\n")).toEqual([]);
   });
 
-  test(`${path} follows the flat, readable public design contract`, async ({ page }) => {
-    await page.goto(path);
+  test(`${path} follows the flat, readable public design contract`, async ({ page, eventSlug }) => {
+    await page.goto(path.replace("$published", eventSlug));
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     for(const summary of await page.locator('details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
@@ -259,10 +275,9 @@ test("customer controls use neutral keyboard focus without halos", async ({ page
   for (const path of ["/", "/my-nights", "/notifications"]) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
     if (path === "/") {
-      const playback = page.locator(".active-night-autoplay-toggle");
-      // Reduced motion is applied after hydration; don't focus a server node
-      // that React is still taking over on a slower runner.
-      if (await playback.count()) await expect(playback).toBeDisabled();
+      // The single-event hero has no playback control. Use the shared
+      // interactive readiness signal rather than focusing server markup.
+      await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
     }
     const controls = path === "/" ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
     await page.keyboard.press("Tab");
