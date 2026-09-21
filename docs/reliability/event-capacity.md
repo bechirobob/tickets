@@ -104,3 +104,47 @@ Cloudflare production capacity or promise reliable operation at 1,600 requests.
 
 Rollback: the prior production source is `a5440f83376df2cc647619b72d814974dc2c5eec`.
 These changes introduce no schema migration or destructive data operation.
+
+## Hosted launch rehearsal — 21 September 2026
+
+Production remains `edbaa5550785873fdbe2f068c62da401776445ce`, Worker version
+`6caccf1f-4a7f-4111-ab5d-594fe680fb90`. PR #168 completed its release and browser
+checks; mobile Chrome required one job rerun after a browser process crash.
+
+Read-only inspection run `35666957074`, source `07ccb2ff67090b1ed8666f2c75f458cc80533054`:
+
+- Cloudflare account and Worker report usage model `standard`. The subscriptions
+  response contains two **zone** Free plans; this does not conclusively identify
+  the Workers billing plan. Do not confuse a domain plan with Workers billing.
+- Account-wide D1 analytics at 23:18 UTC: 119,384 rows read and 4,682 rows written
+  that UTC day. These are a snapshot, not reserved quota or a capacity promise.
+- On The Guest List (`sun-chasers-labadi`) is published, undated RSVP, capacity
+  **50**, Room access on, **approval_required=0**. The owner's edited announcement
+  draft says the host confirms places. Current automatic approval and that copy
+  differ; do not silently change a host's existing event settings or imply that
+  the test target of 400 has changed its capacity.
+- Marketing reports ready with six contacts. Transactional credentials exist,
+  but the Resend billing tier/remaining allowance is unverified. In-app delivery
+  records are not provider quota evidence. No mail is sent by this inspection.
+
+`Hosted capacity readiness` uses a new Worker/database named for its GitHub run.
+It requires low account-wide usage before provisioning, a random access key, a
+20-minute access expiry, and allows only the version, My Nights and Room socket
+read endpoints. It has no provider secrets, queues, cron jobs or production
+bindings. Artifacts contain aggregate metrics only; fixture tokens stay on the
+runner. Cleanup verifies resource ownership before removing the test resources.
+
+The hosted workload is bounded: 50/100/200/400-read bursts, 40 reads/sec for one
+minute, 400 Room connections and one message with all 400 deliveries and 399
+stored recipient notifications, then a recovery read. This is **not** an
+event-length soak or live payment/email delivery test. The one-minute 120-message
+Room flood is intentionally excluded: its 47,880 notification rows plus indexes
+can exceed the free account's 100,000 daily write allowance.
+
+The isolated host-approval test now follows the original guest session through
+approval, one confirmation notice across repeated scheduler runs, My Nights,
+one QR pass, successful gate entry and duplicate rejection. Focused registration
+and Seev tests: **41 passed locally**; provider traffic remains mocked.
+
+Next: run and inspect the bounded hosted rehearsal; preserve measured failures
+alongside any corrected rerun, confirm cleanup, and record final CI evidence here.
