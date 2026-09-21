@@ -175,3 +175,18 @@ feeds. The hosted runner now preserves latency failures while collecting the
 remaining bounded phases; correctness errors still stop immediately. Budgets
 are unchanged. Public RSVP/host door-list focused suite: 19 additional tests
 passed; the verified-account/email path remains explicitly separate.
+
+Local isolated capacity on the optimized application passed: 500 checkouts for
+400 places, 800 callback replays, 400 private wallets, 800 scans, 48,000 Room
+deliveries, revocation and reconnect recovery. My Nights p95 at 400 was 224 ms;
+local timings are not hosted timings. Affected lifecycle/member/registration
+suite passed 24 tests, including two new authorization/empty-feed regressions.
+
+Hosted run `35668104085` on `9abca034bbba9982979be62cb0389cb7b9dfbce5` stopped
+before provisioning at the conservative usage cutoff: account totals had reached
+24,103 writes after two setups (approximately 19,400 additional writes). Replace
+the arbitrary 20,000-current-writes cutoff with an explicit allocation: 20,000
+writes for one bounded rehearsal, 30,000 preserved for production, within the
+100,000 free daily ceiling. Require one million reads for the test and two million
+reserved for production within the five-million daily read ceiling. Account
+usage must be current and numeric; unknown billing plans never imply no limits.

@@ -47,7 +47,12 @@ if (mode === 'setup') {
   if (readiness.accountD1Today.date !== new Date().toISOString().slice(0,10) || !Number.isFinite(Date.parse(readiness.checkedAt)) || Math.abs(Date.now() - Date.parse(readiness.checkedAt)) > 10 * 60000) throw new Error('Fresh usage evidence from this UTC day is required.');
   if (aggregates.some(row => !Number.isFinite(row.sum?.rowsRead) || !Number.isFinite(row.sum?.rowsWritten) || row.sum.rowsRead < 0 || row.sum.rowsWritten < 0)) throw new Error('Invalid account usage metering.');
   const usage = aggregates.reduce((total, row) => ({ reads: total.reads + row.sum.rowsRead, writes: total.writes + row.sum.rowsWritten }), { reads: 0, writes: 0 });
-  if (usage.reads > 1000000 || usage.writes > 20000) throw new Error('Insufficient conservative free-tier headroom for this hosted rehearsal.');
+  // Two observed setups consumed ~19,400 writes in total. Reserve 20,000 for
+  // this bounded setup/message workload (over twice that per-run measurement),
+  // plus 30,000 writes for production. Never treat an unknown plan as unlimited.
+  const budget = { current: usage, testReads: 1000000, testWrites: 20000, productionReadReserve: 2000000, productionWriteReserve: 30000 };
+  console.log(JSON.stringify({ phase: 'quota-budget', ...budget }));
+  if (usage.reads + budget.testReads + budget.productionReadReserve > 5000000 || usage.writes + budget.testWrites + budget.productionWriteReserve > 100000) throw new Error('Insufficient conservative free-tier headroom for this hosted rehearsal.');
   const subdomain = await api('/workers/subdomain');
   if (!/^[a-z0-9-]+$/.test(subdomain.subdomain)) throw new Error('Invalid Workers subdomain.');
   const state = { name, base: `https://${name}.${subdomain.subdomain}.workers.dev`, slug: name, key: randomBytes(32).toString('hex'), tokens: [], revision: process.env.GITHUB_SHA };
