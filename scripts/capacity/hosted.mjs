@@ -44,6 +44,8 @@ if (mode === 'setup') {
   const readiness = JSON.parse(readFileSync('capacity-results/hosted-readiness.json', 'utf8'));
   const aggregates = readiness.accountD1Today?.aggregates;
   if (!readiness.accountD1Today?.available || !Array.isArray(aggregates)) throw new Error('Account-wide D1 usage must be available before hosted testing.');
+  if (readiness.accountD1Today.date !== new Date().toISOString().slice(0,10) || !Number.isFinite(Date.parse(readiness.checkedAt)) || Math.abs(Date.now() - Date.parse(readiness.checkedAt)) > 10 * 60000) throw new Error('Fresh usage evidence from this UTC day is required.');
+  if (aggregates.some(row => !Number.isFinite(row.sum?.rowsRead) || !Number.isFinite(row.sum?.rowsWritten) || row.sum.rowsRead < 0 || row.sum.rowsWritten < 0)) throw new Error('Invalid account usage metering.');
   const usage = aggregates.reduce((total, row) => ({ reads: total.reads + row.sum.rowsRead, writes: total.writes + row.sum.rowsWritten }), { reads: 0, writes: 0 });
   if (usage.reads > 1000000 || usage.writes > 20000) throw new Error('Insufficient conservative free-tier headroom for this hosted rehearsal.');
   const subdomain = await api('/workers/subdomain');
@@ -86,9 +88,10 @@ if (mode === 'setup') {
   }
   save(state);
   writeFileSync('work/hosted-capacity/fixture.sql', sql.join('\n'), { mode: 0o600 });
-  const seeded = wrangler(['d1', 'execute', 'DB', '--remote', '--file', 'work/hosted-capacity/fixture.sql', '--json']);
-  // Only aggregate provider metering is retained; fixtures/tokens never enter artifacts.
-  state.seedMetering = JSON.parse(seeded).map(row => row.meta ?? {});
+  // File imports emit progress text even with --json. Exit status establishes
+  // import completion; application assertions establish fixture correctness.
+  wrangler(['d1', 'execute', 'DB', '--remote', '--file', 'work/hosted-capacity/fixture.sql']);
+  state.seedStatements = sql.length;
   save(state);
   state.workerAttempted = true;
   save(state);
@@ -97,7 +100,7 @@ if (mode === 'setup') {
 } else if (mode === 'test') {
   const state = readState(), base = new URL(state.base);
   if (base.protocol !== 'https:' || !base.hostname.startsWith(`${name}.`) || !base.hostname.endsWith('.workers.dev')) throw new Error('Only the owned staging Worker can be targeted.');
-  const report = { revision: state.revision, environment: 'Cloudflare isolated hosted Worker and D1', guests: 400, externalProviders: false, fullEventSoak: false, seedMetering: state.seedMetering, metrics: [], passed: false };
+  const report = { revision: state.revision, environment: 'Cloudflare isolated hosted Worker and D1', guests: 400, externalProviders: false, fullEventSoak: false, seedStatements: state.seedStatements, metrics: [], passed: false };
   const sockets = [];
   let requests = 0;
   const requestHeaders = i => ({ 'x-capacity-key': state.key, cookie: `bct_attendee=${state.tokens[i % 400]}` });
@@ -193,6 +196,12 @@ if (mode === 'setup') {
   if (existsSync(statePath)) {
     const state = readState(), errors = [];
     if (state.workerAttempted) try { await api(`/workers/scripts/${name}?force=true`, 'DELETE'); } catch (error) { errors.push(String(error)); }
+    // A create response may be lost after the provider created the database.
+    if (!state.databaseId) try {
+      const matches = (await api(`/d1/database?name=${name}`)).filter(database => database.name === name);
+      if (matches.length > 1) throw new Error('Ambiguous owned fixture database.');
+      state.databaseId = matches[0]?.uuid;
+    } catch (error) { errors.push(String(error)); }
     if (state.databaseId) try {
       const database = await api(`/d1/database/${state.databaseId}`);
       if (database.name !== name) throw new Error('Refusing to delete a database not owned by this run.');

@@ -141,10 +141,22 @@ event-length soak or live payment/email delivery test. The one-minute 120-messag
 Room flood is intentionally excluded: its 47,880 notification rows plus indexes
 can exceed the free account's 100,000 daily write allowance.
 
-The isolated host-approval test now follows the original guest session through
+Public RSVP deliberately submits directly without creating a guest account or
+sending a confirmation email. Approved guests use the host's door list. Existing
+`rsvp-audience` tests cover this route, host approval and duplicate door admission.
+The verified-account RSVP path is separate and must not be described as the
+current default public signup experience.
+
+The isolated verified-account host-approval test now follows the original guest session through
 approval, one confirmation notice across repeated scheduler runs, My Nights,
 one QR pass, successful gate entry and duplicate rejection. Focused registration
 and Seev tests: **41 passed locally**; provider traffic remains mocked.
 
-Next: run and inspect the bounded hosted rehearsal; preserve measured failures
-alongside any corrected rerun, confirm cleanup, and record final CI evidence here.
+Hosted run `35667444448` on `788c7a9283dd4b6ed4c1f3f02431dfbf9e0f115f` failed
+during setup: Wrangler's remote SQL-file import writes progress lines even with
+`--json`, so parsing its entire stdout failed after import. The owned database was
+successfully deleted; no hosted application load ran. Remove the optional import
+metadata parser and use exit status plus the application/data assertions.
+
+Next: run and inspect the corrected bounded hosted rehearsal, confirm cleanup,
+and record final CI evidence here.
