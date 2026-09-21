@@ -183,3 +183,13 @@ and deploying once they pass, following the initial automatic approval rejection
 Next action: push to `bechirobob/tickets`, open the PR, inspect the exact-head
 candidate/browser and shared native-component gates, then release and verify the
 live revision. Do not merge the unrelated dependency update.
+
+PR #168 initial candidate `1f8acba61e5c45b740d84dc9956fa3800f5c98c4`:
+391 worker tests passed. Chrome candidate suites passed, but the isolated mobile
+host-overview test passed only on retry: a replaced asynchronous report route
+later tried to fulfill an already handled request. Replace the overlapping
+`route.fetch` handlers with one fixture responder using a captured authenticated
+local response, preserving the coming-soon and unpublished assertions. Final
+candidate gates must verify this follow-up. Production mobile audits passed
+(99 Chrome, 98 WebKit); desktop Chromium suffered SIGSEGV in newContext and its
+single job retry was requested after inspecting the crash log.

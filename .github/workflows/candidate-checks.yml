@@ -56,6 +56,8 @@ jobs:
         run: |
           node scripts/prepare-operations-browser-fixture.mjs
           npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --output test-results/operations
+      - name: Verify host report fixture recovery without retries
+        run: npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep '^host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
       - name: Preserve event-page renders and browser results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

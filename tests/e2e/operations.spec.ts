@@ -466,14 +466,20 @@ test('host lands on their event with a useful overview and recoverable report pr
  await expectVisibleLettering(page,'.host-start');expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  await page.screenshot({path:info.outputPath('host-first-login.png'),fullPage:true});
  await overview.getByRole('button',{name:'Review Guest setup',exact:true}).click();await expect(page.locator('.registration-manager')).toBeVisible();
+ // Fetch the real isolated summary once, then keep a single synchronous mock.
+ // Replacing a handler during route.fetch can leave it fulfilling an already
+ // handled request when overview activation and manual refresh overlap.
+ const reportResponse=await context.request.get(`${baseURL}/api/organizer/reports?eventSlug=rsvp-browser`);
+ expect(reportResponse.ok()).toBe(true);
+ const reportData=await reportResponse.json();
+ let reportView={...reportData,summary:{...reportData.summary,interest:12,event:{...reportData.summary.event,mode:'interest',scheduleStatus:'coming_soon',endsAt:'2020-01-01T00:00:00.000Z'}}};
+ await page.route('**/api/organizer/reports?**',route=>route.fulfill({json:reportView}));
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'At a glance',exact:true}).click();
- await page.route('**/api/organizer/reports?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,summary:{...data.summary,interest:12,event:{...data.summary.event,mode:'interest',scheduleStatus:'coming_soon',endsAt:'2020-01-01T00:00:00.000Z'}}}});});
  await overview.getByRole('button',{name:'Refresh event summary'}).click();
  await expect(overview.getByText('Interest sign-ups',{exact:true})).toBeVisible();
  await expect(overview.getByLabel('Guest link')).toBeVisible();
  await expect(overview.getByText('This event has ended',{exact:true})).toHaveCount(0);
- await page.unroute('**/api/organizer/reports?**');
- await page.route('**/api/organizer/reports?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,summary:{...data.summary,event:{...data.summary.event,status:'unpublished'}}}});});
+ reportView={...reportData,summary:{...reportData.summary,event:{...reportData.summary.event,status:'unpublished'}}};
  await overview.getByRole('button',{name:'Refresh event summary'}).click();await expect(overview.getByText('Your public link is waiting',{exact:true})).toBeVisible();await expect(overview.getByLabel('Guest link')).toHaveCount(0);
  await page.screenshot({path:info.outputPath('host-private-preparation.png'),fullPage:true});
  await overview.getByRole('link',{name:'View analytics & tracked links'}).click();
