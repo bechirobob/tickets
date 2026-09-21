@@ -115,7 +115,13 @@ if (mode === 'setup') {
     if (++requests > 3500) throw new Error('Rehearsal request ceiling reached.');
     const started = performance.now();
     const response = await fetch(`${base.origin}/api/customer/my-nights`, { headers: requestHeaders(i), redirect: 'error', signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(`My Nights HTTP ${response.status}`);
+    if (!response.ok) {
+      const body = await response.text();
+      // The guarded fixture contains synthetic data only. Keep a bounded error
+      // description and provider request ID, never cookies or request headers.
+      const description = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0,220);
+      throw new Error(`My Nights HTTP ${response.status}; ray=${response.headers.get('cf-ray') ?? 'none'}; ${description}`);
+    }
     const data = await response.json();
     if (data.attendee?.displayName !== `Guest ${i % 400}` || data.nights?.length !== 1 || data.nights[0].eventSlug !== state.slug || data.nights[0].ticketCount !== 1) throw new Error('Ownership or admission invariant failed.');
     return performance.now() - started;
@@ -131,9 +137,16 @@ if (mode === 'setup') {
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   try {
     // workers.dev DNS/route registration can take a few seconds.
-    let ready = false;
-    for (let i = 0; i < 12; i++) { try { await request(0); ready = true; break; } catch { await pause(2000); } }
-    if (!ready) throw new Error('Hosted fixture did not become ready.');
+    let consecutive = 0;
+    const startupErrors = [];
+    for (let i = 0; i < 30 && consecutive < 5; i++) {
+      try { await request(i); consecutive++; }
+      catch (error) { consecutive = 0; startupErrors.push(String(error)); }
+      await pause(2000);
+    }
+    report.startup = { consecutiveReady: consecutive, errors: startupErrors };
+    console.log(JSON.stringify({ name: 'deployment-readiness', ...report.startup }));
+    if (consecutive < 5) throw new Error('Hosted fixture did not become consistently ready.');
     const denied = await fetch(`${base.origin}/api/customer/my-nights`, { redirect: 'error', signal: AbortSignal.timeout(15000) });
     if (denied.status !== 404) throw new Error('Staging access guard failed.');
     const version = await (await fetch(`${base.origin}/api/version`, { headers: requestHeaders(0), redirect: 'error', signal: AbortSignal.timeout(15000) })).json();
@@ -183,6 +196,20 @@ if (mode === 'setup') {
     writeFileSync(output, JSON.stringify(report, null, 2));
     console.log(JSON.stringify({ passed: report.passed, requests, failure: report.failure }));
   }
+} else if (mode === 'diagnose') {
+  if (existsSync(statePath)) {
+    const state = readState();
+    if (state.databaseId && state.workerAttempted) {
+      const database = await api(`/d1/database/${state.databaseId}`);
+      if (database.name !== name) throw new Error('Fixture database ownership mismatch.');
+      const result = await api(`/d1/database/${state.databaseId}/query`, 'POST', {
+        sql: "SELECT kind,path,detail,COUNT(*) AS count FROM security_events WHERE kind='runtime_error' GROUP BY kind,path,detail LIMIT 10",
+      });
+      mkdirSync('capacity-results', { recursive: true });
+      writeFileSync('capacity-results/hosted-runtime-errors.json', JSON.stringify(result[0].results, null, 2));
+      console.log(JSON.stringify({ runtimeErrors: result[0].results }));
+    }
+  }
 } else if (mode === 'verify-state') {
   const state = readState();
   const database = await api(`/d1/database/${state.databaseId}`);
@@ -221,4 +248,4 @@ if (mode === 'setup') {
     if (errors.length) throw new Error(errors.join('\n'));
     console.log('Owned staging Worker and database removed.');
   }
-} else throw new Error('Expected setup, test, verify-state or cleanup.');
+} else throw new Error('Expected setup, test, diagnose, verify-state or cleanup.');

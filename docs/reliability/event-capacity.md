@@ -216,3 +216,14 @@ Current direct public RSVP does not automatically send confirmation email.
 Next: verify the Room optimization on hosted resources, retain exact-head CI,
 then merge/release under the owner's standing authorization. Final results and
 release identifiers belong in PR #169 as well as this historical measurement log.
+
+Room optimization focused verification: 35 access/ownership/VIP/registration/
+member tests passed, plus lint/types. Hosted run `35668808933` on
+`d5406ca865e1d810e643f5da63079836b0ed7ff3` then encountered 21 HTTP 500/404
+responses in its first 50-read burst shortly after deployment. Cleanup succeeded;
+no Room load ran and no production deployment occurred. The runner's original
+error message omitted response bodies, so this failure's cause is not yet proven.
+Retain bounded error descriptions/provider request IDs and isolated runtime-error
+records on the next run. Require five successful readiness reads over ten seconds,
+recording any startup failures separately, before load. All load-phase error and
+latency gates remain unchanged; passing warm load does not certify cold startup.

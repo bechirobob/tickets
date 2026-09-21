@@ -39,6 +39,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
         run: node scripts/capacity/hosted.mjs verify-state
+      - name: Preserve isolated runtime diagnostics
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/hosted.mjs diagnose
       - name: Remove only this run's synthetic resources
         if: always()
         env:
@@ -54,5 +60,6 @@ jobs:
             capacity-results/hosted-readiness.json
             capacity-results/hosted-measurements.json
             capacity-results/hosted-notifications.json
+            capacity-results/hosted-runtime-errors.json
             capacity-results/hosted-cleanup.json
           retention-days: 30
