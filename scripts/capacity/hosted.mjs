@@ -102,6 +102,7 @@ if (mode === 'setup') {
   if (base.protocol !== 'https:' || !base.hostname.startsWith(`${name}.`) || !base.hostname.endsWith('.workers.dev')) throw new Error('Only the owned staging Worker can be targeted.');
   const report = { revision: state.revision, environment: 'Cloudflare isolated hosted Worker and D1', guests: 400, externalProviders: false, fullEventSoak: false, seedStatements: state.seedStatements, metrics: [], passed: false };
   const sockets = [];
+  const latencyFailures = [];
   let requests = 0;
   const requestHeaders = i => ({ 'x-capacity-key': state.key, cookie: `bct_attendee=${state.tokens[i % 400]}` });
   const percentile = (values, p) => Math.round([...values].sort((a,b) => a-b)[Math.max(0, Math.ceil(values.length*p)-1)] ?? 0);
@@ -119,7 +120,8 @@ if (mode === 'setup') {
     const errors = results.filter(r => r.status === 'rejected');
     const metric = { name, operations: results.length, failures: errors.length, p50Ms: percentile(times,.5), p95Ms: percentile(times,.95), p99Ms: percentile(times,.99), firstErrors: errors.slice(0,3).map(r => String(r.reason)) };
     report.metrics.push(metric); console.log(JSON.stringify(metric));
-    if (errors.length || metric.p95Ms >= budget) throw new Error(`${name} failed its error/latency gate.`);
+    if (errors.length) throw new Error(`${name} failed its correctness gate.`);
+    if (metric.p95Ms >= budget) latencyFailures.push(`${name}: p95 ${metric.p95Ms}ms exceeds ${budget}ms`);
   }
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   try {
@@ -165,6 +167,7 @@ if (mode === 'setup') {
     report.metrics.push({ name: 'room-single-message-400-recipients', delivered: received.size, expected: 400, socketErrors, p95Ms: percentile(deliveries,.95) });
     if (received.size !== 400 || socketErrors || percentile(deliveries,.95) >= 5000) throw new Error('Hosted Room delivery failed.');
     record('recovery', await Promise.allSettled([request(0)]));
+    if (latencyFailures.length) throw new Error(latencyFailures.join('; '));
     report.passed = true;
   } catch (error) { report.failure = String(error); throw error; }
   finally {

@@ -36,6 +36,39 @@ function request(path: string, cookie?: string, init: RequestInit = {}) {
 }
 
 describe("ticket-earned member experience", () => {
+  it("keeps an empty personal feed distinct from invalid identity and refreshes stale activity", async () => {
+    const emptyCookie = await memberCookie(), otherCookie = await memberCookie();
+    const tokenHash = await hashToken(emptyCookie.slice('bct_attendee='.length));
+    const session = await env.DB.prepare('SELECT attendee_id AS attendeeId FROM attendee_sessions WHERE token_hash=?').bind(tokenHash).first<{ attendeeId: string }>();
+    await env.DB.prepare("UPDATE ticket_assignments SET status='revoked' WHERE attendee_id=?").bind(session!.attendeeId).run();
+    await env.DB.prepare("UPDATE attendee_sessions SET last_seen_at='2000-01-01T00:00:00.000Z' WHERE token_hash=?").bind(tokenHash).run();
+    const empty = await getMyNights(request('/api/customer/my-nights', emptyCookie));
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual({ attendee: { displayName: 'Test Member' }, nights: [] });
+    const touched = await env.DB.prepare('SELECT last_seen_at AS seen FROM attendee_sessions WHERE token_hash=?').bind(tokenHash).first<{ seen: string }>();
+    expect(Date.parse(touched!.seen)).toBeGreaterThan(Date.now()-60000);
+    const other = await getMyNights(request('/api/customer/my-nights', otherCookie));
+    const body = await other.json() as { nights: Array<Record<string, unknown>> };
+    expect(body.nights).toHaveLength(1);
+    expect(body.nights[0].ticketCount).toBe(1);
+    for (const key of ['attendeeDisplayName','sessionLastSeenAt','sortStartsAt','normalizedEmail','tokenHash']) expect(body.nights[0]).not.toHaveProperty(key);
+    expect(other.headers.get('cache-control')).toBe('no-store, private');
+  });
+
+  it("rechecks revoked, expired and inactive identities on every My Nights request", async () => {
+    expect((await getMyNights(request('/api/customer/my-nights', 'bct_attendee=unknown'))).status).toBe(401);
+    for (const reason of ['revoked', 'expired', 'inactive']) {
+      const cookie = await memberCookie(), tokenHash = await hashToken(cookie.slice('bct_attendee='.length));
+      expect((await getMyNights(request('/api/customer/my-nights', cookie))).status).toBe(200);
+      if (reason === 'revoked') await env.DB.prepare('UPDATE attendee_sessions SET revoked_at=? WHERE token_hash=?').bind(new Date().toISOString(),tokenHash).run();
+      if (reason === 'expired') await env.DB.prepare("UPDATE attendee_sessions SET expires_at='2000-01-01T00:00:00.000Z' WHERE token_hash=?").bind(tokenHash).run();
+      if (reason === 'inactive') await env.DB.prepare("UPDATE attendee_profiles SET status='suspended' WHERE id=(SELECT attendee_id FROM attendee_sessions WHERE token_hash=?)").bind(tokenHash).run();
+      const denied = await getMyNights(request('/api/customer/my-nights', cookie));
+      expect(denied.status).toBe(401);
+      expect(await denied.json()).not.toHaveProperty('nights');
+    }
+  });
+
   it("keeps every member and event-specific surface closed without a paid attendee session", async () => {
     const context = { params: Promise.resolve({ slug: eventSlug }) };
     expect((await getMyNights(request("/api/customer/my-nights"))).status).toBe(401);

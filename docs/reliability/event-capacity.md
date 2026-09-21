@@ -160,3 +160,18 @@ metadata parser and use exit status plus the application/data assertions.
 
 Next: run and inspect the corrected bounded hosted rehearsal, confirm cleanup,
 and record final CI evidence here.
+
+Hosted run `35667672658`, source `95a315ad8d1a63f8655d6c7bc4ca09e6980f628b`,
+provisioned successfully and found a real latency failure: 50/100/200/400-request
+bursts had zero correctness failures, but p95 rose from 869 / 1,392 / 2,577 to
+**5,702 ms** at 400, exceeding the existing 5-second budget. The test stopped
+before sustained reads/Room; cleanup succeeded. This is not a 400-guest pass.
+
+Follow-up: combine My Nights authorization and private feed in one D1 snapshot,
+removing a sequential database round trip while preserving fresh session checks,
+coalesced activity writes, empty authenticated feeds, privacy and ordering. Added
+regressions for revoked/expired/inactive identities and empty versus other guest
+feeds. The hosted runner now preserves latency failures while collecting the
+remaining bounded phases; correctness errors still stop immediately. Budgets
+are unchanged. Public RSVP/host door-list focused suite: 19 additional tests
+passed; the verified-account/email path remains explicitly separate.

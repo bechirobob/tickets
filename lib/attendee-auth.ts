@@ -93,7 +93,7 @@ export async function readAttendeeIdentity(
     LIMIT 1
   `).bind(tokenHash, now).first<AttendeeIdentity & { lastSeenAt: string }>();
   if (!identity) return null;
-  await touchSession(db, tokenHash, identity.lastSeenAt, now);
+  await touchAttendeeSession(db, tokenHash, identity.lastSeenAt, now);
   const { lastSeenAt: _lastSeenAt, ...profile } = identity;
   void _lastSeenAt;
   return { ...profile, emailVerified: Boolean(identity.emailVerified) };
@@ -129,7 +129,7 @@ export async function readAttendeeRoomAccess(
     LIMIT 1
   `).bind(tokenHash, now, eventSlug, requireRoom ? 1 : 0, requireRoom ? 1 : 0, requireRoom ? 1 : 0).first<AttendeeRoomAccess & { lastSeenAt: string }>();
   if (!access) return null;
-  await touchSession(db, tokenHash, access.lastSeenAt, now);
+  await touchAttendeeSession(db, tokenHash, access.lastSeenAt, now);
   const { lastSeenAt: _lastSeenAt, ...profile } = access;
   void _lastSeenAt;
   return { ...profile, emailVerified: Boolean(access.emailVerified) };
@@ -151,7 +151,7 @@ export async function listAttendeeEvents(
 }
 
 // Authorization is checked on every request; only activity bookkeeping is coalesced.
-async function touchSession(db: D1Database, tokenHash: string, lastSeenAt: string, now: string) {
+export async function touchAttendeeSession(db: D1Database, tokenHash: string, lastSeenAt: string, now: string) {
   const cutoff = new Date(Date.parse(now) - 5 * 60_000).toISOString();
   if (lastSeenAt >= cutoff) return;
   await db.prepare("UPDATE attendee_sessions SET last_seen_at = ? WHERE token_hash = ? AND last_seen_at < ?")

@@ -1,4 +1,4 @@
-import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
+import { hashToken, readCookie, touchAttendeeSession } from "../../../../lib/attendee-auth";
 
 type NightRecord = {
   roomAccess: number;
@@ -24,23 +24,32 @@ type NightRecord = {
 
 export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
-  const identity = await readAttendeeIdentity(env.DB, request.headers.get("cookie"));
-  if (!identity) {
+  const token = readCookie(request.headers.get("cookie"));
+  if (!token) {
     return Response.json({ error: "Your first verified ticket unlocks My Nights." }, { status: 401, headers: { "cache-control": "no-store" } });
   }
+  const tokenHash = await hashToken(token), now = new Date().toISOString();
+  // Resolve current authorization and its private feed in one D1 snapshot and
+  // round trip. Never cache identity: revocation must affect the next request.
   const rows = await env.DB.prepare(`
-    WITH owned AS MATERIALIZED (
+    WITH identity AS MATERIALIZED (
+      SELECT p.id AS attendeeId, p.display_name AS attendeeDisplayName,
+             s.last_seen_at AS sessionLastSeenAt
+      FROM attendee_sessions s JOIN attendee_profiles p ON p.id = s.attendee_id
+      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
+      LIMIT 1
+    ), owned AS MATERIALIZED (
       SELECT ticket.event_slug, COUNT(*) AS ticketCount,
         MAX(CASE WHEN orders.status='paid' AND ticket.status IN ('issued','checked_in') THEN 1 ELSE 0 END) AS activeAdmission
       FROM ticket_assignments assignment
       JOIN tickets ticket ON ticket.id = assignment.ticket_id
       JOIN orders orders ON orders.id = ticket.order_id
-      WHERE assignment.attendee_id = ? AND assignment.status = 'active'
+      WHERE assignment.attendee_id = (SELECT attendeeId FROM identity) AND assignment.status = 'active'
         AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded')
         AND orders.status IN ('paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
       GROUP BY ticket.event_slug
-    )
-    SELECT event.slug AS eventSlug, event.title,
+    ), nights AS (
+    SELECT event.slug AS eventSlug, event.title, event.starts_at AS sortStartsAt,
            COALESCE(owned.activeAdmission,0) AS admissionActive,
            COALESCE((SELECT mode FROM event_registration_settings WHERE event_slug=event.slug),'paid') AS registrationMode,
            CASE WHEN COALESCE(owned.activeAdmission,0)=0 OR event.event_state NOT IN ('on_sale','sold_out','rescheduled') THEN 0 WHEN COALESCE((SELECT mode FROM event_registration_settings WHERE event_slug = event.slug), 'paid') <> 'rsvp' THEN 1 ELSE COALESCE((SELECT room_access FROM event_registration_settings WHERE event_slug = event.slug), 0) END AS roomAccess,
@@ -56,11 +65,11 @@ export async function GET(request: Request) {
            (SELECT COUNT(*) FROM event_questions question WHERE question.event_slug = event.slug AND question.status = 'active') AS questionCount
     FROM curated_event_records event
     LEFT JOIN owned ON owned.event_slug = event.slug
-    LEFT JOIN attendee_event_preferences preference ON preference.event_slug = event.slug AND preference.attendee_id = ?
+    LEFT JOIN attendee_event_preferences preference ON preference.event_slug = event.slug AND preference.attendee_id = (SELECT attendeeId FROM identity)
     LEFT JOIN event_hosts host_link ON host_link.event_slug = event.slug AND host_link.is_primary = true
     LEFT JOIN hosts host ON host.id = host_link.host_id
-    LEFT JOIN attendee_host_follows host_follow ON host_follow.host_id = host.id AND host_follow.attendee_id = ?
-    LEFT JOIN attendee_privacy_settings privacy ON privacy.attendee_id = ?
+    LEFT JOIN attendee_host_follows host_follow ON host_follow.host_id = host.id AND host_follow.attendee_id = (SELECT attendeeId FROM identity)
+    LEFT JOIN attendee_privacy_settings privacy ON privacy.attendee_id = (SELECT attendeeId FROM identity)
     WHERE event.status IN ('published', 'scheduled')
       AND (
         preference.keep_posted = true
@@ -70,11 +79,21 @@ export async function GET(request: Request) {
     GROUP BY event.slug
     ORDER BY event.starts_at
     LIMIT 100
-  `).bind(identity.attendeeId, identity.attendeeId, identity.attendeeId, identity.attendeeId).all<NightRecord>();
+    )
+    SELECT identity.attendeeDisplayName, identity.sessionLastSeenAt, nights.*
+    FROM identity LEFT JOIN nights ON 1 = 1
+    ORDER BY nights.sortStartsAt
+  `).bind(tokenHash, now).all<NightRecord & { attendeeDisplayName: string; sessionLastSeenAt: string; sortStartsAt: string }>();
+  const identity = rows.results[0];
+  if (!identity) {
+    return Response.json({ error: "Your first verified ticket unlocks My Nights." }, { status: 401, headers: { "cache-control": "no-store" } });
+  }
+  await touchAttendeeSession(env.DB, tokenHash, identity.sessionLastSeenAt, now);
 
   return Response.json({
-    attendee: { displayName: identity.displayName },
-    nights: rows.results.map((row) => {
+    attendee: { displayName: identity.attendeeDisplayName },
+    nights: rows.results.filter(row => row.eventSlug).map(({ attendeeDisplayName: _displayName, sessionLastSeenAt: _lastSeenAt, sortStartsAt: _sortStartsAt, ...row }) => {
+      void _displayName; void _lastSeenAt; void _sortStartsAt;
       const ticketCount = Number(row.ticketCount);
       const purchased = ticketCount > 0;
       return {
