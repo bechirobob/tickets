@@ -227,3 +227,14 @@ Retain bounded error descriptions/provider request IDs and isolated runtime-erro
 records on the next run. Require five successful readiness reads over ten seconds,
 recording any startup failures separately, before load. All load-phase error and
 latency gates remain unchanged; passing warm load does not certify cold startup.
+
+Hosted run `35669159229`, source `4bf4cb62814b6c75aa716a461d7b7c20eaf96302`,
+recorded one startup 404, then passed five readiness reads. The 400-read burst
+passed at p95 1,463 ms; 2,400 sustained reads passed at p95 61 ms. Room opened
+400 connections with zero handshake errors but p95 5,037 ms, and delivered its
+message to zero recipients. No HTTP runtime errors were recorded; cleanup
+succeeded. This remains a failed hosted gate. Add socket close/snapshot evidence
+and an isolated Worker trace subscription to distinguish authorization/connection
+closure from provider runtime failures. Persist only aggregate outcomes and
+redacted exceptions, never raw traces or request headers; the load subprocess
+continues to run without Cloudflare operator credentials.

@@ -1,7 +1,7 @@
 // Bounded hosted read/socket rehearsal. Fresh synthetic resources only; no
 // payment/email credentials, public customer routes, cron jobs or production DB.
 import { createHash, randomBytes } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import WebSocket from 'ws';
 
@@ -102,6 +102,51 @@ if (mode === 'setup') {
   save(state);
   wrangler(['deploy']);
   console.log(JSON.stringify({ phase: 'provisioned', worker: name, revision: state.revision, guests: 400, externalProviders: false }));
+} else if (mode === 'test-observed') {
+  // Subscribe only to this run's synthetic Worker. Persist aggregate outcomes
+  // and redacted exceptions; never request headers, cookies or raw trace data.
+  readState();
+  const trace = await api(`/workers/scripts/${name}/tails`, 'POST', { filters: [] });
+  const tail = new WebSocket(trace.url, 'trace-v1', { handshakeTimeout: 15000 });
+  const diagnostics = { outcomes: {}, failures: [], traceErrors: 0 };
+  const secrets = [readState().key, ...readState().tokens, process.env.CLOUDFLARE_API_TOKEN];
+  const redact = value => {
+    let text = String(value ?? '');
+    for (const secret of secrets) if (secret) text = text.replaceAll(secret, '[redacted]');
+    return text.slice(0,500);
+  };
+  tail.on('error', () => { diagnostics.traceErrors++; });
+  tail.on('message', raw => {
+    try {
+      const event = JSON.parse(String(raw));
+      const outcome = String(event.outcome ?? 'unknown');
+      diagnostics.outcomes[outcome] = (diagnostics.outcomes[outcome] ?? 0) + 1;
+      const errors = (event.logs ?? []).filter(log => log.level === 'error').map(log => redact(JSON.stringify(log.message)));
+      if ((outcome !== 'ok' || event.exceptions?.length || errors.length) && diagnostics.failures.length < 20) {
+        diagnostics.failures.push({ outcome, errors, exceptions: (event.exceptions ?? []).map(error => ({ name: redact(error.name), message: redact(error.message) })) });
+      }
+    } catch { diagnostics.traceErrors++; }
+  });
+  try {
+    await new Promise((resolve, reject) => { tail.once('open', resolve); tail.once('error', reject); });
+    tail.send(JSON.stringify({ debug: false }));
+    const env = { ...process.env };
+    delete env.CLOUDFLARE_API_TOKEN;
+    delete env.CLOUDFLARE_ACCOUNT_ID;
+    const code = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [process.argv[1], 'test'], { env, stdio: 'inherit' });
+      child.once('error', reject);
+      child.once('exit', code => resolve(code ?? 1));
+    });
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    process.exitCode = code;
+  } finally {
+    tail.terminate();
+    await api(`/workers/scripts/${name}/tails/${trace.id}`, 'DELETE');
+    mkdirSync('capacity-results', { recursive: true });
+    writeFileSync('capacity-results/hosted-traces.json', JSON.stringify(diagnostics, null, 2));
+    console.log(JSON.stringify({ traceDiagnostics: diagnostics }));
+  }
 } else if (mode === 'test') {
   const state = readState(), base = new URL(state.base);
   if (base.protocol !== 'https:' || !base.hostname.startsWith(`${name}.`) || !base.hostname.endsWith('.workers.dev')) throw new Error('Only the owned staging Worker can be targeted.');
@@ -165,15 +210,19 @@ if (mode === 'setup') {
     if (schedulerP95Ms >= 250) throw new Error('Load generator could not sustain the requested arrival rate.');
     const received = new Set(), deliveries = [], marker = `rehearsal-${run}`;
     let sentAt = 0, socketErrors = 0;
+    const closed = [], snapshots = new Set(), errorMessages = [];
+    report.roomDiagnostics = { closed, errorMessages, snapshots: 0 };
     const connected = await Promise.allSettled(Array.from({ length: 400 }, (_,i) => new Promise((resolve, reject) => {
       const started = performance.now();
       const socket = new WebSocket(`${base.origin.replace('https:', 'wss:')}/api/room/socket?event=${state.slug}`, { headers: { ...requestHeaders(i), origin: base.origin }, handshakeTimeout: 15000 });
       sockets.push(socket);
       socket.once('open', () => resolve(performance.now()-started));
       socket.on('error', () => { socketErrors++; reject(new Error('Room connection error')); });
+      socket.on('close', (code, reason) => { closed.push({ guest: i, code, reason: String(reason).slice(0,150) }); reject(new Error(`Room closed: ${code}`)); });
       socket.on('message', raw => {
         const message = JSON.parse(String(raw));
-        if (message.type === 'error') socketErrors++;
+        if (message.type === 'snapshot') { snapshots.add(i); report.roomDiagnostics.snapshots = snapshots.size; }
+        if (message.type === 'error') { socketErrors++; if (errorMessages.length < 10) errorMessages.push(String(message.error).slice(0,150)); }
         if (message.type === 'message' && message.message?.content === marker && !received.has(i)) { received.add(i); deliveries.push(performance.now()-sentAt); }
       });
     })));
@@ -182,9 +231,9 @@ if (mode === 'setup') {
     sockets[0].send(JSON.stringify({ type: 'message', content: marker }));
     const deadline = Date.now() + 15000;
     while (received.size < 400 && Date.now() < deadline) await pause(50);
-    const deliveryMetric = { name: 'room-single-message-400-recipients', delivered: received.size, expected: 400, socketErrors, p95Ms: percentile(deliveries,.95) };
+    const deliveryMetric = { name: 'room-single-message-400-recipients', delivered: received.size, expected: 400, socketErrors, closed: closed.length, snapshots: snapshots.size, firstCloses: closed.slice(0,5), errorMessages, p95Ms: percentile(deliveries,.95) };
     report.metrics.push(deliveryMetric); console.log(JSON.stringify(deliveryMetric));
-    if (received.size !== 400 || socketErrors || percentile(deliveries,.95) >= 5000) throw new Error('Hosted Room delivery failed.');
+    if (received.size !== 400 || socketErrors || closed.length || percentile(deliveries,.95) >= 5000) throw new Error('Hosted Room delivery failed.');
     record('recovery', await Promise.allSettled([request(0)]));
     if (latencyFailures.length) throw new Error(latencyFailures.join('; '));
     report.passed = true;

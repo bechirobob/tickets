@@ -33,7 +33,10 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
         run: node scripts/capacity/hosted.mjs setup
       - name: Verify 400 hosted guest identities and Room connections
-        run: node scripts/capacity/hosted.mjs test
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/hosted.mjs test-observed
       - name: Verify persisted Room notifications
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -61,5 +64,6 @@ jobs:
             capacity-results/hosted-measurements.json
             capacity-results/hosted-notifications.json
             capacity-results/hosted-runtime-errors.json
+            capacity-results/hosted-traces.json
             capacity-results/hosted-cleanup.json
           retention-days: 30
