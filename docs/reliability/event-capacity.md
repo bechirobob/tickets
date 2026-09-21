@@ -190,3 +190,29 @@ writes for one bounded rehearsal, 30,000 preserved for production, within the
 100,000 free daily ceiling. Require one million reads for the test and two million
 reserved for production within the five-million daily read ceiling. Account
 usage must be current and numeric; unknown billing plans never imply no limits.
+
+Hosted run `35668340046`, source `324eabab36918caeefdd2b56e1b361228b619adc`,
+confirmed the My Nights fix: zero errors, p95 393 / 456 / 866 / **1,420 ms**
+at 50/100/200/400 concurrent requests. All 2,400 sustained reads passed, p95
+**42 ms**. Room connected all 400 guests and delivered its message to all 400,
+but connection p95 was **5,907 ms**, failing the unchanged 5-second gate. Recovery
+passed and cleanup succeeded. Persisted-notification verification was skipped
+after the latency failure, so that persistence result is not yet a pass.
+
+Follow-up removes a redundant suspension query (already enforced by the shared
+authorization query) and includes the connecting guest's event-specific block
+list in that authorization snapshot. This saves two sequential Room connection
+queries. Per-message and recipient revocation checks remain unchanged. Added a
+regression proving block lists cannot leak across guests/events and suspended or
+revoked sockets remain denied.
+
+Resend account inspection through the authenticated Usage page on 21 September:
+Transactional **Free**, 3/100 daily and 19/3,000 monthly used; Marketing **Free**,
+6/1,000 contacts, unlimited broadcasts; 10 requests/sec. This supersedes the
+earlier unknown-plan note for Resend. No settings were changed and no email was
+sent. A same-day 400-payment-confirmation workload exceeds this daily allowance.
+Current direct public RSVP does not automatically send confirmation email.
+
+Next: verify the Room optimization on hosted resources, retain exact-head CI,
+then merge/release under the owner's standing authorization. Final results and
+release identifiers belong in PR #169 as well as this historical measurement log.

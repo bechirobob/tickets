@@ -11,7 +11,7 @@ import { publicPageCacheKey, publicCacheResponse } from "./public-page-cache";
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { readAttendeeRoomAccess } from "../lib/attendee-auth";
+import { readAttendeeRoomSocketAccess } from "../lib/attendee-auth";
 import { resolveRoomPolicy } from "../lib/room-policy";
 import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
 import { retryFailedDeliveries, sendOperationalAlert } from "../lib/email-delivery";
@@ -50,22 +50,14 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
   const eventSlug = requestUrl.searchParams.get("event")?.trim() ?? "";
   if (!/^[a-z0-9-]{1,80}$/u.test(eventSlug)) return new Response("Invalid event", { status: 400 });
 
-  const [access, policy] = await Promise.all([
-    readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), eventSlug),
+  const [authorization, policy] = await Promise.all([
+    readAttendeeRoomSocketAccess(env.DB, request.headers.get("cookie"), eventSlug),
     resolveRoomPolicy(env.DB, eventSlug),
   ]);
-  if (!access || !policy) return new Response("A valid paid ticket is required", { status: 401 });
-  const suspension = await env.DB.prepare(`
-    SELECT 1 AS blocked FROM room_suspensions
-    WHERE event_slug = ? AND attendee_id = ? AND restored_at IS NULL LIMIT 1
-  `).bind(eventSlug, access.attendeeId).first<{ blocked: number }>();
-  if (suspension) return new Response("Room access suspended", { status: 403 });
-  const blocked = await env.DB.prepare(`
-    SELECT blocked_attendee_id AS attendeeId
-    FROM room_blocks
-    WHERE event_slug = ? AND blocker_attendee_id = ?
-    LIMIT 200
-  `).bind(eventSlug, access.attendeeId).all<{ attendeeId: string }>();
+  if (!authorization || !policy) return new Response("A valid paid ticket is required", { status: 401 });
+  // The shared authorization query already rejects suspended guests and now
+  // returns the same guest's block list in that snapshot, saving two D1 trips.
+  const { access, blockedAttendeeIds } = authorization;
 
   const headers = new Headers(request.headers);
   headers.set("x-bct-room-authorized", "1");
@@ -73,7 +65,7 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
   headers.set("x-bct-session-id", access.sessionId ?? "");
   headers.set("x-bct-display-name", encodeURIComponent(access.displayName));
   headers.set("x-bct-room-badge", access.roomBadge ?? "");
-  headers.set("x-bct-blocked-attendees", blocked.results.map((item) => item.attendeeId).join(","));
+  headers.set("x-bct-blocked-attendees", blockedAttendeeIds.join(","));
   headers.set("x-bct-event-slug", policy.eventSlug);
   headers.set("x-bct-event-title", encodeURIComponent(policy.eventTitle));
   headers.set("x-bct-starts-at", policy.startsAt);

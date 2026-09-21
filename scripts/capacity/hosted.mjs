@@ -169,7 +169,8 @@ if (mode === 'setup') {
     sockets[0].send(JSON.stringify({ type: 'message', content: marker }));
     const deadline = Date.now() + 15000;
     while (received.size < 400 && Date.now() < deadline) await pause(50);
-    report.metrics.push({ name: 'room-single-message-400-recipients', delivered: received.size, expected: 400, socketErrors, p95Ms: percentile(deliveries,.95) });
+    const deliveryMetric = { name: 'room-single-message-400-recipients', delivered: received.size, expected: 400, socketErrors, p95Ms: percentile(deliveries,.95) };
+    report.metrics.push(deliveryMetric); console.log(JSON.stringify(deliveryMetric));
     if (received.size !== 400 || socketErrors || percentile(deliveries,.95) >= 5000) throw new Error('Hosted Room delivery failed.');
     record('recovery', await Promise.allSettled([request(0)]));
     if (latencyFailures.length) throw new Error(latencyFailures.join('; '));
