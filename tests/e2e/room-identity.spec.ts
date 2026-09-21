@@ -4,9 +4,12 @@ import { expect, test } from "./catalogue";
 // The signed-in Room fixture never contacts live attendee APIs or a live socket.
 test.use({ serviceWorkers: "block" });
 
-test("the rendered identity stays legible and Hosts connect to the guest journey", async ({ page, eventSlug }, testInfo) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const path of ["/", "/events", "/hosts", "/organizer/submit", `/checkout/${eventSlug}`, "/help", "/terms", "/admin/login", "/admin/recover"]) {
+// Each route gets the normal timeout: a slow response must identify its page,
+// rather than consume the time left after eight unrelated navigations.
+for (const route of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/$published", "/help", "/terms", "/admin/login", "/admin/recover"]) {
+  test(`the rendered identity stays legible on ${route}`, async ({ page, eventSlug }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const path = route.replace("$published", eventSlug);
     await page.goto(path, { waitUntil: "domcontentloaded" });
     const logo = page.locator(".brand-logo").first();
     await expect(logo).toBeVisible();
@@ -19,7 +22,11 @@ test("the rendered identity stays legible and Hosts connect to the guest journey
     if (["/help", "/terms", "/admin/login", "/admin/recover"].includes(path)) {
       await page.screenshot({ path: testInfo.outputPath(`brand-${path.replaceAll("/", "-")}.png`), fullPage: true });
     }
-  }
+  });
+}
+
+test("Hosts connect to the guest journey", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const bridge = page.locator(".backstage-bridge");
   await bridge.scrollIntoViewIfNeeded();

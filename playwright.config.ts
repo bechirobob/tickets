@@ -14,7 +14,8 @@ export default defineConfig({
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: externalBaseUrl ?? "http://127.0.0.1:8788",
-    trace: "on-first-retry",
+    // Production deliberately disables retries; retain its first failure too.
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   projects: [

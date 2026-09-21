@@ -151,3 +151,35 @@ Next: finish focused checks and reproduce the startup-focus timing; run the HTTP
 harness without competing local jobs; inspect exact-head candidate and production
 browser results; release only once required gates pass. Hosting/provider quotas,
 physical-device acceptance and commercial payout/refund rules remain separate.
+
+## Post-deployment mobile failures — 21 September 2026
+
+Current main: `dd59d6600e87a8e6d32894405cc8b445ebc42255` (PR #167).
+Deployment run `35655451851` succeeded on attempt 2. Post-deployment audit
+`35656172690` passed desktop but failed one test in each mobile browser:
+
+- Chrome job `106520281674`: manual sharing fallback status was absent after the
+  first click. Inspection found Share/Copy enabled in server HTML before handlers
+  attach. The patch gates both controls on client readiness, matching navigation
+  and checkout. This closes the observed startup gap; a fresh browser run is still
+  needed to establish whether it resolves this audit failure.
+- WebKit job `106520281863`: the nine-page identity test exhausted its shared
+  30-second budget at `/organizer/submit`. Split it into one test per route and a
+  separate Hosts-link check, preserving every assertion and the normal timeout.
+- Preserve traces on the first failure, including production's zero-retry runs.
+  Previously `on-first-retry` collected no trace for those failures.
+
+Separate unmerged Dependabot PR #166 failed `npm ci`: its
+`react-server-dom-webpack@19.3.0` requires React `^19.3.0`, while the app uses
+React `19.2.8`. It has not reached production and is outside this focused patch.
+
+Prepared locally on `fix/share-readiness-browser-audit`. Lint, types, 18 repository
+checks, 43 UI checks and the production build passed. Local Playwright could not
+start because the browser binary is absent; its download timed out. No fresh
+browser pass or deployment is claimed.
+
+The owner explicitly approved pushing the prepared patch, running GitHub checks
+and deploying once they pass, following the initial automatic approval rejection.
+Next action: push to `bechirobob/tickets`, open the PR, inspect the exact-head
+candidate/browser and shared native-component gates, then release and verify the
+live revision. Do not merge the unrelated dependency update.
