@@ -29,7 +29,19 @@ def request(path, value=None, signed=False):
         return error.code, {}
 
 
-report = {'a': socket.gethostbyname(HOST)}
+# New DNS names may have a negative cache entry; allow propagation and ACME.
+for attempt in range(60):
+    try:
+        address = socket.gethostbyname(HOST)
+        status, health = request('/healthz')
+        if address == IP and status == 200:
+            break
+    except (OSError, ValueError):
+        pass
+    if attempt == 59:
+        raise RuntimeError('Public DNS and HTTPS are not ready; sending remains disabled.')
+    time.sleep(5)
+report = {'a': address}
 try:
     report['ptr'] = socket.gethostbyaddr(IP)[0].rstrip('.')
 except OSError:
