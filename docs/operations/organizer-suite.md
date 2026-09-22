@@ -1,7 +1,8 @@
 # Organiser business suite
 
 Authorised 22 September 2026: implement the full HustleSasa comparison recommendations.
-Branch: feat/organizer-business-suite. Base: main 94521e6 (includes confirmation notifications).
+Branch: feat/organizer-business-suite. Integrated base: main 754adce (includes host announcements and the analytics baseline).
+Migration: 0054_organizer_business_suite.sql.
 
 ## Acceptance ledger
 
@@ -25,10 +26,11 @@ Existing payout approvals and event publication authority remain in place.
 All feature flows and Help Centre guides are implemented. PR #172 records the final
 acceptance status and exact candidate SHA; a green build alone is not release approval.
 
-Validation so far: 420 worker tests passed across 53 files; repository, UI contract,
-password-client and rendered build checks passed. Twelve new integration cases cover
+Validation includes the worker suite, repository and UI contracts, password-client
+checks and a rendered production build. Thirteen new integration cases cover
 scope, privacy, coupon checkout concurrency, late payments, complimentary idempotency,
-current-holder recovery, team acceptance and revocation, commission refunds and CSVs.
+current-holder recovery, team acceptance and revocation, commission refunds, CSVs,
+and complimentary admissions across the analytics baseline.
 Browser tests were updated for the new navigation and business workflows. Local browser
 installation timed out; candidate CI is the fallback for all three browser projects.
 

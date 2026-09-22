@@ -32,22 +32,22 @@ test('confirmation opt-in reports success only after saving and can be disabled 
   let enabled=false, attempts=0;
   await page.route('**/api/customer/notifications/subscription**',route=>{
     if(route.request().method()==='POST') {
-      const body=route.request().postDataJSON(); expect(body).toHaveProperty('confirmationUpdates');attempts++;
+      const body=route.request().postDataJSON(); expect(body).toHaveProperty('confirmationUpdates');expect(body.hostUpdates).toBe(body.confirmationUpdates);expect(body.roomUpdates).toBeUndefined();attempts++;
       if(attempts===1)return route.fulfill({status:503,json:{error:'Could not save. Try again.'}});
       enabled=body.confirmationUpdates;return route.fulfill({status:201,json:{subscribed:true}});
     }
-    return route.fulfill({json:{available:true,publicKey:'AQID',deviceSubscribed:true,confirmationUpdates:enabled}});
+    return route.fulfill({json:{available:true,publicKey:'AQID',deviceSubscribed:true,confirmationUpdates:enabled,hostUpdates:enabled}});
   });
-  await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Booking notifications'});
-  await card.getByRole('button',{name:'Enable phone confirmations'}).click();
+  await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Event notifications'});
+  await card.getByRole('button',{name:'Enable event alerts'}).click();
   await expect(card.getByRole('status')).toHaveText('Could not save. Try again.');
   await expect(card.getByRole('button',{name:'Turn off on this device'})).toHaveCount(0);
-  await card.getByRole('button',{name:'Enable phone confirmations'}).click();
-  await expect(card.getByRole('status')).toHaveText('Phone confirmations are on for this device.');
+  await card.getByRole('button',{name:'Enable event alerts'}).click();
+  await expect(card.getByRole('status')).toHaveText('Booking confirmations and host announcements are on for this device.');
   await page.screenshot({path:test.info().outputPath('confirmation-enabled.png'),fullPage:true});
   await page.reload();await expect(card.getByRole('button',{name:'Turn off on this device'})).toBeVisible();
   await card.getByRole('button',{name:'Turn off on this device'}).click();
-  await expect(card.getByRole('button',{name:'Enable phone confirmations'})).toBeVisible();expect(enabled).toBe(false);
+  await expect(card.getByRole('button',{name:'Enable event alerts'})).toBeVisible();expect(enabled).toBe(false);
   expect((await new AxeBuilder({page}).include('.confirmation-notifications').analyze()).violations).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
@@ -57,16 +57,33 @@ test('iPhone installation stays optional and never blocks access to My Nights',a
     Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Mozilla/5.0 iPhone Safari'});
     Object.defineProperty(navigator,'standalone',{configurable:true,value:false});
   });
-  await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Booking notifications'});
+  await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Event notifications'});
   await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
   await card.locator('summary').click();await expect(card).toContainText('Share → Add to Home Screen');await expect(card).toContainText('This is optional.');
-  await expect(card.getByRole('button',{name:'Enable phone confirmations'})).toHaveCount(0);
+  await expect(card.getByRole('button',{name:'Enable event alerts'})).toHaveCount(0);
   await page.screenshot({path:test.info().outputPath('confirmation-iphone-optional.png'),fullPage:true});
   expect((await new AxeBuilder({page}).include('.confirmation-notifications').analyze()).violations).toEqual([]);
 });
 test('declined notification permission leaves booking access available',async({page})=>{
   await member(page);await phone(page,'denied');await page.goto('/my-nights');
-  const card=page.getByRole('complementary',{name:'Booking notifications'});
+  const card=page.getByRole('complementary',{name:'Event notifications'});
   await expect(card).toContainText('Alerts are blocked');await expect(card.getByRole('button')).toHaveCount(0);
   await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
+});
+
+
+test('host announcements have a dedicated inbox filter and point straight to the Room update',async({page})=>{
+  await member(page);
+  const now=new Date().toISOString();
+  await page.route('**/api/customer/notifications',route=>route.fulfill({json:{unread:2,notifications:[
+    {id:'host',eventTitle:'Garden Party',kind:'host_update',title:'Host announcement · Garden Party',body:'Use the garden entrance.',url:'/room/garden-party?from=notification&announcement=host-1',createdAt:now,readAt:null},
+    {id:'chat',eventTitle:'Garden Party',kind:'room_message',title:'Kofi is in The Room',body:'Who is coming?',url:'/room/garden-party',createdAt:now,readAt:null},
+  ]}}));
+  await page.goto('/notifications');
+  await page.getByRole('button',{name:'Host updates',exact:true}).click();
+  await expect(page.locator('.buzz-row')).toHaveCount(1);
+  await expect(page.getByRole('link',{name:/Host announcement · Garden Party/})).toHaveAttribute('href','/room/garden-party?from=notification&announcement=host-1');
+  await expect(page.locator('.buzz-row header')).toContainText('Host announcement · Garden Party');
+  expect((await new AxeBuilder({page}).include('.notification-feed').analyze()).violations).toEqual([]);
+  await page.screenshot({path:test.info().outputPath('host-announcement-inbox.png'),fullPage:true});
 });

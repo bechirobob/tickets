@@ -17,6 +17,8 @@ async function seedAttendee(suffix: string, email = `guest-${suffix}@example.com
   const orderId = `event-day-order-${suffix}`;
   const ticketId = `event-day-ticket-${suffix}`;
   await env.DB.batch([
+    env.DB.prepare("UPDATE curated_event_records SET status='published', schedule_status='confirmed', event_state='on_sale', ends_at=? WHERE slug='after-dark-osu'")
+      .bind(new Date(Date.now() + 86_400_000).toISOString()),
     env.DB.prepare(`
       INSERT INTO orders (id, reference, event_slug, ticket_type, quantity, face_amount_minor, booking_fee_minor,
         total_amount_minor, currency, customer_email, customer_phone, customer_name, payment_channel, status, created_at, paid_at)
@@ -119,7 +121,7 @@ describe("event-day operations", () => {
     expect(afterMute.notifications).toHaveLength(1);
   });
 
-  it("defaults Room delivery on and one preference controls messages and Host updates", async () => {
+  it("keeps legacy combined preferences while retaining muted host announcements in the inbox", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const sender = await seedAttendee(`sender-toggle-${suffix}`);
     const recipient = await seedAttendee(`recipient-toggle-${suffix}`);
@@ -134,12 +136,13 @@ describe("event-day operations", () => {
     await notifyRoomMessage(env, { eventSlug: "after-dark-osu", messageId: `disabled-message-${suffix}`, senderAttendeeId: sender.attendeeId, senderName: "Kofi", content: "A quiet message." });
     await notifyRoomMessage(env, { eventSlug: "after-dark-osu", messageId: `disabled-host-${suffix}`, senderAttendeeId: sender.attendeeId, senderName: "Host", content: "A quiet Host update.", announcement: true });
     const quietInbox = await (await listNotifications(new Request("https://tickets.becoreops.com/api/customer/notifications", { headers: { cookie: recipient.cookie } }))).json() as { notifications: unknown[] };
-    expect(quietInbox.notifications).toHaveLength(0);
+    expect(quietInbox.notifications).toHaveLength(1);
+    expect(quietInbox.notifications[0]).toMatchObject({kind:"host_update"});
 
     const enabled = await updatePreference(preferenceRequest(true), { params: Promise.resolve({ slug: "after-dark-osu" }) });
     await expect(enabled.json()).resolves.toMatchObject({ roomMessages: true, hostUpdates: true });
     await notifyRoomMessage(env, { eventSlug: "after-dark-osu", messageId: `enabled-host-${suffix}`, senderAttendeeId: sender.attendeeId, senderName: "Host", content: "Doors are open.", announcement: true });
     const activeInbox = await (await listNotifications(new Request("https://tickets.becoreops.com/api/customer/notifications", { headers: { cookie: recipient.cookie } }))).json() as { notifications: unknown[] };
-    expect(activeInbox.notifications).toHaveLength(1);
+    expect(activeInbox.notifications).toHaveLength(2);
   });
 });

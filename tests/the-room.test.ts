@@ -87,3 +87,19 @@ describe("The Room Durable Object", () => {
     expect(await second.hasMessage(message.id)).toBe(false);
   });
 });
+
+
+it('opens a linked host announcement even after it leaves the latest 100 messages',async()=>{
+  const room=env.THE_ROOM.getByName(`announcement-link-${crypto.randomUUID()}`);
+  const first=await room.publishAnnouncement('Host','The original arrival instructions.',false,policy);
+  for(let i=0;i<100;i++)await room.publishAnnouncement('Host',`Later notice ${i}`,false,policy);
+  const future=new Date(Date.now()+86400000).toISOString();
+  const response=await room.fetch(new Request(`https://room.internal/socket?announcement=${first.id}`,{headers:{
+    upgrade:'websocket','x-bct-room-authorized':'1','x-bct-session-id':'linked-session','x-bct-attendee-id':'linked-guest',
+    'x-bct-display-name':'Guest','x-bct-event-slug':policy.eventSlug,'x-bct-event-title':policy.eventTitle,
+    'x-bct-starts-at':new Date().toISOString(),'x-bct-ends-at':future,'x-bct-read-only-at':future,
+  }}));
+  expect(response.status).toBe(101);const socket=response.webSocket!;
+  const snapshot=new Promise<{messages:Array<{id:string;content:string}>}>(resolve=>socket.addEventListener('message',event=>{const data=JSON.parse(String(event.data));if(data.type==='snapshot')resolve(data);}));
+  socket.accept();try {const data=await snapshot;expect(data.messages).toHaveLength(101);expect(data.messages[0]).toMatchObject({id:first.id,content:'The original arrival instructions.'});}finally{socket.close(1000,'Test complete');}
+});

@@ -42,6 +42,7 @@ export default function HostStart({eventSlug,onOpen,active}:{eventSlug:string;on
     {error?<p role="alert">{error} <button type="button" disabled={refreshing} onClick={()=>{setRefreshing(true);void load();}}>Try again</button></p>:null}
     {!data&&!error?<p role="status">Getting your event ready…</p>:null}
     {data&&event?<>
+      {data.summary.baseline ? <p>Analytics since {time(data.summary.baseline)} (Accra). Your guest list still includes earlier bookings.</p> : null}
       <div className="host-start__numbers"><div><span>{event.mode==='interest'?'Interest sign-ups':'Confirmed RSVP guests'}</span><b>{event.mode==='interest'?data.summary.interest:data.summary.rsvp.totals.confirmedGuests}</b></div><div><span>Paid orders</span><b>{data.summary.sales.orders}</b></div><div><span>Ticket sales</span><b>{money(data.summary.sales.ticketSalesMinor)}</b></div><div><span>Checked in</span><b>{data.summary.checkedIn} <small>/ {data.summary.expected}</small></b></div></div>
       <p className="host-start__note">Ticket sales exclude booking fees. Payout statements are in Money.</p>
       {data.summary.pending?<button className="host-start__pending" type="button" onClick={()=>onOpen('guests')}>{data.summary.pending} RSVP {data.summary.pending===1?'request needs':'requests need'} your nod <ArrowRight size={17}/></button>:null}

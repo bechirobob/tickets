@@ -35,7 +35,7 @@ self.addEventListener("push", (event) => {
     tag: data.tag || "becore-tickets",
     renotify: false,
     data: { url: data.url || "/notifications", eventSlug: data.eventSlug || null },
-    actions: data.eventSlug && ["room_message", "host_update"].includes(data.kind) ? [{ action: "open", title: "Open The Room" }, { action: "quiet", title: "Quiet this Room" }] : [{ action: "open", title: "Open My Nights" }],
+    actions: data.kind === "host_update" ? [{ action: "open", title: "Read host announcement" }, { action: "quiet", title: "Quiet this Room" }] : data.eventSlug && ["room_message", "host_update"].includes(data.kind) ? [{ action: "open", title: "Open The Room" }, { action: "quiet", title: "Quiet this Room" }] : [{ action: "open", title: "Open My Nights" }],
   }));
 });
 self.addEventListener("notificationclick", (event) => {

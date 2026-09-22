@@ -28,7 +28,7 @@ if(!catalogue.screens || !catalogue.events?.length) throw new Error('No live eve
 const server = spawn(process.execPath, [path.join(repo,'mobile/node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', '4174'], {cwd:path.join(repo,'mobile'),stdio:'inherit'});
 for(let i=0;i<50;i++){try{if((await fetch('http://127.0.0.1:4174')).ok)break;}catch{} await new Promise(r=>setTimeout(r,200));}
 const browser = await webkit.launch();
-const context = await browser.newContext({...devices['iPhone 13'], deviceScaleFactor:2, reducedMotion: 'reduce', serviceWorkers: 'block'});
+const context = await browser.newContext({extraHTTPHeaders:{'x-becore-analytics':'exclude'},...devices['iPhone 13'], deviceScaleFactor:2, reducedMotion: 'reduce', serviceWorkers: 'block'});
 const page = await context.newPage();
 const origin = 'https://tickets.becoreops.com';
 await page.route(`${origin}/api/public/events`, route => route.fulfill({json:catalogue,headers:{'access-control-allow-origin':'*'}}));

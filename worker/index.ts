@@ -1,3 +1,4 @@
+import { deliverHostAnnouncement, retryHostAnnouncements } from '../lib/notifications';
 import { processMarketing } from "../lib/marketing-delivery";
 import { processOrganizerReports } from "../lib/organizer-reports";
 import { processPendingOrganizerAccess } from "../lib/organizer-invitations";
@@ -127,6 +128,7 @@ const worker = {
     for (const message of batch.messages) {
       try {
         if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
+        else if (message.body?.deliveryId?.startsWith('host-announcement:')) await deliverHostAnnouncement(env, message.body.deliveryId.slice('host-announcement:'.length));
         else if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
         else if (message.body?.deliveryId?.startsWith('registration-confirmation:')) await processRegistrations(env, 'https://tickets.becoreops.com', message.body.deliveryId.slice('registration-confirmation:'.length));
         else if (message.body?.deliveryId?.startsWith('order-confirmation:')) await deliverOrderConfirmationByReference(env, message.body.deliveryId.slice('order-confirmation:'.length), 'https://tickets.becoreops.com');
@@ -180,6 +182,7 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
   if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
   if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
   try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
+  try { await retryHostAnnouncements(env); } catch (error) { await recordSystemAlert(env, 'host-announcements', error); }
   try { await retryOrderConfirmations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "order-confirmations", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
   try {

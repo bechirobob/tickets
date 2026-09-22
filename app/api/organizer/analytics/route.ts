@@ -1,3 +1,4 @@
+import { analyticsStart, readAnalyticsBaseline } from '../../../../lib/analytics-baseline';
 import { emptyRsvpAnalytics, readRsvpAnalytics, type RsvpAnalytics } from "../../../../lib/rsvp-analytics";
 import {
   hasPermission,
@@ -41,6 +42,7 @@ function analyticsCsv(data: Record<string, unknown>) {
     ["BeCore Tickets organiser analytics"],
     ["Scope", (data.scope as Record<string, unknown>).label],
     ["Range", (data.scope as Record<string, unknown>).rangeLabel],
+    ["Analytics start (UTC)", (data.scope as Record<string, unknown>).baseline ?? "Original records"],
     [],
     ["Overview"],
     ["Metric", "Value"],
@@ -127,6 +129,9 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const window = analyticsPeriod(url.searchParams.get("range"));
+  const baseline = await readAnalyticsBaseline(env.DB);
+  const fullPeriod = !baseline || baseline <= (window.previousStart ?? window.start);
+  window.start = analyticsStart(window.start, baseline);
   const eventStatement = env.DB.prepare(`
     SELECT event.slug, event.title, event.starts_at AS startsAt, event.event_state AS eventState
     FROM curated_event_records event
@@ -162,7 +167,7 @@ export async function GET(request: Request) {
   const rangeLabel = window.range === "all" ? "All time" : `Last ${window.range} days`;
   const empty = {
     events: events.results,
-    scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel },
+    scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel, baseline },
     generatedAt: new Date().toISOString(),
     overview: { rsvpViews: 0, eventViews: 0, checkoutViews: 0, checkoutStarts: 0, paymentAttempts: 0, paymentsConfirmed: 0, paymentFailed: 0, shares: 0, paidOrders: 0, revenueMinor: 0, faceValueMinor: 0, bookingFeesMinor: 0, refundsMinor: 0, admissions: 0, checkedIn: 0, uniqueBuyers: 0, repeatBuyers: 0, averageOrderValueMinor: 0 },
     comparison: null, rsvp: emptyRsvpAnalytics(),
@@ -259,7 +264,7 @@ export async function GET(request: Request) {
     `).bind(...orderBindings).first<{ repeatBuyers: number }>(),
   ]);
 
-  const rsvp = await readRsvpAnalytics(env.DB, slugs, window.start);
+  const rsvp = await readRsvpAnalytics(env.DB, slugs, window.start, baseline);
 
   const overview = {
     rsvpViews: number(product?.rsvpViews), eventViews: number(product?.eventViews), checkoutViews: number(product?.checkoutViews), checkoutStarts: number(product?.checkoutStarts),
@@ -270,7 +275,7 @@ export async function GET(request: Request) {
   };
 
   let comparison: Record<string, number> | null = null;
-  if (window.previousStart && window.previousEnd) {
+  if (fullPeriod && window.previousStart && window.previousEnd) {
     const [previousOrders, previousProduct] = await Promise.all([
       env.DB.prepare(`SELECT COUNT(*) AS paidOrders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor FROM orders
         WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ? AND COALESCE(paid_at, created_at) < ?`)
@@ -284,7 +289,7 @@ export async function GET(request: Request) {
 
   const data = {
     events: events.results,
-    scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel },
+    scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel, baseline },
     generatedAt: new Date().toISOString(),
     overview,
     rsvp,

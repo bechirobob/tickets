@@ -34,8 +34,9 @@ export async function GET(request: Request) {
     SELECT event.slug, event.title, event.venue, event.venue_map_url AS venueMapUrl, event.area,
            event.starts_at AS startsAt, event.ends_at AS endsAt, event.lineup, event.event_state AS eventState,
            event.capacity, event.status, submission.status AS submissionStatus, submission.created_at AS submittedAt,
-           COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider NOT IN ('rsvp','complimentary')), 0) AS paidOrders,
-           COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid'), 0) AS grossMinor,
+           COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS paidOrders,
+           (SELECT started_at FROM analytics_baseline WHERE id=1) AS analyticsBaseline,
+           COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS grossMinor,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status IN ('issued','checked_in')), 0) AS issuedAdmissions,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status = 'checked_in'), 0) AS checkedInAdmissions
     FROM curated_event_records event

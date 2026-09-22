@@ -29,6 +29,7 @@ type EventContext = {
   status: string;
   capacity: number;
   paidOrders: number;
+  analyticsBaseline: string | null;
   grossMinor: number;
   issuedAdmissions: number;
   checkedInAdmissions: number;
@@ -76,8 +77,9 @@ async function eventContext(
     SELECT event.slug, event.title, event.venue, event.area,
            event.starts_at AS startsAt, event.ends_at AS endsAt,
            event.event_state AS eventState, event.status, event.capacity,
-           COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider NOT IN ('rsvp','complimentary')), 0) AS paidOrders,
-           COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid'), 0) AS grossMinor,
+           COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS paidOrders,
+           (SELECT started_at FROM analytics_baseline WHERE id=1) AS analyticsBaseline,
+           COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS grossMinor,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status IN ('issued','checked_in')), 0) AS issuedAdmissions,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status = 'checked_in'), 0) AS checkedInAdmissions,
            COALESCE((SELECT COUNT(*) FROM organizer_requests WHERE organizer_requests.event_slug = event.slug AND organizer_requests.status = 'open'), 0) AS openRequests
@@ -133,6 +135,8 @@ function safeContext(event: EventContext, tiers: TierContext[], settlements: Set
       status: event.status,
       capacity: Number(event.capacity),
       paidOrders: Number(event.paidOrders),
+      salesMeasuredSince: event.analyticsBaseline ?? 'Original records',
+      operationalRecords: 'Admissions, inventory and settlements include all current records.',
       grossCollected: money(Number(event.grossMinor)),
       admissionsIssued: Number(event.issuedAdmissions),
       checkedIn: Number(event.checkedInAdmissions),

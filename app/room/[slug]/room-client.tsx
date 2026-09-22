@@ -8,6 +8,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import RoomOverlay from "../../room-overlay";
 import { requestJson, requestErrorMessage, RequestError } from "../../../lib/client-request";
 import FlashesPanel, { type RoomFlash } from "./flashes-panel";
+import ConfirmationNotifications from "../../confirmation-notifications";
 import RoomNotifications from "./room-notifications";
 import MessageTools from "./message-tools";
 import { FlashMarker, RoomComposeContent } from "../../room-chat-parts";
@@ -74,6 +75,19 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
   const lastSocketActivityRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  const openedAnnouncement = useRef('');
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('announcement');
+    if (!requested || openedAnnouncement.current === requested) return;
+    const target = [...(roomRef.current?.querySelectorAll<HTMLDetailsElement>('[data-announcement]') ?? [])].find(element => element.dataset.announcement === requested);
+    if (target) {
+      nearBottomRef.current = false;
+      target.open = true;
+      target.scrollIntoView({block:'center'});
+      openedAnnouncement.current = requested;
+    }
+  }, [messages]);
+
   const connect = useCallback((attendeeId: string) => {
     if (leavingRef.current) return;
     const current = socketRef.current;
@@ -84,7 +98,8 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     }
     setStatus("connecting");
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/api/room/socket?event=${encodeURIComponent(slug)}`);
+    const announcement = new URLSearchParams(window.location.search).get('announcement') ?? '';
+    const socket = new WebSocket(`${protocol}//${window.location.host}/api/room/socket?event=${encodeURIComponent(slug)}&announcement=${encodeURIComponent(announcement.slice(0,80))}`);
     socketRef.current = socket;
     socket.onopen = () => {
       reconnectAttemptRef.current = 0;
@@ -353,7 +368,8 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
         <div className="room-header__activity"><span aria-label={`${online} people online`} title={`${online} people online`}><Users aria-hidden="true" size={16} /><b>{online}</b></span><button type="button" className="room-flash-toggle" aria-label={`Open Flashes; ${flashCount} unopened`} title={`Flashes · ${flashCount}`} onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera aria-hidden="true" size={17} /><b>{flashCount}</b></button><RoomNotifications slug={slug} onNotice={setNotice} /></div>
       </header>
       <section className="room-trust"><BadgeCheck aria-hidden="true" size={16} /><b>Ticket holders only</b><span>{policy?.emergencyReadOnly ? "Host pause active" : policy?.slowModeSeconds ? `Slow mode · ${policy.slowModeSeconds}s` : "Your Night, together"}</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Reconnecting…"}</i></section>
-      {pinned && <details className="room-pinned" key={pinned.id}><summary><BadgeCheck aria-hidden="true" size={16} /><b>Host</b><span>{pinned.content}</span><ChevronDown aria-hidden="true" size={15} /></summary><p>{pinned.content}</p></details>}
+      {selfId ? <ConfirmationNotifications compact onEnabled={() => setNotice("Event alerts are on. Booking confirmations and host announcements can reach this device.")} /> : null}
+      {pinned && <details className="room-pinned" data-announcement={pinned.id} key={pinned.id}><summary><BadgeCheck aria-hidden="true" size={16} /><b>Host</b><span>{pinned.content}</span><ChevronDown aria-hidden="true" size={15} /></summary><p>{pinned.content}</p></details>}
       {notice && <div className="room-notice" role="status"><span>{notice}</span><button aria-label="Dismiss notice" onClick={() => setNotice("")}><X aria-hidden="true" size={16} /></button></div>}
       <section ref={streamRef} className="room-stream" aria-label="Room conversation" onScroll={(event) => { const stream = event.currentTarget; nearBottomRef.current = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80; if (nearBottomRef.current) setHasUnread(false); }}>
         {timeline.length === 0 && <div className="room-empty"><MessageCircle aria-hidden="true" /><h2>You’re in.</h2><p>Someone has to say hello first. Your people are on their way.</p></div>}
@@ -371,7 +387,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
             </article>;
           }
           const message = item.value;
-          if (message.kind === "announcement" && !message.deletedAt) return <details key={message.id} className="room-host-update"><summary><BadgeCheck aria-hidden="true" size={15} /><b>Host</b><span>{message.content}</span><ChevronDown aria-hidden="true" size={14} /></summary><div><p>{message.content}</p><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div></details>;
+          if (message.kind === "announcement" && !message.deletedAt) return <details key={message.id} className="room-host-update" data-announcement={message.id}><summary><BadgeCheck aria-hidden="true" size={15} /><b>Host</b><span>{message.content}</span><ChevronDown aria-hidden="true" size={14} /></summary><div><p>{message.content}</p><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div></details>;
           const parent = message.parentId ? messages.find((candidate) => candidate.id === message.parentId) : null;
           const own = message.attendeeId === selfId;
           const prior = timeline[index - 1];
