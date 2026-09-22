@@ -44,6 +44,7 @@ test('confirmation opt-in reports success only after saving and can be disabled 
   await expect(card.getByRole('button',{name:'Turn off on this device'})).toHaveCount(0);
   await card.getByRole('button',{name:'Enable phone confirmations'}).click();
   await expect(card.getByRole('status')).toHaveText('Phone confirmations are on for this device.');
+  await page.screenshot({path:test.info().outputPath('confirmation-enabled.png'),fullPage:true});
   await page.reload();await expect(card.getByRole('button',{name:'Turn off on this device'})).toBeVisible();
   await card.getByRole('button',{name:'Turn off on this device'}).click();
   await expect(card.getByRole('button',{name:'Enable phone confirmations'})).toBeVisible();expect(enabled).toBe(false);
@@ -57,14 +58,15 @@ test('iPhone installation stays optional and never blocks access to My Nights',a
     Object.defineProperty(navigator,'standalone',{configurable:true,value:false});
   });
   await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Booking notifications'});
-  await expect(page.getByRole('heading',{name:'My Nights.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
   await card.locator('summary').click();await expect(card).toContainText('Share → Add to Home Screen');await expect(card).toContainText('This is optional.');
   await expect(card.getByRole('button',{name:'Enable phone confirmations'})).toHaveCount(0);
+  await page.screenshot({path:test.info().outputPath('confirmation-iphone-optional.png'),fullPage:true});
   expect((await new AxeBuilder({page}).include('.confirmation-notifications').analyze()).violations).toEqual([]);
 });
 test('declined notification permission leaves booking access available',async({page})=>{
   await member(page);await phone(page,'denied');await page.goto('/my-nights');
   const card=page.getByRole('complementary',{name:'Booking notifications'});
   await expect(card).toContainText('Alerts are blocked');await expect(card.getByRole('button')).toHaveCount(0);
-  await expect(page.getByRole('heading',{name:'My Nights.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
 });
