@@ -1,3 +1,4 @@
+import { organizerScope } from "../../../../lib/organizer-access";
 import {
   hasPermission,
   hashToken,
@@ -72,7 +73,7 @@ async function eventContext(
   session: NonNullable<Awaited<ReturnType<typeof organiser>>["session"]>,
   eventSlug: string,
 ): Promise<EventContext | null> {
-  const owner = session.role === "owner";
+  const scope=organizerScope(session,"event");
   const row = await db.prepare(`
     SELECT event.slug, event.title, event.venue, event.area,
            event.starts_at AS startsAt, event.ends_at AS endsAt,
@@ -86,12 +87,9 @@ async function eventContext(
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
     WHERE event.slug = ? AND event.removed_at IS NULL
-      AND (? = 1 OR EXISTS (
-        SELECT 1 FROM staff_event_assignments assignment
-        WHERE assignment.account_id = ? AND assignment.event_slug = event.slug
-      ) OR submission.contact_email = ?)
+      AND ${scope.sql}
     LIMIT 1
-  `).bind(eventSlug, owner ? 1 : 0, session.accountId, session.email).first<EventContext>();
+  `).bind(eventSlug,...scope.bindings).first<EventContext>();
   return row ?? null;
 }
 
@@ -170,14 +168,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Too many assistant requests. Wait a minute and try again." }, { status: 429, headers: { "cache-control": "no-store" } });
   }
 
-  if (!env.OPENAI_API_KEY?.trim()) {
-    return Response.json({ error: "The event assistant is not available right now." }, { status: 503, headers: { "cache-control": "no-store" } });
-  }
-
-  const costControlRequired = env.AI_COST_CONTROL_REQUIRED?.trim().toLowerCase() === "true";
-  if (costControlRequired && !env.OPENAI_GATEWAY_BASE_URL?.trim()) {
-    return Response.json({ error: "The event assistant is not available right now." }, { status: 503, headers: { "cache-control": "no-store" } });
-  }
 
   try {
     const body = await request.json() as { message?: unknown; eventSlug?: unknown };
@@ -199,6 +189,15 @@ export async function POST(request: Request) {
       });
       return Response.json({ error: "This event is not assigned to your account." }, { status: 403, headers: { "cache-control": "no-store" } });
     }
+
+  if (!env.OPENAI_API_KEY?.trim()) {
+    return Response.json({ error: "The event assistant is not available right now." }, { status: 503, headers: { "cache-control": "no-store" } });
+  }
+
+  const costControlRequired = env.AI_COST_CONTROL_REQUIRED?.trim().toLowerCase() === "true";
+  if (costControlRequired && !env.OPENAI_GATEWAY_BASE_URL?.trim()) {
+    return Response.json({ error: "The event assistant is not available right now." }, { status: 503, headers: { "cache-control": "no-store" } });
+  }
 
     const [tiers, settlements] = await Promise.all([
       tiersFor(env.DB, eventSlug),

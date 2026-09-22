@@ -1,16 +1,9 @@
-import BrandLogo from "../../brand-logo";
-import Link from "next/link";
 import { requireAdminSession } from "../../../lib/admin-auth";
 import { STAFF_ROLE_DEFINITIONS } from "../../../lib/staff-roles";
 import AccountSecurity from "./account-security";
-import WorkspaceJump from "../workspace-jump";
-
+import WorkspaceChrome from "../../workspace-chrome";
 export const dynamic = "force-dynamic";
-
 export default async function AccountPage() {
   const session = await requireAdminSession("/admin/account");
-  return <main className="account-page">
-    <header><Link href="/" className="night-brand-link"><BrandLogo /></Link><WorkspaceJump active="/admin/account" role={session.role} /></header>
-    <section><p className="night-kicker"><span /> Account security</p><h1>{session.actor}</h1><p>{session.email} · {STAFF_ROLE_DEFINITIONS[session.role].label}</p><AccountSecurity mustChangePassword={session.mustChangePassword} /></section>
-  </main>;
+  return <main className="ops-page"><WorkspaceChrome actor={session.actor} role={session.role} active={session.role === "organizer" ? "account" : "/admin/account"} host={session.role === "organizer"}/><section className="ops-main"><header><div><p>Account settings</p><h1>{session.actor}</h1><p>{session.email} · {STAFF_ROLE_DEFINITIONS[session.role].label}</p></div></header><AccountSecurity mustChangePassword={session.mustChangePassword}/></section></main>;
 }

@@ -1,3 +1,16 @@
+import { GET as analytics } from '../app/api/organizer/analytics/route';
+import { GET as legacyWorkspace } from '../app/api/organizer/workspace/route';
+import { GET as assistantEvents } from '../app/api/organizer/assistant/events/route';
+import { POST as assistant } from '../app/api/organizer/assistant/route';
+import { GET as hostReport } from '../app/api/organizer/reports/route';
+import { GET as adminEvents } from '../app/api/admin/events/route';
+import { GET as adminAccounts } from '../app/api/admin/accounts/route';
+import { GET as adminOrders } from '../app/api/admin/orders/route';
+import { GET as adminOperations } from '../app/api/admin/operations/route';
+import { GET as registrations } from '../app/api/admin/registrations/route';
+import { GET as campaigns } from '../app/api/admin/campaigns/route';
+import { saveOrganizerTier } from '../lib/organizer-inventory';
+import { GET as workspaceSession } from '../app/api/admin/workspace/route';
 import {env} from 'cloudflare:test';
 import {describe,it,expect,vi,afterEach} from 'vitest';
 import {adminCookieHeader,createStaffSession,readAdminSession} from '../lib/admin-session';
@@ -32,6 +45,86 @@ function mockPayment(){vi.spyOn(globalThis,'fetch').mockImplementation(async(_ur
 async function buy(f:Awaited<ReturnType<typeof fixture>>,email:string,extra:object={}){const r=await checkout(new Request(`${origin}/api/payments/initialize`,{method:'POST',headers:{origin,'content-type':'application/json','idempotency-key':crypto.randomUUID()},body:JSON.stringify({eventSlug:f.slug,ticketTierId:'general',quantity:1,email,phone:'233200000000',fullName:'Buyer',acceptedPolicies:true,network:'mtn',couponCode:'WELCOME',...extra})}));return {r,data:await r.json() as {reference:string;error?:string}};}
 afterEach(()=>vi.restoreAllMocks());
 describe('organizer business suite',()=>{
+ it('requires an explicit event assignment across every host report, even when a submission repeats their email',async()=>{
+  const a=await fixture(),b=await fixture(),owner=await staff('owner'),stamp=now();
+  await env.DB.prepare(`INSERT INTO party_submissions(id,organizer_name,contact_name,contact_email,contact_phone,title,concept,venue_name,area,starts_at,ends_at,vibe,lineup,capacity,price_from_minor,age_restriction,status,event_slug,created_at,updated_at) VALUES (?,'Another host','Contact',?,'123','Private other event','Other private concept','Venue','Accra',?,?,'Late night','DJ',20,10000,'18+','published',?,?,?)`).bind(b.slug,a.email,future(),future(11),b.slug,stamp,stamp).run();
+  const read=(path:string,cookie=a.cookie)=>new Request(`${origin}${path}`,{headers:{cookie}});
+  for(const [handler,path] of [
+    [analytics,`/api/organizer/analytics?eventSlug=${b.slug}`],
+    [legacyWorkspace,`/api/organizer/workspace?event=${b.slug}`],
+    [hostReport,`/api/organizer/reports?eventSlug=${b.slug}`],
+    [registrations,`/api/admin/registrations?eventSlug=${b.slug}`],
+    [campaigns,`/api/admin/campaigns?eventSlug=${b.slug}`],
+  ] as const)expect((await handler(read(path))).status,path).toBe(403);
+  for(const [handler,path] of [[analytics,'/api/organizer/analytics'],[legacyWorkspace,'/api/organizer/workspace'],[assistantEvents,'/api/organizer/assistant/events']] as const){
+    const response=await handler(read(path));expect(response.status,path).toBe(200);const data=await response.json();expect(JSON.stringify(data),path).not.toContain(b.slug);expect(JSON.stringify(data),path).toContain(a.slug);
+  }
+  expect(await (await GET(req(a.cookie,'submissions','all'))).text()).not.toContain(b.slug);
+  const ask=await assistant(new Request(`${origin}/api/organizer/assistant`,{method:'POST',headers:{origin,cookie:a.cookie,'content-type':'application/json'},body:JSON.stringify({eventSlug:b.slug,message:'Show me the private sales and guests'})}));expect(ask.status).toBe(403);
+  for(const handler of [adminEvents,adminAccounts,adminOrders,adminOperations])expect((await handler(read('/api/admin/private'))).status).toBe(403);
+  const all=await (await GET(req(owner.cookie,'events','all'))).text();expect(all).toContain(a.slug);expect(all).toContain(b.slug);
+  // Grant and revoke using explicit membership; matching email must not keep access alive.
+  await env.DB.prepare('INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES(?,?,?,?)').bind(a.id,b.slug,owner.id,stamp).run();
+  expect((await GET(req(a.cookie,'tickets',b.slug))).status).toBe(200);
+  await env.DB.prepare('DELETE FROM staff_event_assignments WHERE account_id=? AND event_slug=?').bind(a.id,b.slug).run();
+  expect((await GET(req(a.cookie,'tickets',b.slug))).status).toBe(403);
+  expect((await hostReport(read(`/api/organizer/reports?eventSlug=${b.slug}`))).status).toBe(403);
+ });
+
+ async function tierEdit(f: Awaited<ReturnType<typeof fixture>>, extra: object = {}) {
+  const response = await GET(req(f.cookie,'tickets',f.slug));
+  const {tiers} = await response.json() as {tiers: Record<string,unknown>[]};
+  return {action:'ticket_save',eventSlug:f.slug,...tiers[0],...extra};
+ }
+ it('keeps the same staff session when public pages check the workspace return path',async()=>{
+  const f=await fixture();
+  for(let i=0;i<3;i++) { const r=await workspaceSession(new Request(`${origin}/api/admin/workspace`,{headers:{cookie:f.cookie}})); expect(await r.json()).toEqual({role:'organizer',returnTo:'/organizer/workspace'});expect(r.headers.get('set-cookie')).toBeNull();expect(r.headers.get('cache-control')).toContain('no-store'); }
+  expect((await readAdminSession(f.cookie,env.DB))?.sessionId).toBe(f.session.sessionId);
+  expect((await workspaceSession(new Request(`${origin}/api/admin/workspace`))).status).toBe(401);
+ });
+ it('lets hosts edit their allocation and grade while protecting issued passes and commercial snapshots',async()=>{
+  const f=await fixture(10);await issueComplimentary(env.DB,f.session,comp(f));
+  const orders=await env.DB.prepare('SELECT ticket_type,quantity,face_amount_minor,total_amount_minor FROM orders WHERE event_slug=?').bind(f.slug).all();
+  const passes=await env.DB.prepare('SELECT id,ticket_type,status FROM tickets WHERE event_slug=?').bind(f.slug).all();
+  const b=await tierEdit(f,{name:'General release',description:'One admission, updated details',capacity:15,priceMinor:12000});
+  await saveOrganizerTier(env.DB,f.session,b);
+  expect(await env.DB.prepare('SELECT name,capacity_admissions,price_minor FROM event_ticket_tiers WHERE id=?').bind(f.tier).first()).toEqual({name:'General release',capacity_admissions:15,price_minor:12000});
+  expect(await env.DB.prepare('SELECT capacity,price_from_minor FROM curated_event_records WHERE slug=?').bind(f.slug).first()).toEqual({capacity:15,price_from_minor:12000});
+  expect((await env.DB.prepare('SELECT ticket_type,quantity,face_amount_minor,total_amount_minor FROM orders WHERE event_slug=?').bind(f.slug).all()).results).toEqual(orders.results);
+  expect((await env.DB.prepare('SELECT id,ticket_type,status FROM tickets WHERE event_slug=?').bind(f.slug).all()).results).toEqual(passes.results);
+  for(const extra of [{capacity:1},{roomBadge:'VIP'},{admissionsPerUnit:2},{status:'hidden'}])await expect(saveOrganizerTier(env.DB,f.session,await tierEdit(f,extra))).rejects.toThrow();
+ });
+ it('rejects stale concurrent edits and protects stock held by a checkout',async()=>{
+  const f=await fixture(10);await coupon(f);mockPayment();const booking=await buy(f,'held@example.com');expect(booking.r.ok,booking.data.error).toBe(true);
+  const body=await tierEdit(f,{capacity:12});
+  const results=await Promise.allSettled([saveOrganizerTier(env.DB,f.session,body),saveOrganizerTier(env.DB,f.session,{...body,capacity:14})]);
+  expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1);
+  // A live checkout and complimentary issue both count against the same limit.
+  await issueComplimentary(env.DB,f.session,comp(f,{quantity:3}));
+  await expect(saveOrganizerTier(env.DB,f.session,await tierEdit(f,{capacity:3}))).rejects.toThrow();
+  await saveOrganizerTier(env.DB,f.session,await tierEdit(f,{capacity:4}));
+  await expect(issueComplimentary(env.DB,f.session,comp(f,{quantity:1,email:'no-space@example.com'}))).rejects.toThrow('capacity');
+ });
+ it('serializes allocation reductions with concurrent issuing',async()=>{
+  const f=await fixture(3),edit=await tierEdit(f,{capacity:1});
+  const results=await Promise.allSettled([saveOrganizerTier(env.DB,f.session,edit),issueComplimentary(env.DB,f.session,comp(f,{quantity:2}))]);
+  expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1);
+  const stock=await env.DB.prepare(`SELECT capacity_admissions AS capacity,(SELECT COALESCE(SUM(admission_count),0) FROM inventory_reservations WHERE ticket_tier_id=t.id AND status='consumed') AS allocated FROM event_ticket_tiers t WHERE id=?`).bind(f.tier).first<{capacity:number;allocated:number}>();
+  expect(stock!.allocated).toBeLessThanOrEqual(stock!.capacity);
+ });
+ it('adds a fresh VIP grade, rejects duplicate codes, and enforces role, event and lifecycle scope',async()=>{
+  const f=await fixture(),other=await fixture(),gate=await staff('gate');
+  const b={...await tierEdit(f),id:undefined,code:'vip',name:'VIP',description:'Two admissions with concierge',admissionsPerUnit:2,capacity:10,priceMinor:40000,roomBadge:'VIP'};
+  await saveOrganizerTier(env.DB,f.session,b);
+  await expect(saveOrganizerTier(env.DB,f.session,b)).rejects.toThrow('already in use');
+  const send=(cookie:string,body:object,originHeader=origin)=>POST(new Request(`${origin}/api/organizer/business`,{method:'POST',headers:{cookie,origin:originHeader,'content-type':'application/json'},body:JSON.stringify(body)}));
+  expect((await send(other.cookie,await tierEdit(f))).status).toBe(403);
+  expect((await send(gate.cookie,await tierEdit(f))).status).toBe(403);
+  expect((await send(f.cookie,await tierEdit(f),'https://untrusted.example')).status).toBe(403);
+  await env.DB.prepare("UPDATE curated_event_records SET event_state='cancelled' WHERE slug=?").bind(f.slug).run();
+  expect((await send(f.cookie,await tierEdit(f))).status).toBe(409);
+ });
+
  it('scopes every report and mutation and does not fetch contact lists by default',async()=>{const a=await fixture(),b=await fixture();await issueComplimentary(env.DB,b.session,comp(b,{email:'private@example.com'}));for(const section of ['money','guests','questions','team','promote','tickets'])expect((await GET(req(a.cookie,section,b.slug))).status,section).toBe(403);const guests=await readGuests(env.DB,b.session,b.slug,new URLSearchParams());expect(guests.rows).toEqual([]);const audience=await readAudience(env.DB,a.session,new URLSearchParams({show:'1'}));expect(JSON.stringify(audience)).not.toContain('private@example.com');expect((await GET(req(a.cookie,'events','all'))).status).toBe(200);await expect(issueComplimentary(env.DB,a.session,comp(b))).rejects.toThrow('not assigned');});
  it('reserves complimentary admissions once under retry and capacity races, including queued confirmations',async()=>{const f=await fixture(3),body=comp(f);const results=await Promise.all([issueComplimentary(env.DB,f.session,body),issueComplimentary(env.DB,f.session,body)]);expect(results[0].reference).toBe(results[1].reference);await expect(issueComplimentary(env.DB,f.session,comp(f,{email:'second@example.com'}))).rejects.toThrow('capacity');expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM tickets WHERE event_slug=?').bind(f.slug).first()).toEqual({n:2});expect((await readMoney(env.DB,f.session,f.slug)).totals).toMatchObject({collectedMinor:0});const rows=(await readGuests(env.DB,f.session,f.slug,new URLSearchParams({show:'1'}))).rows;expect(rows).toHaveLength(1);const detail=await guestDetails(env.DB,f.session,f.slug,'order',String(rows[0].id));expect(detail.confirmation).toMatchObject({status:'pending'});expect(JSON.stringify(detail)).not.toContain('qr_token');await expect(issueComplimentary(env.DB,f.session,{...body,quantity:1})).rejects.toThrow('request changed');});
  it('keeps complimentary admissions out of paid sales across an analytics reset without changing live access',async()=>{

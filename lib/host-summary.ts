@@ -2,7 +2,7 @@ import { readAnalyticsBaseline } from './analytics-baseline';
 import { readRsvpAnalytics } from './rsvp-analytics';
 
 export const hostScope = `(EXISTS (SELECT 1 FROM staff_event_assignments x WHERE x.account_id=a.id AND x.event_slug=e.slug)
-  OR EXISTS (SELECT 1 FROM party_submissions s WHERE s.id=e.submission_id AND lower(trim(s.contact_email))=a.normalized_email))`;
+  OR e.organizer_owner_id=a.id)`;
 export async function canReadHostEvent(db: D1Database, accountId: string, slug: string, owner = false) {
   return Boolean(await db.prepare(`SELECT 1 FROM curated_event_records e JOIN staff_accounts a ON a.id=?
     WHERE e.slug=? AND e.removed_at IS NULL AND a.status='active' AND ((${owner ? "a.role='owner'" : "a.role='organizer'"}) AND ${owner ? '1=1' : hostScope})`)

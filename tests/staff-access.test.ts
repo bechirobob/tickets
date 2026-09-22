@@ -217,7 +217,7 @@ describe("named staff access", () => {
       .bind(`test-${suffix}`).first()).toMatchObject({ actorId: organizer.id, action: "organizer.event_details_updated", targetId: assignedSlug });
   });
 
-  it("links an organiser's complete submission record by the verified account email", async () => {
+  it("requires an event assignment before exposing a linked submission record", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const organizer = await staff("organizer", `identity-${suffix}`);
     const outsider = await staff("organizer", `outsider-${suffix}`);
@@ -246,6 +246,9 @@ describe("named staff access", () => {
         .bind(`identity-event-${suffix}`, submissionId, slug, startsAt, endsAt, now, startsAt, now, now, now),
     ]);
 
+    const before = await readWorkspace(new Request("https://tickets.becoreops.com/api/organizer/workspace", { headers: { cookie: organizer.cookie } }));
+    expect(JSON.stringify(await before.json())).not.toContain(slug);
+    await env.DB.prepare("INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES(?,?,'owner',?)").bind(organizer.id,slug,now).run();
     const response = await readWorkspace(new Request("https://tickets.becoreops.com/api/organizer/workspace", { headers: { cookie: organizer.cookie } }));
     expect(response.status).toBe(200);
     const workspace = await response.json() as { events: Array<{ slug: string }>; submissions: Array<{ id: string; status: string }> };

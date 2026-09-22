@@ -66,7 +66,7 @@ async function preparePoster(file: File) {
   throw new Error("That flyer stays too large after preparation. Choose a simpler or smaller image.");
 }
 
-export default function PartySubmissionForm() {
+export default function PartySubmissionForm({ contactName, contactEmail }: { contactName?: string; contactEmail?: string } = {}) {
   const [state, setState] = useState<"idle" | "preparing" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
   const [step, setStep] = useState(0);
@@ -147,8 +147,8 @@ export default function PartySubmissionForm() {
       <section data-step="0" hidden={step !== 0}>
         <div className="submission-fields">
           <label>Organiser or collective<input name="organizerName" required maxLength={120} autoComplete="organization" placeholder="Nightlife Accra" /></label>
-          <label>Your name<input name="contactName" autoComplete="name" required maxLength={120} placeholder="Nana Mensah" /></label>
-          <label>Email<input name="contactEmail" autoComplete="email" type="email" required maxLength={180} placeholder="nana@example.com" /></label>
+          <label>Your name<input name="contactName" defaultValue={contactName} autoComplete="name" required maxLength={120} placeholder="Nana Mensah" /></label>
+          <label>Email<input name="contactEmail" defaultValue={contactEmail} readOnly={Boolean(contactEmail)} autoComplete="email" type="email" required maxLength={180} placeholder="nana@example.com" /></label>
           <label>Phone / WhatsApp<input name="contactPhone" autoComplete="tel" type="tel" required maxLength={40} placeholder="+233 24 000 0000" /></label>
           <label className="wide">Social page <span>optional</span><input name="socialUrl" type="url" placeholder="https://instagram.com/..." /></label>
         </div>

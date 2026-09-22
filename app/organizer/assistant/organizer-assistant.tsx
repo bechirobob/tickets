@@ -32,7 +32,7 @@ const prompts = [
 const date = (value: string) => new Date(value).toLocaleDateString("en-GH", { dateStyle: "medium" });
 const readable = (value: string) => value.replaceAll("_", " ");
 
-export default function OrganizerAssistant({ actor, role }: { actor: string; role: StaffRole }) {
+export default function OrganizerAssistant({ actor, role, embedded = false }: { actor: string; role: StaffRole; embedded?: boolean }) {
   const router = useRouter();
   const [events, setEvents] = useState<EventOption[]>([]);
   const [selectedSlug, setSelectedSlug] = useState("");
@@ -92,19 +92,19 @@ export default function OrganizerAssistant({ actor, role }: { actor: string; rol
     router.refresh();
   }
 
-  return <main className={`${styles.shell} organizer-workspace organizer-desk`}>
-    <header className={styles.topbar}>
+  return <main className={`${styles.shell} organizer-workspace organizer-desk${embedded ? " organizer-desk--embedded" : ""}`}>
+    {!embedded ? <header className={styles.topbar}>
       <Link href="/" className="night-brand-link"><BrandLogo /></Link>
       <WorkspaceJump active="/organizer/assistant" role={role} compact />
       <div className={styles.account}><span><BadgeCheck size={15} /> {actor}</span><button type="button" onClick={signOut}><LogOut size={15} /> Sign out</button></div>
-    </header>
+    </header> : null}
 
     <section className={styles.intro}>
       <div><p>Organiser workspace</p><h1>Event desk</h1></div>
       <span>Ask about sales, entry, ticket tiers, settlements or what needs attention.</span>
     </section>
 
-    {loading ? <section className={styles.loading}><Loader2 className="spin" size={18} /> Loading your Nights…</section> : events.length === 0 ? <section className={styles.empty}><h2>No approved Nights yet.</h2><p>The event desk becomes available once an event is approved.</p><Link href="/organizer/submit">Submit an event</Link></section> : <>
+    {loading ? <section className={styles.loading}><Loader2 className="spin" size={18} /> Loading your Nights…</section> : events.length === 0 ? <section className={styles.empty}><h2>No approved Nights yet.</h2><p>The event desk becomes available once an event is approved.</p><Link href="/organizer/workspace?area=submit">Submit an event</Link></section> : <>
       <section className={styles.selector}>
         <label htmlFor="assistant-event">Night</label>
         <select id="assistant-event" value={selectedSlug} onChange={(event) => { setSelectedSlug(event.target.value); setHistory([]); setError(""); }}>

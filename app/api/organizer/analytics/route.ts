@@ -1,3 +1,4 @@
+import { organizerScope } from '../../../../lib/organizer-access';
 import { analyticsStart, readAnalyticsBaseline } from '../../../../lib/analytics-baseline';
 import { emptyRsvpAnalytics, readRsvpAnalytics, type RsvpAnalytics } from "../../../../lib/rsvp-analytics";
 import {
@@ -132,20 +133,16 @@ export async function GET(request: Request) {
   const baseline = await readAnalyticsBaseline(env.DB);
   const fullPeriod = !baseline || baseline <= (window.previousStart ?? window.start);
   window.start = analyticsStart(window.start, baseline);
+  const scope=organizerScope(session,'event');
   const eventStatement = env.DB.prepare(`
     SELECT event.slug, event.title, event.starts_at AS startsAt, event.event_state AS eventState
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
     WHERE event.removed_at IS NULL
-    ${session.role === "owner" ? "" : `AND (
-      EXISTS (SELECT 1 FROM staff_event_assignments assignment WHERE assignment.account_id = ? AND assignment.event_slug = event.slug)
-      OR lower(trim(submission.contact_email)) = ?
-    )`}
+    AND ${scope.sql}
     ORDER BY event.starts_at DESC
   `);
-  const events = session.role === "owner"
-    ? await eventStatement.all<{ slug: string; title: string; startsAt: string; eventState: string }>()
-    : await eventStatement.bind(session.accountId, session.email).all<{ slug: string; title: string; startsAt: string; eventState: string }>();
+  const events = await eventStatement.bind(...scope.bindings).all<{slug:string;title:string;startsAt:string;eventState:string}>();
   const requestedSlug = url.searchParams.get("eventSlug") ?? "all";
   if (requestedSlug !== "all" && !events.results.some((event) => event.slug === requestedSlug)) {
     await recordAudit(env.DB, {
@@ -163,7 +160,7 @@ export async function GET(request: Request) {
     );
   }
   const slugs = requestedSlug === "all" ? events.results.map((event) => event.slug) : [requestedSlug];
-  const label = requestedSlug === "all" ? "All Nights" : events.results.find((event) => event.slug === requestedSlug)?.title ?? "Night";
+  const label = requestedSlug === "all" ? (session.role === "owner" ? "All Nights" : "My Nights") : events.results.find((event) => event.slug === requestedSlug)?.title ?? "Night";
   const rangeLabel = window.range === "all" ? "All time" : `Last ${window.range} days`;
   const empty = {
     events: events.results,

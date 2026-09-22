@@ -1,3 +1,4 @@
+import { saveOrganizerTier } from '../../../../lib/organizer-inventory';
 import { mutationHasValidOrigin, recordAudit, requestMetadata } from '../../../../lib/admin-session';
 import { csvResponse, OrganizerError, organizerScope, organizerSession, privateHeaders, requireOrganizerEvent, textInput } from '../../../../lib/organizer-access';
 import { listOrganizerEvents,readMoney,readGuests,guestDetails,readAudience } from '../../../../lib/organizer-records';
@@ -16,7 +17,8 @@ export async function GET(request:Request){
     let result:object;
     if(section==='events')result={events:await listOrganizerEvents(db,session)};
     else if(section==='submissions'){
-      result={submissions:(await db.prepare(`SELECT s.id,s.title,s.status,s.review_note AS reviewNote,s.created_at AS createdAt,s.event_slug AS eventSlug FROM party_submissions s WHERE (?='owner' OR lower(trim(s.contact_email))=?) AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.submission_id=s.id AND e.removed_at IS NOT NULL) ORDER BY s.created_at DESC LIMIT 250`).bind(session.role,session.email).all()).results};
+      const scope=organizerScope(session,'linked');
+      result={submissions:(await db.prepare(`SELECT s.id,s.title,s.status,s.review_note AS reviewNote,s.created_at AS createdAt,s.event_slug AS eventSlug FROM party_submissions s WHERE (?='owner' OR lower(trim(s.contact_email))=?) AND (s.event_slug IS NULL OR EXISTS(SELECT 1 FROM curated_event_records linked WHERE linked.slug=s.event_slug AND ${scope.sql})) AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.submission_id=s.id AND e.removed_at IS NOT NULL) ORDER BY s.created_at DESC LIMIT 250`).bind(session.role,session.email,...scope.bindings).all()).results};
     }else if(section==='money'){
       const data=await readMoney(db,session,slug);
       if(format==='csv')return csvResponse([['Statement','Event','Period start','Period end','Gross (GHS minor)','Fees (GHS minor)','Refunds (GHS minor)','Net ticket sales (GHS minor)','Status'],...data.statements.map(x=>[x.id,x.eventTitle,x.periodStart,x.periodEnd,x.grossMinor,x.feesMinor,x.refundsMinor,x.netMinor,x.status])],'becore-statements');
@@ -42,7 +44,7 @@ export async function GET(request:Request){
         const coupons=await db.prepare(`SELECT c.id,c.code,c.kind,c.value,c.max_uses AS maxUses,c.status,c.starts_at AS startsAt,c.expires_at AS expiresAt,c.ticket_tier_id AS tierId,${couponUsage} AS used FROM event_coupons c WHERE c.event_slug=? ORDER BY c.created_at DESC LIMIT 250`).bind(new Date().toISOString(),slug).all();
         result={coupons:coupons.results,promoters:await listPromoterReports(db,slug)};
       }else if(section==='questions')result={questions:(await db.prepare(`SELECT id,prompt,kind,options_json AS optionsJson,required,sort_order AS sortOrder,status,(SELECT COUNT(*) FROM attendee_question_answers a WHERE a.question_id=q.id) AS answerCount FROM event_questions q WHERE event_slug=? ORDER BY sort_order,created_at`).bind(slug).all()).results};
-      else if(section==='tickets')result={tiers:(await db.prepare(`SELECT t.id,t.code,t.name,t.price_minor AS priceMinor,t.capacity_admissions AS capacity,t.admissions_per_unit AS admissionsPerUnit,t.status,COALESCE((SELECT SUM(r.admission_count) FROM inventory_reservations r WHERE r.ticket_tier_id=t.id AND (r.status='consumed' OR (r.status='held' AND r.expires_at>?))),0) AS allocated FROM event_ticket_tiers t WHERE t.event_slug=? ORDER BY t.sort_order`).bind(new Date().toISOString(),slug).all()).results};
+      else if(section==='tickets')result={tiers:(await db.prepare(`SELECT t.id,t.code,t.name,t.description,t.max_units_per_order AS maxUnitsPerOrder,t.room_badge AS roomBadge,t.updated_at AS updatedAt,EXISTS(SELECT 1 FROM inventory_reservations history WHERE history.ticket_tier_id=t.id) AS hasHistory,t.price_minor AS priceMinor,t.capacity_admissions AS capacity,t.admissions_per_unit AS admissionsPerUnit,t.status,COALESCE((SELECT SUM(r.admission_count) FROM inventory_reservations r WHERE r.ticket_tier_id=t.id AND (r.status='consumed' OR (r.status='held' AND r.expires_at>?))),0) AS allocated FROM event_ticket_tiers t WHERE t.event_slug=? ORDER BY t.sort_order`).bind(new Date().toISOString(),slug).all()).results};
       else if(section==='draft')result={draft:await db.prepare('SELECT title,venue,lineup,tagline,starts_at AS startsAt,ends_at AS endsAt FROM curated_event_records WHERE slug=?').bind(slug).first()};
       else throw new OrganizerError('Page not found.',404);
     }
@@ -68,6 +70,7 @@ export async function POST(request:Request){
     else if(action==='duplicate')result=await duplicateEvent(db,session,b);
     else if(action==='complimentary')result=await issueComplimentary(db,session,b);
     else if(action==='draft_save'||action==='draft_submit')result=await saveDraft(db,session,b);
+    else if(action==='ticket_save')result=await saveOrganizerTier(db,session,b);
     else if(action==='question_save')result=await saveQuestion(db,session,b);
     else if(action==='guest_recovery'){
       const e=await requireOrganizerEvent(db,session,b.eventSlug),ticketId=textInput(b.ticketId,'ticket',120);
