@@ -50,7 +50,7 @@ jobs:
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
           node scripts/prepare-operations-browser-fixture.mjs
-          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'every organizer task|organizer can manage|host lands on their event' --workers=1 --retries=0 --output test-results/organizer-suite
+          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'every organizer task|organizer can manage|organizer overview keeps|host lands on their event' --workers=1 --retries=0 --output test-results/organizer-suite
       - name: Verify optional SeevPlus checkout on desktop and mobile
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |

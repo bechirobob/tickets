@@ -514,3 +514,16 @@ test('organizer can manage coupons, questions, guests and promoter records in is
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Guests',exact:true}).click();await page.getByLabel('Find a guest',{exact:true}).fill(code.toLowerCase());await expect(page.locator('.suite-section:visible').getByText(`Guest ${code}`,{exact:true})).toBeVisible();
  await page.getByRole('navigation',{name:'Organiser workspace'}).getByRole('link',{name:'Money',exact:true}).click();await expect(page.getByRole('heading',{name:'Know where you stand.'})).toBeVisible();await expect(page.getByRole('heading',{name:'Payout history'})).toBeVisible();
 });
+
+for(const fails of [false,true])test(`organizer overview keeps task controls stable while its summary ${fails?'fails':'loads'}`,async({page})=>{
+ let release:(()=>Promise<void>)|undefined;
+ await page.route('**/api/organizer/reports?**',route=>{release=()=>fails?route.fulfill({status:503,json:{error:'Summary temporarily unavailable'}}):route.continue();});
+ await page.goto('/organizer/workspace?area=events&event=after-dark-osu&view=overview');
+ await expect(page.getByText('Getting your event ready…',{exact:true})).toBeVisible();
+ const questions=page.locator('summary').filter({hasText:/^Guest questions$/});
+ await expect(questions).toBeHidden();
+ await expect.poll(()=>Boolean(release)).toBe(true);await release!();
+ if(fails)await expect(page.getByRole('alert')).toContainText('Summary temporarily unavailable');
+ await questions.click();
+ await expect(page.getByRole('button',{name:'Add question',exact:true})).toBeVisible();
+});
