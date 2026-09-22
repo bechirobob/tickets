@@ -46,6 +46,9 @@ jobs:
       - name: Verify every browser journey before release
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: npx playwright test --project ${{ matrix.browser }}
+      - name: Verify keyboard navigation focus without retries
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
+        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
       - name: Verify organizer suite on desktop and mobile
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
