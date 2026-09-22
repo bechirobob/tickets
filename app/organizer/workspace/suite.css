@@ -11,3 +11,5 @@
 .suite-topbar .workspace-jump select,.suite-topbar .workspace-jump select::picker(select){appearance:auto}
 .organizer-workspace--embedded .organizer-vip__layout{grid-template-columns:minmax(0,1fr)}.organizer-workspace--embedded .organizer-vip__queue,.organizer-workspace--embedded .organizer-vip__queue article>div{min-width:0}.organizer-workspace--embedded .organizer-vip__queue p{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
 .organizer-suite .organizer-workspace--embedded .organizer-dashboard{display:block;padding:0;margin:0;border:0}
+/* Keep task controls stationary while focus or a tap brings them into view. */
+html:has(.organizer-suite){scroll-behavior:auto}
