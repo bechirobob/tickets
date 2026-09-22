@@ -238,3 +238,20 @@ and an isolated Worker trace subscription to distinguish authorization/connectio
 closure from provider runtime failures. Persist only aggregate outcomes and
 redacted exceptions, never raw traces or request headers; the load subprocess
 continues to run without Cloudflare operator credentials.
+
+Diagnostic run `35670341751`, source `0eea93300c0180a33a68a462a7db9697367e6fb3`,
+separated startup from application load: the initial 500 was Cloudflare's
+"Script not found" page and lacked the Worker revision marker. After 30 successful
+startup reads, all HTTP load passed (400-burst p95 1,855 ms; sustained p95 46 ms).
+Room connection p95 passed at 3,711 ms, but the sender was closed with code 1013,
+"Service overloaded; retry later." All 400 snapshots arrived; no message did.
+Cleanup succeeded. This supplies the previously missing overload evidence.
+
+Remediation coalesces Room presence notifications into 250-ms windows, retaining
+an immediate snapshot for every new guest and a final headcount after departures.
+The old 400-join path generated up to 80,200 headcount frames and deserialized an
+attachment for each, even though presence contains no private content. Public
+metadata now skips that needless deserialization. Private messages/reactions/
+flashes retain fresh recipient authorization, block and revocation checks. A
+regression verifies all snapshots, bounded presence fanout, and the final leave
+count. Hosted thresholds and the 400-simultaneous-join workload are unchanged.

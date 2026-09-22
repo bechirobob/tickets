@@ -211,7 +211,7 @@ if (mode === 'setup') {
     report.metrics.push({ name: 'scheduler', p95Ms: schedulerP95Ms });
     if (schedulerP95Ms >= 250) throw new Error('Load generator could not sustain the requested arrival rate.');
     const received = new Set(), deliveries = [], marker = `rehearsal-${run}`;
-    let sentAt = 0, socketErrors = 0;
+    let sentAt = 0, socketErrors = 0, presenceFrames = 0;
     const closed = [], snapshots = new Set(), errorMessages = [];
     report.roomDiagnostics = { closed, errorMessages, snapshots: 0 };
     const connected = await Promise.allSettled(Array.from({ length: 400 }, (_,i) => new Promise((resolve, reject) => {
@@ -223,6 +223,7 @@ if (mode === 'setup') {
       socket.on('close', (code, reason) => { closed.push({ guest: i, code, reason: String(reason).slice(0,150) }); reject(new Error(`Room closed: ${code}`)); });
       socket.on('message', raw => {
         const message = JSON.parse(String(raw));
+        if (message.type === 'presence') presenceFrames++;
         if (message.type === 'snapshot') { snapshots.add(i); report.roomDiagnostics.snapshots = snapshots.size; }
         if (message.type === 'error') { socketErrors++; if (errorMessages.length < 10) errorMessages.push(String(message.error).slice(0,150)); }
         if (message.type === 'message' && message.message?.content === marker && !received.has(i)) { received.add(i); deliveries.push(performance.now()-sentAt); }
@@ -233,7 +234,7 @@ if (mode === 'setup') {
     sockets[0].send(JSON.stringify({ type: 'message', content: marker }));
     const deadline = Date.now() + 15000;
     while (received.size < 400 && Date.now() < deadline) await pause(50);
-    const deliveryMetric = { name: 'room-single-message-400-recipients', delivered: received.size, expected: 400, socketErrors, closed: closed.length, snapshots: snapshots.size, firstCloses: closed.slice(0,5), errorMessages, p95Ms: percentile(deliveries,.95) };
+    const deliveryMetric = { name: 'room-single-message-400-recipients', delivered: received.size, expected: 400, socketErrors, presenceFrames, closed: closed.length, snapshots: snapshots.size, firstCloses: closed.slice(0,5), errorMessages, p95Ms: percentile(deliveries,.95) };
     report.metrics.push(deliveryMetric); console.log(JSON.stringify(deliveryMetric));
     if (received.size !== 400 || socketErrors || closed.length || percentile(deliveries,.95) >= 5000) throw new Error('Hosted Room delivery failed.');
     record('recovery', await Promise.allSettled([request(0)]));
