@@ -48,6 +48,7 @@ type EventItem = {
   submissionStatus: string | null;
   submittedAt: string | null;
   paidOrders: number;
+  analyticsBaseline?: string | null;
   grossMinor: number;
   issuedAdmissions: number;
   checkedInAdmissions: number;
@@ -162,6 +163,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
 
       {message && !selected ? <div className="organizer-load-error" role="alert"><p>{message}</p><button type="button" onClick={() => { setMessage(""); setLoading(true); void load(); }}>Try again</button></div> : null}
       {loading ? <div className="organizer-empty"><Loader2 className="spin" /> Loading your events…</div> : <>
+        {data.events[0]?.analyticsBaseline ? <p>Sales measured since {new Date(data.events[0].analyticsBaseline).toLocaleString("en-GH", { timeZone: "Africa/Accra" })} GMT. Admissions and settlements show all current records.</p> : null}
         <details className="organizer-record-fold" open={data.events.length===0||undefined}><summary>Your events & submissions</summary>
         <section className="organizer-portfolio" aria-labelledby="organizer-record-title">
           <header><div><p>Across your events</p><h2 id="organizer-record-title">Your events so far</h2></div><div className="organizer-portfolio__actions"><Link href="/organizer/analytics">Open analytics <BarChart3 size={15} /></Link><Link href="/help">How this works <LifeBuoy size={15} /></Link></div></header>

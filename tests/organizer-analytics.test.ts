@@ -1,4 +1,5 @@
 import { recordProductMetric } from '../lib/product-analytics';
+import { GET as readWorkspace } from '../app/api/organizer/workspace/route';
 import { readHostSummary } from '../lib/host-summary';
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -207,6 +208,8 @@ it('resets every analytics cohort once while preserving bookings and excluding a
     expect(result.comparison).toBeNull();
     const summary=await readHostSummary(env.DB,slug);expect(summary).toMatchObject({baseline,sales:{orders:1},pending:2});
     expect(summary?.rsvp.totals.requests).toBe(1);
+    const workspace=await (await readWorkspace(new Request('https://tickets.becoreops.com/api/organizer/workspace',{headers:{cookie:account.cookie}}))).json() as {events:Array<{slug:string;analyticsBaseline:string;paidOrders:number;grossMinor:number;issuedAdmissions:number}>};
+    expect(workspace.events.find(event=>event.slug===slug)).toMatchObject({analyticsBaseline:baseline,paidOrders:1,grossMinor:11000,issuedAdmissions:2});
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE event_slug=?').bind(slug).first()).toEqual({n:2});
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM tickets WHERE event_slug=?').bind(slug).first()).toEqual({n:2});
     for(const headers of ([{'x-becore-analytics':'exclude'},{'user-agent':'HeadlessChrome/150'}] as Array<Record<string,string>>)) {
