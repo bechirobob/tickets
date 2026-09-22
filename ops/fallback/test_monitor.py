@@ -57,6 +57,24 @@ class MonitorTest(unittest.TestCase):
             self.assertFalse(writes[0].args[3]['action_parameters']['from_value']['preserve_query_string'])
             self.assertEqual(pathlib.Path(directory, 'state.json').stat().st_mode & 0o777, 0o600)
 
+    def test_recovery_disables_owned_redirect_after_three_saved_healthy_checks(self):
+        env = {'CLOUDFLARE_API_TOKEN': 'test-only', 'CLOUDFLARE_ZONE_ID': 'a' * 32,
+               'CLOUDFLARE_FALLBACK_RULESET_ID': 'b' * 32, 'CLOUDFLARE_FALLBACK_RULE_ID': 'c' * 32}
+        rule = {'id': 'c' * 32, 'ref': RULE_REF, 'action': 'redirect', 'expression': EXPRESSION, 'action_parameters': ACTION, 'enabled': True}
+        healthy = (200, {'content-type': 'application/json'}, json.dumps({'service': 'becore-tickets', 'revision': 'd' * 40}).encode())
+        with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {**env, 'STATE_DIRECTORY': directory}):
+            with patch('monitor.request', return_value=healthy), patch('monitor.api', side_effect=[{'rules': [rule]}, {}, {'rules': [{**rule, 'enabled': False}]}]) as api:
+                main()
+                main()
+                api.assert_not_called()
+                main()
+            writes = [call for call in api.call_args_list if len(call.args) > 2]
+            self.assertEqual(len(writes), 1)
+            self.assertTrue(writes[0].args[0].endswith('/rules/' + 'c' * 32))
+            self.assertEqual(writes[0].args[2], 'PATCH')
+            self.assertFalse(writes[0].args[3]['enabled'])
+            self.assertEqual(json.loads(pathlib.Path(directory, 'state.json').read_text())['healthy'], 3)
+
     def test_changed_rule_is_not_overwritten(self):
         env = {'CLOUDFLARE_API_TOKEN': 'test-only', 'CLOUDFLARE_ZONE_ID': 'a' * 32,
                'CLOUDFLARE_FALLBACK_RULESET_ID': 'b' * 32, 'CLOUDFLARE_FALLBACK_RULE_ID': 'c' * 32}

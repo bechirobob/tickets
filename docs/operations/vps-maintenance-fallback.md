@@ -8,7 +8,7 @@ Workers quota message, using the existing Hermes VPS. No hosting plan upgrade.
 - Static, self-contained page: https://tickets-status.becoreops.com/ on Hermes
   (`51.195.20.137`). Caddy returns HTTP 503, Retry-After, no-store and noindex.
 - Production DNS, Worker custom domain, app code and database are unchanged.
-- A disabled Cloudflare Single Redirect targets only HTML GET/HEAD page visits
+- A monitor-controlled Cloudflare Single Redirect targets only HTML GET/HEAD page visits
   on `tickets.becoreops.com`. API paths, API writes and payment callbacks are
   excluded. Query strings are not copied to the fallback host.
 - The VPS monitor probes `/api/version` once a minute. Only HTTP 429 with
@@ -21,50 +21,65 @@ Workers quota message, using the existing Hermes VPS. No hosting plan upgrade.
   until the original quota problem clears. This does not cover a Cloudflare-wide
   outage, because the redirect itself is served by Cloudflare.
 
-## Verified evidence
+## Active and verified — 22 September 2026
 
-- Tickets source branch: `feat/vps-maintenance-fallback`.
-- Six isolated monitor tests pass: quota classification, verified recovery,
-  three consecutive healthy probes, unhealthy fallback, one-rule-only mutation,
-  and refusal to overwrite an externally changed rule.
-- Cloudflare preparation passed in run `35722619237`; DNS resolves to Hermes and
-  the managed redirect was verified disabled. No production traffic switched.
-- VPS installation and public smoke checks passed in Bubble Wash run
-  `35722989031`, using Tickets source
-  `11e601c5554fe3f6a9eb08ad80cd75644f7ddd42`.
+**Automatic switching is connected and active.** The systemd timer is enabled
+across restarts and checks once a minute. The current Cloudflare quota outage
+activated the redirect. Normal visitors now reach the branded maintenance page.
+
+- Deployed runtime: Tickets `dc4c0b4ad1ef31ad2e58b8210a35d6bac0ca2b0c`.
+  Later changes add verification, operational records and tests only.
 - Page SHA-256:
   `278c9fa029b630e9a273f559c77c35fa1f65dc630c166078303d6062e6461a30`.
-- Live browser inspected the actual branded page. HTTP checks verified HTML 503,
-  no-store, health marker, and JSON 503 for POST to an API path.
-- Existing Caddy site contents were preserved, Caddy validation passed, and the
-  existing Bubble Wash response remained HTTP 403 before/after installation.
-  This is preservation evidence, not a claim that Bubble Wash is healthy.
+- Private activation succeeded in Tickets run `35724143368`, using the existing
+  Tickets Actions Cloudflare secret directly over SSH to Hermes. No credential
+  was copied into source, logs, artifacts, chat or another repository.
+- The ephemeral SSH key was limited to the verified runner IP, an expiring
+  authorization and the fixed activation command. Its public metadata was the
+  only artifact. The server revoked the key after use; the runner destroyed the
+  private key. The temporary gate and cleanup timer were removed.
+- The Cloudflare connection lives in `/etc/becore-tickets-fallback.env`, owned by
+  root with mode 0600. The monitor runs as a sandboxed systemd dynamic user.
+- Final live verification: Bubble Wash run `35724735503`, source
+  `3d76c617a2c852746388fe835bb3289713e1b887`.
+  Confirmed timer enabled/active, service success, repeated scheduled quota
+  detections, exact managed redirect enabled, HTML 302 to the fallback without
+  copying query strings, API 429 without redirect even with HTML Accept, and
+  branded fallback HTTP 503 with no-store. Browser navigation from the actual
+  production URL displayed the branded maintenance page.
+- Seven isolated monitor tests pass, including the complete recovery path:
+  two persisted healthy checks perform no routing writes; the third disables
+  only the managed rule and verifies the change. Live recovery has not yet
+  occurred because the real quota block is still present. No fake production
+  recovery or customer payment was triggered for testing.
+- Existing Caddy site contents were preserved, configuration validation passed,
+  and the existing Bubble Wash response remained HTTP 403 before/after initial
+  installation. This preserves its baseline and does not establish its health.
 
-Initial preparation failed because the existing API secret contained surrounding
-whitespace; normalization fixed it. The initial public check ran before DNS was
-ready. A later check incorrectly assumed the unrelated site's baseline was 200;
-it now compares the observed response before and after installation. Final
-checks passed after those specific corrections.
+The first follow-up verification used Python's default request identity, which
+received HTTP 403; it now uses the actual monitor's request headers and confirms
+HTTP 429 / Error 1027. A repeated cleanup attempted to stop an already-removed
+transient timer; final verification is read-only and passed after that correction.
 
-## Remaining connection and exact next action
+## Operation and credential rotation
 
-**Automatic switching is not active.** The redirect remains disabled and the
-systemd timer has not been enabled. The VPS connection is available to the
-`bechirobob/bubble-wash` workflow; its Cloudflare fallback credential is missing.
-The existing Cloudflare token is in `bechirobob/tickets`, and GitHub does not expose
-its stored value for copying into another repository.
+No further user credential setup is required. The monitor currently uses the
+existing Tickets deployment token, which also has deployment/DNS permissions.
+It is stored privately on the VPS, not in the Bubble Wash repository. Future
+rotation should use a dedicated token scoped to `becoreops.com` with
+Zone > Single Redirect > Edit, delivered through the existing administrator SSH
+connection to `activate-monitor.py` via stdin. Never print or commit the value.
 
-1. Store `TICKETS_FALLBACK_CLOUDFLARE_TOKEN` in the Bubble Wash repository's Actions
-   secrets. Scope it to `becoreops.com` with Zone > Single Redirect > Edit.
-   Do not paste the value into chat, source, logs or artifacts.
-2. Rerun **Install Tickets fallback page** on `ops/inspect-tickets-fallback`.
-   Its activation step sends the credential through Tailscale SSH stdin to a
-   root-owned 0600 environment file, validates the exact rule and healthy page,
-   starts the timer, and performs the first check.
-3. Verify the production hostname redirects during a confirmed quota block,
-   while `/api/version` is not redirected. Verify it stops redirecting after
-   three valid app probes. Runtime failover and recovery remain unverified until
-   activation. A passing static-page check is not evidence of automatic failover.
+Inspect `systemctl status becore-tickets-fallback.timer` and sanitized
+`journalctl -u becore-tickets-fallback.service`. During a confirmed quota outage,
+HTML navigation redirects to the VPS while APIs retain their original responses.
+After three consecutive genuine `/api/version` responses identify the Tickets
+service and a full commit revision, the monitor disables only its own redirect.
+Unknown errors reset the recovery count and preserve the current routing state.
+
+This improves the outage presentation; it does not restore bookings/payments
+while Cloudflare blocks the original application. Allow approximately one check
+interval plus Cloudflare propagation before the branded page takes over.
 
 Managed zone: `bbf0174f839a0d22dbf6d9f4bd3cf53d`.
 Ruleset: `c2e81ba1a73248c0a2974c1fc6889e28`.
