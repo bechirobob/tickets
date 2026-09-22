@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- private event artwork must not use a shared optimizer cache. */
 "use client";
 
+import ConfirmationNotifications from "../confirmation-notifications";
 import MyRegistrations from "../my-registrations";
 import BrandLogo from "../brand-logo";
 import PublicNavigation from "../mobile-navigation";
@@ -102,6 +103,7 @@ export default function MyNightsClient() {
     <header className="directory-header"><Link href="/events" aria-label="Back to The Drop"><ArrowLeft size={16} /><span className="directory-header__back-label">The Drop</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="my-nights-header-actions"><PublicNavigation /><NotificationBell /></span></header>
     <section className="my-nights-shell">
       <header className="nights-heading"><div><p className="eyebrow">{payload ? `For ${payload.attendee.displayName}` : "BeCore Tickets"}</p><h1>My Nights<span aria-hidden="true">.</span></h1></div><Link className="nights-privacy" href="/account/privacy"><ShieldCheck size={17} /><span>Privacy</span></Link></header>
+      {member ? <ConfirmationNotifications /> : null}
       {recovered && payload ? <div className="my-nights-recovered" role="status"><CheckCircle2 size={18} /><span>Your nights are back.</span></div> : null}
       {member ? <div className="nights-toolbar"><nav className="my-nights-tabs night-glass" aria-label="My Nights views">{views.map(item => <button key={item} type="button" aria-current={activeView === item ? "page" : undefined} onClick={() => chooseView(item)}>{item === "upcoming" ? "Upcoming" : item === "past" ? "Past" : item === "following" ? "Following" : "RSVPs"}<span aria-label={`${counts[item]} ${item === "rsvps" ? "registrations" : "nights"}`}>{counts[item]}</span></button>)}</nav>{(payload?.nights.length ?? 0) > 3 && activeView !== "rsvps" ? <label className="nights-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label="Find a night" placeholder="Find a night" value={query} onChange={e => setQuery(e.target.value)} />{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery("")}><X size={16} /></button> : null}</label> : null}</div> : null}
       <div hidden={activeView !== "rsvps" || !member} className="nights-registration-view"><MyRegistrations onCountChange={setRegistrationCount} /></div>

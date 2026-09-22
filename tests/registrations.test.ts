@@ -2,7 +2,7 @@ import { env } from 'cloudflare:test';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { requestRegistration, claimRegistration, readRegistration, cancelRegistration, processRegistrations, registrationSettings } from '../lib/registrations';
 import { notifyRoomMessage } from '../lib/notifications';
-import { readAttendeeRoomAccess } from '../lib/attendee-auth';
+import { readAttendeeRoomAccess, readAttendeeIdentity } from '../lib/attendee-auth';
 import { adminCookieHeader, createStaffSession } from '../lib/admin-session';
 import { POST as passes } from '../app/api/customer/tickets/route';
 import { GET as nights } from '../app/api/customer/my-nights/route';
@@ -196,4 +196,55 @@ it('allows explicitly enabled undated RSVP without exceeding capacity or unlocki
   } finally {
     await env.DB.prepare('UPDATE event_registration_settings SET allow_undated_rsvp=0,accepting=1 WHERE event_slug=?').bind(slug).run();
   }
+});
+
+it('binds only a new RSVP to its originating session and never grants access to a duplicate email submission', async () => {
+  await configure({approvalRequired:true});
+  const input={eventSlug:slug,email:'device-owned@example.com',guestName:'Device Guest',phone:'',partySize:1,acceptedTerms:true};
+  const first=await signup(req('/api/registrations',input));
+  const cookie=first.headers.get('set-cookie')!;
+  expect(cookie).toContain('HttpOnly');
+  const reg=await env.DB.prepare('SELECT id,attendee_id AS attendeeId,verified_at AS verified FROM event_registrations WHERE normalized_email=?').bind(input.email).first<{id:string;attendeeId:string;verified:null}>();
+  expect(reg?.verified).toBeNull();
+  const other=await signup(req('/api/registrations',{...input,email:'separate-device-email@example.com'},cookie));
+  const otherIdentity=await readAttendeeIdentity(env.DB,other.headers.get('set-cookie'));
+  expect(otherIdentity?.normalizedEmail).toBe('separate-device-email@example.com');
+  expect(otherIdentity?.attendeeId).not.toBe(reg!.attendeeId);
+  const duplicate=await signup(req('/api/registrations',input));
+  expect(duplicate.headers.get('set-cookie')).toBeNull();
+  expect(await duplicate.json()).toMatchObject({canManage:false});
+  expect((await signup(req('/api/registrations',input,cookie))).headers.get('set-cookie')).toBeNull();
+  const before=await (await passes(req('/api/customer/tickets',{},cookie))).json() as {orders:unknown[]};
+  expect(before.orders).toHaveLength(0);
+  await processRegistrations(env,origin);
+  expect(await env.DB.prepare("SELECT id FROM delivery_events WHERE recipient=? AND kind='registration_update'").bind(input.email).first()).toBeNull();
+  await hostAction(req('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id},await owner()));
+  const wallet=await (await passes(req('/api/customer/tickets',{},cookie))).json() as {orders:Array<{tickets:Array<{qrPayload:string}>}>};
+  expect(wallet.orders[0].tickets[0].qrPayload).toBeTruthy();
+  await processRegistrations(env,origin);
+  expect(await env.DB.prepare("SELECT url FROM attendee_notifications WHERE attendee_id=? AND kind='registration_update'").bind(reg!.attendeeId).first()).toEqual({url:`/my-nights/${slug}?view=passes`});
+  // Inbox recovery moves only this registration's passes to the verified owner.
+  const grant=await access(input.email);
+  const verified=await claimRegistration(env.DB,grant.token);
+  expect(verified.registration?.attendeeId).not.toBe(reg!.attendeeId);
+  expect((await (await passes(req('/api/customer/tickets',{},verified.cookie))).json() as {orders:unknown[]}).orders).toHaveLength(1);
+  expect((await (await passes(req('/api/customer/tickets',{},cookie))).json() as {orders:unknown[]}).orders).toHaveLength(0);
+});
+
+it('keeps verified ownership when inbox recovery races host approval', async () => {
+  await configure({approvalRequired:true});
+  const input={eventSlug:slug,email:'approval-recovery-race@example.com',guestName:'Racing Guest',phone:'',partySize:1,acceptedTerms:true};
+  const submitted=await signup(req('/api/registrations',input));
+  const deviceCookie=submitted.headers.get('set-cookie')!;
+  const grant=await access(input.email),hostCookie=await owner();
+  const [verified,approved]=await Promise.all([
+    claimRegistration(env.DB,grant.token),
+    hostAction(req('/api/admin/registrations',{eventSlug:slug,action:'approve',id:grant.id},hostCookie)),
+  ]);
+  expect(approved.status).toBe(200);
+  const current=await readRegistration(env.DB,grant.id);
+  expect(current?.status).toBe('confirmed');
+  expect(await env.DB.prepare('SELECT attendee_id AS owner FROM ticket_assignments WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id=?)').bind(`rsvp_${grant.id}`).first()).toEqual({owner:current!.attendeeId});
+  expect((await (await passes(req('/api/customer/tickets',{},verified.cookie))).json() as {orders:unknown[]}).orders).toHaveLength(1);
+  expect((await (await passes(req('/api/customer/tickets',{},deviceCookie))).json() as {orders:unknown[]}).orders).toHaveLength(0);
 });

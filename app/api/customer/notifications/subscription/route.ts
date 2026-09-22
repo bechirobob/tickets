@@ -3,15 +3,17 @@ import { mutationHasValidOrigin } from "../../../../../lib/admin-session";
 import { validPushEndpoint, validPushKeys } from '../../../../../lib/push-subscription';
 import { enforceRateLimit } from '../../../../../lib/security-controls';
 
-type SubscriptionInput = { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+type SubscriptionInput = { confirmationUpdates?: boolean; endpoint?: string; keys?: { p256dh?: string; auth?: string } };
 
 export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
   const identity = await readAttendeeIdentity(env.DB, request.headers.get("cookie"));
   if (!identity) return Response.json({ error: "Verified attendee access required." }, { status: 401 });
+  const endpoint = new URL(request.url).searchParams.get('endpoint');
+  const device = endpoint ? await env.DB.prepare('SELECT confirmation_updates AS confirmations,room_updates AS rooms FROM push_subscriptions WHERE attendee_id=? AND endpoint=? AND revoked_at IS NULL').bind(identity.attendeeId, endpoint).first<{confirmations:number;rooms:number}>() : null;
   const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM push_subscriptions WHERE attendee_id = ? AND revoked_at IS NULL")
     .bind(identity.attendeeId).first<{ count: number }>();
-  return Response.json({ available: Boolean(env.VAPID_PUBLIC_KEY), publicKey: env.VAPID_PUBLIC_KEY ?? null, subscribedDevices: count?.count ?? 0 }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ available: Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT), deviceSubscribed: Boolean(device), roomUpdates: Boolean(device?.rooms), confirmationUpdates: Boolean(device?.confirmations), publicKey: env.VAPID_PUBLIC_KEY ?? null, subscribedDevices: count?.count ?? 0 }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -28,15 +30,20 @@ export async function POST(request: Request) {
   if (!validPushEndpoint(endpoint) || !validPushKeys(p256dh, auth)) {
     return Response.json({ error: "That notification subscription is not valid." }, { status: 400 });
   }
+  if (body.confirmationUpdates !== undefined && typeof body.confirmationUpdates !== 'boolean') return Response.json({ error: 'Choose a valid notification preference.' }, { status: 400 });
+  if (body.confirmationUpdates === true && !(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT)) return Response.json({ error: 'Phone alerts are unavailable right now. Email confirmations are still on.' }, { status: 503 });
   const now = new Date().toISOString();
   const saved = await env.DB.prepare(`
-    INSERT INTO push_subscriptions (id, attendee_id, endpoint, p256dh, auth, user_agent, created_at, updated_at, failure_count)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, 0
+    INSERT INTO push_subscriptions (id, attendee_id, endpoint, p256dh, auth, user_agent, created_at, updated_at, failure_count, confirmation_updates, room_updates)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?
     WHERE (SELECT COUNT(*) FROM push_subscriptions WHERE attendee_id = ? AND revoked_at IS NULL AND endpoint <> ?) < 12
-    ON CONFLICT(endpoint) DO UPDATE SET attendee_id = excluded.attendee_id,
+    ON CONFLICT(endpoint) DO UPDATE SET
+      room_updates = CASE WHEN ? IS NULL THEN 1 WHEN push_subscriptions.attendee_id = excluded.attendee_id THEN push_subscriptions.room_updates ELSE 0 END,
+      confirmation_updates = CASE WHEN ? IS NOT NULL THEN excluded.confirmation_updates WHEN push_subscriptions.attendee_id = excluded.attendee_id THEN push_subscriptions.confirmation_updates ELSE 0 END,
+      attendee_id = excluded.attendee_id,
       p256dh = excluded.p256dh, auth = excluded.auth, user_agent = excluded.user_agent,
       updated_at = excluded.updated_at, revoked_at = NULL, failure_count = 0
-  `).bind(crypto.randomUUID(), identity.attendeeId, endpoint, p256dh, auth, request.headers.get("user-agent")?.slice(0, 300) ?? null, now, now, identity.attendeeId, endpoint).run();
+  `).bind(crypto.randomUUID(), identity.attendeeId, endpoint, p256dh, auth, request.headers.get("user-agent")?.slice(0, 300) ?? null, now, now, body.confirmationUpdates === true ? 1 : 0, body.confirmationUpdates === undefined ? 1 : 0, identity.attendeeId, endpoint, body.confirmationUpdates === undefined ? null : 1, body.confirmationUpdates === undefined ? null : 1).run();
   if (!saved.meta.changes) return Response.json({ error: 'You have notifications on 12 devices. Turn them off on an old device before adding another.' }, { status: 409 });
   return Response.json({ subscribed: true }, { status: 201, headers: { "cache-control": "no-store" } });
 }

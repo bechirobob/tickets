@@ -5,6 +5,7 @@ import { runPreviewCleanup } from "../lib/preview-cleanup";
 import { processEventAnnouncements } from "../lib/event-audience";
 import { deliverQueuedEventAnnouncement } from "../lib/event-announcement-queue";
 import { retryEventRemovals } from "../lib/event-removal";
+import { retryOrderConfirmations, deliverOrderConfirmationByReference } from '../lib/payment-operations';
 import { processRegistrations } from "../lib/registrations";
 import { recoverSeevPayments } from "../lib/seevplus";
 import { publicPageCacheKey, publicCacheResponse } from "./public-page-cache";
@@ -127,6 +128,8 @@ const worker = {
       try {
         if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
         else if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
+        else if (message.body?.deliveryId?.startsWith('registration-confirmation:')) await processRegistrations(env, 'https://tickets.becoreops.com', message.body.deliveryId.slice('registration-confirmation:'.length));
+        else if (message.body?.deliveryId?.startsWith('order-confirmation:')) await deliverOrderConfirmationByReference(env, message.body.deliveryId.slice('order-confirmation:'.length), 'https://tickets.becoreops.com');
         else await deliverQueuedEventAnnouncement(env, message.body?.deliveryId ?? "");
         message.ack();
       } catch (error) {
@@ -177,6 +180,7 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
   if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
   if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
   try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
+  try { await retryOrderConfirmations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "order-confirmations", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
   try {
     await purgeExpiredFlashes(env.DB);

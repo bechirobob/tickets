@@ -14,6 +14,7 @@ import { mutationHasValidOrigin } from "../../../../lib/admin-session";
 
 type ClaimRecord = {
   orderId: string;
+  checkoutAttendeeId: string | null;
   eventSlug: string;
   customerEmail: string;
   customerPhone: string;
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
   const claimHash = await hashToken(claim);
   const now = new Date().toISOString();
   const findClaimRecord = () => db.prepare(`
-    SELECT o.id AS orderId, o.event_slug AS eventSlug, o.customer_email AS customerEmail,
+    SELECT o.id AS orderId, o.checkout_attendee_id AS checkoutAttendeeId, o.event_slug AS eventSlug, o.customer_email AS customerEmail,
            o.customer_phone AS customerPhone, o.customer_name AS customerName, o.status AS orderStatus, o.payment_provider AS paymentProvider,
            g.expires_at AS expiresAt, g.claimed_at AS claimedAt
     FROM order_access_grants g
@@ -122,11 +123,15 @@ export async function POST(request: Request) {
   const normalizedEmail = record.customerEmail.trim().toLowerCase();
   // A payment-return claim proves ownership of this order, not control of the
   // email address typed at checkout. Keep it isolated until inbox verification.
-  const attendeeId = `order_att_${crypto.randomUUID()}`;
+  const identity = await readAttendeeIdentity(db, request.headers.get('cookie'));
+  const retain = identity?.attendeeId === record.checkoutAttendeeId ? identity : null;
+  const attendeeId = retain?.attendeeId ?? `order_att_${crypto.randomUUID()}`;
   const fallbackName = normalizedEmail.split("@")[0]?.replace(/[._-]+/gu, " ").slice(0, 40) || "Guest";
   const displayName = (record.customerName?.trim() || fallbackName).slice(0, 50);
-  const sessionToken = createSecureToken();
-  const sessionId = crypto.randomUUID();
+  const existingToken = retain ? readCookie(request.headers.get('cookie')) : null;
+  const existingSession = existingToken ? await db.prepare('SELECT id FROM attendee_sessions WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?').bind(await hashToken(existingToken),now).first<{id:string}>() : null;
+  const sessionToken = existingSession ? existingToken! : createSecureToken();
+  const sessionId = existingSession?.id ?? crypto.randomUUID();
   const sessionHash = await hashToken(sessionToken);
   const ownsClaim = `
     EXISTS (
@@ -143,19 +148,24 @@ export async function POST(request: Request) {
     db.prepare(`
       INSERT INTO attendee_profiles (id, normalized_email, phone, display_name, email_verified_at, status, created_at, updated_at)
       SELECT ?, ?, ?, ?, NULL, 'active', ?, ?
-      WHERE ${ownsClaim}
-    `).bind(attendeeId, normalizedEmail, record.customerPhone, displayName, now, now, record.orderId, sessionId),
+      WHERE ${ownsClaim} AND NOT EXISTS (SELECT 1 FROM attendee_profiles WHERE id=?)
+    `).bind(attendeeId, normalizedEmail, record.customerPhone, displayName, now, now, record.orderId, sessionId, attendeeId),
     ...issued.results.map((ticket) => db.prepare(`
       INSERT INTO ticket_assignments (ticket_id, attendee_id, assigned_by, status, assigned_at)
       SELECT ?, ?, ?, 'active', ?
       WHERE ${ownsClaim}
-      ON CONFLICT(ticket_id) DO NOTHING
-    `).bind(ticket.id, attendeeId, `order:${record.orderId}`, now, record.orderId, sessionId)),
+      ON CONFLICT(ticket_id) DO UPDATE SET attendee_id=excluded.attendee_id,assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at
+      WHERE ticket_assignments.assigned_by=? AND ticket_assignments.attendee_id=? AND ticket_assignments.status='active'
+    `).bind(ticket.id, attendeeId, `order:${record.orderId}`, now, record.orderId, sessionId, `checkout:${record.orderId}`, record.checkoutAttendeeId)),
     db.prepare(`
       INSERT INTO attendee_sessions (id, attendee_id, token_hash, expires_at, created_at, last_seen_at)
       SELECT ?, ?, ?, ?, ?, ?
-      WHERE ${ownsClaim}
-    `).bind(sessionId, attendeeId, sessionHash, attendeeSessionExpiry(), now, now, record.orderId, sessionId),
+      WHERE ${ownsClaim} AND NOT EXISTS (SELECT 1 FROM attendee_sessions WHERE id=?)
+    `).bind(sessionId, attendeeId, sessionHash, attendeeSessionExpiry(), now, now, record.orderId, sessionId, sessionId),
+    db.prepare(`INSERT OR IGNORE INTO attendee_notifications (id,attendee_id,event_slug,kind,title,body,url,source_id,created_at)
+      SELECT ?,?,?,'purchase_confirmation','Your ticket is confirmed','Your QR ticket and receipt are ready in My Nights.',?,?,?
+      WHERE ${ownsClaim} AND EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id WHERE t.order_id=? AND a.attendee_id=? AND a.status='active')`)
+      .bind(crypto.randomUUID(),attendeeId,record.eventSlug,`/my-nights/${record.eventSlug}?view=passes`,`payment-confirmation/${record.orderId}`,now,record.orderId,sessionId,record.orderId,attendeeId),
   ];
   const [claimResult] = await db.batch(statements);
   if (claimResult.meta.changes !== 1) {

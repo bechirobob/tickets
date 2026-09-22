@@ -24,6 +24,7 @@ export const orders = sqliteTable("orders", {
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerName: text("customer_name"),
+  checkoutAttendeeId: text("checkout_attendee_id"),
   announcementsOptIn: integer("announcements_opt_in").notNull().default(0),
   paymentChannel: text("payment_channel").notNull(),
   status: text("status", { enum: ["payment_pending", "paid", "failed", "refund_pending", "refunded", "expired", "requires_refund", "disputed"] }).notNull(),
@@ -190,6 +191,12 @@ export const attendeeEventPreferences = sqliteTable("attendee_event_preferences"
   index("attendee_event_preferences_event_idx").on(table.eventSlug, table.keepPosted),
 ]);
 
+export const confirmationDeliveries = sqliteTable("confirmation_deliveries", {
+  id: text("id").primaryKey(), orderId: text("order_id"),
+  status: text("status").notNull().default("pending"), leaseToken: text("lease_token"), leaseUntil: text("lease_until"),
+  createdAt: text("created_at").notNull(), completedAt: text("completed_at"),
+}, table => [index("confirmation_deliveries_pending_idx").on(table.status, table.leaseUntil)]);
+
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
   id: text("id").primaryKey(),
   attendeeId: text("attendee_id").notNull(),
@@ -201,6 +208,8 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   updatedAt: text("updated_at").notNull(),
   lastSuccessAt: text("last_success_at"),
   failureCount: integer("failure_count").notNull().default(0),
+  confirmationUpdates: integer("confirmation_updates").notNull().default(0),
+  roomUpdates: integer("room_updates").notNull().default(1),
   revokedAt: text("revoked_at"),
 }, (table) => [
   uniqueIndex("push_subscriptions_endpoint_unique").on(table.endpoint),
@@ -223,7 +232,7 @@ export const attendeeNotifications = sqliteTable("attendee_notifications", {
   id: text("id").primaryKey(),
   attendeeId: text("attendee_id").notNull(),
   eventSlug: text("event_slug"),
-  kind: text("kind", { enum: ["room_message", "host_update", "ticket_transfer", "gate_update", "event_reminder", "test", "waitlist_offer", "payment_recovery", "event_status", "support_update"] }).notNull(),
+  kind: text("kind", { enum: ["room_message", "host_update", "ticket_transfer", "gate_update", "event_reminder", "test", "waitlist_offer", "payment_recovery", "event_status", "support_update", "purchase_confirmation", "registration_update"] }).notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
   url: text("url").notNull(),
@@ -1120,7 +1129,7 @@ export const eventRegistrations = sqliteTable("event_registrations", {
   status: text("status", { enum: ["unverified", "interested", "requested", "waitlisted", "confirmed", "cancelled", "declined"] }).notNull(),
   announcementsOptIn: integer("announcements_opt_in").notNull().default(0),
   acquisitionSource: text("acquisition_source").notNull().default("untracked"),
-  attendeeId: text("attendee_id"), orderId: text("order_id"), verifiedAt: text("verified_at"),
+  attendeeId: text("attendee_id"), orderId: text("order_id"), verifiedAt: text("verified_at"), deviceClaimedAt: text("device_claimed_at"),
   approvedAt: text("approved_at"), eventSignature: text("event_signature"),
   version: integer("version").notNull().default(0), notifiedVersion: integer("notified_version").notNull().default(0),
   createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),

@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- event artwork is already governed by the platform image source */
 
+import ConfirmationNotifications from "../../confirmation-notifications";
 import Link from "next/link";
 import BrandLogo from "../../brand-logo";
 import PublicNavigation from "../../mobile-navigation";
@@ -692,7 +693,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
           </div>
         </div>
       </section>
-
+      <ConfirmationNotifications />
     </main>
   );
 }

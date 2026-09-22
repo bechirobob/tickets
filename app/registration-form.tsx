@@ -1,4 +1,5 @@
 'use client';
+import ConfirmationNotifications from './confirmation-notifications';
 import { FormEvent, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ActionButton } from './action';
@@ -7,6 +8,7 @@ export default function RegistrationForm({ eventSlug, mode, maxPartySize, approv
   const runtime = useCustomerRuntime();
   const [open, setOpen] = useState(initiallyOpen), [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [sent, setSent] = useState(false);
   const inFlight = useRef(false);
+  const [canManage, setCanManage] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (inFlight.current) return;
     inFlight.current = true; setBusy(true); setMessage('');
@@ -14,9 +16,9 @@ export default function RegistrationForm({ eventSlug, mode, maxPartySize, approv
     const attribution = new URLSearchParams(window.location.search);
     try {
       const response = await fetch('/api/registrations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: attribution.get('source'), ref: attribution.get('ref'), eventSlug, email: form.get('email'), guestName: form.get('guestName'), phone: form.get('phone') ?? '', partySize: Number(form.get('partySize') ?? 1), acceptedTerms: form.get('acceptedTerms') === 'on', announcementsOptIn: form.get('announcementsOptIn') === 'on' }) });
-      const data = await response.json() as { error?: string; message: string };
+      const data = await response.json() as { error?: string; message: string; canManage?: boolean };
       if (!response.ok) throw new Error(data.error ?? 'Registration could not be saved.');
-      setMessage(data.message); setSent(true);
+      setMessage(data.message); setCanManage(data.canManage === true); setSent(true);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not connect. Your details are still here. Try again.'); }
     finally { setBusy(false); inFlight.current = false; }
   }
@@ -30,5 +32,6 @@ export default function RegistrationForm({ eventSlug, mode, maxPartySize, approv
       {sent && mode === 'rsvp' ? <div className="registration-success" role="status"><span aria-hidden="true">✓</span><h2>RSVP received.</h2><p>Outfit planning starts now.</p>{approvalRequired ? <p className="registration-success__detail">Now we wait for the host’s nod.</p> : <p className="registration-success__detail">The host has your details. Full house? You’re on the waitlist.</p>}</div> : <>{message ? <p role="status">{message}</p> : null}{sent ? <p>Check your inbox and spam folder. The link lasts 20 minutes.</p> : null}</>}
 
     </form>}
+    {sent && mode === 'rsvp' ? <>{canManage ? <><Link href="/my-nights?view=rsvps">View my RSVP in My Nights</Link><ConfirmationNotifications /></> : <p>Already registered? <Link href="/my-nights">Use your registration email to recover your RSVP.</Link></p>}</> : null}
   </section>;
 }

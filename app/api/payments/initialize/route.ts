@@ -1,7 +1,7 @@
 import { paystackAvailable, paystackEnvironment } from "../../../../lib/paystack-environment";
 import { registrationSettings, registrationsOpen } from "../../../../lib/registrations";
 import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
-import { createSecureToken, hashToken } from "../../../../lib/attendee-auth";
+import { createSecureToken, hashToken, readAttendeeIdentity } from "../../../../lib/attendee-auth";
 import { resolveTicketSelection } from "../../../../lib/ticket-selection";
 import { findCuratedEvent } from "../../../events";
 import { hashToken as hashStaffToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../../lib/admin-session";
@@ -106,6 +106,8 @@ export async function POST(request: Request) {
   const origin = new URL(request.url).origin;
   const claimToken = createSecureToken();
   const claimTokenHash = await hashToken(claimToken);
+  const identity = await readAttendeeIdentity(env.DB, request.headers.get('cookie'));
+  const checkoutAttendeeId = identity?.normalizedEmail === email ? identity.attendeeId : null;
 
   const [reservation] = await env.DB.batch([
     env.DB.prepare(`
@@ -154,7 +156,7 @@ export async function POST(request: Request) {
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
       paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
     ),
-    env.DB.prepare("UPDATE orders SET announcements_opt_in=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,id),
+    env.DB.prepare("UPDATE orders SET announcements_opt_in=?,checkout_attendee_id=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,checkoutAttendeeId,id),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
       SELECT ?, ?, ?, ? FROM orders WHERE id = ?

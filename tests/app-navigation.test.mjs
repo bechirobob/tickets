@@ -29,3 +29,15 @@ test("notification taps preserve staff windows and wait for customer navigation 
   await clickNotification({ url: "/room/one" }, [staff, customer]);
   assert.deepEqual(steps, ["/room/one", "focus"]);
 });
+
+test('ticket confirmations open My Nights without Room mute actions', async () => {
+  for (const kind of ['purchase_confirmation', 'registration_update', 'room_message', 'host_update']) {
+    const handlers=new Map();let shown;
+    const self={addEventListener:(name,handler)=>handlers.set(name,handler),registration:{showNotification:async(title,options)=>{shown={title,...options};}}};
+    vm.runInNewContext(source,{self,URL});let complete;
+    handlers.get('push')({data:{json:()=>({kind,eventSlug:'one',title:'Confirmed',url:'/my-nights/one?view=passes'})},waitUntil:work=>{complete=work;}});
+    await complete;
+    assert.equal(shown.data.url,'/my-nights/one?view=passes');
+    assert.equal(shown.actions.some(action=>action.action==='quiet'),['room_message','host_update'].includes(kind));
+  }
+});

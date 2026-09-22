@@ -40,23 +40,23 @@ afterEach(()=>vi.restoreAllMocks());
 async function directSignup(email:string,extra:Record<string,unknown>={}) {
  return submitRsvp(post('/api/registrations',{eventSlug:slug,email,guestName:'Party Guest',phone:'',partySize:1,acceptedTerms:true,announcementsOptIn:true,...extra},''));
 }
-it('takes RSVP requests straight to host review and guest emails without sending confirmation or creating an account',async()=>{
+it('gives the submitting device only its new RSVP and issues a pass after host approval',async()=>{
  await settings({capacity:100,approvalRequired:true});
  const email='direct-party@example.com';
- const response=await directSignup(email,{source:"instagram"});expect(response.status).toBe(202);expect(response.headers.get('set-cookie')).toBeNull();
- expect(await response.json()).toEqual({message:'RSVP received. Outfit planning starts now.'});
+ const response=await directSignup(email,{source:"instagram"});expect(response.status).toBe(202);expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+ expect(await response.json()).toEqual({message:'RSVP received. Outfit planning starts now.',canManage:true});
  const reg=await env.DB.prepare('SELECT id,status,attendee_id,verified_at,announcements_opt_in FROM event_registrations WHERE event_slug=? AND normalized_email=?').bind(slug,email).first<{id:string}>();
- expect(reg).toMatchObject({status:'requested',attendee_id:null,verified_at:null,announcements_opt_in:1});
- expect(await env.DB.prepare('SELECT id FROM attendee_profiles WHERE normalized_email=?').bind(email).first()).toBeNull();
+ expect(reg).toMatchObject({status:'requested',attendee_id:expect.any(String),verified_at:null,announcements_opt_in:1});
+ expect(await env.DB.prepare('SELECT email_verified_at FROM attendee_profiles WHERE normalized_email=?').bind(email).first()).toEqual({email_verified_at:null});
  expect(await env.DB.prepare('SELECT id FROM registration_access_grants WHERE registration_id=?').bind(reg!.id).first()).toBeNull();
  expect(await env.DB.prepare('SELECT id FROM delivery_events WHERE recipient=?').bind(email).first()).toBeNull();
  expect(await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&live=1`))).json()).toMatchObject({requested:1,confirmed:0,latest:[{name:'Party Guest',status:'requested'}]});
  expect(await (await audience(get(`/api/admin/audience?eventSlug=${slug}`))).json()).toMatchObject({total:1,subscribers:1,contacts:[{email,subscribed:1}]});
  expect(await (await audience(get(`/api/admin/audience?eventSlug=${slug}&export=csv`))).text()).toContain(email);
  expect((await configure(post('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id}))).status).toBe(200);
- expect(await env.DB.prepare('SELECT status,attendee_id,verified_at,order_id FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({status:'confirmed',attendee_id:null,verified_at:null,order_id:null});
+ expect(await env.DB.prepare('SELECT status,attendee_id,verified_at,order_id FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({status:'confirmed',attendee_id:expect.any(String),verified_at:null,order_id:`rsvp_${reg!.id}`});
  await processRegistrations(env,origin);
- expect(await env.DB.prepare('SELECT id FROM delivery_events WHERE recipient=?').bind(email).first()).toBeNull();
+ expect(await env.DB.prepare("SELECT kind FROM delivery_events WHERE recipient=?").bind(email).first()).toEqual({kind:'registration_update'});
  expect((await directSignup(email,{guestName:'Someone else',partySize:2,announcementsOptIn:false,source:'kofi-bills'})).status).toBe(202);
  expect(await env.DB.prepare('SELECT guest_name,party_size,announcements_opt_in,status FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({guest_name:'Party Guest',party_size:1,announcements_opt_in:1,status:'confirmed'});
  expect(await env.DB.prepare('SELECT acquisition_source FROM event_registrations WHERE id=?').bind(reg!.id).first()).toEqual({acquisition_source:'instagram'});
@@ -216,9 +216,11 @@ it('preserves a direct RSVP unsubscribe when the original submission is repeated
  expect(await env.DB.prepare("SELECT consented_at AS consent,consented_at>COALESCE(unsubscribed_at,'') AS subscribed FROM event_audience_contacts WHERE id=?").bind(contact!.id).first()).toEqual({consent:contact!.consent,subscribed:0});
 });
 
-it('takes approved RSVP guests to the door and preserves their admission if they later open a ticket wallet',async()=>{
+it('keeps legacy unclaimed RSVP guests at the door and preserves their admission if they later open a ticket wallet',async()=>{
  await settings({capacity:100,approvalRequired:true});const email='door-rsvp@example.com';await directSignup(email);
  const reg=await env.DB.prepare('SELECT id FROM event_registrations WHERE event_slug=? AND normalized_email=?').bind(slug,email).first<{id:string}>();
+ // Simulate a request from before device ownership was introduced.
+ await env.DB.prepare('UPDATE event_registrations SET attendee_id=NULL,device_claimed_at=NULL WHERE id=?').bind(reg!.id).run();
  expect(await (await doorList(get(`/api/admin/door?eventSlug=${slug}`,owner))).json()).toMatchObject({guests:[]});
  await configure(post('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id}));
  expect(await (await doorList(get(`/api/admin/door?eventSlug=${slug}`,owner))).json()).toMatchObject({guests:[{id:`rsvp:${reg!.id}`,guestName:'Party Guest',status:'expected'}]});

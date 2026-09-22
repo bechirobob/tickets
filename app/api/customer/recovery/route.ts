@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     });
   }
   if (!active) {
-    const row = await env.DB.prepare("SELECT id FROM event_registrations WHERE normalized_email = ? AND verified_at IS NOT NULL ORDER BY updated_at DESC LIMIT 1").bind(normalizedEmail).first<{ id: string }>();
+    const row = await env.DB.prepare("SELECT id FROM event_registrations WHERE normalized_email = ? ORDER BY updated_at DESC LIMIT 1").bind(normalizedEmail).first<{ id: string }>();
     const reg = row ? await readRegistration(env.DB, row.id) : null;
     const settings = reg ? await registrationSettings(env.DB, reg.eventSlug) : null;
     if (reg && settings) await sendRegistrationAccess(env.DB, reg, settings.title, new URL(request.url).origin);

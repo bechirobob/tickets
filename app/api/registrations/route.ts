@@ -1,6 +1,6 @@
 import { resolveRsvpSource } from '../../../lib/rsvp-analytics';
 import { mutationHasValidOrigin, requestMetadata } from '../../../lib/admin-session';
-import { hashToken } from '../../../lib/attendee-auth';
+import { hashToken, readAttendeeIdentity } from '../../../lib/attendee-auth';
 import { enforceRateLimit } from '../../../lib/security-controls';
 import { requestRegistration } from '../../../lib/registrations';
 export async function POST(request: Request) {
@@ -14,8 +14,8 @@ export async function POST(request: Request) {
   const ip = requestMetadata(request).ip ?? 'unknown';
   const allowed = await Promise.all([enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `registration-ip:${await hashToken(ip)}`), enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `registration-email:${await hashToken(input.email)}`)]);
   if (allowed.some(value => !value)) return Response.json({ error: 'Give it a minute before trying again.' }, { status: 429 });
-  let mode: string;
-  try { ({ mode } = await requestRegistration(env.DB, { ...input, acquisitionSource: await resolveRsvpSource(env.DB, input.eventSlug, body.source, body.ref) }, new URL(request.url).origin, true)); }
+  let result: Awaited<ReturnType<typeof requestRegistration>>;
+  try { result = await requestRegistration(env.DB, { ...input, acquisitionSource: await resolveRsvpSource(env.DB, input.eventSlug, body.source, body.ref) }, new URL(request.url).origin, true, await readAttendeeIdentity(env.DB, request.headers.get("cookie"))); }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'Registration could not be saved.' }, { status: 400 }); }
-  return Response.json({ message: mode === 'rsvp' ? 'RSVP received. Outfit planning starts now.' : 'Check your email to confirm your updates.' }, { status: 202, headers: { 'cache-control': 'no-store' } });
+  return Response.json({ canManage: result.canManage === true, message: result.mode === 'rsvp' ? 'RSVP received. Outfit planning starts now.' : 'Check your email to confirm your updates.' }, { status: 202, headers: { 'cache-control': 'no-store', ...(result.cookie ? { 'set-cookie': result.cookie } : {}) } });
 }

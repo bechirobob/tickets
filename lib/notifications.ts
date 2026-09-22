@@ -1,7 +1,7 @@
 import { generateRequestDetails, type PushSubscription } from "web-push-neo";
 import { validPushEndpoint } from './push-subscription';
 
-type NotificationKind = "room_message" | "host_update" | "ticket_transfer" | "gate_update" | "event_reminder" | "test" | "waitlist_offer" | "payment_recovery" | "event_status" | "support_update";
+type NotificationKind = "room_message" | "host_update" | "ticket_transfer" | "gate_update" | "event_reminder" | "test" | "waitlist_offer" | "payment_recovery" | "event_status" | "support_update" | "purchase_confirmation" | "registration_update";
 
 type PushRow = {
   attendeeId: string;
@@ -111,7 +111,7 @@ export async function notifyRoomMessage(env: Cloudflare.Env, input: {
     LEFT JOIN notification_preferences preference
       ON preference.attendee_id = assignment.attendee_id AND preference.event_slug = ticket.event_slug
     LEFT JOIN push_subscriptions subscription
-      ON subscription.attendee_id = assignment.attendee_id AND subscription.revoked_at IS NULL
+      ON subscription.attendee_id = assignment.attendee_id AND subscription.revoked_at IS NULL AND subscription.room_updates = 1
     WHERE ticket.event_slug = ? AND assignment.status = 'active'
       AND ticket.status IN ('issued', 'checked_in')
       AND EXISTS (SELECT 1 FROM orders o WHERE o.id = ticket.order_id AND o.status = 'paid' AND (o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1)))
@@ -172,4 +172,17 @@ export async function notifyEventAttendees(env: Cloudflare.Env, eventSlug: strin
       AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded') LIMIT 2500
   `).bind(eventSlug).all<PushRow>();
   if (rows.results.length) await persistAndPush(env, rows.results, { ...payload, eventSlug });
+}
+
+// Confirmation preferences are separate from Room alerts. Only devices whose
+// owner explicitly enabled confirmations can replace the email fallback.
+export async function confirmationNotice(env: Cloudflare.Env, attendeeId: string, payload: NotificationPayload, push = true): Promise<number> {
+  const rows = push ? await env.DB.prepare(`
+    SELECT ? AS attendeeId, id AS subscriptionId, endpoint, p256dh, auth
+    FROM push_subscriptions WHERE attendee_id = ? AND revoked_at IS NULL AND confirmation_updates = 1
+      AND EXISTS (SELECT 1 FROM attendee_profiles p JOIN attendee_sessions s ON s.attendee_id = p.id
+        WHERE p.id = push_subscriptions.attendee_id AND p.status = 'active' AND s.revoked_at IS NULL AND s.expires_at > ?)
+    LIMIT 12
+  `).bind(attendeeId, attendeeId, new Date().toISOString()).all<PushRow>() : { results: [] };
+  return persistAndPush(env, rows.results.length ? rows.results : [{ attendeeId, subscriptionId: null, endpoint: null, p256dh: null, auth: null }], payload);
 }
