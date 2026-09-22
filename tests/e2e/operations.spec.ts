@@ -278,7 +278,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.locator('main')).not.toContainText(/free|no payment/i);
   const flier=page.getByRole('img',{name:'Event flier for RSVP browser gathering'});await expect(flier).toBeVisible();await expect(flier).toHaveCSS('object-fit','contain');
   await expect.poll(()=>flier.evaluate((img:HTMLImageElement)=>img.complete&&img.naturalWidth>0)).toBe(true);
-  await expect(page.getByLabel('Email me updates from this host')).not.toBeChecked();
+  await expect(page.getByLabel('Receive notifications for this event and host.')).not.toBeChecked();
   const guestAxe=await new AxeBuilder({page}).include('.registration-form').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(guestAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('guest-rsvp-form.png'),fullPage:true});
   await page.getByLabel('Your name').fill('Shared Link Guest');await page.getByLabel('Email address').fill('shared-link@example.com');
