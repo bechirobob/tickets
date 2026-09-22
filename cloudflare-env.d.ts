@@ -28,6 +28,8 @@ declare namespace Cloudflare {
     SEEV_CHECKOUT_API_KEY?: string;
     SEEV_WEBHOOK_SECRET?: string;
     RESEND_API_KEY?: string;
+    TRANSACTIONAL_EMAIL_PROVIDER?: string;
+    VPS_EMAIL_SIGNING_KEY?: string;
     EMAIL_FROM?: string;
     OPS_ALERT_EMAIL?: string;
     RESEND_WEBHOOK_SECRET?: string;
