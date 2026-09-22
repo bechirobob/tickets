@@ -16,12 +16,22 @@ it("never serves a previous release's cached asset references after a deployment
 });
 
 it("keeps private, query-specific and unidentified-release requests outside the page cache", () => {
-  for (const path of ["/my-nights", "/api/customer/registrations", "/admin/orders", "/events?date=2026-09-20"]) {
+  for (const path of ["/my-nights", "/api/customer/registrations", "/admin/orders", "/events?date=2026-09-20", "/api/room/example/access", "/api/room/socket?event=example", "/room/example?from=notification"]) {
     const request = new Request(`https://cache-test.example${path}`, { headers: { accept: "text/html" } });
     expect(publicPageCacheKey(request, new URL(request.url), "release")).toBeNull();
   }
   const request = new Request("https://cache-test.example/", { headers: { accept: "text/html" } });
   expect(publicPageCacheKey(request, new URL(request.url), undefined)).toBeNull();
+});
+
+it("keeps Room HTML and RSC outside shared caching for every session", () => {
+  const url = new URL("https://cache-test.example/room/public-event");
+  for (const accept of ["text/html", "text/x-component"]) {
+    for (const cookie of ["", "bct_attendee=private-session"]) {
+      const request = new Request(url, { headers: { accept, cookie } });
+      expect(publicPageCacheKey(request, url, "release-a")).toBeNull();
+    }
+  }
 });
 
 it("requires browser HTML revalidation while preserving a short edge TTL and removing cookies", () => {

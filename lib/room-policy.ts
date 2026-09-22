@@ -10,6 +10,8 @@ export type RoomPolicy = {
   archived: boolean;
 };
 
+export type RoomPolicyRecord = { title: string; startsAt: string; endsAt: string; emergencyReadOnly: number; slowModeSeconds: number; archivedAt: string | null };
+
 export async function resolveRoomPolicy(db: D1Database, eventSlug: string): Promise<RoomPolicy | null> {
   const record = await db.prepare(`
     SELECT event.title, event.starts_at AS startsAt, event.ends_at AS endsAt,
@@ -21,8 +23,12 @@ export async function resolveRoomPolicy(db: D1Database, eventSlug: string): Prom
     WHERE event.slug = ? AND event.status IN ('published', 'scheduled')
       AND event.schedule_status = 'confirmed'
     LIMIT 1
-  `).bind(eventSlug).first<{ title: string; startsAt: string; endsAt: string; emergencyReadOnly: number; slowModeSeconds: number; archivedAt: string | null }>();
+  `).bind(eventSlug).first<RoomPolicyRecord>();
   if (!record) return null;
+  return roomPolicyFromRecord(eventSlug, record);
+}
+
+export function roomPolicyFromRecord(eventSlug: string, record: RoomPolicyRecord): RoomPolicy {
   const readOnlyAt = new Date(new Date(record.endsAt).getTime() + 72 * 60 * 60 * 1000).toISOString();
   return {
     eventSlug,

@@ -12,7 +12,6 @@ import { publicPageCacheKey, publicCacheResponse } from "./public-page-cache";
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { readAttendeeRoomSocketAccess } from "../lib/attendee-auth";
-import { resolveRoomPolicy } from "../lib/room-policy";
 import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
 import { retryFailedDeliveries, sendOperationalAlert } from "../lib/email-delivery";
 import { processRefundBatches } from "../lib/operational-finance";
@@ -50,14 +49,11 @@ async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<
   const eventSlug = requestUrl.searchParams.get("event")?.trim() ?? "";
   if (!/^[a-z0-9-]{1,80}$/u.test(eventSlug)) return new Response("Invalid event", { status: 400 });
 
-  const [authorization, policy] = await Promise.all([
-    readAttendeeRoomSocketAccess(env.DB, request.headers.get("cookie"), eventSlug),
-    resolveRoomPolicy(env.DB, eventSlug),
-  ]);
-  if (!authorization || !policy) return new Response("A valid paid ticket is required", { status: 401 });
-  // The shared authorization query already rejects suspended guests and now
-  // returns the same guest's block list in that snapshot, saving two D1 trips.
-  const { access, blockedAttendeeIds } = authorization;
+  const authorization = await readAttendeeRoomSocketAccess(env.DB, request.headers.get("cookie"), eventSlug);
+  if (!authorization?.policy) return new Response("A valid paid ticket is required", { status: 401 });
+  // Authorization, event policy and this guest's blocks share one fresh D1
+  // snapshot, avoiding a second queued read during simultaneous arrivals.
+  const { access, blockedAttendeeIds, policy } = authorization;
 
   const headers = new Headers(request.headers);
   headers.set("x-bct-room-authorized", "1");
@@ -154,7 +150,7 @@ function securityResponse(response: Response, nonce = requestNonce(), path = "")
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  if (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan" || path.startsWith("/api/customer/") || path.startsWith("/api/organizer/") || path.startsWith("/organizer/workspace") || path.startsWith("/organizer/analytics") || path.startsWith("/organizer/assistant") || path.startsWith("/my-nights")) {
+  if (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan" || path.startsWith("/api/customer/") || path.startsWith("/api/organizer/") || path.startsWith("/organizer/workspace") || path.startsWith("/organizer/analytics") || path.startsWith("/organizer/assistant") || path.startsWith("/my-nights") || path.startsWith("/room/")) {
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
   }

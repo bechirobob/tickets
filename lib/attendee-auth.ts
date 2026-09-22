@@ -1,3 +1,5 @@
+import { roomPolicyFromRecord, type RoomPolicyRecord } from "./room-policy";
+
 export const ATTENDEE_COOKIE_NAME = "bct_attendee";
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
@@ -112,7 +114,7 @@ export async function readAttendeeRoomSocketAccess(db: D1Database, cookieHeader:
   return readRoomAccessRecord(db, cookieHeader, eventSlug, true, true);
 }
 
-async function readRoomAccessRecord(db: D1Database, cookieHeader: string | null, eventSlug: string, requireRoom: boolean, includeBlocks: boolean) {
+async function readRoomAccessRecord(db: D1Database, cookieHeader: string | null, eventSlug: string, requireRoom: boolean, includeSocketState: boolean) {
   const token = readCookie(cookieHeader);
   if (!token) return null;
   const tokenHash = await hashToken(token);
@@ -121,10 +123,17 @@ async function readRoomAccessRecord(db: D1Database, cookieHeader: string | null,
     SELECT p.id AS attendeeId, p.display_name AS displayName, p.normalized_email AS normalizedEmail,
            p.email_verified_at IS NOT NULL AS emailVerified,
            s.id AS sessionId, s.last_seen_at AS lastSeenAt, t.event_slug AS eventSlug, t.id AS ticketId, tier.room_badge AS roomBadge,
-           ${includeBlocks ? `(SELECT json_group_array(blocked_attendee_id) FROM (
+           ${includeSocketState ? `(SELECT json_group_array(blocked_attendee_id) FROM (
              SELECT blocked_attendee_id FROM room_blocks
              WHERE event_slug = t.event_slug AND blocker_attendee_id = p.id LIMIT 200
-           ))` : 'NULL'} AS blockedIdsJson
+           ))` : 'NULL'} AS blockedIdsJson,
+           ${includeSocketState ? `(SELECT json_object(
+             'title', event.title, 'startsAt', event.starts_at, 'endsAt', event.ends_at,
+             'emergencyReadOnly', COALESCE(setting.emergency_read_only, 0),
+             'slowModeSeconds', COALESCE(setting.slow_mode_seconds, 0), 'archivedAt', setting.archived_at)
+             FROM curated_event_records event LEFT JOIN room_settings setting ON setting.event_slug = event.slug
+             WHERE event.slug = t.event_slug AND event.status IN ('published', 'scheduled')
+               AND event.schedule_status = 'confirmed' LIMIT 1)` : 'NULL'} AS roomPolicyJson
     FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id = s.attendee_id
     JOIN ticket_assignments a ON a.attendee_id = p.id AND a.status = 'active'
@@ -139,12 +148,16 @@ async function readRoomAccessRecord(db: D1Database, cookieHeader: string | null,
       AND (? = 0 OR NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.event_state IN ('cancelled', 'postponed')))
     ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
     LIMIT 1
-  `).bind(tokenHash, now, eventSlug, requireRoom ? 1 : 0, requireRoom ? 1 : 0, requireRoom ? 1 : 0).first<AttendeeRoomAccess & { lastSeenAt: string; blockedIdsJson: string | null }>();
+  `).bind(tokenHash, now, eventSlug, requireRoom ? 1 : 0, requireRoom ? 1 : 0, requireRoom ? 1 : 0).first<AttendeeRoomAccess & { lastSeenAt: string; blockedIdsJson: string | null; roomPolicyJson: string | null }>();
   if (!access) return null;
   await touchAttendeeSession(db, tokenHash, access.lastSeenAt, now);
-  const { lastSeenAt: _lastSeenAt, blockedIdsJson, ...profile } = access;
+  const { lastSeenAt: _lastSeenAt, blockedIdsJson, roomPolicyJson, ...profile } = access;
   void _lastSeenAt;
-  return { access: { ...profile, emailVerified: Boolean(access.emailVerified) }, blockedAttendeeIds: blockedIdsJson ? JSON.parse(blockedIdsJson) as string[] : [] };
+  return {
+    access: { ...profile, emailVerified: Boolean(access.emailVerified) },
+    blockedAttendeeIds: blockedIdsJson ? JSON.parse(blockedIdsJson) as string[] : [],
+    policy: roomPolicyJson ? roomPolicyFromRecord(eventSlug, JSON.parse(roomPolicyJson) as RoomPolicyRecord) : null,
+  };
 }
 
 export async function listAttendeeEvents(

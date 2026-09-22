@@ -52,6 +52,13 @@ type TierRecord = {
   reservedAdmissions: number;
 };
 
+// Reuse immutable locale formatters across requests instead of reconstructing
+// ICU formatting state for every event in every server render.
+const shortDateFormat = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" });
+const fullDateFormat = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" });
+const weekdayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" });
+const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" });
+
 function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): CuratedEvent {
   const starts = new Date(record.startsAt);
   const ends = new Date(record.endsAt);
@@ -61,10 +68,10 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     slug: record.slug,
     registrationMode: record.registrationMode,
     title: record.title,
-    shortDate: comingSoon ? record.scheduleLabel || "Coming soon" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" }).format(starts).toUpperCase(),
-    fullDate: comingSoon ? record.scheduleLabel || "Coming soon" : new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
-    day: comingSoon ? "" : new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" }).format(starts),
-    time: comingSoon ? "Time to be announced" : `${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(starts)}${endPending ? " onwards" : ` — ${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(ends)}`}`,
+    shortDate: comingSoon ? record.scheduleLabel || "Coming soon" : shortDateFormat.format(starts).toUpperCase(),
+    fullDate: comingSoon ? record.scheduleLabel || "Coming soon" : fullDateFormat.format(starts),
+    day: comingSoon ? "" : weekdayFormat.format(starts),
+    time: comingSoon ? "Time to be announced" : `${timeFormat.format(starts)}${endPending ? " onwards" : ` — ${timeFormat.format(ends)}`}`,
     startsAt: comingSoon ? null : record.startsAt,
     endsAt: endPending ? null : record.endsAt,
     scheduleStatus: record.scheduleStatus,
@@ -230,4 +237,28 @@ export async function findCuratedEvent(slug: string): Promise<CuratedEvent | nul
     console.error(JSON.stringify({ message: "event lookup unavailable", slug, error: error instanceof Error ? error.message : String(error) }));
     return null;
   }
+}
+
+// Room admission remains a separate, fresh authorization check. Its server
+// shell only needs these public fields, not fees, tiers or reservation totals.
+export async function findPublicRoomEvent(slug: string): Promise<{ title: string; fullDate: string; time: string; image: string } | null> {
+  if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return null;
+  const db = await runtimeDb();
+  const record = await db.prepare(`
+    SELECT title, starts_at AS startsAt, ends_at AS endsAt,
+           schedule_status AS scheduleStatus, schedule_label AS scheduleLabel,
+           image_url AS imageUrl
+    FROM curated_event_records
+    WHERE slug = ? AND (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
+    LIMIT 1
+  `).bind(slug, new Date().toISOString()).first<Pick<EventRecord, "title" | "startsAt" | "endsAt" | "scheduleStatus" | "scheduleLabel" | "imageUrl">>();
+  if (!record) return null;
+  const comingSoon = record.scheduleStatus === "coming_soon";
+  const starts = new Date(record.startsAt), ends = new Date(record.endsAt);
+  return {
+    title: record.title,
+    fullDate: comingSoon ? record.scheduleLabel || "Coming soon" : fullDateFormat.format(starts),
+    time: comingSoon ? "Time to be announced" : `${timeFormat.format(starts)}${record.scheduleStatus !== "confirmed" ? " onwards" : ` — ${timeFormat.format(ends)}`}`,
+    image: record.imageUrl,
+  };
 }

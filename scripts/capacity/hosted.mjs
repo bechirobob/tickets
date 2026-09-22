@@ -47,10 +47,11 @@ if (mode === 'setup') {
   if (readiness.accountD1Today.date !== new Date().toISOString().slice(0,10) || !Number.isFinite(Date.parse(readiness.checkedAt)) || Math.abs(Date.now() - Date.parse(readiness.checkedAt)) > 10 * 60000) throw new Error('Fresh usage evidence from this UTC day is required.');
   if (aggregates.some(row => !Number.isFinite(row.sum?.rowsRead) || !Number.isFinite(row.sum?.rowsWritten) || row.sum.rowsRead < 0 || row.sum.rowsWritten < 0)) throw new Error('Invalid account usage metering.');
   const usage = aggregates.reduce((total, row) => ({ reads: total.reads + row.sum.rowsRead, writes: total.writes + row.sum.rowsWritten }), { reads: 0, writes: 0 });
-  // Two observed setups consumed ~19,400 writes in total. Reserve 20,000 for
-  // this bounded setup/message workload (over twice that per-run measurement),
-  // plus 30,000 writes for production. Never treat an unknown plan as unlimited.
-  const budget = { current: usage, testReads: 1000000, testWrites: 20000, productionReadReserve: 2000000, productionWriteReserve: 30000 };
+  // Repeated setups consumed about 9,700 writes each. Add at most 399
+  // notifications and their indexes, plus bounded session activity updates.
+  // A 15,000-write allocation preserves margin over the <13,000 measured/
+  // bounded workload; keep 30,000 separate writes reserved for production.
+  const budget = { current: usage, testReads: 1000000, testWrites: 15000, productionReadReserve: 2000000, productionWriteReserve: 30000 };
   console.log(JSON.stringify({ phase: 'quota-budget', ...budget }));
   if (usage.reads + budget.testReads + budget.productionReadReserve > 5000000 || usage.writes + budget.testWrites + budget.productionWriteReserve > 100000) throw new Error('Insufficient conservative free-tier headroom for this hosted rehearsal.');
   const subdomain = await api('/workers/subdomain');
@@ -74,7 +75,7 @@ if (mode === 'setup') {
     version_metadata: { binding: 'CF_VERSION_METADATA' },
   };
   writeFileSync('dist/server/wrangler.hosted.json', JSON.stringify(config), { mode: 0o600 });
-  writeFileSync('dist/server/capacity-entry.mjs', `import worker from './index.js';\nexport { TheRoom } from './index.js';\nexport default { async fetch(request,env,ctx) {\n const path=new URL(request.url).pathname;\n if(Date.now()>Number(env.CAPACITY_EXPIRES) || request.headers.get('x-capacity-key')!==env.CAPACITY_KEY || request.method!=='GET' || !['/api/version','/api/customer/my-nights','/api/room/socket'].includes(path)) return new Response('Not found',{status:404});\n const response=await worker.fetch(request,env,ctx); if(response.status===101) return response; const marked=new Response(response.body,response); marked.headers.set('x-capacity-revision',env.RELEASE_SHA); return marked;\n}};\n`);
+  writeFileSync('dist/server/capacity-entry.mjs', `import worker from './index.js';\nexport { TheRoom } from './index.js';\nexport default { async fetch(request,env,ctx) {\n const path=new URL(request.url).pathname;\n if(Date.now()>Number(env.CAPACITY_EXPIRES) || request.headers.get('x-capacity-key')!==env.CAPACITY_KEY || request.method!=='GET' || (!['/api/version','/api/customer/my-nights','/api/room/socket'].includes(path) && path!==${JSON.stringify('/room/' + state.slug)})) return new Response('Not found',{status:404});\n const response=await worker.fetch(request,env,ctx); if(response.status===101) return response; const marked=new Response(response.body,response); marked.headers.set('x-capacity-revision',env.RELEASE_SHA); return marked;\n}};\n`);
   wrangler(['d1', 'migrations', 'apply', 'DB', '--remote']);
   const now = new Date().toISOString(), future = new Date(Date.now() + 86400000).toISOString();
   const q = sqlString, slug = state.slug;
@@ -199,6 +200,24 @@ if (mode === 'setup') {
     const version = await (await fetch(`${base.origin}/api/version`, { headers: requestHeaders(0), redirect: 'error', signal: AbortSignal.timeout(15000) })).json();
     if (version.revision !== state.revision) throw new Error('Hosted revision mismatch.');
     report.version = version;
+    // Exercise real SSR without private guest data. Query variants deliberately
+    // bypass the public edge cache, so a warm cache cannot hide rendering errors.
+    const roomRenders = [], roomCacheStates = [];
+    for (let i = 0; i < 15; i++) {
+      const started = performance.now();
+      const path = `/room/${state.slug}${i < 10 ? `?render-check=${i}` : ''}`;
+      const response = await fetch(`${base.origin}${path}`, { headers: { 'x-capacity-key': state.key, accept: 'text/html' }, redirect: 'error', signal: AbortSignal.timeout(15000) });
+      const html = await response.text();
+      if (response.headers.get('cache-control') !== 'no-store') throw new Error('Room page must stay uncached.');
+      if (!response.ok || response.headers.get('x-capacity-revision') !== state.revision || !html.includes('room-gate') || /Guest \d+/.test(html)) throw new Error(`Public Room render failed (${response.status}; ray=${response.headers.get('cf-ray') ?? 'none'}).`);
+      if (i < 10) roomRenders.push({ status: 'fulfilled', value: performance.now()-started });
+      else roomCacheStates.push(response.headers.get('x-becore-edge-cache'));
+      await pause(250);
+    }
+    record('room-uncached-public-renders', roomRenders);
+    report.metrics.push({ name: 'room-private-page-cache-boundary', states: roomCacheStates });
+    console.log(JSON.stringify({ name: 'room-private-page-cache-boundary', states: roomCacheStates }));
+    if (roomCacheStates.some(value => value !== null)) throw new Error('Room page entered the shared edge cache.');
     for (const n of [50,100,200,400]) record(`my-nights-${n}-concurrent`, await Promise.allSettled(Array.from({ length: n }, (_,i) => request(i))));
     const scheduled = [], lateness = [], start = performance.now();
     for (let i = 0; i < 2400; i++) {

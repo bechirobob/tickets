@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
-import { findCuratedEvent, getPublicEvents } from "../app/events";
+import { findCuratedEvent, findPublicRoomEvent, getPublicEvents } from "../app/events";
 import { GET as calendar } from "../app/api/calendar/[slug]/route";
 import { POST as payment } from "../app/api/payments/initialize/route";
 import { matchesEventWindow } from "../lib/event-discovery";
@@ -28,6 +28,7 @@ describe("launch event inventory", () => {
     expect(event).toMatchObject({ startsAt: null, endsAt: null, rescheduledFrom: null, salesOpenAt: null, salesCloseAt: null, fullDate: "October · Coming soon", scheduleStatus: "coming_soon", dressCode: "Light pink & white", isVerified: true });
     expect(JSON.stringify(event)).not.toMatch(/2026-10-04|2026-09-13/);
     expect(event?.note).not.toContain("first Sunday");
+    expect(await findPublicRoomEvent("sun-chasers-labadi")).toEqual({ title: event!.title, fullDate: event!.fullDate, time: event!.time, image: event!.image });
     expect(event?.ticketTiers.every((tier) => tier.status === "hidden")).toBe(true);
     expect(matchesEventWindow(event!, "next", Date.parse("2027-01-01"))).toBe(true);
     expect(matchesEventWindow(event!, "tonight", Date.now())).toBe(false);
@@ -38,6 +39,7 @@ describe("launch event inventory", () => {
     const event = await findCuratedEvent("the-weekend-braai");
     expect(event).toMatchObject({ startsAt: "2026-09-20T14:00:00.000Z", endsAt: null, priceFromMinor: 35000, capacity: 0, ticketTiers: [], scheduleStatus: "end_pending", isVerified: true, image: "/events/the-weekend-braai.jpeg" });
     expect(new Date(event!.startsAt!).getUTCDay()).toBe(0);
+    expect(await findPublicRoomEvent("the-weekend-braai")).toEqual({ title: event!.title, fullDate: event!.fullDate, time: event!.time, image: event!.image });
     const response = await calendarFor(event!.slug);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
