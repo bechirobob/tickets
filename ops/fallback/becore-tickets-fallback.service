@@ -1,0 +1,22 @@
+[Unit]
+Description=BeCore Tickets quota fallback check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=becore-tickets-fallback
+EnvironmentFile=/etc/becore-tickets-fallback.env
+ExecStart=/usr/bin/python3 /srv/becore-tickets-fallback/current/monitor.py
+TimeoutStartSec=55
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+

@@ -1,0 +1,26 @@
+name: Prepare Tickets VPS fallback
+on:
+  push:
+    branches: [feat/vps-maintenance-fallback]
+    paths: ['ops/fallback/**', '.github/workflows/prepare-vps-fallback.yml']
+permissions:
+  contents: read
+concurrency:
+  group: tickets-fallback-infrastructure
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify outage detection and recovery
+        run: python3 -m unittest discover -s ops/fallback -p 'test_*.py' -v
+      - name: Build the independent maintenance page
+        run: node ops/fallback/build.mjs
+      - name: Prepare DNS and disabled redirect
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python3 ops/fallback/prepare-cloudflare.py

@@ -1,0 +1,30 @@
+tickets-status.becoreops.com {
+    header {
+        Cache-Control "no-store, max-age=0"
+        X-Robots-Tag "noindex, nofollow"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        -Server
+    }
+    handle /healthz {
+        respond "becore-tickets-fallback-ready" 200
+    }
+    @page {
+        method GET HEAD
+        not path /api /api/*
+    }
+    handle @page {
+        root * /srv/becore-tickets-fallback/current
+        rewrite * /index.html
+        header Retry-After "120"
+        file_server {
+            status 503
+        }
+    }
+    handle {
+        header Content-Type "application/json"
+        header Retry-After "120"
+        respond `{"error":"temporarily_unavailable"}` 503
+    }
+}
