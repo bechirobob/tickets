@@ -62,6 +62,10 @@
 .buzz-intro h1 { margin: 0 0 4px; font-size: 32px; line-height: 1.15; font-weight: 600; letter-spacing: -.045em; }
 .buzz-intro p, .buzz-intro > span { margin: 0; color: var(--buzz-muted); font-size: 13px; line-height: 1.5; }
 .buzz-intro > span { text-align: right; }
+.notification-device-settings { margin-bottom:12px; font-size:14px; }
+.notification-device-settings > summary { min-height:44px; padding:12px 0; cursor:pointer; color:var(--buzz-muted); }
+.notification-device-settings > summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+.notification-device-settings .confirmation-notifications { --ink:var(--buzz-ink); --surface:#30212c; --line:var(--buzz-line); margin-top:0; }
 .notification-panel .room-notification-settings { padding-bottom: 8px; }
 .notification-panel .room-notification-option { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-block: 14px; border-top: 1px solid var(--buzz-line); }
 .room-notification-option > span { min-width: 0; display: grid; gap: 4px; }
