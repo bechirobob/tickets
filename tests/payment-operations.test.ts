@@ -181,3 +181,40 @@ it('keeps batch refunds pending until the provider confirms the ledger',async()=
  await processRefundBatches(env);
  expect(await env.DB.prepare('SELECT status,processed_orders AS processed,failed_orders AS failed FROM refund_batches WHERE id=?').bind(id).first()).toEqual({status:'completed',processed:1,failed:0});
 });
+
+it('keeps a returning buyer’s exact session and scopes a checkout link on another browser to one order', async () => {
+  const {POST:claim}=await import('../app/api/customer/session/route');
+  const {attendeeCookieHeader,readAttendeeIdentity}=await import('../lib/attendee-auth');
+  const id=crypto.randomUUID(),token=crypto.randomUUID(),now=new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO attendee_profiles(id,normalized_email,display_name,status,created_at,updated_at) VALUES (?,?,'Returning guest','active',?,?)").bind(id,`${id}@example.com`,now,now),
+    env.DB.prepare('INSERT INTO attendee_sessions(id,attendee_id,token_hash,expires_at,created_at,last_seen_at) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(),id,await hashToken(token),new Date(Date.now()+3600000).toISOString(),now,now),
+  ]);
+  const cookie=attendeeCookieHeader(token);
+  for (const sameBrowser of [true,false]) {
+    const order=await seedPendingOrder(crypto.randomUUID(),1),claimToken=crypto.randomUUID()+crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare('UPDATE orders SET checkout_attendee_id=? WHERE id=?').bind(id,order.orderId),
+      env.DB.prepare('UPDATE order_access_grants SET token_hash=? WHERE order_id=?').bind(await hashToken(claimToken),order.orderId),
+    ]);
+    await fulfillVerifiedPayment(env.DB,{id:1,reference:order.reference,status:'success',amount:order.amount,currency:'GHS',paidAt:now,channel:'card',gatewayResponse:'Approved'});
+    expect(await env.DB.prepare('SELECT attendee_id AS id FROM ticket_assignments WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id=?)').bind(order.orderId).first()).toEqual({id});
+    const response=await claim(new Request('https://tickets.becoreops.com/api/customer/session',{method:'POST',headers:{origin:'https://tickets.becoreops.com',cookie:sameBrowser?cookie:'','content-type':'application/json'},body:JSON.stringify({reference:order.reference,claim:claimToken})}));
+    expect(response.status).toBe(200);
+    const current=await readAttendeeIdentity(env.DB,response.headers.get('set-cookie'));
+    expect(current?.attendeeId===id).toBe(sameBrowser);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM ticket_assignments WHERE attendee_id=?').bind(current!.attendeeId).first()).toEqual({n:1});
+  }
+});
+
+it('retries an outbox confirmation without sending a second receipt after repeated payment callbacks', async () => {
+  const {deliverConfirmedOrder,retryOrderConfirmations}=await import('../lib/payment-operations');
+  const order=await seedPendingOrder(crypto.randomUUID(),1);
+  const paid=await fulfillVerifiedPayment(env.DB,{id:1,reference:order.reference,status:'success',amount:order.amount,currency:'GHS',paidAt:new Date().toISOString(),channel:'card',gatewayResponse:'Approved'});
+  if(paid.result!=='paid') throw new Error('Fixture payment failed');
+  vi.spyOn(globalThis,'fetch').mockResolvedValue(Response.json({id:crypto.randomUUID()}));
+  await retryOrderConfirmations(env,'https://tickets.becoreops.com');
+  await deliverConfirmedOrder(env.DB,paid.order,'https://tickets.becoreops.com');
+  expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_events WHERE order_id=? AND kind='payment_confirmation'").bind(order.orderId).first()).toEqual({n:1});
+  expect(await env.DB.prepare('SELECT status FROM confirmation_deliveries WHERE order_id=?').bind(order.orderId).first()).toEqual({status:'email'});
+});

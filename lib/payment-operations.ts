@@ -1,3 +1,4 @@
+import { deliverConfirmation } from './confirmation-delivery';
 import { paystackEnvironment } from "./paystack-environment";
 import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { sendOrderConfirmation } from "./email-delivery";
@@ -185,6 +186,13 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
     db.prepare(`UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'
       AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'requires_refund')`).bind(order.id, order.id),
     ...issuedTicketStatements(db, order, verification.paidAt ?? now),
+    db.prepare(`INSERT OR IGNORE INTO ticket_assignments (ticket_id,attendee_id,assigned_by,status,assigned_at)
+      SELECT t.id,o.checkout_attendee_id,'checkout:'||o.id,'active',? FROM tickets t JOIN orders o ON o.id=t.order_id
+      JOIN attendee_profiles p ON p.id=o.checkout_attendee_id AND p.status='active'
+      WHERE o.id=? AND o.status='paid' AND t.status IN ('issued','checked_in')`).bind(now,order.id),
+    db.prepare(`INSERT OR IGNORE INTO confirmation_deliveries (id,order_id,created_at)
+      SELECT 'payment-confirmation/'||id,id,? FROM orders WHERE id=? AND status='paid'
+        AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE d.order_id=orders.id AND d.kind='payment_confirmation')`).bind(now,order.id),
   ]);
 
   const paidOrder = await readOrder(db, verification.reference);
@@ -204,7 +212,19 @@ export async function verifyAndFulfill(db: D1Database, reference: string, secret
 }
 
 export async function deliverConfirmedOrder(db: D1Database, order: OrderRecord, origin: string) {
-  return sendOrderConfirmation(db, order, origin);
+  const { env } = await import('cloudflare:workers');
+  // Existing email deliveries keep their channel, including queued quota retries.
+  const emailed = await db.prepare("SELECT id FROM delivery_events WHERE order_id=? AND kind='payment_confirmation' LIMIT 1").bind(order.id).first();
+  const recipient = await db.prepare(`SELECT o.checkout_attendee_id AS attendeeId FROM orders o
+    WHERE o.id=? AND o.status='paid' AND EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id
+      WHERE t.order_id=o.id AND a.attendee_id=o.checkout_attendee_id AND a.status='active' AND t.status IN ('issued','checked_in'))`)
+    .bind(order.id).first<{attendeeId:string|null}>();
+  return deliverConfirmation({ env: { ...env, DB: db }, id: `payment-confirmation/${order.id}`, orderId: order.id,
+    attendeeId: recipient?.attendeeId ?? null,
+    payload: { kind: 'purchase_confirmation', eventSlug: order.eventSlug, sourceId: `payment-confirmation/${order.id}`,
+      tag: `paid-${order.id}`, title: 'Your ticket is confirmed', body: 'Payment received. Your QR ticket and receipt are ready in My Nights.',
+      url: `/my-nights/${order.eventSlug}?view=passes` },
+    email: () => sendOrderConfirmation(db, order, origin), skipPush: Boolean(emailed) });
 }
 
 export async function initiatePaystackRefund(db: D1Database, input: { orderId: string; actor: string; reason: string; secret: string; amountMinor?: number; ticketIds?: string[]; batchId?: string }) {
@@ -429,4 +449,19 @@ export async function runDailyReconciliation(db: D1Database, input: { secret: st
       .bind((error instanceof Error ? error.message : String(error)).slice(0, 1000), new Date().toISOString(), runId).run();
     throw error;
   }
+}
+
+export async function retryOrderConfirmations(env: Cloudflare.Env, origin: string) {
+  const rows = await env.DB.prepare(`SELECT o.reference FROM confirmation_deliveries d JOIN orders o ON o.id=d.order_id
+    WHERE o.status='paid' AND (d.status='pending' OR (d.status='processing' AND d.lease_until<=?)) ORDER BY d.created_at LIMIT 20`)
+    .bind(new Date().toISOString()).all<{reference:string}>();
+  if (env.EMAIL_DELIVERY_QUEUE && rows.results.length) {
+    await env.EMAIL_DELIVERY_QUEUE.sendBatch(rows.results.map(row => ({ body: { deliveryId: `order-confirmation:${row.reference}` } })));
+    return;
+  }
+  for (const row of rows.results) await deliverOrderConfirmationByReference(env, row.reference, origin);
+}
+export async function deliverOrderConfirmationByReference(env: Cloudflare.Env, reference: string, origin: string) {
+  const order = await readOrder(env.DB, reference);
+  if (order?.status === 'paid') await deliverConfirmedOrder(env.DB, order, origin);
 }

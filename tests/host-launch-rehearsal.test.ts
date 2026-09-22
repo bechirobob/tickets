@@ -8,7 +8,6 @@ import { POST as login } from '../app/api/admin/session/route';
 import { GET as workspace } from '../app/api/organizer/workspace/route';
 import { POST as hostRegistration } from '../app/api/admin/registrations/route';
 import { POST as signup } from '../app/api/registrations/route';
-import { POST as door } from '../app/api/admin/door/route';
 import { POST as passes } from '../app/api/customer/tickets/route';
 import { POST as scan } from '../app/api/admin/check-in/route';
 import { POST as initialize } from '../app/api/payments/initialize/route';
@@ -56,16 +55,15 @@ it.each(['rsvp','paid'])('rehearses approval → activation → %s admission →
  let guestCookie='';
  if(mode==='rsvp') {
   const submitted=await signup(req('/api/registrations',{eventSlug:slug,email:guest,guestName:'Guest Rehearsal',phone:'0240000000',partySize:1,source:'instagram',acceptedTerms:true}));expect(submitted.status,await submitted.text()).toBe(202);
+  guestCookie=submitted.headers.get('set-cookie')!;
   const registration=await env.DB.prepare('SELECT id,status FROM event_registrations WHERE event_slug=? AND normalized_email=?').bind(slug,guest).first<{id:string;status:string}>();expect(registration?.status).toBe('requested');
   expect((await hostRegistration(req('/api/admin/registrations',{action:'approve',eventSlug:slug,id:registration!.id},hostCookie))).status).toBe(200);
-  const entrance=()=>door(req('/api/admin/door',{eventSlug:slug,action:'check_in',id:`rsvp:${registration!.id}`},gate.cookie));
-  expect((await entrance()).status).toBe(200);expect((await entrance()).status).toBe(409);
  } else {
   const response=await initialize(req('/api/payments/initialize',{eventSlug:slug,ticketTierId:'general',quantity:1,fullName:'Paid Rehearsal Guest',email:guest,phone:'0240000000',paymentMethod:'mobile_money',paymentProvider:'seevplus',network:'mtn',acceptedPolicies:true}));expect(response.status,await response.clone().text()).toBe(200);
   const payment=await response.json() as {reference:string};const claim=new URL(checkout.redirect_url).searchParams.get('claim');
   const access=await claimPaid(req('/api/customer/session',{reference:payment.reference,claim}));expect(access.status,await access.clone().text()).toBe(200);guestCookie=access.headers.get('set-cookie')!;
  }
- if(mode==='paid'){
+ {
  const walletResponse=await passes(req('/api/customer/tickets',{},guestCookie));expect(walletResponse.status).toBe(200);const wallet=await walletResponse.json() as {orders:Array<{tickets:Array<{qrPayload:string}>}>};const qr=wallet.orders[0].tickets[0].qrPayload;expect(qr).toBeTruthy();
  const entrance=()=>scan(req('/api/admin/check-in',{code:qr,eventSlug:slug,gate:'Main'},gate.cookie));expect((await entrance()).status).toBe(200);expect((await entrance()).status).toBe(409);
  }

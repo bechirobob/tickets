@@ -1,0 +1,64 @@
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, type Page } from '@playwright/test';
+
+test.use({ serviceWorkers: 'block' });
+async function member(page: Page) {
+  await page.route('**/api/**', route => route.fulfill({status:401,json:{error:'Isolated fixture'}}));
+  await page.route('**/api/customer/my-nights', route => route.fulfill({json:{attendee:{displayName:'Ama'},nights:[]}}));
+  await page.route('**/api/customer/registrations', route => route.fulfill({json:{registrations:[]}}));
+  await page.route('**/api/customer/notifications', route => route.fulfill({json:{notifications:[],unread:0}}));
+}
+async function phone(page:Page, permission:'default'|'denied'='default') {
+  await page.addInitScript(({permission}) => {
+    Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Mozilla/5.0 Android Chrome'});
+    Object.defineProperty(navigator,'platform',{configurable:true,value:'Linux'});
+    Object.defineProperty(window,'Notification',{configurable:true,value:{permission,requestPermission:async()=>{
+      Object.defineProperty(window.Notification,'permission',{configurable:true,value:'granted'});return 'granted';
+    }}});
+    Object.defineProperty(window,'PushManager',{configurable:true,value:class {}});
+    const subscription={endpoint:'https://fcm.googleapis.com/fcm/send/browser-fixture',toJSON:()=>({endpoint:'https://fcm.googleapis.com/fcm/send/browser-fixture',keys:{auth:'fixture',p256dh:'fixture'}})};
+    const registration={pushManager:{getSubscription:async()=>subscription,subscribe:async()=>subscription}};
+    Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{ready:Promise.resolve(registration),register:async()=>registration}});
+  },{permission});
+}
+test('confirmation opt-in reports success only after saving and can be disabled independently of Room messages',async({page})=>{
+  await member(page);await phone(page);
+  let enabled=false, attempts=0;
+  await page.route('**/api/customer/notifications/subscription**',route=>{
+    if(route.request().method()==='POST') {
+      const body=route.request().postDataJSON(); expect(body).toHaveProperty('confirmationUpdates');attempts++;
+      if(attempts===1)return route.fulfill({status:503,json:{error:'Could not save. Try again.'}});
+      enabled=body.confirmationUpdates;return route.fulfill({status:201,json:{subscribed:true}});
+    }
+    return route.fulfill({json:{available:true,publicKey:'AQID',deviceSubscribed:true,confirmationUpdates:enabled}});
+  });
+  await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Booking notifications'});
+  await card.getByRole('button',{name:'Enable phone confirmations'}).click();
+  await expect(card.getByRole('status')).toHaveText('Could not save. Try again.');
+  await expect(card.getByRole('button',{name:'Turn off on this device'})).toHaveCount(0);
+  await card.getByRole('button',{name:'Enable phone confirmations'}).click();
+  await expect(card.getByRole('status')).toHaveText('Phone confirmations are on for this device.');
+  await page.reload();await expect(card.getByRole('button',{name:'Turn off on this device'})).toBeVisible();
+  await card.getByRole('button',{name:'Turn off on this device'}).click();
+  await expect(card.getByRole('button',{name:'Enable phone confirmations'})).toBeVisible();expect(enabled).toBe(false);
+  expect((await new AxeBuilder({page}).include('.confirmation-notifications').analyze()).violations).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+});
+test('iPhone installation stays optional and never blocks access to My Nights',async({page})=>{
+  await member(page);
+  await page.addInitScript(()=>{
+    Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Mozilla/5.0 iPhone Safari'});
+    Object.defineProperty(navigator,'standalone',{configurable:true,value:false});
+  });
+  await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Booking notifications'});
+  await expect(page.getByRole('heading',{name:'My Nights.'})).toBeVisible();
+  await card.locator('summary').click();await expect(card).toContainText('Share → Add to Home Screen');await expect(card).toContainText('This is optional.');
+  await expect(card.getByRole('button',{name:'Enable phone confirmations'})).toHaveCount(0);
+  expect((await new AxeBuilder({page}).include('.confirmation-notifications').analyze()).violations).toEqual([]);
+});
+test('declined notification permission leaves booking access available',async({page})=>{
+  await member(page);await phone(page,'denied');await page.goto('/my-nights');
+  const card=page.getByRole('complementary',{name:'Booking notifications'});
+  await expect(card).toContainText('Alerts are blocked');await expect(card.getByRole('button')).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'My Nights.'})).toBeVisible();
+});

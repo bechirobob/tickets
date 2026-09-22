@@ -1,0 +1,10 @@
+/* Optional confirmation setup remains in the booking flow, never a modal gate. */
+.confirmation-notifications { display:flex; align-items:flex-start; gap:.7rem; margin:1rem 0; padding:1rem; border:1px solid var(--line, #deded7); border-radius:12px; background:var(--surface, #fff); color:var(--ink, #181914); font-size:.875rem; line-height:1.5; }
+.confirmation-notifications > svg { flex:none; margin-top:.2rem; }
+.confirmation-notifications > div { min-width:0; }
+.confirmation-notifications p { margin:.35rem 0; max-width:65ch; overflow-wrap:anywhere; }
+.confirmation-notifications button { min-height:44px; padding:.55rem .8rem; margin-top:.5rem; border:1px solid currentColor; border-radius:7px; background:transparent; font:inherit; font-weight:650; cursor:pointer; }
+.confirmation-notifications button:disabled { opacity:.65; cursor:wait; }
+.confirmation-notifications summary { cursor:pointer; padding:.5rem 0; min-height:44px; }
+.confirmation-notifications__hint { font-size:.75rem; }
+.confirmation-notifications button:focus-visible,.confirmation-notifications summary:focus-visible { outline:2px solid currentColor; outline-offset:3px; }

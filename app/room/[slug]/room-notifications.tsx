@@ -32,10 +32,11 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
   useEffect(() => {
     let cancelled = false;
     const preference = requestJson<{ roomMessages?: boolean; hostUpdates?: boolean }>(`/api/customer/notifications/preferences/${encodeURIComponent(slug)}`);
-    const device = supported ? Promise.all([
-      requestJson<{ available?: boolean }>("/api/customer/notifications/subscription"),
-      readyRegistration().then((registration) => registration.pushManager.getSubscription()),
-    ]) : Promise.resolve([{ available: false }, null] as const);
+    const device = supported ? readyRegistration().then(async registration => {
+      const subscription = await registration.pushManager.getSubscription();
+      const configuration = await requestJson<{ available?: boolean; roomUpdates?: boolean; deviceSubscribed?: boolean }>(`/api/customer/notifications/subscription${subscription ? `?endpoint=${encodeURIComponent(subscription.endpoint)}` : ''}`);
+      return [configuration, subscription] as const;
+    }) : Promise.resolve([{ available: false, roomUpdates: false, deviceSubscribed: false }, null] as const);
     void preference.then((settings) => {
       if (cancelled) return;
       setEnabled(settings.roomMessages !== false && settings.hostUpdates !== false);
@@ -44,7 +45,7 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
     void device.then(([configuration, subscription]) => {
       if (cancelled) return;
       setPushAvailable(Boolean(configuration.available));
-      setSubscribed(Boolean(subscription));
+      setSubscribed(Boolean(subscription && configuration.deviceSubscribed && configuration.roomUpdates));
     }).catch(() => { if (!cancelled) setPushAvailable(false); });
     return () => { cancelled = true; };
   }, [onNotice, slug, supported]);

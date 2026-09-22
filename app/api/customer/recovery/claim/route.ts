@@ -37,6 +37,9 @@ export async function POST(request: Request) {
       SELECT ?,?,?,'active',? WHERE ${owns} AND EXISTS (SELECT 1 ${recoverableTickets} AND t.id=?)
       ON CONFLICT(ticket_id) DO UPDATE SET attendee_id=excluded.attendee_id,assigned_by=excluded.assigned_by,status='active',assigned_at=excluded.assigned_at,revoked_at=NULL`)
       .bind(ticket.id, attendeeId, `recovery:${grant.id}`, now, grant.id, sessionId, grant.email, grant.email, ticket.id)),
+    env.DB.prepare(`UPDATE event_registrations SET attendee_id=?, verified_at=COALESCE(verified_at,?), updated_at=?
+      WHERE normalized_email=? AND ${owns} AND (device_claimed_at IS NOT NULL OR verified_at IS NOT NULL)`)
+      .bind(attendeeId,now,now,grant.email,grant.id,sessionId),
     env.DB.prepare(`INSERT INTO attendee_sessions (id,attendee_id,token_hash,expires_at,created_at,last_seen_at)
       SELECT ?,?,?,?,?,? WHERE ${owns}`)
       .bind(sessionId, attendeeId, await hashToken(sessionToken), attendeeSessionExpiry(), now, now, grant.id, sessionId),

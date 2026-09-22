@@ -1,3 +1,5 @@
+import { deliverConfirmation } from './confirmation-delivery';
+import type { AttendeeIdentity } from './attendee-auth';
 import { emailBrand } from "./email-brand";
 import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from './attendee-auth';
@@ -41,28 +43,45 @@ export function registrationShareState(settings: RegistrationSettings | null) {
 function signature(s: RegistrationSettings) { return JSON.stringify([s.scheduleStatus, s.startsAt, s.endsAt, s.eventState, s.mode]); }
 export async function readRegistration(db: D1Database, id: string) { return db.prepare(`SELECT ${fields} FROM event_registrations WHERE id = ?`).bind(id).first<Registration>(); }
 
-export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean; acquisitionSource?: string }, origin: string, directRsvp = false) {
+export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean; acquisitionSource?: string }, origin: string, directRsvp = false, identity?: AttendeeIdentity | null) {
   const settings = await registrationSettings(db, input.eventSlug);
   if (!settings || !registrationsOpen(settings) || settings.mode === 'paid') throw new Error('Registration is not open for this event.');
   if (settings.mode === 'rsvp' && !registrationScheduleReady(settings)) throw new Error('RSVP opens when the event date is confirmed.');
   if (!Number.isInteger(input.partySize) || input.partySize < 1 || input.partySize > (settings.mode === 'interest' ? 1 : settings.maxPartySize)) throw new Error('Choose an allowed number of guests.');
   const now = timestamp();
-  await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in, acquisition_source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0, input.acquisitionSource ?? 'untracked').run();
+  const newId = crypto.randomUUID();
+  const inserted = await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in, acquisition_source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?, ?)`).bind(newId, input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0, input.acquisitionSource ?? 'untracked').run();
   const reg = await db.prepare(`SELECT ${fields} FROM event_registrations WHERE event_slug = ? AND normalized_email = ?`).bind(input.eventSlug, input.email).first<Registration>();
   if (!reg) throw new Error('Registration could not be saved. Try again.');
   await recordPolicyConsents({ db, subjectType: 'registration', subjectId: reg.id, actorEmail: input.email, policyKeys: ['purchase', 'privacy'] });
   if (directRsvp && settings.mode === 'rsvp') {
-    // Submission is a guest request, not proof of email ownership. Keep the
-    // existing identity and consent on retries; never create an account here.
+    // A new submission proves ownership only of this request, never of other
+    // bookings under the typed email. A duplicate must not mint access.
+    let cookie: string | undefined;
+    if (inserted.meta.changes === 1 && reg.id === newId) {
+      const attendeeId = identity?.attendeeId ?? `rsvp_att_${crypto.randomUUID()}`;
+      const token = createSecureToken();
+      const statements = identity ? [] : [
+        db.prepare(`INSERT INTO attendee_profiles (id,normalized_email,phone,display_name,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)`)
+          .bind(attendeeId,input.email,input.phone,input.guestName.slice(0,50),now,now),
+        db.prepare(`INSERT INTO attendee_sessions (id,attendee_id,token_hash,expires_at,created_at,last_seen_at) VALUES (?,?,?,?,?,?)`)
+          .bind(crypto.randomUUID(),attendeeId,await hashToken(token),attendeeSessionExpiry(),now,now),
+      ];
+      statements.push(db.prepare('UPDATE event_registrations SET attendee_id=?,device_claimed_at=? WHERE id=? AND attendee_id IS NULL').bind(attendeeId,now,newId));
+      await db.batch(statements);
+      reg.attendeeId = attendeeId;
+      if (!identity) cookie = attendeeCookieHeader(token);
+    }
     await db.prepare(`UPDATE event_registrations SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND status = 'unverified'`)
       .bind(settings.approvalRequired ? 'requested' : 'waitlisted', now, reg.id).run();
     await promoteRegistrations(db, reg.eventSlug);
     const consent=await db.prepare('SELECT announcements_opt_in AS optedIn,created_at AS createdAt FROM event_registrations WHERE id=?').bind(reg.id).first<{optedIn:number;createdAt:string}>();
     await rememberEventContact(db,{eventSlug:reg.eventSlug,email:reg.email,guestName:reg.guestName,source:'rsvp',consentedAt:consent?.optedIn ? consent.createdAt : null});
     const current = await readRegistration(db, reg.id);
+    if (current?.status === 'confirmed' && !current.orderId) await confirmRegistration(db, reg.id);
     if (current) await notifyRegistrationHosts(db, { eventSlug: reg.eventSlug, sourceId: reg.id, guestName: reg.guestName, status: current.status, guests: reg.partySize });
-    return { mode: settings.mode };
+    return { mode: settings.mode, cookie, canManage: Boolean(cookie || (identity && reg.attendeeId === identity.attendeeId)) };
   }
   await sendRegistrationAccess(db, reg, settings.title, origin);
   return { mode: settings.mode };
@@ -80,14 +99,14 @@ export async function sendRegistrationAccess(db: D1Database, reg: Registration, 
 }
 
 // Capacity is reserved atomically, including guests who have not verified an
-// email. Account passes are issued only after ownership is independently proven.
+// email. Passes require a verified inbox or proof of the original submission.
 // A unique order and deterministic ticket IDs make retries harmless.
 export async function confirmRegistration(db: D1Database, id: string) {
   const reg = await readRegistration(db, id);
   if (!reg) return false;
   const now = timestamp();
   const orderId = `rsvp_${reg.id}`;
-  const confirmed = `EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND verified_at IS NOT NULL)`;
+  const confirmed = `EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND (verified_at IS NOT NULL OR device_claimed_at IS NOT NULL))`;
   const statements = [db.prepare(`UPDATE event_registrations SET status = 'confirmed', version = version + 1, updated_at = ?
     WHERE id = ? AND kind = 'rsvp' AND status = 'waitlisted'
     AND EXISTS (SELECT 1 FROM event_registration_settings s JOIN curated_event_records e ON e.slug = s.event_slug
@@ -101,9 +120,9 @@ export async function confirmRegistration(db: D1Database, id: string) {
       AND (s.approval_required = 0 OR earlier.approved_at IS NOT NULL)
       AND (earlier.created_at < event_registrations.created_at OR (earlier.created_at = event_registrations.created_at AND earlier.id < event_registrations.id)))`)
     .bind(now, id, now),
-    db.prepare(`UPDATE event_registrations SET order_id = ? WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND verified_at IS NOT NULL`).bind(orderId, id),
+    db.prepare(`UPDATE event_registrations SET order_id = ? WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND (verified_at IS NOT NULL OR device_claimed_at IS NOT NULL)`).bind(orderId, id),
     db.prepare(`INSERT OR IGNORE INTO orders (id, reference, event_slug, ticket_type, quantity, unit_quantity, face_amount_minor, booking_fee_minor, total_amount_minor, currency, customer_email, customer_phone, customer_name, payment_channel, payment_provider, status, created_at, paid_at)
-      SELECT ?, ?, event_slug, 'RSVP', party_size, party_size, 0, 0, 0, 'GHS', normalized_email, phone, guest_name, 'rsvp', 'rsvp', 'paid', ?, ? FROM event_registrations WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND verified_at IS NOT NULL`)
+      SELECT ?, ?, event_slug, 'RSVP', party_size, party_size, 0, 0, 0, 'GHS', normalized_email, phone, guest_name, 'rsvp', 'rsvp', 'paid', ?, ? FROM event_registrations WHERE id = ? AND status = 'confirmed' AND attendee_id IS NOT NULL AND (verified_at IS NOT NULL OR device_claimed_at IS NOT NULL)`)
       .bind(orderId, `RSVP-${reg.id}`, now, now, id),
   ];
   for (let index = 0; index < reg.partySize; index++) {
@@ -120,13 +139,18 @@ export async function confirmRegistration(db: D1Database, id: string) {
   statements.push(
     db.prepare(`INSERT INTO guest_entries (id,event_slug,guest_name,guest_email,guest_phone,admission_count,kind,note,status,created_by,created_at)
       SELECT 'rsvp:'||id,event_slug,guest_name,normalized_email,phone,party_size,'guest_list','RSVP','expected','system:rsvp',? FROM event_registrations
-      WHERE id=? AND status='confirmed' AND verified_at IS NULL
+      WHERE id=? AND status='confirmed' AND verified_at IS NULL AND device_claimed_at IS NULL
       ON CONFLICT(id) DO UPDATE SET guest_name=excluded.guest_name,admission_count=excluded.admission_count WHERE guest_entries.status='expected'`).bind(now,id),
     db.prepare(`UPDATE tickets SET status='checked_in',checked_in_at=(SELECT checked_in_at FROM guest_entries WHERE id=?),checked_in_gate='Guest list'
       WHERE order_id=? AND status='issued' AND EXISTS (SELECT 1 FROM guest_entries WHERE id=? AND status='checked_in')`).bind(`rsvp:${id}`,orderId,`rsvp:${id}`),
-    db.prepare(`UPDATE guest_entries SET status='cancelled' WHERE id=? AND status='expected' AND EXISTS (SELECT 1 FROM event_registrations WHERE id=? AND verified_at IS NOT NULL)`).bind(`rsvp:${id}`,id),
+    db.prepare(`UPDATE guest_entries SET status='cancelled' WHERE id=? AND status='expected' AND EXISTS (SELECT 1 FROM event_registrations WHERE id=? AND (verified_at IS NOT NULL OR device_claimed_at IS NOT NULL))`).bind(`rsvp:${id}`,id),
   );
   const [changed] = await db.batch(statements);
+  if (changed.meta.changes === 1) {
+    const { env } = await import('cloudflare:workers');
+    try { await env.EMAIL_DELIVERY_QUEUE?.send({ deliveryId: `registration-confirmation:${id}` }); }
+    catch { console.error(JSON.stringify({ message: 'RSVP confirmation awaits scheduled retry', registrationId: id })); }
+  }
   return changed.meta.changes === 1;
 }
 export async function promoteRegistrations(db: D1Database, eventSlug: string) {
@@ -154,6 +178,12 @@ export async function claimRegistration(db: D1Database, token: string) {
       .bind(attendeeId, reg.email, reg.phone, reg.guestName.slice(0, 50), now, now, now, grant.id, sessionId),
     db.prepare(`INSERT INTO attendee_sessions (id, attendee_id, token_hash, expires_at, created_at, last_seen_at)
       SELECT ?, ?, ?, ?, ?, ? WHERE ${owns}`).bind(sessionId, attendeeId, await hashToken(sessionToken), attendeeSessionExpiry(), now, now, grant.id, sessionId),
+    db.prepare(`UPDATE ticket_assignments SET attendee_id=?, assigned_at=? WHERE attendee_id=? AND ticket_id IN (SELECT id FROM tickets WHERE order_id=?) AND ${owns}`)
+      .bind(attendeeId,now,reg.attendeeId,reg.orderId,grant.id,sessionId),
+    db.prepare(`INSERT OR IGNORE INTO attendee_notifications (id,attendee_id,event_slug,kind,title,body,url,source_id,created_at)
+      SELECT lower(hex(randomblob(16))),?,event_slug,kind,title,body,url,source_id,created_at FROM attendee_notifications
+      WHERE attendee_id=? AND kind='registration_update' AND instr(source_id,?)=1 AND ${owns}`)
+      .bind(attendeeId,reg.attendeeId,`registration-update/${reg.id}/`,grant.id,sessionId),
     db.prepare(`UPDATE event_registrations SET attendee_id = ?, verified_at = COALESCE(verified_at, ?),
       status = CASE WHEN status = 'unverified' THEN CASE WHEN kind = 'interest' THEN 'interested' WHEN ? = 1 THEN 'requested' ELSE 'waitlisted' END ELSE status END,
       version = version + CASE WHEN status = 'unverified' THEN 1 ELSE 0 END, updated_at = ? WHERE id = ? AND ${owns}`)
@@ -187,7 +217,8 @@ export async function cancelRegistration(db: D1Database, id: string) {
   await promoteRegistrations(db, reg.eventSlug);
 }
 export const registrationStatusText: Record<string, string> = { unverified: 'Check your email', interested: 'You’re in for updates. Book a spot when the date drops.', requested: 'Waiting for the host’s nod.', waitlisted: 'Full house for now. You’re on the waitlist.', confirmed: 'You’re on the list. Your passes are in My Nights.', cancelled: 'Your RSVP is cancelled. Catch you at the next one.', declined: 'The host couldn’t fit you in this time.' };
-export async function processRegistrations(env: Cloudflare.Env, origin: string) {
+export async function processRegistrations(env: Cloudflare.Env, origin: string, registrationId?: string) {
+  if (!registrationId) {
   const events = await env.DB.prepare(`SELECT DISTINCT event_slug AS slug FROM event_registrations WHERE status IN ('waitlisted', 'interested')`).all<{ slug: string }>();
   for (const event of events.results) {
     await promoteRegistrations(env.DB, event.slug);
@@ -196,15 +227,26 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string) 
     await env.DB.prepare(`UPDATE event_registrations SET event_signature = ?, version = version + 1, updated_at = ? WHERE event_slug = ? AND status = 'interested' AND event_signature <> ?`)
       .bind(signature(s), timestamp(), event.slug, signature(s)).run();
   }
-  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return;
-  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE verified_at IS NOT NULL AND version > notified_version AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = event_registrations.event_slug AND e.removed_at IS NOT NULL) ORDER BY updated_at LIMIT 40`).all<Registration>();
+  }
+  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE (? IS NULL OR id=?) AND (verified_at IS NOT NULL OR device_claimed_at IS NOT NULL) AND version > notified_version AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = event_registrations.event_slug AND e.removed_at IS NOT NULL) ORDER BY updated_at LIMIT 40`).bind(registrationId ?? null,registrationId ?? null).all<Registration>();
+  if (!registrationId && env.EMAIL_DELIVERY_QUEUE && rows.results.length) {
+    await env.EMAIL_DELIVERY_QUEUE.sendBatch(rows.results.map(reg => ({ body: { deliveryId: `registration-confirmation:${reg.id}` } })));
+    return;
+  }
   for (const reg of rows.results) {
     const s = await registrationSettings(env.DB, reg.eventSlug);
     if (!s) continue;
     const detail = reg.status === 'interested' ? `${registrationStatusText.interested} ${s.scheduleStatus === 'coming_soon' ? 'The date is still to be announced.' : `The event is scheduled for ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(s.startsAt))}, Accra time.`} ${s.eventState === 'cancelled' ? 'The event has been cancelled.' : s.mode === 'rsvp' ? 'RSVP is now available on the event page.' : 'Check the event page for current booking details.'}` : registrationStatusText[reg.status];
     const key = `registration-update/${reg.id}/${reg.version}`;
     const queued = await env.DB.prepare(`SELECT 1 AS found FROM delivery_events WHERE kind = 'registration_update' AND json_extract(payload_json, '$.idempotencyKey') = ? LIMIT 1`).bind(key).first();
-    if (!queued) await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · Registration update`, text: `${detail}\n\n${origin}/event/${reg.eventSlug}\nManage your registration in My Nights.`, html: `${emailBrand}<p>${escape(detail)}</p><p><a href="${origin}/event/${reg.eventSlug}">${escape(s.title)}</a></p><p>Manage your registration in My Nights.</p>`, idempotencyKey: key });
+    const email = async () => { if (!queued) await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · Registration update`, text: `${detail}\n\n${origin}/event/${reg.eventSlug}\nManage your registration in My Nights.`, html: `${emailBrand}<p>${escape(detail)}</p><p><a href="${origin}/event/${reg.eventSlug}">${escape(s.title)}</a></p><p>Manage your registration in My Nights.</p>`, idempotencyKey: key }); };
+    if (reg.kind === 'rsvp') {
+      const channel = await deliverConfirmation({ env, id: key, attendeeId: reg.attendeeId,
+        payload: { kind: 'registration_update', eventSlug: reg.eventSlug, sourceId: key, tag: `rsvp-${reg.id}`,
+          title: reg.status === 'confirmed' ? 'Your RSVP is confirmed' : 'Your RSVP has an update', body: detail,
+          url: reg.status === 'confirmed' ? `/my-nights/${reg.eventSlug}?view=passes` : '/my-nights?view=rsvps' }, email, skipPush: Boolean(queued) });
+      if (channel === 'pending') continue;
+    } else await email();
     await env.DB.prepare('UPDATE event_registrations SET notified_version = ? WHERE id = ? AND notified_version < ?').bind(reg.version, reg.id, reg.version).run();
   }
 }
