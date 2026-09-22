@@ -4,9 +4,6 @@ on:
   workflow_run:
     workflows: ["Deploy to Cloudflare"]
     types: [completed]
-  pull_request:
-    branches: [main]
-    paths: ["tests/e2e/**", ".github/workflows/browser-audit.yml"]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +11,9 @@ permissions:
 
 jobs:
   browser-audit:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # Pull requests run the full isolated candidate suite. Audit the live site
+    # after a successful release, or when an operator explicitly requests it.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     # Fresh hosted runners may spend several minutes installing WebKit system
     # dependencies before the production checks can begin. Keep enough headroom
@@ -27,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
