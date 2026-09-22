@@ -59,6 +59,11 @@ test("Hosts connect to the guest journey", async ({ page }) => {
 });
 
 test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page, eventSlug }, testInfo) => {
+  // This journey blocks service workers. Use a known permission state so the
+  // help disclosure does not depend on a worker-ready timeout or window focus.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'Notification', { configurable: true, value: { permission: 'denied' } });
+  });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const preview = page.locator(".room-product-phone").first();
