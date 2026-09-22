@@ -28,7 +28,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "test:capacity": "vitest run --config vitest.capacity.config.ts",
     "build:vps": "node scripts/build-vps.mjs",
-    "test:vps": "node --test tests/vps-database.test.mjs && vitest run --config vitest.vps.config.ts"
+    "test:vps": "node --test tests/vps-database.test.mjs tests/vps-operations.test.mjs && vitest run --config vitest.vps.config.ts"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

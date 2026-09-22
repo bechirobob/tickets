@@ -33,6 +33,7 @@ def install(source, revision):
                 raise RuntimeError('Existing release has a different identity.')
         else:
             shutil.copytree(source, release, symlinks=True)
+        os.chmod(release, 0o755)
         try:
             account = pwd.getpwnam('becore-tickets')
         except KeyError:

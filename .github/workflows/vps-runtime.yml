@@ -2,6 +2,21 @@ name: Verify Tickets VPS runtime
 on:
   push:
     branches: [feat/vps-primary-runtime]
+    paths:
+      - '.github/workflows/vps-runtime.yml'
+      - 'runtime/**'
+      - 'ops/vps/**'
+      - 'scripts/**'
+      - 'worker/**'
+      - 'lib/**'
+      - 'app/**'
+      - 'db/**'
+      - 'drizzle/**'
+      - 'public/**'
+      - 'styles/**'
+      - 'tests/**'
+      - 'package*.json'
+      - '*config*'
 permissions:
   contents: read
 concurrency:

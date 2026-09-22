@@ -14,6 +14,17 @@ const directory = mkdtempSync(path.join(tmpdir(), 'tickets-vps-network-'));
 const db = new SqliteDatabase(path.join(directory, 'tickets.sqlite'));
 const host = '127.0.0.1:3218', base = `http://${host}`;
 let child, socket, output = '';
+async function start() {
+  child = spawn(process.execPath, ['dist-vps/server.mjs'], { env: { ...process.env, TICKETS_CONFIG: path.join(directory, 'config.json'), TICKETS_STATE: directory, TICKETS_HOST: host, TICKETS_PORT: '3218', TICKETS_ACTIVE: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.on('data', data => { output = (output + data).slice(-10000); });
+  child.stderr.on('data', data => { output = (output + data).slice(-10000); });
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if (child.exitCode !== null) throw new Error('Server exited during startup.');
+    try { const response = await fetch(base + '/healthz'); if (response.ok) return; } catch { /* Startup is asynchronous. */ }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error('Server did not become ready.');
+}
 try {
   for (const file of readdirSync('drizzle').filter(f => f.endsWith('.sql')).sort()) await db.exec(readFileSync(path.join('drizzle', file), 'utf8'));
   const id = randomUUID(), slug = `vps-network-${id}`, session = randomBytes(32).toString('base64url');
@@ -27,21 +38,16 @@ try {
     db.prepare("INSERT INTO ticket_assignments (ticket_id,attendee_id,assigned_by,status,assigned_at) VALUES (?,?,'fixture','active',?)").bind(id,id,now),
   ]);
   writeFileSync(path.join(directory, 'config.json'), JSON.stringify({ ENVIRONMENT: 'test', STAFF_LOGIN_DECOY_SECRET: 'isolated-vps-network-test-key-with-no-production-access' }));
-  child = spawn(process.execPath, ['dist-vps/server.mjs'], { env: { ...process.env, TICKETS_CONFIG: path.join(directory, 'config.json'), TICKETS_STATE: directory, TICKETS_HOST: host, TICKETS_PORT: '3218', TICKETS_ACTIVE: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
-  child.stdout.on('data', data => { output = (output + data).slice(-10000); });
-  child.stderr.on('data', data => { output = (output + data).slice(-10000); });
-  let ready = false;
-  for (let attempt = 0; attempt < 60; attempt++) {
-    if (child.exitCode !== null) throw new Error('Server exited during startup.');
-    try { const response = await fetch(base + '/healthz'); if (response.ok) { ready = true; break; } } catch {}
-    await new Promise(resolve => setTimeout(resolve, 250));
-  }
-  assert.ok(ready, 'Server did not become ready.');
+  await start();
   for (const route of ['/', '/my-nights', '/api/public/events', '/api/version']) {
     const response = await fetch(base + route);
     assert.equal(response.status, 200, route);
     assert.ok(response.headers.get('content-security-policy'), `${route} security headers`);
-    await response.arrayBuffer();
+    const text = await response.text();
+    if (route === '/') {
+      const nonce = response.headers.get('content-security-policy').match(/'nonce-([^']+)'/)[1];
+      assert.ok(text.includes(`nonce="${nonce}"`), 'SSR script nonce matches the response security policy');
+    }
   }
   const invalidHost = await new Promise((resolve, reject) => {
     get(base + '/healthz', { headers: { host: 'untrusted.example' } }, response => { response.resume(); resolve(response.statusCode); }).once('error', reject);
@@ -67,12 +73,24 @@ try {
   socket.send(JSON.stringify({ type: 'message', content: 'Isolated VPS connection test.' }));
   const messageBody = await incoming;
   assert.equal(messageBody.message.content, 'Isolated VPS connection test.');
+  socket.close();
+  await once(socket, 'close');
+  const stopped = once(child, 'exit');
+  child.kill('SIGTERM');
+  const exit = await Promise.race([stopped, new Promise((_, reject) => setTimeout(() => reject(new Error('Graceful restart timed out.')), 25000).unref())]);
+  assert.equal(exit[0], 0);
+  await start();
+  socket = new WebSocket(`ws://${host}/api/room/socket?event=${slug}`, { headers: { origin: `https://${host}`, cookie: `bct_attendee=${session}` } });
+  const restored = await Promise.race([once(socket, 'message'), new Promise((_, reject) => setTimeout(() => reject(new Error('Restarted Room timed out.')), 8000).unref())]);
+  const restoredBody = JSON.parse(restored[0].toString());
+  assert.equal(restoredBody.type, 'snapshot');
+  assert.ok(restoredBody.messages.some(message => message.id === messageBody.message.id && message.content === messageBody.message.content), 'Room history survives a server restart');
   await db.prepare('UPDATE attendee_sessions SET revoked_at=? WHERE id=?').bind(now,id).run();
   const closed = once(socket, 'close');
   socket.send(JSON.stringify({ type: 'reaction', messageId: 'does-not-matter', emoji: '🔥' }));
   const close = await Promise.race([closed, new Promise((_, reject) => setTimeout(() => reject(new Error('Revoked socket remained open.')), 8000).unref())]);
   assert.equal(close[0], 4003);
-  console.log('VPS HTTP, SSR, private access, QR wallet, real Room WebSocket and session revocation passed.');
+  console.log('VPS HTTP, SSR/CSP, private access, QR wallet, real Room WebSocket, restart persistence and session revocation passed.');
 } catch (error) {
   console.error(output);
   throw error;

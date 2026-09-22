@@ -104,3 +104,72 @@ fallback DNS record if retiring the hostname.
 References: [Cloudflare redirects](https://developers.cloudflare.com/rules/url-forwarding/),
 [redirect API permissions](https://developers.cloudflare.com/rules/url-forwarding/single-redirects/create-api/#required-api-token-permissions),
 [Workers quota](https://developers.cloudflare.com/workers/platform/limits/#daily-requests).
+
+## Functional VPS runtime — preparation in progress
+
+The owner authorized a VPS application deployment and allows it to become the
+primary host. A small progress log is not a database replication mechanism.
+The target is one authoritative application database on Hermes, with atomic
+SQLite WAL transactions, persistent delivery jobs and Room state. Never let an
+old Cloudflare copy and the VPS independently sell tickets. An automatic return
+to an older writable Cloudflare database is explicitly unsafe.
+
+Source branch: `feat/vps-primary-runtime`. The Node runtime reuses the existing
+application, authorization and payment logic; only the Cloudflare runtime
+bindings are adapted. Hermes has Node 22.22.2, four cores, approximately 5 GB
+available RAM and 33 GB free disk at the initial read-only capacity check
+(Bubble Wash run `35726516617`). The application artifact is built in CI, not
+on the shared VPS. Production preview listens only on `127.0.0.1:3118`, runs as
+an unprivileged account, uses separate preview state, disables scheduled work
+and denies outbound network access through its systemd unit. Caddy and DNS
+remain on the verified branded maintenance setup until handoff is complete.
+
+Storage policy: Tickets journal namespace has a 32 MB budget and seven-day
+retention; release cleanup retains the newest three releases plus any active
+and rollback pointers. Obsolete releases must also be older than two days.
+Incomplete temporary uploads expire after one day. Cleanup never visits the
+application database, Room state, financial records or customer tickets.
+Persistent delivery work is deduplicated and capped at 10,000 pending tasks;
+acknowledged tasks are removed. Unresolved work is not discarded because it is
+old. Existing product expiry and analytics retention rules remain intact.
+
+Initial complete CI run `35729472907` passed lint, TypeScript, dependency audit,
+all existing application/Worker tests, 439 backend tests on Node, both builds,
+retention checks, and real HTTP/QR/Room WebSocket checks with production-only
+dependencies. Follow-up verification adds process restart persistence, exact
+CSP nonce matching and persistent queue/rate-limit tests.
+
+The read-only Cloudflare inventory at 12:49 UTC on 22 September 2026 confirmed
+HTTP 429/Error 1027. The application database is
+`8f8723c2-673a-4aba-b025-83c05d67d075`; Room namespace is
+`683655a4b4924e54b31b9b7aad6e2e27`. Seev and Resend credentials are present in
+the existing Tickets Actions secret store. Paystack, VAPID push keys, the staff
+decoy key and Apple Wallet auth secret are Worker-only in that inventory.
+Do not print, commit or attach private credentials or live database snapshots.
+
+Before live activation:
+
+1. Reconcile the latest deployed source, including the concurrently developed
+   VPS email integration, with the tested runtime branch.
+2. Transfer matching production credentials through the private operator path.
+   Cloudflare's secret listing cannot reveal stored values. Preserve VAPID and
+   wallet identity so existing subscriptions and passes continue working.
+3. Stop all Cloudflare writes and scheduled/queue consumers, export D1 and every
+   Room's full persistent state, import into private VPS production state, and
+   verify counts, relationships, issued QR identities and pending deliveries.
+4. Record the verified handoff in private `handoff.json` with source
+   `cloudflare`, writer `vps`, and explicit sourceWritesStopped, roomsVerified
+   and credentialsVerified flags. Active mode refuses a dirty release or a
+   missing handoff. Those flags are an operator gate, not a substitute for the
+   actual migration and checks.
+5. Establish encrypted off-host backups and rehearse restoration. Configure
+   Caddy to overwrite client-address headers and preserve the public hostname,
+   session cookies, WebSockets and payment callback paths. Only then change
+   production routing and disable the old maintenance redirect monitor.
+6. Verify real production booking, host confirmation, ticket access, Room
+   announcements and opted-in push; do not infer these from isolated fixtures.
+
+Photo moderation and the organizer AI gateway still depend on Cloudflare APIs.
+Photo moderation fails closed when its provider is unavailable. This preparation
+therefore does not yet establish complete independence from every Cloudflare
+service, or functional live failover.
