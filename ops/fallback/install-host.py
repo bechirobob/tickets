@@ -38,7 +38,7 @@ def install(source, revision):
         root = pathlib.Path('/srv/becore-tickets-fallback')
         release = root / 'releases' / revision
         release.mkdir(parents=True, exist_ok=True, mode=0o755)
-        for name in ('index.html', 'monitor.py', 'becore-tickets-fallback.service', 'becore-tickets-fallback.timer'):
+        for name in ('index.html', 'monitor.py', 'activate-monitor.py', 'becore-tickets-fallback.service', 'becore-tickets-fallback.timer'):
             data = (source / name).read_bytes()
             if name == 'index.html' and b'__BRAND_IMAGE__' in data:
                 raise RuntimeError('Fallback page was not built.')
