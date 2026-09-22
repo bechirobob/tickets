@@ -44,6 +44,9 @@ function signature(s: RegistrationSettings) { return JSON.stringify([s.scheduleS
 export async function readRegistration(db: D1Database, id: string) { return db.prepare(`SELECT ${fields} FROM event_registrations WHERE id = ?`).bind(id).first<Registration>(); }
 
 export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean; acquisitionSource?: string }, origin: string, directRsvp = false, identity?: AttendeeIdentity | null) {
+  // Keep recovery tied to the email on this booking. A different booking email
+  // receives its own scoped session, just as a new checkout claim does.
+  if (identity?.normalizedEmail !== input.email) identity = null;
   const settings = await registrationSettings(db, input.eventSlug);
   if (!settings || !registrationsOpen(settings) || settings.mode === 'paid') throw new Error('Registration is not open for this event.');
   if (settings.mode === 'rsvp' && !registrationScheduleReady(settings)) throw new Error('RSVP opens when the event date is confirmed.');

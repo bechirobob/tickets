@@ -81,6 +81,7 @@ describe("ticket email delivery and recovery", () => {
 
     const replay = await claimRecovery(new Request('https://tickets.becoreops.com/api/customer/recovery/claim', {method:'POST',headers:{origin:'https://tickets.becoreops.com','content-type':'application/json'},body:JSON.stringify({token:match![1]})}));
     expect(replay.status).toBe(400);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM attendee_notifications WHERE kind='purchase_confirmation' AND source_id IN (?,?)").bind(`payment-confirmation/${orderId}`,`payment-confirmation/${secondOrderId}`).first()).toEqual({n:2});
   });
 
   it("does not disclose whether an unknown email has tickets", async () => {

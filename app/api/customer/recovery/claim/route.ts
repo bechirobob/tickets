@@ -40,6 +40,17 @@ export async function POST(request: Request) {
     env.DB.prepare(`UPDATE event_registrations SET attendee_id=?, verified_at=COALESCE(verified_at,?), updated_at=?
       WHERE normalized_email=? AND ${owns} AND (device_claimed_at IS NOT NULL OR verified_at IS NOT NULL)`)
       .bind(attendeeId,now,now,grant.email,grant.id,sessionId),
+    env.DB.prepare(`INSERT OR IGNORE INTO attendee_notifications (id,attendee_id,event_slug,kind,title,body,url,source_id,created_at)
+      SELECT lower(hex(randomblob(16))),?,o.event_slug,'purchase_confirmation','Your ticket is confirmed',
+        'Your QR ticket and receipt are ready in My Nights.','/my-nights/'||o.event_slug||'?view=passes','payment-confirmation/'||o.id,?
+      FROM orders o WHERE o.payment_provider<>'rsvp' AND o.status='paid' AND ${owns}
+        AND EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id WHERE t.order_id=o.id AND a.attendee_id=? AND a.status='active')`)
+      .bind(attendeeId,now,grant.id,sessionId,attendeeId),
+    env.DB.prepare(`INSERT OR IGNORE INTO attendee_notifications (id,attendee_id,event_slug,kind,title,body,url,source_id,created_at)
+      SELECT lower(hex(randomblob(16))),?,event_slug,'registration_update','Your RSVP is confirmed',
+        'Your passes are in My Nights.','/my-nights/'||event_slug||'?view=passes','registration-update/'||id||'/'||version,?
+      FROM event_registrations WHERE attendee_id=? AND status='confirmed' AND ${owns}`)
+      .bind(attendeeId,now,attendeeId,grant.id,sessionId),
     env.DB.prepare(`INSERT INTO attendee_sessions (id,attendee_id,token_hash,expires_at,created_at,last_seen_at)
       SELECT ?,?,?,?,?,? WHERE ${owns}`)
       .bind(sessionId, attendeeId, await hashToken(sessionToken), attendeeSessionExpiry(), now, now, grant.id, sessionId),
