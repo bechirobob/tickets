@@ -1,3 +1,4 @@
+import { readAnalyticsBaseline } from '../../../../lib/analytics-baseline';
 import {
   hasPermission,
   mutationHasValidOrigin,
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
   const canEvents = hasPermission(session, "events.manage");
   const canFinance = hasPermission(session, "orders.manage");
   const isOwner = session.role === "owner";
+  const analyticsBaseline = await readAnalyticsBaseline(env.DB);
   const events = await env.DB.prepare(
     "SELECT slug, title, venue, starts_at AS startsAt, event_state AS eventState FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC LIMIT 100",
   ).all<{
@@ -85,8 +87,8 @@ export async function GET(request: Request) {
     env.DB.prepare(
       `
       SELECT event.slug, event.title, event.event_state AS eventState,
-        (SELECT COUNT(*) FROM orders WHERE event_slug = event.slug AND payment_provider <> 'rsvp' AND status IN ('paid','refund_pending','refunded','disputed')) AS paidOrders,
-        (SELECT COALESCE(SUM(total_amount_minor),0) FROM orders WHERE event_slug = event.slug AND status IN ('paid','refund_pending','refunded','disputed')) AS grossMinor,
+        (SELECT COUNT(*) FROM orders WHERE event_slug = event.slug AND payment_provider <> 'rsvp' AND status IN ('paid','refund_pending','refunded','disputed') AND COALESCE(paid_at,created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')) AS paidOrders,
+        (SELECT COALESCE(SUM(total_amount_minor),0) FROM orders WHERE event_slug = event.slug AND status IN ('paid','refund_pending','refunded','disputed') AND COALESCE(paid_at,created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')) AS grossMinor,
         (SELECT COUNT(*) FROM tickets WHERE event_slug = event.slug AND status IN ('issued','checked_in')) AS activeTickets,
         (SELECT COUNT(*) FROM tickets WHERE event_slug = event.slug AND status = 'checked_in') AS checkedIn,
         (SELECT COUNT(*) FROM support_cases WHERE event_slug = event.slug AND status NOT IN ('resolved','closed')) AS openSupport,
@@ -172,6 +174,7 @@ export async function GET(request: Request) {
     {
       events: events.results,
       metrics: scopedMetrics,
+      analyticsBaseline,
       checks: canEvents ? checks.results : [],
       devices: canEvents ? devices.results : [],
       incidents: canEvents ? incidents.results : [],

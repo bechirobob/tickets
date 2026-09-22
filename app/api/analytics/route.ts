@@ -16,6 +16,8 @@ const clientMetrics = new Set([
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return new Response(null, { status: 204 });
+  // Release checks identify themselves; their visits must never become guest analytics.
+  if (request.headers.get('x-becore-analytics') === 'exclude' || /HeadlessChrome|Playwright|bot|crawler|spider/iu.test(request.headers.get('user-agent') ?? '')) return new Response(null, { status: 204 });
   const { env } = await import("cloudflare:workers");
   const body = await request.json().catch(() => null) as { metric?: unknown; eventSlug?: unknown } | null;
   if (!isProductMetric(body?.metric) || !clientMetrics.has(body.metric)) return new Response(null, { status: 204 });

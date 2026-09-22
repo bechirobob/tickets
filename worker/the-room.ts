@@ -158,7 +158,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       server.send(JSON.stringify({
         type: "snapshot",
         room: policy,
-        messages: this.readMessages(attachment),
+        messages: this.readMessages(attachment, new URL(request.url).searchParams.get("announcement")?.slice(0,80) ?? ""),
         online: this.ctx.getWebSockets().length,
       }));
       this.schedulePresence();
@@ -316,14 +316,14 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       pinned,
     });
     this.broadcast({ type: "message", message });
-    this.ctx.waitUntil(notifyRoomMessage(this.env, {
+    await notifyRoomMessage(this.env, {
       eventSlug: policy.eventSlug,
       messageId: message.id,
       senderAttendeeId: `admin:${actor}`,
       senderName: "The Host",
       content: message.content,
       announcement: true,
-    }));
+    });
     return message;
   }
 
@@ -349,6 +349,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     if (!found) return false;
     this.ctx.storage.sql.exec("UPDATE messages SET deleted_at = ? WHERE id = ?", new Date().toISOString(), messageId);
     this.broadcast({ type: "message_removed", messageId });
+    await this.env.DB.batch([
+      this.env.DB.prepare("UPDATE room_announcement_deliveries SET status='complete',lease_token=NULL,lease_until=NULL,updated_at=? WHERE event_slug=? AND json_extract(payload_json,'$.sourceId')=?").bind(new Date().toISOString(),this.eventSlug(),messageId),
+      this.env.DB.prepare("UPDATE attendee_notifications SET body='This host announcement was removed.',title='Host announcement removed' WHERE event_slug=? AND kind='host_update' AND source_id=?").bind(this.eventSlug(),messageId),
+    ]);
     return true;
   }
 
@@ -484,7 +488,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     return { ...input, id, sequence: row.sequence, createdAt, deletedAt: null, reactions: [] };
   }
 
-  private readMessages(viewer: ConnectionState): RoomMessage[] {
+  private readMessages(viewer: ConnectionState, announcementId = ""): RoomMessage[] {
     const rows = this.ctx.storage.sql.exec<{
       id: string; sequence: number; attendeeId: string; displayName: string; role: RoomRole; roomBadge: "VIP" | null;
       kind: "message" | "announcement"; content: string; parentId: string | null;
@@ -492,8 +496,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }>(`
       SELECT id, sequence, attendee_id AS attendeeId, display_name AS displayName, role, room_badge AS roomBadge, kind,
              content, parent_id AS parentId, pinned, created_at AS createdAt, deleted_at AS deletedAt
-      FROM messages ORDER BY sequence DESC LIMIT 100
-    `).toArray().reverse();
+      FROM messages WHERE sequence IN (SELECT sequence FROM messages ORDER BY sequence DESC LIMIT 100)
+        OR (id = ? AND kind = 'announcement' AND deleted_at IS NULL)
+      ORDER BY sequence DESC
+    `, announcementId).toArray().reverse();
     return rows
       .filter((row) => !viewer.blockedAttendeeIds.includes(row.attendeeId))
       .map((row) => {

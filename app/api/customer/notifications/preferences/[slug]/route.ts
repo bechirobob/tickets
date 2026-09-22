@@ -21,12 +21,13 @@ export async function PATCH(request: Request, context: Context) {
   const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug, false);
   if (!access) return Response.json({ error: "A valid ticket is required." }, { status: 401 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This notification request was not accepted." }, { status: 403 });
-  const body = await request.json() as { enabled?: boolean; roomMessages?: boolean; hostUpdates?: boolean; mute?: "off" | "1h" | "tonight" };
-  const current = await env.DB.prepare(`SELECT room_messages AS roomMessages, host_updates AS hostUpdates FROM notification_preferences WHERE attendee_id = ? AND event_slug = ?`)
-    .bind(access.attendeeId, slug).first<{ roomMessages: number; hostUpdates: number }>();
+  const body = await request.json().catch(() => null) as { enabled?: boolean; roomMessages?: boolean; hostUpdates?: boolean; mute?: "off" | "1h" | "tonight" } | null;
+  if (!body || ["enabled", "roomMessages", "hostUpdates"].some(key => Object.hasOwn(body,key) && typeof body[key as keyof typeof body] !== "boolean") || (body.mute !== undefined && !["off","1h","tonight"].includes(body.mute))) return Response.json({error:"Choose a valid notification preference."},{status:400});
+  const current = await env.DB.prepare(`SELECT room_messages AS roomMessages, host_updates AS hostUpdates,muted_until AS mutedUntil FROM notification_preferences WHERE attendee_id = ? AND event_slug = ?`)
+    .bind(access.attendeeId, slug).first<{ roomMessages: number; hostUpdates: number; mutedUntil: string | null }>();
   const roomMessages = typeof body.enabled === "boolean" ? body.enabled : typeof body.roomMessages === "boolean" ? body.roomMessages : current ? Boolean(current.roomMessages) : true;
   const hostUpdates = typeof body.enabled === "boolean" ? body.enabled : typeof body.hostUpdates === "boolean" ? body.hostUpdates : current ? Boolean(current.hostUpdates) : true;
-  let mutedUntil: string | null = null;
+  let mutedUntil: string | null = body.mute === "off" || typeof body.enabled === "boolean" ? null : current?.mutedUntil ?? null;
   if (body.mute === "1h") mutedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   if (body.mute === "tonight") mutedUntil = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
   const now = new Date().toISOString();

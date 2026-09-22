@@ -423,7 +423,7 @@ test("event-day journeys remain available beyond the open browser tab", async ()
   assert.match(hub, /TicketTransfer/u);
   assert.match(roomNotifications, /Notification\.requestPermission\(\)/u);
   assert.match(roomNotifications, /role="switch" aria-checked=\{enabled\}/u);
-  assert.match(roomNotifications, /JSON\.stringify\(\{ enabled: next \}\)/u);
+  assert.match(roomNotifications, /JSON\.stringify\(host \? \{ hostUpdates: next \} : \{ roomMessages: next \}\)/u);
   assert.doesNotMatch(roomNotifications, /<select|Mute for|Send me a test notification|notifications\/test/u);
   assert.match(serviceWorker, /addEventListener\("push"/u);
   assert.match(serviceWorker, /showNotification/u);

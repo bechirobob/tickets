@@ -17,7 +17,7 @@ type AnalyticsData = {
   generatedAt: string;
   rsvp: RsvpAnalytics;
   events: EventOption[];
-  scope: { eventSlug: string; label: string; range: string; rangeLabel: string };
+  scope: { eventSlug: string; label: string; range: string; rangeLabel: string; baseline?: string | null };
   overview: Overview;
   comparison: { paidOrders: number; revenueMinor: number; eventViews: number } | null;
   salesTrend: Array<{ day: string; orders: number; admissions: number; revenueMinor: number }>;
@@ -143,6 +143,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
       <p>Follow your guest list, ticket sales and who made it through the door.</p>
     </section>
 
+    {data?.scope.baseline ? <p className="analytics-baseline">Analytics start {new Date(data.scope.baseline).toLocaleString("en-GB", {dateStyle:"medium",timeStyle:"short",timeZone:"Africa/Accra"})} (Accra). Earlier activity is excluded. Bookings remain in the guest list and payment records.</p> : null}
     <section className="analytics-controls" aria-label="Analytics filters">
       <label>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setData(null); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{eventOptions.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
       <label>Period<select aria-label="Period" value={range} onChange={(event) => { setLoading(true); setData(null); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
@@ -177,7 +178,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
         <article className="analytics-section analytics-section--wide"><header><div><small>Inventory</small><h2>Ticket sales</h2></div><b>{overview.admissions} sold</b></header><div className="analytics-table"><div><b>Night / tier</b><b>Orders</b><b>Admissions</b><b>Sold</b><b>Gross</b></div>{data.ticketTiers.map((tier) => <div key={tier.id}><span><b>{tier.name}</b><small>{tier.eventTitle} · {money(tier.priceMinor)}</small></span><span><small className="analytics-cell-label">Orders</small>{tier.orders}</span><span><small className="analytics-cell-label">Admissions</small>{tier.admissions}</span><span><small className="analytics-cell-label">Sold</small>{rate(tier.admissions, tier.capacityAdmissions)}%</span><strong><small className="analytics-cell-label">Gross</small>{money(tier.revenueMinor)}</strong></div>)}</div></article>
       </section>
       <section id="analytics-reach" className="analytics-layout" aria-label="Reach reports" hidden={view !== "reach"}>
-        <article className="analytics-section"><header><div><small>Audience</small><h2>Visits & shares</h2></div></header><dl className="analytics-facts"><div><dt>Event views</dt><dd>{overview.eventViews}</dd></div><div><dt>RSVP page views</dt><dd>{overview.rsvpViews}</dd></div><div><dt>Unique paid buyers</dt><dd>{overview.uniqueBuyers}</dd></div><div><dt>Repeat buyers</dt><dd>{overview.repeatBuyers}</dd></div><div><dt>Shares started</dt><dd>{overview.shares}</dd></div></dl><p>RSVP page views start with this update. Shares count opened share actions, not confirmed posts.</p></article>
+        <article className="analytics-section"><header><div><small>Audience</small><h2>Visits & shares</h2></div></header><dl className="analytics-facts"><div><dt>Event views</dt><dd>{overview.eventViews}</dd></div><div><dt>RSVP page views</dt><dd>{overview.rsvpViews}</dd></div><div><dt>Unique paid buyers</dt><dd>{overview.uniqueBuyers}</dd></div><div><dt>Repeat buyers</dt><dd>{overview.repeatBuyers}</dd></div><div><dt>Shares started</dt><dd>{overview.shares}</dd></div></dl><p>Shares count opened share actions, not confirmed posts.</p></article>
         <article className="analytics-section"><header><div><small>Booking activity</small><h2>From browsing to booking</h2></div></header><BarList rows={funnel as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.value)} label={(item) => String(item.label)} detail={(item) => `${Number(item.value).toLocaleString("en-GH")} tracked`} /><p>Views count once per tab session, per page type, each day where storage is available. These are activity counts, not a joined visitor funnel; browser privacy settings can leave gaps.</p></article>
         <article className="analytics-section"><header><div><small>Promoter links</small><h2>Promoter performance</h2></div></header><BarList rows={data.promoters as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.revenueMinor)} label={(item) => `${item.label} · ${item.eventTitle}`} detail={(item) => `${item.orders} orders · ${money(Number(item.revenueMinor))}`} /></article>
       </section>

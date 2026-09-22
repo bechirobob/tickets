@@ -215,5 +215,16 @@ jobs:
       - name: Complete the owner-requested preview data cleanup
         run: node scripts/complete-preview-cleanup.mjs
 
+      - name: Apply the owner-requested event analytics reset once
+        run: node scripts/reset-event-analytics.mjs
+
+      - name: Preserve event analytics reset evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: event-analytics-reset-${{ github.sha }}
+          path: event-analytics-reset.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Issue the approved single-use owner recovery grant
         run: node scripts/issue-owner-recovery.mjs

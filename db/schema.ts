@@ -210,6 +210,7 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   failureCount: integer("failure_count").notNull().default(0),
   confirmationUpdates: integer("confirmation_updates").notNull().default(0),
   roomUpdates: integer("room_updates").notNull().default(1),
+  hostUpdates: integer("host_updates").notNull().default(0),
   revokedAt: text("revoked_at"),
 }, (table) => [
   uniqueIndex("push_subscriptions_endpoint_unique").on(table.endpoint),
@@ -1186,3 +1187,12 @@ export const marketingCampaigns = sqliteTable("marketing_campaigns", {
 export const marketingRecipients = sqliteTable("marketing_recipients", {
  campaignId:text("campaign_id").notNull(),contactId:text("contact_id").notNull(),status:text("status").notNull().default("pending"),
 },t=>[primaryKey({columns:[t.campaignId,t.contactId]})]);
+
+export const analyticsBaseline = sqliteTable("analytics_baseline", {
+  id: integer("id").primaryKey(), resetKey: text("reset_key").notNull().unique(), startedAt: text("started_at").notNull(),
+});
+export const roomAnnouncementDeliveries = sqliteTable("room_announcement_deliveries", {
+  id: text("id").primaryKey(), attendeeId: text("attendee_id").notNull(), eventSlug: text("event_slug").notNull(), senderId: text("sender_id").notNull(),
+  payloadJson: text("payload_json").notNull(), status: text("status").notNull().default("pending"), attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at").notNull(), leaseToken: text("lease_token"), leaseUntil: text("lease_until"), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+}, table => [index("room_announcement_pending_idx").on(table.status, table.nextAttemptAt)]);

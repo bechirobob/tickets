@@ -8,7 +8,7 @@ export async function GET(request:Request) {
   const slug=new URL(request.url).searchParams.get('eventSlug')??'';
   if(!await canReadHostEvent(env.DB,session.accountId,slug,session.role==='owner'))return Response.json({error:'This event is not available to your account.'},{status:403,headers});
   const preference=await env.DB.prepare('SELECT enabled FROM organizer_report_preferences WHERE account_id=?').bind(session.accountId).first<{enabled:number}>();
-  const latest=await env.DB.prepare(`SELECT r.created_at AS createdAt,r.kind,d.status FROM organizer_reports r LEFT JOIN delivery_events d ON d.id='organizer-report/'||r.id WHERE r.account_id=? ORDER BY r.created_at DESC LIMIT 1`).bind(session.accountId).first();
+  const latest=await env.DB.prepare(`SELECT r.created_at AS createdAt,r.kind,d.status FROM organizer_reports r LEFT JOIN delivery_events d ON d.id='organizer-report/'||r.id WHERE r.account_id=? AND r.created_at>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01') ORDER BY r.created_at DESC LIMIT 1`).bind(session.accountId).first();
   return Response.json({summary:await readHostSummary(env.DB,slug),reports:{enabled:preference?.enabled!==0,canManage:session.role==='organizer',latest}},{headers});
 }
 export async function PATCH(request:Request) {
