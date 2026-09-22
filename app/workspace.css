@@ -97,3 +97,5 @@ main:has(>.workspace-topbar) .account-security>.ticket-action{margin-top:6px}
 .help-centre--workspace .help-contact article :is(h3,p,a){grid-column:2}
 .organizer-suite .host-start__reports label{display:flex;align-items:center;gap:10px;min-height:44px}
 .organizer-suite .host-start__reports input{flex:none;margin:0}
+.help-centre--workspace .help-contact>div:first-child h2{font-size:22px;line-height:1.25;letter-spacing:-.025em}
+.organizer-suite .help-centre--workspace .help-search input{border:0;background:transparent;box-shadow:none}
