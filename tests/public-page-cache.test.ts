@@ -24,15 +24,14 @@ it("keeps private, query-specific and unidentified-release requests outside the 
   expect(publicPageCacheKey(request, new URL(request.url), undefined)).toBeNull();
 });
 
-it("shares only the public Room HTML shell across sessions and keeps it release scoped", () => {
+it("keeps Room HTML and RSC outside shared caching for every session", () => {
   const url = new URL("https://cache-test.example/room/public-event");
-  const guest = new Request(url, { headers: { accept: "text/html", cookie: "bct_attendee=private-session" } });
-  const anonymous = new Request(url, { headers: { accept: "text/html" } });
-  const key = publicPageCacheKey(guest, url, "release-a")!;
-  expect(key.url).toBe(publicPageCacheKey(anonymous, url, "release-a")?.url);
-  expect(key.headers.has("cookie")).toBe(false);
-  expect(key.url).not.toBe(publicPageCacheKey(guest, url, "release-b")?.url);
-  expect(publicPageCacheKey(new Request(url, { headers: { accept: "text/x-component" } }), url, "release-a")).toBeNull();
+  for (const accept of ["text/html", "text/x-component"]) {
+    for (const cookie of ["", "bct_attendee=private-session"]) {
+      const request = new Request(url, { headers: { accept, cookie } });
+      expect(publicPageCacheKey(request, url, "release-a")).toBeNull();
+    }
+  }
 });
 
 it("requires browser HTML revalidation while preserving a short edge TTL and removing cookies", () => {

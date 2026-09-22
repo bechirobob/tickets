@@ -3,7 +3,7 @@ import { env } from "cloudflare:test";
 import { POST as initializePayment } from "../app/api/payments/initialize/route";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { GET as bookingFeeQuote } from "../app/api/config/booking-fee/route";
-import { findCuratedEvent, getPublicEvents } from "../app/events";
+import { findCuratedEvent, findPublicRoomEvent, getPublicEvents } from "../app/events";
 import { discoveryFaceMinor } from "../lib/event-pricing";
 
 const eventSlug = "inventory-payment-test";
@@ -60,10 +60,10 @@ afterEach(() => vi.unstubAllGlobals());
 describe("payment ticket validation", () => {
   it("loads Room metadata without changing public event fields or checkout tiers", async () => {
     const checkout = await findCuratedEvent(eventSlug);
-    const room = await findCuratedEvent(eventSlug, { includeTicketTiers: false });
+    const room = await findPublicRoomEvent(eventSlug);
     expect(checkout?.ticketTiers.length).toBeGreaterThan(0);
-    expect(room).toEqual({ ...checkout, ticketTiers: [] });
-    expect(await findCuratedEvent("not-published", { includeTicketTiers: false })).toBeNull();
+    expect(room).toEqual({ title: checkout!.title, fullDate: checkout!.fullDate, time: checkout!.time, image: checkout!.image });
+    expect(await findPublicRoomEvent("not-published")).toBeNull();
   });
 
   it("replays the original payment without a second reservation or provider call", async () => {

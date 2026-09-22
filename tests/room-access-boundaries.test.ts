@@ -6,6 +6,7 @@ import { GET as readAccess } from '../app/api/rooms/[slug]/access/route';
 import { hashToken, readAttendeeRoomAccess, readAttendeeRoomSocketAccess } from '../lib/attendee-auth';
 import { notifyRoomMessage } from '../lib/notifications';
 import { POST as subscribe } from '../app/api/customer/notifications/subscription/route';
+import { resolveRoomPolicy } from '../lib/room-policy';
 
 async function fixture() {
   const id = crypto.randomUUID(), now = new Date().toISOString();
@@ -26,6 +27,20 @@ async function fixture() {
 }
 
 describe('Room access boundaries', () => {
+  it('loads current socket policy with authorization and excludes unavailable Room schedules', async () => {
+    const f = await fixture();
+    expect((await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug))?.policy).toEqual(await resolveRoomPolicy(env.DB,f.slug));
+    expect(await readAttendeeRoomAccess(env.DB,f.cookie,f.slug)).not.toHaveProperty('roomPolicyJson');
+    await env.DB.prepare('INSERT INTO room_settings(event_slug,emergency_read_only,slow_mode_seconds,updated_at,updated_by) VALUES (?,1,15,?,?)').bind(f.slug,f.now,'fixture').run();
+    const updated = (await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug))?.policy;
+    expect(updated).toEqual(await resolveRoomPolicy(env.DB,f.slug));
+    expect(updated).toMatchObject({ readOnly: true, emergencyReadOnly: true, slowModeSeconds: 15 });
+    await env.DB.prepare("UPDATE curated_event_records SET schedule_status='coming_soon' WHERE slug=?").bind(f.slug).run();
+    expect((await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug))?.policy).toBeNull();
+    await env.DB.prepare("UPDATE curated_event_records SET schedule_status='confirmed',status='draft' WHERE slug=?").bind(f.slug).run();
+    expect((await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug))?.policy).toBeNull();
+  });
+
   it('loads only the connecting guest’s event blocks and denies suspended or revoked sockets', async () => {
     const f = await fixture();
     await env.DB.batch([

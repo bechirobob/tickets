@@ -212,14 +212,14 @@ export async function getPublicEvents(options: { throwOnError?: boolean } = {}):
   }
 }
 
-export async function findCuratedEvent(slug: string, options: { includeTicketTiers?: boolean } = {}): Promise<CuratedEvent | null> {
+export async function findCuratedEvent(slug: string): Promise<CuratedEvent | null> {
   if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return null;
   try {
     const now = new Date().toISOString();
     const records = await loadPublicEventRecords(slug);
     const record = records[0];
     if (!record) return null;
-    const tiers = options.includeTicketTiers === false ? [] : await loadTiers([record.slug], now);
+    const tiers = await loadTiers([record.slug], now);
     return formatEvent(record, tiers.map((tier) => ({
       id: tier.code,
       recordId: tier.recordId,
@@ -237,4 +237,28 @@ export async function findCuratedEvent(slug: string, options: { includeTicketTie
     console.error(JSON.stringify({ message: "event lookup unavailable", slug, error: error instanceof Error ? error.message : String(error) }));
     return null;
   }
+}
+
+// Room admission remains a separate, fresh authorization check. Its server
+// shell only needs these public fields, not fees, tiers or reservation totals.
+export async function findPublicRoomEvent(slug: string): Promise<{ title: string; fullDate: string; time: string; image: string } | null> {
+  if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return null;
+  const db = await runtimeDb();
+  const record = await db.prepare(`
+    SELECT title, starts_at AS startsAt, ends_at AS endsAt,
+           schedule_status AS scheduleStatus, schedule_label AS scheduleLabel,
+           image_url AS imageUrl
+    FROM curated_event_records
+    WHERE slug = ? AND (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
+    LIMIT 1
+  `).bind(slug, new Date().toISOString()).first<Pick<EventRecord, "title" | "startsAt" | "endsAt" | "scheduleStatus" | "scheduleLabel" | "imageUrl">>();
+  if (!record) return null;
+  const comingSoon = record.scheduleStatus === "coming_soon";
+  const starts = new Date(record.startsAt), ends = new Date(record.endsAt);
+  return {
+    title: record.title,
+    fullDate: comingSoon ? record.scheduleLabel || "Coming soon" : fullDateFormat.format(starts),
+    time: comingSoon ? "Time to be announced" : `${timeFormat.format(starts)}${record.scheduleStatus !== "confirmed" ? " onwards" : ` — ${timeFormat.format(ends)}`}`,
+    image: record.imageUrl,
+  };
 }

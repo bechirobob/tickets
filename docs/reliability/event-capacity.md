@@ -277,12 +277,30 @@ Its second attempt also found a real Room HTML render failure: Cloudflare 1102
 page is preserved in artifact `10671178820`; do not report this audit as green.
 
 Follow-up `fix/room-render-and-browser-reliability` uses Playwright's documented
-full Chromium headless channel for desktop, reuses immutable date formatters,
-skips unused tier inventory in the Room server render, and admits only its public
-HTML loading shell to the existing 45-second, release-scoped edge cache. The
-server page reads only public event metadata. Admission APIs, sockets, private
-messages, query-specific responses and RSC requests remain outside that cache.
-New regressions cover cache boundaries and unchanged event metadata/checkout tiers.
+full Chromium headless channel for desktop and reuses immutable date formatters.
+The initial proposed Room shell cache was rejected by an existing security gate
+that excludes Room pages from shared caching. Preserve that boundary: use a
+minimal public title/date/image query for Room rendering, removing unused fee,
+tier and reservation work, and explicitly return no-store on Room pages. New
+regressions cover the unchanged cache boundary and unchanged confirmed,
+coming-soon and end-pending metadata; checkout tier loading remains unchanged.
 No billing, resource allowance, admission policy or data schema changes are made.
-Next: exact-source candidate/native gates, deploy the follow-up, verify Room cache
-responses and complete all live browser audits with retries disabled.
+Next: exact-source candidate/native gates, deploy the follow-up, verify uncached Room
+renders and complete all live browser audits with retries disabled.
+
+Hosted follow-up run `35673372293` on superseded source `611da564a581409ff918bd5f76050bf70446efd7`
+passed ten uncached Room renders (p95 178 ms) and all delivery/read correctness
+checks, but 400-join p95 was 5,823 ms, above the unchanged 5-second gate. Cleanup
+passed. That source's proposed Room cache is not eligible for release because
+of the existing cache security gate. Combine the current policy with session,
+admission and block lookup in one D1 snapshot, eliminating another 400 queued
+statements during the join burst; preserve the shared policy calculation and
+verify immediate moderation/schedule changes. The final rehearsal keeps every
+Room render uncached and explicitly checks no-store.
+
+Repeated fixture setups measured about 9,700 writes. With at most 399 persisted
+notifications and their indexes plus bounded session bookkeeping, the workload
+is below 13,000 writes. Refine the per-run allocation to 15,000 writes while
+retaining the separate 30,000-write production reserve and the provider's full
+100,000-write daily ceiling. The next run must still refuse insufficient headroom;
+no quota or plan is raised, and no load gate is relaxed.
