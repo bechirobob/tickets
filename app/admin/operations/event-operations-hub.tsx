@@ -131,6 +131,7 @@ export default function EventOperationsHub({
   const [data, setData] = useState<{
     events: Event[];
     metrics: Metric[];
+    analyticsBaseline?: string | null;
     checks: CheckItem[];
     devices: Device[];
     incidents: Incident[];
@@ -304,7 +305,7 @@ export default function EventOperationsHub({
                     <article>
                       <CircleDollarSign />
                       <b>{money(Number(metric.grossMinor ?? 0))}</b>
-                      <span>{metric.paidOrders ?? 0} paid orders</span>
+                      <span>{metric.paidOrders ?? 0} paid orders{data.analyticsBaseline ? " since reset" : ""}</span>
                     </article>
                   ) : null}
                   {canEvents ? (
@@ -350,12 +351,12 @@ export default function EventOperationsHub({
                 <nav className="ops-tabs operations-views" aria-label="Operations views">{[['overview','Overview'],...(canEvents?[['readiness','Event readiness']]:[]),['issues','Issues'],['approvals','Approvals']].map(([key,label])=><button key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>
                 {view==='overview'?<section className="operations-next"><header><h3>Next actions</h3><span>Updates automatically</span></header><div>{canEvents?<><ActionLink href={`/admin/registrations?event=${selected}`} icon={<Users size={17}/>}>RSVP & guests</ActionLink><ActionLink href={`/admin/events?event=${selected}`} variant="secondary">Edit event</ActionLink></>:null}{canFinance?<ActionLink href="/admin/orders" variant="secondary">Orders & payments</ActionLink>:null}</div><div className="operations-attention">{canEvents&&readiness<100?<button onClick={()=>setView('readiness')}><ClipboardCheck size={18}/><span><b>Finish event checks</b><small>{checks.filter(c=>c.status!=='passed').length} checks remaining</small></span><span aria-hidden="true">→</span></button>:null}{incidents.length||data.alerts.length?<button onClick={()=>setView('issues')}><ShieldAlert size={18}/><span><b>Review open issues</b><small>{incidents.length} incidents · {data.alerts.length} system alerts</small></span><span aria-hidden="true">→</span></button>:null}{data.approvals.filter(a=>(!a.event_slug||a.event_slug===selected)&&a.status==='pending').length?<button onClick={()=>setView('approvals')}><Users size={18}/><span><b>Approvals waiting</b><small>Review requests from your team</small></span><span aria-hidden="true">→</span></button>:null}</div></section>:null}
                 {journey && view==='overview' ? (
-                  <section className="operations-journey">
+                  <section className="operations-journey">{data.analyticsBaseline ? <p>Analytics start {new Date(data.analyticsBaseline).toLocaleString("en-GB", {timeZone:"Africa/Accra"})} (Accra). Admission and support totals remain current.</p> : null}
                     <header>
                       <div>
                         <BarChart3 size={18} />
                         <span>
-                          <b>30-day ticket journey</b>
+                          <b>{data.analyticsBaseline ? "Ticket journey since reset" : "30-day ticket journey"}</b>
                           <small>
                             Event views through to completed payments.
                           </small>

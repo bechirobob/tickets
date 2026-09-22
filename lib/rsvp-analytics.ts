@@ -1,3 +1,4 @@
+import { analyticsStart, readAnalyticsBaseline } from './analytics-baseline';
 export const rsvpSourceLabels: Record<string, string> = {
   untracked: 'Untracked', becore: 'BeCore Tickets', instagram: 'Instagram', 'kofi-bills': 'Kofi Bills',
 };
@@ -22,8 +23,9 @@ export const emptyRsvpAnalytics = (): RsvpAnalytics => ({
   statuses: [], sources: [], promoterLinks: [],
 });
 
-export async function readRsvpAnalytics(db: D1Database, slugs: string[], start: string): Promise<RsvpAnalytics> {
+export async function readRsvpAnalytics(db: D1Database, slugs: string[], start: string, baseline?: string | null): Promise<RsvpAnalytics> {
   if (!slugs.length) return emptyRsvpAnalytics();
+  start = analyticsStart(start, baseline === undefined ? await readAnalyticsBaseline(db) : baseline);
   const marks = slugs.map(() => '?').join(',');
   // One row per request. A guest-list check-in may later also have QR passes:
   // take the larger recorded count, never add the two representations together.

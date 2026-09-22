@@ -1,7 +1,7 @@
 import type { ProductMetric } from "./product-metrics";
 
 export function trackProductMetric(metric: ProductMetric, eventSlug = "") {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || navigator.webdriver) return;
   void fetch("/api/analytics", {
     method: "POST",
     headers: { "content-type": "application/json" },

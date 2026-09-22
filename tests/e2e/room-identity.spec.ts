@@ -4,6 +4,31 @@ import { expect, test } from "./catalogue";
 // The signed-in Room fixture never contacts live attendee APIs or a live socket.
 test.use({ serviceWorkers: "block" });
 
+test('an announcement link opens the host update above later chat messages', async ({page,eventSlug}) => {
+  test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === 'pull_request', 'Candidate and post-deployment checks exercise the new announcement link.');
+  const room={eventSlug,eventTitle:'Garden Party',readOnlyAt:new Date(Date.now()+86400000).toISOString(),readOnly:false};
+  const base={roomBadge:null,parentId:null,pinned:false,deletedAt:null,reactions:[],createdAt:new Date().toISOString()};
+  await page.route('**/api/**',route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path.endsWith('/access'))return route.fulfill({json:{allowed:true,attendee:{id:'fixture-self'},room}});
+    if(path.endsWith('/flashes'))return route.fulfill({json:{flashes:[]}});
+    if(path.includes('/notifications/preferences/'))return route.fulfill({json:{hostUpdates:true,roomMessages:true}});
+    return route.fulfill({status:401,json:{error:'Isolated fixture'}});
+  });
+  await page.routeWebSocket(/\/api\/room\/socket/u,socket=>{
+    expect(new URL(socket.url()).searchParams.get('announcement')).toBe('old-host');
+    socket.send(JSON.stringify({type:'snapshot',room,online:1,messages:[
+      {...base,id:'old-host',sequence:1,attendeeId:'host',displayName:'The Host',role:'organizer',kind:'announcement',content:'Use the garden entrance.'},
+      ...Array.from({length:60},(_,index)=>({...base,id:`chat-${index}`,sequence:index+2,attendeeId:'guest',displayName:'Guest',role:'attendee',kind:'message',content:`Later conversation ${index}`})),
+    ]}));
+  });
+  await page.goto(`/room/${eventSlug}?from=notification&announcement=old-host`);
+  const announcement=page.locator('[data-announcement="old-host"]');
+  await expect(announcement).toHaveJSProperty('open',true);
+  await expect(announcement.locator('p')).toBeInViewport();
+  await expect(page.locator('.room-stream')).toHaveJSProperty('scrollTop',0);
+});
+
 // Each route gets the normal timeout: a slow response must identify its page,
 // rather than consume the time left after eight unrelated navigations.
 for (const route of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/$published", "/help", "/terms", "/admin/login", "/admin/recover"]) {
@@ -60,13 +85,17 @@ test("the Room keeps reactions on their messages and matches the homepage conver
     { ...base, id: "host-update", attendeeId: "fixture-host", displayName: "The Host", role: "organizer", kind: "announcement", pinned: true, content: "Gate 2 tonight. Have your ticket ready and we’ll see you inside." },
     { ...base, id: "hello", sequence: 2, attendeeId: "fixture-kofi", displayName: "Kofi", role: "attendee", content: "Front left. You know the drill." },
   ];
+  let roomMessages=true,hostUpdates=true;
   const sent: Record<string, unknown>[] = [];
   let reactionActive = false;
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/access")) return route.fulfill({ json: { allowed: true, attendee: { id: "fixture-self" }, room } });
     if (path.endsWith("/flashes")) return route.fulfill({ json: { flashes: [] } });
-    if (path.includes("/notifications/preferences/")) return route.fulfill({ json: { roomMessages: true, hostUpdates: true } });
+    if (path.includes("/notifications/preferences/")) {
+      if(route.request().method()==='PATCH') {const body=route.request().postDataJSON();if(typeof body.roomMessages==='boolean')roomMessages=body.roomMessages;if(typeof body.hostUpdates==='boolean')hostUpdates=body.hostUpdates;}
+      return route.fulfill({json:{roomMessages,hostUpdates}});
+    }
     if (path.endsWith("/notifications/subscription")) return route.fulfill({ json: { available: false } });
     return route.fulfill({ status: 401, json: { error: "Isolated Room fixture" } });
   });
@@ -158,7 +187,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   const notifications = page.getByRole("button", { name: "Room notification settings" });
   await notifications.click();
   await expect(page.getByRole("dialog", { name: "Room notifications" })).toBeVisible();
-  await expect(page.getByRole("switch", { name: "Host updates and Room messages" })).toBeEnabled();
+  await expect(page.getByRole("switch", { name: process.env.E2E_BASE_URL && process.env.GITHUB_EVENT_NAME === "pull_request" ? "Host updates and Room messages" : "Room messages" })).toBeEnabled();
   const settings = page.getByRole("dialog", { name: "Room notifications" });
   const settingsBounds = await settings.locator(".notification-panel").boundingBox();
   expect(settingsBounds!.height).toBeLessThan(340);
@@ -167,4 +196,16 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await page.screenshot({ path: testInfo.outputPath("room-notification-settings.png") });
   await page.keyboard.press("Escape");
   await expect(notifications).toBeFocused();
+  if (!(process.env.E2E_BASE_URL && process.env.GITHUB_EVENT_NAME === 'pull_request')) {
+    await page.locator('.event-alert-nudge > summary').click();
+    await expect(page.getByRole('complementary',{name:'Event notifications'})).toContainText('private guest chat');
+    expect((await new AxeBuilder({page}).include('.event-alert-nudge').analyze()).violations).toEqual([]);
+    await page.screenshot({path:testInfo.outputPath('room-enable-alerts.png')});
+    await page.locator('.event-alert-nudge > summary').click();
+    await notifications.click();
+    await page.getByRole('switch',{name:'Room messages',exact:true}).click();
+    await expect(page.getByRole('switch',{name:'Room messages',exact:true})).toHaveAttribute('aria-checked','false');
+    await expect(page.getByRole('switch',{name:'Host announcements',exact:true})).toHaveAttribute('aria-checked','true');
+    expect(roomMessages).toBe(false);expect(hostUpdates).toBe(true);
+  }
 });

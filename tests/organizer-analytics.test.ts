@@ -1,3 +1,5 @@
+import { recordProductMetric } from '../lib/product-analytics';
+import { readHostSummary } from '../lib/host-summary';
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { enforceAnalyticsReadLimit, GET as readAnalytics } from "../app/api/organizer/analytics/route";
@@ -176,4 +178,41 @@ it('counts direct RSVP visits only for published, non-removed events and rejects
  const rows=await env.DB.prepare('SELECT metric,count FROM product_metrics_daily WHERE event_slug=?').bind(slug).all();
  expect(rows.results).toEqual([{metric:'rsvp_view',count:1}]);
  expect(await env.DB.prepare("SELECT count FROM product_metrics_daily WHERE event_slug='does-not-exist'").first()).toBeNull();
+});
+
+
+it('resets every analytics cohort once while preserving bookings and excluding automated visits',async()=>{
+  const suffix=crypto.randomUUID(),slug=`reset-${suffix}`,now=new Date().toISOString();
+  const old=new Date(Date.now()-60000).toISOString(),baseline=new Date(Date.now()-30000).toISOString();
+  const account=await organizer(suffix);await seedNight(slug,'Clean analytics');
+  await env.DB.prepare("INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES(?,?,'test',?)").bind(account.id,slug,now).run();
+  for(const [label,at] of [['old',old],['new',now]]) {
+    const id=`${slug}-${label}`;
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,payment_provider,created_at,paid_at) VALUES(?,?,?,1,10000,1000,11000,'GHS',?,'233000000000','card','paid','seevplus',?,?)").bind(id,id,slug,`${id}@example.com`,at,at),
+      env.DB.prepare("INSERT INTO tickets(id,order_id,event_slug,ticket_type,qr_token_hash,status,issued_at) VALUES(?,?,?,'general',?,'issued',?)").bind(id,id,slug,id,at),
+      env.DB.prepare("INSERT INTO event_registrations(id,event_slug,normalized_email,guest_name,party_size,kind,status,created_at,updated_at,acquisition_source) VALUES(?,?,?,'Guest',1,'rsvp','requested',?,?,'instagram')").bind(id,slug,`${id}@example.com`,at,at),
+    ]);
+  }
+  await recordProductMetric(env.DB,'event_view',slug,new Date(old));
+  try {
+    await env.DB.prepare('INSERT INTO analytics_baseline(id,reset_key,started_at) VALUES(1,?,?)').bind(slug,baseline).run();
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM product_metrics_daily').first()).toEqual({n:0});
+    await recordProductMetric(env.DB,'event_view',slug,new Date(old));
+    await recordProductMetric(env.DB,'event_view',slug);
+    await env.DB.prepare('INSERT OR IGNORE INTO analytics_baseline(id,reset_key,started_at) VALUES(1,?,?)').bind(slug,now).run();
+    const request=new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}&range=all`,{headers:{cookie:account.cookie}});
+    const result=await (await readAnalytics(request)).json() as {scope:{baseline:string};overview:{paidOrders:number;revenueMinor:number;eventViews:number;admissions:number};rsvp:{totals:{requests:number}};salesTrend:unknown[];comparison:unknown};
+    expect(result.scope.baseline).toBe(baseline);expect(result.overview).toMatchObject({paidOrders:1,revenueMinor:11000,eventViews:1,admissions:1});expect(result.rsvp.totals.requests).toBe(1);
+    expect(result.comparison).toBeNull();
+    const summary=await readHostSummary(env.DB,slug);expect(summary).toMatchObject({baseline,sales:{orders:1},pending:2});
+    expect(summary?.rsvp.totals.requests).toBe(1);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE event_slug=?').bind(slug).first()).toEqual({n:2});
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM tickets WHERE event_slug=?').bind(slug).first()).toEqual({n:2});
+    for(const headers of ([{'x-becore-analytics':'exclude'},{'user-agent':'HeadlessChrome/150'}] as Array<Record<string,string>>)) {
+      expect((await recordVisit(new Request('https://tickets.becoreops.com/api/analytics',{method:'POST',headers:{origin:'https://tickets.becoreops.com','content-type':'application/json',...headers},body:JSON.stringify({metric:'event_view',eventSlug:slug})}))).status).toBe(204);
+    }
+    expect(await env.DB.prepare('SELECT count FROM product_metrics_daily WHERE event_slug=?').bind(slug).first()).toEqual({count:1});
+    const csv=await (await readAnalytics(new Request(`${request.url}&format=csv`,{headers:{cookie:account.cookie}}))).text();expect(csv).toContain(`Analytics start (UTC),${baseline}`);
+  } finally { await env.DB.prepare('DELETE FROM analytics_baseline WHERE id=1').run(); }
 });

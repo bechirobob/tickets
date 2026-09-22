@@ -13,6 +13,7 @@ export default defineConfig({
   timeout: 30_000,
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "list",
   use: {
+    extraHTTPHeaders: { "x-becore-analytics": "exclude" },
     baseURL: externalBaseUrl ?? "http://127.0.0.1:8788",
     // Production deliberately disables retries; retain its first failure too.
     trace: "retain-on-failure",
@@ -22,7 +23,7 @@ export default defineConfig({
     // Full Chromium's current headless mode avoids the separate headless shell
     // that repeatedly segfaulted during context creation in production audits.
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"], channel: "chromium" } },
-    { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
+    { name: "mobile-chromium", use: { ...devices["Pixel 7"], channel: "chromium" } },
     { name: "mobile-webkit", use: { ...devices["iPhone 13"] } },
   ],
   webServer: externalBaseUrl ? undefined : {

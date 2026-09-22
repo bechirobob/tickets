@@ -14,9 +14,9 @@ export async function recordProductMetric(db: D1Database, metric: ProductMetric,
   const now = occurredAt.toISOString();
   await db.prepare(`
     INSERT INTO product_metrics_daily (day, event_slug, metric, count, updated_at)
-    VALUES (?, ?, ?, 1, ?)
+    SELECT ?, ?, ?, 1, ? WHERE ?>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')
     ON CONFLICT(day, event_slug, metric) DO UPDATE SET
       count = count + 1,
       updated_at = excluded.updated_at
-  `).bind(day, validAnalyticsSlug(eventSlug), metric, now).run();
+  `).bind(day, validAnalyticsSlug(eventSlug), metric, now, now).run();
 }
