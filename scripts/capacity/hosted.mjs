@@ -74,7 +74,7 @@ if (mode === 'setup') {
     version_metadata: { binding: 'CF_VERSION_METADATA' },
   };
   writeFileSync('dist/server/wrangler.hosted.json', JSON.stringify(config), { mode: 0o600 });
-  writeFileSync('dist/server/capacity-entry.mjs', `import worker from './index.js';\nexport { TheRoom } from './index.js';\nexport default { async fetch(request,env,ctx) {\n const path=new URL(request.url).pathname;\n if(Date.now()>Number(env.CAPACITY_EXPIRES) || request.headers.get('x-capacity-key')!==env.CAPACITY_KEY || request.method!=='GET' || !['/api/version','/api/customer/my-nights','/api/room/socket'].includes(path)) return new Response('Not found',{status:404});\n const response=await worker.fetch(request,env,ctx); if(response.status===101) return response; const marked=new Response(response.body,response); marked.headers.set('x-capacity-revision',env.RELEASE_SHA); return marked;\n}};\n`);
+  writeFileSync('dist/server/capacity-entry.mjs', `import worker from './index.js';\nexport { TheRoom } from './index.js';\nexport default { async fetch(request,env,ctx) {\n const path=new URL(request.url).pathname;\n if(Date.now()>Number(env.CAPACITY_EXPIRES) || request.headers.get('x-capacity-key')!==env.CAPACITY_KEY || request.method!=='GET' || (!['/api/version','/api/customer/my-nights','/api/room/socket'].includes(path) && path!==${JSON.stringify('/room/' + state.slug)})) return new Response('Not found',{status:404});\n const response=await worker.fetch(request,env,ctx); if(response.status===101) return response; const marked=new Response(response.body,response); marked.headers.set('x-capacity-revision',env.RELEASE_SHA); return marked;\n}};\n`);
   wrangler(['d1', 'migrations', 'apply', 'DB', '--remote']);
   const now = new Date().toISOString(), future = new Date(Date.now() + 86400000).toISOString();
   const q = sqlString, slug = state.slug;
@@ -199,6 +199,23 @@ if (mode === 'setup') {
     const version = await (await fetch(`${base.origin}/api/version`, { headers: requestHeaders(0), redirect: 'error', signal: AbortSignal.timeout(15000) })).json();
     if (version.revision !== state.revision) throw new Error('Hosted revision mismatch.');
     report.version = version;
+    // Exercise real SSR without private guest data. Query variants deliberately
+    // bypass the public edge cache, so a warm cache cannot hide rendering errors.
+    const roomRenders = [], roomCacheStates = [];
+    for (let i = 0; i < 15; i++) {
+      const started = performance.now();
+      const path = `/room/${state.slug}${i < 10 ? `?render-check=${i}` : ''}`;
+      const response = await fetch(`${base.origin}${path}`, { headers: { 'x-capacity-key': state.key, accept: 'text/html' }, redirect: 'error', signal: AbortSignal.timeout(15000) });
+      const html = await response.text();
+      if (!response.ok || response.headers.get('x-capacity-revision') !== state.revision || !html.includes('room-gate') || /Guest \d+/.test(html)) throw new Error(`Public Room render failed (${response.status}; ray=${response.headers.get('cf-ray') ?? 'none'}).`);
+      if (i < 10) roomRenders.push({ status: 'fulfilled', value: performance.now()-started });
+      else roomCacheStates.push(response.headers.get('x-becore-edge-cache'));
+      await pause(250);
+    }
+    record('room-uncached-public-renders', roomRenders);
+    report.metrics.push({ name: 'room-public-shell-cache', states: roomCacheStates });
+    console.log(JSON.stringify({ name: 'room-public-shell-cache', states: roomCacheStates }));
+    if (!roomCacheStates.includes('HIT')) throw new Error('Public Room shell never reached the release-scoped cache.');
     for (const n of [50,100,200,400]) record(`my-nights-${n}-concurrent`, await Promise.allSettled(Array.from({ length: n }, (_,i) => request(i))));
     const scheduled = [], lateness = [], start = performance.now();
     for (let i = 0; i < 2400; i++) {
