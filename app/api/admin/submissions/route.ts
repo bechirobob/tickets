@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   const actor = await actorOrUnauthorized(request);
   if (!actor) return Response.json({ error: "Sign in is required." }, { status: 401 });
   const db = await getDb();
-  const submissions = await db.select().from(partySubmissions).where(sql`NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.submission_id = ${partySubmissions.id} AND event.removed_at IS NOT NULL)`).orderBy(desc(partySubmissions.createdAt));
+  const submissions = await db.select().from(partySubmissions).where(sql`${partySubmissions.status} <> 'draft' AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.submission_id = ${partySubmissions.id} AND event.removed_at IS NOT NULL)`).orderBy(desc(partySubmissions.createdAt));
   return Response.json({ submissions }, { headers: { "cache-control": "no-store" } });
 }
 

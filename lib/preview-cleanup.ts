@@ -44,7 +44,7 @@ const add=(t:Targets,key:string,values:unknown[])=>{t[key]=[...new Set([...(t[ke
 export async function planPreviewCleanup(db:D1Database):Promise<Plan> {
  const events=await db.prepare(`SELECT slug,is_test_event AS preview FROM curated_event_records WHERE ${inside('slug',retired)}`).all<{slug:string;preview:number}>();
  if(events.results.some(e=>!e.preview))throw new Error('A retired preview was converted to a live event. Cleanup stopped.');
- const live=await db.prepare(`SELECT COUNT(*) AS count FROM orders WHERE ${inside('event_slug',retired)} AND payment_environment='live' AND payment_provider<>'rsvp' AND status IN ('paid','refund_pending','refunded','requires_refund','disputed')`).first<{count:number}>();
+ const live=await db.prepare(`SELECT COUNT(*) AS count FROM orders WHERE ${inside('event_slug',retired)} AND payment_environment='live' AND payment_provider NOT IN ('rsvp','complimentary') AND status IN ('paid','refund_pending','refunded','requires_refund','disputed')`).first<{count:number}>();
  if(live?.count)throw new Error('A preview contains live payments. Cleanup stopped.');
  const tables:Record<string,string[]>={};
  const names=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name<>'d1_migrations'").all<{name:string}>();

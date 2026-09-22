@@ -67,19 +67,20 @@ const money = (value: number) => new Intl.NumberFormat("en-GH", { style: "curren
 const date = (value: string) => new Date(value).toLocaleDateString("en-GH", { dateStyle: "medium" });
 const readable = (value: string) => value.replaceAll("_", " ");
 
-export default function OrganizerWorkspace({ actor, role }: { actor: string; role: StaffRole }) {
+export default function OrganizerWorkspace({ actor, role, embeddedEventSlug, embeddedView }: { actor: string; role: StaffRole; embeddedEventSlug?:string; embeddedView?:string }) {
   const router = useRouter();
   const [data, setData] = useState<WorkspaceData>(empty);
-  const [selectedSlug, setSelectedSlug] = useState("");
+  const [ownSelectedSlug, setSelectedSlug] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [view, setView] = useState("start");
+  const [ownView, setView] = useState("start");
+  const selectedSlug=embeddedEventSlug??ownSelectedSlug,view=embeddedView??ownView;
   const [historyPage, setHistoryPage] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/organizer/workspace", { cache: "no-store" });
+      const response = await fetch(`/api/organizer/workspace${embeddedEventSlug?`?event=${encodeURIComponent(embeddedEventSlug)}`:""}`, { cache: "no-store" });
       const result = await response.json() as WorkspaceData & { error?: string };
       if (!response.ok) setMessage(result.error ?? "Workspace could not be loaded.");
       else {
@@ -91,18 +92,18 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [embeddedEventSlug]);
 
   useEffect(() => {
-    fetch("/api/organizer/workspace", { cache: "no-store" })
+    fetch(`/api/organizer/workspace${embeddedEventSlug?`?event=${encodeURIComponent(embeddedEventSlug)}`:""}`, { cache: "no-store" })
       .then(async (response) => ({ response, result: await response.json() as WorkspaceData & { error?: string } }))
       .then(({ response, result }) => {
         if (!response.ok) setMessage(result.error ?? "Workspace could not be loaded.");
-        else { setData(result); setSelectedSlug(preferredHostEvent(result.events,new URLSearchParams(location.search).get("event"))); }
+        else { setData(result); setSelectedSlug(preferredHostEvent(result.events,embeddedEventSlug??new URLSearchParams(location.search).get("event"))); }
         setLoading(false);
       })
       .catch(() => { setMessage("Workspace could not be loaded."); setLoading(false); });
-  }, []);
+  }, [embeddedEventSlug]);
 
   const selected = useMemo(() => data.events.find((item) => item.slug === selectedSlug) ?? null, [data.events, selectedSlug]);
   const portfolio = useMemo(() => data.events.reduce((total, item) => ({
@@ -148,7 +149,7 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); router.push("/"); router.refresh(); }
 
   return (
-    <main className="organizer-workspace">
+    <div className={`organizer-workspace${embeddedEventSlug?" organizer-workspace--embedded":""}`}>
       <header className="organizer-workspace__header">
         <Link href="/" className="night-brand-link"><BrandLogo /></Link>
         <WorkspaceJump active="/organizer/workspace" role={role} compact />
@@ -215,6 +216,6 @@ export default function OrganizerWorkspace({ actor, role }: { actor: string; rol
           </section> : null}
         </>}
       </>}
-    </main>
+    </div>
   );
 }

@@ -158,7 +158,9 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
     db.prepare(`
       UPDATE inventory_reservations SET status = 'consumed', updated_at = ?
       WHERE order_id = ? AND status IN ('held', 'expired', 'released')
-        AND EXISTS (SELECT 1 FROM orders WHERE id = inventory_reservations.order_id AND status IN ('payment_pending', 'expired', 'failed'))
+        AND EXISTS (SELECT 1 FROM orders current WHERE current.id = inventory_reservations.order_id AND current.status IN ('payment_pending', 'expired', 'failed')
+          AND (current.coupon_id IS NULL OR EXISTS (SELECT 1 FROM event_coupons c WHERE c.id=current.coupon_id AND
+            (SELECT COUNT(*) FROM orders used WHERE used.coupon_id=c.id AND used.id<>current.id AND (used.status IN ('paid','refund_pending','refunded','disputed') OR (used.status='payment_pending' AND used.reservation_expires_at>?)))<c.max_uses)))
         AND EXISTS (
           SELECT 1 FROM event_ticket_tiers tier
           WHERE tier.id = inventory_reservations.ticket_tier_id
@@ -169,7 +171,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
                 AND (other.status = 'consumed' OR (other.status = 'held' AND other.expires_at > ?))
             ) + inventory_reservations.admission_count <= tier.capacity_admissions
         )
-    `).bind(now, order.id, now),
+    `).bind(now, order.id, now, now),
     db.prepare(`
       UPDATE orders SET status = CASE
           WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state = 'cancelled'))
@@ -180,7 +182,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
       WHERE id = ? AND (status IN ('payment_pending', 'expired', 'failed') OR
         (status = 'paid' AND EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state = 'cancelled'))))
     `).bind(verification.providerReference ?? verification.reference, String(verification.id), now, now, verification.paidAt ?? now, order.id),
-    db.prepare(`UPDATE orders SET failure_reason = 'Payment succeeded after the event or admission was no longer available.' WHERE id = ? AND status = 'requires_refund'`).bind(order.id),
+    db.prepare(`UPDATE orders SET failure_reason = 'Payment succeeded after the event, admission or discount was no longer available.' WHERE id = ? AND status = 'requires_refund'`).bind(order.id),
     db.prepare(`UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ? AND status IN ('held', 'expired', 'consumed')
       AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'requires_refund')`).bind(now, order.id, order.id),
     db.prepare(`UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'
@@ -222,7 +224,7 @@ export async function deliverConfirmedOrder(db: D1Database, order: OrderRecord, 
   return deliverConfirmation({ env: { ...env, DB: db }, id: `payment-confirmation/${order.id}`, orderId: order.id,
     attendeeId: recipient?.attendeeId ?? null,
     payload: { kind: 'purchase_confirmation', eventSlug: order.eventSlug, sourceId: `payment-confirmation/${order.id}`,
-      tag: `paid-${order.id}`, title: 'Your ticket is confirmed', body: 'Payment received. Your QR ticket and receipt are ready in My Nights.',
+      tag: `paid-${order.id}`, title: 'Your ticket is confirmed', body: order.paymentProvider === 'complimentary' ? 'Your complimentary QR pass is ready in My Nights.' : 'Payment received. Your QR ticket and receipt are ready in My Nights.',
       url: `/my-nights/${order.eventSlug}?view=passes` },
     email: () => sendOrderConfirmation(db, order, origin), skipPush: Boolean(emailed) });
 }

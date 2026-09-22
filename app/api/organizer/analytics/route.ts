@@ -184,13 +184,13 @@ export async function GET(request: Request) {
         COALESCE(SUM(refunded_amount_minor), 0) AS refundsMinor,
         COUNT(DISTINCT lower(customer_email)) AS uniqueBuyers,
         COALESCE(ROUND(AVG(total_amount_minor)), 0) AS averageOrderValueMinor
-      FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') <> 'rsvp' AND COALESCE(paid_at, created_at) >= ?
+      FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
     `).bind(...orderBindings).first<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT COUNT(ticket.id) AS admissions,
         COALESCE(SUM(CASE WHEN ticket.status = 'checked_in' THEN 1 ELSE 0 END), 0) AS checkedIn
       FROM tickets ticket JOIN orders orders ON orders.id = ticket.order_id
-      WHERE ticket.event_slug IN (${marks}) AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') <> 'rsvp' AND COALESCE(orders.paid_at, orders.created_at) >= ?
+      WHERE ticket.event_slug IN (${marks}) AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at, orders.created_at) >= ?
         AND ticket.status IN ('issued','checked_in')
     `).bind(...orderBindings).first<Record<string, unknown>>(),
     env.DB.prepare(`
@@ -208,7 +208,7 @@ export async function GET(request: Request) {
     env.DB.prepare(`
       SELECT ${orderTrendBucket} AS day, COUNT(*) AS orders,
         COALESCE(SUM(quantity), 0) AS admissions, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor
-      FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') <> 'rsvp' AND COALESCE(paid_at, created_at) >= ?
+      FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
       GROUP BY day ORDER BY day LIMIT 400
     `).bind(...orderBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
@@ -225,12 +225,12 @@ export async function GET(request: Request) {
         tier.capacity_admissions AS capacityAdmissions, COUNT(orders.id) AS orders,
         COALESCE(SUM(orders.quantity), 0) AS admissions, COALESCE(SUM(orders.total_amount_minor), 0) AS revenueMinor
       FROM event_ticket_tiers tier JOIN curated_event_records event ON event.slug = tier.event_slug
-      LEFT JOIN orders ON orders.ticket_tier_id = tier.id AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') <> 'rsvp' AND COALESCE(orders.paid_at, orders.created_at) >= ?
+      LEFT JOIN orders ON orders.ticket_tier_id = tier.id AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at, orders.created_at) >= ?
       WHERE tier.event_slug IN (${marks}) GROUP BY tier.id ORDER BY event.starts_at DESC, tier.sort_order
     `).bind(window.start, ...slugs).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT payment_channel AS channel, COUNT(*) AS orders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor
-      FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') <> 'rsvp' AND COALESCE(paid_at, created_at) >= ?
+      FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
       GROUP BY payment_channel ORDER BY orders DESC
     `).bind(...orderBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
@@ -238,12 +238,12 @@ export async function GET(request: Request) {
         COALESCE(MAX(promoter.label), 'Direct / untagged') AS label, COUNT(*) AS orders,
         COALESCE(SUM(orders.quantity), 0) AS admissions, COALESCE(SUM(orders.total_amount_minor), 0) AS revenueMinor
       FROM orders JOIN curated_event_records event ON event.slug = orders.event_slug LEFT JOIN event_promoter_codes promoter ON promoter.event_slug = orders.event_slug AND promoter.code = orders.promoter_code
-      WHERE orders.event_slug IN (${marks}) AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') <> 'rsvp' AND COALESCE(orders.paid_at, orders.created_at) >= ?
+      WHERE orders.event_slug IN (${marks}) AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at, orders.created_at) >= ?
       GROUP BY orders.event_slug, COALESCE(orders.promoter_code, 'direct') ORDER BY orders DESC, orders.event_slug, code
     `).bind(...orderBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT substr(checked_in_at, 12, 2) AS hour, COUNT(*) AS admissions
-      FROM tickets WHERE event_slug IN (${marks}) AND status = 'checked_in' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = tickets.order_id AND COALESCE(o.payment_provider, '') <> 'rsvp') AND checked_in_at >= ?
+      FROM tickets WHERE event_slug IN (${marks}) AND status = 'checked_in' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = tickets.order_id AND COALESCE(o.payment_provider, '') NOT IN ('rsvp','complimentary')) AND checked_in_at >= ?
       GROUP BY hour ORDER BY hour
     `).bind(...slugs, window.start).all<Record<string, unknown>>(),
     env.DB.prepare(`
@@ -253,7 +253,7 @@ export async function GET(request: Request) {
     env.DB.prepare(`
       SELECT COUNT(*) AS repeatBuyers FROM (
         SELECT lower(customer_email) FROM orders
-        WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') <> 'rsvp' AND COALESCE(paid_at, created_at) >= ?
+        WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
         GROUP BY lower(customer_email) HAVING COUNT(*) > 1
       )
     `).bind(...orderBindings).first<{ repeatBuyers: number }>(),
@@ -273,7 +273,7 @@ export async function GET(request: Request) {
   if (window.previousStart && window.previousEnd) {
     const [previousOrders, previousProduct] = await Promise.all([
       env.DB.prepare(`SELECT COUNT(*) AS paidOrders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor FROM orders
-        WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') <> 'rsvp' AND COALESCE(paid_at, created_at) >= ? AND COALESCE(paid_at, created_at) < ?`)
+        WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ? AND COALESCE(paid_at, created_at) < ?`)
         .bind(...slugs, window.previousStart, window.previousEnd).first<Record<string, unknown>>(),
       env.DB.prepare(`SELECT COALESCE(SUM(CASE WHEN metric = 'event_view' THEN count ELSE 0 END), 0) AS eventViews FROM product_metrics_daily
         WHERE event_slug IN (${marks}) AND day >= ? AND day < ?`)

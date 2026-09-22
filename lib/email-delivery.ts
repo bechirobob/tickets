@@ -1,10 +1,12 @@
+import { validTeamInvite } from './organizer-team';
 import { reportDeliveryAllowed } from "./organizer-reports";
 import { emailBrand } from "./email-brand";
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
+type DeliveryKind = "team_invitation" | "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
+  paymentProvider?: string;
   id: string;
   reference: string;
   eventSlug: string;
@@ -125,7 +127,7 @@ export async function applyDeliveryWebhook(db: D1Database, input: {
 
 export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, scope: 'all' | 'audience' | 'standard' | 'invitations' = 'all') {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return { attempted: 0, delivered: 0 };
-  const scopeSql = scope === 'invitations' ? "kind='organizer_invitation'" : scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
+  const scopeSql = scope === 'invitations' ? "kind IN ('organizer_invitation','team_invitation')" : scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
   const due = await env.DB.prepare(`
     SELECT id, kind, recovery_grant_id AS grantId, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
@@ -141,6 +143,13 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
         await env.DB.prepare("UPDATE delivery_events SET status='suppressed',payload_json=NULL,next_attempt_at=NULL,failure_reason='Report expired or access/preferences changed.',updated_at=? WHERE id=?")
           .bind(new Date().toISOString(),item.id).run();
         continue;
+      }
+      if (item.kind === 'team_invitation') {
+        const valid = await env.DB.prepare(`SELECT 1 FROM organizer_team_invites i JOIN staff_accounts a ON a.id=i.account_id JOIN curated_event_records e ON e.slug=i.event_slug WHERE i.id=? AND i.account_email=? AND ${validTeamInvite}`).bind(item.grantId,item.recipient,new Date().toISOString()).first();
+        if (!valid) {
+          await env.DB.prepare("UPDATE delivery_events SET status='suppressed',payload_json=NULL,next_attempt_at=NULL,failure_reason='Invitation expired or access changed.',updated_at=? WHERE id=?").bind(new Date().toISOString(),item.id).run();
+          continue;
+        }
       }
       if (item.kind === "organizer_invitation") {
         const valid = await env.DB.prepare(`SELECT 1 FROM organizer_invitations i JOIN staff_accounts a ON a.id=i.account_id
@@ -257,8 +266,9 @@ export async function issueRecoveryGrant(input: {
     SELECT title, venue, area, CASE WHEN schedule_status != 'coming_soon' THEN starts_at END AS startsAt
     FROM curated_event_records WHERE slug = ? LIMIT 1
   `).bind(input.order.eventSlug).first<{ title: string; venue: string; area: string; startsAt: string | null }>() : null;
+  const complimentary = input.order?.paymentProvider === "complimentary";
   const subject = input.kind === "payment_confirmation" && event
-    ? `${event.title}: payment confirmed and tickets ready`
+    ? `${event.title}: ${complimentary ? "your complimentary passes are ready" : "payment confirmed and tickets ready"}`
     : "Your Nights are ready to come back";
   const receipt = input.order ? `
     <table style="width:100%;border-collapse:collapse;margin:24px 0">
@@ -269,8 +279,8 @@ export async function issueRecoveryGrant(input: {
       <tr><td style="padding:12px 0;border-top:1px solid #ddd;font-weight:700">Total paid</td><td style="padding:12px 0;border-top:1px solid #ddd;text-align:right;font-weight:700">${money(input.order.totalAmountMinor, input.order.currency)}</td></tr>
     </table>` : "";
   const eventBlock = event ? `<p style="font-size:18px"><strong>${escapeHtml(event.title)}</strong><br>${escapeHtml(event.venue)}, ${escapeHtml(event.area)}<br>${escapeHtml(event.startsAt ? new Intl.DateTimeFormat("en-GH", { dateStyle: "full", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(event.startsAt)) : "Coming soon")}</p>` : "";
-  const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">${input.kind === "payment_confirmation" ? "Paid. Verified. Your Night is ready." : "Your Nights missed you. Slightly."}</h1><p>Hi ${escapeHtml(name)},</p>${eventBlock}${receipt}<p>This private link opens My Nights on this device and brings together every confirmed purchase on this email. Tickets, perks, Rooms and receipts—no password archaeology. It expires at ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt)))}.</p><p style="margin:28px 0"><a href="${escapeHtml(recoveryUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open My Nights</a></p><p style="color:#666;font-size:13px">The link is one-time and private. Fresh rotating QR passes appear only after you open it. Forwarding it would be a very generous mistake.</p></div>`;
-  const plain = `${input.kind === "payment_confirmation" ? "Paid. Verified. Your Night is ready." : "Your Nights missed you. Slightly."}\n\n${event ? `${event.title}\n${event.venue}, ${event.area}\n\n` : ""}${input.order ? `Reference: ${input.order.reference}\nTotal paid: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}Secure one-time My Nights link: ${recoveryUrl}\n\nThis link expires at ${expiresAt}. It does not contain a QR pass.`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}</h1><p>Hi ${escapeHtml(name)},</p>${eventBlock}${receipt}<p>This private link opens My Nights on this device and brings together every confirmed purchase on this email. Tickets, perks, Rooms and receipts—no password archaeology. It expires at ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt)))}.</p><p style="margin:28px 0"><a href="${escapeHtml(recoveryUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open My Nights</a></p><p style="color:#666;font-size:13px">The link is one-time and private. Fresh rotating QR passes appear only after you open it. Forwarding it would be a very generous mistake.</p></div>`;
+  const plain = `${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}\n\n${event ? `${event.title}\n${event.venue}, ${event.area}\n\n` : ""}${input.order ? `Reference: ${input.order.reference}\nTotal paid: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}Secure one-time My Nights link: ${recoveryUrl}\n\nThis link expires at ${expiresAt}. It does not contain a QR pass.`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;
   return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId });
 }

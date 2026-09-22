@@ -22,15 +22,17 @@ export async function readHostSummary(db: D1Database, slug: string) {
     db.prepare(`SELECT COUNT(*) AS orders,COALESCE(SUM(face_amount_minor),0) AS ticketSalesMinor,
       COALESCE(SUM((SELECT COUNT(*) FROM tickets t WHERE t.order_id=o.id AND t.status IN ('issued','checked_in'))),0) AS admissions,
       COALESCE(SUM((SELECT COUNT(*) FROM tickets t WHERE t.order_id=o.id AND t.status='checked_in')),0) AS checkedIn
-      FROM orders o WHERE o.event_slug=? AND o.status='paid' AND o.payment_provider<>'rsvp'`).bind(slug).first<{orders:number;ticketSalesMinor:number;admissions:number;checkedIn:number}>(),
+      FROM orders o WHERE o.event_slug=? AND o.status='paid' AND o.payment_provider NOT IN ('rsvp','complimentary')`).bind(slug).first<{orders:number;ticketSalesMinor:number;admissions:number;checkedIn:number}>(),
     db.prepare(`SELECT (SELECT COUNT(*) FROM event_registrations WHERE event_slug=? AND kind='interest' AND status='interested') AS count,
       (SELECT COALESCE(SUM(admission_count),0) FROM guest_entries WHERE event_slug=? AND created_by<>'system:rsvp' AND id NOT LIKE 'rsvp:%' AND status IN ('expected','checked_in')) AS manualGuests,
-      (SELECT COALESCE(SUM(admission_count),0) FROM guest_entries WHERE event_slug=? AND created_by<>'system:rsvp' AND id NOT LIKE 'rsvp:%' AND status='checked_in') AS manualArrivals`).bind(slug,slug,slug).first<{count:number;manualGuests:number;manualArrivals:number}>(),
-    db.prepare(`SELECT COALESCE(promoter_code,'') AS code,COUNT(*) AS orders FROM orders WHERE event_slug=? AND status='paid' AND payment_provider<>'rsvp' GROUP BY promoter_code ORDER BY orders DESC,code LIMIT 5`).bind(slug).all<{code:string;orders:number}>(),
+      (SELECT COUNT(*) FROM tickets t JOIN orders o ON o.id=t.order_id WHERE t.event_slug=? AND o.payment_provider='complimentary' AND o.status='paid' AND t.status IN ('issued','checked_in')) AS complimentary,
+      (SELECT COUNT(*) FROM tickets t JOIN orders o ON o.id=t.order_id WHERE t.event_slug=? AND o.payment_provider='complimentary' AND o.status='paid' AND t.status='checked_in') AS compArrivals,
+      (SELECT COALESCE(SUM(admission_count),0) FROM guest_entries WHERE event_slug=? AND created_by<>'system:rsvp' AND id NOT LIKE 'rsvp:%' AND status='checked_in') AS manualArrivals`).bind(slug,slug,slug,slug,slug).first<{count:number;manualGuests:number;manualArrivals:number;complimentary:number;compArrivals:number}>(),
+    db.prepare(`SELECT COALESCE(promoter_code,'') AS code,COUNT(*) AS orders FROM orders WHERE event_slug=? AND status='paid' AND payment_provider NOT IN ('rsvp','complimentary') GROUP BY promoter_code ORDER BY orders DESC,code LIMIT 5`).bind(slug).all<{code:string;orders:number}>(),
   ]);
   const paid = sales ?? {orders:0,ticketSalesMinor:0,admissions:0,checkedIn:0};
-  const expected = rsvp.totals.confirmedGuests + paid.admissions + (interest?.manualGuests ?? 0);
-  const checkedIn = rsvp.totals.checkedIn + paid.checkedIn + (interest?.manualArrivals ?? 0);
+  const expected = rsvp.totals.confirmedGuests + paid.admissions + (interest?.complimentary ?? 0) + (interest?.manualGuests ?? 0);
+  const checkedIn = rsvp.totals.checkedIn + paid.checkedIn + (interest?.compArrivals ?? 0) + (interest?.manualArrivals ?? 0);
   return {event,rsvp,sales:paid,interest:interest?.count ?? 0,paidSources:sources.results,
     pending:rsvp.statuses.find(x=>x.status==='requested')?.requests ?? 0,
     manualGuests:interest?.manualGuests ?? 0,expected,checkedIn,turnoutPercent:expected ? Math.round(checkedIn/expected*1000)/10 : null};

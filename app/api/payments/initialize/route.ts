@@ -1,3 +1,4 @@
+import { couponQuote, couponUsage } from '../../../../lib/organizer-promotions';
 import { paystackAvailable, paystackEnvironment } from "../../../../lib/paystack-environment";
 import { registrationSettings, registrationsOpen } from "../../../../lib/registrations";
 import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
@@ -15,13 +16,13 @@ const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  type PaymentBody = { paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
+  type PaymentBody = { couponCode?: string; paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
   let body: PaymentBody;
   try {
     const value: unknown = await request.json();
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid body");
     const fields = value as Record<string, unknown>;
-    for (const field of ["paymentProvider", "eventSlug", "ticketTierId", "email", "phone", "paymentMethod", "network", "fullName", "offer", "promoterCode"]) {
+    for (const field of ["paymentProvider", "eventSlug", "ticketTierId", "email", "phone", "paymentMethod", "network", "fullName", "offer", "promoterCode", "couponCode"]) {
       if (fields[field] != null && (typeof fields[field] !== "string" || (fields[field] as string).length > 320)) throw new Error("Invalid field");
     }
     body = value as PaymentBody;
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
   const attemptKey = request.headers.get("idempotency-key");
   if (attemptKey && !/^[a-f0-9-]{36,80}$/iu.test(attemptKey)) return Response.json({ error: "Invalid payment attempt." }, { status: 400 });
   const attemptHash = attemptKey ? await hashToken(attemptKey) : null;
-  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack", body.announcementsOptIn === true]));
+  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack", body.announcementsOptIn === true, body.couponCode?.trim().toUpperCase() ?? ""]));
   if (attemptHash) {
     const replay = await replayPaymentAttempt(env.DB, attemptHash, requestHash);
     if (replay) return replay;
@@ -80,8 +81,8 @@ export async function POST(request: Request) {
   if (otherAttempt) return Response.json({ error: "Your payment with the other provider is still pending. Check that payment before switching providers." }, { status: 409 });
 
   const requestedPromoterCode = body.promoterCode?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
-  const promoter = requestedPromoterCode ? await env.DB.prepare(`SELECT code FROM event_promoter_codes WHERE event_slug = ? AND code = ? AND status = 'active' LIMIT 1`)
-    .bind(eventSlug, requestedPromoterCode).first<{ code: string }>() : null;
+  const promoter = requestedPromoterCode ? await env.DB.prepare(`SELECT code,commission_bps AS commissionBps FROM event_promoter_codes WHERE event_slug = ? AND code = ? AND status = 'active' LIMIT 1`)
+    .bind(eventSlug, requestedPromoterCode).first<{ code: string; commissionBps: number }>() : null;
   if (paymentProvider === "paystack" && !paystackAvailable(env,event.isTestEvent)) return Response.json({error:"Paystack isn't taking payments for this event yet. Choose another available method."},{status:503});
   const now = new Date();
   const createdAt = now.toISOString();
@@ -89,9 +90,10 @@ export async function POST(request: Request) {
   // Availability checks already exclude expired holds. Global expiry/cleanup is
   // performed by the scheduled worker, not repeated by every buyer in a burst.
   const feeBasisPoints = event.bookingFeeBasisPoints;
-  const faceAmountMinor = selection.faceAmountMinor;
-  const bookingFeeMinor = Math.round(faceAmountMinor * feeBasisPoints / 10000);
-  const totalAmountMinor = faceAmountMinor + bookingFeeMinor;
+  let quote;
+  try { quote = await couponQuote(env.DB,eventSlug,selection.tier.recordId,body.couponCode??'',selection.faceAmountMinor,feeBasisPoints); }
+  catch(error){ return Response.json({error:error instanceof Error?error.message:'This code is unavailable.'},{status:400}); }
+  const {faceAmountMinor,bookingFeeMinor,totalAmountMinor,couponId,discountMinor}=quote;
   if (body.expectedTotalMinor !== undefined && body.expectedTotalMinor !== totalAmountMinor) return Response.json({ error: "The total changed. Review the updated booking fee before continuing.", feeBasisPoints, retryable: true }, { status: 409 });
   const id = crypto.randomUUID();
   if (attemptHash) {
@@ -127,6 +129,7 @@ export async function POST(request: Request) {
         AND (COALESCE(tier.sales_open_at, event.sales_open_at) IS NULL OR COALESCE(tier.sales_open_at, event.sales_open_at) <= ?)
         AND (COALESCE(tier.sales_close_at, event.sales_close_at, event.starts_at) > ?)
         AND event.starts_at > ?
+        AND (? IS NULL OR EXISTS (SELECT 1 FROM event_coupons c WHERE c.id=? AND c.status='active' AND c.starts_at<=? AND c.expires_at>? AND ${couponUsage}<c.max_uses))
         AND NOT EXISTS (SELECT 1 FROM orders previous WHERE previous.event_slug = event.slug
           AND previous.customer_email = ? AND previous.payment_provider <> ?
           AND previous.status IN ('payment_pending', 'expired'))
@@ -139,22 +142,22 @@ export async function POST(request: Request) {
     `).bind(
       id, selection.unitQuantity, selection.ticketCount, expiresAt, createdAt, createdAt,
       eventSlug, selection.tier.recordId, selection.tier.id, createdAt, offer?.id ?? null, offer?.id ?? null,
-      createdAt, createdAt, createdAt, email, paymentProvider, createdAt, selection.ticketCount,
+      createdAt, createdAt, createdAt, couponId, couponId, createdAt, createdAt, createdAt, email, paymentProvider, createdAt, selection.ticketCount,
     ),
     env.DB.prepare(`
       INSERT INTO orders (
         id, reference, event_slug, ticket_type, ticket_tier_id, unit_quantity, quantity,
         face_amount_minor, booking_fee_minor, total_amount_minor, currency,
         customer_email, customer_phone, customer_name, payment_channel, payment_provider, payment_environment, status,
-        reservation_expires_at, payment_updated_at, promoter_code, waitlist_entry_id, created_at
+        reservation_expires_at, payment_updated_at, promoter_code, waitlist_entry_id, created_at, coupon_id, discount_minor, promoter_commission_bps
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GHS', ?, ?, ?, ?, ?, ?, 'payment_pending', ?, ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GHS', ?, ?, ?, ?, ?, ?, 'payment_pending', ?, ?, ?, ?, ?, ?, ?, ?
       FROM inventory_reservations WHERE order_id = ? AND status = 'held'
     `).bind(
       id, reference, eventSlug, selection.tier.id, selection.tier.recordId,
       selection.unitQuantity, selection.ticketCount, faceAmountMinor, bookingFeeMinor,
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
-      paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, id,
+      paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, couponId, discountMinor, promoter?.commissionBps ?? 0, id,
     ),
     env.DB.prepare("UPDATE orders SET announcements_opt_in=?,checkout_attendee_id=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,checkoutAttendeeId,id),
     env.DB.prepare(`
@@ -164,7 +167,7 @@ export async function POST(request: Request) {
   ]);
 
   if (reservation.meta.changes !== 1) {
-    return finish({ error: "Those admissions were just reserved or sold. Refresh the event to see current availability.", retryable: true }, 409);
+    return finish({ error: "Those admissions or discount uses were just reserved. Refresh the event and review your code.", retryable: true }, 409);
   }
   await recordPolicyConsents({
     db: env.DB,

@@ -75,7 +75,7 @@ function BarList({ rows, value, label, detail }: { rows: Array<Record<string, un
   </div>)}</div>;
 }
 
-export default function OrganizerAnalytics({ actor, role, initialEvent = "all", initialRange = "30", initialView = "guests" }: { actor: string; role: StaffRole; initialEvent?: string; initialRange?: string; initialView?: string }) {
+export default function OrganizerAnalytics({ actor, role, initialEvent = "all", initialRange = "30", initialView = "guests", embedded=false, active=true }: { embedded?:boolean; active?:boolean; actor: string; role: StaffRole; initialEvent?: string; initialRange?: string; initialView?: string }) {
   const router = useRouter();
   const [eventSlug, setEventSlug] = useState(initialEvent);
   const [range, setRange] = useState(initialRange);
@@ -88,6 +88,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    if(!active)return;
     const controller = new AbortController();
     let running = false;
     async function load() {
@@ -109,13 +110,14 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
     void load();
     const timer = setInterval(() => { if (!document.hidden) void load(); }, 60000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [eventSlug, range, retry]);
+  }, [eventSlug, range, retry,active]);
 
   useEffect(() => {
+    if(embedded)return;
     const url = new URL(window.location.href);
     url.searchParams.set("event", eventSlug); url.searchParams.set("range", range); url.searchParams.set("view", view);
     window.history.replaceState(window.history.state, "", url);
-  }, [eventSlug, range, view]);
+  }, [eventSlug, range, view,embedded]);
 
   const overview = data?.overview;
   const funnel = useMemo(() => overview ? [
@@ -126,12 +128,12 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
     { label: "Payments confirmed", value: overview.paymentsConfirmed },
   ] : [], [overview]);
   const totalVip = data?.vipUsage.reduce((sum, item) => sum + Number(item.count), 0) ?? 0;
-  const workspaceUrl = `/organizer/workspace${eventSlug === "all" ? "" : `?event=${encodeURIComponent(eventSlug)}`}`;
+  const workspaceUrl = `/organizer/workspace${eventSlug === "all" ? "" : `?area=events&view=overview&event=${encodeURIComponent(eventSlug)}`}`;
   const exportUrl = `/api/organizer/analytics?eventSlug=${encodeURIComponent(eventSlug)}&range=${range}&format=csv`;
 
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); router.push("/"); router.refresh(); }
 
-  return <main className="organizer-workspace organizer-analytics">
+  return <div className={`organizer-workspace organizer-analytics${embedded?" organizer-analytics--embedded":""}`}>
     <header className="organizer-workspace__header">
       <Link href="/" className="night-brand-link"><BrandLogo /></Link>
       <WorkspaceJump active="/organizer/analytics" role={role} compact />
@@ -144,7 +146,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
     </section>
 
     <section className="analytics-controls" aria-label="Analytics filters">
-      <label>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setData(null); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{eventOptions.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
+      <label hidden={embedded}>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setData(null); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{eventOptions.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
       <label>Period<select aria-label="Period" value={range} onChange={(event) => { setLoading(true); setData(null); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
       <button type="button" disabled={refreshing} onClick={() => setRetry(value => value + 1)}><RefreshCw size={16} />{refreshing ? "Updating…" : "Refresh"}</button>
       <a href={exportUrl}><ArrowDownToLine size={15} /> Export CSV</a>
@@ -187,5 +189,5 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
       </section>
       </>}
     </> : null}
-  </main>;
+  </div>;
 }
