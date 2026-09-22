@@ -16,6 +16,7 @@ import handler from "vinext/server/app-router-entry";
 import { readAttendeeRoomSocketAccess } from "../lib/attendee-auth";
 import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
 import { retryFailedDeliveries, sendOperationalAlert } from "../lib/email-delivery";
+import { reconcileVpsDeliveries } from '../lib/transactional-email';
 import { processRefundBatches } from "../lib/operational-finance";
 import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
@@ -213,6 +214,11 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
     await retryFailedDeliveries(env, 20, 'standard');
   } catch (error) {
     await recordSystemAlert(env, "email-delivery-retry", error);
+  }
+  try {
+    await reconcileVpsDeliveries(env);
+  } catch (error) {
+    await recordSystemAlert(env, "email-delivery-status", error);
   }
   if (env.PAYSTACK_SECRET_KEY) {
     try {
