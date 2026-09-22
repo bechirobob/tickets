@@ -91,7 +91,7 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
   try {
     await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();
     const manager = page.locator('.registration-manager');
-    const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
+    const announcements = manager.getByRole('button', { name: 'Guest emails', exact: true });
     await expect(announcements).toBeEnabled();
     await announcements.scrollIntoViewIfNeeded();
     const before = (await announcements.boundingBox())!;
@@ -103,7 +103,7 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
     await page.mouse.up();
     await expect(announcements).toHaveAttribute('aria-pressed', 'true');
-    await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
+    await expect(manager.getByLabel('Search guest emails', { exact: true })).toBeVisible();
   } finally {
     releaseActivity();
     await page.mouse.up();
@@ -122,10 +122,10 @@ test('registration tabs accept the first click after scrolling to them', async (
       await expect(manager.getByLabel('Search guest emails', { exact: true })).toBeVisible();
       await manager.getByRole('button', { name: 'Setup', exact: true }).click();
       await manager.getByRole('button', { name: 'Save registration settings', exact: true }).scrollIntoViewIfNeeded();
-      const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
+      const announcements = manager.getByRole('button', { name: path.startsWith('/organizer/')?'Guest emails':'Announcements', exact: true });
       await announcements.click();
       await expect(announcements).toHaveAttribute('aria-pressed', 'true');
-      await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
+      await expect(manager.getByLabel(path.startsWith('/organizer/')?'Search guest emails':'Subject', { exact: true })).toBeVisible();
     }
   }
 });
@@ -323,13 +323,13 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  });
  test('announcement preview preserves a failed send and owner sees organiser actions',async({page,context,baseURL},info)=>{
   await page.route('**/api/admin/campaigns?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,configured:true,state:{...data.state,status:'ready'}}});});
-  await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();const manager=page.locator('.registration-manager');
+  await page.goto('/organizer/workspace?area=promote&event=rsvp-browser');const manager=page.locator('.suite-content');
   const announcements=manager.getByRole('button',{name:'Announcements',exact:true});await announcements.click();await expect(announcements).toHaveAttribute('aria-pressed','true');
   await manager.getByLabel('Subject',{exact:true}).fill('Doors open at eight');await manager.getByLabel('Announcement',{exact:true}).fill('Please bring your QR pass. See you at the event.');
   await manager.getByRole('button',{name:'Preview announcement'}).click();await expect(manager.locator('.announcement-preview')).toContainText('1 subscribed guest emails');
   await page.route('**/api/admin/campaigns',route=>route.abort('failed'));await manager.getByRole('button',{name:'Send announcement'}).click();
   await expect(manager.getByRole('button',{name:'Send announcement'})).toBeEnabled();await expect(manager.getByLabel('Subject',{exact:true})).toHaveValue('Doors open at eight');
-  const axe=await new AxeBuilder({page}).include('.registration-manager').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+  const axe=await new AxeBuilder({page}).include('.suite-content').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('announcement-preview.png'),fullPage:true});
   await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.token,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);await page.goto('/admin/operations');
   await page.locator('.organizer-activity summary').click();await expect(page.locator('.organizer-activity')).toContainText('rsvp-host@example.com');await expect(page.locator('.organizer-activity')).toContainText('GHS 75.00');
@@ -500,7 +500,8 @@ test('host lands on their event with a useful overview and recoverable report pr
  await overview.getByRole('button',{name:'Refresh event summary'}).click();await expect(overview.getByText('Your public link is waiting',{exact:true})).toBeVisible();await expect(overview.getByLabel('Guest link')).toHaveCount(0);
  await page.screenshot({path:info.outputPath('host-private-preparation.png'),fullPage:true});
  await overview.getByRole('button',{name:'View analytics & tracked links'}).click();
- await expect(page.getByRole('combobox',{name:'Night',exact:true})).toHaveValue('rsvp-browser');
+ await expect(page.locator('#suite-event')).toHaveValue('rsvp-browser');
+ await expect(page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Insights',exact:true})).toHaveAttribute('aria-current','page');
  await expect(page.getByRole('combobox',{name:'Period',exact:true})).toHaveValue('all');
 });
 
@@ -539,6 +540,9 @@ for(const fails of [false,true])test(`organizer overview keeps task controls sta
 test('workspace submission, help, public previews and return retain the organizer session',async({page,context,baseURL},info)=>{
  await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
  const signouts:string[]=[];page.on('request',r=>{if(r.url().includes('/api/admin/session')&&r.method()==='DELETE')signouts.push(r.url());});
+ await page.goto('/admin/events');await expect(page).toHaveURL(/\/organizer\/workspace/);await expect(page).not.toHaveURL(/\/admin\/login/);
+ await expect(page.getByRole('combobox',{name:'Workspace',exact:true})).toHaveCount(0);
+ for(const path of ['/api/admin/events','/api/admin/accounts','/api/admin/orders','/api/admin/operations'])expect((await page.request.get(path)).status()).toBe(403);
  await page.goto('/organizer/workspace?area=overview&event=rsvp-browser');
  await page.getByRole('button',{name:'Submit a Night',exact:true}).click();
  await expect(page).toHaveURL(/area=submit/);await expect(page.locator('.workspace-topbar')).toBeVisible();
@@ -546,7 +550,7 @@ test('workspace submission, help, public previews and return retain the organize
  await page.getByLabel('Organiser or collective').fill('My unsent plan');
  await openWorkspaceMenu(page);await page.locator('.workspace-tools>summary').click();
  await page.getByRole('link',{name:'Help centre',exact:true}).click();await expect(page.getByRole('heading',{name:'Help centre',exact:true})).toBeVisible();
- await page.getByRole('textbox',{name:'Search BeCore Help'}).fill('Submit a Night for review');
+ await page.getByRole('searchbox',{name:'Search BeCore Help'}).fill('Submit a Night for review');
  await page.getByRole('link',{name:'Submit a Night',exact:true}).click();
  await expect(page.getByLabel('Organiser or collective')).toHaveValue('My unsent plan');
  await page.getByRole('button',{name:'Back to workspace'}).click();await expect(page).toHaveURL(/area=overview/);
@@ -573,7 +577,7 @@ test('host edits ticket allocation and grade, keeps a failed draft, and sees per
  const current=Number(await capacity.inputValue());await capacity.fill(String(current+5));await form.getByLabel('Ticket grade / name').fill(name);
  await page.route('**/api/organizer/business',route=>route.request().method()==='POST'?route.abort('failed'):route.continue());
  await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form.getByRole('button',{name:'Save ticket grade',exact:true})).toBeEnabled();await expect(form.getByLabel('Ticket grade / name')).toHaveValue(name);
- await page.unroute('**/api/organizer/business');await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form).not.toBeVisible();await expect(page.getByText(name,{exact:true})).toBeVisible();
+ await page.unroute('**/api/organizer/business');await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form).not.toBeVisible();await expect(page.getByRole('button',{name:`Edit ${name}`,exact:true})).toBeVisible();
  await page.reload();await page.getByRole('button',{name:`Edit ${name}`,exact:true}).click();await expect(form.getByLabel('Total admission allocation')).toHaveValue(String(current+5));
  await expect(form.getByLabel('Ticket grade / name')).toHaveValue(name);expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  const axe=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);

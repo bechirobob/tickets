@@ -603,7 +603,7 @@
 
 .ops-sidebar nav a,
 .curation-nav nav a,
-.room-ops > aside nav a,
+.room-ops > .curation-nav nav a,
 .settings-layout > aside a {
   position: relative;
   border-radius: 0;
@@ -612,7 +612,7 @@
 
 .ops-sidebar nav a.active,
 .curation-nav nav a.active,
-.room-ops > aside nav a.active,
+.room-ops > .curation-nav nav a.active,
 .settings-layout > aside a.active {
   background: transparent;
   color: inherit;
@@ -620,7 +620,7 @@
 
 .ops-sidebar nav a.active::after,
 .curation-nav nav a.active::after,
-.room-ops > aside nav a.active::after,
+.room-ops > .curation-nav nav a.active::after,
 .settings-layout > aside a.active::after {
   content: "";
   height: 1px;
@@ -632,10 +632,10 @@
 /* Operational navigation uses a side marker, never a line beneath the words. */
 .ops-page .curation-nav nav a.active::after,
 .curation-page .curation-nav nav a.active::after,
-.room-ops > aside nav a.active::after { display: none; }
+.room-ops > .curation-nav nav a.active::after { display: none; }
 .ops-page .curation-nav nav a.active::before,
 .curation-page .curation-nav nav a.active::before,
-.room-ops > aside nav a.active::before {
+.room-ops > .curation-nav nav a.active::before {
   content: "";
   width: 2px;
   position: absolute;

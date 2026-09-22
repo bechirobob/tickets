@@ -40,7 +40,7 @@ export async function inviteTeam(db:D1Database,session:AdminSession,b:Record<str
 // Lead access is rechecked at acceptance and again before delayed email delivery.
 export const validTeamInvite=`i.revoked_at IS NULL AND i.used_at IS NULL AND i.expires_at>? AND a.status='active' AND a.role=i.role AND a.normalized_email=i.account_email
   AND e.removed_at IS NULL AND EXISTS (SELECT 1 FROM staff_accounts lead WHERE lead.id=i.invited_by AND lead.status='active' AND
-    (lead.role='owner' OR (lead.role='organizer' AND (e.organizer_owner_id=lead.id OR EXISTS (SELECT 1 FROM party_submissions s WHERE s.id=e.submission_id AND lower(trim(s.contact_email))=lead.normalized_email AND EXISTS (SELECT 1 FROM staff_event_assignments assignment WHERE assignment.event_slug=e.slug AND assignment.account_id=lead.id))))))`;
+    (lead.role='owner' OR (lead.role='organizer' AND EXISTS (SELECT 1 FROM staff_event_assignments current_access WHERE current_access.event_slug=e.slug AND current_access.account_id=lead.id) AND (e.organizer_owner_id=lead.id OR EXISTS (SELECT 1 FROM party_submissions s WHERE s.id=e.submission_id AND lower(trim(s.contact_email))=lead.normalized_email AND EXISTS (SELECT 1 FROM staff_event_assignments assignment WHERE assignment.event_slug=e.slug AND assignment.account_id=lead.id))))))`;
 export async function inspectTeamInvite(db:D1Database,token:string){
   if(!/^[A-Za-z0-9_-]{40,128}$/u.test(token))return null;
   return db.prepare(`SELECT i.id,i.account_id AS accountId,i.account_email AS email,i.role,i.event_slug AS eventSlug,e.title AS eventTitle,a.must_change_password AS needsPassword

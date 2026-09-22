@@ -92,7 +92,7 @@ export default function OrganizerAssistant({ actor, role, embedded = false }: { 
     router.refresh();
   }
 
-  return <main className={`${styles.shell} organizer-workspace organizer-desk${embedded ? " organizer-desk--embedded" : ""}`}>
+  return <div className={`${styles.shell} organizer-workspace organizer-desk${embedded ? " organizer-desk--embedded" : ""}`}>
     {!embedded ? <header className={styles.topbar}>
       <Link href="/" className="night-brand-link"><BrandLogo /></Link>
       <WorkspaceJump active="/organizer/assistant" role={role} compact />
@@ -131,5 +131,5 @@ export default function OrganizerAssistant({ actor, role, embedded = false }: { 
         </div>
       </section>
     </>}
-  </main>;
+  </div>;
 }

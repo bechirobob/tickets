@@ -12,5 +12,5 @@ export default async function OrganizerAnalyticsPage({ searchParams }: { searchP
   const view = typeof params.view === "string" && ["guests", "sales", "reach", "door"].includes(params.view) ? params.view : "guests";
   const returnTo = `/organizer/analytics?event=${encodeURIComponent(event)}&range=${range}&view=${view}`;
   const session = await requireAdminSession(returnTo, "organizer.workspace");
-  return <main className="organizer-suite"><WorkspaceChrome actor={session.actor} role={session.role} host active="events" event={event}/><div className="suite-content"><a className="workspace-back" href={`/organizer/workspace?area=events&event=${event}`}>← Back to event</a><h1>Event insights</h1><OrganizerAnalytics actor={session.actor} role={session.role} initialEvent={event} initialRange={range} initialView={view} embedded /></div></main>;
+  return <main className="organizer-suite"><WorkspaceChrome actor={session.actor} role={session.role} host active="events" event={event}/><div className="suite-content"><a className="workspace-back" href={`/organizer/workspace?area=events&event=${event}`}>← Back to event</a><h1>Event insights</h1><OrganizerAnalytics actor={session.actor} role={session.role} initialEvent={event} initialRange={range} initialView={view} workspaceFrame /></div></main>;
 }

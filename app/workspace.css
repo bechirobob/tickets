@@ -64,3 +64,25 @@ main:has(>.workspace-topbar) :is(.ops-main,.curation-main,.room-ops>section) :is
 .workspace-submit .submission-consent--check{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.5}
 .workspace-submit .submission-consent--check input{width:18px;height:18px;flex:0 0 18px;margin-top:3px}
 @media(max-width:760px){.workspace-submit .submission-fields{grid-template-columns:1fr}.workspace-submit .submission-fields .wide{grid-column:1}.workspace-submit .submission-progress{gap:4px}.workspace-submit .submission-progress button{flex:1;padding:8px 5px;font-size:12px}.workspace-submit .submission-progress button>span{display:none}}
+.help-centre--workspace .help-centre__intro{display:block}.help-centre--workspace .help-centre__intro h1{margin:5px 0 12px}.help-centre--workspace .help-guide>summary{min-height:0}.help-centre--workspace .help-guide>summary small{margin-bottom:7px;color:#745c7c;font-size:11px}.help-centre--workspace .help-guide>summary b{font-size:17px;line-height:1.4}.help-centre--workspace .help-guide li{font-size:13px}.help-centre--workspace .help-guide>div>a{display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-top:12px;color:#4b2852;text-decoration:underline;text-underline-offset:3px}
+.help-centre--workspace .help-contact{color:#2b202e;gap:24px;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}.help-centre--workspace .help-contact article{display:grid;grid-template-columns:24px minmax(0,1fr);gap:6px 10px;padding:14px 0;border-bottom:1px solid #e5dce7}.help-centre--workspace .help-contact article p{font-size:13px;margin:0;color:#716078}.help-centre--workspace .help-contact article>a{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:#4b2852;font-size:13px;text-decoration:underline;text-underline-offset:3px}.workspace-topbar .workspace-switch{min-width:0}.workspace-topbar select{min-width:0}.organizer-suite .workspace-topbar button{min-height:44px}
+@media(max-width:760px){.help-centre--workspace .help-contact{grid-template-columns:1fr}}
+
+/* Account forms use the same light workspace controls in either role. */
+main:has(>.workspace-topbar) .account-security-stack{color:#29242c}
+main:has(>.workspace-topbar) .account-security-stack :is(small,article i){color:#625568}
+main:has(>.workspace-topbar) .account-security{margin:0;gap:12px}
+main:has(>.workspace-topbar) .account-security label{color:#514557;letter-spacing:0;text-transform:none;font-weight:500;margin:0}
+main:has(>.workspace-topbar) .account-security input{width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid #b9b2bd;background:#fff;color:#29242c;font-size:16px}
+main:has(>.workspace-topbar) .passkey-security{margin:0}
+main:has(>.workspace-topbar) .passkey-security :is(header,article){flex-wrap:wrap}
+main:has(>.workspace-topbar) .account-security>.ticket-action{margin-top:6px}
+.organizer-suite .organizer-analytics--standalone .analytics-controls{grid-template-columns:minmax(160px,1fr) minmax(120px,1fr) auto auto}
+@media(max-width:760px){.organizer-suite .organizer-analytics--standalone .analytics-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Camera and entry panels retain their dark working surface inside the frame. */
+.workspace-scanner :is(.scanner-event,.scan-surface){color:#f6f2e9;border-radius:8px}
+.workspace-scanner .scanner-event{padding:16px}
+.workspace-scanner .scanner-header>div.online{color:#3f642e}
+.workspace-scanner .scanner-header>div.offline{color:#954124}
+.workspace-scanner .scanner-stats{color:#625568;border-color:#ded0e3;gap:20px}
+.workspace-scanner .scanner-stats b{color:#2b202e}

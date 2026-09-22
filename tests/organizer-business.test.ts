@@ -69,6 +69,9 @@ describe('organizer business suite',()=>{
   await env.DB.prepare('DELETE FROM staff_event_assignments WHERE account_id=? AND event_slug=?').bind(a.id,b.slug).run();
   expect((await GET(req(a.cookie,'tickets',b.slug))).status).toBe(403);
   expect((await hostReport(read(`/api/organizer/reports?eventSlug=${b.slug}`))).status).toBe(403);
+  await env.DB.prepare('DELETE FROM staff_event_assignments WHERE account_id=? AND event_slug=?').bind(a.id,a.slug).run();
+  expect((await GET(req(a.cookie,'tickets',a.slug))).status).toBe(403);
+  expect((await hostReport(read(`/api/organizer/reports?eventSlug=${a.slug}`))).status).toBe(403);
  });
 
  async function tierEdit(f: Awaited<ReturnType<typeof fixture>>, extra: object = {}) {
@@ -104,6 +107,17 @@ describe('organizer business suite',()=>{
   await expect(saveOrganizerTier(env.DB,f.session,await tierEdit(f,{capacity:3}))).rejects.toThrow();
   await saveOrganizerTier(env.DB,f.session,await tierEdit(f,{capacity:4}));
   await expect(issueComplimentary(env.DB,f.session,comp(f,{quantity:1,email:'no-space@example.com'}))).rejects.toThrow('capacity');
+ });
+ it('price edits leave an active checkout payable at its original amount',async()=>{
+  const f=await fixture();await coupon(f,{maxUses:3});mockPayment();
+  const held=await buy(f,'before@example.com');expect(held.r.ok,held.data.error).toBe(true);
+  const before=await env.DB.prepare('SELECT id,face_amount_minor AS face,total_amount_minor AS total,discount_minor AS discount FROM orders WHERE reference=?').bind(held.data.reference).first<{id:string;face:number;total:number;discount:number}>();
+  await saveOrganizerTier(env.DB,f.session,await tierEdit(f,{priceMinor:20000}));
+  expect(await env.DB.prepare('SELECT id,face_amount_minor AS face,total_amount_minor AS total,discount_minor AS discount FROM orders WHERE reference=?').bind(held.data.reference).first()).toEqual(before);
+  const verification={id:10,reference:held.data.reference,status:'success',amount:before!.total,currency:'GHS',paidAt:now(),channel:'mobile_money',gatewayResponse:'Approved',environment:'test' as const};
+  expect((await fulfillVerifiedPayment(env.DB,verification)).result).toBe('paid');
+  const later=await buy(f,'after@example.com');expect(later.r.ok,later.data.error).toBe(true);
+  expect(await env.DB.prepare('SELECT face_amount_minor AS face FROM orders WHERE reference=?').bind(later.data.reference).first()).toEqual({face:18000});
  });
  it('serializes allocation reductions with concurrent issuing',async()=>{
   const f=await fixture(3),edit=await tierEdit(f,{capacity:1});

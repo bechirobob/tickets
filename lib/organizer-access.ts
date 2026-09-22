@@ -7,8 +7,8 @@ export const privateHeaders = { 'cache-control': 'no-store, private', 'referrer-
 // The same scope is used for list, aggregate and record access. Values never enter SQL text.
 export function organizerScope(session: AdminSession, alias = 'e') {
   return session.role === 'owner' ? { sql: '1=1', bindings: [] as string[] } : {
-    sql: `(${alias}.organizer_owner_id=? OR EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.event_slug=${alias}.slug AND a.account_id=?))`,
-    bindings: [session.accountId, session.accountId],
+    sql: `EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.event_slug=${alias}.slug AND a.account_id=?)`,
+    bindings: [session.accountId],
   };
 }
 export async function organizerSession(request: Request, db: D1Database) {
