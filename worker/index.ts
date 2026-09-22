@@ -1,79 +1,17 @@
-import { deliverHostAnnouncement, retryHostAnnouncements } from '../lib/notifications';
-import { processMarketing } from "../lib/marketing-delivery";
-import { processOrganizerReports } from "../lib/organizer-reports";
-import { processPendingOrganizerAccess } from "../lib/organizer-invitations";
-import { runPreviewCleanup } from "../lib/preview-cleanup";
-import { processEventAnnouncements } from "../lib/event-audience";
-import { deliverQueuedEventAnnouncement } from "../lib/event-announcement-queue";
-import { retryEventRemovals } from "../lib/event-removal";
-import { retryOrderConfirmations, deliverOrderConfirmationByReference } from '../lib/payment-operations';
-import { processRegistrations } from "../lib/registrations";
-import { recoverSeevPayments } from "../lib/seevplus";
 import { publicPageCacheKey, publicCacheResponse } from "./public-page-cache";
-/** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { readAttendeeRoomSocketAccess } from "../lib/attendee-auth";
-import { expireReservations, runDailyReconciliation } from "../lib/payment-operations";
-import { retryFailedDeliveries, sendOperationalAlert } from "../lib/email-delivery";
-import { processRefundBatches } from "../lib/operational-finance";
-import { refreshExpiredPreviewEvents } from "../lib/preview-events";
+import { handleRoomSocket } from "./room-socket";
+import { requestNonce, contentSecurityPolicy, securityResponse } from "./security-response";
 import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
-import { purgeExpiredFlashes } from "../lib/flashes";
-import { recoverAbandonedPayments, releaseWaitlistOffers } from "../lib/sales-recovery";
+import { processQueue, runScheduledOperations } from "./background";
 export { TheRoom } from "./the-room";
 
 const edgeCache = (caches as CacheStorage & { readonly default: Cache }).default;
 
-function requestNonce(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(18));
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
-}
-
-function contentSecurityPolicy(nonce: string): string {
-  return `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; media-src 'self' blob:; worker-src 'self' blob:`;
-}
-
 function supportedImageFormat(format: string): "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif" {
   if (format === "image/jpeg" || format === "image/png" || format === "image/gif" || format === "image/avif") return format;
   return "image/webp";
-}
-
-async function handleRoomSocket(request: Request, env: Cloudflare.Env): Promise<Response> {
-  if (request.method !== "GET" || request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-    return new Response("WebSocket upgrade required", { status: 426 });
-  }
-  const requestUrl = new URL(request.url);
-  const origin = request.headers.get("origin");
-  if (!origin || origin !== requestUrl.origin) return new Response("Forbidden", { status: 403 });
-  const eventSlug = requestUrl.searchParams.get("event")?.trim() ?? "";
-  if (!/^[a-z0-9-]{1,80}$/u.test(eventSlug)) return new Response("Invalid event", { status: 400 });
-
-  const authorization = await readAttendeeRoomSocketAccess(env.DB, request.headers.get("cookie"), eventSlug);
-  if (!authorization?.policy) return new Response("A valid paid ticket is required", { status: 401 });
-  // Authorization, event policy and this guest's blocks share one fresh D1
-  // snapshot, avoiding a second queued read during simultaneous arrivals.
-  const { access, blockedAttendeeIds, policy } = authorization;
-
-  const headers = new Headers(request.headers);
-  headers.set("x-bct-room-authorized", "1");
-  headers.set("x-bct-attendee-id", access.attendeeId);
-  headers.set("x-bct-session-id", access.sessionId ?? "");
-  headers.set("x-bct-display-name", encodeURIComponent(access.displayName));
-  headers.set("x-bct-room-badge", access.roomBadge ?? "");
-  headers.set("x-bct-blocked-attendees", blockedAttendeeIds.join(","));
-  headers.set("x-bct-event-slug", policy.eventSlug);
-  headers.set("x-bct-event-title", encodeURIComponent(policy.eventTitle));
-  headers.set("x-bct-starts-at", policy.startsAt);
-  headers.set("x-bct-ends-at", policy.endsAt);
-  headers.set("x-bct-read-only-at", policy.readOnlyAt);
-  headers.set("x-bct-read-only", policy.readOnly ? "1" : "0");
-  headers.set("x-bct-emergency-read-only", policy.emergencyReadOnly ? "1" : "0");
-  headers.set("x-bct-slow-mode-seconds", String(policy.slowModeSeconds));
-  headers.set("x-bct-archived", policy.archived ? "1" : "0");
-  return env.THE_ROOM.getByName(eventSlug).fetch(new Request(request, { headers }));
 }
 
 // Image security config. SVG sources with .svg extension auto-skip the
@@ -124,140 +62,10 @@ const worker = {
       return securityResponse(Response.json({ error: "The service could not complete this request." }, { status: 500 }));
     }
   },
-  async queue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env): Promise<void> {
-    for (const message of batch.messages) {
-      try {
-        if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
-        else if (message.body?.deliveryId?.startsWith('host-announcement:')) await deliverHostAnnouncement(env, message.body.deliveryId.slice('host-announcement:'.length));
-        else if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
-        else if (message.body?.deliveryId?.startsWith('registration-confirmation:')) await processRegistrations(env, 'https://tickets.becoreops.com', message.body.deliveryId.slice('registration-confirmation:'.length));
-        else if (message.body?.deliveryId?.startsWith('order-confirmation:')) await deliverOrderConfirmationByReference(env, message.body.deliveryId.slice('order-confirmation:'.length), 'https://tickets.becoreops.com');
-        else await deliverQueuedEventAnnouncement(env, message.body?.deliveryId ?? "");
-        message.ack();
-      } catch (error) {
-        console.error(JSON.stringify({
-          message: "queued delivery task failed",
-          deliveryId: message.body?.deliveryId ?? null,
-          error: error instanceof Error ? error.message : String(error),
-        }));
-        message.retry({ delaySeconds: 60 });
-      }
-    }
-  },
+  queue: processQueue,
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runScheduledOperations(controller, env));
   },
 };
-
-function securityResponse(response: Response, nonce = requestNonce(), path = ""): Response {
-  const headers = new Headers(response.headers);
-  if (!headers.has("Content-Security-Policy")) headers.set("Content-Security-Policy", contentSecurityPolicy(nonce));
-  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(self), display-capture=(), usb=()");
-  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  if (path === "/help" || path === "/organizer/submit" || path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan" || path.startsWith("/api/customer/") || path.startsWith("/api/organizer/") || path.startsWith("/organizer/workspace") || path.startsWith("/organizer/analytics") || path.startsWith("/organizer/assistant") || path.startsWith("/my-nights") || path.startsWith("/room/")) {
-    headers.set("Cache-Control", "no-store");
-    headers.set("X-Robots-Tag", "noindex, nofollow");
-  }
-  if (path === "/organizer/activate" || path === "/api/organizer/activate" || path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/") || path === "/my-nights/access" || path === "/rsvp/access" || path === "/payment/return" || path.startsWith("/api/customer/recovery") || path.startsWith("/api/customer/transfers/claim")) {
-    headers.set("Referrer-Policy", "no-referrer");
-    headers.set("Cache-Control", "no-store");
-    headers.set("X-Robots-Tag", "noindex, nofollow");
-  }
-  headers.set("X-Content-Type-Options", "nosniff");
-  headers.set("X-Frame-Options", "DENY");
-  headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  headers.set("Cross-Origin-Resource-Policy", "same-origin");
-  headers.delete("X-Powered-By");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unknown): Promise<void> {
-  const detail = error instanceof Error ? error.message : String(error);
-  console.error(JSON.stringify({ message: "scheduled operation failed", source, error: detail }));
-  try { await sendOperationalAlert(env, { source, severity: "critical", message: `${source} failed`, detail }); } catch { console.error(JSON.stringify({message:"Could not save operational alert",source})); }
-}
-
-async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
-  if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
-  if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
-  try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
-  try { await retryHostAnnouncements(env); } catch (error) { await recordSystemAlert(env, 'host-announcements', error); }
-  try { await retryOrderConfirmations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "order-confirmations", error); }
-  try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
-  try {
-    await purgeExpiredFlashes(env.DB);
-  } catch (error) {
-    await recordSystemAlert(env, "flash-expiry", error);
-  }
-  try {
-    await expireReservations(env.DB);
-  } catch (error) {
-    await recordSystemAlert(env, "reservation-expiry", error);
-  }
-  try {
-    await releaseWaitlistOffers(env, "https://tickets.becoreops.com");
-  } catch (error) {
-    await recordSystemAlert(env, "waitlist-offers", error);
-  }
-  try {
-    if (new Date(controller.scheduledTime).getUTCHours() < 8) { /* Reports begin at 8am Accra time. */ }
-    else if (env.EMAIL_DELIVERY_QUEUE) await env.EMAIL_DELIVERY_QUEUE.send({ deliveryId:"organizer-reports:tick" });
-    else if (env.ENVIRONMENT !== "production") await processOrganizerReports(env.DB);
-    else throw new Error("Host report queue is not configured.");
-  } catch (error) {
-    await recordSystemAlert(env, "organizer-reports", error);
-  }
-  try {
-    await processPendingOrganizerAccess(env.DB);
-    await retryFailedDeliveries(env, 20, 'standard');
-  } catch (error) {
-    await recordSystemAlert(env, "email-delivery-retry", error);
-  }
-  if (env.PAYSTACK_SECRET_KEY) {
-    try {
-      await processRefundBatches(env);
-    } catch (error) {
-      await recordSystemAlert(env, "approved-refund-batch", error);
-    }
-  }
-  try {
-    const recovery = await recoverSeevPayments(env, "https://tickets.becoreops.com");
-    if (recovery.failed) throw new Error(`${recovery.failed} SeevPlus payments need verification; review order records.`);
-  } catch (error) {
-    await recordSystemAlert(env, "seevplus-payment-recovery", error);
-  }
-  if (env.PAYSTACK_SECRET_KEY) {
-    try {
-      await recoverAbandonedPayments(env, "https://tickets.becoreops.com");
-    } catch (error) {
-      await recordSystemAlert(env, "abandoned-payment-recovery", error);
-    }
-  }
-  if (controller.cron === "15 3 * * *") {
-    try {
-      if (env.ENVIRONMENT !== "production") await refreshExpiredPreviewEvents(env.DB);
-    } catch (error) {
-      await recordSystemAlert(env, "preview-event-rollover", error);
-    }
-  }
-  if (controller.cron === "15 3 * * *") {
-    try {
-      await env.DB.prepare("DELETE FROM product_metrics_daily WHERE day < date('now', '-180 days')").run();
-    } catch (error) {
-      await recordSystemAlert(env, "analytics-retention", error);
-    }
-  }
-  if (controller.cron === "15 3 * * *" && env.PAYSTACK_SECRET_KEY) {
-    try {
-      const periodEnd = new Date();
-      periodEnd.setUTCHours(0, 0, 0, 0);
-      const periodStart = new Date(periodEnd.getTime() - 24 * 60 * 60 * 1000);
-      await runDailyReconciliation(env.DB, { secret: env.PAYSTACK_SECRET_KEY, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString(), actor: "system:daily-reconciliation" });
-    } catch (error) {
-      await recordSystemAlert(env, "daily-payment-reconciliation", error);
-    }
-  }
-}
 
 export default worker satisfies ExportedHandler<Cloudflare.Env, { deliveryId: string }>;

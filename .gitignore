@@ -47,3 +47,9 @@ worker-configuration.d.ts
 /work/
 
 /capacity-results/
+# Isolated Node build and deployment artifacts contain no source changes.
+.vps-build/
+dist-vps/
+vps-state/
+__pycache__/
+*.pyc

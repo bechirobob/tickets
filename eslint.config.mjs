@@ -13,6 +13,9 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "mobile/**",
+    ".vps-build/**",
+    "dist-vps/**",
+    "vps-state/**",
   ]),
 ]);
 

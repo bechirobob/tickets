@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily BeCore Tickets deployment cleanup
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30m
+Persistent=true
+Unit=becore-tickets-retention.service
+
+[Install]
+WantedBy=timers.target

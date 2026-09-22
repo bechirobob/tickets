@@ -1,0 +1,12 @@
+[Unit]
+Description=BeCore Tickets release retention
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/becore-tickets/current/operations/retention.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/becore-tickets/releases /srv/becore-tickets/temporary
+LogNamespace=becore-tickets

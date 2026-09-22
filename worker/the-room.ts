@@ -118,55 +118,60 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }
 
     try {
-      const attendeeId = requiredHeader(request, "x-bct-attendee-id");
-      const displayName = decodeURIComponent(requiredHeader(request, "x-bct-display-name"));
-      const roomBadge = request.headers.get("x-bct-room-badge") === "VIP" ? "VIP" : null;
-      const blocked = request.headers.get("x-bct-blocked-attendees")?.split(",").filter(Boolean) ?? [];
-      const policy: RoomPolicyInput = {
-        eventSlug: requiredHeader(request, "x-bct-event-slug"),
-        eventTitle: decodeURIComponent(requiredHeader(request, "x-bct-event-title")),
-        startsAt: requiredHeader(request, "x-bct-starts-at"),
-        endsAt: requiredHeader(request, "x-bct-ends-at"),
-        readOnlyAt: requiredHeader(request, "x-bct-read-only-at"),
-        readOnly: request.headers.get("x-bct-read-only") === "1",
-        emergencyReadOnly: request.headers.get("x-bct-emergency-read-only") === "1",
-        slowModeSeconds: Number(request.headers.get("x-bct-slow-mode-seconds") ?? 0),
-        archived: request.headers.get("x-bct-archived") === "1",
-      };
-      this.configure(policy);
-      await this.scheduleFlashExpiry(policy);
-
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
-      const attachment: ConnectionState = {
-        attendeeId,
-        sessionId: requiredHeader(request,"x-bct-session-id"),
-        displayName: displayName.slice(0, 50),
-        role: "attendee",
-        roomBadge,
-        blockedAttendeeIds: blocked,
-        readOnly: policy.readOnly,
-        readOnlyAt: policy.readOnlyAt,
-        emergencyReadOnly: Boolean(policy.emergencyReadOnly),
-        slowModeSeconds: policy.slowModeSeconds ?? 0,
-        lastMessageAt: 0,
-        rateWindowStartedAt: Date.now(),
-        rateCount: 0,
-      };
-      server.serializeAttachment(attachment);
-      this.ctx.acceptWebSocket(server);
-      server.send(JSON.stringify({
-        type: "snapshot",
-        room: policy,
-        messages: this.readMessages(attachment, new URL(request.url).searchParams.get("announcement")?.slice(0,80) ?? ""),
-        online: this.ctx.getWebSockets().length,
-      }));
-      this.schedulePresence();
+      await this.acceptConnection(request, server);
       return new Response(null, { status: 101, webSocket: client });
     } catch (error) {
       console.error(JSON.stringify({ message: "room websocket rejected", error: error instanceof Error ? error.message : String(error) }));
       return new Response("Invalid room connection", { status: 400 });
     }
+  }
+
+  async acceptConnection(request: Request, server: WebSocket): Promise<void> {
+    if (request.headers.get("x-bct-room-authorized") !== "1") throw new Error("Unauthorized Room connection.");
+    const attendeeId = requiredHeader(request, "x-bct-attendee-id");
+    const displayName = decodeURIComponent(requiredHeader(request, "x-bct-display-name"));
+    const roomBadge = request.headers.get("x-bct-room-badge") === "VIP" ? "VIP" : null;
+    const blocked = request.headers.get("x-bct-blocked-attendees")?.split(",").filter(Boolean) ?? [];
+    const policy: RoomPolicyInput = {
+      eventSlug: requiredHeader(request, "x-bct-event-slug"),
+      eventTitle: decodeURIComponent(requiredHeader(request, "x-bct-event-title")),
+      startsAt: requiredHeader(request, "x-bct-starts-at"),
+      endsAt: requiredHeader(request, "x-bct-ends-at"),
+      readOnlyAt: requiredHeader(request, "x-bct-read-only-at"),
+      readOnly: request.headers.get("x-bct-read-only") === "1",
+      emergencyReadOnly: request.headers.get("x-bct-emergency-read-only") === "1",
+      slowModeSeconds: Number(request.headers.get("x-bct-slow-mode-seconds") ?? 0),
+      archived: request.headers.get("x-bct-archived") === "1",
+    };
+    this.configure(policy);
+    await this.scheduleFlashExpiry(policy);
+
+    const attachment: ConnectionState = {
+      attendeeId,
+      sessionId: requiredHeader(request,"x-bct-session-id"),
+      displayName: displayName.slice(0, 50),
+      role: "attendee",
+      roomBadge,
+      blockedAttendeeIds: blocked,
+      readOnly: policy.readOnly,
+      readOnlyAt: policy.readOnlyAt,
+      emergencyReadOnly: Boolean(policy.emergencyReadOnly),
+      slowModeSeconds: policy.slowModeSeconds ?? 0,
+      lastMessageAt: 0,
+      rateWindowStartedAt: Date.now(),
+      rateCount: 0,
+    };
+    server.serializeAttachment(attachment);
+    this.ctx.acceptWebSocket(server);
+    server.send(JSON.stringify({
+      type: "snapshot",
+      room: policy,
+      messages: this.readMessages(attachment, new URL(request.url).searchParams.get("announcement")?.slice(0,80) ?? ""),
+      online: this.ctx.getWebSockets().length,
+    }));
+    this.schedulePresence();
   }
 
   async webSocketMessage(socket: WebSocket, payload: string | ArrayBuffer): Promise<void> {
