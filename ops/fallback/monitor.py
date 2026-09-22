@@ -45,6 +45,7 @@ def decide(state, outcome):
     return state, None
 
 def api(path, token, method='GET', data=None):
+    token = token.strip()
     status, _, body = request('https://api.cloudflare.com/client/v4' + path,
         {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, method,
         json.dumps(data).encode() if data is not None else None)
@@ -65,7 +66,7 @@ def save(path, state):
             os.unlink(name)
 
 def main():
-    token = os.environ['CLOUDFLARE_API_TOKEN']
+    token = os.environ['CLOUDFLARE_API_TOKEN'].strip()
     zone = os.environ['CLOUDFLARE_ZONE_ID']
     ruleset = os.environ['CLOUDFLARE_FALLBACK_RULESET_ID']
     rule_id = os.environ['CLOUDFLARE_FALLBACK_RULE_ID']
