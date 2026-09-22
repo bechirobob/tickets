@@ -1,7 +1,7 @@
 name: Hosted capacity readiness
 on:
   push:
-    branches: [ops/hosted-capacity-readiness]
+    branches: [ops/hosted-capacity-readiness, ops/hosted-capacity-diagnostics]
     paths: ['scripts/capacity/**', '.github/workflows/hosted-capacity.yml']
   workflow_dispatch:
 permissions:

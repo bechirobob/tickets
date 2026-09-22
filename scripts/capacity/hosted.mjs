@@ -74,7 +74,7 @@ if (mode === 'setup') {
     version_metadata: { binding: 'CF_VERSION_METADATA' },
   };
   writeFileSync('dist/server/wrangler.hosted.json', JSON.stringify(config), { mode: 0o600 });
-  writeFileSync('dist/server/capacity-entry.mjs', `import worker from './index.js';\nexport { TheRoom } from './index.js';\nexport default { async fetch(request,env,ctx) {\n const path=new URL(request.url).pathname;\n if(Date.now()>Number(env.CAPACITY_EXPIRES) || request.headers.get('x-capacity-key')!==env.CAPACITY_KEY || request.method!=='GET' || !['/api/version','/api/customer/my-nights','/api/room/socket'].includes(path)) return new Response('Not found',{status:404});\n return worker.fetch(request,env,ctx);\n}};\n`);
+  writeFileSync('dist/server/capacity-entry.mjs', `import worker from './index.js';\nexport { TheRoom } from './index.js';\nexport default { async fetch(request,env,ctx) {\n const path=new URL(request.url).pathname;\n if(Date.now()>Number(env.CAPACITY_EXPIRES) || request.headers.get('x-capacity-key')!==env.CAPACITY_KEY || request.method!=='GET' || !['/api/version','/api/customer/my-nights','/api/room/socket'].includes(path)) return new Response('Not found',{status:404});\n const response=await worker.fetch(request,env,ctx); if(response.status===101) return response; const marked=new Response(response.body,response); marked.headers.set('x-capacity-revision',env.RELEASE_SHA); return marked;\n}};\n`);
   wrangler(['d1', 'migrations', 'apply', 'DB', '--remote']);
   const now = new Date().toISOString(), future = new Date(Date.now() + 86400000).toISOString();
   const q = sqlString, slug = state.slug;
@@ -165,8 +165,9 @@ if (mode === 'setup') {
       // The guarded fixture contains synthetic data only. Keep a bounded error
       // description and provider request ID, never cookies or request headers.
       const description = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0,220);
-      throw new Error(`My Nights HTTP ${response.status}; ray=${response.headers.get('cf-ray') ?? 'none'}; ${description}`);
+      throw new Error(`My Nights HTTP ${response.status}; ray=${response.headers.get('cf-ray') ?? 'none'}; worker=${response.headers.get('x-capacity-revision') ?? 'not-reached'}; ${description}`);
     }
+    if (response.headers.get('x-capacity-revision') !== state.revision) throw new Error('Hosted request did not reach the expected Worker.');
     const data = await response.json();
     if (data.attendee?.displayName !== `Guest ${i % 400}` || data.nights?.length !== 1 || data.nights[0].eventSlug !== state.slug || data.nights[0].ticketCount !== 1) throw new Error('Ownership or admission invariant failed.');
     return performance.now() - started;
@@ -181,17 +182,18 @@ if (mode === 'setup') {
   }
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   try {
-    // workers.dev DNS/route registration can take a few seconds.
+    // Establish a full minute of readiness on this newly created hostname.
+    // Startup errors stay visible and never count as successful load requests.
     let consecutive = 0;
     const startupErrors = [];
-    for (let i = 0; i < 30 && consecutive < 5; i++) {
+    for (let i = 0; i < 90 && consecutive < 30; i++) {
       try { await request(i); consecutive++; }
       catch (error) { consecutive = 0; startupErrors.push(String(error)); }
       await pause(2000);
     }
     report.startup = { consecutiveReady: consecutive, errors: startupErrors };
     console.log(JSON.stringify({ name: 'deployment-readiness', ...report.startup }));
-    if (consecutive < 5) throw new Error('Hosted fixture did not become consistently ready.');
+    if (consecutive < 30) throw new Error('Hosted fixture did not become consistently ready.');
     const denied = await fetch(`${base.origin}/api/customer/my-nights`, { redirect: 'error', signal: AbortSignal.timeout(15000) });
     if (denied.status !== 404) throw new Error('Staging access guard failed.');
     const version = await (await fetch(`${base.origin}/api/version`, { headers: requestHeaders(0), redirect: 'error', signal: AbortSignal.timeout(15000) })).json();
