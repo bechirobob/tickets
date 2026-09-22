@@ -57,7 +57,7 @@ export async function acceptTeamInvite(db:D1Database,token:string,payload:StaffP
       WHERE id=(SELECT account_id FROM organizer_team_invites WHERE claim_id=?) AND must_change_password=1`).bind(password.hash,password.salt,password.iterations,now,now,claim):db.prepare('SELECT 1'),
     db.prepare(`INSERT OR IGNORE INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) SELECT account_id,event_slug,invited_by,? FROM organizer_team_invites WHERE claim_id=?`).bind(now,claim),
     db.prepare(`UPDATE staff_sessions SET revoked_at=? WHERE account_id=(SELECT account_id FROM organizer_team_invites WHERE claim_id=?) AND ?=1`).bind(now,claim,invite.needsPassword),
-    db.prepare(`DELETE FROM staff_auth_challenges WHERE account_id=(SELECT account_id FROM organizer_team_invites WHERE claim_id=?) AND ?=1`).bind(claim,invite.needsPassword),
+    db.prepare(`UPDATE staff_auth_challenges SET used_at=? WHERE account_id=(SELECT account_id FROM organizer_team_invites WHERE claim_id=?) AND ?=1 AND used_at IS NULL`).bind(now,claim,invite.needsPassword),
     db.prepare(`INSERT INTO operational_audit_events(id,actor_account_id,actor_email,actor_role,action,target_type,target_id,outcome,detail,created_at)
       SELECT ?,account_id,account_email,role,'organizer.team_accepted','event',event_slug,'success','Invitation accepted.',? FROM organizer_team_invites WHERE claim_id=?`).bind(crypto.randomUUID(),now,claim),
     db.prepare(`UPDATE delivery_events SET payload_json=NULL,next_attempt_at=NULL WHERE id IN (SELECT 'team-invitation/'||id FROM organizer_team_invites WHERE claim_id=?)`).bind(claim),

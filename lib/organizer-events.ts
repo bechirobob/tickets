@@ -1,6 +1,7 @@
 import { hashToken, type AdminSession } from './admin-session';
 import { dateInput, emailInput, integerInput, OrganizerError, requireOrganizerEvent, textInput } from './organizer-access';
 import { rememberEventContact } from './event-audience';
+import { organizerPolicyKeys,recordPolicyConsents } from './policies';
 import { normalizeEventTagline, assertOriginalEventTagline } from './event-copy';
 
 async function previousMutation(db:D1Database, session:AdminSession, key:string, slug:string, kind:string, payloadHash:string) {
@@ -58,7 +59,7 @@ export async function duplicateEvent(db:D1Database,session:AdminSession,b:Record
     db.prepare(`INSERT INTO event_ticket_tiers(id,event_slug,code,name,description,price_minor,admissions_per_unit,capacity_admissions,max_units_per_order,status,sales_open_at,sales_close_at,sort_order,created_at,updated_at)
       SELECT ?||':'||code,?,code,name,description,price_minor,admissions_per_unit,capacity_admissions,max_units_per_order,CASE WHEN status='hidden' THEN 'hidden' ELSE 'available' END,?,?,sort_order,?,?
       FROM event_ticket_tiers WHERE event_slug=? AND EXISTS (SELECT 1 FROM party_submissions WHERE id=?)`).bind(id,slug,now,startsAt,now,now,e.slug,id),
-    db.prepare(`INSERT INTO event_questions(id,event_slug,prompt,kind,options_json,required,sort_order,status,created_at) SELECT ?||':'||id,?,prompt,kind,options_json,required,sort_order,status,? FROM event_questions WHERE event_slug=? AND EXISTS (SELECT 1 FROM party_submissions WHERE id=?)`).bind(id,slug,now,e.slug,id),
+    db.prepare(`INSERT INTO event_questions(id,event_slug,prompt,kind,options_json,required,sort_order,status,created_at) SELECT lower(hex(randomblob(16))),?,prompt,kind,options_json,required,sort_order,status,? FROM event_questions WHERE event_slug=? AND EXISTS (SELECT 1 FROM party_submissions WHERE id=?)`).bind(slug,now,e.slug,id),
     db.prepare(`INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM party_submissions WHERE id=?)`).bind(session.accountId,slug,session.accountId,now,id),
     db.prepare(`INSERT INTO event_registration_settings(event_slug,mode,accepting,capacity,approval_required,max_party_size,room_access,closes_at,updated_at)
       SELECT ?,mode,0,capacity,approval_required,max_party_size,room_access,?,? FROM event_registration_settings WHERE event_slug=? AND EXISTS (SELECT 1 FROM party_submissions WHERE id=?)`).bind(slug,startsAt,now,e.slug,id),
@@ -69,10 +70,12 @@ export async function duplicateEvent(db:D1Database,session:AdminSession,b:Record
 export async function saveDraft(db:D1Database,session:AdminSession,b:Record<string,unknown>){
   const e=await requireOrganizerEvent(db,session,b.eventSlug);
   if(e.status!=='draft')throw new OrganizerError('Only an unpublished draft can be edited here.',409);
-  const title=textInput(b.title,'title',120,3),startsAt=dateInput(b.startsAt,'start'),endsAt=dateInput(b.endsAt,'end'),venue=textInput(b.venue,'venue',160,2),lineup=textInput(b.lineup,'line-up',1000,2),tagline=normalizeEventTagline(b.tagline,b.action==='draft_submit'),now=new Date().toISOString();
+  const title=textInput(b.title,'title',120,3),startsAt=dateInput(b.startsAt,'start'),endsAt=dateInput(b.endsAt,'end'),venue=textInput(b.venue,'venue',160,2),lineup=textInput(b.lineup,'line-up',1000,2),now=new Date().toISOString();
+  let tagline:string|null;try{tagline=normalizeEventTagline(b.tagline,b.action==='draft_submit');await assertOriginalEventTagline(db,tagline,e.slug);}catch(error){if(error instanceof Error&&/^(Write an original|That line already)/u.test(error.message))throw new OrganizerError(error.message);throw error;}
   if(startsAt<=now||endsAt<=startsAt)throw new OrganizerError('Choose a future start and an end after it.');
-  await assertOriginalEventTagline(db,tagline,e.slug);
+
   if(b.action==='draft_submit'&&b.acceptedPolicies!==true)throw new OrganizerError('Confirm the event details and host terms before submitting.');
+  if(b.action==='draft_submit'){const submission=await db.prepare('SELECT submission_id AS id FROM curated_event_records WHERE slug=?').bind(e.slug).first<{id:string}>();await recordPolicyConsents({db,subjectType:'organizer_submission',subjectId:submission!.id,policyKeys:organizerPolicyKeys,actorEmail:session.email,acceptedAt:now});}
   const statuses=b.action==='draft_submit'?['unpublished','submitted']:['draft','draft'];
   await db.batch([
     db.prepare(`UPDATE curated_event_records SET title=?,starts_at=?,ends_at=?,sales_close_at=?,venue=?,lineup=?,tagline=?,status=?,updated_at=? WHERE slug=? AND status='draft'`).bind(title,startsAt,endsAt,startsAt,venue,lineup,tagline,statuses[0],now,e.slug),

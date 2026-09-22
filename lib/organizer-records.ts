@@ -43,8 +43,8 @@ const roster=`WITH roster AS (
 export async function readGuests(db:D1Database,session:AdminSession,slug:string,params:URLSearchParams){
   await requireOrganizerEvent(db,session,slug);
   const q=(params.get('q')??'').trim().slice(0,120),status=(params.get('status')??'').slice(0,32),offset=Math.min(50000,Math.max(0,Number.parseInt(params.get('offset')??'0')||0));
-  const filter=`WHERE (?='' OR instr(lower(name),lower(?))>0 OR instr(lower(email),lower(?))>0 OR instr(lower(reference),lower(?))>0) AND (?='' OR status=?)`;
-  const binds=[slug,slug,slug,q,q,q,q,status,status];
+  const filter=`WHERE (?='' OR instr(lower(name),lower(?))>0 OR instr(lower(email),lower(?))>0 OR instr(lower(reference),lower(?))>0 OR EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id AND a.status='active' JOIN attendee_profiles h ON h.id=a.attendee_id AND h.status='active' WHERE t.order_id=roster.id AND roster.kind='order' AND (instr(lower(h.display_name),lower(?))>0 OR instr(lower(h.normalized_email),lower(?))>0))) AND (?='' OR status=?)`;
+  const binds=[slug,slug,slug,q,q,q,q,q,q,status,status];
   const counts=await db.prepare(`${roster} SELECT COUNT(*) AS records,COALESCE(SUM(admissions),0) AS admissions,COALESCE(SUM(arrivals),0) AS arrivals FROM roster ${filter}`).bind(...binds).first();
   const show=params.get('show')==='1'||Boolean(q)||params.get('format')==='csv';
   const rows=show?(await db.prepare(`${roster} SELECT * FROM roster ${filter} ORDER BY createdAt DESC,id LIMIT ? OFFSET ?`).bind(...binds,params.get('format')==='csv'?10001:25,params.get('format')==='csv'?0:offset).all()).results:[];
