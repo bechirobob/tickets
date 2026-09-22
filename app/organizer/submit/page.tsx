@@ -1,10 +1,17 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { readAdminSession } from "../../../lib/admin-session";
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import PublicNavigation from "../../mobile-navigation";
 import { LogIn, Ticket, UsersRound, BarChart3, ArrowUpRight } from "lucide-react";
 import PartySubmissionForm from "./submission-form";
 
-export default function SubmitPartyPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SubmitPartyPage() {
+  const session = await readAdminSession((await headers()).get("cookie"));
+  if (session && ["owner", "organizer"].includes(session.role)) redirect("/organizer/workspace?area=submit");
   return (
     <main className="submission-page">
       <header className="submission-header">

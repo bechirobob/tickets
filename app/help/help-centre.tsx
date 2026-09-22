@@ -21,6 +21,12 @@ const audiences: Audience[] = ["Everyone", "Going out", "Organising", "At the do
 
 const guides: Guide[] = [
   {
+    id: "host-ticket-grades", audience: "Organising", category: "Tickets", title: "Change ticket allocations and grades",
+    summary: "Adjust your admission limits, ticket names, prices and availability from the event.",
+    steps: ["Open Events → Tickets and choose Edit beside a grade.", "Set the total admission allocation, including passes already issued and places held at checkout. The limit cannot fall below those admissions.", "Update the name, description, price or availability, then Save ticket grade. New prices apply to new bookings; current checkouts keep their totals.", "Add ticket grade for a new package or VIP entitlement. Once a grade has booking history, its package size and Room access stay fixed to protect existing passes.", "If someone else changes the grade, refresh the saved values before retrying. Pause sales to stop new purchases without removing existing passes."],
+    action: { href: "/organizer/workspace?area=events&view=tickets", label: "Edit tickets" },
+  },
+  {
     id: "rsvp-guest", audience: "Going out", category: "RSVP", title: "RSVP for a Night",
     summary: "Found your plans? Put your name down.",
     steps: ["Open the RSVP link or choose RSVP on the event page.", "Add your details and send your request. You’ll see a message when it lands.", "If the host is reviewing requests, your spot still needs their nod. Paid registration takes you to checkout."],
@@ -106,7 +112,7 @@ const guides: Guide[] = [
     category: "Event operations",
     title: "Read your organiser dashboard",
     summary: "All your nights in one place. Open an event to see sales, guests and what needs doing.",
-    steps: ["Overview shows your events, admissions and RSVPs waiting for review.", "Open Events and choose a Night. Its tabs cover Overview, Tickets, Guests, Room & VIP, Door, Insights and Help.", "Use Audience for guest history, Promote for links and coupons, Money for statements, and Team for invitations.", "Your selected event stays with you as you move between tasks. Save your changes before leaving the workspace or refreshing the page."],
+    steps: ["Overview shows your events, admissions and RSVPs waiting for review.", "Open Events and choose a Night. Its tabs cover Overview, Tickets, Guests, Room & VIP, Insights and Requests.", "Use Audience for guest history, Promote for links and coupons, Money for statements, and Team for invitations.", "Your selected event stays with you as you move between tasks. Save your changes before leaving the workspace or refreshing the page."],
     action: { href: "/organizer/workspace", label: "View the dashboard" },
   },
   {
@@ -133,13 +139,13 @@ const guides: Guide[] = [
     category: "At the door",
     title: "Give the entry team the right access",
     summary: "Give each person on the door their own access for your event.",
-    steps: ["As the lead host, open Team or your event’s Door tab and choose Invite a team member.", "Enter their name and email. Choose Door staff for scanning, or Co-host for event, guest and report access.", "They accept their private invitation within 48 hours and sign in with their own account. Existing staff keep their password.", "Withdraw an unused invitation or remove event access when someone leaves the team. This does not remove their access to other events."],
+    steps: ["As the lead host, open Team and choose Invite a team member.", "Enter their name and email. Choose Door staff for scanning, or Co-host for event, guest and report access.", "They accept their private invitation within 48 hours and sign in with their own account. Existing staff keep their password.", "Withdraw an unused invitation or remove event access when someone leaves the team. This does not remove their access to other events."],
     action: { href: "/organizer/workspace?area=team", label: "Manage the event team" },
   },
   {
     id: "host-money", audience: "Organising", category: "Payments", title: "Check statements and payouts",
     summary: "See collected payments, refunds and what has been paid out.",
-    steps: ["Open Money and choose one event or All my events.", "Check collected payments, booking fees, refunds and ticket value after refunds.", "Use Settlement statements and Payout history to see approval and transfer status. Ticket value is an accounting total, not a promise of an immediate payout.", "Choose Export statements for a CSV. For a query, open the event’s Help tab and include the statement or transfer reference."],
+    steps: ["Open Money and choose one event or All my events.", "Check collected payments, booking fees, refunds and ticket value after refunds.", "Use Settlement statements and Payout history to see approval and transfer status. Ticket value is an accounting total, not a promise of an immediate payout.", "Choose Export statements for a CSV. For a query, open the event’s Requests tab and include the statement or transfer reference."],
     action: { href: "/organizer/workspace?area=money&event=all", label: "Check Money" },
   },
   {
@@ -238,9 +244,9 @@ function normalise(value: string) {
   return value.toLocaleLowerCase("en-GB").normalize("NFKD").replace(/[\u0300-\u036f]/gu, "");
 }
 
-export default function HelpCentre() {
+export default function HelpCentre({ workspace = false, onNavigate, event = "" }: { workspace?: boolean; onNavigate?: (href: string) => void; event?: string } = {}) {
   const [query, setQuery] = useState("");
-  const [audience, setAudience] = useState<Audience>("Everyone");
+  const [audience, setAudience] = useState<Audience>(workspace ? "Organising" : "Everyone");
   const filtered = useMemo(() => {
     const search = normalise(query.trim());
     return guides.filter((guide) => {
@@ -250,11 +256,26 @@ export default function HelpCentre() {
     });
   }, [audience, query]);
 
+  function actionHref(href: string) {
+    if (!workspace) return href;
+    if (href === "/organizer/submit") return `/organizer/workspace?area=submit${event ? `&event=${event}` : ""}`;
+    if (href.startsWith("/organizer/workspace")) {
+      const [path, query = ""] = href.split("?"); const params = new URLSearchParams(query);
+      if (event && !params.has("event")) params.set("event", event);
+      return `${path}?${params}`;
+    }
+    return href;
+  }
   return (
-    <section className="help-centre">
+    <section className={`help-centre${workspace ? " help-centre--workspace" : ""}`} onClick={e=>{
+      if(!onNavigate || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)return;
+      const anchor=(e.target as Element).closest('a');if(!anchor)return;
+      const href=actionHref(anchor.getAttribute('href')??'');
+      if(href.startsWith('/organizer/workspace')){e.preventDefault();onNavigate(href);}
+    }}>
       <div className="help-centre__intro">
         <p className="eyebrow">Useful before panic</p>
-        <h1>What went sideways?</h1>
+        <h1>{workspace ? "Help centre" : "What went sideways?"}</h1>
         <p>Lost a ticket? Payment taking its time? Find the next step here. If you’re still stuck, there’s a human at the end of this.</p>
         <label className="help-search">
           <Search aria-hidden="true" size={21} />
@@ -283,7 +304,7 @@ export default function HelpCentre() {
           </summary>
           <div>
             <ol>{guide.steps.map((step) => <li key={step}><Check aria-hidden="true" size={15} /><span>{step}</span></li>)}</ol>
-            {guide.action ? <Link href={guide.action.href}>{guide.action.label}<ArrowUpRight size={15} /></Link> : null}
+            {guide.action ? <Link href={actionHref(guide.action.href)} onClick={e=>{const href=actionHref(guide.action!.href);if(onNavigate&&href.startsWith("/organizer/workspace")&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey){e.preventDefault();onNavigate(href);}}}>{guide.action.label}<ArrowUpRight size={15} /></Link> : null}
           </div>
         </details>)}
       </div> : <div className="help-no-results"><CircleHelp size={24} /><h2>No exact match.</h2><p>Try fewer words or choose a role above. If this is about a purchase, include the order reference when you contact support.</p><button type="button" onClick={() => { setQuery(""); setAudience("Everyone"); }}>Show every guide</button></div>}
@@ -292,7 +313,7 @@ export default function HelpCentre() {
         <div><Headphones size={21} /><p>Still properly stuck?</p><h2>Bring the reference.<br />We’ll bring a human.</h2></div>
         <div>
           <article><TicketCheck size={19} /><h3>Ticket holders</h3><p>Open your night, then Purchase. We’ll have your booking ready when you ask for help.</p><Link href="/my-nights">Open My Nights <ArrowUpRight size={15} /></Link></article>
-          <article><UsersRound size={19} /><h3>Organisers</h3><p>Open your event’s Help tab and choose Make a request. We’ll have the event details handy, so you can skip the long introduction.</p><Link href="/organizer/workspace">Open workspace <ArrowUpRight size={15} /></Link></article>
+          <article><UsersRound size={19} /><h3>Organisers</h3><p>Open your event’s Requests tab and choose Make a request. We’ll have the event details handy, so you can skip the long introduction.</p><Link href="/organizer/workspace">Open workspace <ArrowUpRight size={15} /></Link></article>
           <article><ShieldCheck size={19} /><h3>Everything else</h3><p>Email <a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a>. Include the account email and reference. Never send passwords or QR screenshots.</p></article>
         </div>
       </section>

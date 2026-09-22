@@ -1,7 +1,15 @@
 import { readFileSync, existsSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { expectVisibleLettering } from './text-visibility';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+async function openWorkspaceMenu(page: Page) {
+ const toggle=page.getByRole('button',{name:'Toggle workspace navigation',exact:true});
+ if(await toggle.isVisible() && await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
+}
+async function hostArea(page: Page,name: string) {
+ await openWorkspaceMenu(page);
+ await page.getByRole('navigation',{name:'Organiser workspace'}).getByRole('link',{name,exact:true}).click();
+}
 const isolated = existsSync('.wrangler/operations-fixture.json');
 const fixture = isolated ? JSON.parse(readFileSync('.wrangler/operations-fixture.json', 'utf8')) : null;
 test.skip(!isolated, 'Run the isolated Operations fixture and config.');
@@ -12,7 +20,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 for (const [path, heading] of [
   ['/admin','Submission queue'], ['/admin/operations','Event operations'], ['/admin/events','Events & inventory'],
   ['/admin/registrations','RSVP & guests'], ['/admin/orders','Orders & payments'], ['/admin/support','Ticket support'], ['/admin/promoters','Promoter links'],
-  ['/admin/rooms','The Room'], ['/admin/fees','Fees & charges'], ['/admin/accounts','People & permissions'], ['/admin/account','My account'],
+  ['/admin/rooms','The Room'], ['/admin/fees','Fees & charges'], ['/admin/accounts','People & permissions'], ['/admin/account','My account'], ['/admin/help','Help centre'],
 ]) {
   test(`owner can open ${path} with readable controls`, async ({ page }, info) => {
     const errors: string[] = [];
@@ -31,12 +39,13 @@ for (const [path, heading] of [
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     expect(overflow, `${path} document overflow`).toBe(false);
     expect(errors).toEqual([]); expect(apiErrors).toEqual([]);
-    if(path!=='/admin/account' && (page.viewportSize()?.width??1280)<=900){const gap=await page.evaluate(()=>{const nav=document.querySelector('.curation-nav')!.getBoundingClientRect();const content=document.querySelector('.ops-main,.curation-main,.room-ops > section')!.getBoundingClientRect();return content.top-nav.bottom;});expect(gap,`${path} space below mobile navigation`).toBeLessThan(40);}
+    if((page.viewportSize()?.width??1280)<=760){const gap=await page.evaluate(()=>{const nav=document.querySelector('.workspace-topbar')!.getBoundingClientRect();const content=document.querySelector('.ops-main,.curation-main,.room-ops > section')!.getBoundingClientRect();return content.top-nav.bottom;});expect(gap,`${path} space below mobile navigation`).toBeLessThan(40);}
 
+    await openWorkspaceMenu(page);
     for(const summary of await page.locator('details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
-    await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true });
+    await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true, scale: 'css' });
   });
 }
 test('event save survives a dropped connection and retains the draft', async ({ page }) => {
@@ -82,7 +91,7 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
   try {
     await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();
     const manager = page.locator('.registration-manager');
-    const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
+    const announcements = manager.getByRole('button', { name: 'Guest emails', exact: true });
     await expect(announcements).toBeEnabled();
     await announcements.scrollIntoViewIfNeeded();
     const before = (await announcements.boundingBox())!;
@@ -94,7 +103,7 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
     await page.mouse.up();
     await expect(announcements).toHaveAttribute('aria-pressed', 'true');
-    await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
+    await expect(manager.getByLabel('Search guest emails', { exact: true })).toBeVisible();
   } finally {
     releaseActivity();
     await page.mouse.up();
@@ -113,10 +122,10 @@ test('registration tabs accept the first click after scrolling to them', async (
       await expect(manager.getByLabel('Search guest emails', { exact: true })).toBeVisible();
       await manager.getByRole('button', { name: 'Setup', exact: true }).click();
       await manager.getByRole('button', { name: 'Save registration settings', exact: true }).scrollIntoViewIfNeeded();
-      const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
+      const announcements = manager.getByRole('button', { name: path.startsWith('/organizer/')?'Guest emails':'Announcements', exact: true });
       await announcements.click();
       await expect(announcements).toHaveAttribute('aria-pressed', 'true');
-      await expect(manager.getByLabel('Subject', { exact: true })).toBeVisible();
+      await expect(manager.getByLabel(path.startsWith('/organizer/')?'Search guest emails':'Subject', { exact: true })).toBeVisible();
     }
   }
 });
@@ -314,13 +323,13 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  });
  test('announcement preview preserves a failed send and owner sees organiser actions',async({page,context,baseURL},info)=>{
   await page.route('**/api/admin/campaigns?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,configured:true,state:{...data.state,status:'ready'}}});});
-  await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();const manager=page.locator('.registration-manager');
+  await page.goto('/organizer/workspace?area=promote&event=rsvp-browser');const manager=page.locator('.suite-content');
   const announcements=manager.getByRole('button',{name:'Announcements',exact:true});await announcements.click();await expect(announcements).toHaveAttribute('aria-pressed','true');
   await manager.getByLabel('Subject',{exact:true}).fill('Doors open at eight');await manager.getByLabel('Announcement',{exact:true}).fill('Please bring your QR pass. See you at the event.');
   await manager.getByRole('button',{name:'Preview announcement'}).click();await expect(manager.locator('.announcement-preview')).toContainText('1 subscribed guest emails');
   await page.route('**/api/admin/campaigns',route=>route.abort('failed'));await manager.getByRole('button',{name:'Send announcement'}).click();
   await expect(manager.getByRole('button',{name:'Send announcement'})).toBeEnabled();await expect(manager.getByLabel('Subject',{exact:true})).toHaveValue('Doors open at eight');
-  const axe=await new AxeBuilder({page}).include('.registration-manager').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+  const axe=await new AxeBuilder({page}).include('.suite-content').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('announcement-preview.png'),fullPage:true});
   await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.token,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);await page.goto('/admin/operations');
   await page.locator('.organizer-activity summary').click();await expect(page.locator('.organizer-activity')).toContainText('rsvp-host@example.com');await expect(page.locator('.organizer-activity')).toContainText('GHS 75.00');
@@ -340,9 +349,9 @@ test('master account can remove staff and keeps its own account',async({page},in
 test('every organizer task and expanded panel remains compact and readable',async({page},info)=>{
  const apiErrors:string[]=[];page.on('response',r=>{if(r.url().includes('/api/organizer/business')&&r.status()>=500)apiErrors.push(r.url());});
  await page.goto('/organizer/workspace?area=events&event=rsvp-browser');await expect(page.locator('#suite-event')).toHaveValue('rsvp-browser');
- const headerFits=await page.locator('.suite-topbar').evaluate(header=>{const box=header.getBoundingClientRect();return [...header.children].every(child=>{const rect=child.getBoundingClientRect();return rect.top>=box.top&&rect.bottom<=box.bottom;});});expect(headerFits,'workspace switcher stays within the header').toBe(true);
+ const headerFits=await page.locator('.workspace-topbar').evaluate(header=>{const box=header.getBoundingClientRect();return [...header.children].every(child=>{const rect=child.getBoundingClientRect();return rect.top>=box.top&&rect.bottom<=box.bottom;});});expect(headerFits,'workspace switcher stays within the header').toBe(true);
  const tabs=page.getByRole('navigation',{name:'Event tools'});
- for(const name of ['Overview','Tickets','Room & VIP','Door','Help','Guests','Insights']){
+ for(const name of ['Overview','Tickets','Room & VIP','Requests','Guests','Insights']){
   await tabs.getByRole('button',{name,exact:true}).click();
   for(const summary of await page.locator('.suite-content details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
   await expectVisibleLettering(page,'.suite-content');
@@ -351,15 +360,14 @@ test('every organizer task and expanded panel remains compact and readable',asyn
   await page.screenshot({path:info.outputPath(`organizer-${name.replaceAll(/[^a-z]/gi,'-')}.png`),fullPage:true});
  }
  await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await page.getByLabel('Venue',{exact:true}).fill('Keep my venue draft');await tabs.getByRole('button',{name:'Room & VIP',exact:true}).click();await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
- const nav=page.getByRole('navigation',{name:'Organiser workspace'});
  for(const name of ['Audience','Promote','Money','Team','Overview']){
-  await nav.getByRole('link',{name,exact:true}).click();
+  await hostArea(page,name);
   await expect(page.locator('.suite-content h1:visible,.suite-content h2:visible').first()).toBeVisible();
   const axe=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),name).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
   await page.screenshot({path:info.outputPath(`organizer-area-${name.toLowerCase()}.png`),fullPage:true});
  }
- await nav.getByRole('link',{name:'Events',exact:true}).click();await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
+ await hostArea(page,'Events');await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
  await page.goBack();await expect(tabs.getByRole('button',{name:'Overview',exact:true})).toHaveAttribute('aria-current','page');await page.goForward();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
  expect(apiErrors).toEqual([]);
  await page.goto('/organizer/analytics');await expect(page.locator('.analytics-overview')).toBeVisible();await expectVisibleLettering(page,'.organizer-analytics');const analyticsAxe=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(analyticsAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),'Analytics').toEqual([]);
@@ -491,8 +499,9 @@ test('host lands on their event with a useful overview and recoverable report pr
  reportView={...reportData,summary:{...reportData.summary,event:{...reportData.summary.event,status:'unpublished'}}};
  await overview.getByRole('button',{name:'Refresh event summary'}).click();await expect(overview.getByText('Your public link is waiting',{exact:true})).toBeVisible();await expect(overview.getByLabel('Guest link')).toHaveCount(0);
  await page.screenshot({path:info.outputPath('host-private-preparation.png'),fullPage:true});
- await overview.getByRole('link',{name:'View analytics & tracked links'}).click();
- await expect(page.getByRole('combobox',{name:'Night',exact:true})).toHaveValue('rsvp-browser');
+ await overview.getByRole('button',{name:'View analytics & tracked links'}).click();
+ await expect(page.locator('#suite-event')).toHaveValue('rsvp-browser');
+ await expect(page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Insights',exact:true})).toHaveAttribute('aria-current','page');
  await expect(page.getByRole('combobox',{name:'Period',exact:true})).toHaveValue('all');
 });
 
@@ -512,7 +521,7 @@ test('organizer can manage coupons, questions, guests and promoter records in is
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Tickets',exact:true}).click();await page.getByText('Issue complimentary passes',{exact:true}).click();
  await page.getByRole('combobox',{name:'Ticket type',exact:true}).selectOption({index:1});await page.getByLabel('Guest CSV',{exact:true}).fill(`name,email,quantity\nGuest ${code},${code.toLowerCase()}@example.com,1`);await page.getByRole('button',{name:'Review guest list',exact:true}).click();await page.getByRole('button',{name:'Issue reviewed passes',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'All complimentary passes are issued'})).toBeVisible();
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Guests',exact:true}).click();await page.getByLabel('Find a guest',{exact:true}).fill(code.toLowerCase());await expect(page.locator('.suite-section:visible').getByText(`Guest ${code}`,{exact:true})).toBeVisible();
- await page.getByRole('navigation',{name:'Organiser workspace'}).getByRole('link',{name:'Money',exact:true}).click();await expect(page.getByRole('heading',{name:'Know where you stand.'})).toBeVisible();await expect(page.getByRole('heading',{name:'Payout history'})).toBeVisible();
+ await hostArea(page,'Money');await expect(page.getByRole('heading',{name:'Know where you stand.'})).toBeVisible();await expect(page.getByRole('heading',{name:'Payout history'})).toBeVisible();
 });
 
 for(const fails of [false,true])test(`organizer overview keeps task controls stable while its summary ${fails?'fails':'loads'}`,async({page})=>{
@@ -526,4 +535,78 @@ for(const fails of [false,true])test(`organizer overview keeps task controls sta
  if(fails)await expect(page.getByRole('alert')).toContainText('Summary temporarily unavailable');
  await questions.click();
  await expect(page.getByRole('button',{name:'Add question',exact:true})).toBeVisible();
+});
+
+test('workspace submission, help, public previews and return retain the organizer session',async({page,context,baseURL},info)=>{
+ await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
+ const signouts:string[]=[];page.on('request',r=>{if(r.url().includes('/api/admin/session')&&r.method()==='DELETE')signouts.push(r.url());});
+ await page.goto('/admin/events');await expect(page).toHaveURL(/\/organizer\/workspace/);await expect(page).not.toHaveURL(/\/admin\/login/);
+ await expect(page.getByRole('combobox',{name:'Workspace',exact:true})).toHaveCount(0);
+ for(const path of ['/api/admin/events','/api/admin/accounts','/api/admin/orders','/api/admin/operations'])expect((await page.request.get(path)).status()).toBe(403);
+ await page.goto('/organizer/workspace?area=overview&event=rsvp-browser');
+ await page.getByRole('button',{name:'Submit a Night',exact:true}).click();
+ await expect(page).toHaveURL(/area=submit/);await expect(page.locator('.workspace-topbar')).toBeVisible();
+ await expect(page.getByLabel('Email',{exact:true})).toHaveValue('rsvp-host@example.com');
+ await page.getByLabel('Organiser or collective').fill('My unsent plan');
+ await openWorkspaceMenu(page);await page.locator('.workspace-tools>summary').click();
+ await page.getByRole('link',{name:'Help centre',exact:true}).click();await expect(page.getByRole('heading',{name:'Help centre',exact:true})).toBeVisible();
+ await page.getByRole('searchbox',{name:'Search BeCore Help'}).fill('Submit a Night for review');
+ await page.getByRole('link',{name:'Submit a Night',exact:true}).click();
+ await expect(page.getByLabel('Organiser or collective')).toHaveValue('My unsent plan');
+ await page.getByRole('button',{name:'Back to workspace'}).click();await expect(page).toHaveURL(/area=overview/);
+ await hostArea(page,'Events');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Tickets',exact:true}).click();
+ const before=page.url();await openWorkspaceMenu(page);await page.getByRole('link',{name:'View public site'}).click();
+ await expect(page.getByRole('link',{name:'Back to workspace'})).toBeVisible();await page.getByRole('link',{name:'Back to workspace'}).click();await expect(page).toHaveURL(before);
+ await expect(page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Tickets',exact:true})).toHaveAttribute('aria-current','page');
+ await page.goto('/organizer/submit');await expect(page).toHaveURL(/organizer\/workspace\?area=submit/);
+ await page.goto('/help');await expect(page).toHaveURL(/organizer\/workspace\?area=help/);
+ await expect(page.getByRole('heading',{name:'Help centre',exact:true})).toBeVisible();
+ await openWorkspaceMenu(page);
+ const links=await page.locator('#workspace-navigation a').evaluateAll(items=>items.map(x=>(x as HTMLAnchorElement).href));expect(new Set(links).size).toBe(links.length);
+ expect(signouts).toEqual([]);expect((await context.cookies()).find(c=>c.name==='bct_staff')?.value).toBe(fixture.organizerToken);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ const axe=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ await page.screenshot({path:info.outputPath('workspace-help-navigation.png'),fullPage:true});
+});
+
+test('host edits ticket allocation and grade, keeps a failed draft, and sees persisted stock',async({page,context,baseURL},info)=>{
+ await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
+ await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=tickets');
+ await expect(page.locator('#suite-event')).toHaveValue('rsvp-browser');
+ const form=page.getByRole('form',{name:'Edit ticket grade'}),base=`Host grade ${Date.now()}`,name=`${base} edited`;
+ await page.getByRole('button',{name:'Add ticket grade',exact:true}).click();
+ await form.getByLabel('Ticket grade / name').fill(base);await form.getByLabel(/^Code/).fill(`browser-${Date.now()}`);
+ await form.getByLabel('Price per package (GH₵)',{exact:true}).fill('75');await form.getByLabel('Total admission allocation').fill('25');await form.getByLabel('Description',{exact:true}).fill('Isolated host ticket grade');
+ await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form).not.toBeVisible();
+ await page.getByRole('button',{name:`Edit ${base}`,exact:true}).click();
+ const capacity=form.getByLabel('Total admission allocation');
+ const current=Number(await capacity.inputValue());await capacity.fill(String(current+5));await form.getByLabel('Ticket grade / name').fill(name);
+ await page.route('**/api/organizer/business',route=>route.request().method()==='POST'?route.abort('failed'):route.continue());
+ await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form.getByRole('button',{name:'Save ticket grade',exact:true})).toBeEnabled();await expect(form.getByLabel('Ticket grade / name')).toHaveValue(name);
+ await page.unroute('**/api/organizer/business');await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form).not.toBeVisible();await expect(page.getByRole('button',{name:`Edit ${name}`,exact:true})).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:`Edit ${name}`,exact:true}).click();await expect(form.getByLabel('Total admission allocation')).toHaveValue(String(current+5));
+ await expect(form.getByLabel('Ticket grade / name')).toHaveValue(name);expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ const axe=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ await page.screenshot({path:info.outputPath('host-ticket-edit-expanded.png'),fullPage:true});
+});
+
+
+test('workspace settings and Event desk retain their frame and unfinished question',async({page,context,baseURL},info)=>{
+ await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
+ await page.goto('/organizer/assistant?event=rsvp-browser');
+ await expect(page).toHaveURL(/area=desk&event=rsvp-browser/);
+ await expect(page.locator('#assistant-event')).toHaveValue('rsvp-browser');
+ await expect(page.getByRole('heading',{name:'Event desk',exact:true})).toBeVisible();
+ const question=page.locator('#event-desk-question');await question.fill('Keep my unfinished event question');
+ const visit=async(name:string)=>{await openWorkspaceMenu(page);const tools=page.locator('.workspace-tools');if(!await tools.evaluate(e=>(e as HTMLDetailsElement).open))await tools.locator('summary').click();await tools.getByRole('link',{name,exact:true}).click();};
+ await visit('Account settings');await expect(page.locator('.account-security-stack')).toBeVisible();
+ for(const summary of await page.locator('.account-security-stack details:not([open])>summary').all())if(await summary.isVisible())await summary.click();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ const account=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(account.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ await page.screenshot({path:info.outputPath('workspace-account.png'),fullPage:true,scale:'css'});
+ await visit('Event desk');await expect(question).toHaveValue('Keep my unfinished event question');
+ await expect(page.locator('main')).toHaveCount(1);await expect(page.locator('.workspace-topbar')).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ const desk=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(desk.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ await page.screenshot({path:info.outputPath('workspace-event-desk.png'),fullPage:true,scale:'css'});
 });

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "../styles/customer.css";
 import CustomerDock from "./customer-dock";
 import PwaRegistration from "./pwa-registration";
+import WorkspaceReturn from "./workspace-return";
 import AnalyticsBeacon from "./analytics-beacon";
 
 export const metadata: Metadata = {
@@ -49,7 +50,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
-      <body>{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
+      <body><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
     </html>
   );
 }

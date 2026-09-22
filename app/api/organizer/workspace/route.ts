@@ -1,4 +1,4 @@
-import { requireOrganizerEvent } from '../../../../lib/organizer-access';
+import { requireOrganizerEvent, organizerScope } from '../../../../lib/organizer-access';
 import {
   hasPermission,
   mutationHasValidOrigin,
@@ -23,13 +23,7 @@ async function assigned(db: D1Database, session: NonNullable<Awaited<ReturnType<
 export async function GET(request: Request) {
   const { env, session } = await organizer(request);
   if (!session) return Response.json({ error: "Organiser access is required." }, { status: 403 });
-  const scope = session.role === "owner" ? "" : `WHERE (
-    EXISTS (
-      SELECT 1 FROM staff_event_assignments assignment
-      WHERE assignment.account_id = ? AND assignment.event_slug = event.slug
-    )
-    OR submission.contact_email = ?
-  )`;
+  const scope = organizerScope(session,'event');
   const statement = env.DB.prepare(`
     SELECT event.slug, event.title, event.venue, event.venue_map_url AS venueMapUrl, event.area,
            event.starts_at AS startsAt, event.ends_at AS endsAt, event.lineup, event.event_state AS eventState,
@@ -41,22 +35,25 @@ export async function GET(request: Request) {
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status = 'checked_in'), 0) AS checkedInAdmissions
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    ${scope || "WHERE 1 = 1"} AND event.removed_at IS NULL
+    WHERE ${scope.sql} AND event.removed_at IS NULL
     ORDER BY event.starts_at DESC
   `);
+  const submissionScope=organizerScope(session,'linked');
   const submissionStatement = env.DB.prepare(`
     SELECT id, organizer_name AS organizerName, title, status, review_note AS reviewNote,
            event_slug AS eventSlug, starts_at AS startsAt, created_at AS createdAt, updated_at AS updatedAt
     FROM party_submissions
     ${session.role === "owner" ? "WHERE 1 = 1" : "WHERE contact_email = ?"} AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = party_submissions.event_slug AND e.removed_at IS NOT NULL)
+    AND (event_slug IS NULL OR EXISTS(SELECT 1 FROM curated_event_records linked WHERE linked.slug=party_submissions.event_slug AND ${submissionScope.sql}))
     ORDER BY created_at DESC
     LIMIT 250
   `);
   const [events, submissions] = await Promise.all([
-    session.role === "owner" ? statement.all<Record<string, unknown>>() : statement.bind(session.accountId, session.email).all<Record<string, unknown>>(),
-    session.role === "owner" ? submissionStatement.all<Record<string, unknown>>() : submissionStatement.bind(session.email).all<Record<string, unknown>>(),
+    statement.bind(...scope.bindings).all<Record<string, unknown>>(),
+    session.role === "owner" ? submissionStatement.all<Record<string, unknown>>() : submissionStatement.bind(session.email,...submissionScope.bindings).all<Record<string, unknown>>(),
   ]);
   const requestedSlug=new URL(request.url).searchParams.get('event');
+  if(requestedSlug && !events.results.some(event=>event.slug===requestedSlug))return Response.json({error:'This event is not assigned to your account.'},{status:403,headers:{'cache-control':'no-store'}});
   const slugs = events.results.map((event) => String(event.slug)).filter(slug=>!requestedSlug||slug===requestedSlug);
   if (!slugs.length) return Response.json({ events: [], submissions: submissions.results, tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [], vipSettings: [], vipRequests: [] }, { headers: { "cache-control": "no-store" } });
   const placeholders = slugs.map(() => "?").join(",");

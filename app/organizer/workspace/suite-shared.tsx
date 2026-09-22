@@ -5,7 +5,7 @@ export const date=(v:string)=>v?new Date(v).toLocaleString('en-GH',{dateStyle:'m
 export const readable=(v:string)=>v?.replaceAll('_',' ')??'—';
 export const apiUrl=(section:string,event:string,extra='')=>`/api/organizer/business?section=${section}&event=${encodeURIComponent(event)}${extra?'&'+extra:''}`;
 export type EventItem={slug:string;title:string;startsAt:string;endsAt:string;status:string;eventState:string;venue:string;area:string;capacity:number;isLead:number;pendingRequests:number;admissions:number;arrivals:number;salesMinor:number};
-export type Tier={id:string;code:string;name:string;priceMinor:number;capacity:number;allocated:number;admissionsPerUnit:number;status:string};
+export type Tier={description:string;maxUnitsPerOrder:number;roomBadge:"VIP"|null;updatedAt:string;hasHistory:number;id:string;code:string;name:string;priceMinor:number;capacity:number;allocated:number;admissionsPerUnit:number;status:string};
 export function useRemote<T>(section:string,event:string,extra='',enabled=true){
  const url=apiUrl(section,event,extra),[version,setVersion]=useState(0),[state,setState]=useState<{url:string;data?:T;error?:string}>({url:''});
  const refresh=useCallback(()=>setVersion(v=>v+1),[]);

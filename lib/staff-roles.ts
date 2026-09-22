@@ -46,8 +46,8 @@ export const STAFF_ROLE_DEFINITIONS: Record<StaffRole, StaffRoleDefinition> = {
   },
   organizer: {
     label: "Organiser",
-    workspace: "Verified organiser record",
-    summary: "Keeps the organiser's submission history and approved Nights together under their verified account email.",
+    workspace: "Assigned events",
+    summary: "Works only on explicitly assigned Nights and their own event drafts.",
     can: ["See their complete submission trail and all-time event record", "See aggregate sales, attendance, inventory and settlement statements", "Update venue and line-up, post announcements, assign gate staff and send operational requests"],
     cannot: ["See unassigned Nights or customer payment details", "Directly issue refunds, payouts or fee changes", "Enter BeCore curation, finance or staff workspaces"],
     eventScoped: true,
@@ -89,7 +89,7 @@ export function isEventScopedRole(role: StaffRole): boolean {
 }
 
 export function isWorkspacePathAllowed(role: StaffRole, path: string): boolean {
-  if (path === "/admin/account") return true;
+  if (path === "/admin/account" || path === "/admin/help") return true;
   if (role === "owner" && (path === "/organizer/workspace" || path === "/organizer/analytics" || path === "/organizer/assistant")) return true;
   if (role === "organizer") return path === "/organizer/workspace" || path === "/organizer/analytics" || path === "/organizer/assistant";
   return STAFF_WORKSPACE_LINKS.some((item) => item.href === path && (item.roles as readonly StaffRole[]).includes(role));

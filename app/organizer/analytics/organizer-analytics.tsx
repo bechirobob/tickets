@@ -75,7 +75,7 @@ function BarList({ rows, value, label, detail }: { rows: Array<Record<string, un
   </div>)}</div>;
 }
 
-export default function OrganizerAnalytics({ actor, role, initialEvent = "all", initialRange = "30", initialView = "guests", embedded=false, active=true }: { embedded?:boolean; active?:boolean; actor: string; role: StaffRole; initialEvent?: string; initialRange?: string; initialView?: string }) {
+export default function OrganizerAnalytics({ actor, role, initialEvent = "all", initialRange = "30", initialView = "guests", embedded=false, workspaceFrame=false, active=true }: { embedded?:boolean; workspaceFrame?:boolean; active?:boolean; actor: string; role: StaffRole; initialEvent?: string; initialRange?: string; initialView?: string }) {
   const router = useRouter();
   const [eventSlug, setEventSlug] = useState(initialEvent);
   const [range, setRange] = useState(initialRange);
@@ -133,7 +133,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
 
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); router.push("/"); router.refresh(); }
 
-  return <div className={`organizer-workspace organizer-analytics${embedded?" organizer-analytics--embedded":""}`}>
+  return <div className={`organizer-workspace organizer-analytics${embedded||workspaceFrame?" organizer-analytics--embedded":""}${workspaceFrame?" organizer-analytics--standalone":""}`}>
     <header className="organizer-workspace__header">
       <Link href="/" className="night-brand-link"><BrandLogo /></Link>
       <WorkspaceJump active="/organizer/analytics" role={role} compact />

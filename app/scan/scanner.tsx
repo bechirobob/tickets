@@ -1,12 +1,10 @@
 "use client";
 
-import BrandLogo from "../brand-logo";
-import Link from "next/link";
 import QrScanner from "qr-scanner";
 import { AlertTriangle, CheckCircle2, CloudOff, Keyboard, Loader2, RefreshCw, RotateCcw, ScanLine, Search, Users, Wifi, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StaffRole } from "../../lib/admin-session";
-import WorkspaceJump from "../admin/workspace-jump";
+import WorkspaceChrome from "../workspace-chrome";
 import DoorDesk from "./door-desk";
 
 type EventOption = { slug: string; title: string; fullDate: string; venue: string };
@@ -176,7 +174,7 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
   }
 
   return <main className="scanner-page">
-    <header className="scanner-header"><Link href="/" className="brand-mark"><BrandLogo section="Gate" /></Link><WorkspaceJump active="/scan" role={role} compact /><span className="scanner-actor">{actor}</span><div className={online ? "online" : "offline"}>{online ? <Wifi size={15} /> : <CloudOff size={15} />}{online ? "Doors synchronized" : `Offline · ${queued.length} queued`}</div></header>
+    <WorkspaceChrome actor={actor} role={role} active="/scan"/><section className="workspace-scanner"><header className="scanner-header"><div className={online ? "online" : "offline"}>{online ? <Wifi size={15} /> : <CloudOff size={15} />}{online ? "Doors synchronized" : `Offline · ${queued.length} queued`}</div></header>
     <div className="scanner-event"><div><small>Now scanning</small><h1>{selectedEvent?.title ?? "Choose an event"}</h1><p>{selectedEvent ? `${selectedEvent.fullDate} · ${selectedEvent.venue}` : "No published events"}</p>{manifest ? <span>Door list saved {new Date(manifest.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : <span>No offline door list yet</span>}</div><label><span>Event</span><select value={eventSlug} onChange={(event) => { scannerRef.current?.pause(); setEventSlug(event.target.value); setMode("ready"); setMatches([]); }}>{events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label></div>
     <section className={`scan-surface scan-surface--${mode}`}>
       {(mode === "ready" || mode === "scanning" || mode === "checking") && <><div className="scan-frame"><video ref={videoRef} muted playsInline /><i /><i /><i /><i />{mode === "ready" ? <ScanLine size={76} /> : null}</div><h2>{mode === "checking" ? "Checking ticket…" : mode === "scanning" ? "Position the QR inside the frame" : "Ready for the next guest"}</h2><p>{message || (mode === "ready" ? "Online verifies live. Offline checks the saved door list and queues the entry." : "The ticket scans automatically.")}</p>{mode === "ready" ? <button onClick={startCamera}>Start camera</button> : null}</>}
@@ -188,5 +186,5 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
     <section className="gate-search"><header><Search size={18} /><span><strong>Find a guest or purchase</strong><small>Name, email, phone or payment reference</small></span></header><form onSubmit={(event) => { event.preventDefault(); void search(); }}><input aria-label="Find a guest or purchase" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search the door list" disabled={!online} /><button disabled={!online || searching || searchQuery.trim().length < 2}>{searching ? <Loader2 className="spin" size={14} /> : "Find"}</button></form>{matches.length ? <div>{matches.map((match) => <article key={match.ticketId}><span><b>{match.attendeeName ?? match.customerName ?? "Guest"}</b><small>{match.reference} · {match.ticketType?.replaceAll("-", " ")}</small><small>{match.customerEmail} · {match.customerPhone}</small></span><i className={match.status}>{match.status?.replaceAll("_", " ")}</i></article>)}</div> : null}</section>
     <DoorDesk key={eventSlug} eventSlug={eventSlug} />
     <footer className="scanner-stats"><span><Users size={17} /><b>{stats.checkedIn}</b> admitted</span><span><b>{Math.max(0, stats.issued - stats.checkedIn)}</b> remaining</span><span><b>{stats.issued}</b> active tickets</span><button type="button" onClick={() => { void loadEventState(); void syncQueue(); }}><RefreshCw size={14} /> Refresh</button>{stats.tiers.map((tier) => <span key={tier.ticketType}><b>{tier.checkedIn ?? 0}/{tier.issued}</b> {tier.ticketType.replaceAll("-", " ")}</span>)}</footer>
-  </main>;
+  </section></main>;
 }

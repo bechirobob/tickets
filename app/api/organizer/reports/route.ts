@@ -14,7 +14,7 @@ export async function GET(request:Request) {
 export async function PATCH(request:Request) {
   const {env}=await import('cloudflare:workers');
   const session=await readAdminSession(request.headers.get('cookie'),env.DB);
-  if(!mutationHasValidOrigin(request)||!session||session.role!=='organizer')return Response.json({error:'Sign in to your host workspace.'},{status:403,headers});
+  if(!mutationHasValidOrigin(request)||!session||session.role!=='organizer'||!hasPermission(session,'organizer.workspace'))return Response.json({error:'Sign in to your host workspace.'},{status:403,headers});
   let enabled:boolean;
   try{const raw=await request.text();if(raw.length>256)throw new Error();const body=JSON.parse(raw);if(typeof body.enabled!=='boolean')throw new Error();enabled=body.enabled;}
   catch{return Response.json({error:'Choose whether to receive reports.'},{status:400,headers});}

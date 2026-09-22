@@ -44,7 +44,6 @@ const adminSessionUrl = new URL("../app/api/admin/session/route.ts", import.meta
 const feeSettingsUrl = new URL("../app/admin/fee-settings.tsx", import.meta.url);
 const staffAccountsUrl = new URL("../app/admin/accounts/staff-accounts.tsx", import.meta.url);
 const staffRolesUrl = new URL("../lib/staff-roles.ts", import.meta.url);
-const workspaceJumpUrl = new URL("../app/admin/workspace-jump.tsx", import.meta.url);
 const operationsNavUrl = new URL("../app/admin/operations-nav.tsx", import.meta.url);
 const accountPageUrl = new URL("../app/admin/account/page.tsx", import.meta.url);
 const orderOperationsUrl = new URL("../app/admin/orders/order-operations.tsx", import.meta.url);
@@ -639,25 +638,20 @@ test("fees and named staff stay inside one compact, role-bound operations system
   assert.match(css, /\.role-boundary\s*\{/u);
 });
 
-test("every private workspace has one compact role-scoped navigator", async () => {
-  const [jump, navigation, account, scanner, organiser, css] = await Promise.all([
-    readFile(workspaceJumpUrl, "utf8"),
-    readFile(operationsNavUrl, "utf8"),
-    readFile(accountPageUrl, "utf8"),
-    readFile(scannerUrl, "utf8"),
-    readFile(organizerWorkspaceUrl, "utf8"),
-    readFile(cssUrl, "utf8"),
+test("every private workspace shares role-scoped navigation and collapsible tools", async () => {
+  const [chrome,navigation,account,scanner,organiser,css] = await Promise.all([
+    readFile(new URL("../app/workspace-chrome.tsx",import.meta.url),"utf8"),
+    readFile(operationsNavUrl,"utf8"),readFile(accountPageUrl,"utf8"),readFile(scannerUrl,"utf8"),
+    readFile(new URL("../app/organizer/workspace/organizer-suite.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/workspace.css",import.meta.url),"utf8"),
   ]);
-
-  assert.match(jump, /STAFF_WORKSPACE_LINKS\s*\n\s*\.filter/u);
-  assert.match(jump, /Open an authorised workspace/u);
-  assert.match(navigation, /aria-label="Workspace navigation"/u);
-  assert.match(navigation, /aria-current=\{active === item\.href \? "page"/u);
-  assert.match(account, /<WorkspaceJump active="\/admin\/account" role=\{session\.role\}/u);
-  assert.match(scanner, /<WorkspaceJump active="\/scan" role=\{role\}/u);
-  assert.match(organiser, /<WorkspaceJump active="\/organizer\/workspace" role=\{role\}/u);
-  assert.match(css, /\.curation-nav > \.workspace-jump\s*\{\s*display:\s*none/u);
-  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.curation-nav > \.workspace-jump[^}]*display:\s*grid/su);
+  for(const component of [navigation,account,scanner,organiser])assert.match(component, /<WorkspaceChrome/u);
+  assert.match(chrome,/STAFF_WORKSPACE_LINKS\.filter/u);
+  assert.match(chrome,/aria-current=\{x\.active \? "page"/u);
+  assert.match(chrome,/aria-controls="workspace-navigation" aria-expanded=\{open\}/u);
+  assert.match(chrome,/<details className="workspace-tools"/u);
+  assert.doesNotMatch(chrome,/<WorkspaceJump/u);
+  assert.match(css,/\.workspace-sidebar\[data-open=true\]\{display:block/u);
 });
 
 test("workplace dashboards choose one event without horizontal event rails", async () => {
@@ -853,7 +847,8 @@ test("help is searchable by role and organiser records follow the verified submi
   assert.match(organizerWorkspace, /Your events so far/u);
   assert.match(organizerWorkspace, /Your submissions/u);
   assert.match(organizerWorkspace, /data\.events\.reduce/u);
-  assert.match(organizerWorkspaceApi, /submission\.contact_email = \?/u);
+  assert.match(organizerWorkspaceApi, /organizerScope\(session,'event'\)/u);
+  assert.doesNotMatch(organizerWorkspaceApi, /OR submission\.contact_email/u);
   assert.match(organizerWorkspaceApi, /WHERE contact_email = \?/u);
   assert.match(adminSubmissions, /db\.insert\(staffEventAssignments\)/u);
   assert.match(css, /\.help-page > \.help-centre > \.help-guides\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);

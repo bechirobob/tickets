@@ -1,0 +1,12 @@
+# Workspace navigation and ticket controls
+
+The public submission and Help Centre pages previously showed guest navigation and sign-in copy even to signed-in staff. The staff cookie was not revoked by these links, but there was no reliable route back to the selected task.
+
+- Staff and hosts now share one header, sidebar, spacing system and collapsible mobile menu. The owner selector switches between Operations and the host workspace; it no longer repeats every sidebar destination.
+- Submission, help, account security and the Event desk open inside the host workspace. Switching these views preserves mounted drafts and event selection. Public help/submission entry points recognize an active staff session.
+- Public browsing offers a role-checked return link to the most recent workspace view. Reading session presence never changes a cookie or revokes access. Only explicit sign-out calls DELETE.
+- Team is the single place for co-host and door assignments. Event Requests is distinct from the general Help Centre. Host email announcements live only in Promote; RSVP review retains guest and setup tools. Legacy Door links resolve to Team; event insights remain in the shell.
+- Host access requires an explicit event assignment, including for the lead host and private drafts. Matching a submission contact email alone no longer grants access to event lists, analytics, the Event desk or scheduled host reports. Aggregate reports and exports use the same scope; owner-only APIs reject hosts. Revocation is effective even when an old submission still has the host’s email.
+- Hosts can edit admission allocations, names, descriptions, prices, order limits and availability, and create new ticket grades. Each write checks current authority, event lifecycle, live held/issued admissions and the displayed revision atomically. Package size and Room entitlement are immutable after booking history; create a fresh grade to change them. Existing order totals, ticket codes and passes are preserved. No schema migration is required.
+
+Regression coverage includes anonymous/session return behavior, cross-event and role denial, stale concurrent updates, checkout and complimentary stock races, historical pass/price preservation, navigation and draft restoration, public return paths, and expanded owner/host desktop/mobile layouts. Candidate CI provides real Chromium and WebKit evidence; local browser binaries are unavailable in this environment. Final exact-commit results belong in the pull request before completion.

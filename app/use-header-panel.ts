@@ -35,9 +35,12 @@ export function useHeaderPanel() {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   useEffect(() => {
     if (phase !== "open") return;
+    let focusFrame: number | undefined;
     if (keyboardOpen.current) {
       keyboardOpen.current = false;
-      panel.current?.querySelector<HTMLElement>('button, a[href]')?.focus();
+      // Wait for WebKit to apply the disclosure's inert/visibility change and
+      // finish the trigger's native keyboard activation before moving focus.
+      focusFrame = requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>('button, a[href]')?.focus({ preventScroll: true }));
     }
     const contains = (target: EventTarget | null) => target instanceof Node && (panel.current?.contains(target) || trigger.current?.contains(target));
     const pointer = (event: PointerEvent) => { if (!contains(event.target)) close(); };
@@ -49,6 +52,7 @@ export function useHeaderPanel() {
     document.addEventListener("keydown", key);
     window.addEventListener("becore:header-panel", other);
     return () => {
+      if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
       document.removeEventListener("pointerdown", pointer);
       document.removeEventListener("focusin", focus);
       document.removeEventListener("keydown", key);
