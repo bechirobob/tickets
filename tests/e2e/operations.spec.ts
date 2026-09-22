@@ -20,7 +20,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 for (const [path, heading] of [
   ['/admin','Submission queue'], ['/admin/operations','Event operations'], ['/admin/events','Events & inventory'],
   ['/admin/registrations','RSVP & guests'], ['/admin/orders','Orders & payments'], ['/admin/support','Ticket support'], ['/admin/promoters','Promoter links'],
-  ['/admin/rooms','The Room'], ['/admin/fees','Fees & charges'], ['/admin/accounts','People & permissions'], ['/admin/account','My account'],
+  ['/admin/rooms','The Room'], ['/admin/fees','Fees & charges'], ['/admin/accounts','People & permissions'], ['/admin/account','My account'], ['/admin/help','Help centre'],
 ]) {
   test(`owner can open ${path} with readable controls`, async ({ page }, info) => {
     const errors: string[] = [];
@@ -45,7 +45,7 @@ for (const [path, heading] of [
     for(const summary of await page.locator('details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
-    await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true });
+    await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true, scale: 'css' });
   });
 }
 test('event save survives a dropped connection and retains the draft', async ({ page }) => {
@@ -571,9 +571,15 @@ test('workspace submission, help, public previews and return retain the organize
 
 test('host edits ticket allocation and grade, keeps a failed draft, and sees persisted stock',async({page,context,baseURL},info)=>{
  await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
- await page.goto('/organizer/workspace?area=events&event=after-dark-osu&view=tickets');
- await page.getByRole('button',{name:/^Edit /}).first().click();
- const form=page.getByRole('form',{name:'Edit ticket grade'}),name=`Host grade ${Date.now()}`,capacity=form.getByLabel('Total admission allocation');
+ await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=tickets');
+ await expect(page.locator('#suite-event')).toHaveValue('rsvp-browser');
+ const form=page.getByRole('form',{name:'Edit ticket grade'}),base=`Host grade ${Date.now()}`,name=`${base} edited`;
+ await page.getByRole('button',{name:'Add ticket grade',exact:true}).click();
+ await form.getByLabel('Ticket grade / name').fill(base);await form.getByLabel('Code',{exact:true}).fill(`browser-${Date.now()}`);
+ await form.getByLabel('Price per package (GH₵)',{exact:true}).fill('75');await form.getByLabel('Total admission allocation').fill('25');await form.getByLabel('Description',{exact:true}).fill('Isolated host ticket grade');
+ await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form).not.toBeVisible();
+ await page.getByRole('button',{name:`Edit ${base}`,exact:true}).click();
+ const capacity=form.getByLabel('Total admission allocation');
  const current=Number(await capacity.inputValue());await capacity.fill(String(current+5));await form.getByLabel('Ticket grade / name').fill(name);
  await page.route('**/api/organizer/business',route=>route.request().method()==='POST'?route.abort('failed'):route.continue());
  await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form.getByRole('button',{name:'Save ticket grade',exact:true})).toBeEnabled();await expect(form.getByLabel('Ticket grade / name')).toHaveValue(name);
@@ -582,4 +588,25 @@ test('host edits ticket allocation and grade, keeps a failed draft, and sees per
  await expect(form.getByLabel('Ticket grade / name')).toHaveValue(name);expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  const axe=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
  await page.screenshot({path:info.outputPath('host-ticket-edit-expanded.png'),fullPage:true});
+});
+
+
+test('workspace settings and Event desk retain their frame and unfinished question',async({page,context,baseURL},info)=>{
+ await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
+ await page.goto('/organizer/assistant?event=rsvp-browser');
+ await expect(page).toHaveURL(/area=desk&event=rsvp-browser/);
+ await expect(page.locator('#assistant-event')).toHaveValue('rsvp-browser');
+ await expect(page.getByRole('heading',{name:'Event desk',exact:true})).toBeVisible();
+ const question=page.locator('#event-desk-question');await question.fill('Keep my unfinished event question');
+ const visit=async(name:string)=>{await openWorkspaceMenu(page);const tools=page.locator('.workspace-tools');if(!await tools.evaluate(e=>(e as HTMLDetailsElement).open))await tools.locator('summary').click();await tools.getByRole('link',{name,exact:true}).click();};
+ await visit('Account settings');await expect(page.locator('.account-security-stack')).toBeVisible();
+ for(const summary of await page.locator('.account-security-stack details:not([open])>summary').all())if(await summary.isVisible())await summary.click();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ const account=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(account.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ await page.screenshot({path:info.outputPath('workspace-account.png'),fullPage:true,scale:'css'});
+ await visit('Event desk');await expect(question).toHaveValue('Keep my unfinished event question');
+ await expect(page.locator('main')).toHaveCount(1);await expect(page.locator('.workspace-topbar')).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ const desk=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(desk.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+ await page.screenshot({path:info.outputPath('workspace-event-desk.png'),fullPage:true,scale:'css'});
 });
