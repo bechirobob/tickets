@@ -59,6 +59,11 @@ test("Hosts connect to the guest journey", async ({ page }) => {
 });
 
 test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page, eventSlug }, testInfo) => {
+  // This journey blocks service workers. Use a known permission state so the
+  // help disclosure does not depend on a worker-ready timeout or window focus.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'Notification', { configurable: true, value: { permission: 'denied' } });
+  });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const preview = page.locator(".room-product-phone").first();
@@ -195,11 +200,16 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await page.screenshot({ path: testInfo.outputPath("room-notification-settings.png") });
   await page.keyboard.press("Escape");
   await expect(notifications).toBeFocused();
-  await page.locator('.event-alert-nudge > summary').click();
-  await expect(page.getByRole('complementary',{name:'Event notifications'})).toContainText('private guest chat');
+  const eventAlerts = page.getByRole('complementary',{name:'Event notifications'});
+  const alertHelp = eventAlerts.locator('summary');
+  await expect(alertHelp).toBeVisible();
+  expect((await eventAlerts.boundingBox())!.height).toBeLessThanOrEqual(60);
+  await expect(eventAlerts.locator('.confirmation-notifications p').first()).not.toBeVisible();
+  await alertHelp.click();
+  await expect(eventAlerts.locator('.confirmation-notifications p').first()).toBeVisible();
   expect((await new AxeBuilder({page}).include('.event-alert-nudge').analyze()).violations).toEqual([]);
   await page.screenshot({path:testInfo.outputPath('room-enable-alerts.png')});
-  await page.locator('.event-alert-nudge > summary').click();
+  await alertHelp.click();
   await notifications.click();
   await page.getByRole('switch',{name:'Room messages',exact:true}).click();
   await expect(page.getByRole('switch',{name:'Room messages',exact:true})).toHaveAttribute('aria-checked','false');

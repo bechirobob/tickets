@@ -287,7 +287,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.locator('main')).not.toContainText(/free|no payment/i);
   const flier=page.getByRole('img',{name:'Event flier for RSVP browser gathering'});await expect(flier).toBeVisible();await expect(flier).toHaveCSS('object-fit','contain');
   await expect.poll(()=>flier.evaluate((img:HTMLImageElement)=>img.complete&&img.naturalWidth>0)).toBe(true);
-  await expect(page.getByLabel('Email me updates from this host')).not.toBeChecked();
+  await expect(page.getByLabel('Receive notifications for this event and host.')).not.toBeChecked();
   const guestAxe=await new AxeBuilder({page}).include('.registration-form').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(guestAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
   await page.screenshot({path:info.outputPath('guest-rsvp-form.png'),fullPage:true});
   await page.getByLabel('Your name').fill('Shared Link Guest');await page.getByLabel('Email address').fill('shared-link@example.com');
@@ -575,7 +575,7 @@ test('host edits ticket allocation and grade, keeps a failed draft, and sees per
  await expect(page.locator('#suite-event')).toHaveValue('rsvp-browser');
  const form=page.getByRole('form',{name:'Edit ticket grade'}),base=`Host grade ${Date.now()}`,name=`${base} edited`;
  await page.getByRole('button',{name:'Add ticket grade',exact:true}).click();
- await form.getByLabel('Ticket grade / name').fill(base);await form.getByLabel('Code',{exact:true}).fill(`browser-${Date.now()}`);
+ await form.getByLabel('Ticket grade / name').fill(base);await form.getByLabel(/^Code/).fill(`browser-${Date.now()}`);
  await form.getByLabel('Price per package (GH₵)',{exact:true}).fill('75');await form.getByLabel('Total admission allocation').fill('25');await form.getByLabel('Description',{exact:true}).fill('Isolated host ticket grade');
  await form.getByRole('button',{name:'Save ticket grade',exact:true}).click();await expect(form).not.toBeVisible();
  await page.getByRole('button',{name:`Edit ${base}`,exact:true}).click();

@@ -11,10 +11,13 @@ test('free RSVP preserves form details on failure and submits the selected party
   await page.getByLabel('Your name').fill('Registration Guest');
   await page.getByLabel('Email address').fill('registration@example.com');
   await page.getByLabel('Guests, including you').selectOption('3');
+  const updates = page.getByRole('checkbox', { name: 'Receive notifications for this event and host.' });
+  await expect(updates).not.toBeChecked();
+  await updates.check();
   await page.getByRole('checkbox', { name: /I accept the event terms/ }).check();
   let attempts = 0;
   await page.route('**/api/registrations', async route => {
-    expect(route.request().postDataJSON()).toMatchObject({ eventSlug: 'after-dark-osu', partySize: 3, acceptedTerms: true });
+    expect(route.request().postDataJSON()).toMatchObject({ eventSlug: 'after-dark-osu', partySize: 3, acceptedTerms: true, announcementsOptIn: true });
     attempts++;
     await route.fulfill({ status: attempts === 1 ? 503 : 202, contentType: 'application/json', body: JSON.stringify(attempts === 1 ? { error: 'Please try again.' } : { message: 'RSVP received. Outfit planning starts now.' }) });
   });
@@ -22,6 +25,7 @@ test('free RSVP preserves form details on failure and submits the selected party
   await send.click();
   await expect(page.getByRole('status')).toHaveText('Please try again.');
   await expect(page.getByLabel('Your name')).toHaveValue('Registration Guest');
+  await expect(updates).toBeChecked();
   expect((await new AxeBuilder({ page }).include('.registration-form').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: `test-results/rsvp-${test.info().project.name}.png`, fullPage: true });

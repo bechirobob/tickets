@@ -16,13 +16,16 @@ async function workerReady(): Promise<ServiceWorkerRegistration> {
   } finally { clearTimeout(timer); }
 }
 
-export default function ConfirmationNotifications({ compact = false, onEnabled }: { compact?: boolean; onEnabled?: () => void }) {
+export default function ConfirmationNotifications({ compact = true, onEnabled }: { compact?: boolean; onEnabled?: () => void }) {
   const [state, setState] = useState<'loading' | 'ready' | 'on' | 'install' | 'unsupported' | 'denied' | 'unavailable'>('loading');
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
   const active = useRef(false);
+  const loadVersion = useRef(0);
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      if (active.current) return;
+      const version = ++loadVersion.current;
       const ios = /iPad|iPhone|iPod/u.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const installed = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
       if (ios && !installed) return setState('install');
@@ -32,17 +35,19 @@ export default function ConfirmationNotifications({ compact = false, onEnabled }
         const registration = await workerReady();
         const subscription = await registration.pushManager.getSubscription();
         const config = await requestJson<Configuration>(`${endpoint}${subscription ? `?endpoint=${encodeURIComponent(subscription.endpoint)}` : ''}`);
-        if (!cancelled) setState(!config.available ? 'unavailable' : subscription && Notification.permission === 'granted' && config.deviceSubscribed && config.confirmationUpdates && config.hostUpdates ? 'on' : 'ready');
-      } catch { if (!cancelled) setState('unavailable'); }
+        if (!cancelled && version === loadVersion.current) setState(!config.available ? 'unavailable' : subscription && Notification.permission === 'granted' && config.deviceSubscribed && config.confirmationUpdates && config.hostUpdates ? 'on' : 'ready');
+      } catch { if (!cancelled && version === loadVersion.current) setState('unavailable'); }
     }
     void load();
     const refresh = () => { void load(); };
     window.addEventListener('becore-notifications-changed', refresh);
-    return () => { cancelled = true; window.removeEventListener('becore-notifications-changed', refresh); };
+    window.addEventListener('focus', refresh);
+    return () => { cancelled = true; window.removeEventListener('becore-notifications-changed', refresh); window.removeEventListener('focus', refresh); };
   }, []);
 
   async function change(enable: boolean) {
     if (active.current) return;
+    ++loadVersion.current;
     active.current = true; setBusy(true); setMessage('');
     try {
       // This must run directly from a tap, before network/worker awaits.
@@ -74,15 +79,18 @@ export default function ConfirmationNotifications({ compact = false, onEnabled }
 
     <Bell size={18} aria-hidden="true" />
     <div><strong>{state === 'on' ? 'Your event alerts are on' : 'Don’t miss the host'}</strong>
-      <p>{state === 'on' ? 'Booking confirmations and host announcements arrive on this device. Chat alerts have their own settings in The Room.' : 'The Room is your event’s private guest chat. Get booking confirmations and host announcements on your phone, even before you open it. Your passes stay in My Nights.'}</p>
-      {state === 'install' ? <details><summary>Want alerts on this iPhone or iPad?</summary><p>In Safari, tap Share → Add to Home Screen. Open the saved app, open My Nights and turn on event alerts. If asked, recover your booking with your email. This is optional.</p></details> : null}
-      {state === 'unsupported' ? <p>This browser doesn’t support phone alerts. Booking confirmations still arrive by email; host announcements stay in your inbox.</p> : null}
-      {state === 'denied' ? <p>Alerts are blocked in your browser or phone settings. Allow notifications there, then refresh. Booking confirmations still arrive by email; host announcements stay in your inbox.</p> : null}
-      {state === 'unavailable' ? <p>Phone alerts couldn’t be checked. Refresh to try again. Your current delivery preference still applies.</p> : null}
+      {!compact ? <p>Booking confirmations and host announcements on this device. Chat alerts have their own settings in The Room.</p> : null}
+      {state === 'install' ? <p>In Safari, tap Share → Add to Home Screen. Open the saved app and enable event alerts in My Nights. This is optional.</p> : null}
+      {state === 'unsupported' ? <p>This browser doesn’t support phone alerts. Your updates stay in My Nights.</p> : null}
+      {state === 'denied' ? <p>Alerts are blocked in your browser or phone settings. Allow them there, then return to My Nights.</p> : null}
+      {state === 'unavailable' ? <p>Phone alerts couldn’t be checked. Refresh to try again. Your updates stay in My Nights.</p> : null}
       {state === 'ready' || state === 'on' ? <><button type="button" disabled={busy} aria-busy={busy} onClick={() => void change(state !== 'on')}>{busy ? 'Saving…' : state === 'on' ? 'Turn off on this device' : 'Enable event alerts'}</button><p className="confirmation-notifications__hint">Booking confirmations use email if phone alerts can’t be sent. Your phone’s notification and Focus settings control banners and sound.</p></> : null}
       {message ? <p role="status">{message}</p> : null}
     </div>
   </>;
-  return compact ? <details className="event-alert-nudge"><summary><Bell size={16} aria-hidden="true" /><span>Don’t miss the host</span><b>Enable alerts</b></summary><aside className="confirmation-notifications" aria-label="Event notifications">{content}</aside></details>
+  return compact ? <aside className="event-alert-nudge" aria-label="Event notifications">{state === 'ready' ? <>
+    <div className="event-alert-nudge__row"><Bell size={16} aria-hidden="true" /><span>Event &amp; host alerts</span><button type="button" aria-label="Enable event alerts" disabled={busy} aria-busy={busy} onClick={() => void change(true)}>{busy ? 'Saving…' : 'Enable'}</button></div>
+    {message ? <p className="event-alert-nudge__message" role="status">{message}</p> : null}
+  </> : <details><summary><Bell size={16} aria-hidden="true" /><span>Event &amp; host alerts</span><b>Set up</b></summary><div className="confirmation-notifications">{content}</div></details>}</aside>
     : <aside className="confirmation-notifications" aria-label="Event notifications">{content}</aside>;
 }

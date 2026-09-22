@@ -9,11 +9,20 @@
 .confirmation-notifications__hint { font-size:.75rem; }
 .confirmation-notifications button:focus-visible,.confirmation-notifications summary:focus-visible { outline:2px solid currentColor; outline-offset:3px; }
 
-.event-alert-nudge { flex:none; margin:0; color:var(--ink); font-size:.8rem; }
-.event-alert-nudge > summary { display:flex; align-items:center; gap:.5rem; padding:.6rem 1rem; min-height:44px; cursor:pointer; list-style:none; }
-.event-alert-nudge > summary b { margin-left:auto; text-decoration:underline; font-weight:600; }
-.event-alert-nudge > summary:focus-visible { outline:2px solid currentColor; outline-offset:-3px; }
-.event-alert-nudge .confirmation-notifications { margin:0 .8rem .6rem; max-height:32vh; overflow:auto; }
+.event-alert-nudge { flex:none; margin:.5rem 0; color:inherit; font-size:.875rem; }
+.event-alert-nudge__row,.event-alert-nudge > details > summary { display:flex; align-items:center; gap:.5rem; min-height:44px; list-style:none; }
+.event-alert-nudge > details > summary { cursor:pointer; }
+.event-alert-nudge > details > summary::-webkit-details-marker { display:none; }
+.event-alert-nudge__row > svg,.event-alert-nudge summary > svg { flex:none; }
+.event-alert-nudge__row > span,.event-alert-nudge summary > span { min-width:0; }
+.event-alert-nudge__row > button,.event-alert-nudge summary > b { margin-left:auto; flex:none; min-height:44px; display:flex; align-items:center; padding:.5rem; border:0; background:transparent; color:inherit; font:inherit; font-weight:650; text-decoration:underline; cursor:pointer; }
+.event-alert-nudge__row > button:disabled { opacity:.65; cursor:wait; }
+.event-alert-nudge button:focus-visible,.event-alert-nudge > details > summary:focus-visible { outline:2px solid currentColor; outline-offset:-3px; }
+.event-alert-nudge__message { margin:.25rem 0 .5rem; overflow-wrap:anywhere; }
+.event-alert-nudge .confirmation-notifications { margin:0 0 .5rem; padding:.5rem 0; border:0; border-radius:0; background:transparent; color:inherit; }
+.event-alert-nudge .confirmation-notifications > svg,.event-alert-nudge .confirmation-notifications strong { display:none; }
 
 .room-page > .event-alert-nudge { width:min(840px,calc(100% - 32px)); align-self:center; color:#fff0e4; background:#231722; border-radius:8px; }
+.room-page .event-alert-nudge__row,.room-page .event-alert-nudge > details > summary { padding:0 .75rem; }
+.room-page .event-alert-nudge__message,.room-page .event-alert-nudge .confirmation-notifications { margin-left:.75rem; margin-right:.75rem; }
 .room-page .event-alert-nudge .confirmation-notifications { --ink:#fff0e4; --surface:#30212c; --line:#796271; }

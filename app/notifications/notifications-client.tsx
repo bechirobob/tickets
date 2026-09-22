@@ -32,7 +32,7 @@ export default function NotificationsClient() {
     <header className="directory-header"><span className="account-header-label">Account</span><Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation /></header>
     <AccountNavigation />
     <section className="buzz-shell"><header className="buzz-intro"><div><h1>The Buzz</h1><p>Only the useful noise.</p></div>{feed.items && <span role="status">{feed.unread ? `${feed.unread} unread` : "All caught up"}</span>}</header>
-      {feed.items ? <ConfirmationNotifications /> : null}
+      {feed.items ? <details className="notification-device-settings"><summary>Notification settings</summary><ConfirmationNotifications compact={false} /></details> : null}
       {notice && <p className="buzz-feedback" role="status">{notice}<button type="button" aria-label="Dismiss notice" onClick={() => setNotice("")}><X size={16} aria-hidden="true" /></button></p>}
       {preferenceError && <p className="buzz-error" role="alert">{preferenceError}</p>}
       <NotificationFeed feed={feed} />
