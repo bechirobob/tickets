@@ -12,7 +12,8 @@ async function phone(page:Page, permission:'default'|'denied'='default') {
   await page.addInitScript(({permission}) => {
     Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Mozilla/5.0 Android Chrome'});
     Object.defineProperty(navigator,'platform',{configurable:true,value:'Linux'});
-    Object.defineProperty(window,'Notification',{configurable:true,value:{permission,requestPermission:async()=>{
+    Object.defineProperty(window,'Notification',{configurable:true,value:{permission:permission === 'denied' ? permission : sessionStorage.getItem('fixture-push-permission') ?? permission,requestPermission:async()=>{
+      sessionStorage.setItem('fixture-push-permission','granted');
       Object.defineProperty(window.Notification,'permission',{configurable:true,value:'granted'});return 'granted';
     }}});
     Object.defineProperty(window,'PushManager',{configurable:true,value:class {}});
