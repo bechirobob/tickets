@@ -231,7 +231,7 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string, 
       .bind(signature(s), timestamp(), event.slug, signature(s)).run();
   }
   }
-  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE (? IS NULL OR id=?) AND (verified_at IS NOT NULL OR device_claimed_at IS NOT NULL) AND version > notified_version AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = event_registrations.event_slug AND e.removed_at IS NOT NULL) ORDER BY updated_at LIMIT 40`).bind(registrationId ?? null,registrationId ?? null).all<Registration>();
+  const rows = await env.DB.prepare(`SELECT ${fields} FROM event_registrations WHERE (? IS NULL OR id=?) AND status NOT IN ('unverified','requested') AND (verified_at IS NOT NULL OR device_claimed_at IS NOT NULL) AND version > notified_version AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = event_registrations.event_slug AND e.removed_at IS NOT NULL) ORDER BY updated_at LIMIT 40`).bind(registrationId ?? null,registrationId ?? null).all<Registration>();
   if (!registrationId && env.EMAIL_DELIVERY_QUEUE && rows.results.length) {
     await env.EMAIL_DELIVERY_QUEUE.sendBatch(rows.results.map(reg => ({ body: { deliveryId: `registration-confirmation:${reg.id}` } })));
     return;

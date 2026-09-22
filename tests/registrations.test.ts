@@ -216,6 +216,8 @@ it('binds only a new RSVP to its originating session and never grants access to 
   expect((await signup(req('/api/registrations',input,cookie))).headers.get('set-cookie')).toBeNull();
   const before=await (await passes(req('/api/customer/tickets',{},cookie))).json() as {orders:unknown[]};
   expect(before.orders).toHaveLength(0);
+  await processRegistrations(env,origin);
+  expect(await env.DB.prepare("SELECT id FROM delivery_events WHERE recipient=? AND kind='registration_update'").bind(input.email).first()).toBeNull();
   await hostAction(req('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id},await owner()));
   const wallet=await (await passes(req('/api/customer/tickets',{},cookie))).json() as {orders:Array<{tickets:Array<{qrPayload:string}>}>};
   expect(wallet.orders[0].tickets[0].qrPayload).toBeTruthy();
