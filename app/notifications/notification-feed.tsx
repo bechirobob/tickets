@@ -45,6 +45,7 @@ export default function NotificationFeed({ feed, compact = false, onNavigate }: 
   const { items, loading, locked, loadError, actionError, markingAll, unread, load, mark } = feed;
   const filtered = items?.filter((item) => filter === "all" || (filter === "host" ? item.kind === "host_update" : !item.readAt)) ?? [];
   return <div className="notification-feed" aria-busy={loading}>
+    {!compact && !locked && items && items.length > 0 ? <h2 className="sr-only">Notifications</h2> : null}
     {!locked && items && <div className="buzz-tools"><div role="group" aria-label="Filter notifications">{(["all", "unread", "host"] as const).map((view) => <button key={view} type="button" aria-pressed={filter === view} onClick={() => { setFilter(view); setLimit(batch); }}>{view === "all" ? "All" : view === "host" ? "Host updates" : "Unread"}{view === "unread" && unread > 0 ? <span>{unread}</span> : null}</button>)}</div><button type="button" onClick={() => void mark()} disabled={!unread || markingAll} aria-busy={markingAll}><CheckCheck size={15} aria-hidden="true" />{markingAll ? "Marking…" : "Mark all read"}</button></div>}
     {actionError && <p className="buzz-error" role="alert">{actionError}</p>}
     {loadError && <div className="buzz-load-error"><p role="alert">{loadError}</p><button type="button" disabled={loading} onClick={() => void load()}>Try again</button></div>}
