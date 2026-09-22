@@ -11,6 +11,42 @@ const policy = {
 };
 
 describe("The Room Durable Object", () => {
+  it("converges presence after a join burst and the last departure", async () => {
+    const room = env.THE_ROOM.getByName(`presence-${crypto.randomUUID()}`);
+    const sockets: WebSocket[] = [];
+    const counts: number[][] = Array.from({ length: 20 }, () => []);
+    const snapshots = new Set<number>();
+    const future = new Date(Date.now() + 86400000).toISOString();
+    try {
+      await Promise.all(counts.map(async (_, i) => {
+        const response = await room.fetch(new Request("https://room.internal/socket", { headers: {
+          upgrade: "websocket", "x-bct-room-authorized": "1",
+          "x-bct-session-id": `presence-session-${i}`, "x-bct-attendee-id": `presence-guest-${i}`,
+          "x-bct-display-name": `Guest ${i}`, "x-bct-event-slug": "presence-test",
+          "x-bct-event-title": "Presence test", "x-bct-starts-at": new Date().toISOString(),
+          "x-bct-ends-at": future, "x-bct-read-only-at": future,
+        } }));
+        expect(response.status).toBe(101);
+        const socket = response.webSocket!;
+        sockets[i] = socket;
+        socket.addEventListener("message", event => {
+          const data = JSON.parse(String(event.data));
+          if (data.type === "snapshot") snapshots.add(i);
+          if (data.type === "presence") counts[i].push(data.online);
+        });
+        socket.accept();
+      }));
+      await expect.poll(() => snapshots.size).toBe(20);
+      await expect.poll(() => counts.every(values => values.at(-1) === 20)).toBe(true);
+      // Broadcasting on every arrival would produce 210 frames for this burst.
+      expect(counts.reduce((total, values) => total + values.length, 0)).toBeLessThan(210);
+      sockets[19].close(1000, "Leaving");
+      await expect.poll(() => counts.slice(0,19).every(values => values.at(-1) === 19)).toBe(true);
+    } finally {
+      for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.close(1000, "Test complete");
+    }
+  });
+
   it("persists an organiser announcement and supports audited removal", async () => {
     const room = env.THE_ROOM.getByName("event-a");
     const announcement = await room.publishAnnouncement("BeCore Admin", "Doors open at 9:30 PM.", true, policy);

@@ -62,6 +62,8 @@ function requiredHeader(request: Request, name: string): string {
 }
 
 export class TheRoom extends DurableObject<Cloudflare.Env> {
+  private presencePending = false;
+
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
@@ -159,7 +161,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         messages: this.readMessages(attachment),
         online: this.ctx.getWebSockets().length,
       }));
-      this.broadcast({ type: "presence", online: this.ctx.getWebSockets().length });
+      this.schedulePresence();
       return new Response(null, { status: 101, webSocket: client });
     } catch (error) {
       console.error(JSON.stringify({ message: "room websocket rejected", error: error instanceof Error ? error.message : String(error) }));
@@ -296,7 +298,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
     // Complete the closing handshake explicitly, including local runtimes.
     socket.close([1005, 1006, 1015].includes(code) ? 1000 : code, reason);
-    this.broadcast({ type: "presence", online: this.ctx.getWebSockets().length });
+    this.schedulePresence();
   }
 
   async publishAnnouncement(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput): Promise<RoomMessage> {
@@ -509,6 +511,21 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       });
   }
 
+  private schedulePresence(): void {
+    // A join burst must not send one full-room headcount for every connection.
+    // New guests still receive their immediate snapshot. Existing guests get
+    // the latest count once per short window, including after the last leave.
+    if (this.presencePending) return;
+    this.presencePending = true;
+    this.ctx.waitUntil(new Promise<void>((resolve) => {
+      setTimeout(() => {
+        this.presencePending = false;
+        this.broadcast({ type: "presence", online: this.ctx.getWebSockets().length });
+        resolve();
+      }, 250);
+    }));
+  }
+
   private broadcast(payload: Record<string, unknown>): void {
     if (payload.type === 'message' || payload.type === 'reaction' || payload.type === 'flash_added') {
       this.ctx.waitUntil(this.broadcastPrivate(payload));
@@ -517,11 +534,8 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     const encoded = JSON.stringify(payload);
     for (const socket of this.ctx.getWebSockets()) {
       try {
-        const state = socket.deserializeAttachment() as ConnectionState | null;
-        const message = payload.message;
-        if (state && isRecord(message) && typeof message.attendeeId === "string" && state.blockedAttendeeIds.includes(message.attendeeId)) {
-          continue;
-        }
+        // Private content uses broadcastPrivate above. Public Room metadata
+        // needs no per-recipient attachment deserialization.
         socket.send(encoded);
       } catch {
         socket.close(1011, "Room connection reset");

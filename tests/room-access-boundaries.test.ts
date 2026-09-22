@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GET as readFlashes } from '../app/api/rooms/[slug]/flashes/route';
 import { GET as readVip } from '../app/api/rooms/[slug]/vip/route';
 import { GET as readAccess } from '../app/api/rooms/[slug]/access/route';
-import { hashToken, readAttendeeRoomAccess } from '../lib/attendee-auth';
+import { hashToken, readAttendeeRoomAccess, readAttendeeRoomSocketAccess } from '../lib/attendee-auth';
 import { notifyRoomMessage } from '../lib/notifications';
 import { POST as subscribe } from '../app/api/customer/notifications/subscription/route';
 
@@ -26,6 +26,23 @@ async function fixture() {
 }
 
 describe('Room access boundaries', () => {
+  it('loads only the connecting guest’s event blocks and denies suspended or revoked sockets', async () => {
+    const f = await fixture();
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO room_blocks(id,event_slug,blocker_attendee_id,blocked_attendee_id,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),f.slug,f.attendeeId,'blocked-here',f.now),
+      env.DB.prepare('INSERT INTO room_blocks(id,event_slug,blocker_attendee_id,blocked_attendee_id,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),'another-event',f.attendeeId,'other-event-block',f.now),
+      env.DB.prepare('INSERT INTO room_blocks(id,event_slug,blocker_attendee_id,blocked_attendee_id,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),f.slug,'another-guest','other-guest-block',f.now),
+    ]);
+    expect(await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug)).toMatchObject({ access: { attendeeId: f.attendeeId }, blockedAttendeeIds: ['blocked-here'] });
+    expect(await readAttendeeRoomAccess(env.DB,f.cookie,f.slug)).not.toHaveProperty('blockedIdsJson');
+    await env.DB.prepare("INSERT INTO room_suspensions(event_slug,attendee_id,reason,suspended_at,suspended_by) VALUES (?,?,'Test',?,'fixture')").bind(f.slug,f.attendeeId,f.now).run();
+    expect(await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug)).toBeNull();
+    await env.DB.prepare('UPDATE room_suspensions SET restored_at=? WHERE event_slug=? AND attendee_id=?').bind(f.now,f.slug,f.attendeeId).run();
+    expect(await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug)).not.toBeNull();
+    await env.DB.prepare('UPDATE attendee_sessions SET revoked_at=? WHERE attendee_id=?').bind(f.now,f.attendeeId).run();
+    expect(await readAttendeeRoomSocketAccess(env.DB,f.cookie,f.slug)).toBeNull();
+  });
+
   it('caps devices atomically and permits refreshing an existing subscription', async () => {
     const f = await fixture(), origin = 'https://tickets.becoreops.com';
     const keys = { p256dh: btoa(String.fromCharCode(4) + 'a'.repeat(64)).replace(/=+$/u,''), auth: btoa('a'.repeat(16)).replace(/=+$/u,'') };

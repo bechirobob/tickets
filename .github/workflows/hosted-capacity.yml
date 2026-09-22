@@ -1,0 +1,69 @@
+name: Hosted capacity readiness
+on:
+  push:
+    branches: [ops/hosted-capacity-readiness, ops/hosted-capacity-diagnostics]
+    paths: ['scripts/capacity/**', '.github/workflows/hosted-capacity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hosted-capacity-readiness
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Inspect account plans and aggregate production state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/inspect-hosted.mjs
+      - run: npm ci
+      - name: Build the exact rehearsal revision
+        run: npm run build && node scripts/prepare-deploy.mjs
+      - name: Provision isolated hosted fixture
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/hosted.mjs setup
+      - name: Verify 400 hosted guest identities and Room connections
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/hosted.mjs test-observed
+      - name: Verify persisted Room notifications
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/hosted.mjs verify-state
+      - name: Preserve isolated runtime diagnostics
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/hosted.mjs diagnose
+      - name: Remove only this run's synthetic resources
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: node scripts/capacity/hosted.mjs cleanup
+      - name: Preserve readiness evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-readiness-${{ github.run_id }}
+          path: |
+            capacity-results/hosted-readiness.json
+            capacity-results/hosted-measurements.json
+            capacity-results/hosted-notifications.json
+            capacity-results/hosted-runtime-errors.json
+            capacity-results/hosted-traces.json
+            capacity-results/hosted-cleanup.json
+          retention-days: 30
