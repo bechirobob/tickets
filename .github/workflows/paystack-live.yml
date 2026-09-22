@@ -1,0 +1,37 @@
+name: Configure Paystack live connection
+on:
+  push:
+    branches: [release/paystack-live]
+    paths: [.github/workflows/paystack-live.yml, scripts/configure-paystack-live.mjs]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  configure:
+    if: github.repository == 'bechirobob/tickets' && github.ref_name == 'release/paystack-live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify payment selection, live/test separation and fulfillment
+        run: npx vitest run tests/delivery-guards.test.ts tests/payment-selection.test.ts tests/payment-operations.test.ts
+      - name: Replace production test key and verify live connection
+        env:
+          PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$PAYSTACK_SECRET_KEY" ]; then
+            echo 'Payment checks complete. Waiting for the live key in the private secret store; no production settings changed.'
+            exit 0
+          fi
+          node scripts/configure-paystack-live.mjs
