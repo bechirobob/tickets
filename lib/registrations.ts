@@ -135,7 +135,7 @@ export async function confirmRegistration(db: D1Database, id: string) {
       SELECT ?, ?, ?, 'RSVP', ?, 'issued', ?, ? WHERE ${confirmed}`).bind(ticketId, orderId, reg.eventSlug, await hashGateToken(token), now, index + 1, id));
     statements.push(db.prepare(`INSERT OR IGNORE INTO ticket_gate_credentials (ticket_id, token, issued_at) SELECT ?, ?, ? WHERE ${confirmed}`).bind(ticketId, token, now, id));
     statements.push(db.prepare(`INSERT OR IGNORE INTO ticket_assignments (ticket_id, attendee_id, assigned_by, status, assigned_at)
-      SELECT ?, ?, 'rsvp', 'active', ? WHERE ${confirmed}`).bind(ticketId, reg.attendeeId, now, id));
+      SELECT ?, attendee_id, 'rsvp', 'active', ? FROM event_registrations WHERE id=? AND ${confirmed}`).bind(ticketId, now, id, id));
   }
   statements.push(db.prepare(`UPDATE orders SET status = 'paid' WHERE id = ? AND payment_provider = 'rsvp' AND ${confirmed}`).bind(orderId, id));
   statements.push(db.prepare(`UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided' AND ${confirmed}`).bind(orderId, id));
@@ -182,7 +182,7 @@ export async function claimRegistration(db: D1Database, token: string) {
     db.prepare(`INSERT INTO attendee_sessions (id, attendee_id, token_hash, expires_at, created_at, last_seen_at)
       SELECT ?, ?, ?, ?, ?, ? WHERE ${owns}`).bind(sessionId, attendeeId, await hashToken(sessionToken), attendeeSessionExpiry(), now, now, grant.id, sessionId),
     db.prepare(`UPDATE ticket_assignments SET attendee_id=?, assigned_at=? WHERE attendee_id=? AND ticket_id IN (SELECT id FROM tickets WHERE order_id=?) AND ${owns}`)
-      .bind(attendeeId,now,reg.attendeeId,reg.orderId,grant.id,sessionId),
+      .bind(attendeeId,now,reg.attendeeId,reg.orderId ?? `rsvp_${reg.id}`,grant.id,sessionId),
     db.prepare(`INSERT OR IGNORE INTO attendee_notifications (id,attendee_id,event_slug,kind,title,body,url,source_id,created_at)
       SELECT lower(hex(randomblob(16))),?,event_slug,kind,title,body,url,source_id,created_at FROM attendee_notifications
       WHERE attendee_id=? AND kind='registration_update' AND instr(source_id,?)=1 AND ${owns}`)

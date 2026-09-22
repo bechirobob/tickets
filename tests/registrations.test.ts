@@ -230,3 +230,21 @@ it('binds only a new RSVP to its originating session and never grants access to 
   expect((await (await passes(req('/api/customer/tickets',{},verified.cookie))).json() as {orders:unknown[]}).orders).toHaveLength(1);
   expect((await (await passes(req('/api/customer/tickets',{},cookie))).json() as {orders:unknown[]}).orders).toHaveLength(0);
 });
+
+it('keeps verified ownership when inbox recovery races host approval', async () => {
+  await configure({approvalRequired:true});
+  const input={eventSlug:slug,email:'approval-recovery-race@example.com',guestName:'Racing Guest',phone:'',partySize:1,acceptedTerms:true};
+  const submitted=await signup(req('/api/registrations',input));
+  const deviceCookie=submitted.headers.get('set-cookie')!;
+  const grant=await access(input.email),hostCookie=await owner();
+  const [verified,approved]=await Promise.all([
+    claimRegistration(env.DB,grant.token),
+    hostAction(req('/api/admin/registrations',{eventSlug:slug,action:'approve',id:grant.id},hostCookie)),
+  ]);
+  expect(approved.status).toBe(200);
+  const current=await readRegistration(env.DB,grant.id);
+  expect(current?.status).toBe('confirmed');
+  expect(await env.DB.prepare('SELECT attendee_id AS owner FROM ticket_assignments WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id=?)').bind(`rsvp_${grant.id}`).first()).toEqual({owner:current!.attendeeId});
+  expect((await (await passes(req('/api/customer/tickets',{},verified.cookie))).json() as {orders:unknown[]}).orders).toHaveLength(1);
+  expect((await (await passes(req('/api/customer/tickets',{},deviceCookie))).json() as {orders:unknown[]}).orders).toHaveLength(0);
+});
