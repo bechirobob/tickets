@@ -16,12 +16,23 @@ it("never serves a previous release's cached asset references after a deployment
 });
 
 it("keeps private, query-specific and unidentified-release requests outside the page cache", () => {
-  for (const path of ["/my-nights", "/api/customer/registrations", "/admin/orders", "/events?date=2026-09-20"]) {
+  for (const path of ["/my-nights", "/api/customer/registrations", "/admin/orders", "/events?date=2026-09-20", "/api/room/example/access", "/api/room/socket?event=example", "/room/example?from=notification"]) {
     const request = new Request(`https://cache-test.example${path}`, { headers: { accept: "text/html" } });
     expect(publicPageCacheKey(request, new URL(request.url), "release")).toBeNull();
   }
   const request = new Request("https://cache-test.example/", { headers: { accept: "text/html" } });
   expect(publicPageCacheKey(request, new URL(request.url), undefined)).toBeNull();
+});
+
+it("shares only the public Room HTML shell across sessions and keeps it release scoped", () => {
+  const url = new URL("https://cache-test.example/room/public-event");
+  const guest = new Request(url, { headers: { accept: "text/html", cookie: "bct_attendee=private-session" } });
+  const anonymous = new Request(url, { headers: { accept: "text/html" } });
+  const key = publicPageCacheKey(guest, url, "release-a")!;
+  expect(key.url).toBe(publicPageCacheKey(anonymous, url, "release-a")?.url);
+  expect(key.headers.has("cookie")).toBe(false);
+  expect(key.url).not.toBe(publicPageCacheKey(guest, url, "release-b")?.url);
+  expect(publicPageCacheKey(new Request(url, { headers: { accept: "text/x-component" } }), url, "release-a")).toBeNull();
 });
 
 it("requires browser HTML revalidation while preserving a short edge TTL and removing cookies", () => {

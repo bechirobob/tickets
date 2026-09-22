@@ -52,6 +52,13 @@ type TierRecord = {
   reservedAdmissions: number;
 };
 
+// Reuse immutable locale formatters across requests instead of reconstructing
+// ICU formatting state for every event in every server render.
+const shortDateFormat = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" });
+const fullDateFormat = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" });
+const weekdayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" });
+const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" });
+
 function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): CuratedEvent {
   const starts = new Date(record.startsAt);
   const ends = new Date(record.endsAt);
@@ -61,10 +68,10 @@ function formatEvent(record: EventRecord, tiers: TicketTier[], index: number): C
     slug: record.slug,
     registrationMode: record.registrationMode,
     title: record.title,
-    shortDate: comingSoon ? record.scheduleLabel || "Coming soon" : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "Africa/Accra" }).format(starts).toUpperCase(),
-    fullDate: comingSoon ? record.scheduleLabel || "Coming soon" : new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" }).format(starts),
-    day: comingSoon ? "" : new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Africa/Accra" }).format(starts),
-    time: comingSoon ? "Time to be announced" : `${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(starts)}${endPending ? " onwards" : ` — ${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Accra" }).format(ends)}`}`,
+    shortDate: comingSoon ? record.scheduleLabel || "Coming soon" : shortDateFormat.format(starts).toUpperCase(),
+    fullDate: comingSoon ? record.scheduleLabel || "Coming soon" : fullDateFormat.format(starts),
+    day: comingSoon ? "" : weekdayFormat.format(starts),
+    time: comingSoon ? "Time to be announced" : `${timeFormat.format(starts)}${endPending ? " onwards" : ` — ${timeFormat.format(ends)}`}`,
     startsAt: comingSoon ? null : record.startsAt,
     endsAt: endPending ? null : record.endsAt,
     scheduleStatus: record.scheduleStatus,
@@ -205,14 +212,14 @@ export async function getPublicEvents(options: { throwOnError?: boolean } = {}):
   }
 }
 
-export async function findCuratedEvent(slug: string): Promise<CuratedEvent | null> {
+export async function findCuratedEvent(slug: string, options: { includeTicketTiers?: boolean } = {}): Promise<CuratedEvent | null> {
   if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return null;
   try {
     const now = new Date().toISOString();
     const records = await loadPublicEventRecords(slug);
     const record = records[0];
     if (!record) return null;
-    const tiers = await loadTiers([record.slug], now);
+    const tiers = options.includeTicketTiers === false ? [] : await loadTiers([record.slug], now);
     return formatEvent(record, tiers.map((tier) => ({
       id: tier.code,
       recordId: tier.recordId,

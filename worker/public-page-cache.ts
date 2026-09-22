@@ -5,6 +5,9 @@ export function publicPageCacheKey(request: Request, url: URL, release: string |
   const path = url.pathname;
   const eligible = path === "/" || path === "/about" || path === "/events" || path === "/hosts"
     || /^\/event\/[a-z0-9-]{1,80}$/u.test(path)
+    // Room HTML contains only public event metadata and its loading shell.
+    // Admission and private content are fetched separately through uncached APIs.
+    || /^\/room\/[a-z0-9-]{1,80}$/u.test(path)
     || /^\/hosts\/[a-z0-9-]{1,80}$/u.test(path);
   if (!eligible) return null;
   // HTML references content-hashed assets belonging to this Worker version.

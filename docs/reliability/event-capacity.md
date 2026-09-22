@@ -255,3 +255,34 @@ metadata now skips that needless deserialization. Private messages/reactions/
 flashes retain fresh recipient authorization, block and revocation checks. A
 regression verifies all snapshots, bounded presence fanout, and the final leave
 count. Hosted thresholds and the 400-simultaneous-join workload are unchanged.
+
+Final PR #169 candidate `4de9b4aee3e456881f583657e3f442c67dcf4584` passed hosted
+runs `35670817933` and `35670987927` on fresh isolated resources. Both delivered
+to all 400 sockets, persisted all 399 non-sender notifications, and passed recovery
+and cleanup. Room join p95 was 2,467 / 2,438 ms; message p95 390 / 1,974 ms;
+400-read p95 1,852 / 1,645 ms; sustained read p95 58 / 62 ms. Both recorded 400
+presence frames by delivery measurement and no unexpected socket closures.
+The local 48,000-delivery/revocation/reconnect scenario also passed. All 395
+backend tests, candidate browser journeys, native validation and iPhone layouts
+passed before merge.
+
+PR #169 deployed as `f23f15e2d6752b6fa123f9a0adbe1f2801a0d696`, Worker
+`981267b6-d70a-463d-8c19-7ec625846930` in run `35671935251`. The merged tree
+matched the tested tree; live version and privacy/public-route smoke checks passed.
+Live mobile Chrome (99 checks), WebKit (98 checks), iPhone layouts and marketing
+connection inspection passed. Desktop audit run `35672132636` failed twice in
+Chromium headless-shell context creation with `SIGSEGV`/`SEGV_MAPERR 0000000001b0`.
+Its second attempt also found a real Room HTML render failure: Cloudflare 1102
+(CPU limit), Ray `a3ed401f7c4e6077`, at 00:39:04 UTC on 22 September. The error
+page is preserved in artifact `10671178820`; do not report this audit as green.
+
+Follow-up `fix/room-render-and-browser-reliability` uses Playwright's documented
+full Chromium headless channel for desktop, reuses immutable date formatters,
+skips unused tier inventory in the Room server render, and admits only its public
+HTML loading shell to the existing 45-second, release-scoped edge cache. The
+server page reads only public event metadata. Admission APIs, sockets, private
+messages, query-specific responses and RSC requests remain outside that cache.
+New regressions cover cache boundaries and unchanged event metadata/checkout tiers.
+No billing, resource allowance, admission policy or data schema changes are made.
+Next: exact-source candidate/native gates, deploy the follow-up, verify Room cache
+responses and complete all live browser audits with retries disabled.

@@ -19,7 +19,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
+    // Full Chromium's current headless mode avoids the separate headless shell
+    // that repeatedly segfaulted during context creation in production audits.
+    { name: "desktop-chromium", use: { ...devices["Desktop Chrome"], channel: "chromium" } },
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
     { name: "mobile-webkit", use: { ...devices["iPhone 13"] } },
   ],
