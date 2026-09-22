@@ -80,7 +80,7 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
     await route.continue();
   });
   try {
-    await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();
+    await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();
     const manager = page.locator('.registration-manager');
     const announcements = manager.getByRole('button', { name: 'Announcements', exact: true });
     await expect(announcements).toBeEnabled();
@@ -101,10 +101,10 @@ test('guest tabs stay under the pointer when live activity arrives', async ({ pa
   }
 });
 test('registration tabs accept the first click after scrolling to them', async ({ page }) => {
-  for (const path of ['/admin/registrations?event=rsvp-browser', '/organizer/workspace?event=rsvp-browser']) {
+  for (const path of ['/admin/registrations?event=rsvp-browser', '/organizer/workspace?area=events&event=rsvp-browser&view=guests']) {
     for (let attempt = 0; attempt < 2; attempt++) {
       await page.goto(path);
-      if(path.startsWith('/organizer/'))await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();
+      if(path.startsWith('/organizer/'))await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();
       const manager = page.locator('.registration-manager');
       await manager.getByRole('button', { name: 'Save registration settings', exact: true }).scrollIntoViewIfNeeded();
       const emails = manager.getByRole('button', { name: 'Guest emails', exact: true });
@@ -244,7 +244,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  test.describe.configure({retries:0});
  test.beforeEach(async({context,baseURL})=>{await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);});
  test('organiser chooses free or paid entry and previews a direct registration link',async({page},info)=>{
-  await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();
+  await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();
   const manager=page.locator('.registration-manager');await expect(manager).toBeVisible();
   await expect(manager.getByText('Updates automatically')).toBeVisible();
   await manager.getByLabel('Guest capacity',{exact:true}).fill('');
@@ -292,7 +292,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeVisible();
  });
  test('verified signup appears without refreshing the organiser dashboard and joins guest emails',async({page})=>{
-  await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();const manager=page.locator('.registration-manager');
+  await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();const manager=page.locator('.registration-manager');
   await expect(manager.getByText('Updates automatically')).toBeVisible();
   await expect(manager.getByLabel('Live registrations')).toContainText('1');
   await manager.getByRole('button',{name:/^Guest list/}).click();
@@ -314,7 +314,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
  });
  test('announcement preview preserves a failed send and owner sees organiser actions',async({page,context,baseURL},info)=>{
   await page.route('**/api/admin/campaigns?**',async route=>{const response=await route.fetch();const data=await response.json();await route.fulfill({response,json:{...data,configured:true,state:{...data.state,status:'ready'}}});});
-  await page.goto('/organizer/workspace?event=rsvp-browser');await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'RSVP & guests',exact:true}).click();const manager=page.locator('.registration-manager');
+  await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();const manager=page.locator('.registration-manager');
   const announcements=manager.getByRole('button',{name:'Announcements',exact:true});await announcements.click();await expect(announcements).toHaveAttribute('aria-pressed','true');
   await manager.getByLabel('Subject',{exact:true}).fill('Doors open at eight');await manager.getByLabel('Announcement',{exact:true}).fill('Please bring your QR pass. See you at the event.');
   await manager.getByRole('button',{name:'Preview announcement'}).click();await expect(manager.locator('.announcement-preview')).toContainText('1 subscribed guest emails');
@@ -340,6 +340,7 @@ test('master account can remove staff and keeps its own account',async({page},in
 test('every organizer task and expanded panel remains compact and readable',async({page},info)=>{
  const apiErrors:string[]=[];page.on('response',r=>{if(r.url().includes('/api/organizer/business')&&r.status()>=500)apiErrors.push(r.url());});
  await page.goto('/organizer/workspace?area=events&event=rsvp-browser');await expect(page.locator('#suite-event')).toHaveValue('rsvp-browser');
+ const headerFits=await page.locator('.suite-topbar').evaluate(header=>{const box=header.getBoundingClientRect();return [...header.children].every(child=>{const rect=child.getBoundingClientRect();return rect.top>=box.top&&rect.bottom<=box.bottom;});});expect(headerFits,'workspace switcher stays within the header').toBe(true);
  const tabs=page.getByRole('navigation',{name:'Event tools'});
  for(const name of ['Overview','Tickets','Room & VIP','Door','Help','Guests','Insights']){
   await tabs.getByRole('button',{name,exact:true}).click();
@@ -358,6 +359,8 @@ test('every organizer task and expanded panel remains compact and readable',asyn
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
   await page.screenshot({path:info.outputPath(`organizer-area-${name.toLowerCase()}.png`),fullPage:true});
  }
+ await nav.getByRole('link',{name:'Events',exact:true}).click();await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
+ await page.goBack();await expect(tabs.getByRole('button',{name:'Overview',exact:true})).toHaveAttribute('aria-current','page');await page.goForward();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
  expect(apiErrors).toEqual([]);
  await page.goto('/organizer/analytics');await expect(page.locator('.analytics-overview')).toBeVisible();await expectVisibleLettering(page,'.organizer-analytics');const analyticsAxe=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(analyticsAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),'Analytics').toEqual([]);
 });
@@ -502,10 +505,10 @@ test('organizer can manage coupons, questions, guests and promoter records in is
  await page.getByLabel('Expires (Accra time)',{exact:true}).fill(new Date(Date.now()+86400000).toISOString().slice(0,16));
  await page.getByRole('button',{name:'Create coupon',exact:true}).click();
  const coupon=page.locator('.suite-rows article').filter({hasText:code});await expect(coupon).toBeVisible();await coupon.getByRole('button',{name:'Disable',exact:true}).click();await expect(coupon.getByRole('button',{name:'Enable',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Links & promoters',exact:true}).click();await page.getByText('Add a promoter',{exact:true}).click();await page.getByLabel('Promoter name',{exact:true}).fill(`Crew ${code}`);await page.getByLabel('Link code',{exact:true}).fill(code);await page.getByLabel('Commission %',{exact:true}).fill('5');await page.getByRole('button',{name:'Create promoter link',exact:true}).click();
+ await page.getByRole('button',{name:'Links & promoters',exact:true}).click();await page.getByText('Add a promoter',{exact:true}).click();await page.getByLabel('Promoter name',{exact:true}).fill(`Crew ${code}`);await page.getByLabel('Link code',{exact:true}).fill(code);await page.locator('details').filter({has:page.locator('summary').filter({hasText:/^Add a promoter$/})}).getByLabel('Commission %',{exact:true}).fill('5');await page.getByRole('button',{name:'Create promoter link',exact:true}).click();
  await page.locator('summary').filter({hasText:`Crew ${code}`}).click();await expect(page.getByLabel(`Crew ${code} buyer link`)).toHaveValue(new RegExp(`ref=${code}`));
  await page.getByRole('button',{name:'Create private report link',exact:true}).click();await expect(page.getByLabel('Share only with this promoter')).toHaveValue(/promoter#token=/);
- await page.goto('/organizer/workspace?area=events&event=after-dark-osu&view=overview');await page.getByText('Guest questions',{exact:true}).click();await page.getByRole('button',{name:'Add question',exact:true}).click();await page.getByLabel('Question',{exact:true}).fill(`Arrival group ${code}?`);await page.getByRole('button',{name:'Save question',exact:true}).click();await expect(page.getByText(`Arrival group ${code}?`,{exact:true})).toBeVisible();
+ await page.goto('/organizer/workspace?area=events&event=after-dark-osu&view=overview');await page.locator('summary').filter({hasText:/^Guest questions$/}).click();await page.getByRole('button',{name:'Add question',exact:true}).click();await page.getByLabel('Question',{exact:true}).fill(`Arrival group ${code}?`);await page.getByRole('button',{name:'Save question',exact:true}).click();await expect(page.getByText(`Arrival group ${code}?`,{exact:true})).toBeVisible();
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Tickets',exact:true}).click();await page.getByText('Issue complimentary passes',{exact:true}).click();
  await page.getByLabel('Ticket type',{exact:true}).selectOption({index:1});await page.getByLabel('Guest CSV',{exact:true}).fill(`name,email,quantity\nGuest ${code},${code.toLowerCase()}@example.com,1`);await page.getByRole('button',{name:'Review guest list',exact:true}).click();await page.getByRole('button',{name:'Issue reviewed passes',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'All complimentary passes are issued'})).toBeVisible();
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Guests',exact:true}).click();await page.getByLabel('Find a guest',{exact:true}).fill(code.toLowerCase());await expect(page.locator('.suite-section:visible').getByText(`Guest ${code}`,{exact:true})).toBeVisible();
