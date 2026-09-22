@@ -2,7 +2,7 @@ import { recordAudit, type AdminSession } from './admin-session';
 export async function removalImpact(db: D1Database, slug: string) {
   return db.prepare(`SELECT e.slug, e.title, e.removed_at AS removedAt, e.event_state AS eventState,
     (e.schedule_status = 'coming_soon' OR julianday(e.ends_at) >= julianday('now')) AS upcoming,
-    (SELECT COUNT(*) FROM orders WHERE event_slug = e.slug AND payment_provider <> 'rsvp' AND total_amount_minor > refunded_amount_minor AND status IN ('paid','refund_pending','requires_refund','disputed')) AS paidBookings,
+    (SELECT COUNT(*) FROM orders WHERE event_slug = e.slug AND payment_provider NOT IN ('rsvp','complimentary') AND total_amount_minor > refunded_amount_minor AND status IN ('paid','refund_pending','requires_refund','disputed')) AS paidBookings,
     (SELECT COUNT(*) FROM event_registrations WHERE event_slug = e.slug AND status IN ('confirmed','requested','waitlisted','interested','unverified')) AS registrations
     FROM curated_event_records e WHERE e.slug = ?`).bind(slug).first<{ slug: string; title: string; removedAt: string | null; eventState: string; upcoming: number; paidBookings: number; registrations: number }>();
 }
@@ -12,7 +12,7 @@ export async function removeEvent(env: Cloudflare.Env, session: AdminSession, sl
   if (!impact) throw new Error('Event not found.');
   if (!approved && !impact.removedAt && impact.eventState !== "cancelled" && impact.upcoming && impact.paidBookings) throw new Error('This event has paid bookings. Request removal approval first.');
   const now = new Date().toISOString();
-  const guard = approved || impact.removedAt || impact.eventState === 'cancelled' ? '' : `AND NOT ((schedule_status = 'coming_soon' OR julianday(ends_at) >= julianday('now')) AND EXISTS (SELECT 1 FROM orders WHERE event_slug = curated_event_records.slug AND payment_provider <> 'rsvp' AND total_amount_minor > refunded_amount_minor AND status IN ('paid','refund_pending','requires_refund','disputed')))`;
+  const guard = approved || impact.removedAt || impact.eventState === 'cancelled' ? '' : `AND NOT ((schedule_status = 'coming_soon' OR julianday(ends_at) >= julianday('now')) AND EXISTS (SELECT 1 FROM orders WHERE event_slug = curated_event_records.slug AND payment_provider NOT IN ('rsvp','complimentary') AND total_amount_minor > refunded_amount_minor AND status IN ('paid','refund_pending','requires_refund','disputed')))`;
   const [marked] = await env.DB.batch([
     env.DB.prepare(`UPDATE curated_event_records SET removed_at = COALESCE(removed_at, ?), status = 'unpublished', scheduled_publish_at = NULL, updated_at = ? WHERE slug = ? ${guard}`).bind(now, now, slug),
     env.DB.prepare("INSERT OR IGNORE INTO event_removal_cleanup (event_slug, created_at) SELECT slug, ? FROM curated_event_records WHERE slug = ? AND removed_at IS NOT NULL").bind(now, slug),

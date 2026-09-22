@@ -849,7 +849,7 @@ test("help is searchable by role and organiser records follow the verified submi
   assert.match(help, /Frequently needed/u);
   assert.match(help, /email you used to submit/u);
   assert.match(help, /Understand what moved your Night/u);
-  assert.match(help, /href: "\/organizer\/analytics", label: "Open organiser analytics"/u);
+  assert.match(help, /href: "\/organizer\/workspace\?area=events&view=insights", label: "Open event insights"/u);
   assert.match(organizerWorkspace, /Your events so far/u);
   assert.match(organizerWorkspace, /Your submissions/u);
   assert.match(organizerWorkspace, /data\.events\.reduce/u);

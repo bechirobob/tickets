@@ -15,7 +15,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -41,22 +41,33 @@ jobs:
       - name: Install browsers for event-page verification
         run: npx playwright install --with-deps chromium webkit
       - name: Prepare isolated event fixtures
+        id: browser_fixtures
         run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
       - name: Verify every browser journey before release
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: npx playwright test --project ${{ matrix.browser }}
+      - name: Verify organizer suite on desktop and mobile
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
+        run: |
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'every organizer task|organizer can manage|organizer overview keeps|host lands on their event' --workers=1 --retries=0 --output test-results/organizer-suite
       - name: Verify optional SeevPlus checkout on desktop and mobile
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
           node scripts/prepare-seev-browser-fixture.mjs
           npx playwright test --config playwright.seev.config.ts --project ${{ matrix.browser }} --output test-results/seevplus
       - name: Verify RSVP and interest registration on desktop and mobile
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
           node scripts/prepare-registration-browser-fixture.mjs
           npx playwright test --config playwright.registration.config.ts --project ${{ matrix.browser }} --output test-results/registration
       - name: Verify owner Operations workflows on desktop and mobile
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
           node scripts/prepare-operations-browser-fixture.mjs
           npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --output test-results/operations
       - name: Verify host report fixture recovery without retries
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
       - name: Preserve event-page renders and browser results
         if: always()

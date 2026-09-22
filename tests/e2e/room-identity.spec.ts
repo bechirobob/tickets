@@ -5,7 +5,6 @@ import { expect, test } from "./catalogue";
 test.use({ serviceWorkers: "block" });
 
 test('an announcement link opens the host update above later chat messages', async ({page,eventSlug}) => {
-  test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === 'pull_request', 'Candidate and post-deployment checks exercise the new announcement link.');
   const room={eventSlug,eventTitle:'Garden Party',readOnlyAt:new Date(Date.now()+86400000).toISOString(),readOnly:false};
   const base={roomBadge:null,parentId:null,pinned:false,deletedAt:null,reactions:[],createdAt:new Date().toISOString()};
   await page.route('**/api/**',route=>{
@@ -187,7 +186,7 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   const notifications = page.getByRole("button", { name: "Room notification settings" });
   await notifications.click();
   await expect(page.getByRole("dialog", { name: "Room notifications" })).toBeVisible();
-  await expect(page.getByRole("switch", { name: process.env.E2E_BASE_URL && process.env.GITHUB_EVENT_NAME === "pull_request" ? "Host updates and Room messages" : "Room messages" })).toBeEnabled();
+  await expect(page.getByRole("switch", { name: "Room messages", exact: true })).toBeEnabled();
   const settings = page.getByRole("dialog", { name: "Room notifications" });
   const settingsBounds = await settings.locator(".notification-panel").boundingBox();
   expect(settingsBounds!.height).toBeLessThan(340);
@@ -196,16 +195,14 @@ test("the Room keeps reactions on their messages and matches the homepage conver
   await page.screenshot({ path: testInfo.outputPath("room-notification-settings.png") });
   await page.keyboard.press("Escape");
   await expect(notifications).toBeFocused();
-  if (!(process.env.E2E_BASE_URL && process.env.GITHUB_EVENT_NAME === 'pull_request')) {
-    await page.locator('.event-alert-nudge > summary').click();
-    await expect(page.getByRole('complementary',{name:'Event notifications'})).toContainText('private guest chat');
-    expect((await new AxeBuilder({page}).include('.event-alert-nudge').analyze()).violations).toEqual([]);
-    await page.screenshot({path:testInfo.outputPath('room-enable-alerts.png')});
-    await page.locator('.event-alert-nudge > summary').click();
-    await notifications.click();
-    await page.getByRole('switch',{name:'Room messages',exact:true}).click();
-    await expect(page.getByRole('switch',{name:'Room messages',exact:true})).toHaveAttribute('aria-checked','false');
-    await expect(page.getByRole('switch',{name:'Host announcements',exact:true})).toHaveAttribute('aria-checked','true');
-    expect(roomMessages).toBe(false);expect(hostUpdates).toBe(true);
-  }
+  await page.locator('.event-alert-nudge > summary').click();
+  await expect(page.getByRole('complementary',{name:'Event notifications'})).toContainText('private guest chat');
+  expect((await new AxeBuilder({page}).include('.event-alert-nudge').analyze()).violations).toEqual([]);
+  await page.screenshot({path:testInfo.outputPath('room-enable-alerts.png')});
+  await page.locator('.event-alert-nudge > summary').click();
+  await notifications.click();
+  await page.getByRole('switch',{name:'Room messages',exact:true}).click();
+  await expect(page.getByRole('switch',{name:'Room messages',exact:true})).toHaveAttribute('aria-checked','false');
+  await expect(page.getByRole('switch',{name:'Host announcements',exact:true})).toHaveAttribute('aria-checked','true');
+  expect(roomMessages).toBe(false);expect(hostUpdates).toBe(true);
 });

@@ -24,6 +24,10 @@ const paymentNetworks = [
 export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled = false, paystackEnabled = true }: { paystackEnabled?: boolean; seevEnabled?: boolean; slug: string; event: CuratedEvent; feeBasisPoints: number }) {
   const params = useSearchParams();
   const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
+  const [couponCode,setCouponCode]=useState('');
+  const [couponMessage,setCouponMessage]=useState('');
+  const [quoting,setQuoting]=useState(false);
+  const [coupon,setCoupon]=useState<{code:string;tierId:string;quantity:number;discountMinor:number}|null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedTierId, setSelectedTierId] = useState(() => {
     const requested = params.get("tier");
@@ -50,8 +54,14 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const paymentProvider = paymentMethod === "card" ? "paystack" : momoProvider;
   const selectedTier = event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0];
   const ticketTotalMinor = quantity * selectedTier.priceMinor;
-  const feeMinor = useMemo(() => Math.round(ticketTotalMinor * feePercent / 100), [ticketTotalMinor, feePercent]);
-  const totalMinor = ticketTotalMinor + feeMinor;
+  const activeCoupon=coupon?.tierId===selectedTierId&&coupon.quantity===quantity?coupon:null;
+  const discountMinor=activeCoupon?.discountMinor??0;
+  const feeMinor = useMemo(() => Math.round((ticketTotalMinor-discountMinor) * feePercent / 100), [ticketTotalMinor,discountMinor,feePercent]);
+  const totalMinor = ticketTotalMinor-discountMinor+feeMinor;
+  async function applyCoupon(){
+    if(quoting||isPaying)return;setQuoting(true);setCouponMessage('');setCoupon(null);
+    try{const r=await fetch('/api/payments/quote',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({eventSlug:slug,tierId:selectedTierId,quantity,code:couponCode}),signal:AbortSignal.timeout(15000)});const d=await r.json() as {discountMinor:number;error?:string};if(!r.ok)throw new Error(d.error??'The code could not be applied.');setCoupon({code:couponCode.trim().toUpperCase(),tierId:selectedTierId,quantity,discountMinor:d.discountMinor});setCouponMessage('Discount applied.');}catch(e){setCouponMessage(e instanceof Error?e.message:'Try again.');}finally{setQuoting(false);}
+  }
   const admissionCount = quantity * selectedTier.admissionsPerUnit;
   const maxPurchasableUnits = Math.max(1, Math.min(selectedTier.maxUnitsPerOrder, Math.floor(selectedTier.remainingAdmissions / selectedTier.admissionsPerUnit)));
 
@@ -67,7 +77,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   }, [slug]);
 
   async function continueToPay() {
-    if (!ready || paying.current || (!paystackEnabled && !seevEnabled)) return;
+    if (!ready || quoting || paying.current || (!paystackEnabled && !seevEnabled)) return;
     if (!paymentMethod) {
       setMessage("Choose a payment method before continuing.");
       paymentChoice.current?.focus();
@@ -101,7 +111,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
-      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, paymentProvider, network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, announcementsOptIn, offer: params.get("offer"), promoterCode: params.get("ref"), expectedTotalMinor: totalMinor });
+      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, paymentProvider, network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, announcementsOptIn, offer: params.get("offer"), promoterCode: params.get("ref"), couponCode:activeCoupon?.code??"", expectedTotalMinor: totalMinor });
       const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload))), (byte) => byte.toString(16).padStart(2, "0")).join("");
       const storageKey = `bct:payment-attempt:${slug}`;
       if (!paymentAttempt.current) {
@@ -240,13 +250,15 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
           <p className="eyebrow">Order summary</p>
           <h2>{event.title}</h2>
           <p>{event.shortDate} · {event.time.split(" — ")[0]}<br />{event.venue}, {event.area}</p>
+          <div className="checkout-coupon"><label htmlFor="checkout-coupon">Discount code</label><div><input id="checkout-coupon" value={couponCode} maxLength={32} disabled={isPaying||quoting} onChange={e=>{setCouponCode(e.target.value);setCoupon(null);setCouponMessage('');}}/><button type="button" disabled={!ready||quoting||isPaying||!couponCode.trim()} onClick={()=>void applyCoupon()}>{quoting?'Checking…':'Apply'}</button>{activeCoupon?<button type="button" disabled={isPaying} onClick={()=>{setCoupon(null);setCouponCode('');setCouponMessage('');}}>Remove</button>:null}</div><p role="status">{coupon&&!activeCoupon?'Your ticket selection changed. Apply the code again.':couponMessage}</p></div>
           <div className="summary-lines">
             <span>{quantity} × {selectedTier.name} <b>{formatGhanaCedis(ticketTotalMinor)}</b></span>
+            {discountMinor>0?<span>Discount · {activeCoupon?.code}<b>−{formatGhanaCedis(discountMinor)}</b></span>:null}
             {selectedTier.admissionsPerUnit > 1 && <span>Admissions included <b>{admissionCount}</b></span>}
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
             <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <ActionButton type="button" className="pay-button" aria-busy={!ready || isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={!ready || isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : !ready ? "Preparing checkout…" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
+          <ActionButton type="button" className="pay-button" aria-busy={!ready || isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={!ready || quoting || isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : !ready ? "Preparing checkout…" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
           <p id="checkout-payment-message" className="payment-message" role="status" aria-atomic="true">{message}</p>
           {paystackEnabled || seevEnabled ? <p className="secure-note"><ShieldCheck size={15} /> {paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.</p> : null}
         </aside>

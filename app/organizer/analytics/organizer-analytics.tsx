@@ -75,7 +75,7 @@ function BarList({ rows, value, label, detail }: { rows: Array<Record<string, un
   </div>)}</div>;
 }
 
-export default function OrganizerAnalytics({ actor, role, initialEvent = "all", initialRange = "30", initialView = "guests" }: { actor: string; role: StaffRole; initialEvent?: string; initialRange?: string; initialView?: string }) {
+export default function OrganizerAnalytics({ actor, role, initialEvent = "all", initialRange = "30", initialView = "guests", embedded=false, active=true }: { embedded?:boolean; active?:boolean; actor: string; role: StaffRole; initialEvent?: string; initialRange?: string; initialView?: string }) {
   const router = useRouter();
   const [eventSlug, setEventSlug] = useState(initialEvent);
   const [range, setRange] = useState(initialRange);
@@ -88,6 +88,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    if(!active)return;
     const controller = new AbortController();
     let running = false;
     async function load() {
@@ -109,13 +110,14 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
     void load();
     const timer = setInterval(() => { if (!document.hidden) void load(); }, 60000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [eventSlug, range, retry]);
+  }, [eventSlug, range, retry,active]);
 
   useEffect(() => {
+    if(embedded)return;
     const url = new URL(window.location.href);
     url.searchParams.set("event", eventSlug); url.searchParams.set("range", range); url.searchParams.set("view", view);
     window.history.replaceState(window.history.state, "", url);
-  }, [eventSlug, range, view]);
+  }, [eventSlug, range, view,embedded]);
 
   const overview = data?.overview;
   const funnel = useMemo(() => overview ? [
@@ -126,12 +128,12 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
     { label: "Payments confirmed", value: overview.paymentsConfirmed },
   ] : [], [overview]);
   const totalVip = data?.vipUsage.reduce((sum, item) => sum + Number(item.count), 0) ?? 0;
-  const workspaceUrl = `/organizer/workspace${eventSlug === "all" ? "" : `?event=${encodeURIComponent(eventSlug)}`}`;
+  const workspaceUrl = `/organizer/workspace${eventSlug === "all" ? "" : `?area=events&view=overview&event=${encodeURIComponent(eventSlug)}`}`;
   const exportUrl = `/api/organizer/analytics?eventSlug=${encodeURIComponent(eventSlug)}&range=${range}&format=csv`;
 
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); router.push("/"); router.refresh(); }
 
-  return <main className="organizer-workspace organizer-analytics">
+  return <div className={`organizer-workspace organizer-analytics${embedded?" organizer-analytics--embedded":""}`}>
     <header className="organizer-workspace__header">
       <Link href="/" className="night-brand-link"><BrandLogo /></Link>
       <WorkspaceJump active="/organizer/analytics" role={role} compact />
@@ -145,7 +147,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
 
     {data?.scope.baseline ? <p className="analytics-baseline">Analytics start {new Date(data.scope.baseline).toLocaleString("en-GB", {dateStyle:"medium",timeStyle:"short",timeZone:"Africa/Accra"})} (Accra). Earlier activity is excluded. Bookings remain in the guest list and payment records.</p> : null}
     <section className="analytics-controls" aria-label="Analytics filters">
-      <label>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setData(null); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{eventOptions.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
+      <label hidden={embedded}>Night<select aria-label="Night" value={eventSlug} onChange={(event) => { setLoading(true); setData(null); setError(""); setEventSlug(event.target.value); }}><option value="all">All Nights</option>{eventOptions.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label>
       <label>Period<select aria-label="Period" value={range} onChange={(event) => { setLoading(true); setData(null); setError(""); setRange(event.target.value); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
       <button type="button" disabled={refreshing} onClick={() => setRetry(value => value + 1)}><RefreshCw size={16} />{refreshing ? "Updating…" : "Refresh"}</button>
       <a href={exportUrl}><ArrowDownToLine size={15} /> Export CSV</a>
@@ -173,7 +175,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
       </div>
       <section id="analytics-sales" className="analytics-layout" aria-label="Sales reports" hidden={view !== "sales"}>
         <article className="analytics-section analytics-section--wide"><header><div><small>Sales</small><h2>Gross sales over time</h2></div><b>{money(overview.revenueMinor)}</b></header><TrendChart rows={data.salesTrend} /></article>
-        <article className="analytics-section"><header><div><small>Sales detail</small><h2>Collected & refunded</h2></div><b>{money(overview.revenueMinor)}</b></header><dl className="analytics-facts"><div><dt>Payment failures</dt><dd>{overview.paymentFailed}</dd></div><div><dt>Refunded</dt><dd>{money(overview.refundsMinor)}</dd></div><div><dt>Collected less refunds</dt><dd>{money(overview.revenueMinor - overview.refundsMinor)}</dd></div><div><dt>Booking fees collected</dt><dd>{money(overview.bookingFeesMinor)}</dd></div><div><dt>Average paid order</dt><dd>{money(overview.averageOrderValueMinor)}</dd></div></dl><p>These figures are not a payout balance. Payment charges, holds and settlements are under Event & sales.</p></article>
+        <article className="analytics-section"><header><div><small>Sales detail</small><h2>Collected & refunded</h2></div><b>{money(overview.revenueMinor)}</b></header><dl className="analytics-facts"><div><dt>Payment failures</dt><dd>{overview.paymentFailed}</dd></div><div><dt>Refunded</dt><dd>{money(overview.refundsMinor)}</dd></div><div><dt>Collected less refunds</dt><dd>{money(overview.revenueMinor - overview.refundsMinor)}</dd></div><div><dt>Booking fees collected</dt><dd>{money(overview.bookingFeesMinor)}</dd></div><div><dt>Average paid order</dt><dd>{money(overview.averageOrderValueMinor)}</dd></div></dl><p>For settlement statements and confirmed payout status, open Money in your workspace.</p></article>
         <article className="analytics-section"><header><div><small>Checkout</small><h2>Payment methods</h2></div></header><BarList rows={data.paymentMethods as unknown as Array<Record<string, unknown>>} value={(item) => Number(item.orders)} label={(item) => readable(String(item.channel))} detail={(item) => `${item.orders} orders · ${money(Number(item.revenueMinor))}`} /></article>
         <article className="analytics-section analytics-section--wide"><header><div><small>Inventory</small><h2>Ticket sales</h2></div><b>{overview.admissions} sold</b></header><div className="analytics-table"><div><b>Night / tier</b><b>Orders</b><b>Admissions</b><b>Sold</b><b>Gross</b></div>{data.ticketTiers.map((tier) => <div key={tier.id}><span><b>{tier.name}</b><small>{tier.eventTitle} · {money(tier.priceMinor)}</small></span><span><small className="analytics-cell-label">Orders</small>{tier.orders}</span><span><small className="analytics-cell-label">Admissions</small>{tier.admissions}</span><span><small className="analytics-cell-label">Sold</small>{rate(tier.admissions, tier.capacityAdmissions)}%</span><strong><small className="analytics-cell-label">Gross</small>{money(tier.revenueMinor)}</strong></div>)}</div></article>
       </section>
@@ -188,5 +190,5 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
       </section>
       </>}
     </> : null}
-  </main>;
+  </div>;
 }

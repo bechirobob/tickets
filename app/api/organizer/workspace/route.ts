@@ -1,3 +1,4 @@
+import { requireOrganizerEvent } from '../../../../lib/organizer-access';
 import {
   hasPermission,
   mutationHasValidOrigin,
@@ -12,26 +13,11 @@ import { notifyAttendee } from "../../../../lib/notifications";
 async function organizer(request: Request) {
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
-  return { env, session: session && hasPermission(session, "organizer.workspace") ? session : null };
+  return { env, session: session && !session.mustChangePassword && hasPermission(session, "organizer.workspace") ? session : null };
 }
 
 async function assigned(db: D1Database, session: NonNullable<Awaited<ReturnType<typeof organizer>>["session"]>, slug: string) {
-  if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return false;
-  if (session.role === "owner") return true;
-  const access = await db.prepare(`
-    SELECT 1 AS allowed
-    FROM curated_event_records event
-    LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    WHERE event.slug = ? AND (
-      EXISTS (
-        SELECT 1 FROM staff_event_assignments assignment
-        WHERE assignment.account_id = ? AND assignment.event_slug = event.slug
-      )
-      OR submission.contact_email = ?
-    )
-    LIMIT 1
-  `).bind(slug, session.accountId, session.email).first<{ allowed: number }>();
-  return Boolean(access?.allowed);
+  try { await requireOrganizerEvent(db,session,slug);return true; } catch { return false; }
 }
 
 export async function GET(request: Request) {
@@ -48,7 +34,7 @@ export async function GET(request: Request) {
     SELECT event.slug, event.title, event.venue, event.venue_map_url AS venueMapUrl, event.area,
            event.starts_at AS startsAt, event.ends_at AS endsAt, event.lineup, event.event_state AS eventState,
            event.capacity, event.status, submission.status AS submissionStatus, submission.created_at AS submittedAt,
-           COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider <> 'rsvp' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS paidOrders,
+           COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS paidOrders,
            (SELECT started_at FROM analytics_baseline WHERE id=1) AS analyticsBaseline,
            COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS grossMinor,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status IN ('issued','checked_in')), 0) AS issuedAdmissions,
@@ -70,7 +56,8 @@ export async function GET(request: Request) {
     session.role === "owner" ? statement.all<Record<string, unknown>>() : statement.bind(session.accountId, session.email).all<Record<string, unknown>>(),
     session.role === "owner" ? submissionStatement.all<Record<string, unknown>>() : submissionStatement.bind(session.email).all<Record<string, unknown>>(),
   ]);
-  const slugs = events.results.map((event) => String(event.slug));
+  const requestedSlug=new URL(request.url).searchParams.get('event');
+  const slugs = events.results.map((event) => String(event.slug)).filter(slug=>!requestedSlug||slug===requestedSlug);
   if (!slugs.length) return Response.json({ events: [], submissions: submissions.results, tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [], vipSettings: [], vipRequests: [] }, { headers: { "cache-control": "no-store" } });
   const placeholders = slugs.map(() => "?").join(",");
   const now = new Date().toISOString();
@@ -175,6 +162,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "assign_gate") {
+      await requireOrganizerEvent(env.DB,session,eventSlug,true);
       const email = normalizeStaffEmail(String(body.email ?? ""));
       const gate = await env.DB.prepare("SELECT id FROM staff_accounts WHERE normalized_email = ? AND role = 'gate' AND status = 'active' LIMIT 1").bind(email).first<{ id: string }>();
       if (!gate) throw new Error("Create an active gate-staff account for that email first.");

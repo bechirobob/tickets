@@ -31,7 +31,7 @@ export const orders = sqliteTable("orders", {
   paystackReference: text("paystack_reference"),
   paystackTransactionId: text("paystack_transaction_id"),
   paystackStatus: text("paystack_status"),
-  paymentProvider: text("payment_provider", { enum: ["paystack", "seevplus", "rsvp"] }).notNull().default("paystack"),
+  paymentProvider: text("payment_provider", { enum: ["paystack", "seevplus", "rsvp", "complimentary"] }).notNull().default("paystack"),
   providerReference: text("provider_reference"),
   providerTransactionId: text("provider_transaction_id"),
   providerStatus: text("provider_status"),
@@ -42,6 +42,9 @@ export const orders = sqliteTable("orders", {
   paymentUpdatedAt: text("payment_updated_at"),
   paymentVerifiedAt: text("payment_verified_at"),
   promoterCode: text("promoter_code"),
+  promoterCommissionBps: integer("promoter_commission_bps").notNull().default(0),
+  couponId: text("coupon_id"),
+  discountMinor: integer("discount_minor").notNull().default(0),
   waitlistEntryId: text("waitlist_entry_id"),
   failureReason: text("failure_reason"),
   refundStatus: text("refund_status"),
@@ -462,7 +465,7 @@ export const partySubmissions = sqliteTable("party_submissions", {
   posterObjectKey: text("poster_object_key"),
   posterContentType: text("poster_content_type"),
   posterData: blob("poster_data", { mode: "buffer" }),
-  status: text("status", { enum: ["submitted", "in_review", "changes_requested", "approved", "rejected", "scheduled", "published", "unpublished", "archived"] }).notNull(),
+  status: text("status", { enum: ["draft", "submitted", "in_review", "changes_requested", "approved", "rejected", "scheduled", "published", "unpublished", "archived"] }).notNull(),
   organizerAccessPending: integer("organizer_access_pending").notNull().default(0),
   reviewNote: text("review_note"),
   curationNote: text("curation_note"),
@@ -494,6 +497,7 @@ export const organizerInvitations = sqliteTable("organizer_invitations", {
 export const curatedEventRecords = sqliteTable("curated_event_records", {
   id: text("id").primaryKey(),
   submissionId: text("submission_id").notNull(),
+  organizerOwnerId: text("organizer_owner_id"),
   slug: text("slug").notNull(),
   title: text("title").notNull(),
   venue: text("venue").notNull(),
@@ -522,7 +526,7 @@ export const curatedEventRecords = sqliteTable("curated_event_records", {
   imageUrl: text("image_url").notNull(),
   curationNote: text("curation_note").notNull(),
   tagline: text("tagline"),
-  status: text("status", { enum: ["scheduled", "published", "unpublished"] }).notNull(),
+  status: text("status", { enum: ["draft", "scheduled", "published", "unpublished"] }).notNull(),
   scheduledPublishAt: text("scheduled_publish_at"),
   publishedAt: text("published_at"),
   createdAt: text("created_at").notNull(),
@@ -578,6 +582,9 @@ export const eventPromoterCodes = sqliteTable("event_promoter_codes", {
   eventSlug: text("event_slug").notNull(),
   code: text("code").notNull(),
   label: text("label").notNull(),
+  commissionBps: integer("commission_bps").notNull().default(0),
+  portalTokenHash: text("portal_token_hash"),
+  portalExpiresAt: text("portal_expires_at"),
   status: text("status", { enum: ["active", "disabled"] }).notNull().default("active"),
   createdAt: text("created_at").notNull(),
   createdBy: text("created_by").notNull(),
@@ -1187,6 +1194,26 @@ export const marketingCampaigns = sqliteTable("marketing_campaigns", {
 export const marketingRecipients = sqliteTable("marketing_recipients", {
  campaignId:text("campaign_id").notNull(),contactId:text("contact_id").notNull(),status:text("status").notNull().default("pending"),
 },t=>[primaryKey({columns:[t.campaignId,t.contactId]})]);
+
+export const eventCoupons = sqliteTable("event_coupons", {
+  id: text("id").primaryKey(), eventSlug: text("event_slug").notNull(), code: text("code").notNull(), ticketTierId: text("ticket_tier_id"),
+  kind: text("kind", {enum:["percent","fixed"]}).notNull(), value: integer("value").notNull(), maxUses: integer("max_uses").notNull(),
+  startsAt: text("starts_at").notNull(), expiresAt: text("expires_at").notNull(), status: text("status", {enum:["active","disabled"]}).notNull().default("active"),
+  createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull(),
+}, t => [uniqueIndex("event_coupons_code").on(t.eventSlug,t.code),index("event_coupons_scope").on(t.eventSlug,t.status,t.expiresAt)]);
+export const promoterPayments = sqliteTable("promoter_payments", {
+  id: text("id").primaryKey(), promoterId: text("promoter_id").notNull(), amountMinor: integer("amount_minor").notNull(),
+  reference: text("reference").notNull(), paidAt: text("paid_at").notNull(), recordedBy: text("recorded_by").notNull(),createdAt: text("created_at").notNull(),
+}, t => [uniqueIndex("promoter_payment_reference").on(t.promoterId,t.reference),index("promoter_payments_scope").on(t.promoterId,t.paidAt)]);
+export const organizerTeamInvites = sqliteTable("organizer_team_invites", {
+  id: text("id").primaryKey(), eventSlug: text("event_slug").notNull(), accountId: text("account_id").notNull(), accountEmail: text("account_email").notNull(),
+  role: text("role", {enum:["organizer","gate"]}).notNull(), tokenHash: text("token_hash").notNull().unique(),invitedBy: text("invited_by").notNull(),
+  createdAt: text("created_at").notNull(),expiresAt: text("expires_at").notNull(),usedAt: text("used_at"),revokedAt: text("revoked_at"),claimId: text("claim_id"),
+}, t => [index("organizer_team_scope").on(t.eventSlug,t.accountId,t.createdAt)]);
+export const organizerMutations = sqliteTable("organizer_mutations", {
+  id: text("id").primaryKey(),actorId: text("actor_id").notNull(),eventSlug: text("event_slug").notNull(),kind: text("kind").notNull(),
+  payloadHash: text("payload_hash").notNull(),resultId: text("result_id").notNull(),createdAt: text("created_at").notNull(),
+});
 
 export const analyticsBaseline = sqliteTable("analytics_baseline", {
   id: integer("id").primaryKey(), resetKey: text("reset_key").notNull().unique(), startedAt: text("started_at").notNull(),

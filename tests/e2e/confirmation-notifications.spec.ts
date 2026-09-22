@@ -2,11 +2,6 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 test.use({ serviceWorkers: 'block' });
-// A PR production audit still serves the previous release. Candidate checks
-// exercise this UI now; the post-deployment production audit exercises it live.
-test.beforeEach(() => {
-  test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === 'pull_request', 'New confirmation UI is verified against the candidate before deployment.');
-});
 async function member(page: Page) {
   await page.route('**/api/**', route => route.fulfill({status:401,json:{error:'Isolated fixture'}}));
   await page.route('**/api/customer/my-nights', route => route.fulfill({json:{attendee:{displayName:'Ama'},nights:[]}}));

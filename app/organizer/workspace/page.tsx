@@ -1,5 +1,5 @@
 import { requireAdminSession } from "../../../lib/admin-auth";
-import OrganizerWorkspace from "./organizer-workspace";
+import OrganizerWorkspace from "./organizer-suite";
 
 export const dynamic = "force-dynamic";
 
