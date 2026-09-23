@@ -1,8 +1,8 @@
-name: Configure Paystack live connection
+name: Verify Paystack live connection
 on:
   push:
     branches: [release/paystack-live]
-    paths: [.github/workflows/paystack-live.yml, scripts/configure-paystack-live.mjs]
+    paths: [.github/workflows/paystack-live.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,28 +10,77 @@ concurrency:
   group: production
   cancel-in-progress: false
 jobs:
-  configure:
+  verify:
     if: github.repository == 'bechirobob/tickets' && github.ref_name == 'release/paystack-live'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Verify payment selection, live/test separation and fulfillment
-        run: npx vitest run tests/delivery-guards.test.ts tests/payment-selection.test.ts tests/payment-operations.test.ts
-      - name: Replace production test key and verify live connection
+      # Payment source and dependencies are unchanged from the 34 passing tests
+      # in run 35732422076 attempt 2. No deployment or secret installation here.
+      - name: Verify recovered application and reference-free payment endpoints
         env:
           PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "$PAYSTACK_SECRET_KEY" ]; then
-            echo 'Payment checks complete. Waiting for the live key in the private secret store; no production settings changed.'
-            exit 0
-          fi
-          node scripts/configure-paystack-live.mjs
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { createHmac } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          const key = process.env.PAYSTACK_SECRET_KEY;
+          assert.ok(key && /^sk_live_[a-zA-Z0-9]+$/.test(key), 'Existing live Paystack secret is required.');
+          const origin = 'https://tickets.becoreops.com';
+          const expectedRevision = '31922f31c823d72d07bf614b3416c95b4f39d54c';
+          const request = (path, options = {}) => fetch(origin + path, {
+            ...options, redirect: 'manual', signal: AbortSignal.timeout(20000),
+          });
+          const versionResponse = await request('/api/version');
+          assert.equal(versionResponse.status, 200, 'Application must have recovered.');
+          assert.match(versionResponse.headers.get('content-type') ?? '', /application\/json/);
+          const version = await versionResponse.json();
+          assert.equal(version.service, 'becore-tickets');
+          assert.equal(version.revision, expectedRevision, 'Production drift requires source review.');
+          console.log(`Application recovered: HTTP 200, revision ${version.revision}.`);
+          const raw = '{"event":"connection.check","data":{}}';
+          const signature = createHmac('sha512', key).update(raw).digest('hex');
+          const signed = await request('/api/payments/webhook', {
+            method: 'POST', headers: { 'content-type': 'application/json', 'x-paystack-signature': signature }, body: raw,
+          });
+          assert.equal(signed.status, 200, 'Signed reference-free webhook must return HTTP 200.');
+          assert.equal(await signed.text(), 'OK');
+          console.log('Signed reference-free webhook: HTTP 200 OK.');
+          const unsigned = await request('/api/payments/webhook', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: raw,
+          });
+          assert.equal(unsigned.status, 401, 'Unsigned webhook must return HTTP 401.');
+          assert.equal(await unsigned.text(), 'Invalid signature');
+          console.log('Unsigned reference-free webhook: HTTP 401 Invalid signature.');
+          const returnPage = await request('/payment/return');
+          assert.equal(returnPage.status, 200, 'Reference-free return page must load.');
+          const html = await returnPage.text();
+          assert.ok(html.includes('One last money check.') && html.includes('Open My Nights'), 'Expected application return page, not maintenance.');
+          const session = await request('/api/customer/session?paymentReturn=1');
+          assert.equal(session.status, 401, 'Anonymous payment return must be rejected safely.');
+          const result = await session.json();
+          assert.ok(!result.signedIn, 'An absent reference must not create a customer session.');
+          assert.ok(result.error?.includes('Open My Nights') && result.error?.includes('Don’t pay again.'), 'Return must provide safe recovery guidance.');
+          assert.ok(!result.authorizationUrl && !result.eventSlug && !result.pending, 'An absent reference must not start or confirm payment.');
+          console.log('Return page: HTTP 200; anonymous reference-free session returns HTTP 401 with safe recovery guidance.');
+          const summary = [
+            '# Paystack non-financial production verification',
+            `Verified at: ${new Date().toISOString()}`,
+            `Production revision: ${version.revision}`,
+            '- Application /api/version: HTTP 200, expected service and revision.',
+            '- HMAC-SHA512 signed connection.check with no reference: HTTP 200 OK.',
+            '- Unsigned equivalent: HTTP 401 Invalid signature.',
+            '- /payment/return without reference: application HTML, HTTP 200.',
+            '- Anonymous payment-return session: HTTP 401, safe recovery guidance, no sign-in or payment confirmation.',
+            '- No secret installation/rotation, deployment, financial transaction, email, ticket issuance or guest-data mutation.',
+            '- Callback and webhook dashboard URLs are owner-confirmed, not independently dashboard-verified.',
+            '- A genuine successful payment through ticket issuance remains unverified.',
+          ].join('\n');
+          console.log(summary);
+          if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n');
+          NODE
+
