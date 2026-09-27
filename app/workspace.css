@@ -27,8 +27,8 @@ main:has(>.workspace-topbar) :is(.operations-metrics,.organizer-metrics){gap:16p
 main:has(>.workspace-topbar) :is(.operations-metrics,.organizer-metrics)>article{padding:0 8px;min-height:0;background:transparent;border:0;border-radius:0}
 main:has(>.workspace-topbar) :is(.workspace-event-picker,.suite-event-picker){background:transparent;border:0;border-bottom:1px solid #e2d8e5;border-radius:0;padding:0 0 16px;margin:0 0 20px;gap:12px}
 main:has(>.workspace-topbar) :is(.ops-tabs,.suite-event-nav,.host-applications nav){display:flex;flex-wrap:wrap;width:100%;gap:4px;padding:0;margin:18px 0 24px;border-radius:0;border-bottom:1px solid #d8d8d8;background:transparent}
-main:has(>.workspace-topbar) :is(.ops-tabs,.suite-event-nav,.host-applications nav)>button{min-height:44px;border:0;border-bottom:3px solid transparent;border-radius:0;padding:10px 12px;color:#606060;background:transparent}
-main:has(>.workspace-topbar) :is(.ops-tabs>button[aria-pressed=true],.suite-event-nav>button[aria-current=page],.host-applications nav>button[aria-pressed=true]){border-bottom-color:#4a4a4a;color:#292929;background:transparent}
+main:has(>.workspace-topbar) :is(.ops-tabs,.suite-event-nav,.host-applications nav)>button{min-height:44px;border:0;border-radius:0;padding:10px 12px;color:#606060;background:transparent}
+main:has(>.workspace-topbar) :is(.ops-tabs>button[aria-pressed=true],.suite-event-nav>button[aria-current=page],.host-applications nav>button[aria-pressed=true]){border:0;color:#292929;background:transparent;font-weight:700}
 .workspace-back{display:inline-flex;margin-bottom:18px!important;min-height:44px;align-items:center;color:#4b2852;font-size:13px;text-decoration:none}
 .workspace-return{display:flex;align-items:center;justify-content:center;gap:16px;min-height:44px;padding:8px 16px;background:#eee7f0;color:#4b2852;font:500 13px/1.4 system-ui}
 .workspace-return a{font-weight:650;color:inherit;text-decoration:underline;text-underline-offset:3px}
