@@ -274,7 +274,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .payment-footer__methods-row { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 24px; }
 .discovery-home .payment-footer .payment-footer__crypto { display: flex; align-items: center; gap: 8px; margin: 0; color: #d9cbdc; font-size: 12px; line-height: 1.4; }
 .discovery-home .payment-footer__crypto span { display: grid; gap: 1px; }
-.discovery-home .payment-footer__crypto small { font-size: 11px; color: #c7b5ca; }
+.discovery-home .payment-footer__crypto small { font-size: 12px; color: #c7b5ca; }
 @media (max-width: 700px) {
   .discovery-home .payment-footer { gap: 22px; padding-top: 0; }
   .discovery-home .payment-footer__group { flex-basis: 100%; }
