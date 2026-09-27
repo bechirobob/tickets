@@ -37,6 +37,11 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
       </dl>
     </section>
 
-    <footer className="night-footer compact-footer"><BrandLogo prominent /><p>Accra, we’re going out. Tell the group chat.</p><div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><PaymentFooter /></footer>
+    <footer className="night-footer compact-footer">
+      <PaymentFooter />
+      <BrandLogo prominent />
+      <p>Accra, we’re going out. Tell the group chat.</p>
+      <nav className="compact-footer__links" aria-label="Footer"><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></nav>
+    </footer>
   </main>;
 }
