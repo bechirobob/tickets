@@ -64,16 +64,31 @@ test("discovery shows the available catalogue with full flyers and aligned rows"
       await expect(poster).toHaveCSS("object-fit", "contain");
       if (!event.startsAt) await expect(card.locator("time")).toHaveCount(0);
     }
+    const spotlight = await page.locator(".discovery-grid--spotlight").count() > 0;
+    if (spotlight) {
+      expect(path).toBe("/");
+      await expect(cards).toHaveCount(1);
+    }
     const rows = await cards.evaluateAll(elements => elements.map(card => ({
       top: card.getBoundingClientRect().top,
       width: card.getBoundingClientRect().width,
       poster: card.querySelector(".drop-card__image")!.getBoundingClientRect().height,
+      posterRight: card.querySelector(".drop-card__image")!.getBoundingClientRect().right,
+      posterWidth: card.querySelector(".drop-card__image")!.getBoundingClientRect().width,
+      bodyLeft: card.querySelector(".drop-card__body")!.getBoundingClientRect().left,
       cells: Array.from(card.querySelector(".drop-card__body")!.children).map(child => child.getBoundingClientRect().top),
     })));
     for (const row of rows) {
       if (page.viewportSize()!.width > 700) {
-        expect(row.width).toBeLessThanOrEqual(281);
-        expect(row.poster).toBeLessThanOrEqual(337);
+        if (spotlight) {
+          expect(row.width).toBeLessThanOrEqual(961);
+          expect(row.posterWidth).toBeLessThanOrEqual(341);
+          expect(row.poster).toBeLessThanOrEqual(511);
+          expect(row.bodyLeft).toBeGreaterThan(row.posterRight);
+        } else {
+          expect(row.width).toBeLessThanOrEqual(281);
+          expect(row.poster).toBeLessThanOrEqual(337);
+        }
       }
       for (const peer of rows.filter(peer => Math.abs(peer.top - row.top) <= 1)) {
         expect(Math.abs(row.width - peer.width)).toBeLessThanOrEqual(1);

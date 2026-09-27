@@ -54,13 +54,27 @@ for (const route of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/$
   });
 }
 
-test("Hosts connect to the guest journey", async ({ page }) => {
+test("Hosts connect to the guest journey", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const bridge = page.locator(".backstage-bridge");
   await bridge.scrollIntoViewIfNeeded();
   await expect(bridge.getByRole("link", { name: "Meet the Hosts" })).toHaveAttribute("href", "/hosts");
   await expect(bridge.getByRole("link", { name: "List your event" })).toHaveAttribute("href", "/organizer/submit");
+  const photo = bridge.locator(".backstage-bridge__image img");
+  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  const bounds = await photo.boundingBox();
+  expect(bounds?.height).toBeGreaterThan(180);
+  expect(bounds?.width).toBeGreaterThan(200);
+  await expect(bridge.locator("figcaption")).toBeVisible();
+  if (await bridge.evaluate(element => element.classList.contains("backstage-bridge--split")) && page.viewportSize()!.width > 700) {
+    const copy = await bridge.locator(".organizer-intelligence__copy").boundingBox();
+    const benefits = await bridge.locator("dl").boundingBox();
+    expect(bounds!.x).toBeGreaterThan(copy!.x + copy!.width);
+    expect(Math.abs(benefits!.x - copy!.x)).toBeLessThanOrEqual(1);
+    expect(bounds!.height).toBeGreaterThan(copy!.height);
+  }
+  await bridge.screenshot({ path: testInfo.outputPath("homepage-organisers.png") });
 });
 
 test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page, eventSlug }, testInfo) => {
