@@ -1,3 +1,4 @@
+import { queueOwnerApprovalAlerts } from '../lib/owner-approval-alerts';
 import { processPendingHostAccess } from '../lib/host-applications';
 import { deliverHostAnnouncement, retryHostAnnouncements } from '../lib/notifications';
 import { processMarketing } from "../lib/marketing-delivery";
@@ -212,6 +213,7 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
   try {
     await processPendingOrganizerAccess(env.DB);
     await processPendingHostAccess(env.DB);
+    await queueOwnerApprovalAlerts(env);
     await retryFailedDeliveries(env, 20, 'standard');
   } catch (error) {
     await recordSystemAlert(env, "email-delivery-retry", error);

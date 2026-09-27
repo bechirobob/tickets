@@ -5,8 +5,9 @@ async function owner(request:Request){const {env}=await import('cloudflare:worke
 export async function GET(request:Request){
  const {env,session}=await owner(request);if(!session)return Response.json({error:'Owner access is required.'},{status:403});
  const params=new URL(request.url).searchParams,status=params.get('status')??'pending',page=Math.min(10000,Math.max(0,Number(params.get('page'))||0));
+ const id=params.get('id');if(id!==null&&!/^[\w-]{1,128}$/.test(id))return Response.json({error:'Choose a valid application.'},{status:400});
  if(!['pending','awaiting_email','approved','rejected'].includes(status)||!Number.isInteger(page))return Response.json({error:'Choose a valid queue.'},{status:400});
- const [items,counts,hosts]=await Promise.all([env.DB.prepare(`SELECT ${applicationColumns} FROM host_applications WHERE status=? ORDER BY created_at DESC LIMIT 20 OFFSET ?`).bind(status,page*20).all(),env.DB.prepare('SELECT status,COUNT(*) AS count FROM host_applications GROUP BY status').all(),env.DB.prepare('SELECT id,name,slug FROM hosts WHERE NOT EXISTS(SELECT 1 FROM host_applications a WHERE a.host_id=hosts.id) ORDER BY name LIMIT 500').all()]);
+ const [items,counts,hosts]=await Promise.all([(id?env.DB.prepare(`SELECT ${applicationColumns} FROM host_applications WHERE id=?`).bind(id):env.DB.prepare(`SELECT ${applicationColumns} FROM host_applications WHERE status=? ORDER BY created_at DESC LIMIT 20 OFFSET ?`).bind(status,page*20)).all(),env.DB.prepare('SELECT status,COUNT(*) AS count FROM host_applications GROUP BY status').all(),env.DB.prepare('SELECT id,name,slug FROM hosts WHERE NOT EXISTS(SELECT 1 FROM host_applications a WHERE a.host_id=hosts.id) ORDER BY name LIMIT 500').all()]);
  return Response.json({items:items.results,counts:counts.results,hosts:hosts.results},{headers:{'cache-control':'no-store'}});
 }
 export async function PATCH(request:Request){
