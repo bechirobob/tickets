@@ -17,6 +17,20 @@ test.beforeEach(async ({ context, baseURL }) => {
   test.skip(!baseURL?.endsWith(':8791'), 'Isolated local Operations server only.');
   await context.addCookies([{ name: 'bct_staff', value: fixture.token, url: baseURL!, httpOnly: true, sameSite: 'Strict' }]);
 });
+test('owner approval email links open the exact form and preserve the sign-in destination', async ({ page, context }) => {
+  await page.goto('/admin?submission=operations-review');
+  await expect(page.getByRole('heading', { name: 'Queue audit submission', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back to submissions' })).toBeVisible();
+  await page.goto('/admin/hosts?application=host-onboarding-fixture');
+  await expect(page.locator('.host-applications details[open]')).toContainText('Host onboarding fixture');
+  await expect(page.getByRole('button', { name: 'Approve host', exact: true })).toBeVisible();
+  await context.clearCookies();
+  for (const path of ['/admin?submission=operations-review', '/admin/hosts?application=host-onboarding-fixture']) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/admin\/login\?/);
+    expect(new URL(page.url()).searchParams.get('returnTo')).toBe(path);
+  }
+});
 for (const [path, heading] of [
   ['/admin','Submission queue'], ['/admin/operations','Event operations'], ['/admin/events','Events & inventory'],
   ['/admin/registrations','RSVP & guests'], ['/admin/orders','Orders & payments'], ['/admin/support','Ticket support'], ['/admin/promoters','Promoter links'],

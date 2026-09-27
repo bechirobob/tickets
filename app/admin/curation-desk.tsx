@@ -6,7 +6,7 @@ import OrganizerAccess from "./organizer-access";
 import { operationsFetch } from "../../lib/operations-client";
 
 import { CalendarClock, Check, ChevronRight, Eye, RotateCcw, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import OperationsNav from "./operations-nav";
 import type { StaffRole } from "../../lib/admin-session";
 
@@ -20,7 +20,7 @@ type Submission = {
 
 const labels: Record<string, string> = { submitted: "New", in_review: "In review", changes_requested: "Changes requested", approved: "Approved", rejected: "Rejected", scheduled: "Scheduled", published: "Published", unpublished: "Unpublished", archived: "Archived" };
 
-export default function CurationDesk({ actor, role }: { actor: string; role: StaffRole }) {
+export default function CurationDesk({ actor, role, initialSubmissionId }: { actor: string; role: StaffRole; initialSubmissionId?: string }) {
   const [view, setView] = useState("active");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -35,9 +35,21 @@ export default function CurationDesk({ actor, role }: { actor: string; role: Sta
   const [tagline, setTagline] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
 
+  const initialLinkHandled = useRef(false);
   const applyLoadedItems = useCallback((submissions: Submission[]) => {
     setItems(submissions);
-  }, []);
+    if (initialSubmissionId && !initialLinkHandled.current) {
+      initialLinkHandled.current = true;
+      const item = submissions.find(item => item.id === initialSubmissionId);
+      if (item) {
+        setSelectedId(item.id);
+        setNote(item.reviewNote ?? '');
+        setCurationNote(item.curationNote ?? '');
+        setTagline(item.tagline ?? '');
+        setScheduledAt(item.scheduledPublishAt?.slice(0, 16) ?? '');
+      } else setNotice('This submission is no longer available. Your current queue is below.');
+    }
+  }, [initialSubmissionId]);
 
   const load = useCallback(async () => {
     const response = await operationsFetch("/api/admin/submissions", { cache: "no-store" });
