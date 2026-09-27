@@ -1,0 +1,36 @@
+name: Host onboarding live verification
+on:
+  push:
+    branches: [verify/host-onboarding-live]
+    paths: ['scripts/verify-host-onboarding-live.mjs', '.github/workflows/host-onboarding-live.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify one isolated live application and remove its test data
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
+        run: EXPECTED_RELEASE_SHA=$(git rev-parse HEAD^) node scripts/verify-host-onboarding-live.mjs
+      - name: Preserve redacted live evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: host-onboarding-live-evidence
+          path: |
+            host-live-evidence.json
+            host-live-evidence
+          if-no-files-found: error
+          retention-days: 30
