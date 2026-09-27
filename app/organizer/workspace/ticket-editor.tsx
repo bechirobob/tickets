@@ -2,11 +2,13 @@
 import { useState } from 'react';
 import { Message, money, useMutation, apiUrl, type Tier } from './suite-shared';
 
+const availabilityLabels: Record<string, string> = { available: 'Available', sold_out: 'Sold out', hidden: 'Hidden' };
+
 export default function TicketEditor({ event, tiers, onSaved }: { event: string; tiers?: Tier[]; onSaved: () => void }) {
   const [editing, setEditing] = useState<Tier | 'new' | null>(null), mutation = useMutation(), [reloading,setReloading] = useState(false);
   const tier = editing && editing !== 'new' ? editing : null;
   return <>
-    <div className="suite-rows">{tiers?.map(t => <article key={t.id}><div><b>{t.name}</b><p>{money(t.priceMinor)} · {t.admissionsPerUnit} admissions per package · {t.status}</p><small>{t.allocated} / {t.capacity} allocated · {Math.max(0,t.capacity-t.allocated)} available</small></div><button disabled={mutation.busy} onClick={() => { setEditing(t); mutation.setMessage(''); }}>Edit <span className="sr-only">{t.name}</span></button></article>)}</div>
+    <div className="suite-rows">{tiers?.map(t => <article key={t.id}><div><b>{t.name}</b><p>{money(t.priceMinor)} · {t.admissionsPerUnit} admissions per package · {availabilityLabels[t.status] ?? t.status}</p><small>{t.allocated} / {t.capacity} allocated · {Math.max(0,t.capacity-t.allocated)} unallocated</small></div><button disabled={mutation.busy} onClick={() => { setEditing(t); mutation.setMessage(''); }}>Edit <span className="sr-only">{t.name}</span></button></article>)}</div>
     {tiers ? <div className="suite-actions"><button disabled={mutation.busy || tiers.length >= 12} onClick={() => { setEditing('new'); mutation.setMessage(''); }}>Add ticket grade</button><button disabled={mutation.busy} onClick={onSaved}>Refresh allocations</button></div> : null}
     {editing ? <form className="suite-detail" aria-label="Edit ticket grade" key={tier ? `${tier.id}:${tier.updatedAt}` : 'new'} onSubmit={async e => {
       e.preventDefault(); const form = new FormData(e.currentTarget);
@@ -21,11 +23,11 @@ export default function TicketEditor({ event, tiers, onSaved }: { event: string;
         <label>Total admission allocation<input name="capacity" type="number" min={Math.max(tier?.allocated ?? 0,tier?.admissionsPerUnit ?? 1)} max={100000} defaultValue={tier?.capacity} required/><small>{tier?.allocated ?? 0} issued or held. This is the total limit, including these admissions.</small></label>
         <label>Admissions per package<input name="admissions" type="number" min={1} max={20} defaultValue={tier?.admissionsPerUnit ?? 1} disabled={Boolean(tier?.hasHistory)} required/></label>
         <label>Packages per order<input name="limit" type="number" min={1} max={20} defaultValue={tier?.maxUnitsPerOrder ?? 10} required/></label>
-        <label>Availability<select name="status" defaultValue={tier?.status ?? 'available'}><option value="available">Available</option><option value="sold_out">Pause sales</option><option value="hidden">Hidden</option></select></label>
+        <label>Availability<select name="status" defaultValue={tier?.status ?? 'available'}>{Object.entries(availabilityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>Room grade<select name="badge" defaultValue={tier?.roomBadge ?? ''} disabled={Boolean(tier?.hasHistory)}><option value="">Standard</option><option value="VIP">VIP badge & concierge</option></select></label>
       </div>
       <label>Description<input name="description" defaultValue={tier?.description} maxLength={240} required/></label>
-      {tier?.hasHistory ? <p className="suite-note">This grade has booking history. To change package size or Room access, add a new grade and pause sales on this one.</p> : null}
+      {tier?.hasHistory ? <p className="suite-note">This grade has booking history. To change package size or Room access, add a new grade and mark this one Sold out.</p> : null}
       <div className="suite-actions"><button disabled={mutation.busy || reloading}>{mutation.busy ? 'Saving…' : 'Save ticket grade'}</button><button type="button" disabled={mutation.busy || reloading} onClick={() => setEditing(null)}>Cancel</button>{tier ? <button type="button" disabled={mutation.busy || reloading} onClick={async()=>{
         setReloading(true);
         try { const response=await fetch(apiUrl('tickets',event),{cache:'no-store'});const data=await response.json() as {tiers?:Tier[];error?:string};if(!response.ok)throw new Error(data.error??'Could not reload.');const saved=data.tiers?.find(x=>x.id===tier.id);if(!saved)throw new Error('This grade is no longer available.');setEditing(saved);onSaved();mutation.setMessage('Loaded the latest saved values.'); }
