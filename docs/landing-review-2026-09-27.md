@@ -44,3 +44,14 @@ Artifact: BeCore-Tickets-Landing-Preview-v4.html, compares the original section 
 Next: owner visual review. No production merge or deployment authorized.
 
 Fourth preview Library ID: libfile_60eb2a4625f48191a6aff18a6cdc11f3
+
+## Fifth preview — side-by-side required
+The owner rejected the full-width strip (v4) and explicitly requires a side-by-side desktop composition. Preserve plum colours. V2, v3 and v4 are rejected.
+
+Research: visually inspected Soho House https://www.sohohouse.com/en-us/event-spaces, especially its festive-hosting split section: narrow copy beside taller imagery. POSH platform inspection hit a security challenge, and DICE ticketing returned 403; no visual claims are based on those blocked pages.
+
+Proposed adaptation: copy and compact benefit rows in the left column; taller photography fills the right column and reaches the section's right edge. Caption is in normal flow below the photo. Mobile stacks naturally. Existing photograph, copy, destinations, plum palette and the accepted first-preview hero/Drop/Room/footer remain. No feathering, white background or panoramic strip.
+
+Review artifact: BeCore-Tickets-Landing-Preview-v5.html. Typecheck, targeted ESLint, CSS compilation, preview script syntax, scope checks and diff whitespace pass. Actual preview browser visual verification remains pending due to local-file restriction. User should compare Original section / Proposed on desktop and mobile. No production merge or deployment authorized.
+
+Fifth preview Library ID: libfile_3f42811fa6f88191b981b8b030e0d070
