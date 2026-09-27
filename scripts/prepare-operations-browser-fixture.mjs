@@ -13,6 +13,10 @@ const email = 'operations-audit@example.com';
 const start = new Date(Date.now() + 7 * 86400000).toISOString();
 const end = new Date(Date.now() + 8 * 86400000).toISOString();
 const sql = `
+DELETE FROM host_applications WHERE id='host-onboarding-fixture';
+INSERT INTO host_applications(id,email,brand_name,contact_name,phone,social_url,about,status,email_verified_at,policy_versions,accepted_at,created_at,updated_at)
+VALUES('host-onboarding-fixture','host-onboarding-fixture@example.com','Host onboarding fixture','Host fixture','233240000000','https://example.com','Local test only','pending','${stamp}','[]','${stamp}','${stamp}','${stamp}');
+DELETE FROM hosts WHERE id='host:host-onboarding-fixture';
 INSERT OR REPLACE INTO staff_accounts(id,normalized_email,display_name,role,password_hash,password_salt,password_iterations,must_change_password,status,password_changed_at,created_at,created_by,updated_at)
 VALUES('remove-staff-audit','remove-staff@example.com','Removable Staff','gate','test','test',1,0,'active','${stamp}','${stamp}','fixture','${stamp}');
 

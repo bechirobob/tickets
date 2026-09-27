@@ -1,0 +1,25 @@
+CREATE TABLE host_applications (
+ id TEXT PRIMARY KEY NOT NULL,
+ email TEXT NOT NULL UNIQUE,
+ brand_name TEXT NOT NULL,
+ contact_name TEXT NOT NULL,
+ phone TEXT NOT NULL,
+ social_url TEXT NOT NULL,
+ about TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL DEFAULT 'awaiting_email' CHECK(status IN ('awaiting_email','pending','approved','rejected')),
+ verification_hash TEXT,
+ verification_expires_at TEXT,
+ email_verified_at TEXT,
+ policy_versions TEXT NOT NULL,
+ accepted_at TEXT NOT NULL,
+ review_note TEXT,
+ reviewed_by TEXT,
+ reviewed_at TEXT,
+ review_claim TEXT,
+ account_id TEXT,
+ host_id TEXT UNIQUE,
+ access_pending INTEGER NOT NULL DEFAULT 0,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+CREATE INDEX host_applications_queue ON host_applications(status,created_at);

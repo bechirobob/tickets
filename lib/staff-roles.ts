@@ -81,6 +81,7 @@ export const STAFF_WORKSPACE_LINKS = [
   { href: "/scan", label: "Gate scanner", roles: ["owner", "gate"] },
   { href: "/admin/rooms", label: "Room moderation", roles: ["owner", "moderator"] },
   { href: "/admin/fees", label: "Fees & charges", roles: ["owner", "finance"] },
+  { href: "/admin/hosts", label: "Host applications", roles: ["owner"] },
   { href: "/admin/accounts", label: "People & permissions", roles: ["owner"] },
 ] as const satisfies readonly { href: string; label: string; roles: readonly StaffRole[] }[];
 
