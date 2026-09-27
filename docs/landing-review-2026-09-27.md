@@ -33,3 +33,14 @@ Removed the editorial variant, restored the original section content and colours
 Review: BeCore-Tickets-Landing-Preview-v3.html; compares Original section with Proposed and opens at the organiser section. V2 is rejected and must not ship. CSS compilation, preview script syntax, diff whitespace and rendered-markup comparison pass; only the intended photo class differs from the accepted first preview. Browser visual verification remains pending. Next: owner reviews this treatment; no merge or deployment authorized.
 
 Third preview Library ID: libfile_55099056499c8191812e22c128f0c770
+
+## Fourth preview — new composition
+The owner rejected the feathered image treatment as unprofessional. Neither the cream design (v2) nor the feathered design (v3) may ship. Keep the original plum palette.
+
+Recomposed the host section: headline and supporting copy/actions share an aligned grid above an edge-to-edge panoramic photo. The caption sits outside the photo on the normal content gutter. Benefits sit beneath, with a clearer title hierarchy. Mobile stacks the introduction and uses a shorter photo crop. Removed all added masks and fades. Original image, text, CTA destinations and payment logos retained.
+
+Artifact: BeCore-Tickets-Landing-Preview-v4.html, compares the original section from the accepted first preview with this proposal. Opens at the organiser section. Typecheck, targeted ESLint, CSS compilation, preview JS syntax, rendered comparison of hero/Drop/Room/footer and diff whitespace checks pass. Browser visual verification is still pending because local-file previews are blocked here.
+
+Next: owner visual review. No production merge or deployment authorized.
+
+Fourth preview Library ID: libfile_60eb2a4625f48191a6aff18a6cdc11f3

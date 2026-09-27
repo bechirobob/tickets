@@ -22,14 +22,14 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
 
     <ActiveNightExperience events={events} />
 
-    <section className="organizer-intelligence backstage-bridge backstage-bridge--blended" data-scroll-reveal>
+    <section className="organizer-intelligence backstage-bridge backstage-bridge--panorama" data-scroll-reveal>
       <div className="organizer-intelligence__copy">
         <p className="night-kicker"><span /> Behind the night / Hosts &amp; organisers</p>
         <h2>You bring the crowd.<br />We’ll mind the details.</h2>
-        <p>Sell the tickets, keep guests in the loop and get the door moving. You have a party to throw.</p>
-        <div className="backstage-bridge__actions"><ActionLink href="/organizer/submit">List your event</ActionLink><ActionLink href="/hosts" variant="text">Meet the Hosts</ActionLink></div>
+        <div className="backstage-bridge__intro"><p>Sell the tickets, keep guests in the loop and get the door moving. You have a party to throw.</p>
+        <div className="backstage-bridge__actions"><ActionLink href="/organizer/submit">List your event</ActionLink><ActionLink href="/hosts" variant="text">Meet the Hosts</ActionLink></div></div>
       </div>
-      <figure className="backstage-bridge__image"><Image src="/atmospheres/behind-the-night.webp" width={1100} height={733} sizes="(max-width: 700px) 100vw, 46vw" alt="" aria-hidden="true" unoptimized /><figcaption>Good nights don’t happen by accident.</figcaption></figure>
+      <figure className="backstage-bridge__image"><Image src="/atmospheres/behind-the-night.webp" width={1100} height={733} sizes="100vw" alt="" aria-hidden="true" unoptimized /><figcaption>Good nights don’t happen by accident.</figcaption></figure>
       <dl>
         <div><dt><Ticket aria-hidden="true" size={20} /> Sell tickets</dt><dd>MoMo, cards and ticket tiers. Give the group chat a deadline.</dd></div>
         <div><dt><MessageCircle aria-hidden="true" size={20} /> Run the night</dt><dd>Guest updates, a private Room and passes ready for the door.</dd></div>

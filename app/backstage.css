@@ -55,40 +55,66 @@
   .submission-intro h1 { font-size: 38px; }
 }
 
-/* Let the atmosphere dissolve into the existing plum page, without a photo panel. */
-.discovery-home .backstage-bridge--blended {
-  column-gap: 3vw;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+/* The photo spans the composition; the typography stays on one shared grid. */
+.discovery-home .backstage-bridge--panorama {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 30px;
+  padding: 52px 5vw 44px;
 }
-.backstage-bridge--blended .backstage-bridge__image { overflow: visible; }
-.backstage-bridge--blended .backstage-bridge__image img {
-  aspect-ratio: 1.5;
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 94%, transparent),
-    linear-gradient(0deg, transparent, #000 24%, #000 92%, transparent);
-  mask-composite: intersect;
-  -webkit-mask-composite: source-in;
+.backstage-bridge--panorama .organizer-intelligence__copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr);
+  gap: 16px 7vw;
+  align-items: end;
 }
-.backstage-bridge--blended .backstage-bridge__image figcaption {
-  position: relative;
-  inset: auto;
-  margin: -16px 0 0;
-  padding: 0 6%;
+.discovery-home .backstage-bridge--panorama .night-kicker {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.discovery-home .backstage-bridge--panorama h2 {
+  margin: 0;
+  max-width: 660px;
+  font-size: clamp(34px, 3.8vw, 52px);
+  line-height: 1.06;
+}
+.backstage-bridge__intro { min-width: 0; }
+.backstage-bridge__intro > p { margin: 0 0 18px; max-width: 420px; color: #ddcbd7; font-size: 16px; line-height: 1.6; }
+.backstage-bridge--panorama .backstage-bridge__actions { gap: 8px 22px; }
+.backstage-bridge--panorama .backstage-bridge__image {
+  margin: 0 -5vw;
+  overflow: visible;
+}
+.backstage-bridge--panorama .backstage-bridge__image img {
+  width: 100%;
+  aspect-ratio: 3.1;
+  max-height: 440px;
+  object-fit: cover;
+  object-position: center 56%;
+  border-radius: 0;
+}
+.backstage-bridge--panorama .backstage-bridge__image figcaption {
+  position: static;
+  padding: 15px 5vw 0;
   background: none;
-  color: #ddcbd7;
-  font-size: 16px;
-  font-weight: 450;
+  color: #cbbac6;
+  font-size: 14px;
   line-height: 1.5;
-  letter-spacing: -.015em;
-  text-align: right;
+}
+.discovery-home .backstage-bridge--panorama dl { margin: 0; gap: 36px; }
+.discovery-home .backstage-bridge--panorama dl > div { padding-top: 20px; border-top-color: #645a63; }
+.discovery-home .backstage-bridge--panorama dt { color: #faf1e8; font-size: 19px; font-weight: 550; letter-spacing: -.015em; }
+.discovery-home .backstage-bridge--panorama dd { margin-top: 9px; }
+@media (max-width: 900px) {
+  .backstage-bridge--panorama .organizer-intelligence__copy { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .backstage-bridge__intro > p { max-width: 540px; }
 }
 @media (max-width: 700px) {
-  .discovery-home .backstage-bridge--blended { grid-template-columns: minmax(0, 1fr); }
-  .backstage-bridge--blended .backstage-bridge__image { margin-inline: -12px; }
-  .backstage-bridge--blended .backstage-bridge__image img { aspect-ratio: 1.65; }
-  .backstage-bridge--blended .backstage-bridge__image figcaption {
-    margin-top: -10px;
-    padding-inline: 18px;
-    font-size: 14px;
-    text-align: center;
-  }
+  .discovery-home .backstage-bridge--panorama { padding: 36px 20px; gap: 26px; }
+  .backstage-bridge--panorama .backstage-bridge__image { margin-inline: -20px; }
+  .backstage-bridge--panorama .backstage-bridge__image img { aspect-ratio: 1.8; object-position: center 55%; }
+  .backstage-bridge--panorama .backstage-bridge__image figcaption { padding: 12px 20px 0; font-size: 13px; }
+  .discovery-home .backstage-bridge--panorama dl { gap: 20px; }
+  .discovery-home .backstage-bridge--panorama dt { font-size: 16px; }
+  .discovery-home .backstage-bridge--panorama dd { margin-top: 0; }
 }
