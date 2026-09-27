@@ -24,3 +24,12 @@ Review artifact: BeCore-Tickets-Landing-Preview-v2.html; opens at the organiser 
 Next: owner reviews organiser treatment, then browser review and required release checks after approval.
 
 Second preview Library ID: libfile_976d3d77789c81919e689fffe092889f
+
+## Third preview — owner correction
+The owner rejected the cream background: the original plum composition was good. Preserve it. The requested improvement is to blend the existing photo into the page and improve its caption.
+
+Removed the editorial variant, restored the original section content and colours. Added only a scoped blended-photo treatment: transparent edge masks, slightly wider desktop image, caption in normal flow with no rectangular overlay, compact mobile treatment. The hero, event layout, Room and payment footer are retained.
+
+Review: BeCore-Tickets-Landing-Preview-v3.html; compares Original section with Proposed and opens at the organiser section. V2 is rejected and must not ship. CSS compilation, preview script syntax, diff whitespace and rendered-markup comparison pass; only the intended photo class differs from the accepted first preview. Browser visual verification remains pending. Next: owner reviews this treatment; no merge or deployment authorized.
+
+Third preview Library ID: libfile_55099056499c8191812e22c128f0c770
