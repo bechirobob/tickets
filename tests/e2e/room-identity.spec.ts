@@ -43,6 +43,11 @@ for (const route of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/$
     const bounds = await logo.boundingBox();
     expect(bounds?.height).toBeGreaterThanOrEqual(38);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    if (path === "/") {
+      const footer = page.locator(".compact-footer");
+      await footer.scrollIntoViewIfNeeded();
+      await footer.screenshot({ path: testInfo.outputPath("homepage-footer.png") });
+    }
     if (["/help", "/terms", "/admin/login", "/admin/recover"].includes(path)) {
       await page.screenshot({ path: testInfo.outputPath(`brand-${path.replaceAll("/", "-")}.png`), fullPage: true });
     }
