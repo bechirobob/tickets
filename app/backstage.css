@@ -18,6 +18,26 @@
 .discovery-home .backstage-bridge dt { color: #f9ede2; font-size: 16px; }
 .discovery-home .backstage-bridge dt svg { color: #e4f18b; }
 .discovery-home .backstage-bridge dd { margin-top: 10px; max-width: 330px; font-size: 14px; line-height: 1.6; }
+
+/* A quieter paper section gives the host story its own place after The Room. */
+.discovery-home .backstage-bridge--editorial {
+  --action-surface: #281b2b;
+  --action-ink: #faf1e8;
+  background: #f2ece2 url('/textures/print-grain.svg') repeat;
+  color: #281b2b;
+  color-scheme: light;
+  gap: 40px 5vw;
+  padding-block: 64px 56px;
+}
+.discovery-home .backstage-bridge--editorial .night-kicker { color: #685260; }
+.discovery-home .backstage-bridge--editorial .organizer-intelligence__copy > p:not(.night-kicker) { color: #574b53; }
+.backstage-bridge--editorial .backstage-bridge__actions > a[data-variant="text"] { color: #281b2b; }
+.discovery-home .backstage-bridge--editorial dl { margin: 0; gap: 36px; }
+.discovery-home .backstage-bridge--editorial dl > div { padding-top: 21px; border-color: #c6bfc0; }
+.discovery-home .backstage-bridge--editorial dt { display: grid; gap: 14px; color: #281b2b; font-size: 23px; font-weight: 600; line-height: 1.2; letter-spacing: -.025em; }
+.discovery-home .backstage-bridge--editorial dt small { display: flex; align-items: baseline; gap: 12px; color: #685260; font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.discovery-home .backstage-bridge--editorial dt small > span { color: #8b7b84; font-variant-numeric: tabular-nums; }
+.discovery-home .backstage-bridge--editorial dd { margin-top: 12px; color: #574b53; font-size: 15px; line-height: 1.6; }
 :is(.hosts-page, .host-page) { background: #281b2b url('/textures/print-grain.svg') repeat; color: #f9eee6; --action-surface: #e4f18b; --action-ink: #281b2b; }
 :is(.hosts-page, .host-page) .directory-header, .submission-header { background: #281b2b; color: #f9eee6; border-color: #63505e; }
 .hosts-page .directory-intro, .submission-intro { position: relative; isolation: isolate; background: #281b2b; color: #f9eee6; }
@@ -49,6 +69,12 @@
   .discovery-home .backstage-bridge dt { align-items: flex-start; font-size: 14px; }
   .discovery-home .backstage-bridge dd { margin: 0; }
   .backstage-bridge__image img { aspect-ratio: 1.65; }
+  .discovery-home .backstage-bridge--editorial { padding: 40px 20px; gap: 28px; }
+  .discovery-home .backstage-bridge--editorial dl { gap: 23px; }
+  .discovery-home .backstage-bridge--editorial dl > div { display: block; padding-top: 18px; }
+  .discovery-home .backstage-bridge--editorial dt { gap: 10px; font-size: 22px; }
+  .discovery-home .backstage-bridge--editorial dd { margin-top: 9px; max-width: none; font-size: 14px; }
+  .backstage-bridge--editorial .backstage-bridge__image img { aspect-ratio: 1.85; }
   .hosts-page .directory-intro, .submission-intro { padding: 36px 20px; }
   .hosts-page .directory-intro::before, .submission-intro::before { background-image: linear-gradient(90deg, rgba(40,27,43,.97), rgba(40,27,43,.79)), url('/atmospheres/behind-the-night.webp'); }
   .hosts-page .directory-intro h1 { font-size: 42px; }

@@ -11,3 +11,16 @@ Verification: TypeScript, targeted ESLint, production build and diff whitespace 
 Review artifact: BeCore-Tickets-Landing-Preview.html, Library libfile_77462ad86b24819184732e41350fa0c1. Contains Current/Proposed and Desktop/Mobile switches, public event data captured on 27 September, real components/CSS with offline framework adapters and embedded assets. This is a design comparison, not a deployed full application. Event links open the live site.
 
 Next: owner opens the HTML comparison and accepts or requests changes. Then run actual desktop/mobile browser review and required candidate release gates before a separately authorized deployment. No production changes have been made.
+
+## Second preview — organiser section
+The owner prefers the proposed hero and single-event layout. Those remain unchanged. Additional request: improve the section below The Room, still preview-only.
+
+Prepared a warm paper/plum organiser section retaining the photo and CTAs, with more prominent before/during/after benefit headings. Payment footer is unchanged.
+
+Verification: TypeScript, targeted ESLint, production build, diff check, preview JavaScript syntax and rendered comparisons pass. Accepted hero, Drop and Room markup are identical between previews; footer is byte-identical. Browser visual verification remains pending due to the same local-file restriction.
+
+Review artifact: BeCore-Tickets-Landing-Preview-v2.html; opens at the organiser section and compares Previous preview against Proposed. First preview remains available. Nothing has been merged or deployed.
+
+Next: owner reviews organiser treatment, then browser review and required release checks after approval.
+
+Second preview Library ID: libfile_976d3d77789c81919e689fffe092889f

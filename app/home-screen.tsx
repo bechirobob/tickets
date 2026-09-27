@@ -4,7 +4,7 @@ import PaymentFooter from "./payment-footer";
 import BrandLogo from "./brand-logo";
 import Image from "next/image";
 import Link from "next/link";
-import { ChartNoAxesCombined, MapPin, MessageCircle, Ticket } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { ActionLink } from "./action";
 import ActiveNightExperience from "./active-night-experience";
 import type { CustomerEvent } from "../lib/customer-screen";
@@ -22,7 +22,7 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
 
     <ActiveNightExperience events={events} />
 
-    <section className="organizer-intelligence backstage-bridge" data-scroll-reveal>
+    <section className="organizer-intelligence backstage-bridge backstage-bridge--editorial" data-scroll-reveal>
       <div className="organizer-intelligence__copy">
         <p className="night-kicker"><span /> Behind the night / Hosts &amp; organisers</p>
         <h2>You bring the crowd.<br />We’ll mind the details.</h2>
@@ -31,9 +31,9 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
       </div>
       <figure className="backstage-bridge__image"><Image src="/atmospheres/behind-the-night.webp" width={1100} height={733} sizes="(max-width: 700px) 100vw, 46vw" alt="" aria-hidden="true" unoptimized /><figcaption>Good nights don’t happen by accident.</figcaption></figure>
       <dl>
-        <div><dt><Ticket aria-hidden="true" size={20} /> Sell tickets</dt><dd>MoMo, cards and ticket tiers. Give the group chat a deadline.</dd></div>
-        <div><dt><MessageCircle aria-hidden="true" size={20} /> Run the night</dt><dd>Guest updates, a private Room and passes ready for the door.</dd></div>
-        <div><dt><ChartNoAxesCombined aria-hidden="true" size={20} /> Plan the next</dt><dd>See what sold, who brought the crowd and when they showed up.</dd></div>
+        <div><dt><small><span aria-hidden="true">01</span> Before the doors</small><span>Give them a way in.</span></dt><dd>MoMo, cards and ticket tiers. Give the group chat a deadline.</dd></div>
+        <div><dt><small><span aria-hidden="true">02</span> During the night</small><span>Less chasing. More hosting.</span></dt><dd>Keep guests in the loop with Room updates and scan their passes at the door.</dd></div>
+        <div><dt><small><span aria-hidden="true">03</span> After the last song</small><span>Know what worked.</span></dt><dd>See what sold, who brought the crowd and when they showed up. Bring the good bits back.</dd></div>
       </dl>
     </section>
 
