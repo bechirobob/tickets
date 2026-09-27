@@ -620,7 +620,7 @@ test('owner reviews a host application without an event',async({page},info)=>{
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  await page.screenshot({path:info.outputPath('host-approval.png'),fullPage:true});
  await page.getByRole('button',{name:'Approve host',exact:true}).click();
- await expect(page.getByRole('status')).toContainText('Host approved');
+ await expect(page.getByRole('status').filter({hasText:'Host approved'})).toContainText('Host approved');
  await page.getByRole('button',{name:/^Approved/}).click();
  await page.getByText('Host onboarding fixture',{exact:true}).click();
  await expect(page.getByRole('link',{name:'Manage account access'})).toBeVisible();
