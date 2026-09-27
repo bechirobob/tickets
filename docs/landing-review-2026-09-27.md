@@ -55,3 +55,8 @@ Proposed adaptation: copy and compact benefit rows in the left column; taller ph
 Review artifact: BeCore-Tickets-Landing-Preview-v5.html. Typecheck, targeted ESLint, CSS compilation, preview script syntax, scope checks and diff whitespace pass. Actual preview browser visual verification remains pending due to local-file restriction. User should compare Original section / Proposed on desktop and mobile. No production merge or deployment authorized.
 
 Fifth preview Library ID: libfile_3f42811fa6f88191b981b8b030e0d070
+
+## Release authorized — 27 September, 19:48 Africa/Malabo
+The owner selected the fifth preview and explicitly authorized combining all accepted changes and pushing with full discretion. Release scope: the first preview hero crop and single-event layout plus the fifth preview side-by-side host section. Payment logos and footer remain unchanged. Rejected intermediate treatments are absent.
+
+Next: exact-head candidate browser, native app and iPhone-layout gates; inspect screenshots; merge only after successful required checks; verify Cloudflare deployment and live revision. Last known-good production source: 710dc6204b88584bb1bce5f6c47aa0bca4de6794. No data/schema change in this release.
