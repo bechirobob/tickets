@@ -1,0 +1,71 @@
+/* Art direction for this poster only; other featured nights retain their crop. */
+.discovery-home .compact-hero > img[data-portrait-crop] {
+  left: auto;
+  right: 0;
+  width: 74%;
+  object-position: center top;
+}
+
+/* One result gets a complete composition. Multiple results retain the grid. */
+.discovery-home .discovery-grid--spotlight[data-count="1"] {
+  grid-template-columns: minmax(0, 960px);
+  justify-content: start;
+}
+.discovery-home .discovery-grid--spotlight .drop-card {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  grid-template-rows: auto;
+  grid-row: auto;
+  align-items: center;
+  gap: clamp(28px, 5vw, 72px);
+  margin-bottom: 0;
+}
+.discovery-home .discovery-grid--spotlight .drop-card[data-colour-scheme] .drop-card__image {
+  aspect-ratio: 2 / 3;
+  --artwork-inset: 0px;
+  border-radius: 0;
+}
+.discovery-home .discovery-grid--spotlight .drop-card__artwork-wash { display: none; }
+.discovery-home .discovery-grid--spotlight .drop-card__body {
+  display: flex;
+  flex-direction: column;
+  grid-row: auto;
+  gap: 14px;
+  padding: 0;
+}
+.discovery-home .discovery-grid--spotlight .drop-card h3 {
+  font-size: clamp(28px, 3.2vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -.035em;
+  text-wrap: balance;
+}
+.discovery-home .discovery-grid--spotlight .drop-card__body > small { max-width: 390px; }
+.discovery-home .discovery-grid--spotlight .drop-card__body > .drop-card__quip {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.discovery-home .discovery-grid--spotlight .drop-card__body > .ticket-action {
+  margin-top: 6px;
+  font-size: 15px;
+}
+@media (max-width: 700px) {
+  .discovery-home .compact-hero:has(img[data-portrait-crop]) { height: 560px; min-height: 560px; }
+  .discovery-home .compact-hero > img[data-portrait-crop] {
+    width: 100%;
+    height: 300px;
+  }
+  .discovery-home .compact-hero:has(img[data-portrait-crop]) .compact-hero__shade {
+    background: linear-gradient(0deg, #281b2b 42%, rgba(40,27,43,.92) 49%, rgba(40,27,43,.12) 82%);
+  }
+  .discovery-home .compact-hero:has(img[data-portrait-crop]) .compact-hero__copy { bottom: 36px; }
+  .discovery-home .discovery-grid--spotlight .drop-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .discovery-home .discovery-grid--spotlight .drop-card[data-colour-scheme] .drop-card__image {
+    width: min(100%, 290px);
+    justify-self: center;
+  }
+  .discovery-home .discovery-grid--spotlight .drop-card__body { gap: 10px; }
+  .discovery-home .discovery-grid--spotlight .drop-card h3 { font-size: 28px; }
+}
