@@ -1,7 +1,7 @@
 /* Workspaces keep focus and programmatic scrolling immediate. */
 html:has(:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page)) { scroll-behavior:auto; }
 /* Shared workspace system. Guest pages keep their event palette. */
-:is(.ops-page,.curation-page,.room-ops,.organizer-workspace,.account-page) { --ops-surface:#fffdfa; --ops-canvas:#f2f0ec; --ops-ink:#29242c; --ops-muted:#655f69; --ops-accent:#3b2942; --action-surface:#3b2942; --action-ink:#fff9f2; --action-line:#b8aebb; --focus-ring:#694675; color:var(--ops-ink); background:var(--ops-canvas); }
+:is(.ops-page,.curation-page,.room-ops,.organizer-workspace,.account-page) { --ops-surface:#fffdfa; --ops-canvas:#f2f0ec; --ops-ink:#29242c; --ops-muted:#655f69; --ops-accent:#3b2942; --action-surface:#3b2942; --action-ink:#fff9f2; --action-line:#b8aebb; --focus-ring:#666; color:var(--ops-ink); background:var(--ops-canvas); }
 :is(.ops-page,.curation-page,.room-ops) .curation-nav { background:#2b2230; color:#f9f5ee; border:0; }
 .curation-nav nav a { display:flex; align-items:center; gap:11px; border:0; border-radius:9px; min-height:42px; }
 .curation-nav nav a > span { color:inherit; font:inherit; letter-spacing:inherit; text-transform:none; margin:0; }
@@ -10,7 +10,7 @@ html:has(:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-pa
 .curation-nav > p { margin-top:auto; overflow-wrap:anywhere; }.curation-nav .curation-signout { border:0; border-radius:8px; }
 .ops-page .ops-main,.curation-page .curation-main { padding:30px clamp(20px,3vw,44px) 64px; }
 .ops-main > header,.curation-main > header { align-items:center; margin-bottom:24px; }.ops-main > header h1,.curation-main > header h1 { font-size:30px; line-height:1.15; letter-spacing:-.035em; }.ops-main > header p,.curation-main > header p { font-size:12px; letter-spacing:.04em; color:var(--ops-muted); }
-:is(.ops-main,.curation-main,.organizer-dashboard,.staff-page,.room-ops) button:not(.ticket-action):not(.ops-directory__row):not([role='switch']) { font:inherit; font-size:13px; font-weight:600; border-radius:9px; min-height:38px; cursor:pointer; }
+:is(.ops-main,.curation-main,.organizer-dashboard,.staff-page,.room-ops) button:not(.ticket-action):not(.ops-directory__row):not([role='switch']):not(:where(.ops-tabs > button,.suite-event-nav > button)) { font:inherit; font-size:13px; font-weight:600; border-radius:9px; min-height:38px; cursor:pointer; }
 :is(.ops-main,.curation-main,.organizer-dashboard,.staff-page,.room-ops) button:disabled { opacity:.5; cursor:not-allowed; }
 :is(.ops-main,.curation-main,.organizer-dashboard) > header > button { background:var(--ops-accent); color:#fff; border:0; border-radius:10px; padding:11px 16px; }
 :is(.ops-main,.curation-main,.organizer-dashboard) :is(input:not([type='checkbox']):not([type='radio']),select,textarea) { border:1px solid #b9b2bd; border-radius:8px; background:var(--ops-surface); color:var(--ops-ink); padding:10px 12px; font:inherit; font-size:16px; min-height:42px; min-width:0; max-width:100%; }
@@ -60,7 +60,7 @@ html:has(:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-pa
 :is(.ops-main,.curation-main,.organizer-dashboard,.organizer-record-fold,.room-ops > section) :is(input:not([type='checkbox']):not([type='radio']),select,textarea) { width:100%; border:1px solid #bbb5bf; border-radius:8px; background:#fffdfa; color:#29242c; padding:10px 12px; font-size:16px; min-height:42px; max-width:100%; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) label:has(>input[type='checkbox']) { display:flex; align-items:center; flex-wrap:nowrap; gap:10px; min-height:44px; text-transform:none; letter-spacing:0; font-size:13px; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) label:has(>input[type='checkbox']) small { font-size:12px; }
-:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) :is(input,select,textarea,button,summary,a,[tabindex="0"]):focus-visible { outline:2px solid #795585; outline-offset:3px; }
+:is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) :is(input,select,textarea,button,summary,a,[tabindex="0"]):focus-visible { outline:2px solid #666; outline-offset:3px; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) details { border:0; min-width:0; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) details > summary { display:flex; align-items:center; justify-content:space-between; gap:14px; list-style:none; cursor:pointer; min-height:44px; padding:10px 0; font-size:14px; font-weight:650; line-height:1.45; }
 :is(.ops-page,.curation-page,.organizer-workspace,.room-ops,.account-page) details > summary::-webkit-details-marker { display:none; }

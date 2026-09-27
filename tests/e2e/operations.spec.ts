@@ -20,7 +20,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 for (const [path, heading] of [
   ['/admin','Submission queue'], ['/admin/operations','Event operations'], ['/admin/events','Events & inventory'],
   ['/admin/registrations','RSVP & guests'], ['/admin/orders','Orders & payments'], ['/admin/support','Ticket support'], ['/admin/promoters','Promoter links'],
-  ['/admin/rooms','The Room'], ['/admin/fees','Fees & charges'], ['/admin/accounts','People & permissions'], ['/admin/account','My account'], ['/admin/help','Help centre'],
+  ['/admin/rooms','The Room'], ['/admin/fees','Fees & charges'], ['/admin/accounts','People & permissions'], ['/admin/account','My account'], ['/admin/help','Help centre'], ['/admin/hosts','Host applications'],
 ]) {
   test(`owner can open ${path} with readable controls`, async ({ page }, info) => {
     const errors: string[] = [];
@@ -45,6 +45,14 @@ for (const [path, heading] of [
     for(const summary of await page.locator('details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+    // Inspect the final cascade: generic Operations controls previously restored
+    // rounded bottom borders even when the shared tab stylesheet removed them.
+    const decoratedTabs = await page.locator('.ops-tabs > button, .suite-event-nav > button, .host-applications nav > button').evaluateAll(buttons => buttons.flatMap(button => {
+      const style = getComputedStyle(button);
+      return style.borderBottomWidth !== '0px' || style.borderBottomLeftRadius !== '0px' || style.boxShadow !== 'none'
+        ? [{ text: button.textContent, border: style.borderBottomWidth, radius: style.borderBottomLeftRadius, shadow: style.boxShadow }] : [];
+    }));
+    expect(decoratedTabs, `${path} tabs must not have curved underlines or shadows`).toEqual([]);
     await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true, scale: 'css' });
   });
 }
