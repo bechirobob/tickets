@@ -610,3 +610,18 @@ test('workspace settings and Event desk retain their frame and unfinished questi
  const desk=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(desk.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
  await page.screenshot({path:info.outputPath('workspace-event-desk.png'),fullPage:true,scale:'css'});
 });
+
+test('owner reviews a host application without an event',async({page},info)=>{
+ await page.goto('/admin/hosts');
+ await expect(page.getByRole('heading',{name:'Host applications',exact:true})).toBeVisible();
+ await page.getByText('Host onboarding fixture',{exact:true}).click();
+ await expect(page.getByText('host-onboarding-fixture@example.com',{exact:true})).toBeVisible();
+ expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()).violations).toEqual([]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ await page.screenshot({path:info.outputPath('host-approval.png'),fullPage:true});
+ await page.getByRole('button',{name:'Approve host',exact:true}).click();
+ await expect(page.getByRole('status')).toContainText('Host approved');
+ await page.getByRole('button',{name:/^Approved/}).click();
+ await page.getByText('Host onboarding fixture',{exact:true}).click();
+ await expect(page.getByRole('link',{name:'Manage account access'})).toBeVisible();
+});

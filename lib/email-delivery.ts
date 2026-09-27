@@ -3,7 +3,7 @@ import { reportDeliveryAllowed } from "./organizer-reports";
 import { emailBrand } from "./email-brand";
 import { createSecureToken, hashToken } from "./attendee-auth";
 
-type DeliveryKind = "team_invitation" | "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
+type DeliveryKind = "host_application_decision" | "host_application_verify" | "team_invitation" | "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
   paymentProvider?: string;
@@ -125,9 +125,9 @@ export async function applyDeliveryWebhook(db: D1Database, input: {
   return { updated: result.meta.changes === 1, status };
 }
 
-export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, scope: 'all' | 'audience' | 'standard' | 'invitations' = 'all') {
+export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, scope: 'all' | 'audience' | 'standard' | 'invitations' | 'host_applications' = 'all') {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return { attempted: 0, delivered: 0 };
-  const scopeSql = scope === 'invitations' ? "kind IN ('organizer_invitation','team_invitation')" : scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
+  const scopeSql = scope === 'host_applications' ? "kind IN ('host_application_verify','host_application_decision')" : scope === 'invitations' ? "kind IN ('organizer_invitation','team_invitation')" : scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
   const due = await env.DB.prepare(`
     SELECT id, kind, recovery_grant_id AS grantId, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
@@ -139,6 +139,10 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
     const lease=await env.DB.prepare("UPDATE delivery_events SET status='queued',updated_at=?,next_attempt_at=NULL WHERE id=? AND ((status='failed' AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now')) OR (status='queued' AND julianday(updated_at)<julianday('now','-5 minutes'))) ").bind(new Date().toISOString(),item.id).run();
     if (!lease.meta.changes) continue;
     try {
+      if (item.kind === 'host_application_verify') {
+        const valid = await env.DB.prepare("SELECT 1 FROM host_applications WHERE verification_hash=? AND email=? AND status='awaiting_email' AND verification_expires_at>?").bind(item.grantId,item.recipient,new Date().toISOString()).first();
+        if (!valid) { await env.DB.prepare("UPDATE delivery_events SET status='suppressed',payload_json=NULL,next_attempt_at=NULL WHERE id=?").bind(item.id).run(); continue; }
+      }
       if (item.kind === "organizer_report" && !await reportDeliveryAllowed(env.DB,item.grantId,item.recipient)) {
         await env.DB.prepare("UPDATE delivery_events SET status='suppressed',payload_json=NULL,next_attempt_at=NULL,failure_reason='Report expired or access/preferences changed.',updated_at=? WHERE id=?")
           .bind(new Date().toISOString(),item.id).run();

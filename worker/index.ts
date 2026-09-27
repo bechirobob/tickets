@@ -1,3 +1,4 @@
+import { processPendingHostAccess } from '../lib/host-applications';
 import { deliverHostAnnouncement, retryHostAnnouncements } from '../lib/notifications';
 import { processMarketing } from "../lib/marketing-delivery";
 import { processOrganizerReports } from "../lib/organizer-reports";
@@ -159,7 +160,7 @@ function securityResponse(response: Response, nonce = requestNonce(), path = "")
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
   }
-  if (path === "/organizer/activate" || path === "/api/organizer/activate" || path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/") || path === "/my-nights/access" || path === "/rsvp/access" || path === "/payment/return" || path.startsWith("/api/customer/recovery") || path.startsWith("/api/customer/transfers/claim")) {
+  if (path.startsWith("/organizer/join") || path.startsWith("/api/host-applications") || path === "/organizer/activate" || path === "/api/organizer/activate" || path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/") || path === "/my-nights/access" || path === "/rsvp/access" || path === "/payment/return" || path.startsWith("/api/customer/recovery") || path.startsWith("/api/customer/transfers/claim")) {
     headers.set("Referrer-Policy", "no-referrer");
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -210,6 +211,7 @@ async function runScheduledOperations(controller: ScheduledController, env: Clou
   }
   try {
     await processPendingOrganizerAccess(env.DB);
+    await processPendingHostAccess(env.DB);
     await retryFailedDeliveries(env, 20, 'standard');
   } catch (error) {
     await recordSystemAlert(env, "email-delivery-retry", error);
