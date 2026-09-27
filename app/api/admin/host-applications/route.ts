@@ -1,7 +1,7 @@
-import {mutationHasValidOrigin,readAdminSession} from '../../../../lib/admin-session';
+import {hasPermission,mutationHasValidOrigin,readAdminSession} from '../../../../lib/admin-session';
 import {applicationColumns,processPendingHostAccess,reviewHostApplication} from '../../../../lib/host-applications';
 import {retryFailedDeliveries} from '../../../../lib/email-delivery';
-async function owner(request:Request){const {env}=await import('cloudflare:workers');const session=await readAdminSession(request.headers.get('cookie'),env.DB);return {env,session:session?.role==='owner'?session:null};}
+async function owner(request:Request){const {env}=await import('cloudflare:workers');const session=await readAdminSession(request.headers.get('cookie'),env.DB);return {env,session:session&&hasPermission(session,'accounts.manage')?session:null};}
 export async function GET(request:Request){
  const {env,session}=await owner(request);if(!session)return Response.json({error:'Owner access is required.'},{status:403});
  const params=new URL(request.url).searchParams,status=params.get('status')??'pending',page=Math.min(10000,Math.max(0,Number(params.get('page'))||0));

@@ -1,6 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import {expect,test} from '@playwright/test';
 test.use({serviceWorkers:'block'});
+// PR production audits target the previous release. Candidate CI exercises these
+// routes locally; the post-deploy production audit exercises the live routes.
+test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === 'pull_request', 'Host onboarding is verified against the candidate, then the deployed release.');
 test('host onboarding preserves details on failure and completes without an event',async({page},info)=>{
  let attempts=0;
  await page.route('**/api/host-applications',route=>{const body=route.request().postDataJSON();expect(body.acceptedPolicies).toBe(true);expect(body.brandName).toBe('Accra Social Club');attempts++;return attempts===1?route.fulfill({status:503,json:{error:'Couldn’t save your details. Try again.'}}):route.fulfill({status:202,json:{received:true}});});
