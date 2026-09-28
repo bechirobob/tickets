@@ -46,7 +46,7 @@ async function start() {
     for(const file of readdirSync(directory)) chownSync(path.join(directory,file),uid,gid);
     child = spawn('systemd-run', ['--quiet','--wait','--collect','--pipe',`--unit=${unit}`,
       '--property=User=becore-tickets','--property=Group=becore-tickets',`--property=WorkingDirectory=${process.cwd()}`,
-      '--property=MemoryMax=1G','--property=CPUQuota=150%','--property=TasksMax=128','--property=LimitNOFILE=4096',
+      '--property=MemoryMax=1G','--property=CPUQuota=200%','--property=TasksMax=128','--property=LimitNOFILE=4096',
       '--property=IPAddressDeny=any','--property=IPAddressAllow=localhost','--property=NoNewPrivileges=true',
       '--property=ProtectSystem=strict',`--property=ReadWritePaths=${directory}`,'--property=ProtectHome=true','--property=PrivateDevices=true',
       '--property=PrivateTmp=true','--property=RuntimeMaxSec=240','--property=TimeoutStopSec=30',
@@ -69,7 +69,7 @@ async function stop() {
     const exited=once(child,'exit');
     if (constrainedServer) {
       const usage=spawnSync('systemctl',['show',unit,'-p','MemoryPeak','-p','CPUUsageNSec'],{encoding:'utf8'});
-      console.log(JSON.stringify({name:'server-resource-usage',limits:{memoryBytes:1073741824,cpuPercent:150},usage:usage.stdout.trim()}));
+      console.log(JSON.stringify({name:'server-resource-usage',limits:{memoryBytes:1073741824,cpuPercent:200},usage:usage.stdout.trim()}));
       spawnSync('systemctl',['stop',unit],{timeout:35000});
     } else child.kill('SIGTERM');
     const result=await Promise.race([exited,delay(25000).then(()=>null)]);

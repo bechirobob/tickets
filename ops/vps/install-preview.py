@@ -57,7 +57,10 @@ def install(source, revision):
         journal = pathlib.Path('/etc/systemd/journald@becore-tickets.conf.d')
         journal.mkdir(mode=0o755, parents=True, exist_ok=True)
         shutil.copyfile(source / 'operations/journal-limits.conf', journal / 'limits.conf')
+        unit_backups = {}
         for name in ('becore-tickets-preview.service', 'becore-tickets-retention.service', 'becore-tickets-retention.timer'):
+            target_unit = pathlib.Path('/etc/systemd/system') / name
+            unit_backups[name] = target_unit.read_bytes() if target_unit.exists() else None
             shutil.copyfile(source / 'operations' / name, pathlib.Path('/etc/systemd/system') / name)
         override = pathlib.Path('/etc/systemd/system/becore-tickets-preview.service.d')
         override.mkdir(mode=0o755, exist_ok=True)
@@ -75,7 +78,7 @@ def install(source, revision):
         temporary.symlink_to(release)
         os.replace(temporary, current)
         try:
-            subprocess.run(['runuser', '-u', 'becore-tickets', '--', 'node', 'operations/initialize-preview.mjs', revision], cwd=release, check=True)
+            subprocess.run(['runuser', '-u', 'becore-tickets', '--', str(release / 'bin/node'), 'operations/initialize-preview.mjs', revision], cwd=release, check=True)
             run('systemctl', 'enable', '--now', 'becore-tickets-preview.service', 'becore-tickets-retention.timer')
             run('systemctl', 'restart', 'becore-tickets-preview.service')
             import time
@@ -91,6 +94,12 @@ def install(source, revision):
             else:
                 raise RuntimeError('Isolated service did not become ready.')
         except Exception:
+            for name, original in unit_backups.items():
+                target_unit = pathlib.Path('/etc/systemd/system') / name
+                if original is None:
+                    target_unit.unlink(missing_ok=True)
+                else:
+                    target_unit.write_bytes(original)
             if previous_override is None:
                 override_file.unlink(missing_ok=True)
             else:

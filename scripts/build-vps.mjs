@@ -30,7 +30,9 @@ await build({
 });
 const revision = process.env.BECORE_RELEASE_SHA ?? head;
 if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error('Missing source revision.');
-await writeFile(path.join(target, 'release.json'), JSON.stringify({ revision, dirty }));
+await mkdir(path.join(target, 'bin'));
+await cp(process.execPath, path.join(target, 'bin/node'));
+await writeFile(path.join(target, 'release.json'), JSON.stringify({ revision, dirty, node: process.version }));
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 await writeFile(path.join(target, 'package.json'), JSON.stringify({ private: true, type: 'module', dependencies: pkg.dependencies }));
 console.log('Node application build saved to dist-vps.');
