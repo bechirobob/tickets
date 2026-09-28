@@ -6,7 +6,7 @@
 .cuppy-guest__art { position: relative; z-index: 1; display: block; width: 96px; aspect-ratio: 3 / 4; margin: 0 auto; background: url("/events/dj-cuppy-decks.webp") 0 0 / 400% 200% no-repeat; animation: cuppy-decks 1580ms steps(1, end) infinite; animation-play-state: paused; }
 .cuppy-guest[data-playing="true"] .cuppy-guest__art { animation-play-state: running; }
 .cuppy-guest__name { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 1px; margin: -20px 0 0; padding: 5px 5px 6px; background: #51243a; color: #fff5e9; transform: rotate(-4deg); clip-path: polygon(3% 0, 100% 0, 97% 100%, 0 100%); }
-.cuppy-guest__name small { display: block; font-size: 12px; font-weight: 500; line-height: 1.15; letter-spacing: -.025em; white-space: nowrap; }
+.cuppy-guest__name small { display: block; font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: -.025em; white-space: nowrap; }
 .cuppy-guest__name strong { display: block; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-size: 31px; font-weight: 700; line-height: 1; letter-spacing: -.045em; padding-right: 4px; white-space: nowrap; overflow-wrap: normal; word-break: normal; }
 @keyframes cuppy-decks {
   0%, 100% { background-position: 0 0; }
