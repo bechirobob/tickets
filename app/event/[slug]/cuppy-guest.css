@@ -19,7 +19,7 @@
   84.177% { background-position: 100% 100%; }
 }
 @media (max-width: 760px) {
-  .cuppy-guest { width: 100px; }
+  .cuppy-guest { top: -6px; width: 100px; }
   .cuppy-guest__art { width: 70px; }
   .cuppy-guest__name { padding: 4px 5px 5px; }
   .cuppy-guest__name strong { font-size: 28px; }
