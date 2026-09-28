@@ -31,7 +31,7 @@ test("Cuppy keeps the flyer and booking layout intact, with controllable motion"
       const parent = overlay.parentElement!;
       overlay.remove();
       const without = bounds();
-      parent.append(overlay);
+      parent.appendChild(overlay);
       const box = overlay.getBoundingClientRect();
       const image = document.querySelector<HTMLImageElement>(".event-detail-poster > img")!;
       const poster = image.getBoundingClientRect();
