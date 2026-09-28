@@ -48,24 +48,56 @@ export class SqliteDatabase {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.connection = new DatabaseSync(path);
     this.connection.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;');
+    this.pending = [];
+    this.flushHandle = null;
   }
   prepare(sql) { return new Prepared(this, sql); }
-  async batch(statements) {
-    // All statements run synchronously inside one transaction. A promise cannot
-    // yield midway and let another booking see partially reserved inventory.
-    this.connection.exec('BEGIN IMMEDIATE');
-    try {
-      const results = statements.map(statement => {
-        if (!(statement instanceof Prepared) || statement.owner !== this) throw new Error('Foreign SQL statement.');
-        return statement.execute();
-      });
-      this.connection.exec('COMMIT');
-      return results;
-    } catch (error) { this.connection.exec('ROLLBACK'); throw error; }
+  batch(statements) {
+    if (!statements.length) return Promise.resolve([]);
+    if (this.pending.length >= 2048) return Promise.reject(new Error('Database commit queue is full.'));
+    return new Promise((resolve, reject) => {
+      this.pending.push({ statements, resolve, reject });
+      if (!this.flushHandle) this.flushHandle = setImmediate(() => this.flushBatches());
+    });
   }
-  async exec(sql) { const start = performance.now(); this.connection.exec(sql); return { count: 1, duration: performance.now() - start }; }
+  flushBatches() {
+    if (this.flushHandle) clearImmediate(this.flushHandle);
+    this.flushHandle = null;
+    const jobs = this.pending.splice(0, 128);
+    if (!jobs.length) return;
+    const settled = [];
+    // One FULL-synchronous commit can durably acknowledge several simultaneous
+    // requests. A savepoint keeps each logical batch atomic and independent.
+    // No promise resolves, and no JS read interleaves, before COMMIT succeeds.
+    try {
+      this.connection.exec('BEGIN IMMEDIATE');
+      for (const job of jobs) {
+        this.connection.exec('SAVEPOINT request_batch');
+        try {
+          const results = job.statements.map(statement => {
+            if (!(statement instanceof Prepared) || statement.owner !== this) throw new Error('Foreign SQL statement.');
+            return statement.execute();
+          });
+          this.connection.exec('RELEASE request_batch');
+          settled.push({ job, results });
+        } catch (error) {
+          this.connection.exec('ROLLBACK TO request_batch; RELEASE request_batch');
+          settled.push({ job, error });
+        }
+      }
+      this.connection.exec('COMMIT');
+      for (const result of settled) {
+        if (result.error) result.job.reject(result.error);
+        else result.job.resolve(result.results);
+      }
+    } catch (error) {
+      try { this.connection.exec('ROLLBACK'); } catch { /* BEGIN itself may have failed. */ }
+      for (const job of jobs) job.reject(error);
+    }
+    if (this.pending.length) this.flushHandle = setImmediate(() => this.flushBatches());
+  }
+  async exec(sql) { while (this.pending.length) this.flushBatches(); const start = performance.now(); this.connection.exec(sql); return { count: 1, duration: performance.now() - start }; }
   withSession() { return this; }
   getBookmark() { return null; }
-  close() { this.connection.close(); }
+  close() { while (this.pending.length) this.flushBatches(); this.connection.close(); }
 }
-

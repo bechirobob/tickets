@@ -1,6 +1,42 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SqliteDatabase } from '../runtime/vps/database.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+test('concurrent commits preserve independent rollback, inventory limits and restart durability', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'tickets-group-commit-'));
+  const file = path.join(directory, 'tickets.sqlite');
+  let db = new SqliteDatabase(file);
+  try {
+    await db.exec('CREATE TABLE inventory(id INTEGER PRIMARY KEY, remaining INTEGER); INSERT INTO inventory VALUES (1, 40); CREATE TABLE claims(id INTEGER PRIMARY KEY);');
+    const outcomes = await Promise.allSettled(Array.from({ length: 80 }, (_, i) => db.batch([
+      db.prepare('UPDATE inventory SET remaining=remaining-1 WHERE id=1 AND remaining>0'),
+      db.prepare('INSERT INTO claims(id) SELECT ? WHERE changes()=1').bind(i),
+      ...(i === 0 ? [db.prepare('INSERT INTO inventory VALUES (1, 9)')] : []),
+    ])));
+    assert.equal(outcomes.filter(result => result.status === 'rejected').length, 1);
+    assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM claims').first('n'), 40);
+    assert.equal(await db.prepare('SELECT remaining FROM inventory').first('remaining'), 0);
+    assert.equal(await db.prepare('SELECT id FROM claims WHERE id=0').first(), null);
+    db.close(); db = new SqliteDatabase(file);
+    assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM claims').first('n'), 40);
+    assert.equal(db.connection.prepare('PRAGMA synchronous').get().synchronous, 2);
+  } finally { db.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('a physical commit failure rejects every grouped success and leaves no partial writes', async () => {
+  const db = new SqliteDatabase(':memory:');
+  try {
+    await db.exec('CREATE TABLE claims(id INTEGER PRIMARY KEY)');
+    const execute = db.connection.exec.bind(db.connection);
+    db.connection.exec = sql => { if (sql === 'COMMIT') throw new Error('Synthetic disk failure'); return execute(sql); };
+    const outcomes = await Promise.allSettled([1, 2, 3].map(id => db.batch([db.prepare('INSERT INTO claims VALUES (?)').bind(id)])));
+    assert.equal(outcomes.filter(result => result.status === 'rejected').length, 3);
+    assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM claims').first('n'), 0);
+  } finally { db.close(); }
+});
 
 test('a failed batch rolls back all inventory changes', async () => {
   const db = new SqliteDatabase(':memory:');
@@ -22,4 +58,3 @@ test('RETURNING, change counts and binary data preserve the D1 contract', async 
     assert.equal((await db.prepare('UPDATE photos SET body=? WHERE id=99').bind([1]).run()).meta.changes, 0);
   } finally { db.close(); }
 });
-
