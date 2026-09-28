@@ -20,6 +20,18 @@ test("Cuppy keeps the flyer and booking layout intact, with controllable motion"
   const sizes = page.viewportSize()!.width > 760 ? [1280, 800] : [390, 320];
   for (const width of sizes) {
     await page.setViewportSize({ width, height: 844 });
+    const name = guest.locator("strong");
+    await expect(name).toHaveCSS("white-space", "nowrap");
+    const nameLayout = await name.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rects = Array.from(range.getClientRects());
+      return { lines: rects.length, width: element.scrollWidth, available: element.parentElement!.clientWidth };
+    });
+    expect(nameLayout.lines).toBe(1);
+    expect(nameLayout.width).toBeLessThanOrEqual(nameLayout.available);
+    const initialFrame = await art.evaluate(element => getComputedStyle(element).backgroundPosition);
+    await expect.poll(() => art.evaluate(element => getComputedStyle(element).backgroundPosition), { timeout: 4000 }).not.toBe(initialFrame);
     const result = await page.evaluate(() => {
       const overlay = document.querySelector<HTMLElement>(".cuppy-guest")!;
       const targets = [".event-detail-poster > img", ".event-detail-overview", "#register"];
