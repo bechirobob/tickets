@@ -5,6 +5,19 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+test('prepared statement reuse never carries bindings between guests and stays bounded', async () => {
+  const db = new SqliteDatabase(':memory:');
+  try {
+    assert.equal(await db.prepare('SELECT ? AS guest').bind('first').first('guest'), 'first');
+    assert.equal(await db.prepare('SELECT ? AS guest').bind('second').first('guest'), 'second');
+    assert.equal(await db.prepare('SELECT ? AS guest').first('guest'), null);
+    for (let i = 0; i < 300; i++) await db.prepare(`SELECT ${i} AS n`).first();
+    assert.ok(db.statements.size <= 256);
+    await db.exec('CREATE TABLE fixture(id INTEGER)');
+    assert.equal(db.statements.size, 0);
+  } finally { db.close(); }
+});
+
 test('concurrent commits preserve independent rollback, inventory limits and restart durability', async () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'tickets-group-commit-'));
   const file = path.join(directory, 'tickets.sqlite');

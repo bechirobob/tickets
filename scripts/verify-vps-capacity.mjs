@@ -1,9 +1,9 @@
 // Synthetic data, fixed loopback destination, no payment/email credentials.
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync, chownSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
 import WebSocket from 'ws';
@@ -11,7 +11,10 @@ import { SqliteDatabase } from '../runtime/vps/database.mjs';
 
 process.umask(0o077);
 const count = 600, host = '127.0.0.1:3220', base = `http://${host}`;
-const directory = mkdtempSync(path.join(tmpdir(), 'tickets-vps-capacity-'));
+const constrainedServer = process.env.TICKETS_REHEARSAL_SYSTEMD === '1';
+if (constrainedServer && process.getuid?.() !== 0) throw Error('Systemd rehearsal requires the existing operator connection.');
+const directory = mkdtempSync(path.join(constrainedServer ? '/srv/becore-tickets/temporary' : tmpdir(), 'tickets-vps-capacity-'));
+let unit, launch = 0;
 const db = new SqliteDatabase(path.join(directory, 'tickets.sqlite'));
 const slug = `capacity-${randomUUID()}`, now = new Date().toISOString(), future = new Date(Date.now() + 86400000).toISOString();
 const sessions = [], identities = [], passes = [], sockets = [], metrics = [];
@@ -32,7 +35,26 @@ async function request(route, i, data, cookie) {
   return response;
 }
 async function start() {
-  child = spawn(process.execPath, ['dist-vps/server.mjs'], {env:{PATH:process.env.PATH, NODE_ENV:'production', TICKETS_CONFIG:path.join(directory,'config.json'), TICKETS_STATE:directory, TICKETS_HOST:host, TICKETS_PORT:'3220', TICKETS_ACTIVE:'0'}, stdio:['ignore','pipe','pipe']});
+  const values = {PATH:process.env.PATH, NODE_ENV:'production', TICKETS_CONFIG:path.join(directory,'config.json'), TICKETS_STATE:directory, TICKETS_HOST:host, TICKETS_PORT:'3220', TICKETS_ACTIVE:'0'};
+  if (constrainedServer) {
+    unit = `tickets-capacity-server-${process.pid}-${++launch}`;
+    const account = spawnSync('id', ['-u', 'becore-tickets'], {encoding:'utf8'});
+    const group = spawnSync('id', ['-g', 'becore-tickets'], {encoding:'utf8'});
+    if (account.status !== 0 || group.status !== 0) throw Error('Isolated service account unavailable.');
+    const uid=Number(account.stdout.trim()), gid=Number(group.stdout.trim());
+    chownSync(directory,uid,gid);
+    for(const file of readdirSync(directory)) chownSync(path.join(directory,file),uid,gid);
+    child = spawn('systemd-run', ['--quiet','--wait','--collect','--pipe',`--unit=${unit}`,
+      '--property=User=becore-tickets','--property=Group=becore-tickets',`--property=WorkingDirectory=${process.cwd()}`,
+      '--property=MemoryMax=1G','--property=CPUQuota=150%','--property=TasksMax=128','--property=LimitNOFILE=4096',
+      '--property=IPAddressDeny=any','--property=IPAddressAllow=localhost','--property=NoNewPrivileges=true',
+      '--property=ProtectSystem=strict',`--property=ReadWritePaths=${directory}`,'--property=ProtectHome=true','--property=PrivateDevices=true',
+      '--property=PrivateTmp=true','--property=RuntimeMaxSec=240','--property=TimeoutStopSec=30',
+      ...Object.entries(values).map(([key,value])=>`--setenv=${key}=${value}`),
+      process.execPath, path.resolve('dist-vps/server.mjs')], {stdio:['ignore','pipe','pipe']});
+  } else {
+    child = spawn(process.execPath, ['dist-vps/server.mjs'], {env:values, stdio:['ignore','pipe','pipe']});
+  }
   for (const stream of [child.stdout,child.stderr]) stream.on('data', data => {output=(output+data).slice(-6000);});
   for(let attempt=0;attempt<80;attempt++) {
     if(child.exitCode!==null) throw Error('Capacity server exited');
@@ -44,7 +66,12 @@ async function start() {
 async function stop() {
   for (const socket of sockets) socket?.terminate();
   if(child && child.exitCode===null) {
-    const exited=once(child,'exit'); child.kill('SIGTERM');
+    const exited=once(child,'exit');
+    if (constrainedServer) {
+      const usage=spawnSync('systemctl',['show',unit,'-p','MemoryPeak','-p','CPUUsageNSec'],{encoding:'utf8'});
+      console.log(JSON.stringify({name:'server-resource-usage',limits:{memoryBytes:1073741824,cpuPercent:150},usage:usage.stdout.trim()}));
+      spawnSync('systemctl',['stop',unit],{timeout:35000});
+    } else child.kill('SIGTERM');
     const result=await Promise.race([exited,delay(25000).then(()=>null)]);
     if(!result) {child.kill('SIGKILL');throw Error('Graceful shutdown timed out');}
     assert.equal(result[0],0);
