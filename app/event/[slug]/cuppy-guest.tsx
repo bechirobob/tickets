@@ -37,7 +37,7 @@ export default function CuppyGuest() {
   }, [mode]);
 
   return <div className="cuppy-guest" ref={guest} data-playing={playing}>
-    <button type="button" className="cuppy-guest__toggle" onClick={() => setMode(playing ? "paused" : "playing")} aria-label={playing ? "Pause Cuppy animation" : "Play Cuppy animation"} aria-description="Special Guest DJ Cuppy" title={playing ? "Tap to pause" : "Tap to play"}>
+    <button type="button" className="cuppy-guest__toggle" onClick={() => setMode(playing ? "paused" : "playing")} aria-label={playing ? "Pause Cuppy animation" : "Play Cuppy animation"} title={playing ? "Tap to pause" : "Tap to play"}>
       <span className="cuppy-guest__art" aria-hidden="true" />
       <span className="cuppy-guest__name"><small>Special Guest DJ</small><strong>Cuppy</strong></span>
     </button>
