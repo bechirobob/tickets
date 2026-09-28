@@ -8,6 +8,7 @@ test("Cuppy keeps the flyer and booking layout intact, with controllable motion"
   const art = guest.locator(".cuppy-guest__art");
   await expect(guest).toBeVisible();
   await expect(guest.getByText("Special Guest DJ", { exact: true })).toBeVisible();
+  await expect(guest.locator("small")).toHaveCSS("font-size", "12px");
   await expect(guest.locator("strong")).toHaveText("Cuppy");
   await expect(guest).toHaveAttribute("data-playing", "true");
   await expect(art).toHaveCSS("animation-play-state", "running");
