@@ -1,0 +1,27 @@
+/* Only the approved artist layer changes; poster dimensions and page flow stay intact. */
+.event-detail-poster:has(.cuppy-guest) { position: relative; min-height: 0; overflow: visible; }
+.cuppy-guest { position: absolute; z-index: 2; top: 0; right: 0; width: 108px; margin: 0; }
+.cuppy-guest__toggle { display: block; width: 100%; padding: 0; border: 0; border-radius: 0; margin: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.cuppy-guest__toggle:focus-visible { outline: 2px solid var(--event-ink); outline-offset: 4px; }
+.cuppy-guest__art { position: relative; z-index: 1; display: block; width: 96px; aspect-ratio: 3 / 4; margin: 0 auto; background: url("/events/dj-cuppy-decks.webp") 0 0 / 400% 200% no-repeat; animation: cuppy-decks 1580ms steps(1, end) infinite; animation-play-state: paused; }
+.cuppy-guest[data-playing="true"] .cuppy-guest__art { animation-play-state: running; }
+.cuppy-guest__name { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 1px; margin: -20px 0 0; padding: 5px 5px 6px; background: #51243a; color: #fff5e9; transform: rotate(-4deg); clip-path: polygon(3% 0, 100% 0, 97% 100%, 0 100%); }
+.cuppy-guest__name small { display: block; font-size: 11px; font-weight: 500; line-height: 1.15; letter-spacing: 0; white-space: nowrap; }
+.cuppy-guest__name strong { display: block; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-size: 31px; font-weight: 700; line-height: 1; letter-spacing: -.045em; padding-right: 4px; }
+@keyframes cuppy-decks {
+  0%, 100% { background-position: 0 0; }
+  27.215% { background-position: 33.333333% 0; }
+  36.076% { background-position: 66.666667% 0; }
+  44.937% { background-position: 100% 0; }
+  57.595% { background-position: 0 100%; }
+  66.456% { background-position: 33.333333% 100%; }
+  75.317% { background-position: 66.666667% 100%; }
+  84.177% { background-position: 100% 100%; }
+}
+@media (max-width: 760px) {
+  .cuppy-guest { width: 100px; }
+  .cuppy-guest__art { width: 70px; }
+  .cuppy-guest__name { padding: 4px 5px 5px; }
+  .cuppy-guest__name strong { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { .cuppy-guest__art { animation: none; } }

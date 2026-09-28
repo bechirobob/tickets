@@ -8,7 +8,7 @@ test('Kofi Bills profile shows the portrait, public socials and linked event',as
   await expect(page.getByRole('heading',{name:'Kofi Bills',exact:true})).toBeVisible();
   await expect(page.getByText('Henry Yorke',{exact:true})).toBeVisible();
   await expect(page.locator('.host-profile__portrait img')).toBeVisible();
-  expect(await page.locator('.host-profile__portrait img').evaluate((img:HTMLImageElement)=>img.complete && img.naturalWidth>0)).toBe(true);
+  await expect.poll(() => page.locator('.host-profile__portrait img').evaluate((img:HTMLImageElement)=>img.complete && img.naturalWidth>0)).toBe(true);
   await expect(page.getByRole('link',{name:/Instagram/})).toHaveAttribute('href','https://www.instagram.com/mr.yorke/');
   await expect(page.getByRole('link',{name:/Snapchat/})).toHaveAttribute('href','https://www.snapchat.com/add/kofi_billz123');
   await expect(page.getByRole('heading',{name:'On The Guest List',exact:true})).toBeVisible();

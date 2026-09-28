@@ -1,6 +1,7 @@
 "use client";
 
 import EventStory from "./event-story";
+import CuppyGuest from "./cuppy-guest";
 import RegistrationForm from "../../registration-form";
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
@@ -39,7 +40,7 @@ export default function EventScreen({ event, host, registration, promoterCode = 
     <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>
 
     <div className="event-detail-layout">
-      <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized /></figure>
+      <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized />{slug === "sun-chasers-labadi" && event.image === "/events/on-the-guest-list.webp" ? <CuppyGuest /> : null}</figure>
       <section className="event-detail-overview" aria-labelledby="event-title">
         <p className="eyebrow">{event.vibe}{event.isVerified ? <span className="event-detail-verified"><BadgeCheck size={15} aria-hidden="true" /> Verified event</span> : null}</p><h1 id="event-title">{event.title}</h1>
         <div className="event-detail-facts">
