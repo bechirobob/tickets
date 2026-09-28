@@ -24,4 +24,4 @@
   .cuppy-guest__name { padding: 4px 5px 5px; }
   .cuppy-guest__name strong { font-size: 28px; }
 }
-@media (prefers-reduced-motion: reduce) { .cuppy-guest__art { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cuppy-guest:not([data-playing="true"]) .cuppy-guest__art { animation: none; } }
