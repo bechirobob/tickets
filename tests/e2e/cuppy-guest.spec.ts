@@ -1,6 +1,7 @@
 import { expect, test } from "./catalogue";
 
 test("Cuppy keeps the flyer and booking layout intact, with controllable motion", async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === "pull_request", "The production PR audit still serves the previous release; candidate CI and the post-deploy audit cover this addition");
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/event/sun-chasers-labadi");
   const guest = page.locator(".cuppy-guest");
