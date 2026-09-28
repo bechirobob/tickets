@@ -16,6 +16,7 @@ export default defineConfig({
           this.emitFile({ type: 'asset', fileName: `${folder}/${file}`, source: readFileSync(path.join(here, '../public', folder, file)) });
         }
       }
+      this.emitFile({ type: 'asset', fileName: 'events/dj-cuppy-decks.webp', source: readFileSync(path.join(here, '../public/events/dj-cuppy-decks.webp')) });
     },
   }],
   resolve: { alias: {
