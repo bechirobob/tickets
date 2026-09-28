@@ -2,7 +2,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
-const file = '/var/lib/becore-tickets-preview/tickets.sqlite';
+const revision = process.argv[2];
+if (!/^[a-f0-9]{40}$/.test(revision ?? '')) throw new Error('Exact preview revision is required.');
+const file = `/var/lib/becore-tickets-preview/${revision}/tickets.sqlite`;
 if (existsSync(file)) process.exit(0);
 process.umask(0o077);
 const db = new DatabaseSync(file);

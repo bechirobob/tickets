@@ -42,6 +42,9 @@ def install(source, revision):
         state = pathlib.Path('/var/lib/becore-tickets-preview')
         state.mkdir(mode=0o700, exist_ok=True)
         os.chown(state, account.pw_uid, account.pw_gid)
+        revision_state = state / revision
+        revision_state.mkdir(mode=0o700, exist_ok=True)
+        os.chown(revision_state, account.pw_uid, account.pw_gid)
         configuration = pathlib.Path('/etc/becore-tickets')
         configuration.mkdir(mode=0o750, exist_ok=True)
         os.chown(configuration, 0, account.pw_gid)
@@ -56,6 +59,11 @@ def install(source, revision):
         shutil.copyfile(source / 'operations/journal-limits.conf', journal / 'limits.conf')
         for name in ('becore-tickets-preview.service', 'becore-tickets-retention.service', 'becore-tickets-retention.timer'):
             shutil.copyfile(source / 'operations' / name, pathlib.Path('/etc/systemd/system') / name)
+        override = pathlib.Path('/etc/systemd/system/becore-tickets-preview.service.d')
+        override.mkdir(mode=0o755, exist_ok=True)
+        override_file = override / 'revision.conf'
+        previous_override = override_file.read_text() if override_file.exists() else None
+        override_file.write_text(f'[Service]\nEnvironment=TICKETS_STATE={revision_state}\n')
         run('systemctl', 'daemon-reload')
         current = root / 'current'
         previous = current.resolve() if current.is_symlink() else None
@@ -67,7 +75,7 @@ def install(source, revision):
         temporary.symlink_to(release)
         os.replace(temporary, current)
         try:
-            subprocess.run(['runuser', '-u', 'becore-tickets', '--', 'node', 'operations/initialize-preview.mjs'], cwd=release, check=True)
+            subprocess.run(['runuser', '-u', 'becore-tickets', '--', 'node', 'operations/initialize-preview.mjs', revision], cwd=release, check=True)
             run('systemctl', 'enable', '--now', 'becore-tickets-preview.service', 'becore-tickets-retention.timer')
             run('systemctl', 'restart', 'becore-tickets-preview.service')
             import time
@@ -83,6 +91,11 @@ def install(source, revision):
             else:
                 raise RuntimeError('Isolated service did not become ready.')
         except Exception:
+            if previous_override is None:
+                override_file.unlink(missing_ok=True)
+            else:
+                override_file.write_text(previous_override)
+            run('systemctl', 'daemon-reload')
             if previous:
                 temporary.symlink_to(previous)
                 os.replace(temporary, current)
