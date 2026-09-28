@@ -66,4 +66,12 @@ test("Cuppy keeps the flyer and booking layout intact, with controllable motion"
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(guest).toHaveAttribute("data-playing", "false");
   await expect(art).toHaveCSS("animation-name", "none");
+  // A phone's reduced-motion setting disables autoplay, but an explicit tap can play.
+  await guest.getByRole("button", { name: "Play Cuppy animation" }).click();
+  await expect(guest).toHaveAttribute("data-playing", "true");
+  const reducedFrame = await art.evaluate(element => getComputedStyle(element).backgroundPosition);
+  await expect.poll(() => art.evaluate(element => getComputedStyle(element).backgroundPosition), { timeout: 4000 }).not.toBe(reducedFrame);
+  await guest.getByRole("button", { name: "Pause Cuppy animation" }).click();
+  await expect(guest).toHaveAttribute("data-playing", "false");
+  await expect(art).toHaveCSS("animation-name", "none");
 });
