@@ -49,7 +49,7 @@ test("keeps the production Worker configuration portable and preserves The Room"
 });
 
 test("the Worker applies the production browser security baseline", async () => {
-  const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
+  const worker = (await Promise.all(["index.ts", "security-response.ts", "background.ts"].map(file => readFile(new URL(`../worker/${file}`, import.meta.url), "utf8")))).join("\n");
 
   assert.match(worker, /Content-Security-Policy/u);
   assert.match(worker, /frame-ancestors 'none'/u);
@@ -62,7 +62,8 @@ test("the Worker applies the production browser security baseline", async () => 
   assert.match(worker, /display-capture=\(\)/u);
   assert.match(worker, /recordSecurityEvent/u);
   assert.match(worker, /sendOperationalAlert/u);
-  assert.match(worker, /async queue\(/u);
+  assert.match(worker, /queue: processQueue/u);
+  assert.match(worker, /export async function processQueue/u);
   assert.match(worker, /deliverQueuedEventAnnouncement/u);
   assert.match(worker, /message\.retry\(\{ delaySeconds: 60 \}\)/u);
 });
@@ -84,3 +85,4 @@ test("ships the BeCore Tickets tab icon in modern and fallback formats", async (
   assert.ok((await stat(new URL("favicon-32x32.png", client))).size > 100);
   assert.ok((await stat(new URL("apple-touch-icon.png", client))).size > 100);
 });
+
