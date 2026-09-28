@@ -28,9 +28,10 @@ test("Cuppy keeps the flyer and booking layout intact, with controllable motion"
         return [box.x, box.y, box.width, box.height];
       });
       const before = bounds();
-      overlay.style.display = "none";
+      const parent = overlay.parentElement!;
+      overlay.remove();
       const without = bounds();
-      overlay.style.removeProperty("display");
+      parent.append(overlay);
       const box = overlay.getBoundingClientRect();
       const image = document.querySelector<HTMLImageElement>(".event-detail-poster > img")!;
       const poster = image.getBoundingClientRect();

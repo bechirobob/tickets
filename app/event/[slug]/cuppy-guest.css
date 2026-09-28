@@ -1,5 +1,5 @@
 /* Only the approved artist layer changes; poster dimensions and page flow stay intact. */
-.event-detail-poster:has(.cuppy-guest) { position: relative; overflow: visible; }
+.event-detail-poster:has(.cuppy-guest) { position: relative; min-height: 0; overflow: visible; }
 .cuppy-guest { position: absolute; z-index: 2; top: 0; right: 0; width: 108px; margin: 0; }
 .cuppy-guest__toggle { display: block; width: 100%; padding: 0; border: 0; border-radius: 0; margin: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .cuppy-guest__toggle:focus-visible { outline: 2px solid var(--event-ink); outline-offset: 4px; }
