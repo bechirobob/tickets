@@ -1,4 +1,4 @@
-name: Close verified historical Tickets incidents
+name: Inventory owner-requested Tickets cleanup
 on:
   push:
     branches: [main]
@@ -7,7 +7,7 @@ permissions:
   contents: read
   id-token: write
 jobs:
-  check:
+  inspect:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -17,24 +17,30 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Resolve only the inspected historical incidents with audit evidence
+      - name: Inventory booking dependencies and removable build artifacts
         run: |
           tailscale ssh root@hermes "python3 -" <<'PY'
-          import sqlite3,json,datetime,uuid
-          db=sqlite3.connect('/var/lib/becore-tickets/tickets.sqlite',timeout=20)
-          now=datetime.datetime.now(datetime.timezone.utc).isoformat()
-          ids=["9a984c9a-9581-467c-958e-7a6b7b0b5fd6","b7c30e67-7e35-40e4-940b-f8d684d2f41c","dbff36de-38c9-4ed9-b5ae-91c66c0c0d9e","9aa7fe4b-5d0d-40bb-b00e-b19da4f0c7f9","176ed8a4-ac78-4f71-9e55-87e7759a64ab","85642ed5-8463-458e-b134-258bde0d12f3","741e8257-bf60-478a-92fd-9b2e8719af08","277ce81c-2f49-493c-864d-90d76e2a8fe3","c8677578-27a6-4943-9853-e2e53b23a0ee"]
-          evidence={'healthRun':'36597096208','integrationRun':'36597395782','providerReconciliationRun':'36597707986','backupRestoreRun':'36597708099','reason':'Historical incidents reviewed after VPS migration. No current scheduled errors, delivery backlog or expired flashes. SeevPlus verification now succeeds: completed order matches provider; abandoned expired order remains pending/unpaid upstream and is not marked paid. No deliveries resent and no financial records changed.'}
-          with db:
-              assert db.execute("SELECT COUNT(*) FROM room_flashes WHERE status!='deleted' AND expires_at<=?",(now,)).fetchone()[0]==0
-              assert db.execute("SELECT COUNT(*) FROM seev_checkout_sessions WHERE last_error IS NOT NULL").fetchone()[0]==0
-              count=0
-              for ident in ids:
-                  row=db.execute("SELECT source FROM system_alerts WHERE id=? AND status='open' AND created_at<'2026-09-29T14:00:00Z'",(ident,)).fetchone()
-                  if not row: continue
-                  assert row[0] in ['event-announcements','flash-expiry','seevplus-payment-recovery']
-                  count+=db.execute("UPDATE system_alerts SET status='resolved',resolved_at=?,resolved_by=? WHERE id=? AND status='open'",(now,'system:verified-production-audit',ident)).rowcount
-                  db.execute("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES(?,?,?,?,?,?,?,?)",(str(uuid.uuid4()),'system','resolve_verified_historical_alert','system_alert',ident,'success',json.dumps(evidence),now))
-          print(json.dumps({'historicalAlertsResolved':count,'openAlertsRemaining':db.execute("SELECT COUNT(*) FROM system_alerts WHERE status='open'").fetchone()[0],'emailHistoryPreserved':True,'paymentsUnchanged':True}))
+          import sqlite3,pathlib,subprocess,json,os
+          def q(s): return '"'+s.replace('"','""')+'"'
+          db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True);db.row_factory=sqlite3.Row
+          tables={}
+          for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+              count=db.execute('SELECT COUNT(*) FROM '+q(name)).fetchone()[0]
+              if count: tables[name]={'count':count,'columns':[r[1] for r in db.execute('PRAGMA table_info('+q(name)+')')]}
+          report={'tables':tables,'foreignKeys':[]}
+          for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+              for row in db.execute('PRAGMA foreign_key_list('+q(name)+')'): report['foreignKeys'].append({'table':name,'parent':row[2],'from':row[3],'to':row[4]})
+          report['rooms']=[]
+          for p in pathlib.Path('/var/lib/becore-tickets/rooms').glob('*.sqlite'):
+              rdb=sqlite3.connect('file:'+str(p)+'?mode=ro',uri=True)
+              report['rooms'].append({'file':p.name,'tables':{n:rdb.execute('SELECT COUNT(*) FROM '+q(n)).fetchone()[0] for (n,) in rdb.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}})
+          report['serviceReleasePaths']={}
+          for unit in ['becore-tickets.service','becore-tickets-preview.service']:
+              report['serviceReleasePaths'][unit]=subprocess.run(['systemctl','show',unit,'--property=WorkingDirectory','--property=ActiveState'],capture_output=True,text=True).stdout.strip()
+          root=pathlib.Path('/srv/becore-tickets')
+          report['pointers']={n:str((root/n).resolve()) for n in ['current','previous'] if (root/n).is_symlink()}
+          report['releases']=[{'name':p.name,'modified':p.stat().st_mtime,'sizeKiB':int(subprocess.check_output(['du','-sk',str(p)],text=True).split()[0])} for p in (root/'releases').iterdir() if p.is_dir() and not p.is_symlink()]
+          report['temporary']=[{'name':p.name,'sizeKiB':int(subprocess.check_output(['du','-sk',str(p)],text=True).split()[0])} for p in pathlib.Path('/var/tmp').glob('tickets-*') if not p.is_symlink()]
+          print(json.dumps(report))
           
           PY
