@@ -30,18 +30,9 @@ jobs:
           const db=s.bindings.find(b=>b.type==='d1'&&b.name==='DB').id;
           const query=async sql=>(await cloudflare(root+'/d1/database/'+db+'/query','POST',{sql}))[0].results;
           console.log(JSON.stringify({readOnly:true,admission:await query('SELECT phase,transfer_id,paused_at FROM _bct_handover_admission'),operations:await query('SELECT kind,COUNT(*) AS count,MIN(started_at) AS oldest,MAX(started_at) AS newest FROM _bct_handover_operations GROUP BY kind')}));
-          const telemetry=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:'tickets-handover-diagnose',timeframe:{from:Date.parse('2026-09-29T10:11:00Z'),to:Date.parse('2026-09-29T10:15:00Z')},view:'events',limit:1000,parameters:{filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'becore-tickets'}]}});
-          console.log(JSON.stringify({telemetryKeys:Object.keys(telemetry),eventsKeys:telemetry.events&&Object.keys(telemetry.events),sampleKeys:telemetry.events?.events?.[0]&&Object.keys(telemetry.events.events[0])}));
+          const telemetry=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:'tickets-handover-completion',timeframe:{from:Date.parse('2026-09-29T10:11:00Z'),to:Date.parse('2026-09-29T10:15:00Z')},view:'events',limit:2000,parameters:{filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'becore-tickets'},{key:'$metadata.type',operation:'eq',type:'string',value:'cf-worker-event'}]}});
           const events=telemetry.events.events;
-          console.log(JSON.stringify({eventCount:telemetry.events.count,returned:events.length,workerKeys:events[0]?.$workers&&Object.keys(events[0].$workers),sourceKeys:events[0]?.source&&Object.keys(events[0].source),metadataKeys:events[0]?.$metadata&&Object.keys(events[0].$metadata),sample:events.slice(0,3).map(e=>({timestamp:e.timestamp,worker:e.$workers?{outcome:e.$workers.outcome,eventType:e.$workers.eventType,wallTimeMs:e.$workers.wallTimeMs,cpuTimeMs:e.$workers.cpuTimeMs}:null}))}));
-          const groups={};
-          for(const e of events){const w=e.$workers??{},k=JSON.stringify([e.$metadata?.type,w.outcome,w.event?.request?.method,w.event?.response?.status]);groups[k]=(groups[k]??0)+1;}
-          console.log(JSON.stringify({groups,eventKeys:events[0]?.$workers?.event&&Object.keys(events[0].$workers.event),eventTimestamp:events[0]?.$workers?.event?.timestamp,sourceErrorCategories:events.filter(e=>e.$metadata?.level==='error').map(e=>String(e.source?.message??'').replace(/https?:[^ ]+|[a-f0-9-]{16,}|"[^"]*"|'[^']*'/g,'[redacted]').slice(0,200)).slice(0,8)}));
-          const before=await query('SELECT COUNT(*) AS n FROM _bct_handover_operations');
-          const probe=await fetch('https://tickets.becoreops.com/api/version',{method:'HEAD'});
-          await new Promise(r=>setTimeout(r,2000));
-          const after=await query('SELECT COUNT(*) AS n FROM _bct_handover_operations');
-          console.log(JSON.stringify({headProbeStatus:probe.status,before,after}));
-          const serialized=JSON.stringify(telemetry);
-          console.log(JSON.stringify({categories:Object.fromEntries(['waitUntil','cancelled','Illegal invocation','Cannot perform','Response Stream Disconnected','exceeded','error'].map(s=>[s,serialized.split(s).length-1]))}));
+          const canceled=events.filter(e=>e.$workers?.outcome==='canceled'&&e.$workers?.event?.request?.method==='GET').sort((a,b)=>a.timestamp-b.timestamp);
+          const ops=await query('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY started_at');
+          console.log(JSON.stringify({returned:events.length,total:telemetry.events.count,canceledCount:canceled.length,operationCount:ops.length,canceledSamples:canceled.slice(0,6).map(e=>({timestamp:e.timestamp,wallTimeMs:e.$workers.wallTimeMs,pathCategory:e.$workers.event.path?.split('/').slice(0,3).join('/')})),operationSamples:ops.slice(0,6).map(o=>({started_at:o.started_at,epoch:Date.parse(o.started_at)})),nearestDeltas:ops.slice(0,12).map(o=>Math.min(...canceled.map(e=>Math.abs(e.timestamp-Date.parse(o.started_at)))))}));
           NODE
