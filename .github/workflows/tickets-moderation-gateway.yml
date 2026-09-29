@@ -1,0 +1,54 @@
+name: Provision restricted Tickets photo moderation
+on:
+  push:
+    branches: [ops/tickets-encrypted-handover-20260929]
+    paths: [.github/workflows/tickets-moderation-gateway.yml]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tickets-moderation-gateway
+  cancel-in-progress: false
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: 5807f6ea9a7baef998cf379dc298ce636caf1f60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5807f6ea9a7baef998cf379dc298ce636caf1f60
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - name: Require successful exact-source verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in $(seq 1 90); do
+            gh api repos/bechirobob/tickets/actions/runs/36507766312 > "$RUNNER_TEMP/source-run.json"
+            status=$(python3 - <<'PY'
+          import json,os
+          r=json.load(open(os.environ['RUNNER_TEMP']+'/source-run.json'))
+          assert r['head_sha']==os.environ['SOURCE_SHA']
+          print(r['conclusion'] if r['status']=='completed' else 'waiting')
+          PY
+            )
+            if [ "$status" = success ]; then break; fi
+            if [ "$status" != waiting ]; then exit 1; fi
+            sleep 10
+          done
+          test "$status" = success
+      - run: npm ci --ignore-scripts
+      - name: Provision fixed-policy gateway and encrypt its private connection
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node ops/moderation/provision.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tickets-encrypted-moderation
+          path: handover-encrypted/moderation.json
+          retention-days: 1
