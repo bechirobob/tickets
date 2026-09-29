@@ -36,7 +36,7 @@ if(rows.length){
   // Preserve proof before retiring the exact corresponding record. A lost API
   // response cannot lose evidence; the second statement requires that evidence.
   await q("INSERT OR IGNORE INTO _bct_handover_terminal_operations SELECT id,kind,started_at,? FROM _bct_handover_operations WHERE id=? AND kind=? AND started_at=?",[JSON.stringify(evidence),record.id,record.kind,record.started_at]);
-  await q("DELETE FROM _bct_handover_operations WHERE id=? AND kind='http' AND started_at=? AND EXISTS(SELECT 1 FROM _bct_handover_terminal_operations WHERE id=?)",[record.id,record.kind,record.started_at,record.id]);
+  await q("DELETE FROM _bct_handover_operations WHERE id=? AND kind=? AND started_at=? AND EXISTS(SELECT 1 FROM _bct_handover_terminal_operations WHERE id=?)",[record.id,record.kind,record.started_at,record.id]);
   retired++;
  }
  console.log(JSON.stringify({examined:rows.length,exactTerminalMatches:matches.length,retired,evidencePreserved:true,noExpiry:true}));
