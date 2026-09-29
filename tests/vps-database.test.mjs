@@ -15,6 +15,9 @@ test('prepared statement reuse never carries bindings between guests and stays b
     assert.ok(db.statements.size <= 256);
     await db.exec('CREATE TABLE fixture(id INTEGER)');
     assert.equal(db.statements.size, 0);
+    assert.deepEqual(await db.prepare('SELECT * FROM fixture').raw({ columnNames: true }), [['id']]);
+    await db.exec('ALTER TABLE fixture ADD COLUMN label TEXT');
+    assert.deepEqual(await db.prepare('SELECT * FROM fixture').raw({ columnNames: true }), [['id', 'label']]);
   } finally { db.close(); }
 });
 

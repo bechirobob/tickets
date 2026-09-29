@@ -20,9 +20,9 @@ class Prepared {
   bind(...values) { return new Prepared(this.owner, this.sql, values.map(bindValue)); }
   execute() {
     const start = performance.now();
-    const statement = this.owner.statement(this.sql);
+    const { statement, columns } = this.owner.statement(this.sql);
     const before = this.owner.beforeChanges.get().n;
-    const rows = statement.columns().length ? resultRows(statement.all(...this.values)) : (statement.run(...this.values), []);
+    const rows = columns.length ? resultRows(statement.all(...this.values)) : (statement.run(...this.values), []);
     const after = this.owner.afterChanges.get();
     return { success: true, results: rows, meta: { changes: after.n - before, last_row_id: after.id, duration: performance.now() - start, changed_db: after.n !== before, rows_read: rows.length, rows_written: after.n - before, size_after: 0, served_by: 'vps' } };
   }
@@ -37,7 +37,7 @@ class Prepared {
   }
   async raw(options = {}) {
     const result = this.execute();
-    const columns = this.owner.connection.prepare(this.sql).columns().map(c => c.name);
+    const columns = this.owner.statement(this.sql).columns;
     const rows = result.results.map(row => columns.map(name => row[name]));
     return options.columnNames ? [columns, ...rows] : rows;
   }
@@ -58,7 +58,8 @@ export class SqliteDatabase {
   statement(sql) {
     let statement = this.statements.get(sql);
     if (!statement) {
-      statement = this.connection.prepare(sql);
+      const compiled = this.connection.prepare(sql);
+      statement = { statement: compiled, columns: compiled.columns().map(column => column.name) };
       if (this.statements.size >= 256) this.statements.delete(this.statements.keys().next().value);
       this.statements.set(sql, statement);
     }
@@ -69,11 +70,13 @@ export class SqliteDatabase {
     if (this.pending.length >= 2048) return Promise.reject(new Error('Database commit queue is full.'));
     return new Promise((resolve, reject) => {
       this.pending.push({ statements, resolve, reject });
-      if (!this.flushHandle) this.flushHandle = setImmediate(() => this.flushBatches());
+      // A bounded 4ms window groups requests arriving in adjacent I/O turns.
+      // Acknowledgements still wait for the FULL-synchronous durable commit.
+      if (!this.flushHandle) this.flushHandle = setTimeout(() => this.flushBatches(), 4);
     });
   }
   flushBatches() {
-    if (this.flushHandle) clearImmediate(this.flushHandle);
+    if (this.flushHandle) clearTimeout(this.flushHandle);
     this.flushHandle = null;
     const jobs = this.pending.splice(0, 128);
     if (!jobs.length) return;
@@ -106,7 +109,7 @@ export class SqliteDatabase {
       try { this.connection.exec('ROLLBACK'); } catch { /* BEGIN itself may have failed. */ }
       for (const job of jobs) job.reject(error);
     }
-    if (this.pending.length) this.flushHandle = setImmediate(() => this.flushBatches());
+    if (this.pending.length) this.flushHandle = setTimeout(() => this.flushBatches(), 4);
   }
   async exec(sql) { while (this.pending.length) this.flushBatches(); const start = performance.now(); this.connection.exec(sql); this.statements.clear(); return { count: 1, duration: performance.now() - start }; }
   withSession() { return this; }
