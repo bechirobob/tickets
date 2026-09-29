@@ -24,15 +24,26 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           node --input-type=module <<'NODE'
-          import { cloudflare, account } from './ops/handover/control-client.mjs';
-          const root='/accounts/'+account;
-          const s=await cloudflare(root+'/workers/scripts/becore-tickets/settings');
+          import assert from 'node:assert/strict';
+          import { cloudflare, account, withControl } from './ops/handover/control-client.mjs';
+          const root='/accounts/'+account, worker=root+'/workers/scripts/becore-tickets';
+          const revision='1acd916c7414b30665c4f903dd2ce3ccf10609a0';
+          const s=await cloudflare(worker+'/settings');
+          assert.equal(s.bindings.find(b=>b.name==='RELEASE_SHA')?.text,revision);
           const db=s.bindings.find(b=>b.type==='d1'&&b.name==='DB').id;
           const query=async sql=>(await cloudflare(root+'/d1/database/'+db+'/query','POST',{sql}))[0].results;
-          console.log(JSON.stringify({readOnly:true,admission:await query('SELECT phase,transfer_id,paused_at FROM _bct_handover_admission'),operations:await query('SELECT kind,COUNT(*) AS count,MIN(started_at) AS oldest,MAX(started_at) AS newest FROM _bct_handover_operations GROUP BY kind')}));
-          const telemetry=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:'tickets-handover-completion',timeframe:{from:Date.parse('2026-09-29T10:11:00Z'),to:Date.parse('2026-09-29T10:15:00Z')},view:'events',limit:2000,parameters:{filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'becore-tickets'},{key:'$metadata.type',operation:'eq',type:'string',value:'cf-worker-event'}]}});
-          const events=telemetry.events.events;
-          const canceled=events.filter(e=>e.$workers?.outcome==='canceled'&&e.$workers?.event?.request?.method==='GET').sort((a,b)=>a.timestamp-b.timestamp);
-          const ops=await query('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY started_at');
-          console.log(JSON.stringify({returned:events.length,total:telemetry.events.count,canceledCount:canceled.length,operationCount:ops.length,canceledSamples:canceled.slice(0,6).map(e=>({timestamp:e.timestamp,wallTimeMs:e.$workers.wallTimeMs,pathCategory:e.$workers.event.path?.split('/').slice(0,3).join('/')})),operationSamples:ops.slice(0,6).map(o=>({started_at:o.started_at,epoch:Date.parse(o.started_at)})),nearestDeltas:ops.slice(0,12).map(o=>Math.min(...canceled.map(e=>Math.abs(e.timestamp-Date.parse(o.started_at)))))}));
+          const admission=(await query('SELECT phase,transfer_id FROM _bct_handover_admission WHERE id=1'))[0];
+          assert.equal(admission.phase,'active');
+          assert.equal(admission.transfer_id,'034c4f23-82b8-402c-91a6-aaba1f6625f0');
+          const queue=await cloudflare(root+'/queues/4bcab6ba4d2447efa852e83c9091906c');
+          assert.equal(Boolean(queue.settings.delivery_paused),false);
+          const domains=await cloudflare(root+'/workers/domains');
+          assert.ok(domains.some(d=>d.hostname==='tickets.becoreops.com'&&d.service==='becore-tickets'));
+          await cloudflare(worker+'/secrets','PUT',{name:'HANDOVER_TRACKING',text:'0',type:'secret_text'});
+          await withControl(revision,async rpc=>{
+            const state=await rpc('sourceStatus');
+            assert.equal(state.tracking,false);
+            assert.equal(state.admission.phase,'active');
+            console.log(JSON.stringify({normalSourceRestored:true,sourceWriter:'cloudflare',tracking:false,queuePaused:false,unresolvedOperationsPreserved:state.operations}));
+          });
           NODE
