@@ -12,6 +12,7 @@ on:
       - '.github/workflows/tickets-handover.yml'
       - 'ops/handover/**'
       - 'tests/handover-loopback-health.test.mjs'
+      - 'docs/operations/dual-hosting.md'
   workflow_dispatch:
 
 permissions:
