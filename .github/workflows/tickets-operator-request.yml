@@ -1,4 +1,4 @@
-name: Complete Tickets VPS transfer with verified private credential bridge
+name: Inspect Tickets private startup failure
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -15,8 +15,7 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      TICKETS_OPERATOR_HEAD: '2777924ef80e6597b5066f11b52258948bc0cd57'
-      TICKETS_REVISION: '8a46eeaae8296ab588104ea2406f5287c08e5fb6'
+      TICKETS_REVISION: '55ae493b1d5734edce1ecbab1f207080615eed46'
       TICKETS_RUNTIME_RUN: '36566932648'
       TICKETS_DEPLOY_RUN: '36566932507'
     steps:
@@ -26,7 +25,6 @@ jobs:
           import json, os, time, urllib.request
           repo = os.environ['GITHUB_REPOSITORY']
           revision = os.environ['TICKETS_REVISION']
-          operator_head = os.environ['TICKETS_OPERATOR_HEAD']
           runtime_run = int(os.environ['TICKETS_RUNTIME_RUN'])
           deploy_run = int(os.environ['TICKETS_DEPLOY_RUN'])
           assert repo == 'bechirobob/tickets'
@@ -41,15 +39,13 @@ jobs:
                   return json.loads(body) if body else None
           
           def assert_main():
-              assert api('git/ref/heads/main')['object']['sha'] == operator_head, 'Operator head changed; review required.'
-              changed=api('compare/'+revision+'...'+operator_head)['files']
-              assert all(f['filename'] in ['.github/workflows/deploy.yml','.github/workflows/tickets-vps-diagnostics.yml'] for f in changed), 'Application source changed.'
+              assert api('git/ref/heads/main')['object']['sha'] == revision, 'Main changed; explicit release review required.'
           
-          def wait_run(run_id, seconds=1800, expected_sha=revision):
+          def wait_run(run_id, seconds=1800):
               deadline=time.monotonic()+seconds
               while time.monotonic()<deadline:
                   run=api('actions/runs/'+str(run_id))
-                  assert run['head_sha']==expected_sha
+                  assert run['head_sha']==revision
                   if run['status']=='completed':
                       assert run['conclusion']=='success', f'Run {run_id} finished {run["conclusion"]}; inspect its logs before retrying.'
                       return
@@ -62,56 +58,18 @@ jobs:
               api('actions/workflows/'+workflow+'/dispatches', 'POST', {'ref':'main','inputs':inputs})
               for attempt in range(24):
                   runs=api('actions/workflows/'+workflow+'/runs?event=workflow_dispatch&branch=main&per_page=30')['workflow_runs']
-                  matches=[r for r in runs if r['id'] not in existing and r['head_sha']==operator_head]
+                  matches=[r for r in runs if r['id'] not in existing and r['head_sha']==revision]
                   if matches:
                       assert len(matches)==1, 'Ambiguous dispatch; inspect runs before continuing.'
                       run_id=matches[0]['id']
                       print(json.dumps({'stage':workflow,'mode':inputs.get('mode'),'runId':run_id}),flush=True)
-                      wait_run(run_id, expected_sha=operator_head)
+                      wait_run(run_id)
                       print(json.dumps({'completedRun':run_id}),flush=True)
                       return run_id
                   time.sleep(5)
               raise RuntimeError('Dispatch response was lost; inspect existing runs, never blindly replay.')
           
           assert_main()
-          wait_run(runtime_run)
-          wait_run(deploy_run)
-          print(json.dumps({'revision':revision,'runtimeVerifiedRun':runtime_run}),flush=True)
-          wait_run(36567312960)
-          print('Reusing verified installation 36567312960; no rebuild or reinstall.',flush=True)
-          wait_run(36572410290, expected_sha='6b843a429bc4983a6a41b56b8e83e6a52ce12271')
-          wait_run(36573494131, expected_sha=operator_head)
-          from datetime import datetime
-          prepared_done=datetime.fromisoformat(api('actions/runs/36572410290')['updated_at'].replace('Z','+00:00')).timestamp()
-          remaining=max(0,prepared_done+16*60-time.time())
-          print(json.dumps({'reusedPreparation':36572410290,'remainingDrainSeconds':round(remaining)}),flush=True)
-          time.sleep(remaining)
-          terminal_runs=api('actions/runs?head_sha=60333a41ff793860cc1c8aba13e39f6dad5e2ac4&per_page=10')['workflow_runs']
-          assert any(r['path']=='.github/workflows/tickets-terminal.yml' and r['conclusion']=='success' for r in terminal_runs), 'Exact scheduled terminal evidence gate did not pass.'
-          dispatch('tickets-handover.yml', {'mode':'capture','revision':revision})
-          dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})
-          try:
-              health=None
-              for attempt in range(24):
-                  try:
-                      with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com/healthz',headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'application/json'}),timeout=10) as response:
-                          health=json.load(response)
-                      if health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True:
-                          break
-                  except Exception:
-                      pass
-                  time.sleep(5)
-              assert health and health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True
-              for path in ['/', '/events', '/my-nights', '/api/public/events']:
-                  with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'text/html,application/json'}),timeout=20) as response:
-                      assert response.status==200
-                      response.read()
-              print(json.dumps({'publicVpsVerified':True,'revision':revision,'routesVerified':4}),flush=True)
-          except Exception:
-              print('Public verification failed after activation; returning fresh VPS state through the verified rollback.',flush=True)
-              dispatch('tickets-handover.yml', {'mode':'rollback','revision':revision})
-              raise
-          backup=dispatch('tickets-backup.yml', {})
-          browser=dispatch('browser-audit.yml', {})
-          print(json.dumps({'complete':True,'revision':revision,'backupRun':backup,'browserRun':browser,'writer':'vps','host':'hermes'}),flush=True)
+          dispatch('tickets-vps-diagnostics.yml', {})
+          print('Read-only Tickets startup inspection completed.',flush=True)
           PY
