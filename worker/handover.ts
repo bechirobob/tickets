@@ -1,3 +1,4 @@
+import { isLegacyInventory, legacyHttpIncident, archiveFencedOperations, restoreReconciledOperations, type OperationRecord } from './handover-reconciliation';
 import type { RoomReturn } from './room-return';
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { sealHandover, requireHandover } from './handover-crypto';
@@ -43,17 +44,19 @@ export class HandoverEntrypoint extends WorkerEntrypoint<Cloudflare.Env> {
     return this.sourceStatus();
   }
 
-  async freezeSource(transferId: string) {
+  async freezeSource(transferId: string, reconcileLegacy = false) {
     requireHandover(this.env); requireTransfer(transferId);
     const admission = await this.env.DB.prepare("SELECT transfer_id FROM _bct_handover_admission WHERE id=1 AND phase IN ('paused','frozen')").first<{ transfer_id: string }>();
-    const active = await this.env.DB.prepare('SELECT COUNT(*) AS n FROM _bct_handover_operations').first<{ n: number }>();
-    if (admission?.transfer_id !== transferId || active?.n !== 0) throw new Error('Source has not drained.');
+    const operations = (await this.env.DB.prepare('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY id').all<OperationRecord>()).results;
+    const legacy = reconcileLegacy === true && await isLegacyInventory(operations);
+    if (admission?.transfer_id !== transferId || (operations.length !== 0 && !legacy)) throw new Error('Source has not drained.');
     const tables = (await this.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*' AND name NOT GLOB '_bct_handover_*' ORDER BY name").all<{ name: string }>()).results.map(row => row.name);
     const guards = writerGuardStatements(tables);
     for (let i = 0; i < guards.length; i += 25) await this.env.DB.batch(guards.slice(i, i + 25).map(sql => this.env.DB.prepare(sql)));
     const transition = transitionWriterSql(transferId, true);
     const frozen = await this.env.DB.prepare(transition.sql).bind(...transition.params).first();
     if (!frozen) throw new Error('Writer lock belongs to another transfer.');
+    if (legacy) await archiveFencedOperations(this.env.DB, transferId, legacyHttpIncident.digest, legacyHttpIncident.evidenceRun);
     await this.env.DB.prepare("UPDATE _bct_handover_admission SET phase='frozen' WHERE id=1 AND transfer_id=?").bind(transferId).run();
     return this.sourceStatus();
   }
@@ -88,6 +91,7 @@ export class HandoverEntrypoint extends WorkerEntrypoint<Cloudflare.Env> {
       const lock = await this.env.DB.prepare('SELECT frozen,transfer_id FROM _bct_handover_state WHERE id=1').first<{ frozen: number; transfer_id: string }>();
       if (lock?.frozen === 1) {
         if (lock.transfer_id !== transferId) throw new Error('Writer lock belongs to another transfer.');
+        await restoreReconciledOperations(this.env.DB, transferId);
         const command = transitionWriterSql(transferId, false);
         if (!await this.env.DB.prepare(command.sql).bind(...command.params).first()) throw new Error('Writer lock belongs to another transfer.');
       }

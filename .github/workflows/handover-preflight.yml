@@ -1,4 +1,4 @@
-name: Tickets historical handover reconciliation evidence
+name: Tickets durable-work reconciliation evidence
 on:
   push:
     branches: [ops/vps-reconciliation-evidence]
@@ -16,29 +16,17 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.21.0
-      - name: Read source work without changing it
+      - name: Read all durable-work counters without changing source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          node ops/handover/live-preflight.mjs
           node --input-type=module <<'NODE'
           import { cloudflare, account } from './ops/handover/control-client.mjs';
-          import { createHash } from 'node:crypto';
+          import { durableWorkChecks } from './worker/handover-reconciliation.ts';
           const root='/accounts/'+account;
           const s=await cloudflare(root+'/workers/scripts/becore-tickets/settings');
           const db=s.bindings.find(b=>b.type==='d1'&&b.name==='DB').id;
-          const q=async sql=>(await cloudflare(root+'/d1/database/'+db+'/query','POST',{sql}))[0].results;
-          const ops=await q('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY id');
-          console.log(JSON.stringify({legacyInventory:ops.length,digest:createHash('sha256').update(JSON.stringify(ops)).digest('hex'),kinds:[...new Set(ops.map(o=>o.kind))],earliest:ops.map(o=>o.started_at).sort()[0],latest:ops.map(o=>o.started_at).sort().at(-1)}));
-          const summaries=[]; const collected=[];
-          for(let from=Date.parse('2026-09-29T10:11:00Z');from<Date.parse('2026-09-29T10:15:00Z');from+=15000){
-            const t=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:'tickets-complete-legacy-evidence',timeframe:{from,to:from+15000},view:'events',limit:2000,parameters:{filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'becore-tickets'},{key:'$metadata.type',operation:'eq',type:'string',value:'cf-worker-event'}]}});
-            const events=t.events.events; collected.push(...events);
-            const counts={};
-            for(const e of events){const key=(e.$workers?.event?.request?.method??e.$workers?.eventType??'unknown')+':'+(e.$workers?.outcome??'unknown');counts[key]=(counts[key]??0)+1;}
-            summaries.push({from,returned:events.length,total:t.events.count,counts});
-          }
-          console.log(JSON.stringify({invocationEvidence:summaries}));
-          const first=Date.parse(ops.map(o=>o.started_at).sort()[0]);
-          console.log(JSON.stringify({nearFirst:collected.filter(e=>Math.abs(e.timestamp-first)<2000).map(e=>({timestamp:e.timestamp,wallTime:e.$workers?.wallTimeMs,outcome:e.$workers?.outcome,method:e.$workers?.event?.request?.method,keys:Object.keys(e.$workers??{}),metadataKeys:Object.keys(e.$metadata??{})})),firstOps:ops.map(o=>o.started_at).sort().slice(0,12),canceledSinceFirst:collected.filter(e=>e.timestamp>=first&&e.$workers?.outcome==='canceled').length,postRoutes:collected.filter(e=>e.$workers?.event?.request?.method==='POST').map(e=>({timestamp:e.timestamp,path:e.$workers?.event?.path,outcome:e.$workers?.outcome}))}));
+          const sql=Object.entries(durableWorkChecks).map(([name,query])=>"SELECT '"+name+"' AS category,n FROM ("+query+")").join(' UNION ALL ');
+          const rows=(await cloudflare(root+'/d1/database/'+db+'/query','POST',{sql}))[0].results;
+          console.log(JSON.stringify({readOnly:true,durableWork:rows}));
           NODE
