@@ -1,15 +1,18 @@
-name: Inventory owner-requested Tickets cleanup
+name: Clear owner-approved old bookings and obsolete Tickets builds
 on:
   push:
     branches: [main]
     paths: ['.github/workflows/tickets-vps-diagnostics.yml']
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
 permissions:
   contents: read
   id-token: write
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
@@ -17,30 +20,136 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Inventory booking dependencies and removable build artifacts
+      - name: Back up, clear old bookings, retire rehearsal and prune obsolete builds
         run: |
-          tailscale ssh root@hermes "python3 -" <<'PY'
-          import sqlite3,pathlib,subprocess,json,os
-          def q(s): return '"'+s.replace('"','""')+'"'
-          db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True);db.row_factory=sqlite3.Row
-          tables={}
-          for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
-              count=db.execute('SELECT COUNT(*) FROM '+q(name)).fetchone()[0]
-              if count: tables[name]={'count':count,'columns':[r[1] for r in db.execute('PRAGMA table_info('+q(name)+')')]}
-          report={'tables':tables,'foreignKeys':[]}
-          for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
-              for row in db.execute('PRAGMA foreign_key_list('+q(name)+')'): report['foreignKeys'].append({'table':name,'parent':row[2],'from':row[3],'to':row[4]})
-          report['rooms']=[]
-          for p in pathlib.Path('/var/lib/becore-tickets/rooms').glob('*.sqlite'):
-              rdb=sqlite3.connect('file:'+str(p)+'?mode=ro',uri=True)
-              report['rooms'].append({'file':p.name,'tables':{n:rdb.execute('SELECT COUNT(*) FROM '+q(n)).fetchone()[0] for (n,) in rdb.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}})
-          report['serviceReleasePaths']={}
-          for unit in ['becore-tickets.service','becore-tickets-preview.service']:
-              report['serviceReleasePaths'][unit]=subprocess.run(['systemctl','show',unit,'--property=WorkingDirectory','--property=ActiveState'],capture_output=True,text=True).stdout.strip()
-          root=pathlib.Path('/srv/becore-tickets')
-          report['pointers']={n:str((root/n).resolve()) for n in ['current','previous'] if (root/n).is_symlink()}
-          report['releases']=[{'name':p.name,'modified':p.stat().st_mtime,'sizeKiB':int(subprocess.check_output(['du','-sk',str(p)],text=True).split()[0])} for p in (root/'releases').iterdir() if p.is_dir() and not p.is_symlink()]
-          report['temporary']=[{'name':p.name,'sizeKiB':int(subprocess.check_output(['du','-sk',str(p)],text=True).split()[0])} for p in pathlib.Path('/var/tmp').glob('tickets-*') if not p.is_symlink()]
+          tailscale ssh root@hermes "python3 - '$GITHUB_RUN_ID'" <<'PY'
+          import pathlib,sqlite3,json,subprocess,datetime,time,os,re,shutil,fcntl,urllib.request,sys
+          run=sys.argv[1];root=pathlib.Path('/srv/becore-tickets');state=pathlib.Path('/var/lib/becore-tickets')
+          def cmd(args): return subprocess.check_output(args,text=True,timeout=60).strip()
+          def health():
+              req=urllib.request.Request('http://127.0.0.1:3119/healthz',headers={'Host':'tickets.becoreops.com'})
+              return json.load(urllib.request.urlopen(req,timeout=10))
+          def qi(name):
+              assert re.fullmatch('[A-Za-z0-9_]+',name)
+              return '"'+name+'"'
+          lock=open('/run/lock/becore-tickets-deploy.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          release=pathlib.Path(cmd(['systemctl','show','becore-tickets.service','--property=WorkingDirectory','--value']))
+          assert release==root/'releases/181bfc6801a4fc4c993dc0220af99bb3509e433d'
+          assert health()['active'] is True
+          receipt=pathlib.Path('/var/lib/becore-tickets-handover')/('booking-cleanup-'+run+'.json')
+          assert not receipt.exists(),'Inspect completed cleanup before retrying'
+          previewenv=cmd(['systemctl','show','becore-tickets-preview.service','--property=Environment','--value'])
+          assert 'TICKETS_ACTIVE=0' in previewenv and 'TICKETS_STATE=/var/lib/becore-tickets-preview' in previewenv
+          subprocess.run(['systemctl','disable','--now','becore-tickets-preview.service'],check=True,timeout=60)
+          report={'run':run,'cutoff':'2026-09-29T16:33:50Z','previewRetired':True}
+          subprocess.run(['systemctl','stop','becore-tickets.service'],check=True,timeout=90)
+          try:
+              backup=json.loads(cmd([str(release/'bin/node'),str(release/'operations/backup.mjs')]))
+              assert backup['ok'] and backup['restoredAndAuthenticated']
+              report['preCleanupBackup']=backup['filename']
+              restore=pathlib.Path('/var/backups/becore-tickets')/('precleanup-restore-'+run)
+              assert not restore.exists()
+              try:
+                  cmd([str(release/'bin/node'),str(release/'operations/restore-backup.mjs'),'/var/backups/becore-tickets/'+backup['filename'],'/etc/becore-tickets/backup.key',str(restore)])
+              finally:
+                  if restore.exists(): shutil.rmtree(restore)
+              report['fullRestoreTested']=True
+              db=sqlite3.connect(state/'tickets.sqlite',timeout=20);db.row_factory=sqlite3.Row
+              db.execute('PRAGMA foreign_keys=ON');db.execute('BEGIN IMMEDIATE')
+              db.execute('PRAGMA defer_foreign_keys=ON')
+              orders=list(db.execute('SELECT id,reference FROM orders WHERE created_at<=?',(report['cutoff'],)))
+              regs=[r[0] for r in db.execute('SELECT id FROM event_registrations WHERE created_at<=?',(report['cutoff'],))]
+              orderids=[r['id'] for r in orders];refs=[r['reference'] for r in orders]
+              ticketids=[r[0] for r in db.execute('SELECT id FROM tickets WHERE order_id IN (SELECT id FROM orders WHERE created_at<=?)',(report['cutoff'],))]
+              assert len(orderids)==3 and len(ticketids)==2 and len(regs)==3,'Booking inventory changed; inspect before deleting'
+              ids={'order_id':orderids,'ticket_id':ticketids,'registration_id':regs}
+              keys=orderids+ticketids+regs+refs
+              tables=[r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+              columns={t:{r[1] for r in db.execute('PRAGMA table_info('+qi(t)+')')} for t in tables}
+              report['removedRows']={}
+              protected=['curated_event_records','party_submissions','staff_accounts','staff_sessions','hosts','event_hosts','event_ticket_tiers','event_registration_settings','event_audience_contacts','marketing_contacts','attendee_profiles','operational_audit_events','security_events','system_alerts']
+              for table in tables:
+                  if table in protected or table.startswith('_'): continue
+                  clauses=[];params=[]
+                  for col,values in ids.items():
+                      if col in columns[table] and values:
+                          clauses.append(qi(col)+' IN ('+','.join('?' for _ in values)+')');params.extend(values)
+                  own={'orders':orderids,'tickets':ticketids,'event_registrations':regs}.get(table)
+                  if own:
+                      clauses.append('id IN ('+','.join('?' for _ in own)+')');params.extend(own)
+                  if table=='payment_events':
+                      clauses.append('reference IN ('+','.join('?' for _ in refs)+')');params.extend(refs)
+                  if table=='consent_records':
+                      clauses.append('subject_id IN ('+','.join('?' for _ in keys)+')');params.extend(keys)
+                  if table=='guest_entries':
+                      values=['rsvp:'+x for x in regs]
+                      clauses.append('id IN ('+','.join('?' for _ in values)+')');params.extend(values)
+                  if table in ['delivery_events','attendee_notifications']:
+                      col='payload_json' if table=='delivery_events' else 'source_id'
+                      clauses.append('EXISTS (SELECT 1 FROM json_each(?) AS old_keys WHERE instr(COALESCE('+qi(col)+",''),old_keys.value)>0)")
+                      params.append(json.dumps(keys))
+                  if clauses:
+                      count=db.execute('DELETE FROM '+qi(table)+' WHERE '+' OR '.join('('+s+')' for s in clauses),params).rowcount
+                      if count: report['removedRows'][table]=count
+              assert not list(db.execute('PRAGMA foreign_key_check'))
+              assert db.execute('SELECT COUNT(*) FROM orders WHERE created_at<=?',(report['cutoff'],)).fetchone()[0]==0
+              assert db.execute('SELECT COUNT(*) FROM event_registrations WHERE created_at<=?',(report['cutoff'],)).fetchone()[0]==0
+              now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+              db.execute("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES(?,?,?,?,?,?,?,?)",('owner-booking-cleanup-'+run,'system','owner_authorized_booking_cleanup','booking_history',report['cutoff'],'success',json.dumps(report),now))
+              db.commit()
+              db.execute('PRAGMA wal_checkpoint(TRUNCATE)');db.execute('VACUUM')
+              assert db.execute('PRAGMA quick_check').fetchone()[0]=='ok'
+              report['remaining']={t:db.execute('SELECT COUNT(*) FROM '+qi(t)).fetchone()[0] for t in ['orders','tickets','event_registrations','staff_accounts','hosts','curated_event_records']}
+              db.close()
+              receipt.write_text(json.dumps(report));receipt.chmod(0o600)
+          finally:
+              subprocess.run(['systemctl','start','becore-tickets.service'],check=True,timeout=90)
+          for i in range(30):
+              try:
+                  h=health()
+                  if h.get('active') and h.get('revision')==release.name: break
+              except Exception: pass
+              time.sleep(1)
+          else: raise RuntimeError('Live health needs attention; encrypted pre-cleanup backup preserved')
+          protected_paths={release.resolve(),(root/'current').resolve(),(root/'previous').resolve()}
+          releases=sorted([p for p in (root/'releases').iterdir() if re.fullmatch('[a-f0-9]{40}',p.name) and p.is_dir() and not p.is_symlink()],key=lambda p:p.stat().st_mtime,reverse=True)
+          protected_paths.update(p.resolve() for p in releases[:3])
+          report['removedBuilds']=[]
+          report['reclaimedKiB']=0
+          for p in releases:
+              if p.resolve() in protected_paths: continue
+              assert p.parent==root/'releases'
+              size=int(cmd(['du','-sk',str(p)]).split()[0])
+              shutil.rmtree(p);report['removedBuilds'].append(p.name);report['reclaimedKiB']+=size
+          preview=pathlib.Path('/var/lib/becore-tickets-preview')
+          assert cmd(['systemctl','show','becore-tickets-preview.service','--property=ActiveState','--value'])=='inactive'
+          if preview.exists():
+              assert preview.is_dir() and not preview.is_symlink() and preview.resolve()!=state.resolve()
+              size=int(cmd(['du','-sk',str(preview)]).split()[0])
+              shutil.rmtree(preview);report['reclaimedKiB']+=size;report['previewStateKiBRemoved']=size
+          fs=os.statvfs('/')
+          report['diskAvailableBytes']=fs.f_bavail*fs.f_frsize
+          report['health']=health()
+          logs=subprocess.run(['journalctl','--namespace=becore-tickets','-u','becore-tickets.service','--since','5 minutes ago','-o','json','--no-pager'],capture_output=True,text=True,timeout=20).stdout
+          messages=[json.loads(l).get('MESSAGE','') for l in logs.splitlines() if l.startswith('{')]
+          report['namespacedRecentErrorCount']=sum(bool(re.search('error|failed|exception',m,re.I)) for m in messages)
+          report['retainedBuilds']=[p.name for p in releases if p.exists()]
+          receipt.write_text(json.dumps(report))
           print(json.dumps(report))
           
           PY
+      - name: Preserve encrypted pre-cleanup backup off-host
+        id: snapshot
+        run: |
+          name="$(tailscale ssh root@hermes "python3 -c \"import json; print(json.load(open('/var/lib/becore-tickets-handover/booking-cleanup-$GITHUB_RUN_ID.json'))['preCleanupBackup'])\"")"
+          [[ "$name" =~ ^tickets-[0-9TZ.:-]+\.tar\.gz\.enc$ ]]
+          tailscale ssh root@hermes "cat '/var/backups/becore-tickets/$name'" > "$RUNNER_TEMP/$name"
+          test -s "$RUNNER_TEMP/$name"
+          echo "file=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tickets-precleanup-${{ github.run_id }}
+          path: ${{ steps.snapshot.outputs.file }}
+          if-no-files-found: error
+          retention-days: 35
+          compression-level: 0
