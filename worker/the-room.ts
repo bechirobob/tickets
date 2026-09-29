@@ -1,3 +1,4 @@
+import { encryptedRoomSnapshot } from "./room-handover";
 import { DurableObject } from "cloudflare:workers";
 import { purgeExpiredFlashes, type FlashRecord } from "../lib/flashes";
 import { notifyRoomMessage } from "../lib/notifications";
@@ -110,6 +111,11 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN room_badge TEXT");
       }
     });
+  }
+
+  async encryptedHandoverSnapshot() {
+    try { return await encryptedRoomSnapshot(this.ctx.storage, this.env, this.env.RELEASE_SHA, this.ctx.id.toString()); }
+    catch { return { error: "Room handover unavailable." }; }
   }
 
   async fetch(request: Request): Promise<Response> {

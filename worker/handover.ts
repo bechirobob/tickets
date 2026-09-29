@@ -15,6 +15,12 @@ export const configurationNames = [
 // No public HTTP handler. Only an explicitly configured same-account Service
 // Binding can invoke this entrypoint; callers cannot choose a decryption key.
 export class HandoverEntrypoint extends WorkerEntrypoint<Cloudflare.Env> {
+  async roomSnapshot(objectId: string) {
+    requireHandover(this.env);
+    if (!/^[a-f0-9]{64}$/.test(objectId)) throw new Error("Invalid Room identifier.");
+    return this.env.THE_ROOM.get(this.env.THE_ROOM.idFromString(objectId)).encryptedHandoverSnapshot();
+  }
+
   async configuration() {
     requireHandover(this.env);
     const bindings = this.env as unknown as Record<string, unknown>;

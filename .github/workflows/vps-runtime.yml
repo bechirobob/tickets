@@ -1,7 +1,7 @@
 name: Verify Tickets VPS runtime
 on:
   push:
-    branches: [feat/vps-primary-runtime, feat/vps-event-20260928]
+    branches: [feat/vps-primary-runtime, feat/vps-event-20260928, feat/vps-data-handover-20260929]
     paths:
       - '.github/workflows/vps-runtime.yml'
       - 'runtime/**'
