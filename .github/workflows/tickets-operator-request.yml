@@ -1,0 +1,20 @@
+name: Request existing Tickets operator stage
+on:
+  push:
+    branches: [ops/tickets-operator-request]
+    paths: ['.github/workflows/tickets-operator-request.yml']
+permissions:
+  contents: read
+  actions: write
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Request verified main-branch status operation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          test "$GH_REPO" = bechirobob/tickets
+          gh workflow run tickets-handover.yml --repo "$GH_REPO" --ref main -f mode=status -f revision=1acd916c7414b30665c4f903dd2ce3ccf10609a0
