@@ -95,6 +95,12 @@ export class HandoverEntrypoint extends WorkerEntrypoint<Cloudflare.Env> {
     return changed;
   }
 
+  async roomIdentity(name: string) {
+    requireHandover(this.env);
+    if (typeof name !== 'string' || name.length < 1 || name.length > 200) throw new Error('Invalid Room name.');
+    return { objectId: this.env.THE_ROOM.idFromName(name).toString() };
+  }
+
   async roomSnapshot(objectId: string) {
     requireHandover(this.env);
     if (!/^[a-f0-9]{64}$/.test(objectId)) throw new Error("Invalid Room identifier.");

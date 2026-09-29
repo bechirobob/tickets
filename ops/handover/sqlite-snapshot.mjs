@@ -52,8 +52,10 @@ export function restoreRoomSnapshot(db, snapshot) {
   } catch (error) { db.exec('ROLLBACK'); throw error; }
 }
 
-export function restoreRoomEnvelope(snapshot, destination) {
-  if (snapshot?.snapshotType !== 'rehearsal-not-cutover' || !Array.isArray(snapshot.schema) || !Array.isArray(snapshot.sequences)) throw new Error('Invalid Room envelope.');
+export function restoreRoomEnvelope(snapshot, destination, transferId) {
+  const cutover = transferId !== undefined;
+  if (cutover && (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(transferId) || snapshot?.transferId !== transferId)) throw new Error('Room transfer identity mismatch.');
+  if (snapshot?.snapshotType !== (cutover ? 'frozen-cutover' : 'rehearsal-not-cutover') || !Array.isArray(snapshot.schema) || !Array.isArray(snapshot.sequences)) throw new Error('Invalid Room envelope.');
   const db = new DatabaseSync(destination);
   try {
     if (tables(db).length) throw new Error('Restore target must be empty.');

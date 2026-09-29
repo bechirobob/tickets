@@ -71,6 +71,7 @@ function requiredHeader(request: Request, name: string): string {
 export class TheRoom extends DurableObject<Cloudflare.Env> {
   private presencePending = false;
   private writerFrozen = false;
+  private handoverDeferred = new Set<Promise<void>>();
   private recentMessages: StoredRoomMessage[] | null = null;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
@@ -122,48 +123,64 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
 
   async fetch(request: Request): Promise<Response> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:fetch', () => this.fetchUntracked(request));
+    return this.trackedRoomOperation('room:fetch', () => this.fetchUntracked(request));
   }
   async acceptConnection(request: Request, server: WebSocket): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:acceptConnection', () => this.acceptConnectionUntracked(request, server));
+    return this.trackedRoomOperation('room:acceptConnection', () => this.acceptConnectionUntracked(request, server));
   }
   async webSocketMessage(socket: WebSocket, payload: string | ArrayBuffer): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:webSocketMessage', () => this.webSocketMessageUntracked(socket, payload));
+    return this.trackedRoomOperation('room:webSocketMessage', () => this.webSocketMessageUntracked(socket, payload));
   }
   async publishAnnouncement(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput): Promise<RoomMessage> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:publishAnnouncement', () => this.publishAnnouncementUntracked(actor, content, pinned, policy));
+    return this.trackedRoomOperation('room:publishAnnouncement', () => this.publishAnnouncementUntracked(actor, content, pinned, policy));
   }
   async removeEventContent(): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:removeEventContent', () => this.removeEventContentUntracked());
+    return this.trackedRoomOperation('room:removeEventContent', () => this.removeEventContentUntracked());
   }
   async removePreviewContentBefore(before: string): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:removePreviewContentBefore', () => this.removePreviewContentBeforeUntracked(before));
+    return this.trackedRoomOperation('room:removePreviewContentBefore', () => this.removePreviewContentBeforeUntracked(before));
   }
   async removeMessage(messageId: string): Promise<boolean> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:removeMessage', () => this.removeMessageUntracked(messageId));
+    return this.trackedRoomOperation('room:removeMessage', () => this.removeMessageUntracked(messageId));
   }
   async publishFlash(flash: FlashRecord, policy: RoomPolicyInput): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:publishFlash', () => this.publishFlashUntracked(flash, policy));
+    return this.trackedRoomOperation('room:publishFlash', () => this.publishFlashUntracked(flash, policy));
   }
   async scheduleFlashExpiry(policy: RoomPolicyInput): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:scheduleFlashExpiry', () => this.scheduleFlashExpiryUntracked(policy));
+    return this.trackedRoomOperation('room:scheduleFlashExpiry', () => this.scheduleFlashExpiryUntracked(policy));
   }
   async alarm(): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:alarm', () => this.alarmUntracked());
+    return this.trackedRoomOperation('room:alarm', () => this.alarmUntracked());
   }
   async refreshAdmissionAccess(): Promise<void> {
     this.assertWriterAvailable();
-    return trackedOperation(this.env, 'room:refreshAdmissionAccess', () => this.refreshAdmissionAccessUntracked());
+    return this.trackedRoomOperation('room:refreshAdmissionAccess', () => this.refreshAdmissionAccessUntracked());
   }
+  private defer(promise: Promise<unknown>): void {
+    if (this.env.HANDOVER_TRACKING === '1') {
+      const settled = promise.then(() => { this.handoverDeferred.delete(settled); }, () => { this.handoverDeferred.delete(settled); });
+      this.handoverDeferred.add(settled);
+      this.ctx.waitUntil(settled);
+    }
+    this.ctx.waitUntil(promise);
+  }
+
+  private async trackedRoomOperation<T>(kind: string, operation: () => Promise<T>): Promise<T> {
+    return trackedOperation(this.env, kind, async () => {
+      try { return await operation(); }
+      finally { while (this.handoverDeferred.size) await Promise.all(this.handoverDeferred); }
+    });
+  }
+
   private assertWriterAvailable(): void {
     if (this.writerFrozen) throw new Error('Room writer is paused.');
   }
@@ -350,7 +367,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       state.lastMessageAt = now;
       socket.serializeAttachment(state);
       this.broadcast({ type: "message", message });
-      this.ctx.waitUntil(notifyRoomMessage(this.env, {
+      this.defer(notifyRoomMessage(this.env, {
         eventSlug: this.eventSlug(),
         messageId: message.id,
         senderAttendeeId: state.attendeeId,
@@ -651,7 +668,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     // the latest count once per short window, including after the last leave.
     if (this.presencePending) return;
     this.presencePending = true;
-    this.ctx.waitUntil(new Promise<void>((resolve) => {
+    this.defer(new Promise<void>((resolve) => {
       setTimeout(() => {
         this.presencePending = false;
         this.broadcast({ type: "presence", online: this.ctx.getWebSockets().length });
@@ -662,7 +679,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
 
   private broadcast(payload: Record<string, unknown>): void {
     if (payload.type === 'message' || payload.type === 'reaction' || payload.type === 'flash_added') {
-      this.ctx.waitUntil(this.broadcastPrivate(payload));
+      this.defer(this.broadcastPrivate(payload));
       return;
     }
     const encoded = JSON.stringify(payload);

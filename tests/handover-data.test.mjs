@@ -54,3 +54,11 @@ test('Room restore retains deleted sequence high-water mark and scheduled alarm'
     } finally { db.close(); }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test('live Room restore rejects rehearsal snapshots and another transfer identity', () => {
+  const id = '01234567-89ab-4cde-8123-456789abcdef';
+  const base = { snapshotType: 'rehearsal-not-cutover', schema: [], sequences: [] };
+  assert.throws(() => restoreRoomEnvelope(base, ':memory:', id), /identity/);
+  assert.throws(() => restoreRoomEnvelope({ ...base, snapshotType: 'frozen-cutover', transferId: id }, ':memory:'), /envelope/);
+  assert.throws(() => restoreRoomEnvelope({ ...base, snapshotType: 'frozen-cutover', transferId: '11234567-89ab-4cde-8123-456789abcdef' }, ':memory:', id), /identity/);
+});
