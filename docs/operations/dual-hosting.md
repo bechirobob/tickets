@@ -143,3 +143,36 @@ data transfer, freeze or traffic switch is claimed by these preparation changes.
 - Next: complete configuration collection after the verified entrypoint is
   live; release and run encrypted Room snapshot/restore; then implement and
   verify the final writer freeze, bidirectional handover and origin switch.
+
+## 29 September export continuation (in progress)
+
+The previous chat stopped with an untested, uncommitted reverse-export helper.
+Continuation source is `ops/vps-standby-completion-20260929` in
+`bechirobob/tickets`; operational workflows remain on
+`ops/tickets-vps-event-20260928` in `bechirobob/bubble-wash`.
+
+Verified:
+- Actual Hermes round-trip: 107 database tables / 430 rows and all six Rooms,
+  including schema, row content, sequence state and writer guards on disposable
+  copies. Runs 36511437666 and 36512907584.
+- Updated standby runtime `5807f6ea9a7baef998cf379dc298ce636caf1f60` installed
+  by 36511549703; actual-host 600-guest rehearsal passed. 72,000 chat deliveries,
+  zero errors; restart recovery passed. This uses synthetic customer fixtures.
+- Real restored data launched behind a private local Caddy proxy in 36512450226.
+  Public pages and event reads passed; unsigned callbacks were rejected.
+  Egress and background jobs were disabled. Probe units and copied data removed.
+- Fixed reverse SQL statement overflow for large poster blobs using bounded
+  staging statements, retaining finished-value constraints. Nine local handover
+  tests and focused lint passed. Real D1 synthetic large-poster and full-schema
+  imports passed (36512872487 and 36513236464).
+
+A full private-data return import is still being investigated. Early attempts
+failed at ingestion; their temporary D1 databases were deleted. The original
+source database and public routes were never modified. Exact next action:
+complete the scoped upload prepared by 36513281723, inspect sanitized ingestion
+diagnostics, fix any remaining import defect and verify all schema/record/sequence
+digests. Do not repeat old uploads against deleted targets.
+
+Cloudflare remains the live writer. The VPS data is a rehearsal snapshot.
+No coordinated D1/Room/queue freeze, live traffic cutover, automatic failover or
+live Durable Object reverse import is claimed. Preserve these distinctions.
