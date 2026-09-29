@@ -550,3 +550,36 @@ security setting changed. This coordinator-only update retains preparation
 or preparation. Source production audit 36567199873 overlapped the maintenance
 window (mobile Chromium passed; desktop/WebKit failures require the independent
 post-activation audit already included in the controller).
+
+
+## Credential startup repair and current continuation — 2026-09-29
+Capture 36570674982 succeeded: source frozen, zero outstanding operations,
+119 records preserved, fresh SQL/Room reverse transfer verified, encrypted
+backup artifact 11034062660 saved off-host and fully restored successfully.
+Activation 36571189795 failed while phase remained verified and TICKETS_ACTIVE=0;
+no write ownership or routing transferred. Abort 36571533604 succeeded and
+restored source availability.
+
+Root cause proven by private diagnostics: systemd-managed credential file mode
+0440 conflicted with the application's intentional 0600 requirement. Source
+configuration itself was correctly 0600. The fix retains the application guard:
+a dedicated systemd RuntimeDirectory (0700) and ExecStartPre copy produce a
+service-owned 0600 runtime configuration. Permanent drop-in:
+/etc/systemd/system/becore-tickets.service.d/private-configuration.conf.
+No application code, secrets, or other product service changed.
+
+Repair 36573494131 PASSED using the actual encrypted frozen backup, the verified
+8a46eeaae8296ab588104ea2406f5287c08e5fb6 runtime, real production configuration,
+TICKETS_ACTIVE=0 and outbound networking blocked. Private health returned the
+correct revision and inactive state. Test copy and transient unit were removed.
+
+CURRENT prepared transfer: f33a852d-72a9-469f-95a7-a64299e391ba.
+Preparation 36572410290 completed 13:04:29 UTC; drain ends 13:20:29 UTC.
+The continuation skips rebuild, installation and preparation, requires the
+successful credential repair, waits only the remaining drain, then captures,
+activates, verifies public routes, backs up and runs the production browser audit.
+Application release remains 8a46eeaae8296ab588104ea2406f5287c08e5fb6.
+Operational main 2777924ef80e6597b5066f11b52258948bc0cd57 differs only in the deployment trigger and
+scoped diagnostics workflow; automatic app deployment excludes those two paths.
+The controller verifies this exact comparison on every stage. Inspect latest
+ops/tickets-operator-request workflow run before any manual action.
