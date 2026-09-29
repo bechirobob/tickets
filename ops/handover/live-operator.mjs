@@ -76,7 +76,7 @@ async function proxyOrigin() {
   const ranges = await cloudflare('/ips');
   const ips = [...ranges.ipv4_cidrs, ...ranges.ipv6_cidrs];
   assert.ok(ips.length > 10 && ips.every(ip => /^[a-f0-9:./]+$/i.test(ip)));
-  setOrigin(`${hostname} {\n tls /etc/caddy/certs/becore-tickets/origin.pem /etc/caddy/certs/becore-tickets/origin.key\n @blocked not remote_ip ${ips.join(' ')} 127.0.0.1 ::1\n respond @blocked 403\n reverse_proxy 127.0.0.1:3119 {\n  header_up Host ${hostname}\n  header_up X-Forwarded-Proto https\n  header_up X-Forwarded-Host ${hostname}\n  header_up X-Forwarded-For {http.request.header.Cf-Connecting-Ip}\n  header_up X-Real-IP {http.request.header.Cf-Connecting-Ip}\n }\n}\n`);
+  setOrigin(`${hostname} {\n tls /etc/caddy/certs/becore-tickets/origin.pem /etc/caddy/certs/becore-tickets/origin.key\n @blocked not remote_ip ${ips.join(' ')} 127.0.0.1 ::1\n respond @blocked 403\n rewrite /offline-ticket /offline-ticket.html\n reverse_proxy 127.0.0.1:3119 {\n  header_up Host ${hostname}\n  header_up X-Forwarded-Proto https\n  header_up X-Forwarded-Host ${hostname}\n  header_up X-Forwarded-For {http.request.header.Cf-Connecting-Ip}\n  header_up X-Real-IP {http.request.header.Cf-Connecting-Ip}\n }\n}\n`);
 }
 async function localHealth(active) {
   for (let i = 0; i < 30; i++) {

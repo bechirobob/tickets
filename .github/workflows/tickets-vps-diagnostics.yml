@@ -1,43 +1,57 @@
-name: Verify and repair Tickets private credential startup
+name: Repair Tickets offline static route
 on:
   workflow_dispatch:
 permissions:
   contents: read
   id-token: write
 jobs:
-  repair:
+  inspect:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: test "$GITHUB_REF" = refs/heads/main
+      - name: Require main-only operator context
+        run: test "$GITHUB_REF" = refs/heads/main
       - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
           oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Verify frozen-copy startup with private credential copy before installing scoped unit configuration
+      - name: Restore canonical offline-pass route on active Tickets origin
         run: |
-          tailscale ssh root@hermes "PROBE_RUN='$GITHUB_RUN_ID' python3 -" <<'PY'
-          import json,subprocess,urllib.request,urllib.error,pathlib
-          for port in [3119,3118]:
-           try:
-            req=urllib.request.Request('http://127.0.0.1:'+str(port)+'/healthz',headers={'Host':'tickets.becoreops.com'})
-            try:r=urllib.request.urlopen(req,timeout=5)
-            except urllib.error.HTTPError as e:r=e
-            data=r.read()
-            try:v=json.loads(data);v={k:v.get(k) for k in ['service','revision','runtime','active']}
-            except ValueError:v={'json':False,'bytes':len(data)}
-            print(json.dumps({'port':port,'status':r.status,'health':v}))
-           except Exception as e:print(json.dumps({'port':port,'errorType':type(e).__name__}))
-          p=subprocess.run(['ss','-ltnp','sport = :3119'],capture_output=True,text=True,check=True)
-          print(json.dumps({'ticketsPortListener':p.stdout.strip()}))
-          p=subprocess.run(['journalctl','--namespace=becore-tickets','-u','becore-tickets.service','--since','2026-09-29 13:25:00','-o','json','--no-pager'],capture_output=True,text=True,check=True)
-          for line in p.stdout.splitlines():
-           try:r=json.loads(line);m=r.get('MESSAGE','')
-           except ValueError:continue
-           if isinstance(m,str) and m.startswith('{'):
-            try:j=json.loads(m)
-            except ValueError:continue
-            if j.get('service')=='becore-tickets':print(json.dumps({'startup':j}))
+          tailscale ssh root@hermes 'python3 -' <<'PY'
+          import json,pathlib,subprocess,fcntl,urllib.request,hashlib
+          lock=open('/run/lock/becore-tickets-deploy.lock','a')
+          fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          root=pathlib.Path('/var/lib/becore-tickets-handover')
+          record=json.loads((root/'live-transfer.json').read_text())
+          assert record['phase']=='active' and record['revision']=='8a46eeaae8296ab588104ea2406f5287c08e5fb6'
+          path=pathlib.Path('/etc/caddy/becore-tickets-origin.caddy')
+          previous=path.read_text()
+          assert previous.startswith('tickets.becoreops.com {\n')
+          assert previous.count(' reverse_proxy 127.0.0.1:3119 {')==1
+          assert '@blocked not remote_ip' in previous
+          assert ' rewrite /offline-ticket /offline-ticket.html\n' not in previous
+          backup=root/'origin-before-offline-route.caddy'
+          assert not backup.exists()
+          backup.write_text(previous);backup.chmod(0o600)
+          candidate=previous.replace(' reverse_proxy 127.0.0.1:3119 {',' rewrite /offline-ticket /offline-ticket.html\n reverse_proxy 127.0.0.1:3119 {')
+          try:
+           path.write_text(candidate);path.chmod(0o644)
+           subprocess.run(['caddy','validate','--config','/etc/caddy/Caddyfile'],capture_output=True,check=True)
+           subprocess.run(['systemctl','reload','caddy'],capture_output=True,check=True)
+           def request(route):
+            req=urllib.request.Request('https://tickets.becoreops.com'+route,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'*/*'})
+            with urllib.request.urlopen(req,timeout=15) as response:
+             assert response.status==200
+             return response.read()
+           canonical=request('/offline-ticket');literal=request('/offline-ticket.html')
+           assert canonical==literal and b'Offline door pass' in canonical
+           health=json.loads(request('/healthz'))
+           assert health.get('runtime')=='vps' and health.get('active') is True and health.get('revision')==record['revision']
+           print(json.dumps({'offlineCanonicalRouteVerified':True,'sameSavedPassDocument':True,'documentSha256':hashlib.sha256(canonical).hexdigest(),'runtime':'vps','active':True,'revision':record['revision'],'applicationRestarted':False}))
+          except Exception:
+           path.write_text(previous)
+           subprocess.run(['systemctl','reload','caddy'],capture_output=True,check=True)
+           raise RuntimeError('Tickets route verification failed; original origin configuration restored.') from None
           PY
