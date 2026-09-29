@@ -1,0 +1,46 @@
+name: Verify repaired offline passes on live VPS
+on:
+  push:
+    branches: [ops/tickets-terminal-observer]
+    paths: ['.github/workflows/tickets-offline-check.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 8a46eeaae8296ab588104ea2406f5287c08e5fb6
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Require successful scoped origin repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          req=urllib.request.Request('https://api.github.com/repos/bechirobob/tickets/actions/runs/36581437682',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=20) as response:r=json.load(response)
+          assert r['head_sha']=='179b0f7daefd39424388b18bba6d0a74e28e3aa2' and r['conclusion']=='success'
+          print('Scoped origin repair verified; application release remains 8a46eea.')
+          PY
+      - name: Verify saved-pass rendering and real offline service-worker recovery
+        run: npm run test:e2e:production -- --project desktop-chromium --project mobile-chromium --project mobile-webkit --grep 'saved door pass|offline door pass' --workers=1 --retries=0
+      - name: Preserve focused browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tickets-offline-pass-verification-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14
