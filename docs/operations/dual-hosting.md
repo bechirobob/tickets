@@ -381,3 +381,20 @@ The three repository-owned workflows now use OIDC and fail closed when their
 client ID/audience variables are absent. YAML and shell syntax checks pass.
 Next: finish and confirm the prepared trust/SSH policy, configure its public ID
 and audience in Tickets, then run the main-branch access probe and release gates.
+
+
+## Verified Hermes setup; live transfer blocked — 29 September 2026 10:43 UTC
+
+Tickets remains on the same Hermes server as BubbleWash, using its own OS user, directories, configuration, state, workflows, Tailscale identity, and backup procedures. Do not use the BubbleWash repository connection for Tickets operations.
+
+Production source and installed VPS release: `1acd916c7414b30665c4f903dd2ce3ccf10609a0`. The earlier application commit `7b4d472` passed all three browser jobs (run 36550243182) and 489 local VPS tests; the final change only corrects public OIDC identifiers. Final exact-release VPS build 36553270881, Cloudflare deployment 36553270938, dedicated access/isolation check 36553270782, and Hermes installer/rehearsal 36553359253 all succeeded. Rehearsal passed 600 wallets, 1,200 duplicate scan races, 72,000 deliveries with zero errors, 599 reconnects, and 40/40 HTTP checks. Synthetic state was removed.
+
+The working OIDC trust subject is `repo:bechirobob@85619137/tickets@1330037012:ref:refs/heads/main`, with auth_keys scope and tag:tickets-ci. Its public client ID/audience are pinned in the four Tickets workflows on main. The original repository variables point to the first, nonworking subject and are unused. Tailscale's existing Hermes host tag is named tag:bubblewash-prod; this identifies the shared server, not a shared application account. No app resource was merged. A separate tag:tickets-ci SSH rule permits approved deployment access to root on Hermes.
+
+Preparation run 36554204239 succeeded at 10:13:47 UTC, transfer `034c4f23-82b8-402c-91a6-aaba1f6625f0`. After the full drain window, capture run 36555991275 failed closed because HTTP operation records did not drain. Its abort handler resumed source admission and queue delivery. No source freeze, data transfer, production VPS activation, or DNS switch completed; no fresh preactivation off-host backup was produced.
+
+Read-only diagnostic runs 36556399739, 36556717578, 36556836912, 36556931408, and 36557079885 found 116 HTTP records from 10:11:51.638–10:14:07.037 UTC. Newer GET/HEAD probes returned 200 and cleared normally. Worker telemetry showed canceled GET invocations and Network connection lost errors during that period. Existing records lack a request identifier that can conclusively match them to completed/canceled invocations; timestamp proximity is insufficient grounds to delete them. Do not expire, delete, or ignore these records merely because they are old. Do not replay external deliveries or payments to clear this blocker.
+
+Normal source operation was restored and verified in run **36557251677**: Cloudflare is the sole writer, source admission active, queue unpaused, HANDOVER_TRACKING=0, all 116 unresolved records preserved. Private Hermes journal phase is aborted. The preview runtime remains installed and verified. Recurring backup workflow is installed but skips while VPS is not the active writer; do not claim a production VPS backup succeeded.
+
+Next work is a focused repair of HTTP lifecycle tracking and defensible reconciliation of the preserved records, including completed/canceled invocation evidence and any related side effects. Then repeat the guarded prepare/capture/off-host-backup/activate process using an exact verified release. Capture must fail closed until outstanding work is reconciled. Keep one active writer throughout. Main is 1acd916; the recovery branch contains diagnostic/checkpoint commits after the already merged PR #195.
