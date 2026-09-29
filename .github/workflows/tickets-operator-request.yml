@@ -1,4 +1,4 @@
-name: Request existing Tickets operator stage
+name: Complete verified Tickets VPS handover
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -6,15 +6,101 @@ on:
 permissions:
   contents: read
   actions: write
+concurrency:
+  group: tickets-live-completion
+  cancel-in-progress: false
 jobs:
-  request:
+  complete:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TICKETS_REVISION: '18d1a08e0e77f862870aecd6b9fbcec4705c3bb8'
+      TICKETS_RUNTIME_RUN: '36561278089'
+      TICKETS_DEPLOY_RUN: '36561278033'
     steps:
-      - name: Request verified main-branch status operation
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+      - name: Complete exact verified release through existing main-only workflows
         run: |
-          test "$GH_REPO" = bechirobob/tickets
-          gh workflow run tickets-handover.yml --repo "$GH_REPO" --ref main -f mode=status -f revision=1acd916c7414b30665c4f903dd2ce3ccf10609a0
+          python - <<'PY'
+          import json, os, time, urllib.request
+          repo = os.environ['GITHUB_REPOSITORY']
+          revision = os.environ['TICKETS_REVISION']
+          runtime_run = int(os.environ['TICKETS_RUNTIME_RUN'])
+          deploy_run = int(os.environ['TICKETS_DEPLOY_RUN'])
+          assert repo == 'bechirobob/tickets'
+          
+          def api(path, method='GET', data=None):
+              payload = None if data is None else json.dumps(data).encode()
+              req = urllib.request.Request('https://api.github.com/repos/'+repo+'/'+path,
+                  data=payload, method=method, headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                  'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body=response.read()
+                  return json.loads(body) if body else None
+          
+          def assert_main():
+              assert api('git/ref/heads/main')['object']['sha'] == revision, 'Main changed; explicit release review required.'
+          
+          def wait_run(run_id, seconds=1800):
+              deadline=time.monotonic()+seconds
+              while time.monotonic()<deadline:
+                  run=api('actions/runs/'+str(run_id))
+                  assert run['head_sha']==revision
+                  if run['status']=='completed':
+                      assert run['conclusion']=='success', f'Run {run_id} finished {run["conclusion"]}; inspect its logs before retrying.'
+                      return
+                  time.sleep(15)
+              raise RuntimeError('Timed out waiting for run '+str(run_id))
+          
+          def dispatch(workflow, inputs):
+              assert_main()
+              existing={r['id'] for r in api('actions/workflows/'+workflow+'/runs?event=workflow_dispatch&branch=main&per_page=30')['workflow_runs']}
+              api('actions/workflows/'+workflow+'/dispatches', 'POST', {'ref':'main','inputs':inputs})
+              for attempt in range(24):
+                  runs=api('actions/workflows/'+workflow+'/runs?event=workflow_dispatch&branch=main&per_page=30')['workflow_runs']
+                  matches=[r for r in runs if r['id'] not in existing and r['head_sha']==revision]
+                  if matches:
+                      assert len(matches)==1, 'Ambiguous dispatch; inspect runs before continuing.'
+                      run_id=matches[0]['id']
+                      print(json.dumps({'stage':workflow,'mode':inputs.get('mode'),'runId':run_id}),flush=True)
+                      wait_run(run_id)
+                      print(json.dumps({'completedRun':run_id}),flush=True)
+                      return run_id
+                  time.sleep(5)
+              raise RuntimeError('Dispatch response was lost; inspect existing runs, never blindly replay.')
+          
+          assert_main()
+          wait_run(runtime_run)
+          wait_run(deploy_run)
+          print(json.dumps({'revision':revision,'runtimeVerifiedRun':runtime_run}),flush=True)
+          dispatch('tickets-vps-install.yml', {'source_sha':revision,'source_run':str(runtime_run)})
+          dispatch('tickets-handover.yml', {'mode':'prepare','revision':revision})
+          print('Tracking armed. Waiting the required 16 minutes for earlier background invocations.',flush=True)
+          time.sleep(16*60)
+          dispatch('tickets-handover.yml', {'mode':'capture','revision':revision})
+          dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})
+          try:
+              health=None
+              for attempt in range(24):
+                  try:
+                      with urllib.request.urlopen('https://tickets.becoreops.com/healthz',timeout=10) as response:
+                          health=json.load(response)
+                      if health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True:
+                          break
+                  except Exception:
+                      pass
+                  time.sleep(5)
+              assert health and health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True
+              for path in ['/', '/events', '/my-nights', '/api/public/events']:
+                  with urllib.request.urlopen('https://tickets.becoreops.com'+path,timeout=20) as response:
+                      assert response.status==200
+                      response.read()
+              print(json.dumps({'publicVpsVerified':True,'revision':revision,'routesVerified':4}),flush=True)
+          except Exception:
+              print('Public verification failed after activation; returning fresh VPS state through the verified rollback.',flush=True)
+              dispatch('tickets-handover.yml', {'mode':'rollback','revision':revision})
+              raise
+          backup=dispatch('tickets-backup.yml', {})
+          browser=dispatch('browser-audit.yml', {})
+          print(json.dumps({'complete':True,'revision':revision,'backupRun':backup,'browserRun':browser,'writer':'vps','host':'hermes'}),flush=True)
+          PY
