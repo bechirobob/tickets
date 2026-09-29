@@ -3,7 +3,7 @@ const quote = value => '"' + value.replaceAll('"', '""') + '"';
 const stagingTable = '_bct_export_large_values';
 const maxStatementBytes = 64000;
 export function tableDigestQuery(name, columns) {
-  return `SELECT ${columns.map((column, index) => `typeof(${quote(column)})||':'||hex(${quote(column)}) AS c${index}`).join(',')} FROM ${quote(name)}`;
+  return `SELECT ${columns.map((column, index) => `typeof(${quote(column)})||':'||hex(CASE WHEN typeof(${quote(column)})='real' THEN printf('%!.17g',${quote(column)}) ELSE ${quote(column)} END) AS c${index}`).join(',')} FROM ${quote(name)}`;
 }
 export function digestRows(rows, columns) {
   const records = rows.map(row => JSON.stringify(columns.map((_, index) => row['c' + index]))).sort();

@@ -1,5 +1,5 @@
 import { restoreFrozenRoom, type RoomReturn } from "./room-return";
-import { trackedOperation, requireTransfer } from "./handover-control";
+import { trackedOperation, requireTransfer, HandoverPaused } from "./handover-control";
 import { requireHandover } from "./handover-crypto";
 import { writerGuardStatements, transitionWriterSql } from "../ops/handover/writer-lock.mjs";
 import { encryptedRoomSnapshot } from "./room-handover";
@@ -71,6 +71,7 @@ function requiredHeader(request: Request, name: string): string {
 export class TheRoom extends DurableObject<Cloudflare.Env> {
   private presencePending = false;
   private writerFrozen = false;
+  private alarmRunning = false;
   private handoverDeferred = new Set<Promise<void>>();
   private recentMessages: StoredRoomMessage[] | null = null;
 
@@ -158,8 +159,13 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     return this.trackedRoomOperation('room:scheduleFlashExpiry', () => this.scheduleFlashExpiryUntracked(policy));
   }
   async alarm(): Promise<void> {
-    this.assertWriterAvailable();
-    return this.trackedRoomOperation('room:alarm', () => this.alarmUntracked());
+    if (this.writerFrozen) return;
+    this.alarmRunning = true;
+    try { await this.trackedRoomOperation('room:alarm', () => this.alarmUntracked()); }
+    catch (error) {
+      if (!(error instanceof HandoverPaused)) throw error;
+      if (!this.writerFrozen) await this.ctx.storage.setAlarm(Date.now() + 60000);
+    } finally { this.alarmRunning = false; }
   }
   async refreshAdmissionAccess(): Promise<void> {
     this.assertWriterAvailable();
@@ -190,12 +196,16 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     const admission = await this.env.DB.prepare("SELECT transfer_id FROM _bct_handover_admission WHERE id=1 AND phase IN ('paused','frozen')").first<{ transfer_id: string }>();
     const active = await this.env.DB.prepare('SELECT COUNT(*) AS n FROM _bct_handover_operations').first<{ n: number }>();
     if (admission?.transfer_id !== transferId || active?.n !== 0) throw new Error('Source has not drained.');
+    const alarm = this.writerFrozen ? undefined : (await this.ctx.storage.getAlarm()) ?? (this.alarmRunning ? Date.now() : null);
     this.ctx.storage.transactionSync(() => {
       for (const sql of writerGuardStatements(['room_config', 'messages', 'reactions'])) this.ctx.storage.sql.exec(sql);
+      this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS _bct_handover_alarm(id INTEGER PRIMARY KEY CHECK(id=1),due INTEGER)');
+      if (alarm !== undefined) this.ctx.storage.sql.exec('INSERT OR REPLACE INTO _bct_handover_alarm VALUES(1,?)', alarm);
       const command = transitionWriterSql(transferId, true);
       if (this.ctx.storage.sql.exec(command.sql, ...command.params).toArray().length !== 1) throw new Error('Room freeze belongs to another transfer.');
     });
     this.writerFrozen = true;
+    await this.ctx.storage.deleteAlarm();
     for (const socket of this.ctx.getWebSockets()) socket.close(1012, 'Service moving. Please reconnect shortly.');
     return { objectId: this.ctx.id.toString(), transferId, frozen: true };
   }
@@ -205,8 +215,8 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     restoreFrozenRoom(this.ctx.storage, transferId, snapshot);
     this.writerFrozen = true;
     this.recentMessages = null;
-    if (snapshot.alarm === null) await this.ctx.storage.deleteAlarm();
-    else await this.ctx.storage.setAlarm(snapshot.alarm);
+    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO _bct_handover_alarm VALUES(1,?)', snapshot.alarm);
+    await this.ctx.storage.deleteAlarm();
     return this.encryptedHandoverSnapshot();
   }
 
@@ -217,6 +227,8 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     const command = transitionWriterSql(transferId, false);
     if (this.ctx.storage.sql.exec(command.sql, ...command.params).toArray().length !== 1) throw new Error('Room freeze belongs to another transfer.');
     this.writerFrozen = false;
+    const alarm = this.ctx.storage.sql.exec<{ due: number | null }>('SELECT due FROM _bct_handover_alarm WHERE id=1').one().due;
+    if (alarm !== null) await this.ctx.storage.setAlarm(alarm);
     return { resumed: true, transferId };
   }
 

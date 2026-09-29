@@ -306,3 +306,31 @@ passed; typecheck and lint passed (one pre-existing moderation export warning).
 Latest operator/API integration verification, exact final candidate CI, release
 installation, backup scheduling and public switch remain pending. Do not treat
 this checkpoint or a rehearsal manifest as activation evidence.
+
+#### Final failure-path verification
+
+Host installation/load test 36543063748 passed for candidate 4920367: 600 guest
+wallets, 1,200 duplicate scan races, 600 Room joins, 72,000 message deliveries
+with zero errors, and 599 reconnects after restart. Synthetic state was removed.
+Production remained on Cloudflare.
+
+Disposable routing round trip 36544226237 passed and removed its temporary
+hostname/Worker/DNS. The real API requires removing the owned VPS A record before
+restoring a Worker custom domain; domain deletion returns HTTP 200 with an empty
+body. Both behaviors are now handled and verified by readback.
+
+Additional failure-path tests pass: abort recovers an SQL freeze even if the
+admission-phase update was interrupted; another transfer cannot unlock it.
+Frozen Rooms retain their alarm in private SQL state and cancel platform alarm
+execution until resume, preventing retry exhaustion from losing an alarm.
+Database digest transport preserves full-precision real values as well as
+64-bit integers. Successful empty API responses are distinguished from errors.
+
+Encrypted backup/restore scripts passed a local disposable round trip, binary
+row comparison, tamper rejection and seven-copy retention check. The proposed
+nightly off-host workflow is draft BubbleWash PR 42: its inactive-writer test
+passed, but that repository's unrelated dependency audit failed. Do not merge
+or deploy that application's code as part of Tickets. Direct R2 access through
+the current VPS operator token returned 403. A first private off-host backup can
+be run from the isolated backup branch; automatic off-host scheduling is not yet
+established. Final source deployment and live pause/switch are still pending.

@@ -110,7 +110,15 @@ async function routeToVps() {
 }
 async function routeToCloudflare() {
   const domains = (await cloudflare(root + '/workers/domains')).filter(d => d.hostname === hostname);
-  if (!domains.length) await cloudflare(root + '/workers/domains', 'PUT', { hostname, service: 'becore-tickets', environment: 'production', zone_id: zone.split('/')[2] });
+  if (!domains.length) {
+    const records = await cloudflare(zone + '/dns_records?name=' + hostname);
+    assert.ok(records.length <= 1);
+    for (const dns of records) {
+      assert.ok(dns.type === 'A' && dns.content === '51.195.20.137' && dns.proxied === true, 'Unexpected DNS owner; return routing stopped.');
+      await cloudflare(zone + '/dns_records/' + dns.id, 'DELETE');
+    }
+    await cloudflare(root + '/workers/domains', 'PUT', { hostname, service: 'becore-tickets', zone_id: zone.split('/')[2] });
+  } else assert.equal(domains[0].service, 'becore-tickets');
 }
 async function resumeBeforeActivation(rpc) {
   assert.ok(!['transferred','active','returning','returned'].includes(record.phase));

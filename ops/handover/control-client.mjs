@@ -10,7 +10,11 @@ export async function cloudflare(path, method = 'GET', body) {
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(30000),
   });
-  const result = await response.json();
+  const payload = await response.text();
+  // Some domain mutations return a successful empty response. Callers verify
+  // the resulting resource separately rather than treating JSON absence as failure.
+  if (response.ok && !payload) return null;
+  const result = JSON.parse(payload);
   if (!response.ok || !result.success || result.result?.some?.(row => row.success === false)) throw new Error(`Cloudflare operator request failed (${response.status}).`);
   return result.result;
 }

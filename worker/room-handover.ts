@@ -19,6 +19,7 @@ export async function encryptedRoomSnapshot(storage: DurableObjectStorage, setti
   const state = hasState ? storage.sql.exec<{ frozen: number; transfer_id: string }>('SELECT frozen,transfer_id FROM _bct_handover_state WHERE id=1').one() : null;
   const frozen = state?.frozen === 1;
   const capturedAt = new Date().toISOString();
-  const alarm = await storage.getAlarm();
+  const savedAlarm = frozen && storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name='_bct_handover_alarm'").toArray().length;
+  const alarm = savedAlarm ? storage.sql.exec<{ due: number | null }>('SELECT due FROM _bct_handover_alarm WHERE id=1').one().due : await storage.getAlarm();
   return sealHandover(settings, frozen ? 'room-cutover' : 'room-rehearsal', { objectId, sourceRevision, snapshotType: frozen ? 'frozen-cutover' : 'rehearsal-not-cutover', transferId: frozen ? state.transfer_id : null, capturedAt, schema, tables, sequences, alarm });
 }
