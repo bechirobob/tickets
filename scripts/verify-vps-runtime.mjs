@@ -54,6 +54,14 @@ try {
   });
   assert.equal(invalidHost, 421);
   assert.equal((await fetch(base + '/api/admin/accounts')).status, 403);
+  for (const [route, method] of [['/api/customer/tickets', 'POST'], ['/api/customer/my-nights', 'GET'], ['/api/admin/check-in', 'POST']]) {
+    const rejected = await fetch(base + route, { method, headers: { origin: base } });
+    assert.equal(rejected.status, 401);
+    assert.ok(rejected.headers.get('cache-control').includes('no-store'));
+    assert.ok(rejected.headers.get('content-security-policy'));
+  }
+  assert.equal((await fetch(base + '/api/customer/tickets', { method: 'POST', headers: { origin: 'https://untrusted.example', cookie: `bct_attendee=${session}` } })).status, 403);
+  assert.equal((await fetch(base + '/api/admin/check-in', { method: 'POST', headers: { origin: base }, body: 'x'.repeat(32769) })).status, 413);
   const wallet = await fetch(base + '/api/customer/tickets', { method: 'POST', headers: { origin: base, cookie: `bct_attendee=${session}` } });
   assert.equal(wallet.status, 200);
   const walletBody = await wallet.json();
@@ -104,4 +112,3 @@ try {
   db.close();
   rmSync(directory, { recursive: true, force: true });
 }
-

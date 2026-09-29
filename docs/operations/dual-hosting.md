@@ -56,6 +56,15 @@ must account for the destination's then-current quota and capacity.
   containing `ENVIRONMENT`; there is no production key file in the Tickets
   configuration directory. Known project checkouts also contain no private
   environment configuration. Do not extract or print Worker secret values.
+- Follow-up host run `36502412541`, release `4f70f500`: wallets now pass at
+  4,270 ms and Room recovery completes. Gate scans remain over target at
+  6,031 ms and 599 reconnects at 7,775 ms. All 72,000 deliveries pass (130 ms).
+- The next increment avoids unchanged Room policy writes, reuses only the
+  shared recent message rows with invalidation on every message mutation, and
+  retains fresh per-viewer authorization, blocks and reactions. The busiest
+  three APIs call their existing shared handlers directly on Node, preserving
+  security headers and adding a 32 KiB request-body limit. HTTP regressions
+  cover missing sessions, foreign origins, oversized bodies and private headers.
 - Next action: pass the complete actual-host rehearsal for this increment, then
   securely provision the missing original configuration and implement/rehearse
   the bidirectional data handover. The write freeze, live D1/Room transfers,

@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { WebSocketServer } from 'ws';
+import { dispatchPrivateApi } from './private-api.mjs';
 import { createEnvironment, loadPrivateConfiguration } from './environment.mjs';
 import { authorizeRoomSocket } from '../../worker/room-socket.ts';
 import { requestNonce, contentSecurityPolicy, securityResponse } from '../../worker/security-response.ts';
@@ -48,6 +49,7 @@ server.on('request', (request, response) => {
   request.headers['content-security-policy'] = contentSecurityPolicy(nonce);
   const headers = securityResponse(new Response(null), nonce, (request.url ?? '/').split('?')[0]).headers;
   for (const [key, value] of headers) response.setHeader(key, value);
+  if (dispatchPrivateApi(request, response, host)) return;
   for (const handler of handlers) handler.call(server, request, response);
 });
 server.requestTimeout = 30000;

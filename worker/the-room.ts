@@ -36,6 +36,8 @@ type RoomMessage = {
   reactions: Array<{ emoji: string; count: number; mine: boolean }>;
 };
 
+type StoredRoomMessage = Omit<RoomMessage, "pinned" | "reactions"> & { pinned: number };
+
 type RoomPolicyInput = {
   eventSlug: string;
   eventTitle: string;
@@ -63,6 +65,7 @@ function requiredHeader(request: Request, name: string): string {
 
 export class TheRoom extends DurableObject<Cloudflare.Env> {
   private presencePending = false;
+  private recentMessages: StoredRoomMessage[] | null = null;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
@@ -333,6 +336,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   async removeEventContent(): Promise<void> {
+    this.recentMessages = null;
     for (const socket of this.ctx.getWebSockets()) socket.close(1008, "Event removed");
     this.ctx.storage.sql.exec("DELETE FROM reactions; DELETE FROM messages; DELETE FROM room_config;");
     await this.ctx.storage.deleteAlarm();
@@ -340,6 +344,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
 
   async removePreviewContentBefore(before: string): Promise<void> {
     if (!Number.isFinite(Date.parse(before))) throw new Error("Invalid preview cutoff.");
+    this.recentMessages = null;
     const ids = this.ctx.storage.sql.exec<{id:string}>("SELECT id FROM messages WHERE datetime(created_at) < datetime(?)", before).toArray();
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec("DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE datetime(created_at) < datetime(?))", before);
@@ -352,6 +357,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   async removeMessage(messageId: string): Promise<boolean> {
     const found = this.messageExists(messageId);
     if (!found) return false;
+    this.recentMessages = null;
     this.ctx.storage.sql.exec("UPDATE messages SET deleted_at = ? WHERE id = ?", new Date().toISOString(), messageId);
     this.broadcast({ type: "message_removed", messageId });
     await this.env.DB.batch([
@@ -376,6 +382,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   clearPins(): number {
+    this.recentMessages = null;
     const result = this.ctx.storage.sql.exec("UPDATE messages SET pinned = 0 WHERE pinned = 1 AND deleted_at IS NULL");
     this.broadcast({ type: "pins_cleared" });
     return result.rowsWritten;
@@ -439,6 +446,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         ends_at = excluded.ends_at,
         read_only_at = excluded.read_only_at,
         updated_at = excluded.updated_at
+      WHERE room_config.event_title IS NOT excluded.event_title
+         OR room_config.starts_at IS NOT excluded.starts_at
+         OR room_config.ends_at IS NOT excluded.ends_at
+         OR room_config.read_only_at IS NOT excluded.read_only_at
     `, policy.eventSlug, policy.eventTitle, policy.startsAt, policy.endsAt, policy.readOnlyAt, new Date().toISOString());
   }
 
@@ -485,6 +496,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   private insertMessage(input: Omit<RoomMessage, "id" | "sequence" | "createdAt" | "deletedAt" | "reactions">): RoomMessage {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
+    this.recentMessages = null;
     const row = this.ctx.storage.sql.exec<{ sequence: number }>(`
       INSERT INTO messages (id, attendee_id, display_name, role, room_badge, kind, content, parent_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -494,17 +506,16 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   private readMessages(viewer: ConnectionState, announcementId = ""): RoomMessage[] {
-    const rows = this.ctx.storage.sql.exec<{
-      id: string; sequence: number; attendeeId: string; displayName: string; role: RoomRole; roomBadge: "VIP" | null;
-      kind: "message" | "announcement"; content: string; parentId: string | null;
-      pinned: number; createdAt: string; deletedAt: string | null;
-    }>(`
+    // Only shared message content is reused. Authorization, blocks and reactions
+    // are evaluated for each connection; every message mutation invalidates this.
+    const rows = (!announcementId && this.recentMessages) || this.ctx.storage.sql.exec<StoredRoomMessage>(`
       SELECT id, sequence, attendee_id AS attendeeId, display_name AS displayName, role, room_badge AS roomBadge, kind,
              content, parent_id AS parentId, pinned, created_at AS createdAt, deleted_at AS deletedAt
       FROM messages WHERE sequence IN (SELECT sequence FROM messages ORDER BY sequence DESC LIMIT 100)
         OR (id = ? AND kind = 'announcement' AND deleted_at IS NULL)
       ORDER BY sequence DESC
     `, announcementId).toArray().reverse();
+    if (!announcementId) this.recentMessages = rows;
     const visible = rows.filter((row) => !viewer.blockedAttendeeIds.includes(row.attendeeId));
     const reactionsByMessage = new Map<string, Array<{ emoji: string; count: number; mine: number }>>();
     // Load reactions once for this viewer's visible history, not once per message.
