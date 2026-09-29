@@ -657,6 +657,10 @@ test('gate camera survives scan results, repeated starts and camera failure', as
       const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
       const context = canvas.getContext('2d')!; context.fillStyle = 'white'; context.fillRect(0, 0, 640, 480);
       const stream = canvas.captureStream(10); state.streams.push(stream);
+      const timer = window.setInterval(() => {
+        if (stream.getVideoTracks()[0]?.readyState === 'ended') { clearInterval(timer); return; }
+        context.fillRect(0, 0, 640, 480);
+      }, 100);
       return stream;
     } });
   });
