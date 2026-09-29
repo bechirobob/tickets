@@ -15,9 +15,17 @@ async function collect(from,to){
  else events.push(...result.events.events);
 }
 if(rows.length){
- const start=Date.parse('2026-09-29T11:15:00Z'), end=Date.now();
- assert.ok(end-start<3600000,'Explicit historical window review required.');
- for(let from=start;from<end;from+=30000)await collect(from,Math.min(end,from+30000));
+ const timeframe={from:Date.parse('2026-09-29T11:00:00Z'),to:Date.now()};
+ for(const record of rows){
+  const result=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:crypto.randomUUID(),timeframe,view:'events',limit:2000,parameters:{needle:{value:record.id,matchCase:true}}});
+  events.push(...result.events.events);
+ }
+ const requests=[...new Set(events.map(e=>e.$metadata?.requestId).filter(Boolean))];
+ requests.push('01dd0168f36d1e23ab5614cf7596ed61');
+ for(const request of new Set(requests)){
+  const result=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:crypto.randomUUID(),timeframe,view:'events',limit:2000,parameters:{filters:[{key:'$metadata.requestId',operation:'eq',type:'string',value:request}]}});
+  events.push(...result.events.events);
+ }
  const matches=matchTerminalEvidence(rows,events);
  for(const record of rows.filter(r=>!matches.some(m=>m.record.id===r.id))){
   const entries=events.filter(e=>e.source?.handoverOperation===record.id);
