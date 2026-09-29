@@ -167,7 +167,8 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
       scannerRef.current = scanner;
       await scanner.start();
       if (generation !== cameraGeneration.current) scanner.stop();
-    } catch {
+    } catch (error) {
+      console.warn("Ticket camera could not start", error);
       if (generation === cameraGeneration.current) {
         scannerRef.current?.stop();
         setMode("ready"); setMessage("Camera access was not available. Try Start camera again or use the ticket code below.");

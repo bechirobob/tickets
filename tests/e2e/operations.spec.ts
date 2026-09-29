@@ -669,7 +669,7 @@ test('gate camera survives scan results, repeated starts and camera failure', as
     } });
   });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  page.on('console', message => { if (message.text().startsWith('Camera fixture failed:')) console.error(message.text()); });
+  page.on('console', message => { if (/^(Camera fixture failed:|Ticket camera could not start)/.test(message.text())) console.error(message.text()); });
   let outcome = 'unavailable';
   let holdStats = false;
   const statsGate: { release?: () => Promise<void> } = {};
