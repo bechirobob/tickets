@@ -1,4 +1,4 @@
-name: Complete verified Tickets VPS handover
+name: Finish prepared Tickets VPS handover
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -15,9 +15,9 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      TICKETS_REVISION: '18d1a08e0e77f862870aecd6b9fbcec4705c3bb8'
-      TICKETS_RUNTIME_RUN: '36561278089'
-      TICKETS_DEPLOY_RUN: '36561278033'
+      TICKETS_REVISION: '8a46eeaae8296ab588104ea2406f5287c08e5fb6'
+      TICKETS_RUNTIME_RUN: '36566932648'
+      TICKETS_DEPLOY_RUN: '36566932507'
     steps:
       - name: Complete exact verified release through existing main-only workflows
         run: |
@@ -75,8 +75,8 @@ jobs:
           print(json.dumps({'revision':revision,'runtimeVerifiedRun':runtime_run}),flush=True)
           dispatch('tickets-vps-install.yml', {'source_sha':revision,'source_run':str(runtime_run)})
           dispatch('tickets-handover.yml', {'mode':'prepare','revision':revision})
-          print('Tracking armed. Waiting the required 16 minutes for earlier background invocations.',flush=True)
-          time.sleep(16*60)
+          print('Existing prepared transfer refreshed; original tracking/drain time preserved.',flush=True)
+          assert time.time() >= 1790682330
           dispatch('tickets-handover.yml', {'mode':'capture','revision':revision})
           dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})
           try:

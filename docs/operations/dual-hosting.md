@@ -470,3 +470,33 @@ job 36561390383 is now in its required 16-minute wait, with capture
 expected around 11:46 UTC. Do not dispatch another prepare or capture while
 that completion job is active. Inspect its run log for automatically dispatched
 capture/activation/backup/browser runs.
+
+
+## Recovery correction — 2026-09-29 11:54 UTC
+Completion controller 36561390383 was cancelled before capture after detecting
+fresh Cloudflare cancellation records. Source remains active; the prepared
+transfer 01b7d630-9512-4ddd-a6a9-d64d1591de73 and original 11:29 preparation time
+remain valid. Do not reinstall or re-arm tracking merely because chat disconnects.
+
+Private terminal observer installed in 36563124626 stops fresh accumulation.
+Exact platform invocation evidence retired 148 records in 36563513120, preserving
+the proof. Three explicitly identified records have incomplete platform logs
+(36564168953), so they are NOT claimed completed or expired. The same exclusive
+SQL fence, Room freeze, twelve terminal durable-work checks, preserved archive
+and abort restoration used for the original incident must reconcile them.
+Unknown records still block. Room freeze now recognizes the same exact incident
+inventory as source freeze; previously it incorrectly required zero before the
+source had archived the incident. Preparation can refresh a verified release
+while preserving the existing transfer and drain time, only while untouched and
+active on the same database with tracking still armed.
+
+Pending: candidate checks, release deployment/runtime artifact, install new
+release, refresh existing preparation, capture/backup/activate, public health,
+production backup and browser audit. Terminal utility source lives in branch
+ops/tickets-terminal-observer. BubbleWash remains untouched.
+
+
+## Verified release continuation — 2026-09-29 12:16 UTC
+PR 197 merged as 8a46eeaae8296ab588104ea2406f5287c08e5fb6; exact tree matches candidate ae1978d43ccf2041e5a46a1783e3cc82e9749512. Candidate run 36565172805 passed desktop Chromium, mobile Chromium and mobile WebKit, including organizer/owner workflows. Initial candidate failure was a local test harness trying to resolve the production-only Tail service; the isolated harness now excludes that service, and all checks passed after the fix.
+
+Completion controller on ops/tickets-operator-request waits for exact runtime 36566932648 and source deploy 36566932507, installs that verified artifact, refreshes the SAME prepared transfer (preserving its original tracking time), then captures with verified off-host backup, activates, checks public VPS health/routes, runs production backup and browser audit. Do not replay installation/preparation or create another transfer while it runs. Inspect its run and printed dispatched IDs first.
