@@ -231,3 +231,25 @@ The outstanding live activation gates remain: coordinated writer freeze and
 drain, fresh D1/Room snapshot, pending-delivery reconciliation, live Room reverse
 import, and secured public routing/rollback verification. Keep both deployments
 and never activate rehearsal data as current production.
+
+### Rehearsal cleanup — 29 September, 07:34 UTC
+
+Owner instruction: completed rehearsal data must not accumulate on the VPS.
+Run 36537243355 removed both historical D1/Room rehearsal directories after
+checking their non-activation manifests and absence of open file handles.
+Run 36537364276 removed six obsolete preview revisions and the unused original
+preview database files, preserving the currently configured preview state.
+Total removed file content: 13933705 bytes (approximately 13.9 MB).
+Remaining filesystem free space: 26,445,312,000 bytes (approximately 26.4 GB).
+
+The current isolated preview health check passed, with zero orders and zero
+tickets. Production, credentials, release binaries and the small verification
+record were preserved. The old rehearsal snapshots no longer exist and the old
+return scripts/manifests must not be replayed; any further data rehearsal needs
+a newly captured encrypted snapshot.
+
+Retention rule for future handovers: remove disposable snapshot copies and
+obsolete preview state after successful verification; retain concise evidence.
+Keep active state and genuine recovery backups separate from disposable test
+copies. This closeout performed cleanup; it does not claim a new automatic
+snapshot-retention job was installed.
