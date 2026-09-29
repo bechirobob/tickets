@@ -29,5 +29,9 @@ jobs:
           const s=await cloudflare(root+'/workers/scripts/becore-tickets/settings');
           const db=s.bindings.find(b=>b.type==='d1'&&b.name==='DB').id;
           const query=async sql=>(await cloudflare(root+'/d1/database/'+db+'/query','POST',{sql}))[0].results;
-          console.log(JSON.stringify({readOnly:true,admission:await query('SELECT phase,transfer_id,paused_at FROM _bct_handover_admission'),operations:await query('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY started_at')}));
+          console.log(JSON.stringify({readOnly:true,admission:await query('SELECT phase,transfer_id,paused_at FROM _bct_handover_admission'),operations:await query('SELECT kind,COUNT(*) AS count,MIN(started_at) AS oldest,MAX(started_at) AS newest FROM _bct_handover_operations GROUP BY kind')}));
+          const telemetry=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:'tickets-handover-diagnose',timeframe:{from:Date.parse('2026-09-29T10:11:00Z'),to:Date.parse('2026-09-29T10:15:00Z')},view:'events',limit:1000,parameters:{filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'becore-tickets'}]}});
+          console.log(JSON.stringify({telemetryKeys:Object.keys(telemetry),eventsKeys:telemetry.events&&Object.keys(telemetry.events),sampleKeys:telemetry.events?.events?.[0]&&Object.keys(telemetry.events.events[0])}));
+          const serialized=JSON.stringify(telemetry);
+          console.log(JSON.stringify({categories:Object.fromEntries(['waitUntil','cancelled','Illegal invocation','Cannot perform','Response Stream Disconnected','exceeded','error'].map(s=>[s,serialized.split(s).length-1]))}));
           NODE
