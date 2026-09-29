@@ -34,6 +34,14 @@ jobs:
           console.log(JSON.stringify({telemetryKeys:Object.keys(telemetry),eventsKeys:telemetry.events&&Object.keys(telemetry.events),sampleKeys:telemetry.events?.events?.[0]&&Object.keys(telemetry.events.events[0])}));
           const events=telemetry.events.events;
           console.log(JSON.stringify({eventCount:telemetry.events.count,returned:events.length,workerKeys:events[0]?.$workers&&Object.keys(events[0].$workers),sourceKeys:events[0]?.source&&Object.keys(events[0].source),metadataKeys:events[0]?.$metadata&&Object.keys(events[0].$metadata),sample:events.slice(0,3).map(e=>({timestamp:e.timestamp,worker:e.$workers?{outcome:e.$workers.outcome,eventType:e.$workers.eventType,wallTimeMs:e.$workers.wallTimeMs,cpuTimeMs:e.$workers.cpuTimeMs}:null}))}));
+          const groups={};
+          for(const e of events){const w=e.$workers??{},k=JSON.stringify([e.$metadata?.type,w.outcome,w.event?.request?.method,w.event?.response?.status]);groups[k]=(groups[k]??0)+1;}
+          console.log(JSON.stringify({groups,eventKeys:events[0]?.$workers?.event&&Object.keys(events[0].$workers.event),eventTimestamp:events[0]?.$workers?.event?.timestamp,sourceErrorCategories:events.filter(e=>e.$metadata?.level==='error').map(e=>String(e.source?.message??'').replace(/https?:[^ ]+|[a-f0-9-]{16,}|"[^"]*"|'[^']*'/g,'[redacted]').slice(0,200)).slice(0,8)}));
+          const before=await query('SELECT COUNT(*) AS n FROM _bct_handover_operations');
+          const probe=await fetch('https://tickets.becoreops.com/api/version',{method:'HEAD'});
+          await new Promise(r=>setTimeout(r,2000));
+          const after=await query('SELECT COUNT(*) AS n FROM _bct_handover_operations');
+          console.log(JSON.stringify({headProbeStatus:probe.status,before,after}));
           const serialized=JSON.stringify(telemetry);
           console.log(JSON.stringify({categories:Object.fromEntries(['waitUntil','cancelled','Illegal invocation','Cannot perform','Response Stream Disconnected','exceeded','error'].map(s=>[s,serialized.split(s).length-1]))}));
           NODE
