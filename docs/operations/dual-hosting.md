@@ -1,11 +1,42 @@
 # Cloudflare and VPS deployments
 
 The owner confirmed on 28 September 2026 that Tickets must retain both working
-deployments. This is not retirement of Cloudflare. Both builds use the same
-application source and release identity. The VPS became the live application host on 29 September 2026; Cloudflare remains
+deployments. This is not retirement of Cloudflare. Both runtimes use the same application codebase and expose their deployed source revision. The VPS became the live application host on 29 September 2026; Cloudflare remains
 the public TLS/security edge and the preserved, write-frozen return deployment.
 
-## Current operating state — 29 September 2026, 14:19 UTC
+## Current operating state — 29 September 2026, 16:04 UTC
+
+**Tickets remains active on Hermes.** Live application release:
+`181bfc6801a4fc4c993dc0220af99bb3509e433d` (scanner repair, PR #199).
+
+- Fixed the blank preview after Scan next by retaining the camera video through scan results.
+  Camera retry, current-event decoder state, slow attendance refresh and initial hydration are covered.
+- Paused admission now returns `unavailable` / “Entry is paused”, separately from an invalid ticket.
+  Admission eligibility, duplicate protection and event dates were not changed.
+- Candidate `e44f48781c1c00274a57c1f1615385f9857242f6` passed all three complete browser jobs:
+  run `36592304019`. Focused camera run `36592262428` also passed all three projects.
+  These use isolated data and simulated camera feeds, not a physical phone.
+- Exact merged-source VPS build/test run `36594425551` passed.
+  Code-only release `36594839083` succeeded at 16:04:05 UTC; coordinator
+  `36594460754` succeeded. Local and public health confirmed the exact revision,
+  active=true, and five public route checks passed.
+- Only the Tickets service release changed. No data migration or routing change occurred.
+  Its systemd override is `scanner-release.conf`; the previous release remains available.
+  The release evidence is `/var/lib/becore-tickets-handover/scanner-release-36594839083.json`.
+- The handover journal preserves original transfer `revision=8a46eeaae8296ab588104ea2406f5287c08e5fb6`
+  for the existing return protocol, and now records `activeRevision=181bfc6801a4fc4c993dc0220af99bb3509e433d`.
+  Cloudflare remains the edge and frozen return deployment. Ordinary Cloudflare deploy
+  `36594425680` was deliberately blocked by the active-writer routing guard.
+- The real “On The Guest List” / `sun-chasers-labadi` event remains `coming_soon`.
+  Its valid RSVP journey stops before admission until the real date/status is confirmed.
+  The earlier instruction to check this undated event in was premature. After reloading
+  the scanner, the owner should confirm physical camera recovery; successful admission
+  must be tested with an eligible event.
+
+Do not repeat the completed migration or replay the one-shot scanner updater.
+Future code releases must start from this active application revision. BubbleWash is outside scope.
+
+## Activation checkpoint — 29 September 2026, 14:19 UTC
 
 **Tickets is active on Hermes.** Application release:
 `8a46eeaae8296ab588104ea2406f5287c08e5fb6`. The operational tooling revision is
