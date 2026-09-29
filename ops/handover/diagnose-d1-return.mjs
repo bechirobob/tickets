@@ -13,6 +13,7 @@ async function call(url,body,method='POST') {
 try {
   const db=new DatabaseSync(':memory:');
   db.exec("CREATE TABLE records(id INTEGER PRIMARY KEY AUTOINCREMENT,value TEXT);INSERT INTO records(value) VALUES('synthetic-only'); INSERT INTO records(id,value) VALUES(99,'deleted');DELETE FROM records WHERE id=99;");
+  db.exec("CREATE TABLE pictures(id INTEGER PRIMARY KEY,image BLOB); INSERT INTO pictures VALUES(1,zeroblob(160000));");
   const snapshot=exportDatabase(db);db.close();
   database=(await call(root,{name:'tickets-synthetic-return-'+process.env.GITHUB_RUN_ID})).uuid;
   const endpoint=root+'/'+database+'/import';

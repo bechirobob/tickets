@@ -19,3 +19,4 @@ jobs:
       - env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node ops/handover/diagnose-d1-return.mjs
+# Include a representative large binary poster in the synthetic export.
