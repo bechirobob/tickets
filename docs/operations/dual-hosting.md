@@ -143,3 +143,33 @@ data transfer, freeze or traffic switch is claimed by these preparation changes.
 - Next: complete configuration collection after the verified entrypoint is
   live; release and run encrypted Room snapshot/restore; then implement and
   verify the final writer freeze, bidirectional handover and origin switch.
+
+### Original credentials transferred and provider reads verified
+
+Configuration release `0a74c92c9f3b5e3aeea9d7b666cf215ea3bf14b6` deployed
+successfully in `36506723913`; live privacy/public-route/unsigned-webhook checks
+passed. Encrypted collection `36506762582` and Hermes import `36506844988`
+succeeded. All 22 allowlisted settings are staged root-only at
+`/etc/becore-tickets/runtime.pending.json` (0600). Temporary collector and
+handover settings were removed. The source push and Wallet identities remain
+unchanged; no credentials were printed or stored unencrypted in artifacts.
+
+Provider preflight `36507340324` on Hermes confirmed matching original VAPID
+keys, Paystack authenticated read HTTP 200, Resend authenticated read HTTP 200
+and verified sending domain, and both stored Seev references matching amount
+and currency. No charges, email sends or database mutations occurred. Initial
+probe `36507249724` failed because the probe assumed a raw EC key; the existing
+web-push-neo library uses PKCS8. The corrected probe handles both representations
+without changing the original key.
+
+Photo moderation is a Cloudflare AI binding, not an exportable credential.
+The next increment adds a dedicated HMAC-authenticated moderation gateway using
+the existing model and policy, with a fixed destination, bounded image body,
+short signature lifetime and no caller-selected model/prompt. A new gateway-only
+key is encrypted for Hermes; no broad Cloudflare operator token is placed on the
+VPS. This retains the existing Cloudflare AI service and its quota; it does not
+claim to remove provider limits. The gateway and runtime change are not yet live.
+
+SQL source-writer guards have synthetic persistence/mutation/exclusive-release
+tests, but are preparation helpers only: no live freeze, final consistent
+snapshot, reverse cutover or public routing switch has taken place.
