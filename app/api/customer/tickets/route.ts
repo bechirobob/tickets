@@ -2,6 +2,10 @@ import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 import { createGateToken, formatGateCode, gateQrPayload, hashGateToken } from "../../../../lib/gate-pass";
 import { mutationHasValidOrigin } from "../../../../lib/admin-session";
 
+// Formatters contain no guest data and can be shared across private requests.
+const eventDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Africa/Accra" });
+const eventTime = new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" });
+
 type TicketRow = {
   roomAccess: number;
   ticketId: string;
@@ -118,7 +122,7 @@ export async function POST(request: Request) {
       roomBadge: ticket.roomBadge === "VIP" ? "VIP" : null,
       event: ticket.eventTitle && ticket.eventStartsAt && ticket.eventEndsAt ? {
         title: ticket.eventTitle,
-        date: `${new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} · ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventStartsAt))} — ${new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(ticket.eventEndsAt))}`,
+        date: `${eventDate.format(new Date(ticket.eventStartsAt))} · ${eventTime.format(new Date(ticket.eventStartsAt))} — ${eventTime.format(new Date(ticket.eventEndsAt))}`,
         venue: `${ticket.eventVenue}, ${ticket.eventArea}`,
         state: ticket.eventState ?? "",
       } : null,

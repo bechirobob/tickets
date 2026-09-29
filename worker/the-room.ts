@@ -36,6 +36,8 @@ type RoomMessage = {
   reactions: Array<{ emoji: string; count: number; mine: boolean }>;
 };
 
+type StoredRoomMessage = Omit<RoomMessage, "pinned" | "reactions"> & { pinned: number };
+
 type RoomPolicyInput = {
   eventSlug: string;
   eventTitle: string;
@@ -63,6 +65,7 @@ function requiredHeader(request: Request, name: string): string {
 
 export class TheRoom extends DurableObject<Cloudflare.Env> {
   private presencePending = false;
+  private recentMessages: StoredRoomMessage[] | null = null;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
@@ -118,55 +121,60 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }
 
     try {
-      const attendeeId = requiredHeader(request, "x-bct-attendee-id");
-      const displayName = decodeURIComponent(requiredHeader(request, "x-bct-display-name"));
-      const roomBadge = request.headers.get("x-bct-room-badge") === "VIP" ? "VIP" : null;
-      const blocked = request.headers.get("x-bct-blocked-attendees")?.split(",").filter(Boolean) ?? [];
-      const policy: RoomPolicyInput = {
-        eventSlug: requiredHeader(request, "x-bct-event-slug"),
-        eventTitle: decodeURIComponent(requiredHeader(request, "x-bct-event-title")),
-        startsAt: requiredHeader(request, "x-bct-starts-at"),
-        endsAt: requiredHeader(request, "x-bct-ends-at"),
-        readOnlyAt: requiredHeader(request, "x-bct-read-only-at"),
-        readOnly: request.headers.get("x-bct-read-only") === "1",
-        emergencyReadOnly: request.headers.get("x-bct-emergency-read-only") === "1",
-        slowModeSeconds: Number(request.headers.get("x-bct-slow-mode-seconds") ?? 0),
-        archived: request.headers.get("x-bct-archived") === "1",
-      };
-      this.configure(policy);
-      await this.scheduleFlashExpiry(policy);
-
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
-      const attachment: ConnectionState = {
-        attendeeId,
-        sessionId: requiredHeader(request,"x-bct-session-id"),
-        displayName: displayName.slice(0, 50),
-        role: "attendee",
-        roomBadge,
-        blockedAttendeeIds: blocked,
-        readOnly: policy.readOnly,
-        readOnlyAt: policy.readOnlyAt,
-        emergencyReadOnly: Boolean(policy.emergencyReadOnly),
-        slowModeSeconds: policy.slowModeSeconds ?? 0,
-        lastMessageAt: 0,
-        rateWindowStartedAt: Date.now(),
-        rateCount: 0,
-      };
-      server.serializeAttachment(attachment);
-      this.ctx.acceptWebSocket(server);
-      server.send(JSON.stringify({
-        type: "snapshot",
-        room: policy,
-        messages: this.readMessages(attachment, new URL(request.url).searchParams.get("announcement")?.slice(0,80) ?? ""),
-        online: this.ctx.getWebSockets().length,
-      }));
-      this.schedulePresence();
+      await this.acceptConnection(request, server);
       return new Response(null, { status: 101, webSocket: client });
     } catch (error) {
       console.error(JSON.stringify({ message: "room websocket rejected", error: error instanceof Error ? error.message : String(error) }));
       return new Response("Invalid room connection", { status: 400 });
     }
+  }
+
+  async acceptConnection(request: Request, server: WebSocket): Promise<void> {
+    if (request.headers.get("x-bct-room-authorized") !== "1") throw new Error("Unauthorized Room connection.");
+    const attendeeId = requiredHeader(request, "x-bct-attendee-id");
+    const displayName = decodeURIComponent(requiredHeader(request, "x-bct-display-name"));
+    const roomBadge = request.headers.get("x-bct-room-badge") === "VIP" ? "VIP" : null;
+    const blocked = request.headers.get("x-bct-blocked-attendees")?.split(",").filter(Boolean) ?? [];
+    const policy: RoomPolicyInput = {
+      eventSlug: requiredHeader(request, "x-bct-event-slug"),
+      eventTitle: decodeURIComponent(requiredHeader(request, "x-bct-event-title")),
+      startsAt: requiredHeader(request, "x-bct-starts-at"),
+      endsAt: requiredHeader(request, "x-bct-ends-at"),
+      readOnlyAt: requiredHeader(request, "x-bct-read-only-at"),
+      readOnly: request.headers.get("x-bct-read-only") === "1",
+      emergencyReadOnly: request.headers.get("x-bct-emergency-read-only") === "1",
+      slowModeSeconds: Number(request.headers.get("x-bct-slow-mode-seconds") ?? 0),
+      archived: request.headers.get("x-bct-archived") === "1",
+    };
+    this.configure(policy);
+    await this.scheduleFlashExpiry(policy);
+
+    const attachment: ConnectionState = {
+      attendeeId,
+      sessionId: requiredHeader(request,"x-bct-session-id"),
+      displayName: displayName.slice(0, 50),
+      role: "attendee",
+      roomBadge,
+      blockedAttendeeIds: blocked,
+      readOnly: policy.readOnly,
+      readOnlyAt: policy.readOnlyAt,
+      emergencyReadOnly: Boolean(policy.emergencyReadOnly),
+      slowModeSeconds: policy.slowModeSeconds ?? 0,
+      lastMessageAt: 0,
+      rateWindowStartedAt: Date.now(),
+      rateCount: 0,
+    };
+    server.serializeAttachment(attachment);
+    this.ctx.acceptWebSocket(server);
+    server.send(JSON.stringify({
+      type: "snapshot",
+      room: policy,
+      messages: this.readMessages(attachment, new URL(request.url).searchParams.get("announcement")?.slice(0,80) ?? ""),
+      online: this.ctx.getWebSockets().length,
+    }));
+    this.schedulePresence();
   }
 
   async webSocketMessage(socket: WebSocket, payload: string | ArrayBuffer): Promise<void> {
@@ -328,6 +336,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   async removeEventContent(): Promise<void> {
+    this.recentMessages = null;
     for (const socket of this.ctx.getWebSockets()) socket.close(1008, "Event removed");
     this.ctx.storage.sql.exec("DELETE FROM reactions; DELETE FROM messages; DELETE FROM room_config;");
     await this.ctx.storage.deleteAlarm();
@@ -335,6 +344,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
 
   async removePreviewContentBefore(before: string): Promise<void> {
     if (!Number.isFinite(Date.parse(before))) throw new Error("Invalid preview cutoff.");
+    this.recentMessages = null;
     const ids = this.ctx.storage.sql.exec<{id:string}>("SELECT id FROM messages WHERE datetime(created_at) < datetime(?)", before).toArray();
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec("DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE datetime(created_at) < datetime(?))", before);
@@ -347,6 +357,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   async removeMessage(messageId: string): Promise<boolean> {
     const found = this.messageExists(messageId);
     if (!found) return false;
+    this.recentMessages = null;
     this.ctx.storage.sql.exec("UPDATE messages SET deleted_at = ? WHERE id = ?", new Date().toISOString(), messageId);
     this.broadcast({ type: "message_removed", messageId });
     await this.env.DB.batch([
@@ -371,6 +382,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   clearPins(): number {
+    this.recentMessages = null;
     const result = this.ctx.storage.sql.exec("UPDATE messages SET pinned = 0 WHERE pinned = 1 AND deleted_at IS NULL");
     this.broadcast({ type: "pins_cleared" });
     return result.rowsWritten;
@@ -434,6 +446,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         ends_at = excluded.ends_at,
         read_only_at = excluded.read_only_at,
         updated_at = excluded.updated_at
+      WHERE room_config.event_title IS NOT excluded.event_title
+         OR room_config.starts_at IS NOT excluded.starts_at
+         OR room_config.ends_at IS NOT excluded.ends_at
+         OR room_config.read_only_at IS NOT excluded.read_only_at
     `, policy.eventSlug, policy.eventTitle, policy.startsAt, policy.endsAt, policy.readOnlyAt, new Date().toISOString());
   }
 
@@ -480,6 +496,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   private insertMessage(input: Omit<RoomMessage, "id" | "sequence" | "createdAt" | "deletedAt" | "reactions">): RoomMessage {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
+    this.recentMessages = null;
     const row = this.ctx.storage.sql.exec<{ sequence: number }>(`
       INSERT INTO messages (id, attendee_id, display_name, role, room_badge, kind, content, parent_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -489,25 +506,36 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   private readMessages(viewer: ConnectionState, announcementId = ""): RoomMessage[] {
-    const rows = this.ctx.storage.sql.exec<{
-      id: string; sequence: number; attendeeId: string; displayName: string; role: RoomRole; roomBadge: "VIP" | null;
-      kind: "message" | "announcement"; content: string; parentId: string | null;
-      pinned: number; createdAt: string; deletedAt: string | null;
-    }>(`
+    // Only shared message content is reused. Authorization, blocks and reactions
+    // are evaluated for each connection; every message mutation invalidates this.
+    const rows = (!announcementId && this.recentMessages) || this.ctx.storage.sql.exec<StoredRoomMessage>(`
       SELECT id, sequence, attendee_id AS attendeeId, display_name AS displayName, role, room_badge AS roomBadge, kind,
              content, parent_id AS parentId, pinned, created_at AS createdAt, deleted_at AS deletedAt
       FROM messages WHERE sequence IN (SELECT sequence FROM messages ORDER BY sequence DESC LIMIT 100)
         OR (id = ? AND kind = 'announcement' AND deleted_at IS NULL)
       ORDER BY sequence DESC
     `, announcementId).toArray().reverse();
-    return rows
-      .filter((row) => !viewer.blockedAttendeeIds.includes(row.attendeeId))
+    if (!announcementId) this.recentMessages = rows;
+    const visible = rows.filter((row) => !viewer.blockedAttendeeIds.includes(row.attendeeId));
+    const reactionsByMessage = new Map<string, Array<{ emoji: string; count: number; mine: number }>>();
+    // Load reactions once for this viewer's visible history, not once per message.
+    // Only two bindings are needed even when an older linked announcement is included.
+    if (visible.length) {
+      const reactions = this.ctx.storage.sql.exec<{ messageId: string; emoji: string; count: number; mine: number }>(`
+        SELECT message_id AS messageId, emoji, COUNT(*) AS count,
+               MAX(CASE WHEN attendee_id = ? THEN 1 ELSE 0 END) AS mine
+        FROM reactions WHERE message_id IN (SELECT value FROM json_each(?))
+        GROUP BY message_id, emoji ORDER BY emoji
+      `, viewer.attendeeId, JSON.stringify(visible.map(row => row.id))).toArray();
+      for (const reaction of reactions) {
+        const group = reactionsByMessage.get(reaction.messageId) ?? [];
+        group.push(reaction);
+        reactionsByMessage.set(reaction.messageId, group);
+      }
+    }
+    return visible
       .map((row) => {
-        const reactions = this.ctx.storage.sql.exec<{ emoji: string; count: number; mine: number }>(`
-          SELECT emoji, COUNT(*) AS count,
-                 MAX(CASE WHEN attendee_id = ? THEN 1 ELSE 0 END) AS mine
-          FROM reactions WHERE message_id = ? GROUP BY emoji ORDER BY emoji
-        `, viewer.attendeeId, row.id).toArray();
+        const reactions = reactionsByMessage.get(row.id) ?? [];
         return {
           ...row,
           content: row.deletedAt ? "Message removed" : row.content,
@@ -599,3 +627,4 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }
   }
 }
+

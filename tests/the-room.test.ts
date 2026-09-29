@@ -103,3 +103,30 @@ it('opens a linked host announcement even after it leaves the latest 100 message
   const snapshot=new Promise<{messages:Array<{id:string;content:string}>}>(resolve=>socket.addEventListener('message',event=>{const data=JSON.parse(String(event.data));if(data.type==='snapshot')resolve(data);}));
   socket.accept();try {const data=await snapshot;expect(data.messages).toHaveLength(101);expect(data.messages[0]).toMatchObject({id:first.id,content:'The original arrival instructions.'});}finally{socket.close(1000,'Test complete');}
 });
+
+it('refreshes reused history after pin, removal and cleanup changes, with per-viewer blocks', async () => {
+  const room=env.THE_ROOM.getByName(`history-refresh-${crypto.randomUUID()}`);
+  const snapshot=async (blocked='')=>{
+    const future=new Date(Date.now()+86400000).toISOString();
+    const response=await room.fetch(new Request('https://room.internal/socket',{headers:{
+      upgrade:'websocket','x-bct-room-authorized':'1','x-bct-session-id':'history-session','x-bct-attendee-id':'history-guest',
+      'x-bct-display-name':'Guest','x-bct-event-slug':policy.eventSlug,'x-bct-event-title':policy.eventTitle,
+      'x-bct-starts-at':new Date().toISOString(),'x-bct-ends-at':future,'x-bct-read-only-at':future,
+      'x-bct-blocked-attendees':blocked,
+    }}));
+    const socket=response.webSocket!;
+    const result=new Promise<{messages:Array<{id:string;attendeeId:string;content:string;pinned:boolean}>}>(resolve=>socket.addEventListener('message',event=>{const data=JSON.parse(String(event.data));if(data.type==='snapshot')resolve(data);}));
+    socket.accept();try{return await result;}finally{socket.close(1000,'Test complete');}
+  };
+  const first=await room.publishAnnouncement('Host','Original notice',true,policy);
+  expect((await snapshot()).messages[0]).toMatchObject({id:first.id,pinned:true});
+  expect((await snapshot('admin:Host')).messages).toEqual([]);
+  await room.clearPins();
+  expect((await snapshot()).messages[0].pinned).toBe(false);
+  await room.removeMessage(first.id);
+  expect((await snapshot()).messages[0].content).toBe('Message removed');
+  await room.publishAnnouncement('Host','New notice',false,policy);
+  expect((await snapshot()).messages).toHaveLength(2);
+  await room.removePreviewContentBefore('2099-01-01T00:00:00.000Z');
+  expect((await snapshot()).messages).toEqual([]);
+});
