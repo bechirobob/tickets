@@ -1,0 +1,30 @@
+name: Retire superseded scanner test runs
+on:
+  push:
+    branches: [ops/scanner-ci-cleanup]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os,json,urllib.request
+          root='https://api.github.com/repos/bechirobob/tickets/'
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'}
+          def api(path,method='GET'):
+              with urllib.request.urlopen(urllib.request.Request(root+path,headers=headers,method=method),timeout=20) as r:
+                  body=r.read()
+                  return json.loads(body) if body else None
+          old={'bb6a917d7c331a7c92a41de27a4c46747f4717e1','f4013c6c02336c3b52d2a1160158a96402c1a3b4'}
+          paths={'.github/workflows/candidate-checks.yml','.github/workflows/browser-audit.yml','.github/workflows/native-apps.yml','.github/workflows/iphone-layouts.yml'}
+          for run in api('actions/runs?per_page=100')['workflow_runs']:
+              if run['head_sha'] in old and run['event']=='pull_request' and run['path'] in paths and run['status']!='completed':
+                  api('actions/runs/'+str(run['id'])+'/cancel','POST')
+                  print('Cancelled superseded test run',run['id'])
+          PY
