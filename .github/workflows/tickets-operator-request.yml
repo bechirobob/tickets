@@ -1,4 +1,4 @@
-name: Activate existing verified Tickets snapshot with corrected Host probe
+name: Activate existing verified Tickets snapshot with complete managed fallback rule
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      TICKETS_OPERATOR_HEAD: '017a1258e0595b2aa7683b0c41e4e93c042da122'
+      TICKETS_OPERATOR_HEAD: 'e731f65534a2fcb7132a0eca8dbf81ce9f6cf0c8'
       TICKETS_REVISION: '8a46eeaae8296ab588104ea2406f5287c08e5fb6'
       TICKETS_RUNTIME_RUN: '36566932648'
       TICKETS_DEPLOY_RUN: '36566932507'
