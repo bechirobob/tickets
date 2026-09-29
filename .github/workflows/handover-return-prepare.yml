@@ -33,3 +33,5 @@ jobs:
 # Preserve numeric provider error codes nested inside an error string.
 # Decode string-valued provider codes and nested message templates safely.
 # Identify provider error variant field names without printing error payloads.
+
+# Import schema, rows and triggers separately, with unchanged exact-state digests.
