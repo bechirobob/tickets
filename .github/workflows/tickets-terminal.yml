@@ -1,4 +1,4 @@
-name: Inspect three remaining Tickets invocation records
+name: Complete scheduled invocation evidence
 on:
   push:
     branches: [ops/tickets-terminal-observer]
@@ -8,7 +8,7 @@ permissions:
 jobs:
   install:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -20,4 +20,6 @@ jobs:
       - name: Install private terminal observer without changing application code or routing
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node ops/handover-terminal/reconcile.mjs
+        run: |
+          node ops/handover-terminal/install.mjs
+          node ops/handover-terminal/reconcile.mjs
