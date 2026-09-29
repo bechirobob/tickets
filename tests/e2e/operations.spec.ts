@@ -652,19 +652,26 @@ test('gate camera survives scan results, repeated starts and camera failure', as
   await page.addInitScript(() => {
     const state = { denied: false, streams: [] as MediaStream[] };
     Object.assign(window, { gateCameraTest: state });
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: true, value: async () => {
+    const mediaDevices = { getUserMedia: async () => {
       if (state.denied) throw new DOMException('Camera unavailable', 'NotAllowedError');
+      try {
       const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
+      canvas.style.cssText = 'position:fixed;left:-1000px;top:0'; document.body.appendChild(canvas);
       const context = canvas.getContext('2d')!; context.fillStyle = 'white'; context.fillRect(0, 0, 640, 480);
       const stream = canvas.captureStream(10); state.streams.push(stream);
       const timer = window.setInterval(() => {
-        if (stream.getVideoTracks()[0]?.readyState === 'ended') { clearInterval(timer); return; }
+        if (stream.getVideoTracks()[0]?.readyState === 'ended') { clearInterval(timer); canvas.remove(); return; }
+        context.fillStyle = Date.now() % 2 ? 'white' : '#fefefe';
         context.fillRect(0, 0, 640, 480);
       }, 100);
       return stream;
-    } });
+      } catch (error) { console.error('Camera fixture failed:', String(error)); throw error; }
+    } };
+    // Use a stable API object: WebKit can replace its native mediaDevices wrapper.
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, get: () => mediaDevices });
   });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (/^(Camera fixture failed:|Ticket camera could not start)/.test(message.text())) console.error(message.text()); });
   let outcome = 'unavailable';
   let holdStats = false;
   const statsGate: { release?: () => Promise<void> } = {};
@@ -680,7 +687,11 @@ test('gate camera survives scan results, repeated starts and camera failure', as
   await expect(page.getByText('Door list saved', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Start camera', exact: true }).click();
   const video = page.locator('.scan-frame video');
-  await expect.poll(() => video.evaluate(v => (v as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  try { await expect.poll(() => video.evaluate(v => (v as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2); }
+  catch (error) {
+    console.error('Scanner startup evidence', await page.evaluate(() => ({ secure: isSecureContext, media: typeof navigator.mediaDevices, camera: String(navigator.mediaDevices?.getUserMedia).slice(0,150), fixture: (window as unknown as {gateCameraTest: {denied:boolean; streams:MediaStream[]}}).gateCameraTest?.streams.map(stream => stream.getVideoTracks().map(track => ({label:track.label,state:track.readyState}))) })), errors);
+    throw error;
+  }
   await video.evaluate(v => Object.assign(window, { originalGateVideo: v }));
   for (const [result, heading] of [['unavailable', 'Entry is paused'], ['valid', 'You’re in'], ['duplicate', 'Already admitted']]) {
     outcome = result; holdStats = result === 'valid'; statsGate.release = undefined;
