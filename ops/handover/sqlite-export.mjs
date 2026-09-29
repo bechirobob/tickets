@@ -86,7 +86,16 @@ function exportSnapshot(db) {
       if (tables.some(table => table.name === row.name)) statements.push(`INSERT INTO sqlite_sequence(name,seq) VALUES(${literal(row.name)},${literal(row.seq)});`);
     }
   }
+  // D1 can reset when schema creation and private-data import share one job.
+  // Keep independently committed phases on a disposable, inactive destination.
+  // Indexes must exist before rows for foreign-key parent uniqueness; triggers
+  // must follow rows so restoration cannot duplicate application side effects.
+  const phases = {
+    schema: [...tables.map(row => row.sql + ';'), ...['index', 'view'].flatMap(type => schema.filter(row => row.type === type).map(row => row.sql + ';'))].join('\n') + '\n',
+    data: ['PRAGMA defer_foreign_keys=TRUE;', ...statements.slice(1 + tables.length)].join('\n') + '\n',
+    triggers: ['SELECT 1;', ...schema.filter(row => row.type === 'trigger').map(row => row.sql + ';')].join('\n') + '\n',
+  };
   for (const type of ['index', 'view', 'trigger']) statements.push(...schema.filter(row => row.type === type).map(row => row.sql + ';'));
   if (statements.some(sql => Buffer.byteLength(sql) > maxStatementBytes)) throw new Error('Schema or row cannot fit bounded SQL export.');
-  return { sql: statements.join('\n') + '\n', evidence, schema, sequences: sequences.map(row => ({ name: row.name, seq: String(row.seq) })) };
+  return { sql: statements.join('\n') + '\n', phases, evidence, schema, sequences: sequences.map(row => ({ name: row.name, seq: String(row.seq) })) };
 }

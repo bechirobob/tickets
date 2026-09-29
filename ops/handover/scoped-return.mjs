@@ -35,35 +35,45 @@ try {
     const created = await call(root, 'POST', { name: 'tickets-return-' + process.env.GITHUB_RUN_ID });
     assert.match(created.uuid, /^[a-f0-9-]{36}$/); assert.notEqual(created.uuid, '8f8723c2-673a-4aba-b025-83c05d67d075'); database = created.uuid;
     phase = 'prepare-upload';
-    const result = await call(root + '/' + database + '/import', 'POST', { action: 'init', etag: expected.sqlMD5 });
-    const url = new URL(result.upload_url); assert.equal(url.protocol, 'https:'); assert.ok(url.hostname.endsWith('.r2.cloudflarestorage.com'));
+    assert.deepEqual(Object.keys(expected.phases), ['schema','data','triggers']);
+    const uploads = [];
+    for (const [name, part] of Object.entries(expected.phases)) {
+      assert.match(part.md5, /^[a-f0-9]{32}$/);
+      const result = await call(root + '/' + database + '/import', 'POST', { action: 'init', etag: part.md5 });
+      const url = new URL(result.upload_url); assert.equal(url.protocol, 'https:'); assert.ok(url.hostname.endsWith('.r2.cloudflarestorage.com'));
+      uploads.push({ name, filename: result.filename, uploadUrl: result.upload_url });
+    }
     const recipient = JSON.parse(readFileSync('ops/handover/recipient.json', 'utf8'));
     assert.equal(createHash('sha256').update(Buffer.from(recipient.publicKey, 'base64')).digest('hex'), recipient.fingerprint);
-    const manifest = { runId: process.env.GITHUB_RUN_ID, database, filename: result.filename, expected };
-    const envelope = await sealHandover({ HANDOVER_RECIPIENT_SPKI: recipient.publicKey, HANDOVER_EXPIRES_AT: new Date(Date.now() + 55 * 60000).toISOString() }, 'return-upload', { ...manifest, uploadUrl: result.upload_url });
+    const manifest = { runId: process.env.GITHUB_RUN_ID, database, parts: uploads.map(({ name, filename }) => ({ name, filename })), expected };
+    const envelope = await sealHandover({ HANDOVER_RECIPIENT_SPKI: recipient.publicKey, HANDOVER_EXPIRES_AT: new Date(Date.now() + 55 * 60000).toISOString() }, 'return-upload', { ...manifest, uploads });
     mkdirSync('scoped-return', { mode: 0o700 });
     writeFileSync('scoped-return/upload.json', JSON.stringify(envelope), { mode: 0o600 });
     writeFileSync('scoped-return/manifest.json', JSON.stringify(manifest), { mode: 0o600 });
     retained = true;
-    console.log(JSON.stringify({ temporaryDatabasePrepared: database, scope: 'one SQL upload', broadCredentialsTransferred: false }));
+    console.log(JSON.stringify({ temporaryDatabasePrepared: database, scope: 'three phased SQL uploads to one isolated database', broadCredentialsTransferred: false }));
   } else if (mode === 'verify') {
     const manifest = JSON.parse(readFileSync(file, 'utf8'));
     assert.match(manifest.database, /^[a-f0-9-]{36}$/); assert.match(manifest.runId, /^\d+$/);
     assert.notEqual(manifest.database, '8f8723c2-673a-4aba-b025-83c05d67d075');
     const info = await call(root + '/' + manifest.database, 'GET');
     assert.equal(info.name, 'tickets-return-' + manifest.runId); database = manifest.database;
-    phase = 'ingest';
+    assert.deepEqual(manifest.parts.map(part => part.name), ['schema','data','triggers']);
     const endpoint = root + '/' + database + '/import';
-    let result = await call(endpoint, 'POST', { action: 'ingest', etag: manifest.expected.sqlMD5, filename: manifest.filename });
-    console.log(JSON.stringify({ importResponseKeys: Object.keys(result ?? {}), importStatus: result?.status, bookmarkPresent: Boolean(result?.at_bookmark) }));
-    if (result.success === false || result.error) { safeFailure(result); throw new Error('Import rejected.'); }
-    for (let attempt = 0; attempt < 60 && result.status !== 'complete'; attempt++) {
-      if (result.status === 'error') { safeFailure(result); throw new Error('Import failed.'); } assert.ok(result.at_bookmark);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      result = await call(endpoint, 'POST', { action: 'poll', current_bookmark: result.at_bookmark });
+    for (const part of manifest.parts) {
+      phase = 'ingest-' + part.name;
+      let result = await call(endpoint, 'POST', { action: 'ingest', etag: manifest.expected.phases[part.name].md5, filename: part.filename });
+      console.log(JSON.stringify({ phase, importResponseKeys: Object.keys(result ?? {}), importStatus: result?.status, bookmarkPresent: Boolean(result?.at_bookmark) }));
       if (result.success === false || result.error) { safeFailure(result); throw new Error('Import rejected.'); }
+      for (let attempt = 0; attempt < 60 && result.status !== 'complete'; attempt++) {
+        if (result.status === 'error') { safeFailure(result); throw new Error('Import failed.'); } assert.ok(result.at_bookmark);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        result = await call(endpoint, 'POST', { action: 'poll', current_bookmark: result.at_bookmark });
+        if (result.success === false || result.error) { safeFailure(result); throw new Error('Import rejected.'); }
+      }
+      assert.equal(result.status, 'complete');
+      console.log(JSON.stringify({ importedPhase: part.name, productionChanged: false }));
     }
-    assert.equal(result.status, 'complete');
     phase = 'foreign-keys'; assert.deepEqual(await query('PRAGMA foreign_key_check'), []);
     phase = 'schema';
     const schema = await query("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*' ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,name");

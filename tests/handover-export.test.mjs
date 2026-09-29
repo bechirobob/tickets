@@ -67,3 +67,24 @@ test('large posters and text restore exactly without oversized SQL or partial ap
     assert.equal(target.prepare("SELECT name FROM sqlite_master WHERE name='_bct_export_large_values'").get(), undefined);
   } finally { source.close(); target.close(); }
 });
+
+test('independent D1 import phases preserve references, indexes and trigger side effects', () => {
+  const source = new DatabaseSync(':memory:'), target = new DatabaseSync(':memory:');
+  try {
+    source.exec(`CREATE TABLE parent(id INTEGER PRIMARY KEY, code TEXT);
+      CREATE UNIQUE INDEX parent_code ON parent(code);
+      CREATE TABLE child(id INTEGER PRIMARY KEY, code TEXT REFERENCES parent(code));
+      CREATE TABLE audit(id INTEGER);
+      CREATE TRIGGER child_audit AFTER INSERT ON child BEGIN INSERT INTO audit VALUES(NEW.id); END;
+      INSERT INTO parent VALUES(1,'parent'); INSERT INTO child VALUES(2,'parent');`);
+    const snapshot = exportDatabase(source);
+    assert.deepEqual(Object.keys(snapshot.phases), ['schema','data','triggers']);
+    for (const sql of Object.values(snapshot.phases)) {
+      target.exec('BEGIN'); target.exec(sql); target.exec('COMMIT');
+    }
+    assert.deepEqual(exportDatabase(target), snapshot);
+    assert.equal(target.prepare('SELECT count(*) AS n FROM audit').get().n, 1);
+    target.exec("INSERT INTO child VALUES(3,'parent')");
+    assert.equal(target.prepare('SELECT count(*) AS n FROM audit').get().n, 2);
+  } finally { source.close(); target.close(); }
+});

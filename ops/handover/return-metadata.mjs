@@ -11,7 +11,7 @@ export function restoredReturnSnapshot() {
 }
 export function returnMetadata(snapshot) {
   const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-  return { sqlMD5: createHash('md5').update(snapshot.sql).digest('hex'), evidenceSHA256: sha(snapshot.evidence), schemaSHA256: sha(snapshot.schema), sequencesSHA256: sha(snapshot.sequences), tables: Object.keys(snapshot.evidence).length, rows: Object.values(snapshot.evidence).reduce((sum, row) => sum + row.rows, 0) };
+  return { sqlMD5: createHash('md5').update(snapshot.sql).digest('hex'), phases: Object.fromEntries(Object.entries(snapshot.phases).map(([name, sql]) => [name, { md5: createHash('md5').update(sql).digest('hex'), bytes: Buffer.byteLength(sql) }])), evidenceSHA256: sha(snapshot.evidence), schemaSHA256: sha(snapshot.schema), sequencesSHA256: sha(snapshot.sequences), tables: Object.keys(snapshot.evidence).length, rows: Object.values(snapshot.evidence).reduce((sum, row) => sum + row.rows, 0) };
 }
 if (process.argv[2] === '--inspect') {
   try { console.log(JSON.stringify({ returnMetadata: returnMetadata(restoredReturnSnapshot()) })); }
