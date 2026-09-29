@@ -32,6 +32,8 @@ jobs:
           console.log(JSON.stringify({readOnly:true,admission:await query('SELECT phase,transfer_id,paused_at FROM _bct_handover_admission'),operations:await query('SELECT kind,COUNT(*) AS count,MIN(started_at) AS oldest,MAX(started_at) AS newest FROM _bct_handover_operations GROUP BY kind')}));
           const telemetry=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:'tickets-handover-diagnose',timeframe:{from:Date.parse('2026-09-29T10:11:00Z'),to:Date.parse('2026-09-29T10:15:00Z')},view:'events',limit:1000,parameters:{filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'becore-tickets'}]}});
           console.log(JSON.stringify({telemetryKeys:Object.keys(telemetry),eventsKeys:telemetry.events&&Object.keys(telemetry.events),sampleKeys:telemetry.events?.events?.[0]&&Object.keys(telemetry.events.events[0])}));
+          const events=telemetry.events.events;
+          console.log(JSON.stringify({eventCount:telemetry.events.count,returned:events.length,workerKeys:events[0]?.$workers&&Object.keys(events[0].$workers),sourceKeys:events[0]?.source&&Object.keys(events[0].source),metadataKeys:events[0]?.$metadata&&Object.keys(events[0].$metadata),sample:events.slice(0,3).map(e=>({timestamp:e.timestamp,worker:e.$workers?{outcome:e.$workers.outcome,eventType:e.$workers.eventType,wallTimeMs:e.$workers.wallTimeMs,cpuTimeMs:e.$workers.cpuTimeMs}:null}))}));
           const serialized=JSON.stringify(telemetry);
           console.log(JSON.stringify({categories:Object.fromEntries(['waitUntil','cancelled','Illegal invocation','Cannot perform','Response Stream Disconnected','exceeded','error'].map(s=>[s,serialized.split(s).length-1]))}));
           NODE
