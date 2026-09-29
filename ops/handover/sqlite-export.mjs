@@ -38,10 +38,28 @@ function exportSnapshot(db) {
   const tables = schema.filter(row => row.type === 'table');
   if (tables.some(row => /^CREATE VIRTUAL TABLE/i.test(row.sql))) throw new Error('Virtual tables require a dedicated export.');
   if (tables.some(row => row.name === stagingTable)) throw new Error('Export staging table already exists.');
+  // D1 bulk imports may commit between statements. A deferred constraint at
+  // the start of the file therefore cannot make child-before-parent inserts
+  // safe. Order populated tables by their actual foreign-key dependencies.
+  const dataTables = [], visiting = new Set(), visited = new Set();
+  const byName = new Map(tables.map(table => [table.name, table]));
+  function visit(table) {
+    if (visited.has(table.name)) return;
+    if (visiting.has(table.name)) throw new Error('Cyclic foreign keys require a dedicated data import.');
+    visiting.add(table.name);
+    const populated = db.prepare(`SELECT 1 FROM ${quote(table.name)} LIMIT 1`).get();
+    if (populated) for (const reference of db.prepare(`PRAGMA foreign_key_list(${quote(table.name)})`).all()) {
+      const parent = byName.get(reference.table);
+      if (!parent) throw new Error('Foreign key references an excluded table.');
+      visit(parent);
+    }
+    visiting.delete(table.name); visited.add(table.name); dataTables.push(table);
+  }
+  for (const table of tables) visit(table);
   const statements = ['PRAGMA defer_foreign_keys=TRUE;', ...tables.map(row => row.sql + ';')];
   let stagingCreated = false;
   const evidence = {};
-  for (const table of tables) {
+  for (const table of dataTables) {
     const columns = db.prepare(`PRAGMA table_xinfo(${quote(table.name)})`).all().filter(row => row.hidden === 0).map(row => row.name);
     evidence[table.name] = { columns, ...digestRows(db.prepare(tableDigestQuery(table.name, columns)).all(), columns) };
     const query = db.prepare(`SELECT * FROM ${quote(table.name)}`); query.setReadBigInts(true);
@@ -97,5 +115,5 @@ function exportSnapshot(db) {
   };
   for (const type of ['index', 'view', 'trigger']) statements.push(...schema.filter(row => row.type === type).map(row => row.sql + ';'));
   if (statements.some(sql => Buffer.byteLength(sql) > maxStatementBytes)) throw new Error('Schema or row cannot fit bounded SQL export.');
-  return { sql: statements.join('\n') + '\n', phases, evidence, schema, sequences: sequences.map(row => ({ name: row.name, seq: String(row.seq) })) };
+  return { sql: statements.join('\n') + '\n', phases, evidence: Object.fromEntries(tables.map(table => [table.name, evidence[table.name]])), schema, sequences: sequences.map(row => ({ name: row.name, seq: String(row.seq) })) };
 }

@@ -88,3 +88,18 @@ test('independent D1 import phases preserve references, indexes and trigger side
     assert.equal(target.prepare('SELECT count(*) AS n FROM audit').get().n, 2);
   } finally { source.close(); target.close(); }
 });
+
+test('parent rows precede children even when D1 commits every imported statement', () => {
+  const source = new DatabaseSync(':memory:'), target = new DatabaseSync(':memory:');
+  try {
+    source.exec(`CREATE TABLE z_parent(id TEXT PRIMARY KEY);
+      CREATE TABLE a_child(id TEXT PRIMARY KEY, parent_id TEXT REFERENCES z_parent(id));
+      INSERT INTO z_parent VALUES('p'); INSERT INTO a_child VALUES('c','p');`);
+    const snapshot = exportDatabase(source);
+    target.exec(snapshot.phases.schema);
+    for (const sql of snapshot.phases.data.split('\n').filter(Boolean)) target.exec(sql);
+    target.exec(snapshot.phases.triggers);
+    assert.deepEqual(exportDatabase(target), snapshot);
+    assert.deepEqual(target.prepare('PRAGMA foreign_key_check').all(), []);
+  } finally { source.close(); target.close(); }
+});
