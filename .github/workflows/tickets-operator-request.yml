@@ -1,4 +1,4 @@
-name: Finish prepared Tickets transfer with verified terminal evidence
+name: Restore source after inactive Tickets readiness failure
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -70,43 +70,6 @@ jobs:
               raise RuntimeError('Dispatch response was lost; inspect existing runs, never blindly replay.')
           
           assert_main()
-          wait_run(runtime_run)
-          wait_run(deploy_run)
-          print(json.dumps({'revision':revision,'runtimeVerifiedRun':runtime_run}),flush=True)
-          wait_run(36567312960)
-          print('Reusing verified installation 36567312960; no rebuild or reinstall.',flush=True)
-          wait_run(36568774958)
-          from datetime import datetime
-          prepared_done=datetime.fromisoformat(api('actions/runs/36568774958')['updated_at'].replace('Z','+00:00')).timestamp()
-          remaining=max(0,prepared_done+16*60-time.time())
-          print(json.dumps({'reusedPreparation':36568774958,'remainingDrainSeconds':round(remaining)}),flush=True)
-          time.sleep(remaining)
-          terminal_runs=api('actions/runs?head_sha=60333a41ff793860cc1c8aba13e39f6dad5e2ac4&per_page=10')['workflow_runs']
-          assert any(r['path']=='.github/workflows/tickets-terminal.yml' and r['conclusion']=='success' for r in terminal_runs), 'Exact scheduled terminal evidence gate did not pass.'
-          dispatch('tickets-handover.yml', {'mode':'capture','revision':revision})
-          dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})
-          try:
-              health=None
-              for attempt in range(24):
-                  try:
-                      with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com/healthz',headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'application/json'}),timeout=10) as response:
-                          health=json.load(response)
-                      if health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True:
-                          break
-                  except Exception:
-                      pass
-                  time.sleep(5)
-              assert health and health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True
-              for path in ['/', '/events', '/my-nights', '/api/public/events']:
-                  with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'text/html,application/json'}),timeout=20) as response:
-                      assert response.status==200
-                      response.read()
-              print(json.dumps({'publicVpsVerified':True,'revision':revision,'routesVerified':4}),flush=True)
-          except Exception:
-              print('Public verification failed after activation; returning fresh VPS state through the verified rollback.',flush=True)
-              dispatch('tickets-handover.yml', {'mode':'rollback','revision':revision})
-              raise
-          backup=dispatch('tickets-backup.yml', {})
-          browser=dispatch('browser-audit.yml', {})
-          print(json.dumps({'complete':True,'revision':revision,'backupRun':backup,'browserRun':browser,'writer':'vps','host':'hermes'}),flush=True)
+          dispatch('tickets-handover.yml', {'mode':'abort','revision':revision})
+          print('Source restored after inactive VPS readiness failure; no writer transfer occurred.',flush=True)
           PY
