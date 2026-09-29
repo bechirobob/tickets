@@ -440,3 +440,103 @@ successful switch keeps the old source fenced; reverse transfer uses a fresh D1.
 No customer data is deleted, no providers are replayed, and no BubbleWash resource
 is touched. This replaces missing lifecycle evidence with enforced write
 exclusion and explicit side-effect reconciliation, not time-based expiry.
+
+
+### Active completion job — 29 September 2026
+
+PR #196 passed all three candidate browser jobs in run 36559523736 and merged
+as 18d1a08e0e77f862870aecd6b9fbcec4705c3bb8. Its tree matches tested candidate
+85ce0a16d59bcaa606737b9750d78b325c25f1ec exactly. Production durable-work inspection
+36560462791 returned zero for all twelve counters; source remains Cloudflare
+until the guarded activation stage.
+
+**Do not restart setup or replay a transfer.** Inspect completion run
+36561390383 first (workflow on branch ops/tickets-operator-request).
+It waits for exact-release runtime verification 36561278089 and source
+deployment 36561278033, then dispatches the existing main-only installer,
+prepare, the required 16-minute drain, capture with verified off-host backup,
+activate, public health/route checks, production backup and browser verification.
+Every dispatched run ID is printed in the completion log. The authoritative
+Hermes journal is /var/lib/becore-tickets-handover/live-transfer.json.
+If a stage fails, inspect its logs and journal phase before any replay; recover
+paused/frozen state explicitly where needed. BubbleWash remains out of scope.
+
+
+Preparation run 36562005115 completed at 2026-09-29T11:29:26Z.
+Transfer 01b7d630-9512-4ddd-a6a9-d64d1591de73 is **prepared**; public source remains
+active on Cloudflare. Installer 36561619608 passed the 600-guest,
+72,000-delivery, restart and real-network checks with zero errors. The completion
+job 36561390383 is now in its required 16-minute wait, with capture
+expected around 11:46 UTC. Do not dispatch another prepare or capture while
+that completion job is active. Inspect its run log for automatically dispatched
+capture/activation/backup/browser runs.
+
+
+## Recovery correction — 2026-09-29 11:54 UTC
+Completion controller 36561390383 was cancelled before capture after detecting
+fresh Cloudflare cancellation records. Source remains active; the prepared
+transfer 01b7d630-9512-4ddd-a6a9-d64d1591de73 and original 11:29 preparation time
+remain valid. Do not reinstall or re-arm tracking merely because chat disconnects.
+
+Private terminal observer installed in 36563124626 stops fresh accumulation.
+Exact platform invocation evidence retired 148 records in 36563513120, preserving
+the proof. Three explicitly identified records have incomplete platform logs
+(36564168953), so they are NOT claimed completed or expired. The same exclusive
+SQL fence, Room freeze, twelve terminal durable-work checks, preserved archive
+and abort restoration used for the original incident must reconcile them.
+Unknown records still block. Room freeze now recognizes the same exact incident
+inventory as source freeze; previously it incorrectly required zero before the
+source had archived the incident. Preparation can refresh a verified release
+while preserving the existing transfer and drain time, only while untouched and
+active on the same database with tracking still armed.
+
+Pending: candidate checks, release deployment/runtime artifact, install new
+release, refresh existing preparation, capture/backup/activate, public health,
+production backup and browser audit. Terminal utility source lives in branch
+ops/tickets-terminal-observer. BubbleWash remains untouched.
+
+
+## Verified release continuation — 2026-09-29
+PR 197 merged as 8a46eeaae8296ab588104ea2406f5287c08e5fb6; exact tree matches candidate ae1978d43ccf2041e5a46a1783e3cc82e9749512. Candidate run 36565172805 passed desktop Chromium, mobile Chromium and mobile WebKit, including organizer/owner workflows. Initial candidate failure was a local test harness trying to resolve the production-only Tail service; the isolated harness now excludes that service, and all checks passed after the fix.
+
+Completion controller on ops/tickets-operator-request waits for exact runtime 36566932648 and source deploy 36566932507, installs that verified artifact, refreshes the SAME prepared transfer (preserving its original tracking time), then captures with verified off-host backup, activates, checks public VPS health/routes, runs production backup and browser audit. Do not replay installation/preparation or create another transfer while it runs. Inspect its run and printed dispatched IDs first.
+
+
+## Post-capture recovery — 2026-09-29
+Capture 36567882191 safely aborted and resumed the source: exact inventory check
+found one outstanding **scheduled** record (not new HTTP records). Inspection
+36568398165 verified the original 116 digest plus the three known HTTP records,
+and scheduled operation 8c9aa595-7dd8-4e7b-8e73-01c5147d98a5 from 12:15:44.354Z.
+Terminal Tail evidence has already preserved 241 HTTP completions. Its scope is
+now extended to exact scheduled/queue kinds, with matching kind validation and
+five passing tests; retrospective retirement still requires exact platform
+request/version/terminal proof. Utility commit 731deb164e6f86a55ad2db05f5740270e7ae7709 must pass
+before capture resumes.
+
+Source is active; no transfer or data loss occurred. Release 8a46eeaae8296ab588104ea2406f5287c08e5fb6
+and installation 36567312960 are verified, including 600 guests, 72,000 deliveries
+with zero errors, 1,200 duplicate scan races and restart recovery. Do NOT rebuild
+or reinstall. The new completion workflow skips installation, prepares after the
+safe abort, observes the required 16-minute background drain, then captures,
+backs up, activates and verifies. Prior completion 36566999306 stopped after
+the safe capture failure. Never manually repeat active controller stages.
+
+
+Fresh preparation 36568774958 completed at 12:33:05 UTC. Its drain ends by
+12:49:05 UTC. The coordinator is replaced only to pin the corrected terminal
+utility gate (60333a41ff793860cc1c8aba13e39f6dad5e2ac4); it skips preparation and installation,
+reuses run 36568774958, and waits only the remaining original drain. The prior
+coordinator is cancelled by its shared concurrency group while sleeping.
+No source transfer stage is cancelled. Do not re-prepare.
+
+
+Current prepared transfer is f06e7454-ca03-4be1-bd14-c9ae43656ada; completion coordinator
+36568972159 is active. Terminal evidence run 36568919335 succeeded: the one
+scheduled record was matched to its exact platform completion and archived;
+119 records remain, exactly the recognized fenced incident inventory.
+No time-based expiry was used. Full isolated actual Worker/Room RPC rehearsal
+passed with 119 synthetic incident records: Room freeze, source SQL freeze,
+twelve durable-work checks, evidence preservation, late-write rejection, and
+abort restoring every obligation. Test source is tests/handover-incident-flow.test.mjs
+in ops/tickets-terminal-observer. Production capture is pending the original
+new preparation deadline of 12:49:05 UTC; do not reset it.
