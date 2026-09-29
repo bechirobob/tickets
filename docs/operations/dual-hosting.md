@@ -1,5 +1,60 @@
 # Cloudflare and VPS deployments
 
+## Operational check — 29 September 2026, 16:28 UTC
+
+Scope: focused post-launch runtime/integration check, reusing today's unchanged
+application candidate and VPS gates; not a newly repeated full visual audit.
+Live application remains `181bfc6801a4fc4c993dc0220af99bb3509e433d`.
+Owner additionally confirmed approved ticket access opens The Room correctly.
+
+Evidence: host/database run `36597096208`, public/integration check
+`36597395782`, read-only SeevPlus reconciliation `36597707986`,
+fresh encrypted off-host backup/full restore `36597708099`,
+historical-alert resolution `36597902283`.
+
+- Host: four CPU cores; 32% sampled CPU, load 1.39/1.43/1.45.
+  RAM total 7.57 GiB, available 4.77 GiB. Tickets service uses 80.14 MiB,
+  limit 1 GiB. No automatic service restarts since the scanner release.
+  No host OOM events in the last 24 hours. Memory pressure averages are zero;
+  no swap pages moved in the two-second follow-up sample.
+- Root disk: 71.60 GiB total, 19.88 GiB available. Tickets live state is about
+  3.7 MiB; 13 retained build directories occupy about 10.0 GiB. Existing nightly
+  retention is active, keeping protected/current rollback releases and a
+  48-hour grace period. No customer data or release packages were deleted.
+- Fixed stale release pointers: `current` now identifies the running
+  `181bfc6` release; `previous` identifies `8a46eea`. This aligns cleanup and
+  rollback metadata with the service without a restart. Future code releases
+  must atomically update these pointers as well as the systemd release.
+- Database quick_check passed; zero foreign-key violations. Delivery queue empty,
+  no pending refunds/payouts/campaigns, no overdue undeleted flashes, no recent
+  Tickets application or scheduled-operation errors.
+- Public health and five public routes passed. Unsigned admin-events access is
+  rejected with 403 (the endpoint's policy); unsigned check-in access is rejected
+  with 401. CSP, HSTS, nosniff and Permissions-Policy headers are present.
+- Live SeevPlus and Paystack credentials and email configuration are present.
+  Provider lookup confirmed the historical GH₵1 SeevPlus paid order is completed
+  with matching reference, amount, currency and environment. A separate expired
+  GH₵1 checkout remains pending/unpaid at the provider. No payment state was
+  changed, collection retried, refund issued, or message sent by this check.
+- Nine historical alerts were resolved with per-alert audit evidence: five
+  SeevPlus verification incidents, two old Cloudflare queue/D1 announcement
+  incidents and two old D1 flash-expiry incidents. Zero open alerts remain.
+  Original incident details remain recorded.
+- Six historical failed deliveries remain preserved: four operational alerts,
+  two guest-signup notifications to an organizer (not host-onboarding emails).
+  All failed before transactional email was configured. No resend was authorized
+  or attempted. Newer ticket recovery delivery succeeded after migration.
+- A fresh encrypted off-host backup and full restore passed on the active release.
+  Scheduled backups remain 01:45 UTC, seven local backups / 35-day off-host retention.
+
+Remaining boundaries: a real refund has not been verified by this check; no new
+paid transaction or campaign was sent. Automatic VPS-to-Cloudflare failover is
+not enabled under the current free-stack decision. Physical native-app/store
+acceptance remains separate from the owner-verified mobile web journey.
+Next product action: keep the event coming_soon until its genuine date is approved;
+before paid launch, perform an authorized payment/refund acceptance check.
+
+
 Owner confirmed the live scanner journey worked as intended at 17:13 Malabo on
 29 September 2026: admission, camera restart and duplicate rejection. Restoration
 run `36596164866` returned `sun-chasers-labadi` to its original `coming_soon` /
