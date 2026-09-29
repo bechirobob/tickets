@@ -1,4 +1,4 @@
-name: Complete installed Tickets handover after scheduled evidence
+name: Finish prepared Tickets transfer with verified terminal evidence
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -8,7 +8,7 @@ permissions:
   actions: write
 concurrency:
   group: tickets-live-completion
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   complete:
     runs-on: ubuntu-latest
@@ -75,10 +75,13 @@ jobs:
           print(json.dumps({'revision':revision,'runtimeVerifiedRun':runtime_run}),flush=True)
           wait_run(36567312960)
           print('Reusing verified installation 36567312960; no rebuild or reinstall.',flush=True)
-          dispatch('tickets-handover.yml', {'mode':'prepare','revision':revision})
-          print('Tracking armed. Waiting the required 16 minutes for earlier background invocations.',flush=True)
-          time.sleep(16*60)
-          terminal_runs=api('actions/runs?head_sha=731deb164e6f86a55ad2db05f5740270e7ae7709&per_page=10')['workflow_runs']
+          wait_run(36568774958)
+          from datetime import datetime
+          prepared_done=datetime.fromisoformat(api('actions/runs/36568774958')['updated_at'].replace('Z','+00:00')).timestamp()
+          remaining=max(0,prepared_done+16*60-time.time())
+          print(json.dumps({'reusedPreparation':36568774958,'remainingDrainSeconds':round(remaining)}),flush=True)
+          time.sleep(remaining)
+          terminal_runs=api('actions/runs?head_sha=60333a41ff793860cc1c8aba13e39f6dad5e2ac4&per_page=10')['workflow_runs']
           assert any(r['path']=='.github/workflows/tickets-terminal.yml' and r['conclusion']=='success' for r in terminal_runs), 'Exact scheduled terminal evidence gate did not pass.'
           dispatch('tickets-handover.yml', {'mode':'capture','revision':revision})
           dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})

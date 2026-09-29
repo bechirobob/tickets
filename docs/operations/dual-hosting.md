@@ -520,3 +520,11 @@ or reinstall. The new completion workflow skips installation, prepares after the
 safe abort, observes the required 16-minute background drain, then captures,
 backs up, activates and verifies. Prior completion 36566999306 stopped after
 the safe capture failure. Never manually repeat active controller stages.
+
+
+Fresh preparation 36568774958 completed at 12:33:05 UTC. Its drain ends by
+12:49:05 UTC. The coordinator is replaced only to pin the corrected terminal
+utility gate (60333a41ff793860cc1c8aba13e39f6dad5e2ac4); it skips preparation and installation,
+reuses run 36568774958, and waits only the remaining original drain. The prior
+coordinator is cancelled by its shared concurrency group while sleeping.
+No source transfer stage is cancelled. Do not re-prepare.
