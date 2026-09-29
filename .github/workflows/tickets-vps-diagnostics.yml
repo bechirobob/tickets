@@ -1,4 +1,4 @@
-name: Restore event after successful owner scanner test
+name: Tickets post-launch operational health check
 on:
   push:
     branches: [main]
@@ -6,13 +6,10 @@ on:
 permissions:
   contents: read
   id-token: write
-concurrency:
-  group: tickets-vps-handover
-  cancel-in-progress: false
 jobs:
-  restore:
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
@@ -20,16 +17,61 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Restore original event state and verify
+      - name: Inspect host resources and Tickets state without mutations
         run: |
           tailscale ssh root@hermes "python3 -" <<'PY'
-          import subprocess,sqlite3,json,pathlib
-          root=pathlib.Path('/var/lib/becore-tickets-handover/entry-test-36595703020')
-          subprocess.run(['/usr/bin/python3',str(root/'restore.py')],check=True)
-          old=json.loads((root/'state.json').read_text())['previous']
-          db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True)
-          row=db.execute('SELECT schedule_status,event_state FROM curated_event_records WHERE slug=?',(old['slug'],)).fetchone()
-          assert row==(old['schedule_status'],old['event_state']), 'Event changed separately; inspect before overwriting'
-          subprocess.run(['systemctl','stop','becore-tickets-entry-test-36595703020.timer'],check=True)
-          print(json.dumps({'event':old['slug'],'schedule':row[0],'state':row[1],'restored':True,'checkinsPreserved':True}))
+          import os,json,pathlib,sqlite3,subprocess,time,datetime,collections,re,urllib.request
+          def cmd(args):
+              p=subprocess.run(args,capture_output=True,text=True,timeout=30)
+              return p.stdout.strip()
+          def props(unit,keys):
+              return dict(x.split('=',1) for x in cmd(['systemctl','show',unit]+['--property='+k for k in keys]).splitlines() if '=' in x)
+          def sample():
+              a=list(map(int,pathlib.Path('/proc/stat').read_text().splitlines()[0].split()[1:]))
+              return sum(a[:8]),a[3]+a[4]
+          a=sample();time.sleep(1);b=sample()
+          mem={k:int(v.split()[0])*1024 for k,v in (line.split(':',1) for line in pathlib.Path('/proc/meminfo').read_text().splitlines())}
+          fs=os.statvfs('/')
+          result={'checkedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'cpuCores':os.cpu_count(),'load':os.getloadavg(),'cpuBusyPercent':round(100*(1-(b[1]-a[1])/max(1,b[0]-a[0])),1),'uptimeSeconds':float(pathlib.Path('/proc/uptime').read_text().split()[0]),'memory':{k:mem[k] for k in ['MemTotal','MemAvailable','SwapTotal','SwapFree']},'disk':{'total':fs.f_blocks*fs.f_frsize,'available':fs.f_bavail*fs.f_frsize,'inodeFree':fs.f_favail,'inodeTotal':fs.f_files}}
+          result['ticketsService']=props('becore-tickets.service',['ActiveState','SubState','NRestarts','MemoryCurrent','MemoryPeak','CPUUsageNSec','ActiveEnterTimestamp','WorkingDirectory','MemoryMax','MemoryHigh','TasksCurrent'])
+          result['edgeService']=props('caddy.service',['ActiveState','NRestarts'])
+          result['retentionTimer']=props('becore-tickets-retention.timer',['ActiveState','NextElapseUSecRealtime'])
+          req=urllib.request.Request('http://127.0.0.1:3119/healthz',headers={'Host':'tickets.becoreops.com'})
+          result['health']=json.load(urllib.request.urlopen(req,timeout=10))
+          result['ticketsStorageKiB']={}
+          for p in ['/var/lib/becore-tickets','/var/backups/becore-tickets','/srv/becore-tickets/releases','/var/lib/becore-tickets-handover']:
+              output=cmd(['du','-sk',p])
+              result['ticketsStorageKiB'][p]=int(output.split()[0]) if output else None
+          result['releasePointers']={n:str((pathlib.Path('/srv/becore-tickets')/n).resolve()) for n in ['current','previous'] if (pathlib.Path('/srv/becore-tickets')/n).is_symlink()}
+          backup=pathlib.Path('/var/backups/becore-tickets/offhost.json')
+          result['offhostBackup']=json.loads(backup.read_text()) if backup.exists() else None
+          result['backupRecordAgeHours']=round((time.time()-backup.stat().st_mtime)/3600,2) if backup.exists() else None
+          db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True,timeout=15)
+          db.row_factory=sqlite3.Row
+          db.execute('PRAGMA query_only=ON')
+          result['databaseQuickCheck']=[x[0] for x in db.execute('PRAGMA quick_check')]
+          result['foreignKeyViolationsByTable']=dict(collections.Counter(x[0] for x in db.execute('PRAGMA foreign_key_check')))
+          result['counts']={}
+          for table in ['orders','tickets','delivery_events','payment_refunds','payout_transfers','event_announcement_campaigns','marketing_campaigns','system_alerts']:
+              cols={x[1] for x in db.execute('PRAGMA table_info('+table+')')}
+              if 'status' in cols: result['counts'][table]=[dict(x) for x in db.execute('SELECT status,COUNT(*) AS count FROM '+table+' GROUP BY status')]
+          result['emailOutcomes']=[dict(x) for x in db.execute('SELECT kind,status,COUNT(*) AS count,MAX(updated_at) AS latest,MAX(attempt_count) AS maxAttempts FROM delivery_events GROUP BY kind,status')]
+          result['emailFailures']=[]
+          for row in db.execute("SELECT kind,failure_reason,attempt_count,created_at,updated_at FROM delivery_events WHERE status='failed' ORDER BY updated_at DESC LIMIT 20"):
+              x=dict(row);x['failure_reason']=re.sub(r'[\w.+-]+@[\w.-]+','[email]',str(x['failure_reason']))
+              x['failure_reason']=re.sub(r'https?://\S+','[url]',x['failure_reason'])[:350]
+              result['emailFailures'].append(x)
+          result['eventState']=[dict(x) for x in db.execute('SELECT slug,schedule_status,event_state,status FROM curated_event_records WHERE removed_at IS NULL AND status=\'published\'')]
+          ops=sqlite3.connect('file:/var/lib/becore-tickets/operations.sqlite?mode=ro',uri=True,timeout=15)
+          ops.row_factory=sqlite3.Row
+          ops.execute('PRAGMA query_only=ON')
+          result['queue']=dict(ops.execute('SELECT COUNT(*) AS total,MAX(attempts) AS maxAttempts,MIN(created) AS oldestCreated, SUM(CASE WHEN available<=? AND (lease IS NULL OR lease<=?) THEN 1 ELSE 0 END) AS ready FROM delivery_queue',(int(time.time()*1000),int(time.time()*1000))).fetchone())
+          logs=cmd(['journalctl','-u','becore-tickets.service','--since','2 hours ago','-o','json','--no-pager'])
+          messages=[json.loads(l).get('MESSAGE','') for l in logs.splitlines() if l.startswith('{')]
+          result['recentLogCounts']={name:sum(bool(re.search(pattern,m,re.I)) for m in messages) for name,pattern in {'scheduledFailures':'Scheduled Tickets operation failed','databaseLocked':'database is locked|SQLITE_BUSY','uncaughtErrors':'uncaught|unhandled|TypeError|ReferenceError','outOfMemory':'out of memory|oom-kill','errors':'error|failed|exception'}.items()}
+          result['recentLogEntries']=len(messages)
+          kernel=cmd(['journalctl','-k','--since','24 hours ago','--no-pager','-o','cat'])
+          result['hostOomEvents24h']=len(re.findall('Out of memory:|oom-kill:',kernel))
+          print(json.dumps(result))
+          
           PY
