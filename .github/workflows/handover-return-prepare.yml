@@ -28,3 +28,4 @@ jobs:
           retention-days: 1
 # Bounded SQL export verified on Hermes and on actual D1 with synthetic large blobs.
 # Collect safe phase diagnostics for the remaining private-data difference.
+# Handle immediate import rejection without a polling bookmark.

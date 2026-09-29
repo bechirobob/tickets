@@ -10,7 +10,7 @@ const quote = value => '"' + value.replaceAll('"', '""') + '"';
 let database, retained = false, phase = 'start';
 function safeFailure(value) {
   const text = JSON.stringify(value);
-  const categories = ['SQLITE_AUTH', 'SQLITE_CONSTRAINT', 'FOREIGN KEY', 'no such table', 'syntax error', 'not authorized', 'No uploaded file', 'does not exist', 'incomplete input', 'SQLITE_ERROR'].filter(term => text.toLowerCase().includes(term.toLowerCase()));
+  const categories = ['SQLITE_AUTH', 'SQLITE_CONSTRAINT', 'SQLITE_TOOBIG', 'FOREIGN KEY', 'no such table', 'syntax error', 'not authorized', 'No uploaded file', 'does not exist', 'incomplete input', 'already exists', 'unrecognized token', 'SQLITE_ERROR', 'too long', 'failed to parse', 'too many', 'constraint failed', 'no such column'].filter(term => text.toLowerCase().includes(term.toLowerCase()));
   console.error(JSON.stringify({ phase, errorCategories: categories, apiCodes: Array.isArray(value.errors) ? value.errors.map(row => row.code) : [] }));
 }
 async function call(url, method, body) {
@@ -51,10 +51,12 @@ try {
     const endpoint = root + '/' + database + '/import';
     let result = await call(endpoint, 'POST', { action: 'ingest', etag: manifest.expected.sqlMD5, filename: manifest.filename });
     console.log(JSON.stringify({ importResponseKeys: Object.keys(result ?? {}), importStatus: result?.status, bookmarkPresent: Boolean(result?.at_bookmark) }));
+    if (result.success === false || result.error) { safeFailure(result); throw new Error('Import rejected.'); }
     for (let attempt = 0; attempt < 60 && result.status !== 'complete'; attempt++) {
       if (result.status === 'error') { safeFailure(result); throw new Error('Import failed.'); } assert.ok(result.at_bookmark);
       await new Promise(resolve => setTimeout(resolve, 2000));
       result = await call(endpoint, 'POST', { action: 'poll', current_bookmark: result.at_bookmark });
+      if (result.success === false || result.error) { safeFailure(result); throw new Error('Import rejected.'); }
     }
     assert.equal(result.status, 'complete');
     phase = 'foreign-keys'; assert.deepEqual(await query('PRAGMA foreign_key_check'), []);

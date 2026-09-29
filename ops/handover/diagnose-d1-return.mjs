@@ -14,6 +14,7 @@ async function call(url,body,method='POST') {
 try {
   const db=new DatabaseSync(':memory:');
   for (const file of readdirSync('drizzle').filter(name=>name.endsWith('.sql')).sort()) db.exec(readFileSync('drizzle/'+file,'utf8'));
+  db.exec("CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL); INSERT INTO d1_migrations(name) VALUES('synthetic-migration.sql');");
   db.exec("CREATE TABLE records(id INTEGER PRIMARY KEY AUTOINCREMENT,value TEXT);INSERT INTO records(value) VALUES('synthetic-only'); INSERT INTO records(id,value) VALUES(99,'deleted');DELETE FROM records WHERE id=99;");
   db.exec("CREATE TABLE pictures(id INTEGER PRIMARY KEY,image BLOB); INSERT INTO pictures VALUES(1,zeroblob(160000));");
   const snapshot=exportDatabase(db);db.close();
@@ -24,6 +25,7 @@ try {
   const sent=await fetch(upload.upload_url,{method:'PUT',body:snapshot.sql,signal:AbortSignal.timeout(30000)});
   if(!sent.ok)throw new Error('Synthetic upload failed.');
   let result=await call(endpoint,{action:'ingest',etag,filename:upload.filename});
+  if(result.success===false || result.error) throw new Error('Synthetic import rejected: '+JSON.stringify(result));
   for(let attempt=0;attempt<30 && result.status!=='complete';attempt++) {
     if(result.status==='error')throw new Error('Synthetic import failed: '+result.error);
     if(!result.at_bookmark)throw new Error('Synthetic import response has no bookmark: '+JSON.stringify(result));
