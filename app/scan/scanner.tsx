@@ -9,7 +9,7 @@ import DoorDesk from "./door-desk";
 
 type EventOption = { slug: string; title: string; fullDate: string; venue: string };
 type GateTicket = { ticketId?: string; ticketType?: string; attendeeName?: string; checkedInAt?: string; checkedInGate?: string; eventSlug?: string; status?: string };
-type GateResult = { result?: "valid" | "invalid" | "duplicate" | "wrong_event"; error?: string; message?: string; ticket?: GateTicket };
+type GateResult = { result?: "valid" | "invalid" | "duplicate" | "wrong_event" | "unavailable"; error?: string; message?: string; ticket?: GateTicket };
 type TierStat = { ticketType: string; issued: number; checkedIn: number | null };
 type ManifestTicket = { ticketId: string; tokenHash: string; ticketType: string; status: string; attendeeName: string };
 type Manifest = { eventSlug: string; generatedAt: string; tickets: ManifestTicket[] };
@@ -38,7 +38,7 @@ async function tokenHash(token: string): Promise<string> {
 
 export default function Scanner({ actor, role, events }: { actor: string; role: StaffRole; events: EventOption[] }) {
   const [eventSlug, setEventSlug] = useState(events[0]?.slug ?? "");
-  const [mode, setMode] = useState<"ready" | "scanning" | "checking" | "valid" | "offline_saved" | "invalid" | "duplicate" | "wrong_event">("ready");
+  const [mode, setMode] = useState<"ready" | "scanning" | "checking" | "valid" | "offline_saved" | "invalid" | "duplicate" | "wrong_event" | "unavailable">("ready");
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [ticket, setTicket] = useState<GateTicket | undefined>();
@@ -53,6 +53,9 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
   const busyRef = useRef(false);
+  const startingRef = useRef(false);
+  const cameraGeneration = useRef(0);
+  const checkTicketRef = useRef<(value: string) => Promise<void>>(async () => {});
   const deviceId = useMemo(() => {
     if (typeof window === "undefined") return "gate-device";
     const existing = window.localStorage.getItem(DEVICE_KEY);
@@ -112,7 +115,7 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
     return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, [syncQueue]);
   useEffect(() => { const kick = window.setTimeout(() => void loadEventState(), 0); const timer = window.setInterval(() => { if (navigator.onLine) void loadEventState(); }, 10_000); return () => { window.clearTimeout(kick); window.clearInterval(timer); }; }, [loadEventState]);
-  useEffect(() => () => { scannerRef.current?.destroy(); scannerRef.current = null; }, []);
+  useEffect(() => () => { cameraGeneration.current++; scannerRef.current?.destroy(); scannerRef.current = null; }, []);
 
   const offlineCheck = useCallback(async (value: string) => {
     const token = normalizeToken(value);
@@ -132,8 +135,8 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
 
   const checkTicket = useCallback(async (value: string) => {
     if (busyRef.current || !value.trim()) return;
-    busyRef.current = true; setMode("checking"); setMessage("");
-    if (!navigator.onLine) { await offlineCheck(value); busyRef.current = false; scannerRef.current?.pause(); return; }
+    busyRef.current = true; scannerRef.current?.pause(true); setMode("checking"); setMessage("");
+    if (!navigator.onLine) { try { await offlineCheck(value); } finally { busyRef.current = false; } return; }
     try {
       const response = await fetch("/api/admin/check-in", {
         method: "POST", headers: { "content-type": "application/json" },
@@ -141,21 +144,37 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
       });
       const result = await response.json() as GateResult;
       setTicket(result.ticket); setMessage(result.error ?? result.message ?? "Entry recorded.");
-      setMode(response.ok ? "valid" : result.result === "duplicate" ? "duplicate" : result.result === "wrong_event" ? "wrong_event" : "invalid");
+      setMode(response.ok ? "valid" : result.result === "duplicate" ? "duplicate" : result.result === "wrong_event" ? "wrong_event" : result.result === "unavailable" ? "unavailable" : "invalid");
       scannerRef.current?.pause(); if (response.ok) await loadEventState();
     } catch { await offlineCheck(value); }
     finally { busyRef.current = false; }
   }, [deviceId, eventSlug, loadEventState, offlineCheck]);
 
+  // The decoder lives longer than a render; always use the current event and manifest.
+  useEffect(() => { checkTicketRef.current = checkTicket; }, [checkTicket]);
+
   async function startCamera() {
-    if (!videoRef.current) return;
+    if (startingRef.current || busyRef.current || !videoRef.current) return;
+    startingRef.current = true;
+    const generation = ++cameraGeneration.current;
     setMode("scanning"); setMessage("");
-    const scanner = scannerRef.current ?? new QrScanner(videoRef.current, (result) => void checkTicket(result.data), { preferredCamera: "environment", maxScansPerSecond: 8, highlightScanRegion: true, highlightCodeOutline: true, returnDetailedScanResult: true });
-    scannerRef.current = scanner;
-    try { await scanner.start(); } catch { setMode("ready"); setMessage("Camera access was not available. Use the ticket code below."); }
+    try {
+      // Allow React to reveal the retained video before measuring the scan region.
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      if (generation !== cameraGeneration.current || !videoRef.current) return;
+      const scanner = scannerRef.current ?? new QrScanner(videoRef.current, (result) => void checkTicketRef.current(result.data), { preferredCamera: "environment", maxScansPerSecond: 8, highlightScanRegion: true, highlightCodeOutline: true, returnDetailedScanResult: true });
+      scannerRef.current = scanner;
+      await scanner.start();
+      if (generation !== cameraGeneration.current) scanner.stop();
+    } catch {
+      if (generation === cameraGeneration.current) {
+        scannerRef.current?.stop();
+        setMode("ready"); setMessage("Camera access was not available. Try Start camera again or use the ticket code below.");
+      }
+    } finally { startingRef.current = false; }
   }
 
-  function scanNext() { setCode(""); setTicket(undefined); setMessage(""); if (scannerRef.current) { setMode("scanning"); void scannerRef.current.start(); } else setMode("ready"); }
+  function scanNext() { setCode(""); setTicket(undefined); setMessage(""); void startCamera(); }
 
   async function search() {
     if (searchQuery.trim().length < 2 || !navigator.onLine) return;
@@ -175,12 +194,12 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
 
   return <main className="scanner-page">
     <WorkspaceChrome actor={actor} role={role} active="/scan"/><section className="workspace-scanner"><header className="scanner-header"><div className={online ? "online" : "offline"}>{online ? <Wifi size={15} /> : <CloudOff size={15} />}{online ? "Doors synchronized" : `Offline · ${queued.length} queued`}</div></header>
-    <div className="scanner-event"><div><small>Now scanning</small><h1>{selectedEvent?.title ?? "Choose an event"}</h1><p>{selectedEvent ? `${selectedEvent.fullDate} · ${selectedEvent.venue}` : "No published events"}</p>{manifest ? <span>Door list saved {new Date(manifest.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : <span>No offline door list yet</span>}</div><label><span>Event</span><select value={eventSlug} onChange={(event) => { scannerRef.current?.pause(); setEventSlug(event.target.value); setMode("ready"); setMatches([]); }}>{events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label></div>
+    <div className="scanner-event"><div><small>Now scanning</small><h1>{selectedEvent?.title ?? "Choose an event"}</h1><p>{selectedEvent ? `${selectedEvent.fullDate} · ${selectedEvent.venue}` : "No published events"}</p>{manifest ? <span>Door list saved {new Date(manifest.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : <span>No offline door list yet</span>}</div><label><span>Event</span><select value={eventSlug} onChange={(event) => { cameraGeneration.current++; scannerRef.current?.stop(); setEventSlug(event.target.value); setMode("ready"); setMatches([]); }}>{events.map((event) => <option key={event.slug} value={event.slug}>{event.title}</option>)}</select></label></div>
     <section className={`scan-surface scan-surface--${mode}`}>
-      {(mode === "ready" || mode === "scanning" || mode === "checking") && <><div className="scan-frame"><video ref={videoRef} muted playsInline /><i /><i /><i /><i />{mode === "ready" ? <ScanLine size={76} /> : null}</div><h2>{mode === "checking" ? "Checking ticket…" : mode === "scanning" ? "Position the QR inside the frame" : "Ready for the next guest"}</h2><p>{message || (mode === "ready" ? "Online verifies live. Offline checks the saved door list and queues the entry." : "The ticket scans automatically.")}</p>{mode === "ready" ? <button onClick={startCamera}>Start camera</button> : null}</>}
+      <div style={{ display: ["ready", "scanning", "checking"].includes(mode) ? undefined : "none" }}><div className="scan-frame"><video ref={videoRef} muted playsInline /><i /><i /><i /><i />{mode === "ready" ? <ScanLine size={76} /> : null}</div><h2>{mode === "checking" ? "Checking ticket…" : mode === "scanning" ? "Position the QR inside the frame" : "Ready for the next guest"}</h2><p>{message || (mode === "ready" ? "Online verifies live. Offline checks the saved door list and queues the entry." : "The ticket scans automatically.")}</p>{mode === "ready" ? <button onClick={startCamera}>Start camera</button> : null}</div>
       {mode === "valid" && <><CheckCircle2 size={92} /><h2>You’re in</h2><strong>{ticket?.ticketType?.replaceAll("-", " ")} · 1 guest</strong><p>{ticket?.attendeeName ?? "Verified attendee"} · Entry recorded now</p><button onClick={scanNext}>Scan next ticket</button></>}
       {mode === "offline_saved" && <><AlertTriangle size={92} /><h2>Saved offline</h2><strong>{ticket?.ticketType?.replaceAll("-", " ")} · This gate device only</strong><p>{message}</p><button onClick={scanNext}>Scan next ticket</button></>}
-      {(mode === "invalid" || mode === "wrong_event" || mode === "duplicate") && <><XCircle size={92} /><h2>{mode === "duplicate" ? "Already admitted" : mode === "wrong_event" ? "Wrong event" : "Ticket not recognised"}</h2><strong>{mode === "duplicate" && ticket?.checkedInAt ? `First admitted ${new Date(ticket.checkedInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "No new entry was recorded"}</strong><p>{message}</p><div className="scanner-result-actions"><button onClick={scanNext}>Scan next ticket</button>{mode === "duplicate" && canUndo ? <button className="scanner-undo" onClick={() => void undo()}><RotateCcw size={14} /> Supervisor undo</button> : null}</div></>}
+      {(mode === "invalid" || mode === "wrong_event" || mode === "duplicate" || mode === "unavailable") && <><XCircle size={92} /><h2>{mode === "duplicate" ? "Already admitted" : mode === "wrong_event" ? "Wrong event" : mode === "unavailable" ? "Entry is paused" : "Ticket not recognised"}</h2><strong>{mode === "duplicate" && ticket?.checkedInAt ? `First admitted ${new Date(ticket.checkedInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "No new entry was recorded"}</strong><p>{message}</p><div className="scanner-result-actions"><button onClick={scanNext}>Scan next ticket</button>{mode === "duplicate" && canUndo ? <button className="scanner-undo" onClick={() => void undo()}><RotateCcw size={14} /> Supervisor undo</button> : null}</div></>}
     </section>
     <section className="manual-entry"><div><Keyboard size={19} /><span><strong>Enter ticket code</strong><small>Use when the camera cannot read the QR</small></span></div><label><Search size={17} /><input aria-label="Ticket code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="BCT-XXXX-XXXX-XXXX-XXXX" /><button onClick={() => void checkTicket(code)}>Check</button></label></section>
     <section className="gate-search"><header><Search size={18} /><span><strong>Find a guest or purchase</strong><small>Name, email, phone or payment reference</small></span></header><form onSubmit={(event) => { event.preventDefault(); void search(); }}><input aria-label="Find a guest or purchase" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search the door list" disabled={!online} /><button disabled={!online || searching || searchQuery.trim().length < 2}>{searching ? <Loader2 className="spin" size={14} /> : "Find"}</button></form>{matches.length ? <div>{matches.map((match) => <article key={match.ticketId}><span><b>{match.attendeeName ?? match.customerName ?? "Guest"}</b><small>{match.reference} · {match.ticketType?.replaceAll("-", " ")}</small><small>{match.customerEmail} · {match.customerPhone}</small></span><i className={match.status}>{match.status?.replaceAll("_", " ")}</i></article>)}</div> : null}</section>

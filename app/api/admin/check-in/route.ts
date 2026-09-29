@@ -123,7 +123,7 @@ export async function POST(request: Request) {
       EXISTS(SELECT 1 FROM curated_event_records WHERE slug = ? AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')) AS unavailable
   `).bind(eventSlug, session.role, session.accountId, eventSlug, eventSlug).first<{removed: number; assigned: number; unavailable: number}>();
   if (!eventAccess || eventAccess.removed || !eventAccess.assigned) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
-  if (eventAccess.unavailable) return Response.json({ result: "invalid", error: "Entry is paused for this event. Check its latest status." }, { status: 409 });
+  if (eventAccess.unavailable) return Response.json({ result: "unavailable", error: "Entry is paused for this event. The host must confirm its date and reopen entry before tickets can be scanned." }, { status: 409 });
   if (clientScanId) {
     const replay = await env.DB.prepare(`
       SELECT ticket.id AS ticketId, ticket.event_slug AS eventSlug, ticket.ticket_type AS ticketType,

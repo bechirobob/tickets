@@ -647,3 +647,49 @@ test('owner reviews a host application without an event',async({page},info)=>{
  await page.getByText('Host onboarding fixture',{exact:true}).click();
  await expect(page.getByRole('link',{name:'Manage account access'})).toBeVisible();
 });
+
+test('gate camera survives scan results, repeated starts and camera failure', async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = { denied: false, streams: [] as MediaStream[] };
+    Object.assign(window, { gateCameraTest: state });
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: true, value: async () => {
+      if (state.denied) throw new DOMException('Camera unavailable', 'NotAllowedError');
+      const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
+      const context = canvas.getContext('2d')!; context.fillStyle = 'white'; context.fillRect(0, 0, 640, 480);
+      const stream = canvas.captureStream(10); state.streams.push(stream);
+      return stream;
+    } });
+  });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  let outcome = 'unavailable';
+  await page.route('**/api/admin/check-in', route => {
+    if (route.request().method() !== 'POST' || route.request().postDataJSON().action === 'heartbeat') return route.continue();
+    return route.fulfill({ status: outcome === 'valid' ? 200 : 409, json: { result: outcome, error: outcome === 'unavailable' ? 'The host must confirm its date before entry.' : undefined, ticket: { ticketId: 'camera-fixture', ticketType: 'RSVP', attendeeName: 'Camera fixture' } } });
+  });
+  await page.goto('/scan');
+  await page.getByRole('button', { name: 'Start camera', exact: true }).click();
+  const video = page.locator('.scan-frame video');
+  await expect.poll(() => video.evaluate(v => (v as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  await video.evaluate(v => Object.assign(window, { originalGateVideo: v }));
+  for (const [result, heading] of [['unavailable', 'Entry is paused'], ['valid', 'You’re in'], ['duplicate', 'Already admitted']]) {
+    outcome = result;
+    await page.getByPlaceholder('BCT-XXXX-XXXX-XXXX-XXXX').fill('BCT-ABCD-EFGH-IJKL-MNOP');
+    await page.getByRole('button', { name: 'Check', exact: true }).click();
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { originalGateVideo: HTMLVideoElement }).originalGateVideo.isConnected)).toBe(true);
+    await page.getByRole('button', { name: 'Scan next ticket', exact: true }).click();
+    await expect(video).toBeVisible();
+    await expect.poll(() => video.evaluate(v => !(v as HTMLVideoElement).paused && Boolean((v as HTMLVideoElement).srcObject))).toBe(true);
+  }
+  outcome = 'unavailable';
+  await page.getByPlaceholder('BCT-XXXX-XXXX-XXXX-XXXX').fill('BCT-ABCD-EFGH-IJKL-MNOP');
+  await page.getByRole('button', { name: 'Check', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Entry is paused' })).toBeVisible();
+  await page.evaluate(() => { (window as unknown as { gateCameraTest: { denied: boolean } }).gateCameraTest.denied = true; });
+  await page.getByRole('button', { name: 'Scan next ticket', exact: true }).click();
+  await expect(page.getByText('Camera access was not available.', { exact: false })).toBeVisible();
+  await page.evaluate(() => { (window as unknown as { gateCameraTest: { denied: boolean } }).gateCameraTest.denied = false; });
+  await page.getByRole('button', { name: 'Start camera', exact: true }).click();
+  await expect.poll(() => video.evaluate(v => !(v as HTMLVideoElement).paused && Boolean((v as HTMLVideoElement).srcObject))).toBe(true);
+  expect(errors).toEqual([]);
+});
