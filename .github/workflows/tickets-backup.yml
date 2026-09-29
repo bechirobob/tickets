@@ -102,3 +102,5 @@ jobs:
           path.chmod(0o600)
           print('Tickets encrypted backup stored off-host; restore test passed.')
           PY
+
+# Refresh and restore-test the post-scanner production snapshot, 29 September 2026.
