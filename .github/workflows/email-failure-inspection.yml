@@ -1,0 +1,44 @@
+name: Inspect failed email records privately
+on:
+  push:
+    branches: [ops/email-failure-inspection-20260929]
+    paths: ['.github/workflows/email-failure-inspection.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read failed records and encrypt results
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const publicKey = "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAzQBLi1guudCa8oaReeWp\n61Pdr6GveW0xrtkDVUNg8RgsEa2hifqjIkdFmy1HolDpwhzrJaala54sM8M19hop\nn0P8t0rVnlBtdy8DHYbexDUUlb/bpAFIzk86n1Kx+VseIRCZ/YNn9Yg2iexkVpWI\nc5F8wa4GaIR+xHOjQlj0R4N4uPqiONR1UA3oxJ7Hr+Qb0tsFuUQdnk3ZVClXLUq+\nqDIGeSmgjvjqFp12MdfH6pN/GEiGJMjwF9/FCvXj+fR3UK4KuxWCqv6vrtGANySj\n2Ly6S2J9eee0AOy554cailLab00XRcirwvjijtWH7WoTIfTncmw5sIqjpYQGRcS1\nuI1OlhimkmZYUv/JY0Rzd4GuR+8nZgZNVUK3NE2N4btJVyAUBTfffX+C6HhHY9Jr\nmAJBKJPLqTl7cBCcJ+it8MGOboVQk2uB13MwowU4DzgGt3ompRbNPgvya1qq6/Uf\nJY4L/YR2DihKlRS41uXSVIT2k3H5b9Mz3XyPSQkVPi17AgMBAAE=\n-----END PUBLIC KEY-----";
+          async function query(sql) {
+            const response = await fetch('https://api.cloudflare.com/client/v4/accounts/af75a230de2eea882606db8d9acce473/d1/database/8f8723c2-673a-4aba-b025-83c05d67d075/query', {
+              method: 'POST',
+              headers: {authorization: 'Bearer ' + process.env.CLOUDFLARE_API_TOKEN, 'content-type':'application/json'},
+              body: JSON.stringify({sql}),
+              signal: AbortSignal.timeout(30000)
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success || data.result.some(r=>r.success===false)) throw new Error('Read-only database query failed; HTTP ' + response.status);
+            return data.result[0].results;
+          }
+          (async()=>{
+          const records = await query(`SELECT id, recipient, kind, CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.subject') END AS subject, created_at, updated_at, failure_reason, attempt_count, next_attempt_at, provider_id, provider_event_at, order_id, recovery_grant_id FROM delivery_events WHERE status='failed' ORDER BY created_at LIMIT 100`);
+          const later = await query(`SELECT d.id, d.recipient, d.kind, CASE WHEN json_valid(d.payload_json) THEN json_extract(d.payload_json, '$.subject') END AS subject, d.created_at, d.updated_at, d.status, d.provider_id, d.provider_event_at, d.order_id, d.recovery_grant_id FROM delivery_events d WHERE d.status IN ('sent','delivered') AND EXISTS(SELECT 1 FROM delivery_events f WHERE f.status='failed' AND lower(f.recipient)=lower(d.recipient) AND f.kind=d.kind AND d.created_at>=f.created_at AND d.id<>f.id) ORDER BY d.created_at LIMIT 200`);
+          const key=crypto.randomBytes(32), iv=crypto.randomBytes(12);
+          const cipher=crypto.createCipheriv('aes-256-gcm',key,iv);
+          const plaintext=JSON.stringify({observedAt:new Date().toISOString(),records,later});
+          const encrypted=Buffer.concat([cipher.update(plaintext,'utf8'),cipher.final()]);
+          const wrapped=crypto.publicEncrypt({key:publicKey,oaepHash:'sha256',padding:crypto.constants.RSA_PKCS1_OAEP_PADDING},key);
+          const envelope={key:wrapped.toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:encrypted.toString('base64')};
+          console.log('ENCRYPTED_EMAIL_DIAGNOSTIC='+Buffer.from(JSON.stringify(envelope)).toString('base64'));
+          console.log('Read-only inspection complete. Results encrypted; no email sent.');
+          })().catch(()=>{console.error('Read-only inspection failed. No email sent.');process.exitCode=1;});
+          NODE
