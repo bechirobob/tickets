@@ -26,3 +26,4 @@ jobs:
           name: scoped-return-${{ github.run_id }}
           path: scoped-return
           retention-days: 1
+# Bounded SQL export verified on Hermes and on actual D1 with synthetic large blobs.
