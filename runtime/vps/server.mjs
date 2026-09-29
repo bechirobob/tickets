@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { request as httpRequest } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { WebSocketServer } from 'ws';
@@ -35,10 +36,11 @@ const { startProdServer } = await import('vinext/server/prod-server');
 const { server } = await startProdServer({ host: '127.0.0.1', port, outDir: distribution, silent: true });
 const handlers = server.listeners('request');
 server.removeAllListeners('request');
+let ready = false;
 server.on('request', (request, response) => {
   if (request.headers.host !== host) { response.writeHead(421); response.end(); return; }
   if (request.url === '/healthz') {
-    response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    response.writeHead(ready ? 200 : 503, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     response.end(JSON.stringify({ service: 'becore-tickets', revision, runtime: 'vps', active })); return;
   }
   if (request.url?.startsWith('/__vinext/')) { response.writeHead(404); response.end(); return; }
@@ -50,6 +52,22 @@ server.on('request', (request, response) => {
 });
 server.requestTimeout = 30000;
 server.headersTimeout = 10000;
+// Load the three event-critical route modules before declaring the process ready.
+// These probes have no session, cannot mutate guest data, and must be rejected.
+await Promise.all([
+  ['/api/customer/tickets', 'POST'], ['/api/customer/my-nights', 'GET'], ['/api/admin/check-in', 'POST'],
+].map(([route, method]) => new Promise((resolve, reject) => {
+  const probe = httpRequest({ hostname: '127.0.0.1', port, path: route, method,
+    headers: { host, origin: `http://${host}`, 'content-type': 'application/json' }, timeout: 15000 }, response => {
+    response.resume();
+    response.on('end', () => response.statusCode === 401 ? resolve() : reject(new Error('Private route readiness check failed.')));
+    response.on('error', reject);
+  });
+  probe.on('error', reject);
+  probe.on('timeout', () => probe.destroy(new Error('Private route readiness check timed out.')));
+  probe.end(method === 'POST' ? '{}' : undefined);
+})));
+ready = true;
 const sockets = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
 server.on('upgrade', (incoming, socket, head) => {
   void (async () => {

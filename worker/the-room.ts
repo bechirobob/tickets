@@ -505,14 +505,26 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         OR (id = ? AND kind = 'announcement' AND deleted_at IS NULL)
       ORDER BY sequence DESC
     `, announcementId).toArray().reverse();
-    return rows
-      .filter((row) => !viewer.blockedAttendeeIds.includes(row.attendeeId))
+    const visible = rows.filter((row) => !viewer.blockedAttendeeIds.includes(row.attendeeId));
+    const reactionsByMessage = new Map<string, Array<{ emoji: string; count: number; mine: number }>>();
+    // Load reactions once for this viewer's visible history, not once per message.
+    // Only two bindings are needed even when an older linked announcement is included.
+    if (visible.length) {
+      const reactions = this.ctx.storage.sql.exec<{ messageId: string; emoji: string; count: number; mine: number }>(`
+        SELECT message_id AS messageId, emoji, COUNT(*) AS count,
+               MAX(CASE WHEN attendee_id = ? THEN 1 ELSE 0 END) AS mine
+        FROM reactions WHERE message_id IN (SELECT value FROM json_each(?))
+        GROUP BY message_id, emoji ORDER BY emoji
+      `, viewer.attendeeId, JSON.stringify(visible.map(row => row.id))).toArray();
+      for (const reaction of reactions) {
+        const group = reactionsByMessage.get(reaction.messageId) ?? [];
+        group.push(reaction);
+        reactionsByMessage.set(reaction.messageId, group);
+      }
+    }
+    return visible
       .map((row) => {
-        const reactions = this.ctx.storage.sql.exec<{ emoji: string; count: number; mine: number }>(`
-          SELECT emoji, COUNT(*) AS count,
-                 MAX(CASE WHEN attendee_id = ? THEN 1 ELSE 0 END) AS mine
-          FROM reactions WHERE message_id = ? GROUP BY emoji ORDER BY emoji
-        `, viewer.attendeeId, row.id).toArray();
+        const reactions = reactionsByMessage.get(row.id) ?? [];
         return {
           ...row,
           content: row.deletedAt ? "Message removed" : row.content,

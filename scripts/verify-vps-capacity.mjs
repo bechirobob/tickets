@@ -111,19 +111,28 @@ try {
   const scanned=await burst('gate-1200-duplicate-races',count*2,async i=>{const response=await request('/api/admin/check-in',0,{code:passes[i%count],eventSlug:slug,gate:`Gate ${i%4}`},`bct_staff=${staffToken}`);await response.text();assert.ok([200,409].includes(response.status),`scan ${response.status}`);return response.status;});
   assert.equal(scanned.filter(s=>s===200).length,count);assert.equal(scanned.filter(s=>s===409).length,count);
   const received=Array.from({length:count},()=>new Set()), sent=new Map(), delivery=[];
-  const receive=i=>value=>{if(value.type==='message' && sent.has(value.message.content)){received[i].add(value.message.content);delivery.push(performance.now()-sent.get(value.message.content));}};
+  let reactionTarget;
+  const receive=i=>value=>{if(i===0 && value.type==='message' && value.message.content==='capacity-message-119') reactionTarget=value.message.id; if(value.type==='message' && sent.has(value.message.content)){received[i].add(value.message.content);delivery.push(performance.now()-sent.get(value.message.content));}};
   await burst('room-600-simultaneous-joins',count,i=>connect(i,receive(i)));
   for(let n=0;n<120;n++){const content=`capacity-message-${n}`;sent.set(content,performance.now());sockets[n%count].send(JSON.stringify({type:'message',content}));await delay(500);}
   const deadline=Date.now()+30000;
   while(received.some(set=>set.size<120)&&Date.now()<deadline)await delay(50);
   assert.equal(received.reduce((sum,set)=>sum+set.size,0),72000);assert.equal(socketErrors,0);assert.ok(p95(delivery)<5000);
   metrics.push({name:'room-600-guests-60-seconds',messages:120,deliveries:72000,p95Ms:Math.round(p95(delivery)),errors:socketErrors});console.log(JSON.stringify(metrics.at(-1)));
+  assert.ok(reactionTarget);
+  const reactionsReceived = new Promise((resolve, reject) => {
+    const timer=setTimeout(()=>reject(Error('Reaction delivery timeout')),10000);
+    const listener=raw=>{const value=JSON.parse(String(raw));if(value.type==='reaction' && value.messageId===reactionTarget && value.count===2){clearTimeout(timer);sockets[0].off('message',listener);resolve();}};
+    sockets[0].on('message',listener);
+  });
+  for(const i of [0,1]) sockets[i].send(JSON.stringify({type:'reaction',messageId:reactionTarget,emoji:'🔥'}));
+  await reactionsReceived;
   const revoked=count-1;let leaked=false;sockets[revoked].on('message',data=>{if(String(data).includes('after-revocation'))leaked=true;});
   const closed=once(sockets[revoked],'close');await db.prepare('UPDATE attendee_sessions SET revoked_at=? WHERE id=?').bind(now,identities[revoked]).run();
   sockets[0].send(JSON.stringify({type:'message',content:'after-revocation'}));
   assert.equal((await Promise.race([closed,delay(10000).then(()=>{throw Error('Revocation timeout');})]))[0],4003);assert.equal(leaked,false);
   await stop();await start();
-  await burst('room-599-reconnect-after-restart',count-1,async i=>{const snapshot=await connect(i);assert.ok(snapshot.messages.some(m=>m.content==='after-revocation'));});
+  await burst('room-599-reconnect-after-restart',count-1,async i=>{const snapshot=await connect(i);assert.ok(snapshot.messages.some(m=>m.content==='after-revocation'));assert.deepEqual(snapshot.messages.find(m=>m.id===reactionTarget)?.reactions,[{emoji:'🔥',count:2,mine:i<2}]);});
   await burst('my-nights-after-restart',count-1,async i=>{const response=await request('/api/customer/my-nights',i);assert.equal(response.status,200);await response.arrayBuffer();});
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM gate_checkin_events WHERE event_slug=?').bind(slug).first()).n,count);
   assert.deepEqual(latencyFailures, [], 'Bursts exceeding the unchanged 5-second p95 target');

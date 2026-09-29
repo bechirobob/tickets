@@ -74,3 +74,14 @@ test('RETURNING, change counts and binary data preserve the D1 contract', async 
     assert.equal((await db.prepare('UPDATE photos SET body=? WHERE id=99').bind([1]).run()).meta.changes, 0);
   } finally { db.close(); }
 });
+
+
+test('standalone conditional writes keep one winner under a simultaneous burst', async () => {
+  const db = new SqliteDatabase(':memory:');
+  try {
+    await db.exec('CREATE TABLE admission(id INTEGER PRIMARY KEY, used INTEGER); INSERT INTO admission VALUES(1,0)');
+    const results = await Promise.all(Array.from({ length: 100 }, () => db.prepare('UPDATE admission SET used=1 WHERE id=1 AND used=0').run()));
+    assert.equal(results.reduce((sum, result) => sum + result.meta.changes, 0), 1);
+    assert.equal(await db.prepare('SELECT used FROM admission').first('used'), 1);
+  } finally { db.close(); }
+});

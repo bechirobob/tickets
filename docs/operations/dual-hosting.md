@@ -38,6 +38,30 @@ must account for the destination's then-current quota and capacity.
   bindings, adapter atomicity/persistence tests, both builds, and real HTTP,
   private QR access, Room WebSocket, restart and revocation verification.
 
+### 29 September checkpoint
+
+- Installed isolated release `a947aee5e3274b8812ffade5b63817c5b4804c69`:
+  runtime build `36501449127` passed all checks, including dependency audit after
+  patching fast-uri to 3.1.7 and Undici to 7.29.1. Node 24.21.0 is bundled in each
+  release; the service uses at most two CPU cores and 1 GiB memory.
+- Actual-host rehearsal `36501483855`: wallet p95 5,193 ms, My Nights at 600
+  guests 3,101 ms, 1,200 competing scans 8,414 ms, 600 Room joins 3,918 ms.
+  All 72,000 chat deliveries succeeded (p95 302 ms); restart reconnect timed out.
+  This is **not** a passing capacity result. No latency threshold was relaxed.
+- This increment groups standalone writes as well as batches, loads private
+  routes before reporting readiness, and fetches history reactions once per
+  snapshot instead of once per message. The rehearsal now verifies each viewer's
+  own reaction flags after restart and reports all completed timing phases.
+- Host configuration check `36501535792` found only the private preview JSON
+  containing `ENVIRONMENT`; there is no production key file in the Tickets
+  configuration directory. Known project checkouts also contain no private
+  environment configuration. Do not extract or print Worker secret values.
+- Next action: pass the complete actual-host rehearsal for this increment, then
+  securely provision the missing original configuration and implement/rehearse
+  the bidirectional data handover. The write freeze, live D1/Room transfers,
+  encrypted off-host restore and public routing switch are not implemented or
+  verified by the preview installer.
+
 The 600-guest network rehearsal uses a temporary local database and paid-ticket
 fixtures. It exercises private wallets, duplicate gate scans, 600 Room joins,
 72,000 message deliveries, revocation and recovery after restart. It never

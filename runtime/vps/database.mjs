@@ -27,7 +27,7 @@ class Prepared {
     return { success: true, results: rows, meta: { changes: after.n - before, last_row_id: after.id, duration: performance.now() - start, changed_db: after.n !== before, rows_read: rows.length, rows_written: after.n - before, size_after: 0, served_by: 'vps' } };
   }
   async all() { return this.execute(); }
-  async run() { return this.execute(); }
+  async run() { return (await this.owner.batch([this]))[0]; }
   async first(column) {
     const row = this.execute().results[0];
     if (!row) return null;
