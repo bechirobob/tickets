@@ -1,0 +1,63 @@
+name: Verify Tickets single-writer guards on isolated D1
+on:
+  push:
+    branches: [ops/tickets-encrypted-handover-20260929]
+    paths: [.github/workflows/tickets-writer-guard-rehearsal.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5807f6ea9a7baef998cf379dc298ce636caf1f60
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - run: node --test tests/handover-writer-lock.test.mjs
+      - name: Exercise guards on temporary D1 and remove the fixture
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writerGuardStatements, transitionWriterSql } from './ops/handover/writer-lock.mjs';
+          import { randomUUID } from 'node:crypto';
+          import assert from 'node:assert/strict';
+          const root='https://api.cloudflare.com/client/v4/accounts/af75a230de2eea882606db8d9acce473/d1/database';
+          const headers={authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN,'content-type':'application/json'};
+          let database;
+          async function call(url,method,body,allowFailure=false) {
+            const response=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
+            const data=await response.json();
+            if (!allowFailure && (!response.ok || !data.success || data.result?.some?.(item=>item.success===false))) throw new Error('Isolated D1 rehearsal API failed.');
+            return {ok:response.ok && data.success && !data.result?.some?.(item=>item.success===false),result:data.result};
+          }
+          try {
+            database=(await call(root,'POST',{name:'tickets-handover-check-'+process.env.GITHUB_RUN_ID})).result.uuid;
+            console.log(JSON.stringify({isolatedDatabaseCreated:database}));
+            const query=(sql,params=[],allowFailure=false)=>call(root+'/'+database+'/query','POST',{sql,params},allowFailure);
+            await query('CREATE TABLE orders(id TEXT PRIMARY KEY,status TEXT)');
+            await query('CREATE TABLE tickets(id TEXT PRIMARY KEY,order_id TEXT REFERENCES orders(id))');
+            for (const sql of writerGuardStatements(['orders','tickets'])) await query(sql);
+            await query("INSERT INTO orders VALUES('synthetic-order','paid')");
+            await query("INSERT INTO tickets VALUES('synthetic-ticket','synthetic-order')");
+            const id=randomUUID(); const freeze=transitionWriterSql(id,true);
+            assert.equal((await query(freeze.sql,freeze.params)).result[0].results[0].frozen,1);
+            let blocked=0;
+            for(const sql of ["INSERT INTO orders VALUES('new','pending')","UPDATE orders SET status='changed'","DELETE FROM orders","INSERT OR REPLACE INTO orders VALUES('synthetic-order','changed')","DELETE FROM tickets"]) {
+              const result=await query(sql,[],true);
+              assert.equal(result.ok,false); blocked++;
+            }
+            const wrong=transitionWriterSql(randomUUID(),false);
+            assert.equal((await query(wrong.sql,wrong.params)).result[0].results.length,0);
+            const resume=transitionWriterSql(id,false);
+            assert.equal((await query(resume.sql,resume.params)).result[0].results[0].frozen,0);
+            await query("UPDATE orders SET status='resumed'");
+            console.log(JSON.stringify({isolatedCloudflareWriterGuardPassed:true,blockedMutationTypes:blocked,productionDatabaseChanged:false}));
+          } finally {
+            if(database) {await call(root+'/'+database,'DELETE');console.log(JSON.stringify({isolatedDatabaseRemoved:database}));}
+          }
+          NODE
