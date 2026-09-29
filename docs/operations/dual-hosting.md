@@ -528,3 +528,25 @@ utility gate (60333a41ff793860cc1c8aba13e39f6dad5e2ac4); it skips preparation an
 reuses run 36568774958, and waits only the remaining original drain. The prior
 coordinator is cancelled by its shared concurrency group while sleeping.
 No source transfer stage is cancelled. Do not re-prepare.
+
+
+Current prepared transfer is f06e7454-ca03-4be1-bd14-c9ae43656ada; completion coordinator
+36568972159 is active. Terminal evidence run 36568919335 succeeded: the one
+scheduled record was matched to its exact platform completion and archived;
+119 records remain, exactly the recognized fenced incident inventory.
+No time-based expiry was used. Full isolated actual Worker/Room RPC rehearsal
+passed with 119 synthetic incident records: Room freeze, source SQL freeze,
+twelve durable-work checks, evidence preservation, late-write rejection, and
+abort restoring every obligation. Test source is tests/handover-incident-flow.test.mjs
+in ops/tickets-terminal-observer. Production capture is pending the original
+new preparation deadline of 12:49:05 UTC; do not reset it.
+
+
+The source catalogue returned HTTP 200 after abort. Cloudflare BIC rejects the
+default Python User-Agent (1010), so coordinator public probes now identify as
+Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0), verified HTTP 200. No Cloudflare
+security setting changed. This coordinator-only update retains preparation
+36568774958 and the SAME 12:49:05 UTC drain deadline; it performs no reinstallation
+or preparation. Source production audit 36567199873 overlapped the maintenance
+window (mobile Chromium passed; desktop/WebKit failures require the independent
+post-activation audit already included in the controller).

@@ -89,7 +89,7 @@ jobs:
               health=None
               for attempt in range(24):
                   try:
-                      with urllib.request.urlopen('https://tickets.becoreops.com/healthz',timeout=10) as response:
+                      with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com/healthz',headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'application/json'}),timeout=10) as response:
                           health=json.load(response)
                       if health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True:
                           break
@@ -98,7 +98,7 @@ jobs:
                   time.sleep(5)
               assert health and health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True
               for path in ['/', '/events', '/my-nights', '/api/public/events']:
-                  with urllib.request.urlopen('https://tickets.becoreops.com'+path,timeout=20) as response:
+                  with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'text/html,application/json'}),timeout=20) as response:
                       assert response.status==200
                       response.read()
               print(json.dumps({'publicVpsVerified':True,'revision':revision,'routesVerified':4}),flush=True)
