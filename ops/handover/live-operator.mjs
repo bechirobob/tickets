@@ -12,6 +12,7 @@ import { restoreRoomEnvelope } from './sqlite-snapshot.mjs';
 import { openEnvelope } from './open-envelope.mjs';
 import { privateJson, checkpoint, reconciliation, roomReturn, assertNoVpsQueue, hash } from './live-state.mjs';
 import { controlSchema } from '../../worker/handover-control.ts';
+import { isLegacyInventory } from '../../worker/handover-reconciliation.ts';
 process.umask(0o077);
 const root = '/accounts/' + account;
 const worker = root + '/workers/scripts/becore-tickets';
@@ -177,18 +178,20 @@ async function capture() {
     try {
       await pauseQueue(true); record.phase = 'pausing'; save();
       await rpc('pauseSource', record.transferId); sourcePaused = true;
-      let status;
+      let status, reconcileLegacy = false;
       for (let i = 0; i < 60; i++) {
         status = await rpc('sourceStatus');
         assert.equal(status.admission.transfer_id, record.transferId);
         if (status.operations.length === 0) break;
+        const operations = await query(record.database, 'SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY id');
+        if (await isLegacyInventory(operations)) { reconcileLegacy = true; break; }
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
-      assert.equal(status.operations.length, 0, 'Source work did not drain; no leases were expired.');
+      assert.ok(status.operations.length === 0 || reconcileLegacy, 'Source work did not drain; no leases were expired.');
       await emptyQueue();
       record.roomIds = await inventory(); record.phase = 'freezing'; save();
       for (const objectId of record.roomIds) await rpc('freezeRoom', objectId, record.transferId);
-      await rpc('freezeSource', record.transferId);
+      await rpc('freezeSource', record.transferId, reconcileLegacy);
       record.phase = 'frozen'; save(); log('source-frozen');
       const snapshot = await captureFrozenDatabase(record.database, stage + '/tickets.sqlite', record.transferId);
       const db = new DatabaseSync(stage + '/tickets.sqlite');

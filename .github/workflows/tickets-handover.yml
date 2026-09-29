@@ -44,7 +44,7 @@ jobs:
       - name: Run explicit stage under Tickets deployment lock
         run: |
           set -euo pipefail
-          tar -cf - ops/handover worker/handover-control.ts package.json | tailscale ssh root@hermes "umask 077; mkdir -p /var/tmp/tickets-operator-$GITHUB_RUN_ID; tar -xf - -C /var/tmp/tickets-operator-$GITHUB_RUN_ID"
+          tar -cf - ops/handover worker/handover-control.ts worker/handover-reconciliation.ts package.json | tailscale ssh root@hermes "umask 077; mkdir -p /var/tmp/tickets-operator-$GITHUB_RUN_ID; tar -xf - -C /var/tmp/tickets-operator-$GITHUB_RUN_ID"
           tailscale ssh root@hermes "bash -s -- '$MODE' '$REVISION' '$GITHUB_RUN_ID'" <<'SH'
           set -euo pipefail
           mode=$1 revision=$2 run_id=$3

@@ -417,3 +417,26 @@ Next: exact-candidate CI and release of the lifecycle fix, then reconcile the
 historical records using conclusive invocation/side-effect evidence before
 prepare/capture/backup/activate. Timestamp proximity is not proof. Do not
 repeat setup, access provisioning, or the already-passed host capacity work.
+
+
+### Guarded legacy reconciliation
+
+Read-only evidence run 36558791879 confirmed the exact historical set of 116
+HTTP records (SHA-256 1ce09ef54981765646448a424926738d477790a85ccb8dc31b646c3d3716b4eb),
+no pending payments/refunds/payouts/campaigns, no visible email queue messages,
+and only delivered/failed email outcomes. Complete 15-second telemetry windows
+avoid the earlier 2,000-event truncation. This is aggregate evidence, not an
+assertion that a UUID has been matched to a completed invocation.
+
+The candidate supports only that exact incident inventory. After admission and
+queue pause, all other operations must drain and every Room must freeze. SQL
+triggers then fence every source business table, including against old requests.
+Only after checking terminal durable work under that physical fence are the
+116 rows moved atomically into a preserved reconciliation ledger with the digest,
+evidence run, counts and method; completion is explicitly not claimed. Any
+changed/additional record or unresolved durable work still blocks capture.
+Abort restores the original obligations before releasing the SQL fence. A
+successful switch keeps the old source fenced; reverse transfer uses a fresh D1.
+No customer data is deleted, no providers are replayed, and no BubbleWash resource
+is touched. This replaces missing lifecycle evidence with enforced write
+exclusion and explicit side-effect reconciliation, not time-based expiry.
