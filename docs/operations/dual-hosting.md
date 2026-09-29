@@ -1,5 +1,13 @@
 # Cloudflare and VPS deployments
 
+Temporary owner-requested scanner test: run `36595703020` enabled `sun-chasers-labadi`
+entry at 16:10 UTC on 29 September 2026. A verified active systemd timer restores its
+previous coming-soon state at 16:40 UTC (17:40 Malabo), provided event settings have
+not subsequently been edited. Original settings and restore script are at
+`/var/lib/becore-tickets-handover/entry-test-36595703020/`. Dates and ticket records
+were not changed by activation. Successful test scans are real check-ins; duplicate
+rejection should be tested with the same pass. Restore early when the owner finishes.
+
 The owner confirmed on 28 September 2026 that Tickets must retain both working
 deployments. This is not retirement of Cloudflare. Both runtimes use the same application codebase and expose their deployed source revision. The VPS became the live application host on 29 September 2026; Cloudflare remains
 the public TLS/security edge and the preserved, write-frozen return deployment.
