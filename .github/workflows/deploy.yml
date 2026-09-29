@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    # Operator diagnostics do not change the application. Workflow-only release
+    # configuration edits remain deployable through explicit workflow_dispatch.
+    paths-ignore:
+      - '.github/workflows/tickets-vps-diagnostics.yml'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
