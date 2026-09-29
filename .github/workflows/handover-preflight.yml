@@ -22,4 +22,12 @@ jobs:
       - name: Read source queues, record counts and routing
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node ops/handover/live-preflight.mjs
+        run: |
+          node --input-type=module <<'NODE'
+          import { cloudflare, account } from './ops/handover/control-client.mjs';
+          const root='/accounts/'+account;
+          const s=await cloudflare(root+'/workers/scripts/becore-tickets/settings');
+          const db=s.bindings.find(b=>b.type==='d1'&&b.name==='DB').id;
+          const query=async sql=>(await cloudflare(root+'/d1/database/'+db+'/query','POST',{sql}))[0].results;
+          console.log(JSON.stringify({readOnly:true,admission:await query('SELECT phase,transfer_id,paused_at FROM _bct_handover_admission'),operations:await query('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY started_at')}));
+          NODE
