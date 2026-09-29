@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      TICKETS_REVISION: '6b843a429bc4983a6a41b56b8e83e6a52ce12271'
+      TICKETS_REVISION: 'b29996173c1a101861ecb05f0b9264703056c521'
       TICKETS_RUNTIME_RUN: '36566932648'
       TICKETS_DEPLOY_RUN: '36566932507'
     steps:
@@ -71,6 +71,5 @@ jobs:
           
           assert_main()
           dispatch('tickets-vps-diagnostics.yml', {})
-          dispatch('tickets-handover.yml', {'mode':'prepare','revision':'8a46eeaae8296ab588104ea2406f5287c08e5fb6'})
           print('Read-only Tickets startup inspection completed.',flush=True)
           PY
