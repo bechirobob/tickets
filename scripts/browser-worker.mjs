@@ -20,6 +20,10 @@ const wranglerRequire = createRequire(require.resolve('wrangler'));
 const { Miniflare, convertV4MiniflareOptions } = wranglerRequire('miniflare');
 const options = unstable_getMiniflareWorkerOptions('dist/server/wrangler.json');
 delete options.workerOptions.modulesRules;
+// The terminal observer belongs to the production source database. Local
+// browser fixtures have no handover tracking and must not call that service.
+delete options.workerOptions.tails;
+delete options.workerOptions.streamingTails;
 const modules = [
   { type: 'ESModule', path: options.main },
   ...readdirSync('dist/server', { recursive: true })
