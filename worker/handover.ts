@@ -95,6 +95,13 @@ export class HandoverEntrypoint extends WorkerEntrypoint<Cloudflare.Env> {
     return changed;
   }
 
+  async backupRecovery() {
+    requireHandover(this.env);
+    const key = (this.env as unknown as Record<string, unknown>).VPS_BACKUP_RECOVERY_KEY;
+    if (typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)) throw new Error('No backup recovery key.');
+    return sealHandover(this.env, 'backup-recovery', { key });
+  }
+
   async roomIdentity(name: string) {
     requireHandover(this.env);
     if (typeof name !== 'string' || name.length < 1 || name.length > 200) throw new Error('Invalid Room name.');

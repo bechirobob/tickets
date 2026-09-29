@@ -33,7 +33,7 @@ export async function withControl(revision, operation) {
       await cloudflare(worker + '/secrets', 'PUT', { name, text, type: 'secret_text' });
     }
     const token = randomBytes(32).toString('hex');
-    const methods = ['configuration', 'roomIdentity', 'prepareSource', 'sourceStatus', 'pauseSource', 'freezeSource', 'freezeRoom', 'roomSnapshot', 'restoreRoom', 'resumeRoom', 'resumeSource', 'markTransferred'];
+    const methods = ['configuration', 'backupRecovery', 'roomIdentity', 'prepareSource', 'sourceStatus', 'pauseSource', 'freezeSource', 'freezeRoom', 'roomSnapshot', 'restoreRoom', 'resumeRoom', 'resumeSource', 'markTransferred'];
     const script = `const allowed=${JSON.stringify(methods)}; export default {async fetch(request,env){
       if(request.method!=='POST'||request.headers.get('authorization')!=='Bearer '+env.TOKEN||Date.now()>=Date.parse(env.EXPIRES_AT))return new Response('Not found',{status:404});
       try{const input=await request.json();if(!allowed.includes(input.method)||!Array.isArray(input.args))throw new Error();

@@ -279,3 +279,30 @@ Next: complete and verify the operator controller, fresh encrypted snapshot
 installation, pending-delivery reconciliation, secured origin routing and reverse
 transfer orchestration before touching live traffic. Rehearsal data was removed
 at the owner's request; retain only disposable test state during each test.
+
+### Live-transfer operator checkpoint — 29 September
+
+The source has not yet been paused or switched. VPS origin preparation succeeded
+in host run 36539784306: a Tickets-only Origin CA certificate, a hostname-specific
+strict TLS rule, and a maintenance-only Caddy vhost. Existing DNS/custom-domain
+routing remains on the Worker. Host scope verification 36540517418 confirmed the
+existing root-private operator token can read the Worker, D1 and queue.
+
+Preflight 36540913127 found one paid and one expired order, no visible queue
+messages, no pending refunds/payouts or announcement campaigns, 14 delivered
+email records and six historical failed email records. This is a read-only
+inventory, not final paused-state reconciliation.
+
+The live operator now has explicit prepare, capture, activate, abort and rollback
+stages with a root-private durable journal. Frozen transport checks every row,
+schema and sequence. Capture includes a disposable D1 reverse import and an
+actual frozen Room restore/compare. Activation requires a fresh verified stage;
+rollback stops the VPS and imports fresh data into a new D1 before rebinding.
+Ordinary Cloudflare deployment now refuses to reclaim a VPS-owned hostname and
+resolves the current D1 binding after any reverse transfer.
+
+Local validation: 17 Node handover/adapter tests and 469 VPS application tests
+passed; typecheck and lint passed (one pre-existing moderation export warning).
+Latest operator/API integration verification, exact final candidate CI, release
+installation, backup scheduling and public switch remain pending. Do not treat
+this checkpoint or a rehearsal manifest as activation evidence.

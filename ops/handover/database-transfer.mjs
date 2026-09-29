@@ -13,7 +13,7 @@ export async function query(database, sql, params) {
 }
 export async function verifyCloudflareDatabase(database, snapshot) {
   assert.deepEqual(await query(database, 'PRAGMA foreign_key_check'), []);
-  assert.deepEqual(await query(database, schemaSql), snapshot.schema);
+  assert.equal(JSON.stringify(await query(database, schemaSql)), JSON.stringify(snapshot.schema));
   for (const [table, expected] of Object.entries(snapshot.evidence)) {
     const rows = await query(database, tableDigestQuery(table, expected.columns));
     assert.deepEqual(digestRows(rows, expected.columns), { rows: expected.rows, sha256: expected.sha256 });
@@ -99,3 +99,16 @@ export async function createVerifiedReturnDatabase(snapshot, label) {
   }
 }
 export async function removeDisposableDatabase(database) { await cloudflare(root + '/' + database, 'DELETE'); }
+
+export async function replaceDatabaseBinding(scriptName, database) {
+  assert.match(scriptName, /^[a-z0-9-]{1,63}$/);
+  const worker = '/accounts/' + account + '/workers/scripts/' + scriptName;
+  const before = await cloudflare(worker + '/settings');
+  assert.equal(before.bindings.filter(b => b.type === 'd1').length, 1);
+  const form = new FormData();
+  form.set('settings', JSON.stringify({ bindings: before.bindings.map(b => b.name === 'DB' ? { name: 'DB', type: 'd1', id: database } : { name: b.name, type: 'inherit' }) }));
+  await cloudflare(worker + '/settings', 'PATCH', form);
+  const after = await cloudflare(worker + '/settings');
+  assert.equal(after.bindings.find(b => b.name === 'DB')?.id, database);
+  assert.deepEqual(after.bindings.filter(b => b.name !== 'DB').sort((a,b) => a.name.localeCompare(b.name)), before.bindings.filter(b => b.name !== 'DB').sort((a,b) => a.name.localeCompare(b.name)));
+}
