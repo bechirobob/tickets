@@ -1,0 +1,75 @@
+name: Verify VPS SQL return in isolated Cloudflare databases
+on:
+  push:
+    branches: [ops/vps-standby-completion-20260929]
+    paths: [.github/workflows/handover-return-cloudflare.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - run: node --test tests/handover-export.test.mjs tests/handover-envelope.test.mjs
+      - name: Create ephemeral return recipient
+        run: |
+          node --input-type=module <<'NODE'
+          import { generateKeyPairSync,createHash } from 'node:crypto';
+          import { mkdirSync,writeFileSync } from 'node:fs';
+          process.umask(0o077);
+          mkdirSync('/dev/shm/tickets-return');
+          mkdirSync('return-recipient');
+          const pair=generateKeyPairSync('rsa',{modulusLength:3072});
+          const publicKey=pair.publicKey.export({type:'spki',format:'der'});
+          writeFileSync('/dev/shm/tickets-return/private.pem',pair.privateKey.export({type:'pkcs8',format:'pem'}),{mode:0o600});
+          writeFileSync('return-recipient/recipient.json',JSON.stringify({runId:process.env.GITHUB_RUN_ID,publicKey:publicKey.toString('base64'),fingerprint:createHash('sha256').update(publicKey).digest('hex'),expiresAt:new Date(Date.now()+55*60000).toISOString()}));
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: return-recipient-${{ github.run_id }}
+          path: return-recipient/recipient.json
+          retention-days: 1
+      - name: Await authenticated encrypted return from Hermes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {writeFileSync} from 'node:fs';
+          const headers={authorization:'Bearer '+process.env.GH_TOKEN,accept:'application/vnd.github+json'};
+          const root='https://api.github.com/repos/bechirobob/bubble-wash';
+          let found;
+          for(let attempt=0;attempt<150;attempt++){
+            const response=await fetch(root+'/actions/artifacts?per_page=100',{headers});
+            assert.ok(response.ok);
+            const data=await response.json();
+            const artifact=data.artifacts.find(row=>row.name==='tickets-return-'+process.env.GITHUB_RUN_ID);
+            if(artifact){
+              const run=await (await fetch(root+'/actions/runs/'+artifact.workflow_run.id,{headers})).json();
+              assert.equal(run.head_branch,'ops/tickets-vps-event-20260928');
+              assert.equal(run.path,'.github/workflows/tickets-vps-return-export.yml');
+              if(run.status==='completed'){assert.equal(run.conclusion,'success');found=artifact;break;}
+            }
+            await new Promise(resolve=>setTimeout(resolve,5000));
+          }
+          assert.ok(found,'Encrypted Hermes return did not arrive in time.');
+          const response=await fetch(found.archive_download_url,{headers});assert.ok(response.ok);
+          const bytes=Buffer.from(await response.arrayBuffer());assert.ok(bytes.length<24*1024*1024);
+          writeFileSync('/dev/shm/tickets-return/encrypted.zip',bytes,{mode:0o600});
+          console.log(JSON.stringify({encryptedReturnReceived:true,sourceRun:found.workflow_run.id}));
+          NODE
+          unzip -q /dev/shm/tickets-return/encrypted.zip -d /dev/shm/tickets-return/encrypted
+      - name: Verify private export in new unbound D1 databases and remove them
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node ops/handover/verify-cloudflare-return.mjs /dev/shm/tickets-return/encrypted/return.json /dev/shm/tickets-return/private.pem return-recipient/recipient.json
+      - name: Remove ephemeral recipient and ciphertext
+        if: always()
+        run: rm -rf /dev/shm/tickets-return
