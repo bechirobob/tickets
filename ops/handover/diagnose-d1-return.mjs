@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
 import { exportDatabase } from './sqlite-export.mjs';
 const root='https://api.cloudflare.com/client/v4/accounts/af75a230de2eea882606db8d9acce473/d1/database';
 const headers={authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN,'content-type':'application/json'};
@@ -12,6 +13,7 @@ async function call(url,body,method='POST') {
 }
 try {
   const db=new DatabaseSync(':memory:');
+  for (const file of readdirSync('drizzle').filter(name=>name.endsWith('.sql')).sort()) db.exec(readFileSync('drizzle/'+file,'utf8'));
   db.exec("CREATE TABLE records(id INTEGER PRIMARY KEY AUTOINCREMENT,value TEXT);INSERT INTO records(value) VALUES('synthetic-only'); INSERT INTO records(id,value) VALUES(99,'deleted');DELETE FROM records WHERE id=99;");
   db.exec("CREATE TABLE pictures(id INTEGER PRIMARY KEY,image BLOB); INSERT INTO pictures VALUES(1,zeroblob(160000));");
   const snapshot=exportDatabase(db);db.close();

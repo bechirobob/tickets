@@ -21,3 +21,4 @@ jobs:
         run: node ops/handover/diagnose-d1-return.mjs
 # Include a representative large binary poster in the synthetic export.
 # Verify bounded binary assembly fixes SQLITE_TOOBIG.
+# Exercise the full application schema with synthetic data and a large poster.

@@ -50,6 +50,7 @@ try {
     phase = 'ingest';
     const endpoint = root + '/' + database + '/import';
     let result = await call(endpoint, 'POST', { action: 'ingest', etag: manifest.expected.sqlMD5, filename: manifest.filename });
+    console.log(JSON.stringify({ importResponseKeys: Object.keys(result ?? {}), importStatus: result?.status, bookmarkPresent: Boolean(result?.at_bookmark) }));
     for (let attempt = 0; attempt < 60 && result.status !== 'complete'; attempt++) {
       if (result.status === 'error') { safeFailure(result); throw new Error('Import failed.'); } assert.ok(result.at_bookmark);
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -73,7 +74,7 @@ try {
     assert.equal(hash(sequences), manifest.expected.sequencesSHA256);
     console.log(JSON.stringify({ actualVpsSqlRestoredInCloudflare: true, tables: Object.keys(evidence).length, rows: Object.values(evidence).reduce((sum, row) => sum + row.rows, 0), exactSchemaRowsAndSequences: true, productionChanged: false }));
   } else throw new Error('Unknown scoped return mode.');
-} catch { console.error(JSON.stringify({ scopedReturnFailedAt: phase, productionChanged: false })); process.exitCode = 1; }
+} catch (error) { console.error(JSON.stringify({ scopedReturnFailedAt: phase, productionChanged: false, errorType: error?.name, errorCode: error?.code, frames: error?.stack?.split('\n').slice(1, 4) })); process.exitCode = 1; }
 finally {
   if (database && !retained) {
     try { await call(root + '/' + database, 'DELETE'); console.log(JSON.stringify({ temporaryDatabaseRemoved: database })); }
