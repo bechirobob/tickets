@@ -24,8 +24,9 @@ export function restoreSqlSnapshot(sql, destination) {
   const db = new DatabaseSync(destination);
   try {
     if (tables(db).length) throw new Error('Restore target must be empty.');
-    db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
+    db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=OFF;');
     db.exec(sql);
+    db.exec('PRAGMA foreign_keys=ON;');
     return databaseEvidence(db);
   } finally { db.close(); }
 }
