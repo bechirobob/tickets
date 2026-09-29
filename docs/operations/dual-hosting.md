@@ -82,6 +82,79 @@ Cloudflare Free was already found inadequate for the event workload. Retaining
 its deployment does not make it a safe automatic event failover target. A return
 must account for the destination's then-current quota and capacity.
 
+## Unattended failover proposal — 29 September 2026
+
+Status: design reviewed against current source; not implemented or enabled.
+Owner requested recovery without being present. This authorizes implementation,
+not a new paid subscription or a loss of acknowledged bookings.
+
+### Concrete recommended architecture
+
+Retain Hermes as the normal application server and Cloudflare as the fallback
+application. Use one authoritative off-Hermes transaction store, accessible to
+both runtimes, rather than switching between independently writable snapshots.
+The existing D1 and Durable Object application interfaces make Cloudflare-hosted
+state a candidate, subject to paid-plan capacity testing and measured VPS RPC
+latency. This deliberately changes the current local-SQLite architecture and
+must be rehearsed before any live data move. It is not a DNS automation patch.
+A Cloudflare outage would remain a shared dependency; this design covers Hermes
+failure, not simultaneous loss of both providers.
+
+- Database operations from Hermes go through a private authenticated Worker
+  gateway with a narrow application interface, bounded batches, replay protection
+  and idempotency. No public arbitrary-SQL endpoint or account API token in the app.
+- Room state, alarms and delivery ownership must also live off Hermes; moving
+  only the main database leaves messages and background work vulnerable.
+- An independent controller holds durable incident state and the current writer
+  generation. Every mutation and external side effect validates ownership at
+  the authoritative boundary. An old or returning VPS cannot keep writing.
+- Confirm repeated failures using public and origin health, distinguish a
+  provider-wide Cloudflare failure from a Hermes failure, and serialize promotion.
+- Promote only an exact compatible, capacity-tested fallback; verify live health,
+  ticket identity, inventory and callback handling before completing the incident.
+- Keep recovered Hermes inactive until state/versions match and a stability window
+  passes. Transfer authority before routing back. Persist transitions so a worker
+  restart cannot repeat payments, messages, or an incomplete promotion.
+- Use payment-provider idempotency and durable reconciliation for an interrupted
+  outbound request; never interpret a network timeout as proof payment failed.
+- Preserve encrypted backups separately. Backups are not synchronous replication.
+
+### Why not activate the current reverse-transfer script automatically?
+
+`rollback()` needs Hermes SQLite files and private recovery configuration. If
+Hermes is unreachable, neither is available to the workflow. Current production
+backups run nightly and copy each database separately; they do not establish a
+current cross-database point for automatic writable recovery. Cloudflare's old
+SQL/Room stores are frozen. Promoting them on a health-check failure is unsafe.
+The repository also records that Cloudflare Free was insufficient for event load.
+
+### Acceptance gates before enabling unattended switching
+
+1. Confirm the destination plan and budget, then prove production-like capacity
+   and VPS-to-store latency; no paid subscription has been activated.
+2. Implement private shared-state access, writer generations, queue/Room ownership,
+   callback idempotency and durable incident transitions behind disabled flags.
+3. On disposable data, kill Hermes and partition its network during booking,
+   scanning, Room sends and provider callbacks. Check every acknowledged write,
+   stock total, ticket identity, provider operation and message sequence.
+4. Exercise stale-node return, concurrent controllers, failed promotion, deployment
+   drift, unavailable authority and controller restart. All ambiguous writers stop.
+5. Rehearse both directions, measure detection/recovery times, and verify user
+   journeys. Publish measured limits; no instant-failover or zero-downtime promise.
+6. Perform one controlled production data migration with tested rollback, enable
+   automation only after verification, and record deployed revisions and incidents.
+
+Decision needed: whether an ongoing Workers Paid dependency is acceptable.
+Official minimum on 29 September 2026 is USD 5/month plus applicable usage;
+this is not a total project quote or proof of sufficient capacity.
+Source: https://developers.cloudflare.com/workers/platform/pricing/
+
+Exact next action after that decision: verify the account's actual Workers plan
+and choose the tested state gateway interface before modifying runtime bindings.
+If the free-only constraint remains, do not claim this architecture is funded or
+activate a stale-data fallback. Reassess a reduced read-only outage mode separately.
+Production remains on Hermes; no routing, live state or BubbleWash changes made.
+
 ## Historical preparation evidence
 
 - Production source at start: `27560025f22ac3f796b6c53947f42d2a7eec3d22`.
