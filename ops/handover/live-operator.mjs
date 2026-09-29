@@ -258,7 +258,17 @@ async function activate() {
     installService(liveState, false); run('systemctl', 'start', 'becore-tickets.service');
     await localHealth(false); run('systemctl', 'stop', 'becore-tickets.service');
     run('systemctl', 'disable', '--now', 'becore-tickets-fallback.timer');
-    await cloudflare(zone + '/rulesets/' + settings.CLOUDFLARE_FALLBACK_RULESET_ID + '/rules/' + settings.CLOUDFLARE_FALLBACK_RULE_ID, 'PATCH', { enabled: false });
+    const fallbackBase = zone + '/rulesets/' + settings.CLOUDFLARE_FALLBACK_RULESET_ID;
+    const fallbackSet = await cloudflare(fallbackBase);
+    const fallbackRule = fallbackSet.rules.find(rule => rule.id === settings.CLOUDFLARE_FALLBACK_RULE_ID);
+    assert.ok(fallbackRule && fallbackRule.ref === 'becore_tickets_vps_maintenance' && fallbackRule.action === 'redirect');
+    assert.equal(fallbackRule.action_parameters?.from_value?.target_url?.value, 'https://tickets-status.becoreops.com/');
+    if (fallbackRule.enabled !== false) {
+      const { ref, action, expression, description, action_parameters } = fallbackRule;
+      await cloudflare(fallbackBase + '/rules/' + fallbackRule.id, 'PATCH', { ref, action, expression, description, action_parameters, enabled: false });
+    }
+    const fallbackVerified = await cloudflare(fallbackBase);
+    assert.equal(fallbackVerified.rules.find(rule => rule.id === fallbackRule.id)?.enabled, false);
     // Persist the irreversible boundary before requesting it; recovery inspects RPC state.
     record.phase = 'transferred'; save();
     await rpc('markTransferred', record.transferId);
