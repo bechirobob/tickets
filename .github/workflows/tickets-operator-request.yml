@@ -1,4 +1,4 @@
-name: Restore source after inactive Tickets readiness failure
+name: Inspect Tickets private startup failure
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      TICKETS_REVISION: '8a46eeaae8296ab588104ea2406f5287c08e5fb6'
+      TICKETS_REVISION: 'ec75bc5e16c48f300f2cbc98d0f33f9d352f0049'
       TICKETS_RUNTIME_RUN: '36566932648'
       TICKETS_DEPLOY_RUN: '36566932507'
     steps:
@@ -70,6 +70,6 @@ jobs:
               raise RuntimeError('Dispatch response was lost; inspect existing runs, never blindly replay.')
           
           assert_main()
-          dispatch('tickets-handover.yml', {'mode':'abort','revision':revision})
-          print('Source restored after inactive VPS readiness failure; no writer transfer occurred.',flush=True)
+          dispatch('tickets-vps-diagnostics.yml', {})
+          print('Read-only Tickets startup inspection completed.',flush=True)
           PY
