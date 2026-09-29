@@ -1,13 +1,10 @@
-name: Inspect live Tickets handover prerequisites
+name: Tickets historical handover reconciliation evidence
 on:
   push:
-    branches: [feat/vps-live-handover-20260929]
-    paths: ['.github/workflows/handover-preflight.yml', 'ops/handover/live-preflight.mjs']
+    branches: [ops/vps-reconciliation-evidence]
+    paths: ['.github/workflows/handover-preflight.yml']
 permissions:
   contents: read
-concurrency:
-  group: tickets-live-handover
-  cancel-in-progress: false
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -19,7 +16,27 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.21.0
-      - name: Read source queues, record counts and routing
+      - name: Read source work without changing it
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node ops/handover/live-preflight.mjs
+        run: |
+          node ops/handover/live-preflight.mjs
+          node --input-type=module <<'NODE'
+          import { cloudflare, account } from './ops/handover/control-client.mjs';
+          import { createHash } from 'node:crypto';
+          const root='/accounts/'+account;
+          const s=await cloudflare(root+'/workers/scripts/becore-tickets/settings');
+          const db=s.bindings.find(b=>b.type==='d1'&&b.name==='DB').id;
+          const q=async sql=>(await cloudflare(root+'/d1/database/'+db+'/query','POST',{sql}))[0].results;
+          const ops=await q('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY id');
+          console.log(JSON.stringify({legacyInventory:ops.length,digest:createHash('sha256').update(JSON.stringify(ops)).digest('hex'),kinds:[...new Set(ops.map(o=>o.kind))],earliest:ops.map(o=>o.started_at).sort()[0],latest:ops.map(o=>o.started_at).sort().at(-1)}));
+          const summaries=[];
+          for(let from=Date.parse('2026-09-29T10:11:00Z');from<Date.parse('2026-09-29T10:15:00Z');from+=15000){
+            const t=await cloudflare(root+'/workers/observability/telemetry/query','POST',{queryId:'tickets-complete-legacy-evidence',timeframe:{from,to:from+15000},view:'events',limit:2000,parameters:{filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'becore-tickets'},{key:'$metadata.type',operation:'eq',type:'string',value:'cf-worker-event'}]}});
+            const events=t.events.events;
+            const counts={};
+            for(const e of events){const key=(e.$workers?.event?.request?.method??e.$workers?.eventType??'unknown')+':'+(e.$workers?.outcome??'unknown');counts[key]=(counts[key]??0)+1;}
+            summaries.push({from,returned:events.length,total:t.events.count,counts});
+          }
+          console.log(JSON.stringify({invocationEvidence:summaries}));
+          NODE
