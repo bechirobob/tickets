@@ -30,7 +30,7 @@ jobs:
           db=sqlite3.connect('/var/lib/becore-tickets/tickets.sqlite',timeout=20)
           db.row_factory=sqlite3.Row
           slug='sun-chasers-labadi'
-          h=json.load(urllib.request.urlopen('http://127.0.0.1:3119/healthz'))
+          h=json.load(urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:3119/healthz',headers={'Host':'tickets.becoreops.com'}),timeout=15))
           assert h['active'] and h['revision']=='181bfc6801a4fc4c993dc0220af99bb3509e433d'
           db.execute('BEGIN IMMEDIATE')
           row=db.execute('SELECT slug,title,schedule_status,event_state,status,removed_at,starts_at,ends_at,updated_at FROM curated_event_records WHERE slug=?',(slug,)).fetchone()
