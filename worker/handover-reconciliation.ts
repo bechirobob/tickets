@@ -12,9 +12,23 @@ export async function inventoryDigest(rows: OperationRecord[]): Promise<string> 
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonical)));
   return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
+// Three records from the same terminated-request incident have incomplete
+// platform logs (inspection 36564168953). They are not declared completed:
+// only the exclusive SQL/Room fence plus all durable-work checks can archive them.
+export const unloggedHttpIncident = [
+  { id: '03601097-cdfa-4ff6-a4bb-6b2a6ad6ae0f', kind: 'http', started_at: '2026-09-29T11:29:37.117Z' },
+  { id: '2896d048-eba4-41ea-88cd-ddae027c7692', kind: 'http', started_at: '2026-09-29T11:29:44.397Z' },
+  { id: 'cb1c0efc-2554-46b5-bf0d-b10ac6769c2c', kind: 'http', started_at: '2026-09-29T11:29:38.305Z' },
+] as const;
+export function isKnownUnloggedOperation(row: OperationRecord): boolean {
+  return unloggedHttpIncident.some(item => item.id === row.id && item.kind === row.kind && item.started_at === row.started_at);
+}
 export async function isLegacyInventory(rows: OperationRecord[]): Promise<boolean> {
-  return rows.length === legacyHttpIncident.count && rows.every(row => row.kind === 'http')
-    && await inventoryDigest(rows) === legacyHttpIncident.digest;
+  const original = rows.filter(row => !isKnownUnloggedOperation(row));
+  const supplemental = rows.filter(isKnownUnloggedOperation);
+  return original.length === legacyHttpIncident.count && original.every(row => row.kind === 'http')
+    && supplemental.length <= unloggedHttpIncident.length && new Set(rows.map(row => row.id)).size === rows.length
+    && await inventoryDigest(original) === legacyHttpIncident.digest;
 }
 export const durableWorkChecks = {
   orders: "SELECT COUNT(*) AS n FROM orders WHERE status NOT IN ('paid','expired','cancelled','refunded','failed')",

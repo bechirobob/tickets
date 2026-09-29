@@ -135,16 +135,23 @@ async function resumeBeforeActivation(rpc) {
   record.phase = 'aborted'; save();
 }
 async function prepare() {
-  assert.ok(!record || ['aborted','returned'].includes(record.phase), 'An existing transfer requires explicit recovery.');
+  const prepared = record?.phase === 'prepared' ? record : null;
+  assert.ok(!record || prepared || ['aborted','returned'].includes(record.phase), 'An existing transfer requires explicit recovery.');
+  if (prepared) assert.ok(prepared.roomIds.length === 0 && prepared.rooms.length === 0 && !prepared.stage);
   assert.ok(!existsSync(liveState), 'Existing live state requires review.');
   const release = JSON.parse(readFileSync('/srv/becore-tickets/releases/' + revision + '/release.json', 'utf8'));
   assert.equal(release.revision, revision); assert.equal(release.dirty, false);
   run('openssl', 'x509', '-in', '/etc/caddy/certs/becore-tickets/origin.pem', '-checkhost', hostname, '-checkend', '2592000', '-noout');
   const database = await currentDatabase();
+  if (prepared) {
+    assert.equal(prepared.database, database);
+    const sourceSettings = await cloudflare(worker + '/settings');
+    assert.equal(sourceSettings.bindings.find(b => b.name === 'HANDOVER_TRACKING')?.type, 'secret_text');
+  }
   for (const sql of controlSchema) await query(database, sql);
   const status = (await query(database, 'SELECT phase FROM _bct_handover_admission WHERE id=1'))[0];
   assert.equal(status.phase, 'active');
-  await cloudflare(worker + '/secrets', 'PUT', { name: 'HANDOVER_TRACKING', text: '1', type: 'secret_text' });
+  if (!prepared) await cloudflare(worker + '/secrets', 'PUT', { name: 'HANDOVER_TRACKING', text: '1', type: 'secret_text' });
   await withControl(revision, async rpc => {
     const current = await rpc('sourceStatus'); assert.equal(current.tracking, true);
     const backupFile = '/etc/becore-tickets/backup.key';
@@ -163,7 +170,7 @@ async function prepare() {
     const values = { ...fresh.values, ...Object.fromEntries(Object.entries(pending).filter(([k]) => ['VPS_AI_URL','VPS_AI_SIGNING_KEY'].includes(k))) };
     assert.ok(values.VPS_AI_URL && values.VPS_AI_SIGNING_KEY && values.STAFF_LOGIN_DECOY_SECRET && values.VAPID_PRIVATE_KEY && values.APPLE_WALLET_AUTH_SECRET && values.ENVIRONMENT === 'production');
     checkpoint('/etc/becore-tickets/runtime.json', values);
-    record = { version: 1, transferId: randomUUID(), revision, database, phase: 'prepared', preparedAt: new Date().toISOString(), configurationHash: hash(values), roomIds: [], rooms: [] };
+    record = { version: 1, transferId: prepared?.transferId ?? randomUUID(), revision, database, phase: 'prepared', preparedAt: prepared?.preparedAt ?? new Date().toISOString(), configurationHash: hash(values), roomIds: [], rooms: [] };
     save(); log('tracking-armed-live-source-unchanged');
   });
 }

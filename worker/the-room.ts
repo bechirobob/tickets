@@ -1,3 +1,4 @@
+import { isLegacyInventory, type OperationRecord } from "./handover-reconciliation";
 import { restoreFrozenRoom, type RoomReturn } from "./room-return";
 import { trackedOperation, requireTransfer, HandoverPaused } from "./handover-control";
 import { requireHandover } from "./handover-crypto";
@@ -194,8 +195,8 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   async freezeHandover(transferId: string) {
     requireHandover(this.env); requireTransfer(transferId);
     const admission = await this.env.DB.prepare("SELECT transfer_id FROM _bct_handover_admission WHERE id=1 AND phase IN ('paused','frozen')").first<{ transfer_id: string }>();
-    const active = await this.env.DB.prepare('SELECT COUNT(*) AS n FROM _bct_handover_operations').first<{ n: number }>();
-    if (admission?.transfer_id !== transferId || active?.n !== 0) throw new Error('Source has not drained.');
+    const operations = (await this.env.DB.prepare('SELECT id,kind,started_at FROM _bct_handover_operations ORDER BY id').all<OperationRecord>()).results;
+    if (admission?.transfer_id !== transferId || (operations.length !== 0 && !await isLegacyInventory(operations))) throw new Error('Source has not drained.');
     const alarm = this.writerFrozen ? undefined : (await this.ctx.storage.getAlarm()) ?? (this.alarmRunning ? Date.now() : null);
     this.ctx.storage.transactionSync(() => {
       for (const sql of writerGuardStatements(['room_config', 'messages', 'reactions'])) this.ctx.storage.sql.exec(sql);

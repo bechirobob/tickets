@@ -53,7 +53,12 @@ test('frozen live Rooms retain alarms without platform retries consuming them', 
       const id='01234567-89ab-4cde-8123-456789abcdef';
       await env.DB.prepare("UPDATE _bct_handover_admission SET phase='paused',transfer_id=? WHERE id=1").bind(id).run();
       const room=env.ROOM.getByName('alarm-handover');
-      await room.seedAlarm(${due});await room.freezeHandover(id);await room.invokeAlarm();
+      await room.seedAlarm(${due});
+      await env.DB.prepare("INSERT INTO _bct_handover_operations VALUES('unknown','http','2000')").run();
+      let rejected=false;try{await room.freezeHandover(id)}catch{rejected=true}
+      if(!rejected)throw new Error('Unknown operation incorrectly allowed Room freeze');
+      await env.DB.prepare('DELETE FROM _bct_handover_operations').run();
+      await room.freezeHandover(id);await room.invokeAlarm();
       const frozen=await room.encryptedHandoverSnapshot();
       const inactive=await room.platformAlarm();
       const restored=await room.restoreHandover(id,{tables:{room_config:[],messages:[],reactions:[]},sequences:[],alarm:${due + 1000}});

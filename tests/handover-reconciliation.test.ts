@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, expect, it } from 'vitest';
 import { controlSchema } from '../worker/handover-control';
-import { archiveFencedOperations, inventoryDigest, isLegacyInventory, restoreReconciledOperations } from '../worker/handover-reconciliation';
+import { archiveFencedOperations, isKnownUnloggedOperation, unloggedHttpIncident, inventoryDigest, isLegacyInventory, restoreReconciledOperations } from '../worker/handover-reconciliation';
 import { writerGuardStatements, transitionWriterSql } from '../ops/handover/writer-lock.mjs';
 const transfer = '01234567-89ab-4cde-8123-456789abcdef';
 const record = { id: 'synthetic', kind: 'http', started_at: '2000-01-01T00:00:00Z' };
@@ -48,4 +48,13 @@ it('blocks reconciliation for unresolved delivery work without discarding the re
   await freeze();
   await expect(archiveFencedOperations(env.DB, transfer, await inventoryDigest([record]), 'test')).rejects.toThrow('deliveries');
   expect(await count()).toBe(1);
+});
+
+it('supplemental incident matching requires exact identity, kind and timestamp and never replaces the original inventory', async () => {
+  for (const row of unloggedHttpIncident) {
+    expect(isKnownUnloggedOperation(row)).toBe(true);
+    expect(isKnownUnloggedOperation({ ...row, kind: 'queue' })).toBe(false);
+    expect(isKnownUnloggedOperation({ ...row, started_at: '2000' })).toBe(false);
+  }
+  expect(await isLegacyInventory([...unloggedHttpIncident])).toBe(false);
 });
