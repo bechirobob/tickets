@@ -1,4 +1,4 @@
-import { isLegacyInventory, legacyHttpIncident, archiveFencedOperations, restoreReconciledOperations, type OperationRecord } from './handover-reconciliation';
+import { isLegacyInventory, inventoryDigest, archiveFencedOperations, restoreReconciledOperations, type OperationRecord } from './handover-reconciliation';
 import type { RoomReturn } from './room-return';
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { sealHandover, requireHandover } from './handover-crypto';
@@ -56,7 +56,7 @@ export class HandoverEntrypoint extends WorkerEntrypoint<Cloudflare.Env> {
     const transition = transitionWriterSql(transferId, true);
     const frozen = await this.env.DB.prepare(transition.sql).bind(...transition.params).first();
     if (!frozen) throw new Error('Writer lock belongs to another transfer.');
-    if (legacy) await archiveFencedOperations(this.env.DB, transferId, legacyHttpIncident.digest, legacyHttpIncident.evidenceRun);
+    if (legacy) await archiveFencedOperations(this.env.DB, transferId, await inventoryDigest(operations), '36558791879,36564168953');
     await this.env.DB.prepare("UPDATE _bct_handover_admission SET phase='frozen' WHERE id=1 AND transfer_id=?").bind(transferId).run();
     return this.sourceStatus();
   }

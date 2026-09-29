@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "becore-tickets",
+  "tail_consumers": [{ "service": "tickets-handover-terminal" }],
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-11",
   "compatibility_flags": [
