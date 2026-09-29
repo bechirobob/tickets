@@ -22,3 +22,11 @@ describe('encrypted operator handover', () => {
     await expect(crypto.subtle.decrypt({ name: 'AES-GCM', iv: decode(envelope.nonce), additionalData: new TextEncoder().encode(envelope.header + ' ') }, key, decode(envelope.ciphertext))).rejects.toThrow();
   });
 });
+
+// Exercise the internal API's default denial in the actual Cloudflare/Node
+// bindings, not just its encryption helper.
+import { env } from 'cloudflare:test';
+it('does not expose Room history without an operator transfer window', async () => {
+  const room = env.THE_ROOM.getByName(`handover-disabled-${crypto.randomUUID()}`);
+  expect(await room.encryptedHandoverSnapshot()).toEqual({ error: 'Room handover unavailable.' });
+});

@@ -119,3 +119,27 @@ activating the service or overwriting a different existing configuration.
 Next action: release the tested dormant entrypoint, collect and decrypt the
 configuration on Hermes, then implement consistent D1/Room handover. No live
 data transfer, freeze or traffic switch is claimed by these preparation changes.
+
+### Data rehearsal checkpoint
+
+- D1 encrypted export `36505772936` succeeded from live source `27560025`.
+  Actual Hermes restore `36505904761` passed SQLite integrity and foreign-key
+  validation. Root-only inactive state is retained at
+  `/var/lib/becore-tickets-handover/rehearsal-36505772936`.
+- All database tables were preserved, including 2 orders, 1 ticket, 2
+  registrations, 3 attendee sessions and 45 staff sessions. No customer rows or
+  plaintext SQL crossed tool output or unencrypted workflow artifacts.
+- The next Room increment adds an internal encrypted snapshot of all three
+  Room tables, their schemas, the message sequence high-water mark and alarm.
+  It preserves Cloudflare object IDs and derives the Node filename from the
+  original event slug; removed/empty Rooms are retained as unmapped objects.
+  Exports fail rather than truncate if an object exceeds the bounded snapshot
+  size. These remain rehearsal snapshots, not a coordinated write freeze.
+- The actual internal Service Binding configuration call was exercised with
+  synthetic credentials under Miniflare: only allowlisted values survived
+  decryption, while the public Worker handler returned 404. SQL restore tests
+  cover binary values, referential integrity, rollback, reactions, deleted
+  sequence numbers and alarm preservation.
+- Next: complete configuration collection after the verified entrypoint is
+  live; release and run encrypted Room snapshot/restore; then implement and
+  verify the final writer freeze, bidirectional handover and origin switch.
