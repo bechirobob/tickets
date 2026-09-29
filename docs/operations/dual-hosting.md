@@ -209,3 +209,25 @@ deliveries and verify secured public routing. The rehearsal snapshot must never
 be activated as though it were current production data. Cloudflare remains the only live writer;
 this task completes standby/export verification, not live cutover or automatic
 failover. No second live writer is authorized.
+
+### Final standby recovery closeout — 29 September, 07:24 UTC
+
+The requested stopped-operation recovery is complete. Rechecked successful return
+verification 36535200847 and isolated regression run 36535071452. Fresh host
+inventory 36536113775 confirmed release
+`5807f6ea9a7baef998cf379dc298ce636caf1f60`, active isolated preview, root-private
+pending configuration, and no active production configuration. Host closeout
+36536379015 succeeded and atomically recorded the verified Cloudflare SQL return
+in `standby-verification.json`, retaining `cutoverReady: false` and
+`activated: false`. No recovery operation is still running.
+
+Final public HTTPS check returned 200. Production reports source
+`6b6fd02cf2b94501b0fdc0122c4d7a647444366c`, Worker version
+`04643a11-6330-4d65-a245-a36150078087`. No live routing, credentials, payments,
+messages, source writes or customer data were changed by this closeout.
+
+This closes the failed standby SQL-return task, not the separate live activation.
+The outstanding live activation gates remain: coordinated writer freeze and
+drain, fresh D1/Room snapshot, pending-delivery reconciliation, live Room reverse
+import, and secured public routing/rollback verification. Keep both deployments
+and never activate rehearsal data as current production.
