@@ -2,6 +2,9 @@ name: Focused scanner browser verification
 on:
   push:
     branches: [ops/scanner-focus]
+concurrency:
+  group: scanner-focus
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -17,5 +20,6 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium webkit
+      - run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
       - run: node scripts/prepare-operations-browser-fixture.mjs
       - run: npx playwright test --config playwright.operations.config.ts --grep 'gate camera survives' --workers=1 --retries=0
