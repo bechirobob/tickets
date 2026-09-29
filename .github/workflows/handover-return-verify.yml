@@ -1,0 +1,27 @@
+name: Verify actual VPS SQL restored in Cloudflare
+on:
+  push:
+    branches: [ops/vps-standby-completion-20260929]
+    paths: [.github/workflows/handover-return-verify.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - name: Read scoped preparation manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 36512162403 --repo bechirobob/tickets --name scoped-return-36512162403 --dir scoped-return
+      - name: Import, compare all records and remove isolated database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node ops/handover/scoped-return.mjs verify scoped-return/manifest.json
