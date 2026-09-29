@@ -42,3 +42,6 @@ jobs:
           config=pathlib.Path('/etc/becore-tickets/runtime.json');metadata=config.lstat();values=json.loads(config.read_text())
           print(json.dumps({'configRegular':stat.S_ISREG(metadata.st_mode),'configMode':oct(stat.S_IMODE(metadata.st_mode)),'allConfigValuesStrings':all(isinstance(v,str) for v in values.values()),'productionEnvironment':values.get('ENVIRONMENT')=='production','staffDecoyPresent':bool(values.get('STAFF_LOGIN_DECOY_SECRET'))}))
           PY
+      - name: Inspect systemd credential metadata without printing its contents
+        run: |
+          tailscale ssh root@hermes "systemd-run --wait --pipe --collect --unit=becore-tickets-credential-inspect --property=User=becore-tickets --property=LoadCredential=runtime.json:/etc/becore-tickets/runtime.json /usr/bin/python3 -c 'import os,pathlib,stat,json; d=pathlib.Path(os.environ[\"CREDENTIALS_DIRECTORY\"]); p=d/\"runtime.json\"; s=p.lstat(); t=d.lstat(); print(json.dumps({\"fileMode\":oct(stat.S_IMODE(s.st_mode)),\"regular\":stat.S_ISREG(s.st_mode),\"fileUid\":s.st_uid,\"fileGid\":s.st_gid,\"processUid\":os.getuid(),\"directoryMode\":oct(stat.S_IMODE(t.st_mode)),\"directoryUid\":t.st_uid,\"directoryGid\":t.st_gid}))'"
