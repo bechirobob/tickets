@@ -1,142 +1,72 @@
-name: Release verified Tickets scanner repair on Hermes
+name: Open temporary owner scanner test window
 on:
-  workflow_dispatch:
-    inputs:
-      source_sha:
-        required: true
-        type: string
-      runtime_run:
-        required: true
-        type: string
-      candidate_run:
-        required: true
-        type: string
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tickets-vps-diagnostics.yml']
 permissions:
   contents: read
-  actions: read
   id-token: write
 concurrency:
   group: tickets-vps-handover
   cancel-in-progress: false
 jobs:
-  release:
+  test-window:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      SOURCE_SHA: ${{ inputs.source_sha }}
-      RUNTIME_RUN: ${{ inputs.runtime_run }}
-      CANDIDATE_RUN: ${{ inputs.candidate_run }}
-      EXPECTED_ACTIVE: 8a46eeaae8296ab588104ea2406f5287c08e5fb6
+    timeout-minutes: 5
     steps:
-      - name: Require main and exact verified source
-        run: |
-          test "$GITHUB_REF" = refs/heads/main
-          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$RUNTIME_RUN" =~ ^[0-9]+$ && "$CANDIDATE_RUN" =~ ^[0-9]+$ ]]
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source_sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Verify CI, unchanged data contracts and release ancestry
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$RUNNER_TEMP/runtime.json"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$RUNNER_TEMP/candidate.json"
-          python3 - <<'PY'
-          import json,os,subprocess
-          def git(*args): return subprocess.check_output(['git',*args],text=True).strip()
-          source=os.environ['SOURCE_SHA']
-          runtime=json.load(open(os.environ['RUNNER_TEMP']+'/runtime.json'))
-          candidate=json.load(open(os.environ['RUNNER_TEMP']+'/candidate.json'))
-          assert runtime['conclusion']=='success' and runtime['head_sha']==source and runtime['path']=='.github/workflows/vps-runtime.yml'
-          assert candidate['conclusion']=='success' and candidate['path']=='.github/workflows/candidate-checks.yml'
-          subprocess.run(['git','merge-base','--is-ancestor',source,'origin/main'],check=True)
-          # Candidate source must match, apart from operational documentation/tooling.
-          allowed=lambda f: f.startswith(('docs/','.github/workflows/','ops/handover/','tests/handover-'))
-          assert all(allowed(f) for f in git('diff','--name-only',candidate['head_sha'],source).splitlines())
-          # This updater is only for the scanner. No database, runtime, credentials or migration changes.
-          changed=git('diff','--name-only',os.environ['EXPECTED_ACTIVE'],source).splitlines()
-          assert all(allowed(f) or f in ['app/scan/scanner.tsx','app/api/admin/check-in/route.ts','tests/e2e/operations.spec.ts','scripts/browser-worker.mjs'] for f in changed),changed
-          PY
-          gh run download "$RUNTIME_RUN" --repo "$GITHUB_REPOSITORY" --name "tickets-vps-$SOURCE_SHA" --dir artifact
-          cd artifact
-          sha256sum --check tickets-vps-runtime.tar.gz.sha256
-      - name: Connect dedicated Tickets identity
-        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+      - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
           oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Apply reversible code-only update under deployment lock
+      - name: Enable only the requested event with automatic restoration
         run: |
-          set -euo pipefail
-          digest=$(sha256sum artifact/tickets-vps-runtime.tar.gz | cut -d ' ' -f 1)
-          cat artifact/tickets-vps-runtime.tar.gz | tailscale ssh root@hermes "umask 077; mkdir -p /var/tmp/tickets-scanner-$GITHUB_RUN_ID; cat > /var/tmp/tickets-scanner-$GITHUB_RUN_ID/runtime.tar.gz"
-          tailscale ssh root@hermes "python3 - '$SOURCE_SHA' '$EXPECTED_ACTIVE' '$GITHUB_RUN_ID' '$digest'" <<'PY'
-          import json,pathlib,subprocess,fcntl,urllib.request,time,sys,hashlib,tarfile,shutil,os
-          source,expected,run_id,digest=sys.argv[1:]
-          lock=open('/run/lock/becore-tickets-deploy.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-          stage=pathlib.Path('/var/tmp/tickets-scanner-'+run_id)
-          root=pathlib.Path('/var/lib/becore-tickets-handover')
-          record=json.loads((root/'live-transfer.json').read_text())
-          assert record['phase']=='active' and record['revision']==expected
-          def health(public=False):
-              url='https://tickets.becoreops.com/healthz' if public else 'http://127.0.0.1:3119/healthz'
-              req=urllib.request.Request(url,headers={'Host':'tickets.becoreops.com','User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)'})
-              with urllib.request.urlopen(req,timeout=15) as response: return json.load(response)
-          assert health().get('revision')==expected and health().get('active') is True
-          previous=subprocess.check_output(['systemctl','show','becore-tickets.service','--property=WorkingDirectory','--value'],text=True).strip()
-          assert previous=='/srv/becore-tickets/releases/'+expected
-          handoff=pathlib.Path('/var/lib/becore-tickets/handoff.json').read_bytes()
-          assert hashlib.sha256((stage/'runtime.tar.gz').read_bytes()).hexdigest()==digest
-          release=pathlib.Path('/srv/becore-tickets/releases')/source
-          assert not release.exists(),'Release already exists; inspect before retrying.'
-          release.mkdir(mode=0o755)
-          with tarfile.open(stage/'runtime.tar.gz') as archive: archive.extractall(release,filter='data')
-          manifest=json.loads((release/'release.json').read_text())
-          assert manifest['revision']==source and manifest['dirty'] is False
-          subprocess.run(['chown','-R','root:root',str(release)],check=True)
-          subprocess.run([str(release/'bin/node'),'--check',str(release/'server.mjs')],check=True)
-          override=pathlib.Path('/etc/systemd/system/becore-tickets.service.d/scanner-release.conf')
-          assert not override.exists(),'An earlier scanner update must be inspected first.'
-          candidate=f'[Service]\nWorkingDirectory={release}\nExecStart=\nExecStart=/usr/bin/flock --nonblock /var/lib/becore-tickets/instance.lock {release}/bin/node {release}/server.mjs\n'
-          evidence=root/('scanner-release-'+run_id+'.json')
-          evidence.write_text(json.dumps({'phase':'prepared','previous':expected,'candidate':source,'runId':run_id}));evidence.chmod(0o600)
+          tailscale ssh root@hermes "python3 - '$GITHUB_RUN_ID'" <<'PY'
+          import sqlite3,json,pathlib,datetime,uuid,subprocess,urllib.request,sys
+          run=sys.argv[1]
+          root=pathlib.Path('/var/lib/becore-tickets-handover')/('entry-test-'+run)
+          root.mkdir(mode=0o700)
+          db=sqlite3.connect('/var/lib/becore-tickets/tickets.sqlite',timeout=20)
+          db.row_factory=sqlite3.Row
+          slug='sun-chasers-labadi'
+          h=json.load(urllib.request.urlopen('http://127.0.0.1:3119/healthz'))
+          assert h['active'] and h['revision']=='181bfc6801a4fc4c993dc0220af99bb3509e433d'
+          db.execute('BEGIN IMMEDIATE')
+          row=db.execute('SELECT slug,title,schedule_status,event_state,status,removed_at,starts_at,ends_at,updated_at FROM curated_event_records WHERE slug=?',(slug,)).fetchone()
+          assert row and row['removed_at'] is None and row['status']=='published'
+          assert row['schedule_status']=='coming_soon' and row['event_state'] not in ('cancelled','past')
+          now=datetime.datetime.now(datetime.timezone.utc)
+          stamp=now.isoformat()
+          record={'previous':dict(row),'activatedAt':stamp,'expiresAt':(now+datetime.timedelta(minutes=30)).isoformat(),'run':run}
+          snapshot=root/'state.json'
+          snapshot.write_text(json.dumps(record));snapshot.chmod(0o600)
+          restore=root/'restore.py'
+          restore.write_text("""import sqlite3,json,pathlib,datetime,uuid
+          root=pathlib.Path(__file__).parent
+          record=json.loads((root/'state.json').read_text())
+          old=record['previous']
+          db=sqlite3.connect('/var/lib/becore-tickets/tickets.sqlite',timeout=30)
+          with db:
+              changed=db.execute("UPDATE curated_event_records SET schedule_status=?,event_state=?,updated_at=? WHERE slug=? AND schedule_status='confirmed' AND event_state='on_sale' AND updated_at=?",(old['schedule_status'],old['event_state'],datetime.datetime.now(datetime.timezone.utc).isoformat(),old['slug'],record['activatedAt'])).rowcount
+              db.execute("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES(?,?,?,?,?,?,?,?)",(str(uuid.uuid4()),'system','restore_scanner_test_window','event',old['slug'],'success' if changed else 'skipped',json.dumps({'run':record['run'],'restored':bool(changed)}),datetime.datetime.now(datetime.timezone.utc).isoformat()))
+          record['restored']=bool(changed)
+          (root/'result.json').write_text(json.dumps(record))
+          print(json.dumps({'event':old['slug'],'restored':bool(changed)}))
+          """)
+          restore.chmod(0o700)
+          unit='becore-tickets-entry-test-'+run
+          subprocess.run(['systemd-run','--unit='+unit,'--on-active=30m','--timer-property=AccuracySec=1s','/usr/bin/python3',str(restore)],check=True)
           try:
-              override.write_text(candidate);override.chmod(0o644)
-              subprocess.run(['systemctl','daemon-reload'],check=True)
-              subprocess.run(['systemctl','restart','becore-tickets.service'],check=True,timeout=90)
-              for attempt in range(30):
-                  try:
-                      h=health()
-                      if h.get('revision')==source and h.get('active') is True: break
-                  except Exception: pass
-                  time.sleep(1)
-              else: raise RuntimeError('Candidate readiness failed')
-              h=health(True);assert h['revision']==source and h['active'] is True
-              for path in ['/', '/events', '/my-nights', '/scan', '/api/public/events']:
-                  req=urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)'})
-                  with urllib.request.urlopen(req,timeout=20) as response: assert response.status==200
-              assert pathlib.Path('/var/lib/becore-tickets/handoff.json').read_bytes()==handoff
-              evidence.write_text(json.dumps({'phase':'verified','previous':expected,'candidate':source,'runId':run_id,'publicHealth':True,'routes':5,'stateUnchanged':True}))
-              # Keep original transfer revision for its original Cloudflare return protocol.
-              record['activeRevision']=source;record['lastCodeReleaseRun']=run_id
-              tmp=root/'live-transfer.code-update.tmp';tmp.write_text(json.dumps(record));tmp.chmod(0o600);os.replace(tmp,root/'live-transfer.json')
-              print(json.dumps({'released':source,'previous':expected,'active':True,'publicVerified':True,'dataMigration':False}))
-          except Exception:
-              override.unlink(missing_ok=True)
-              subprocess.run(['systemctl','daemon-reload'],check=True)
-              subprocess.run(['systemctl','restart','becore-tickets.service'],check=True,timeout=90)
-              for attempt in range(30):
-                  try:
-                      h=health()
-                      if h.get('revision')==expected and h.get('active') is True: break
-                  except Exception: pass
-                  time.sleep(1)
-              else: raise RuntimeError('Rollback requires operator attention')
-              evidence.write_text(json.dumps({'phase':'rolled-back','previous':expected,'candidate':source,'runId':run_id}))
+              db.execute("UPDATE curated_event_records SET schedule_status='confirmed',event_state='on_sale',updated_at=? WHERE slug=?",(stamp,slug))
+              db.execute("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES(?,?,?,?,?,?,?,?)",(str(uuid.uuid4()),'system','open_scanner_test_window','event',slug,'success',json.dumps({'run':run,'previousSchedule':row['schedule_status'],'previousState':row['event_state'],'expiresAt':record['expiresAt'],'authorization':'Owner requested temporary event activation for live scanner test'}),stamp))
+              db.commit()
+          except:
+              db.rollback()
+              subprocess.run(['systemctl','stop',unit+'.timer'],check=True)
               raise
-          finally: shutil.rmtree(stage)
+          assert db.execute("SELECT schedule_status,event_state FROM curated_event_records WHERE slug=?",(slug,)).fetchone()[0]=='confirmed'
+          subprocess.run(['systemctl','is-active',unit+'.timer'],check=True)
+          print(json.dumps({'event':slug,'title':row['title'],'entry':'active','expiresAt':record['expiresAt'],'previousSchedule':row['schedule_status'],'datesUnchanged':True,'restoreScript':str(restore)}))
+          
           PY
