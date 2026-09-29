@@ -31,3 +31,4 @@ jobs:
 # Handle immediate import rejection without a polling bookmark.
 # Return only a fixed-vocabulary failure template; never private values or SQL.
 # Preserve numeric provider error codes nested inside an error string.
+# Decode string-valued provider codes and nested message templates safely.
