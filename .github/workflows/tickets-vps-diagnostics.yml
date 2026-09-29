@@ -43,7 +43,10 @@ jobs:
            properties=['User=becore-tickets','Group=becore-tickets','WorkingDirectory='+str(release),'LoadCredential=runtime.json:/etc/becore-tickets/runtime.json','RuntimeDirectory='+unit,'RuntimeDirectoryMode=0700','ExecStartPre=/usr/bin/install -m 600 %d/runtime.json '+str(runtime/'runtime.json'),'NoNewPrivileges=true','ProtectSystem=strict','ProtectHome=true','PrivateTmp=true','ReadWritePaths='+str(state)+' '+str(runtime),'IPAddressDeny=any','IPAddressAllow=localhost','UMask=0077']
            environment={'NODE_ENV':'production','TICKETS_ACTIVE':'0','TICKETS_CONFIG':str(runtime/'runtime.json'),'TICKETS_STATE':str(state),'TICKETS_HOST':'tickets.becoreops.com','TICKETS_PORT':'3121'}
            command=['systemd-run','--quiet','--collect','--unit='+unit,'--service-type=exec']+['--property='+p for p in properties]+['--setenv='+k+'='+v for k,v in environment.items()]+[str(release/'bin/node'),str(release/'server.mjs')]
-           subprocess.run(command,check=True,capture_output=True)
+           result=subprocess.run(command,capture_output=True,text=True)
+           if result.returncode:
+            print(json.dumps({'transientUnitSetupError':result.stderr[:1500]}))
+            raise RuntimeError('Private test unit setup rejected; inspect reported systemd diagnostic.')
            healthy=False
            for attempt in range(40):
             try:
