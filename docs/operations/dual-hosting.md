@@ -144,7 +144,7 @@ data transfer, freeze or traffic switch is claimed by these preparation changes.
   live; release and run encrypted Room snapshot/restore; then implement and
   verify the final writer freeze, bidirectional handover and origin switch.
 
-## 29 September export continuation (in progress)
+## 29 September export continuation (historical checkpoint)
 
 The previous chat stopped with an untested, uncommitted reverse-export helper.
 Continuation source is `ops/vps-standby-completion-20260929` in
@@ -166,12 +166,9 @@ Verified:
   tests and focused lint passed. Real D1 synthetic large-poster and full-schema
   imports passed (36512872487 and 36513236464).
 
-A full private-data return import is still being investigated. Early attempts
-failed at ingestion; their temporary D1 databases were deleted. The original
-source database and public routes were never modified. Exact next action:
-complete the scoped upload prepared by 36513281723, inspect sanitized ingestion
-diagnostics, fix any remaining import defect and verify all schema/record/sequence
-digests. Do not repeat old uploads against deleted targets.
+The full private-data return import was subsequently completed by recovery run
+36535200847; see the final continuation record below. Earlier failed targets
+were removed and their manifests must not be replayed.
 
 Cloudflare remains the live writer. The VPS data is a rehearsal snapshot.
 No coordinated D1/Room/queue freeze, live traffic cutover, automatic failover or
@@ -193,9 +190,22 @@ import. Eleven local regression checks and focused ESLint pass.
 Source code: `1978b651c41fff11bdb39681fd39222714e1612b`.
 Private Hermes metadata run 36534979412 confirmed identical schema, row and
 sequence digests for all 107 tables / 430 rows. Preparation 36535071347 and
-private upload 36535132498 succeeded. Exact-state D1 verification is running as
-36535200847 at `1ba9ab96958e3dbf20153ea4998acf316795debb`.
-Next action: inspect that run's result and cleanup before any new import.
-Do not retry its manifest after cleanup. Cloudflare remains the only live writer;
+private upload 36535132498 succeeded. Exact-state D1 verification **passed** in run
+36535200847 at `1ba9ab96958e3dbf20153ea4998acf316795debb` on
+29 September 2026 at 07:13 UTC (08:13 Malabo). All three imports completed;
+foreign-key validation and exact schema, all 107 tables / 430 rows, and sequence
+digests matched. The disposable database was removed successfully. There is no
+remaining export/import job running. Do not retry its cleaned-up manifest.
+
+Required scope complete: the stopped standby SQL export/return rehearsal is
+resolved. Exact-source isolated checks passed in 36535071452 (11 tests).
+Production HTTPS returned HTTP 200 during final verification. Existing six-Room
+restore and VPS runtime/capacity evidence above remains separate; no new live
+Room reverse import is claimed.
+
+Next action only for a future activation task: implement and verify a coordinated
+D1/Room/queue writer freeze, obtain a fresh consistent snapshot, reconcile pending
+deliveries and verify secured public routing. The rehearsal snapshot must never
+be activated as though it were current production data. Cloudflare remains the only live writer;
 this task completes standby/export verification, not live cutover or automatic
 failover. No second live writer is authorized.
