@@ -692,7 +692,7 @@ test('gate camera survives scan results, repeated starts and camera failure', as
     await page.getByRole('button', { name: 'Scan next ticket', exact: true }).click();
     await expect(video).toBeVisible();
     await expect.poll(() => video.evaluate(v => !(v as HTMLVideoElement).paused && Boolean((v as HTMLVideoElement).srcObject))).toBe(true);
-    holdStats = false; await statsGate.release?.();
+    holdStats = false; await (statsGate.release as (() => Promise<void>) | undefined)?.();
   }
   outcome = 'unavailable';
   await page.getByPlaceholder('BCT-XXXX-XXXX-XXXX-XXXX').fill('BCT-ABCD-EFGH-IJKL-MNOP');
