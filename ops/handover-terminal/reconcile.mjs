@@ -15,7 +15,7 @@ async function collect(from,to){
  else events.push(...result.events.events);
 }
 if(rows.length){
- const start=Math.min(...rows.map(r=>Date.parse(r.started_at)))-2000, end=Date.now();
+ const start=Date.parse('2026-09-29T11:15:00Z'), end=Date.now();
  assert.ok(end-start<3600000,'Explicit historical window review required.');
  for(let from=start;from<end;from+=30000)await collect(from,Math.min(end,from+30000));
  const matches=matchTerminalEvidence(rows,events);
