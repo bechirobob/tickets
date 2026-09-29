@@ -1,12 +1,12 @@
 {
-  "sqlMD5": "4307433a71fc2c0db94a16edde453d9c",
+  "sqlMD5": "2b030362ee1031a3d65accb6cd3791ba",
   "phases": {
     "schema": {
       "md5": "9c40cc042d1ec469e8818987e0c1e45c",
       "bytes": 49348
     },
     "data": {
-      "md5": "08ef58071aa2399e487daef6859531aa",
+      "md5": "08ee46afc15a9f7f8807cf7af375be8f",
       "bytes": 1200301
     },
     "triggers": {

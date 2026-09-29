@@ -35,3 +35,5 @@ jobs:
 # Identify provider error variant field names without printing error payloads.
 
 # Import schema, rows and triggers separately, with unchanged exact-state digests.
+
+# Restore referenced parents before child rows across D1 import transactions.
