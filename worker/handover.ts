@@ -80,9 +80,17 @@ export class HandoverEntrypoint extends WorkerEntrypoint<Cloudflare.Env> {
     requireHandover(this.env); requireTransfer(transferId);
     const admission = await this.env.DB.prepare("SELECT phase,transfer_id FROM _bct_handover_admission WHERE id=1").first<{ phase: string; transfer_id: string }>();
     if (admission?.transfer_id !== transferId || !['paused', 'frozen'].includes(admission.phase)) throw new Error('A completed transfer requires verified reverse import before release.');
-    if (admission.phase === 'frozen') {
-      const command = transitionWriterSql(transferId, false);
-      if (!await this.env.DB.prepare(command.sql).bind(...command.params).first()) throw new Error('Writer lock belongs to another transfer.');
+    // A lost response between SQL freeze and admission-state update can leave
+    // phase=paused with the physical writer already frozen. Inspect the lock
+    // rather than assuming the admission phase proves its physical state.
+    const hasLock = await this.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='_bct_handover_state'").first();
+    if (hasLock) {
+      const lock = await this.env.DB.prepare('SELECT frozen,transfer_id FROM _bct_handover_state WHERE id=1').first<{ frozen: number; transfer_id: string }>();
+      if (lock?.frozen === 1) {
+        if (lock.transfer_id !== transferId) throw new Error('Writer lock belongs to another transfer.');
+        const command = transitionWriterSql(transferId, false);
+        if (!await this.env.DB.prepare(command.sql).bind(...command.params).first()) throw new Error('Writer lock belongs to another transfer.');
+      }
     }
     await this.env.DB.prepare("UPDATE _bct_handover_admission SET phase='active',paused_at=NULL WHERE id=1 AND transfer_id=?").bind(transferId).run();
     return this.sourceStatus();
