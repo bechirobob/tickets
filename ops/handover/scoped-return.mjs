@@ -8,10 +8,15 @@ const root = 'https://api.cloudflare.com/client/v4/accounts/af75a230de2eea882606
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const quote = value => '"' + value.replaceAll('"', '""') + '"';
 let database, retained = false, phase = 'start';
+function safeFailure(value) {
+  const text = JSON.stringify(value);
+  const categories = ['SQLITE_AUTH', 'SQLITE_CONSTRAINT', 'FOREIGN KEY', 'no such table', 'syntax error', 'not authorized', 'No uploaded file', 'does not exist', 'incomplete input', 'SQLITE_ERROR'].filter(term => text.toLowerCase().includes(term.toLowerCase()));
+  console.error(JSON.stringify({ phase, errorCategories: categories, apiCodes: Array.isArray(value.errors) ? value.errors.map(row => row.code) : [] }));
+}
 async function call(url, method, body) {
   const response = await fetch(url, { method, headers: { authorization: 'Bearer ' + process.env.CLOUDFLARE_API_TOKEN, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
   const value = await response.json();
-  if (!response.ok || !value.success || value.result?.some?.(row => row.success === false)) throw new Error('Scoped D1 operation failed.');
+  if (!response.ok || !value.success || value.result?.some?.(row => row.success === false)) { safeFailure(value); throw new Error('Scoped D1 operation failed.'); }
   return value.result;
 }
 const query = async sql => (await call(root + '/' + database + '/query', 'POST', { sql }))[0].results;
@@ -46,7 +51,7 @@ try {
     const endpoint = root + '/' + database + '/import';
     let result = await call(endpoint, 'POST', { action: 'ingest', etag: manifest.expected.sqlMD5, filename: manifest.filename });
     for (let attempt = 0; attempt < 60 && result.status !== 'complete'; attempt++) {
-      assert.notEqual(result.status, 'error'); assert.ok(result.at_bookmark);
+      if (result.status === 'error') { safeFailure(result); throw new Error('Import failed.'); } assert.ok(result.at_bookmark);
       await new Promise(resolve => setTimeout(resolve, 2000));
       result = await call(endpoint, 'POST', { action: 'poll', current_bookmark: result.at_bookmark });
     }
