@@ -1,4 +1,4 @@
-name: Activate existing verified Tickets snapshot with complete managed fallback rule
+name: Finish Tickets handover after repaired readiness and fallback checks
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -74,9 +74,17 @@ jobs:
               raise RuntimeError('Dispatch response was lost; inspect existing runs, never blindly replay.')
           
           assert_main()
-          completed_capture=api('actions/runs/36574378382')
-          assert completed_capture['conclusion']=='success'
-          print('Reusing fresh verified capture, off-host receipt and frozen copy. No capture or preparation replay.',flush=True)
+          dispatch('tickets-handover.yml', {'mode':'abort','revision':revision})
+          print('Source resumed; previous expired snapshot safely retired.',flush=True)
+          prepared=dispatch('tickets-handover.yml', {'mode':'prepare','revision':revision})
+          from datetime import datetime
+          prepared_done=datetime.fromisoformat(api('actions/runs/'+str(prepared))['updated_at'].replace('Z','+00:00')).timestamp()
+          remaining=max(0,prepared_done+16*60-time.time())
+          print(json.dumps({'preparationRun':prepared,'remainingDrainSeconds':round(remaining)}),flush=True)
+          while remaining>0:
+              time.sleep(min(30,remaining))
+              remaining=max(0,prepared_done+16*60-time.time())
+          dispatch('tickets-handover.yml', {'mode':'capture','revision':revision})
           dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})
           try:
               health=None
