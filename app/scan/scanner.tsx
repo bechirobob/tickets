@@ -43,7 +43,7 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
   const [message, setMessage] = useState("");
   const [ticket, setTicket] = useState<GateTicket | undefined>();
   const [stats, setStats] = useState({ checkedIn: 0, issued: 0, tiers: [] as TierStat[] });
-  const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
+  const [online, setOnline] = useState(true);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [queued, setQueued] = useState<QueuedScan[]>(() => typeof window === "undefined" ? [] : readJson<QueuedScan[]>(QUEUE_KEY, []));
   const [canUndo, setCanUndo] = useState(false);
@@ -109,10 +109,11 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
   }, [heartbeat, loadEventState, manifest?.generatedAt, saveQueue]);
 
   useEffect(() => {
+    const initialConnection = window.setTimeout(() => setOnline(navigator.onLine), 0);
     const onOnline = () => { setOnline(true); void syncQueue(); };
     const onOffline = () => setOnline(false);
     window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
-    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+    return () => { window.clearTimeout(initialConnection); window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, [syncQueue]);
   useEffect(() => { const kick = window.setTimeout(() => void loadEventState(), 0); const timer = window.setInterval(() => { if (navigator.onLine) void loadEventState(); }, 10_000); return () => { window.clearTimeout(kick); window.clearInterval(timer); }; }, [loadEventState]);
   useEffect(() => () => { cameraGeneration.current++; scannerRef.current?.destroy(); scannerRef.current = null; }, []);

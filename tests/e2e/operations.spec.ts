@@ -654,17 +654,22 @@ test('gate camera survives scan results, repeated starts and camera failure', as
     Object.assign(window, { gateCameraTest: state });
     Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: true, value: async () => {
       if (state.denied) throw new DOMException('Camera unavailable', 'NotAllowedError');
+      try {
       const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
+      canvas.style.cssText = 'position:fixed;left:-1000px;top:0'; document.body.appendChild(canvas);
       const context = canvas.getContext('2d')!; context.fillStyle = 'white'; context.fillRect(0, 0, 640, 480);
       const stream = canvas.captureStream(10); state.streams.push(stream);
       const timer = window.setInterval(() => {
-        if (stream.getVideoTracks()[0]?.readyState === 'ended') { clearInterval(timer); return; }
+        if (stream.getVideoTracks()[0]?.readyState === 'ended') { clearInterval(timer); canvas.remove(); return; }
+        context.fillStyle = Date.now() % 2 ? 'white' : '#fefefe';
         context.fillRect(0, 0, 640, 480);
       }, 100);
       return stream;
+      } catch (error) { console.error('Camera fixture failed:', String(error)); throw error; }
     } });
   });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.text().startsWith('Camera fixture failed:')) console.error(message.text()); });
   let outcome = 'unavailable';
   let holdStats = false;
   const statsGate: { release?: () => Promise<void> } = {};
