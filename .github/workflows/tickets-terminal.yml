@@ -1,4 +1,4 @@
-name: Install verified Tickets terminal observer
+name: Reconcile exact completed Tickets invocations
 on:
   push:
     branches: [ops/tickets-terminal-observer]
@@ -8,7 +8,7 @@ permissions:
 jobs:
   install:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: 24.21.0
       - run: node --test tests/handover-terminal.test.mjs
-      - name: Install private terminal observer without changing application code or routing
+      - name: Preserve exact terminal evidence and retire only matching completed invocations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node ops/handover-terminal/install.mjs
+        run: node ops/handover-terminal/reconcile.mjs
