@@ -17,7 +17,7 @@ const directory = mkdtempSync(path.join(constrainedServer ? '/srv/becore-tickets
 let unit, launch = 0;
 const db = new SqliteDatabase(path.join(directory, 'tickets.sqlite'));
 const slug = `capacity-${randomUUID()}`, now = new Date().toISOString(), future = new Date(Date.now() + 86400000).toISOString();
-const sessions = [], identities = [], passes = [], sockets = [], metrics = [];
+const sessions = [], identities = [], passes = [], sockets = [], metrics = [], latencyFailures = [];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const p95 = values => [...values].sort((a,b) => a-b)[Math.ceil(values.length * .95)-1] ?? 0;
@@ -28,7 +28,9 @@ async function burst(name, n, action) {
     const begun = performance.now(); const value = await action(i); times.push(performance.now()-begun); return value;
   }));
   const result = {name, operations:n, elapsedMs:Math.round(performance.now()-start), p95Ms:Math.round(p95(times))};
-  metrics.push(result); console.log(JSON.stringify(result)); assert.ok(result.p95Ms < 5000, `${name} exceeds 5-second p95`); return results;
+  metrics.push(result); console.log(JSON.stringify(result));
+  if (result.p95Ms >= 5000) latencyFailures.push(name);
+  return results;
 }
 async function request(route, i, data, cookie) {
   const response = await fetch(base+route, {method:data === undefined ? 'GET':'POST', headers:{origin:base, cookie:cookie ?? `bct_attendee=${sessions[i]}`, 'content-type':'application/json'}, ...(data === undefined ? {}:{body:JSON.stringify(data)}), signal:AbortSignal.timeout(15000)});
@@ -124,6 +126,7 @@ try {
   await burst('room-599-reconnect-after-restart',count-1,async i=>{const snapshot=await connect(i);assert.ok(snapshot.messages.some(m=>m.content==='after-revocation'));});
   await burst('my-nights-after-restart',count-1,async i=>{const response=await request('/api/customer/my-nights',i);assert.equal(response.status,200);await response.arrayBuffer();});
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM gate_checkin_events WHERE event_slug=?').bind(slug).first()).n,count);
+  assert.deepEqual(latencyFailures, [], 'Bursts exceeding the unchanged 5-second p95 target');
   console.log(JSON.stringify({result:'passed',guests:count,providers:'none; synthetic paid-ticket fixtures',productionDataTouched:false,metrics}));
 } catch(error) {console.error(output);throw error;}
 finally {await stop();db.close();rmSync(directory,{recursive:true,force:true});}
