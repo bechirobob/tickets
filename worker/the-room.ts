@@ -1,3 +1,7 @@
+import { restoreFrozenRoom, type RoomReturn } from "./room-return";
+import { trackedOperation, requireTransfer } from "./handover-control";
+import { requireHandover } from "./handover-crypto";
+import { writerGuardStatements, transitionWriterSql } from "../ops/handover/writer-lock.mjs";
 import { encryptedRoomSnapshot } from "./room-handover";
 import { DurableObject } from "cloudflare:workers";
 import { purgeExpiredFlashes, type FlashRecord } from "../lib/flashes";
@@ -66,6 +70,7 @@ function requiredHeader(request: Request, name: string): string {
 
 export class TheRoom extends DurableObject<Cloudflare.Env> {
   private presencePending = false;
+  private writerFrozen = false;
   private recentMessages: StoredRoomMessage[] | null = null;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
@@ -106,6 +111,8 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         );
         CREATE INDEX IF NOT EXISTS reactions_message_idx ON reactions(message_id);
       `);
+      const writerStateExists = this.ctx.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name='_bct_handover_state'").toArray().length;
+      this.writerFrozen = Boolean(writerStateExists && this.ctx.storage.sql.exec<{ frozen: number }>('SELECT frozen FROM _bct_handover_state WHERE id=1').one().frozen);
       const messageColumns = this.ctx.storage.sql.exec<{ name: string }>("PRAGMA table_info(messages)").toArray();
       if (!messageColumns.some((column) => column.name === "room_badge")) {
         this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN room_badge TEXT");
@@ -113,12 +120,95 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     });
   }
 
+  async fetch(request: Request): Promise<Response> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:fetch', () => this.fetchUntracked(request));
+  }
+  async acceptConnection(request: Request, server: WebSocket): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:acceptConnection', () => this.acceptConnectionUntracked(request, server));
+  }
+  async webSocketMessage(socket: WebSocket, payload: string | ArrayBuffer): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:webSocketMessage', () => this.webSocketMessageUntracked(socket, payload));
+  }
+  async publishAnnouncement(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput): Promise<RoomMessage> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:publishAnnouncement', () => this.publishAnnouncementUntracked(actor, content, pinned, policy));
+  }
+  async removeEventContent(): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:removeEventContent', () => this.removeEventContentUntracked());
+  }
+  async removePreviewContentBefore(before: string): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:removePreviewContentBefore', () => this.removePreviewContentBeforeUntracked(before));
+  }
+  async removeMessage(messageId: string): Promise<boolean> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:removeMessage', () => this.removeMessageUntracked(messageId));
+  }
+  async publishFlash(flash: FlashRecord, policy: RoomPolicyInput): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:publishFlash', () => this.publishFlashUntracked(flash, policy));
+  }
+  async scheduleFlashExpiry(policy: RoomPolicyInput): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:scheduleFlashExpiry', () => this.scheduleFlashExpiryUntracked(policy));
+  }
+  async alarm(): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:alarm', () => this.alarmUntracked());
+  }
+  async refreshAdmissionAccess(): Promise<void> {
+    this.assertWriterAvailable();
+    return trackedOperation(this.env, 'room:refreshAdmissionAccess', () => this.refreshAdmissionAccessUntracked());
+  }
+  private assertWriterAvailable(): void {
+    if (this.writerFrozen) throw new Error('Room writer is paused.');
+  }
+
+  async freezeHandover(transferId: string) {
+    requireHandover(this.env); requireTransfer(transferId);
+    const admission = await this.env.DB.prepare("SELECT transfer_id FROM _bct_handover_admission WHERE id=1 AND phase IN ('paused','frozen')").first<{ transfer_id: string }>();
+    const active = await this.env.DB.prepare('SELECT COUNT(*) AS n FROM _bct_handover_operations').first<{ n: number }>();
+    if (admission?.transfer_id !== transferId || active?.n !== 0) throw new Error('Source has not drained.');
+    this.ctx.storage.transactionSync(() => {
+      for (const sql of writerGuardStatements(['room_config', 'messages', 'reactions'])) this.ctx.storage.sql.exec(sql);
+      const command = transitionWriterSql(transferId, true);
+      if (this.ctx.storage.sql.exec(command.sql, ...command.params).toArray().length !== 1) throw new Error('Room freeze belongs to another transfer.');
+    });
+    this.writerFrozen = true;
+    for (const socket of this.ctx.getWebSockets()) socket.close(1012, 'Service moving. Please reconnect shortly.');
+    return { objectId: this.ctx.id.toString(), transferId, frozen: true };
+  }
+
+  async restoreHandover(transferId: string, snapshot: RoomReturn) {
+    requireHandover(this.env);
+    restoreFrozenRoom(this.ctx.storage, transferId, snapshot);
+    this.writerFrozen = true;
+    this.recentMessages = null;
+    if (snapshot.alarm === null) await this.ctx.storage.deleteAlarm();
+    else await this.ctx.storage.setAlarm(snapshot.alarm);
+    return this.encryptedHandoverSnapshot();
+  }
+
+  async resumeHandover(transferId: string) {
+    requireHandover(this.env); requireTransfer(transferId);
+    const admission = await this.env.DB.prepare("SELECT phase,transfer_id FROM _bct_handover_admission WHERE id=1").first<{ phase: string; transfer_id: string }>();
+    if (admission?.transfer_id !== transferId || admission?.phase === 'transferred') throw new Error('A completed transfer requires verified reverse import before release.');
+    const command = transitionWriterSql(transferId, false);
+    if (this.ctx.storage.sql.exec(command.sql, ...command.params).toArray().length !== 1) throw new Error('Room freeze belongs to another transfer.');
+    this.writerFrozen = false;
+    return { resumed: true, transferId };
+  }
+
   async encryptedHandoverSnapshot() {
     try { return await encryptedRoomSnapshot(this.ctx.storage, this.env, this.env.RELEASE_SHA, this.ctx.id.toString()); }
     catch { return { error: "Room handover unavailable." }; }
   }
 
-  async fetch(request: Request): Promise<Response> {
+  private async fetchUntracked(request: Request): Promise<Response> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Upgrade required", { status: 426 });
     }
@@ -137,7 +227,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }
   }
 
-  async acceptConnection(request: Request, server: WebSocket): Promise<void> {
+  private async acceptConnectionUntracked(request: Request, server: WebSocket): Promise<void> {
     if (request.headers.get("x-bct-room-authorized") !== "1") throw new Error("Unauthorized Room connection.");
     const attendeeId = requiredHeader(request, "x-bct-attendee-id");
     const displayName = decodeURIComponent(requiredHeader(request, "x-bct-display-name"));
@@ -183,7 +273,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     this.schedulePresence();
   }
 
-  async webSocketMessage(socket: WebSocket, payload: string | ArrayBuffer): Promise<void> {
+  private async webSocketMessageUntracked(socket: WebSocket, payload: string | ArrayBuffer): Promise<void> {
     const state = socket.deserializeAttachment() as ConnectionState | null;
     if (!state || typeof payload !== "string" || payload.length > 4000) {
       socket.send(JSON.stringify({ type: "error", error: "Invalid Room message." }));
@@ -315,7 +405,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     this.schedulePresence();
   }
 
-  async publishAnnouncement(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput): Promise<RoomMessage> {
+  private async publishAnnouncementUntracked(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput): Promise<RoomMessage> {
     const cleaned = content.trim();
     if (!cleaned || cleaned.length > MAX_MESSAGE_LENGTH) throw new Error("Invalid announcement length");
     this.configure(policy);
@@ -341,14 +431,14 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     return message;
   }
 
-  async removeEventContent(): Promise<void> {
+  private async removeEventContentUntracked(): Promise<void> {
     this.recentMessages = null;
     for (const socket of this.ctx.getWebSockets()) socket.close(1008, "Event removed");
     this.ctx.storage.sql.exec("DELETE FROM reactions; DELETE FROM messages; DELETE FROM room_config;");
     await this.ctx.storage.deleteAlarm();
   }
 
-  async removePreviewContentBefore(before: string): Promise<void> {
+  private async removePreviewContentBeforeUntracked(before: string): Promise<void> {
     if (!Number.isFinite(Date.parse(before))) throw new Error("Invalid preview cutoff.");
     this.recentMessages = null;
     const ids = this.ctx.storage.sql.exec<{id:string}>("SELECT id FROM messages WHERE datetime(created_at) < datetime(?)", before).toArray();
@@ -360,7 +450,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     for (const {id} of ids) this.broadcast({type:"message_removed",messageId:id});
   }
 
-  async removeMessage(messageId: string): Promise<boolean> {
+  private async removeMessageUntracked(messageId: string): Promise<boolean> {
     const found = this.messageExists(messageId);
     if (!found) return false;
     this.recentMessages = null;
@@ -374,6 +464,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   updatePolicy(policy: RoomPolicyInput): void {
+    this.assertWriterAvailable();
     this.configure(policy);
     for (const socket of this.ctx.getWebSockets()) {
       const state = socket.deserializeAttachment() as ConnectionState | null;
@@ -388,6 +479,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   clearPins(): number {
+    this.assertWriterAvailable();
     this.recentMessages = null;
     const result = this.ctx.storage.sql.exec("UPDATE messages SET pinned = 0 WHERE pinned = 1 AND deleted_at IS NULL");
     this.broadcast({ type: "pins_cleared" });
@@ -395,30 +487,32 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   suspendAttendee(attendeeId: string): void {
+    this.assertWriterAvailable();
     for (const socket of this.ctx.getWebSockets()) {
       const state = socket.deserializeAttachment() as ConnectionState | null;
       if (state?.attendeeId === attendeeId) socket.close(4003, "Room access suspended");
     }
   }
 
-  async publishFlash(flash: FlashRecord, policy: RoomPolicyInput): Promise<void> {
+  private async publishFlashUntracked(flash: FlashRecord, policy: RoomPolicyInput): Promise<void> {
     this.configure(policy);
     await this.scheduleFlashExpiry(policy);
     this.broadcast({ type: "flash_added", flash });
   }
 
   removeFlash(flashId: string): void {
+    this.assertWriterAvailable();
     this.broadcast({ type: "flash_removed", flashId });
   }
 
-  async scheduleFlashExpiry(policy: RoomPolicyInput): Promise<void> {
+  private async scheduleFlashExpiryUntracked(policy: RoomPolicyInput): Promise<void> {
     const expiry = Date.parse(policy.readOnlyAt);
     if (!Number.isFinite(expiry)) return;
     const current = await this.ctx.storage.getAlarm();
     if (current === null || current !== expiry) await this.ctx.storage.setAlarm(expiry);
   }
 
-  async alarm(): Promise<void> {
+  private async alarmUntracked(): Promise<void> {
     const configured = this.ctx.storage.sql.exec<{ eventSlug: string }>(
       "SELECT event_slug AS eventSlug FROM room_config WHERE id = 1 LIMIT 1",
     ).toArray()[0];
@@ -472,7 +566,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     ).toArray()[0]?.eventSlug ?? "";
   }
 
-  async refreshAdmissionAccess(): Promise<void> {
+  private async refreshAdmissionAccessUntracked(): Promise<void> {
     for (const socket of this.ctx.getWebSockets()) {
       const state = socket.deserializeAttachment() as ConnectionState | null;
       if (state && await this.currentRoomBadge(state.attendeeId) === undefined) socket.close(4003, "Room access changed");

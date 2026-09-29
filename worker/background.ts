@@ -1,3 +1,4 @@
+import { trackedOperation, HandoverPaused } from "./handover-control";
 import { queueOwnerApprovalAlerts } from '../lib/owner-approval-alerts';
 import { processPendingHostAccess } from '../lib/host-applications';
 import { deliverHostAnnouncement, retryHostAnnouncements } from '../lib/notifications';
@@ -18,7 +19,7 @@ import { refreshExpiredPreviewEvents } from "../lib/preview-events";
 import { purgeExpiredFlashes } from "../lib/flashes";
 import { recoverAbandonedPayments, releaseWaitlistOffers } from "../lib/sales-recovery";
 
-export async function processQueue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env): Promise<void> {
+async function processQueueUntracked(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env): Promise<void> {
     for (const message of batch.messages) {
       try {
         if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
@@ -45,7 +46,7 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
   try { await sendOperationalAlert(env, { source, severity: "critical", message: `${source} failed`, detail }); } catch { console.error(JSON.stringify({message:"Could not save operational alert",source})); }
 }
 
-export async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+async function runScheduledOperationsUntracked(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
   if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
   if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
   try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
@@ -129,3 +130,12 @@ export async function runScheduledOperations(controller: ScheduledController, en
   }
 }
 
+
+export async function processQueue(batch: MessageBatch<{ deliveryId: string }>, env: Cloudflare.Env): Promise<void> {
+  try { await trackedOperation(env, 'queue', () => processQueueUntracked(batch, env)); }
+  catch (error) { if (!(error instanceof HandoverPaused)) throw error; batch.retryAll({ delaySeconds: 60 }); }
+}
+export async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  try { await trackedOperation(env, 'scheduled', () => runScheduledOperationsUntracked(controller, env)); }
+  catch (error) { if (!(error instanceof HandoverPaused)) throw error; }
+}

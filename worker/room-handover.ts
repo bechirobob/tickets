@@ -15,7 +15,10 @@ export async function encryptedRoomSnapshot(storage: DurableObjectStorage, setti
     if (tables[name].length !== count) throw new Error('Room snapshot count mismatch.');
   }
   const sequences = storage.sql.exec<{ name: string; seq: number }>("SELECT name, seq FROM sqlite_sequence WHERE name='messages'").toArray();
+  const hasState = storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name='_bct_handover_state'").toArray().length;
+  const state = hasState ? storage.sql.exec<{ frozen: number; transfer_id: string }>('SELECT frozen,transfer_id FROM _bct_handover_state WHERE id=1').one() : null;
+  const frozen = state?.frozen === 1;
   const capturedAt = new Date().toISOString();
   const alarm = await storage.getAlarm();
-  return sealHandover(settings, 'room-rehearsal', { objectId, sourceRevision, snapshotType: 'rehearsal-not-cutover', capturedAt, schema, tables, sequences, alarm });
+  return sealHandover(settings, frozen ? 'room-cutover' : 'room-rehearsal', { objectId, sourceRevision, snapshotType: frozen ? 'frozen-cutover' : 'rehearsal-not-cutover', transferId: frozen ? state.transfer_id : null, capturedAt, schema, tables, sequences, alarm });
 }

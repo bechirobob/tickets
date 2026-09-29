@@ -253,3 +253,29 @@ obsolete preview state after successful verification; retain concise evidence.
 Keep active state and genuine recovery backups separate from disposable test
 copies. This closeout performed cleanup; it does not claim a new automatic
 snapshot-retention job was installed.
+
+### Authorized live handover implementation — 29 September
+
+Owner explicitly requested completion of stages 1–5, including live switching.
+Working branch: `feat/vps-live-handover-20260929`. Production remains unchanged
+while the coordinated controls are implemented and tested. No source pause has
+been issued and no second live writer has started.
+
+Implemented dormant admission/drain tracking for HTTP (including response streams
+and deferred tasks), queues, scheduled work and asynchronous Room operations.
+Leases persist until completion and never automatically expire. Added private
+source pause/freeze/status RPC, persistent per-Room SQL write exclusion, and
+atomic Room reverse import preserving sequence high-water marks and history.
+Copied the already-installed moderation adapter from release 5807f6e into the
+shared candidate to avoid overwriting that host-only improvement.
+
+Focused validation: typecheck, lint, 13 Worker handover/Room tests, and actual
+SQLite Durable Object reverse-import test pass. Full candidate CI is next.
+Host routing preflight 36538325880 succeeded: Caddy currently has only the Tickets
+fallback and email imports; production origin routing and a dedicated Tickets
+backup directory are not yet installed.
+
+Next: complete and verify the operator controller, fresh encrypted snapshot
+installation, pending-delivery reconciliation, secured origin routing and reverse
+transfer orchestration before touching live traffic. Rehearsal data was removed
+at the owner's request; retain only disposable test state during each test.

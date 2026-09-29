@@ -1,3 +1,4 @@
+import { trackedFetch } from "./handover-control";
 import { publicPageCacheKey, publicCacheResponse } from "./public-page-cache";
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
@@ -69,5 +70,5 @@ const worker = {
   },
 };
 
-export default worker satisfies ExportedHandler<Cloudflare.Env, { deliveryId: string }>;
+export default { ...worker, fetch: (request: Request, env: Cloudflare.Env, ctx: ExecutionContext) => trackedFetch(request, env, ctx, worker.fetch) } satisfies ExportedHandler<Cloudflare.Env, { deliveryId: string }>;
 

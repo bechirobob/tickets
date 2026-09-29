@@ -6,6 +6,7 @@ import { NodeRooms } from './rooms.mjs';
 import { RateLimiter } from './rate-limit.mjs';
 import { DeliveryQueue } from './queue.mjs';
 import { images } from './images.mjs';
+import { createModerationBinding } from './moderation.mjs';
 import { environmentKey } from './cloudflare-workers.mjs';
 
 export function createEnvironment({ directory, values, revision }) {
@@ -20,16 +21,7 @@ export function createEnvironment({ directory, values, revision }) {
   environment.EMAIL_DELIVERY_QUEUE = new DeliveryQueue(operations);
   // Retain the existing safety gate. An unavailable moderation provider must
   // never silently approve uploads. Credentials are read only on the server.
-  environment.AI = { async run(model, input) {
-    if (!values.CLOUDFLARE_AI_TOKEN || !values.CLOUDFLARE_ACCOUNT_ID) throw new Error('Photo safety provider is unavailable.');
-    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${values.CLOUDFLARE_ACCOUNT_ID}/ai/run/${model}`, {
-      method: 'POST', headers: { authorization: `Bearer ${values.CLOUDFLARE_AI_TOKEN}`, 'content-type': 'application/json' },
-      body: JSON.stringify(input), signal: AbortSignal.timeout(20000),
-    });
-    const result = await response.json();
-    if (!response.ok || !result.success) throw new Error('Photo safety provider is unavailable.');
-    return result.result;
-  } };
+  environment.AI = createModerationBinding(values);
   globalThis[environmentKey] = environment;
   return { environment, operations, async close() { await environment.THE_ROOM.close(); database.close(); operations.close(); delete globalThis[environmentKey]; } };
 }
