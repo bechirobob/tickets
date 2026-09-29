@@ -1,0 +1,63 @@
+name: Coordinate verified scanner release
+on:
+  push:
+    branches: [ops/scanner-release]
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: scanner-release-coordinator
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 181bfc6801a4fc4c993dc0220af99bb3509e433d
+      CANDIDATE_RUN: '36592304019'
+    steps:
+      - name: Verify runtime and dispatch code-only release once
+        run: |
+          python3 - <<'PY'
+          import json,os,time,urllib.request
+          repo=os.environ['GITHUB_REPOSITORY']
+          source=os.environ['SOURCE_SHA']
+          def api(path,data=None):
+              req=urllib.request.Request('https://api.github.com/repos/'+repo+'/'+path,data=None if data is None else json.dumps(data).encode(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'})
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  b=r.read();return json.loads(b) if b else None
+          candidate=api('actions/runs/'+os.environ['CANDIDATE_RUN'])
+          assert candidate['conclusion']=='success' and candidate['head_sha']=='e44f48781c1c00274a57c1f1615385f9857242f6'
+          assert api('git/ref/heads/main')['object']['sha']==source
+          for attempt in range(100):
+              runs=api('actions/workflows/vps-runtime.yml/runs?head_sha='+source)['workflow_runs']
+              if runs:
+                  runtime=runs[0]
+                  if runtime['status']=='completed':
+                      assert runtime['conclusion']=='success',runtime['html_url'];break
+              time.sleep(15)
+          else: raise RuntimeError('Runtime verification did not finish')
+          workflow='actions/workflows/tickets-vps-diagnostics.yml'
+          previous=api(workflow+'/runs?per_page=20')['workflow_runs']
+          # Refuse an ambiguous retry after any release dispatch for this source.
+          assert not any(r['head_sha']==source and r['event']=='workflow_dispatch' for r in previous),'Inspect existing release run before retrying'
+          prior={r['id'] for r in previous}
+          api(workflow+'/dispatches',{'ref':'main','inputs':{'source_sha':source,'runtime_run':str(runtime['id']),'candidate_run':os.environ['CANDIDATE_RUN']}})
+          print('Dispatched verified scanner release',source,flush=True)
+          for attempt in range(60):
+              runs=api(workflow+'/runs?per_page=20')['workflow_runs']
+              matches=[r for r in runs if r['id'] not in prior and r['head_sha']==source and r['event']=='workflow_dispatch']
+              if matches:
+                  assert len(matches)==1;release=matches[0];break
+              time.sleep(5)
+          else: raise RuntimeError('Dispatch sent; inspect runs before retrying')
+          print('Release run:',release['html_url'],flush=True)
+          for attempt in range(100):
+              release=api('actions/runs/'+str(release['id']))
+              if release['status']=='completed':
+                  assert release['conclusion']=='success',release['html_url'];break
+              time.sleep(10)
+          else: raise RuntimeError('Release still running; inspect before retrying')
+          print('Verified scanner release succeeded',source,flush=True)
+          PY
