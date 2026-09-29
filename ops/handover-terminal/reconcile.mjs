@@ -19,6 +19,10 @@ if(rows.length){
  assert.ok(end-start<3600000,'Explicit historical window review required.');
  for(let from=start;from<end;from+=30000)await collect(from,Math.min(end,from+30000));
  const matches=matchTerminalEvidence(rows,events);
+ for(const record of rows.filter(r=>!matches.some(m=>m.record.id===r.id))){
+  const entries=events.filter(e=>e.source?.handoverOperation===record.id);
+  console.log(JSON.stringify({unmatched:record.id,entries:entries.map(e=>({phase:e.source?.phase,request:e.$metadata?.requestId,version:e.$workers?.scriptVersion?.id,metadataType:e.$metadata?.type})),related:events.filter(e=>entries.some(x=>x.$metadata?.requestId===e.$metadata?.requestId)).map(e=>({type:e.$metadata?.type,outcome:e.$workers?.outcome,version:e.$workers?.scriptVersion?.id,phase:e.source?.phase,operation:e.source?.handoverOperation}))}));
+ }
  let retired=0;
  for(const {record,evidence} of matches){
   const state=(await q('SELECT phase FROM _bct_handover_admission WHERE id=1'))[0];
