@@ -145,7 +145,7 @@ export default function Scanner({ actor, role, events }: { actor: string; role: 
       const result = await response.json() as GateResult;
       setTicket(result.ticket); setMessage(result.error ?? result.message ?? "Entry recorded.");
       setMode(response.ok ? "valid" : result.result === "duplicate" ? "duplicate" : result.result === "wrong_event" ? "wrong_event" : result.result === "unavailable" ? "unavailable" : "invalid");
-      scannerRef.current?.pause(); if (response.ok) await loadEventState();
+      scannerRef.current?.pause(); if (response.ok) void loadEventState();
     } catch { await offlineCheck(value); }
     finally { busyRef.current = false; }
   }, [deviceId, eventSlug, loadEventState, offlineCheck]);
