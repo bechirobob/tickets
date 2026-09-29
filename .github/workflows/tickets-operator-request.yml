@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      TICKETS_REVISION: 'a2dfe0db0e6c87b6f8299a5d5a2e699d091d0694'
+      TICKETS_REVISION: 'c43ef8f089b91dfe3650f8c179e8616fd73c2403'
       TICKETS_RUNTIME_RUN: '36566932648'
       TICKETS_DEPLOY_RUN: '36566932507'
     steps:
