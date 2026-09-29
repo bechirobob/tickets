@@ -19,57 +19,12 @@ jobs:
       - name: Verify frozen-copy startup with private credential copy before installing scoped unit configuration
         run: |
           tailscale ssh root@hermes "PROBE_RUN='$GITHUB_RUN_ID' python3 -" <<'PY'
-          import os,json,pathlib,pwd,stat,sqlite3,subprocess,time,urllib.request,shutil
-          revision='8a46eeaae8296ab588104ea2406f5287c08e5fb6'
-          release=pathlib.Path('/srv/becore-tickets/releases')/revision
-          assert json.loads((release/'release.json').read_text())['revision']==revision
-          journal=json.loads(pathlib.Path('/var/lib/becore-tickets-handover/live-transfer.json').read_text())
-          assert journal['phase']=='prepared' and journal['revision']==revision
-          account=pwd.getpwnam('becore-tickets')
-          root=pathlib.Path('/var/lib/becore-tickets-startup-probe-'+os.environ['PROBE_RUN'])
-          assert not root.exists()
-          backup=max(pathlib.Path('/var/backups/becore-tickets').glob('tickets-*.tar.gz.enc'),key=lambda p:p.stat().st_mtime)
-          unit='becore-tickets-startup-probe'
-          runtime=pathlib.Path('/run')/unit
-          try:
-           subprocess.run([str(release/'bin/node'),str(release/'operations/restore-backup.mjs'),str(backup),'/etc/becore-tickets/backup.key',str(root)],check=True,capture_output=True)
-           state=root/'state'
-           with sqlite3.connect(str(state/'tickets.sqlite')) as db:
-            assert db.execute('SELECT frozen FROM _bct_handover_state WHERE id=1').fetchone()[0]==1
-            assert db.execute('SELECT COUNT(*) FROM _bct_handover_operations').fetchone()[0]==0
-           for p in [root,*root.rglob('*')]:
-            assert not p.is_symlink()
-            os.chown(p,account.pw_uid,account.pw_gid)
-           properties=['User=becore-tickets','Group=becore-tickets','WorkingDirectory='+str(release),'LoadCredential=runtime.json:/etc/becore-tickets/runtime.json','RuntimeDirectory='+unit,'RuntimeDirectoryMode=0700','ExecStartPre=/usr/bin/install -m 600 %d/runtime.json '+str(runtime/'runtime.json'),'NoNewPrivileges=true','ProtectSystem=strict','ProtectHome=true','PrivateTmp=true','ReadWritePaths='+str(state)+' '+str(runtime),'IPAddressDeny=any','IPAddressAllow=localhost','UMask=0077']
-           environment={'NODE_ENV':'production','TICKETS_ACTIVE':'0','TICKETS_CONFIG':str(runtime/'runtime.json'),'TICKETS_STATE':str(state),'TICKETS_HOST':'tickets.becoreops.com','TICKETS_PORT':'3121'}
-           command=['systemd-run','--quiet','--collect','--unit='+unit,'--service-type=exec']+['--property='+p for p in properties]+['--setenv='+k+'='+v for k,v in environment.items()]+[str(release/'bin/node'),str(release/'server.mjs')]
-           result=subprocess.run(command,capture_output=True,text=True)
-           if result.returncode:
-            print(json.dumps({'transientUnitSetupError':result.stderr[:1500]}))
-            raise RuntimeError('Private test unit setup rejected; inspect reported systemd diagnostic.')
-           healthy=False
-           for attempt in range(40):
-            try:
-             req=urllib.request.Request('http://127.0.0.1:3121/healthz',headers={'Host':'tickets.becoreops.com'})
-             with urllib.request.urlopen(req,timeout=3) as response:health=json.load(response)
-             if health.get('revision')==revision and health.get('active') is False:
-              healthy=True;break
-            except Exception:pass
-            time.sleep(1)
-           assert healthy,'Frozen-copy private runtime did not become ready.'
-           metadata=(runtime/'runtime.json').lstat()
-           assert stat.S_ISREG(metadata.st_mode) and stat.S_IMODE(metadata.st_mode)==0o600 and metadata.st_uid==account.pw_uid
-           assert stat.S_IMODE(runtime.lstat().st_mode)==0o700
-           print(json.dumps({'frozenBackupRuntimeReady':True,'active':False,'revision':revision,'credentialMode':'0600','privateRuntimeDirectory':'0700','externalNetworkBlocked':True}))
-           dropin=pathlib.Path('/etc/systemd/system/becore-tickets.service.d/private-configuration.conf')
-           dropin.parent.mkdir(parents=True,exist_ok=True,mode=0o755)
-           content='[Service]\nRuntimeDirectory=becore-tickets-runtime\nRuntimeDirectoryMode=0700\nEnvironment=TICKETS_CONFIG=/run/becore-tickets-runtime/runtime.json\nExecStartPre=/usr/bin/install -m 600 %d/runtime.json /run/becore-tickets-runtime/runtime.json\nReadWritePaths=/run/becore-tickets-runtime\n'
-           if dropin.exists():assert dropin.read_text()==content,'Unrecognized existing credential configuration.'
-           else:dropin.write_text(content);dropin.chmod(0o644)
-           subprocess.run(['systemctl','daemon-reload'],check=True,capture_output=True)
-           subprocess.run(['systemctl','reset-failed','becore-tickets.service'],check=True,capture_output=True)
-           print(json.dumps({'privateCredentialBridgeInstalled':True,'publicRoutingChanged':False,'applicationReleaseUnchanged':True,'transferId':journal['transferId'],'preparedAt':journal['preparedAt']}))
-          finally:
-           subprocess.run(['systemctl','stop',unit+'.service'],capture_output=True)
-           if root.exists():shutil.rmtree(root)
+          import subprocess,json
+          p=subprocess.run(['journalctl','-u','becore-tickets-startup-probe.service','--since','2026-09-29 13:08:00','-o','json','--no-pager'],capture_output=True,text=True,check=True)
+          patterns=['install:','/usr/bin/install','Failed','failed','status=','ExecStartPre','credential','Permission','No such','Read-only']
+          for line in p.stdout.splitlines():
+           try:r=json.loads(line)
+           except ValueError:continue
+           m=r.get('MESSAGE','')
+           if isinstance(m,str) and any(k in m for k in patterns):print(json.dumps({'time':r.get('__REALTIME_TIMESTAMP'),'setupMessage':m[:1200]}))
           PY
