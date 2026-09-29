@@ -652,6 +652,8 @@ test('gate camera survives scan results, repeated starts and camera failure', as
   await page.addInitScript(() => {
     const state = { denied: false, streams: [] as MediaStream[] };
     Object.assign(window, { gateCameraTest: state });
+    // Headless WebKit can omit mediaDevices when no capture device is installed.
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {} });
     Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: true, value: async () => {
       if (state.denied) throw new DOMException('Camera unavailable', 'NotAllowedError');
       try {
