@@ -1,57 +1,142 @@
-name: Repair Tickets offline static route
+name: Release verified Tickets scanner repair on Hermes
 on:
   workflow_dispatch:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      runtime_run:
+        required: true
+        type: string
+      candidate_run:
+        required: true
+        type: string
 permissions:
   contents: read
+  actions: read
   id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
 jobs:
-  inspect:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RUNTIME_RUN: ${{ inputs.runtime_run }}
+      CANDIDATE_RUN: ${{ inputs.candidate_run }}
+      EXPECTED_ACTIVE: 8a46eeaae8296ab588104ea2406f5287c08e5fb6
     steps:
-      - name: Require main-only operator context
-        run: test "$GITHUB_REF" = refs/heads/main
-      - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+      - name: Require main and exact verified source
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$RUNTIME_RUN" =~ ^[0-9]+$ && "$CANDIDATE_RUN" =~ ^[0-9]+$ ]]
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify CI, unchanged data contracts and release ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$RUNNER_TEMP/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$RUNNER_TEMP/candidate.json"
+          python3 - <<'PY'
+          import json,os,subprocess
+          def git(*args): return subprocess.check_output(['git',*args],text=True).strip()
+          source=os.environ['SOURCE_SHA']
+          runtime=json.load(open(os.environ['RUNNER_TEMP']+'/runtime.json'))
+          candidate=json.load(open(os.environ['RUNNER_TEMP']+'/candidate.json'))
+          assert runtime['conclusion']=='success' and runtime['head_sha']==source and runtime['path']=='.github/workflows/vps-runtime.yml'
+          assert candidate['conclusion']=='success' and candidate['path']=='.github/workflows/candidate-checks.yml'
+          subprocess.run(['git','merge-base','--is-ancestor',source,'origin/main'],check=True)
+          # Candidate source must match, apart from operational documentation/tooling.
+          allowed=lambda f: f.startswith(('docs/','.github/workflows/','ops/handover/','tests/handover-'))
+          assert all(allowed(f) for f in git('diff','--name-only',candidate['head_sha'],source).splitlines())
+          # This updater is only for the scanner. No database, runtime, credentials or migration changes.
+          changed=git('diff','--name-only',os.environ['EXPECTED_ACTIVE'],source).splitlines()
+          assert all(allowed(f) or f in ['app/scan/scanner.tsx','app/api/admin/check-in/route.ts','tests/e2e/operations.spec.ts','scripts/browser-worker.mjs'] for f in changed),changed
+          PY
+          gh run download "$RUNTIME_RUN" --repo "$GITHUB_REPOSITORY" --name "tickets-vps-$SOURCE_SHA" --dir artifact
+          cd artifact
+          sha256sum --check tickets-vps-runtime.tar.gz.sha256
+      - name: Connect dedicated Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
           oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Restore canonical offline-pass route on active Tickets origin
+      - name: Apply reversible code-only update under deployment lock
         run: |
-          tailscale ssh root@hermes 'python3 -' <<'PY'
-          import json,pathlib,subprocess,fcntl,urllib.request,hashlib
-          lock=open('/run/lock/becore-tickets-deploy.lock','a')
-          fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          set -euo pipefail
+          digest=$(sha256sum artifact/tickets-vps-runtime.tar.gz | cut -d ' ' -f 1)
+          cat artifact/tickets-vps-runtime.tar.gz | tailscale ssh root@hermes "umask 077; mkdir -p /var/tmp/tickets-scanner-$GITHUB_RUN_ID; cat > /var/tmp/tickets-scanner-$GITHUB_RUN_ID/runtime.tar.gz"
+          tailscale ssh root@hermes "python3 - '$SOURCE_SHA' '$EXPECTED_ACTIVE' '$GITHUB_RUN_ID' '$digest'" <<'PY'
+          import json,pathlib,subprocess,fcntl,urllib.request,time,sys,hashlib,tarfile,shutil,os
+          source,expected,run_id,digest=sys.argv[1:]
+          lock=open('/run/lock/becore-tickets-deploy.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          stage=pathlib.Path('/var/tmp/tickets-scanner-'+run_id)
           root=pathlib.Path('/var/lib/becore-tickets-handover')
           record=json.loads((root/'live-transfer.json').read_text())
-          assert record['phase']=='active' and record['revision']=='8a46eeaae8296ab588104ea2406f5287c08e5fb6'
-          path=pathlib.Path('/etc/caddy/becore-tickets-origin.caddy')
-          previous=path.read_text()
-          assert previous.startswith('tickets.becoreops.com {\n')
-          assert previous.count(' reverse_proxy 127.0.0.1:3119 {')==1
-          assert '@blocked not remote_ip' in previous
-          assert ' rewrite /offline-ticket /offline-ticket.html\n' not in previous
-          backup=root/'origin-before-offline-route.caddy'
-          assert not backup.exists()
-          backup.write_text(previous);backup.chmod(0o600)
-          candidate=previous.replace(' reverse_proxy 127.0.0.1:3119 {',' rewrite /offline-ticket /offline-ticket.html\n reverse_proxy 127.0.0.1:3119 {')
+          assert record['phase']=='active' and record['revision']==expected
+          def health(public=False):
+              url='https://tickets.becoreops.com/healthz' if public else 'http://127.0.0.1:3119/healthz'
+              req=urllib.request.Request(url,headers={'Host':'tickets.becoreops.com','User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)'})
+              with urllib.request.urlopen(req,timeout=15) as response: return json.load(response)
+          assert health().get('revision')==expected and health().get('active') is True
+          previous=subprocess.check_output(['systemctl','show','becore-tickets.service','--property=WorkingDirectory','--value'],text=True).strip()
+          assert previous=='/srv/becore-tickets/releases/'+expected
+          handoff=pathlib.Path('/var/lib/becore-tickets/handoff.json').read_bytes()
+          assert hashlib.sha256((stage/'runtime.tar.gz').read_bytes()).hexdigest()==digest
+          release=pathlib.Path('/srv/becore-tickets/releases')/source
+          assert not release.exists(),'Release already exists; inspect before retrying.'
+          release.mkdir(mode=0o755)
+          with tarfile.open(stage/'runtime.tar.gz') as archive: archive.extractall(release,filter='data')
+          manifest=json.loads((release/'release.json').read_text())
+          assert manifest['revision']==source and manifest['dirty'] is False
+          subprocess.run(['chown','-R','root:root',str(release)],check=True)
+          subprocess.run([str(release/'bin/node'),'--check',str(release/'server.mjs')],check=True)
+          override=pathlib.Path('/etc/systemd/system/becore-tickets.service.d/scanner-release.conf')
+          assert not override.exists(),'An earlier scanner update must be inspected first.'
+          candidate=f'[Service]\nWorkingDirectory={release}\nExecStart=\nExecStart=/usr/bin/flock --nonblock /var/lib/becore-tickets/instance.lock {release}/bin/node {release}/server.mjs\n'
+          evidence=root/('scanner-release-'+run_id+'.json')
+          evidence.write_text(json.dumps({'phase':'prepared','previous':expected,'candidate':source,'runId':run_id}));evidence.chmod(0o600)
           try:
-           path.write_text(candidate);path.chmod(0o644)
-           subprocess.run(['caddy','validate','--config','/etc/caddy/Caddyfile'],capture_output=True,check=True)
-           subprocess.run(['systemctl','reload','caddy'],capture_output=True,check=True)
-           def request(route):
-            req=urllib.request.Request('https://tickets.becoreops.com'+route,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'*/*'})
-            with urllib.request.urlopen(req,timeout=15) as response:
-             assert response.status==200
-             return response.read()
-           canonical=request('/offline-ticket');literal=request('/offline-ticket.html')
-           assert canonical==literal and b'Offline door pass' in canonical
-           health=json.loads(request('/healthz'))
-           assert health.get('runtime')=='vps' and health.get('active') is True and health.get('revision')==record['revision']
-           print(json.dumps({'offlineCanonicalRouteVerified':True,'sameSavedPassDocument':True,'documentSha256':hashlib.sha256(canonical).hexdigest(),'runtime':'vps','active':True,'revision':record['revision'],'applicationRestarted':False}))
+              override.write_text(candidate);override.chmod(0o644)
+              subprocess.run(['systemctl','daemon-reload'],check=True)
+              subprocess.run(['systemctl','restart','becore-tickets.service'],check=True,timeout=90)
+              for attempt in range(30):
+                  try:
+                      h=health()
+                      if h.get('revision')==source and h.get('active') is True: break
+                  except Exception: pass
+                  time.sleep(1)
+              else: raise RuntimeError('Candidate readiness failed')
+              h=health(True);assert h['revision']==source and h['active'] is True
+              for path in ['/', '/events', '/my-nights', '/scan', '/api/public/events']:
+                  req=urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)'})
+                  with urllib.request.urlopen(req,timeout=20) as response: assert response.status==200
+              assert pathlib.Path('/var/lib/becore-tickets/handoff.json').read_bytes()==handoff
+              evidence.write_text(json.dumps({'phase':'verified','previous':expected,'candidate':source,'runId':run_id,'publicHealth':True,'routes':5,'stateUnchanged':True}))
+              # Keep original transfer revision for its original Cloudflare return protocol.
+              record['activeRevision']=source;record['lastCodeReleaseRun']=run_id
+              tmp=root/'live-transfer.code-update.tmp';tmp.write_text(json.dumps(record));tmp.chmod(0o600);os.replace(tmp,root/'live-transfer.json')
+              print(json.dumps({'released':source,'previous':expected,'active':True,'publicVerified':True,'dataMigration':False}))
           except Exception:
-           path.write_text(previous)
-           subprocess.run(['systemctl','reload','caddy'],capture_output=True,check=True)
-           raise RuntimeError('Tickets route verification failed; original origin configuration restored.') from None
+              override.unlink(missing_ok=True)
+              subprocess.run(['systemctl','daemon-reload'],check=True)
+              subprocess.run(['systemctl','restart','becore-tickets.service'],check=True,timeout=90)
+              for attempt in range(30):
+                  try:
+                      h=health()
+                      if h.get('revision')==expected and h.get('active') is True: break
+                  except Exception: pass
+                  time.sleep(1)
+              else: raise RuntimeError('Rollback requires operator attention')
+              evidence.write_text(json.dumps({'phase':'rolled-back','previous':expected,'candidate':source,'runId':run_id}))
+              raise
+          finally: shutil.rmtree(stage)
           PY
