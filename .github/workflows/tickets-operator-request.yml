@@ -1,4 +1,4 @@
-name: Finish prepared Tickets VPS handover
+name: Complete installed Tickets handover after scheduled evidence
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -73,10 +73,13 @@ jobs:
           wait_run(runtime_run)
           wait_run(deploy_run)
           print(json.dumps({'revision':revision,'runtimeVerifiedRun':runtime_run}),flush=True)
-          dispatch('tickets-vps-install.yml', {'source_sha':revision,'source_run':str(runtime_run)})
+          wait_run(36567312960)
+          print('Reusing verified installation 36567312960; no rebuild or reinstall.',flush=True)
           dispatch('tickets-handover.yml', {'mode':'prepare','revision':revision})
-          print('Existing prepared transfer refreshed; original tracking/drain time preserved.',flush=True)
-          assert time.time() >= 1790682330
+          print('Tracking armed. Waiting the required 16 minutes for earlier background invocations.',flush=True)
+          time.sleep(16*60)
+          terminal_runs=api('actions/runs?head_sha=731deb164e6f86a55ad2db05f5740270e7ae7709&per_page=10')['workflow_runs']
+          assert any(r['path']=='.github/workflows/tickets-terminal.yml' and r['conclusion']=='success' for r in terminal_runs), 'Exact scheduled terminal evidence gate did not pass.'
           dispatch('tickets-handover.yml', {'mode':'capture','revision':revision})
           dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})
           try:

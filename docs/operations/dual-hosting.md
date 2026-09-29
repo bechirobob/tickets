@@ -496,7 +496,27 @@ production backup and browser audit. Terminal utility source lives in branch
 ops/tickets-terminal-observer. BubbleWash remains untouched.
 
 
-## Verified release continuation — 2026-09-29 12:16 UTC
+## Verified release continuation — 2026-09-29
 PR 197 merged as 8a46eeaae8296ab588104ea2406f5287c08e5fb6; exact tree matches candidate ae1978d43ccf2041e5a46a1783e3cc82e9749512. Candidate run 36565172805 passed desktop Chromium, mobile Chromium and mobile WebKit, including organizer/owner workflows. Initial candidate failure was a local test harness trying to resolve the production-only Tail service; the isolated harness now excludes that service, and all checks passed after the fix.
 
 Completion controller on ops/tickets-operator-request waits for exact runtime 36566932648 and source deploy 36566932507, installs that verified artifact, refreshes the SAME prepared transfer (preserving its original tracking time), then captures with verified off-host backup, activates, checks public VPS health/routes, runs production backup and browser audit. Do not replay installation/preparation or create another transfer while it runs. Inspect its run and printed dispatched IDs first.
+
+
+## Post-capture recovery — 2026-09-29
+Capture 36567882191 safely aborted and resumed the source: exact inventory check
+found one outstanding **scheduled** record (not new HTTP records). Inspection
+36568398165 verified the original 116 digest plus the three known HTTP records,
+and scheduled operation 8c9aa595-7dd8-4e7b-8e73-01c5147d98a5 from 12:15:44.354Z.
+Terminal Tail evidence has already preserved 241 HTTP completions. Its scope is
+now extended to exact scheduled/queue kinds, with matching kind validation and
+five passing tests; retrospective retirement still requires exact platform
+request/version/terminal proof. Utility commit 731deb164e6f86a55ad2db05f5740270e7ae7709 must pass
+before capture resumes.
+
+Source is active; no transfer or data loss occurred. Release 8a46eeaae8296ab588104ea2406f5287c08e5fb6
+and installation 36567312960 are verified, including 600 guests, 72,000 deliveries
+with zero errors, 1,200 duplicate scan races and restart recovery. Do NOT rebuild
+or reinstall. The new completion workflow skips installation, prepares after the
+safe abort, observes the required 16-minute background drain, then captures,
+backs up, activates and verifies. Prior completion 36566999306 stopped after
+the safe capture failure. Never manually repeat active controller stages.
