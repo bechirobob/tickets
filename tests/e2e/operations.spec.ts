@@ -652,9 +652,7 @@ test('gate camera survives scan results, repeated starts and camera failure', as
   await page.addInitScript(() => {
     const state = { denied: false, streams: [] as MediaStream[] };
     Object.assign(window, { gateCameraTest: state });
-    // Headless WebKit can omit mediaDevices when no capture device is installed.
-    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {} });
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: true, value: async () => {
+    const mediaDevices = { getUserMedia: async () => {
       if (state.denied) throw new DOMException('Camera unavailable', 'NotAllowedError');
       try {
       const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
@@ -668,7 +666,9 @@ test('gate camera survives scan results, repeated starts and camera failure', as
       }, 100);
       return stream;
       } catch (error) { console.error('Camera fixture failed:', String(error)); throw error; }
-    } });
+    } };
+    // Use a stable API object: WebKit can replace its native mediaDevices wrapper.
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, get: () => mediaDevices });
   });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (/^(Camera fixture failed:|Ticket camera could not start)/.test(message.text())) console.error(message.text()); });
