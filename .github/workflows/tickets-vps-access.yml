@@ -1,27 +1,28 @@
 name: Verify dedicated Tickets VPS access
 on:
   push:
-    branches: [feat/vps-live-handover-20260929]
+    branches: [main]
     paths: [.github/workflows/tickets-vps-access.yml]
   workflow_dispatch:
 permissions:
   contents: read
+  id-token: write
 jobs:
   access:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require Tickets-owned credentials
+      - name: Require Tickets-owned identity configuration
         env:
-          CLIENT_ID: ${{ secrets.TICKETS_TS_OAUTH_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.TICKETS_TS_OAUTH_SECRET }}
+          CLIENT_ID: ${{ vars.TICKETS_TS_CLIENT_ID }}
+          AUDIENCE: ${{ vars.TICKETS_TS_AUDIENCE }}
         run: |
-          test -n "$CLIENT_ID" && test -n "$CLIENT_SECRET" || { echo "Dedicated Tickets VPS credentials are missing in the Tickets repository. No shared fallback will be used."; exit 1; }
+          test -n "$CLIENT_ID" && test -n "$AUDIENCE" || { echo "Dedicated Tickets identity configuration is missing. No shared fallback will be used."; exit 1; }
       - name: Connect using the dedicated Tickets identity
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
-          oauth-client-id: ${{ secrets.TICKETS_TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TICKETS_TS_OAUTH_SECRET }}
+          oauth-client-id: ${{ vars.TICKETS_TS_CLIENT_ID }}
+          audience: ${{ vars.TICKETS_TS_AUDIENCE }}
           tags: tag:tickets-ci
           ping: hermes
       - name: Verify Tickets service isolation without changes

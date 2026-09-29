@@ -343,9 +343,10 @@ for further Tickets work. Do not repair or deploy BubbleWash dependencies to
 enable Tickets backups.
 
 The Tickets repository now owns its isolated VPS installer and nightly encrypted
-backup workflows. They require dedicated repository secrets
-`TICKETS_TS_OAUTH_CLIENT_ID` and `TICKETS_TS_OAUTH_SECRET`, using a dedicated
-`tag:tickets-ci` identity permitted to reach Hermes. Do not copy credentials into
+backup workflows. They use GitHub OIDC with repository variables `TICKETS_TS_CLIENT_ID` and
+`TICKETS_TS_AUDIENCE`, and a dedicated `tag:tickets-ci` identity permitted to
+reach Hermes. Trust is restricted to `repo:bechirobob/tickets:ref:refs/heads/main`;
+no long-lived Tailscale client secret is required. Do not copy credentials into
 source, logs, artifacts, or chat. The connection has not yet been provisioned or
 verified; missing access is a live-switch blocker.
 
@@ -365,3 +366,18 @@ written. No live source pause or traffic switch was issued.
 
 Next: provision the dedicated Tickets connection, verify its read-only reachability,
 finish exact-candidate CI, then complete the backup and controlled transfer gates.
+
+### Dedicated access preparation — 29 September
+
+The owner confirmed full discretion to continue and clarified that Tickets stays
+on Hermes alongside BubbleWash, with separate application resources. The
+Tailscale owner browser session is authenticated; Hermes is connected. Prepared
+GitHub main-only OIDC trust with auth_keys scope; do not grant policy, user, DNS
+or credential administration scopes. The new trust and SSH authorization have
+not been submitted. Browser policy requires confirmation at the point of granting
+new server access, even with earlier general authorization. No live switch occurred.
+
+The three repository-owned workflows now use OIDC and fail closed when their
+client ID/audience variables are absent. YAML and shell syntax checks pass.
+Next: finish and confirm the prepared trust/SSH policy, configure its public ID
+and audience in Tickets, then run the main-branch access probe and release gates.
