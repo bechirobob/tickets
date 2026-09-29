@@ -334,3 +334,34 @@ or deploy that application's code as part of Tickets. Direct R2 access through
 the current VPS operator token returned 403. A first private off-host backup can
 be run from the isolated backup branch; automatic off-host scheduling is not yet
 established. Final source deployment and live pause/switch are still pending.
+
+### Separate Tickets operations — owner direction, 29 September
+
+Tickets must not share BubbleWash application operations. The earlier operational
+branch in the BubbleWash repository was a connection workaround and is retired
+for further Tickets work. Do not repair or deploy BubbleWash dependencies to
+enable Tickets backups.
+
+The Tickets repository now owns its isolated VPS installer and nightly encrypted
+backup workflows. They require dedicated repository secrets
+`TICKETS_TS_OAUTH_CLIENT_ID` and `TICKETS_TS_OAUTH_SECRET`, using a dedicated
+`tag:tickets-ci` identity permitted to reach Hermes. Do not copy credentials into
+source, logs, artifacts, or chat. The connection has not yet been provisioned or
+verified; missing access is a live-switch blocker.
+
+Tickets retains its own `becore-tickets` Unix runtime user, systemd services,
+`/srv/becore-tickets` release directory, `/var/lib/becore-tickets` production data,
+`/etc/becore-tickets` configuration and `/var/backups/becore-tickets` backups.
+No BubbleWash application files, database, service or dependencies were changed.
+
+Recovery check 36546057745 found no live-transfer journal, no Tickets production
+service and no off-host backup receipt. Public events returned HTTP 200; public
+revision remained 6b6fd02cf2b94501b0fdc0122c4d7a647444366c.
+The already-started isolated installer run 36546211410 completed successfully for
+runtime 082888a007afe4fec83a7f2f795917e77edf7738, including runtime, actual-host
+capacity/restart and bounded HTTP checks. Temporary rehearsal state was removed.
+The prior mobile WebKit candidate retry was still running when this record was
+written. No live source pause or traffic switch was issued.
+
+Next: provision the dedicated Tickets connection, verify its read-only reachability,
+finish exact-candidate CI, then complete the backup and controlled transfer gates.

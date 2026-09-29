@@ -1,0 +1,41 @@
+name: Verify dedicated Tickets VPS access
+on:
+  push:
+    branches: [feat/vps-live-handover-20260929]
+    paths: [.github/workflows/tickets-vps-access.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require Tickets-owned credentials
+        env:
+          CLIENT_ID: ${{ secrets.TICKETS_TS_OAUTH_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.TICKETS_TS_OAUTH_SECRET }}
+        run: |
+          test -n "$CLIENT_ID" && test -n "$CLIENT_SECRET" || { echo "Dedicated Tickets VPS credentials are missing in the Tickets repository. No shared fallback will be used."; exit 1; }
+      - name: Connect using the dedicated Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: ${{ secrets.TICKETS_TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TICKETS_TS_OAUTH_SECRET }}
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Verify Tickets service isolation without changes
+        run: |
+          tailscale ssh root@hermes 'python3 -' <<'PY'
+          import pathlib,pwd,json,subprocess
+          user=pwd.getpwnam('becore-tickets')
+          assert user.pw_uid != 0
+          for name in ['/srv/becore-tickets','/etc/becore-tickets','/var/lib/becore-tickets-preview']:
+            p=pathlib.Path(name)
+            assert p.is_dir() and not p.is_symlink()
+          result=subprocess.run(['systemctl','show','becore-tickets-preview.service','--property=User,WorkingDirectory,ActiveState','--no-pager'],capture_output=True,text=True,check=True)
+          values=dict(line.split('=',1) for line in result.stdout.splitlines() if '=' in line)
+          assert values['User']=='becore-tickets'
+          assert values['WorkingDirectory'].startswith('/srv/becore-tickets/')
+          print(json.dumps({'dedicatedTicketsAccess':True,'runtimeUser':values['User'],'previewState':values['ActiveState']}))
+          PY
