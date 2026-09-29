@@ -9,11 +9,14 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 const quote = value => '"' + value.replaceAll('"', '""') + '"';
 let database, retained = false, phase = 'start';
 function safeFailure(value) {
+  let embeddedError;
+  try { embeddedError = JSON.parse(value.error); } catch { /* Plain provider errors use the template below. */ }
+  const providerNumbers = embeddedError && typeof embeddedError === 'object' ? Object.fromEntries(Object.entries(embeddedError).filter(([key, item]) => /code|status|retry/i.test(key) && (typeof item === 'number' || typeof item === 'boolean'))) : {};
   const text = JSON.stringify(value);
   const categories = ['SQLITE_AUTH', 'SQLITE_CONSTRAINT', 'SQLITE_TOOBIG', 'FOREIGN KEY', 'no such table', 'syntax error', 'not authorized', 'No uploaded file', 'does not exist', 'incomplete input', 'already exists', 'unrecognized token', 'SQLITE_ERROR', 'too long', 'failed to parse', 'too many', 'constraint failed', 'no such column'].filter(term => text.toLowerCase().includes(term.toLowerCase()));
   const vocabulary = new Set('the a an and or of from to in out on for with is be was has have been not no cannot can could unable found find match mismatch invalid valid expected provided supplied file files upload uploaded uploading download downloaded import importing imported export sql statement statements query queries database databases table column constraint foreign key unique check null error failed failure internal server response request status code number type allowed only read too long large size limit maximum exceeded bytes length empty data input format syntax parse parsing parser transaction token expired permission permissions denied unavailable unknown please retry already currently executing process processing operation run successfully success md5 etag hash checksum under name filename this that does did do it you your must should may value present missing bad required needs content completed complete fetching failed'.split(' '));
   const template = String(value.error?.message ?? value.error ?? '').replace(/(['"])[\s\S]*?\1/g, '[redacted]').replace(/[A-Za-z0-9_]+/g, word => vocabulary.has(word.toLowerCase()) ? word : '_').slice(0,500);
-  console.error(JSON.stringify({ phase, errorCategories: categories, errorType: typeof value.error, errorTemplate: template, apiCodes: Array.isArray(value.errors) ? value.errors.map(row => row.code) : [] }));
+  console.error(JSON.stringify({ phase, errorCategories: categories, errorType: typeof value.error, providerNumbers, errorTemplate: template, apiCodes: Array.isArray(value.errors) ? value.errors.map(row => row.code) : [] }));
 }
 async function call(url, method, body) {
   const response = await fetch(url, { method, headers: { authorization: 'Bearer ' + process.env.CLOUDFLARE_API_TOKEN, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
