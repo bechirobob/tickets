@@ -34,6 +34,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Verify exact operator readiness behavior before private access
+        run: |
+          node --check ops/handover/live-operator.mjs
+          node --test tests/handover-loopback-health.test.mjs
       - name: Connect dedicated Tickets identity
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
