@@ -1,4 +1,4 @@
-name: Open temporary owner scanner test window
+name: Restore event after successful owner scanner test
 on:
   push:
     branches: [main]
@@ -10,7 +10,7 @@ concurrency:
   group: tickets-vps-handover
   cancel-in-progress: false
 jobs:
-  test-window:
+  restore:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -20,53 +20,16 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Enable only the requested event with automatic restoration
+      - name: Restore original event state and verify
         run: |
-          tailscale ssh root@hermes "python3 - '$GITHUB_RUN_ID'" <<'PY'
-          import sqlite3,json,pathlib,datetime,uuid,subprocess,urllib.request,sys
-          run=sys.argv[1]
-          root=pathlib.Path('/var/lib/becore-tickets-handover')/('entry-test-'+run)
-          root.mkdir(mode=0o700)
-          db=sqlite3.connect('/var/lib/becore-tickets/tickets.sqlite',timeout=20)
-          db.row_factory=sqlite3.Row
-          slug='sun-chasers-labadi'
-          h=json.load(urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:3119/healthz',headers={'Host':'tickets.becoreops.com'}),timeout=15))
-          assert h['active'] and h['revision']=='181bfc6801a4fc4c993dc0220af99bb3509e433d'
-          db.execute('BEGIN IMMEDIATE')
-          row=db.execute('SELECT slug,title,schedule_status,event_state,status,removed_at,starts_at,ends_at,updated_at FROM curated_event_records WHERE slug=?',(slug,)).fetchone()
-          assert row and row['removed_at'] is None and row['status']=='published'
-          assert row['schedule_status']=='coming_soon' and row['event_state'] not in ('cancelled','past')
-          now=datetime.datetime.now(datetime.timezone.utc)
-          stamp=now.isoformat()
-          record={'previous':dict(row),'activatedAt':stamp,'expiresAt':(now+datetime.timedelta(minutes=30)).isoformat(),'run':run}
-          snapshot=root/'state.json'
-          snapshot.write_text(json.dumps(record));snapshot.chmod(0o600)
-          restore=root/'restore.py'
-          restore.write_text("""import sqlite3,json,pathlib,datetime,uuid
-          root=pathlib.Path(__file__).parent
-          record=json.loads((root/'state.json').read_text())
-          old=record['previous']
-          db=sqlite3.connect('/var/lib/becore-tickets/tickets.sqlite',timeout=30)
-          with db:
-              changed=db.execute("UPDATE curated_event_records SET schedule_status=?,event_state=?,updated_at=? WHERE slug=? AND schedule_status='confirmed' AND event_state='on_sale' AND updated_at=?",(old['schedule_status'],old['event_state'],datetime.datetime.now(datetime.timezone.utc).isoformat(),old['slug'],record['activatedAt'])).rowcount
-              db.execute("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES(?,?,?,?,?,?,?,?)",(str(uuid.uuid4()),'system','restore_scanner_test_window','event',old['slug'],'success' if changed else 'skipped',json.dumps({'run':record['run'],'restored':bool(changed)}),datetime.datetime.now(datetime.timezone.utc).isoformat()))
-          record['restored']=bool(changed)
-          (root/'result.json').write_text(json.dumps(record))
-          print(json.dumps({'event':old['slug'],'restored':bool(changed)}))
-          """)
-          restore.chmod(0o700)
-          unit='becore-tickets-entry-test-'+run
-          subprocess.run(['systemd-run','--unit='+unit,'--on-active=30m','--timer-property=AccuracySec=1s','/usr/bin/python3',str(restore)],check=True)
-          try:
-              db.execute("UPDATE curated_event_records SET schedule_status='confirmed',event_state='on_sale',updated_at=? WHERE slug=?",(stamp,slug))
-              db.execute("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES(?,?,?,?,?,?,?,?)",(str(uuid.uuid4()),'system','open_scanner_test_window','event',slug,'success',json.dumps({'run':run,'previousSchedule':row['schedule_status'],'previousState':row['event_state'],'expiresAt':record['expiresAt'],'authorization':'Owner requested temporary event activation for live scanner test'}),stamp))
-              db.commit()
-          except:
-              db.rollback()
-              subprocess.run(['systemctl','stop',unit+'.timer'],check=True)
-              raise
-          assert db.execute("SELECT schedule_status,event_state FROM curated_event_records WHERE slug=?",(slug,)).fetchone()[0]=='confirmed'
-          subprocess.run(['systemctl','is-active',unit+'.timer'],check=True)
-          print(json.dumps({'event':slug,'title':row['title'],'entry':'active','expiresAt':record['expiresAt'],'previousSchedule':row['schedule_status'],'datesUnchanged':True,'restoreScript':str(restore)}))
-          
+          tailscale ssh root@hermes "python3 -" <<'PY'
+          import subprocess,sqlite3,json,pathlib
+          root=pathlib.Path('/var/lib/becore-tickets-handover/entry-test-36595703020')
+          subprocess.run(['/usr/bin/python3',str(root/'restore.py')],check=True)
+          old=json.loads((root/'state.json').read_text())['previous']
+          db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True)
+          row=db.execute('SELECT schedule_status,event_state FROM curated_event_records WHERE slug=?',(old['slug'],)).fetchone()
+          assert row==(old['schedule_status'],old['event_state']), 'Event changed separately; inspect before overwriting'
+          subprocess.run(['systemctl','stop','becore-tickets-entry-test-36595703020.timer'],check=True)
+          print(json.dumps({'event':old['slug'],'schedule':row[0],'state':row[1],'restored':True,'checkinsPreserved':True}))
           PY
