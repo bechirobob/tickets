@@ -440,3 +440,23 @@ successful switch keeps the old source fenced; reverse transfer uses a fresh D1.
 No customer data is deleted, no providers are replayed, and no BubbleWash resource
 is touched. This replaces missing lifecycle evidence with enforced write
 exclusion and explicit side-effect reconciliation, not time-based expiry.
+
+
+### Active completion job — 29 September 2026
+
+PR #196 passed all three candidate browser jobs in run 36559523736 and merged
+as 18d1a08e0e77f862870aecd6b9fbcec4705c3bb8. Its tree matches tested candidate
+85ce0a16d59bcaa606737b9750d78b325c25f1ec exactly. Production durable-work inspection
+36560462791 returned zero for all twelve counters; source remains Cloudflare
+until the guarded activation stage.
+
+**Do not restart setup or replay a transfer.** Inspect completion run
+36561390383 first (workflow on branch ops/tickets-operator-request).
+It waits for exact-release runtime verification 36561278089 and source
+deployment 36561278033, then dispatches the existing main-only installer,
+prepare, the required 16-minute drain, capture with verified off-host backup,
+activate, public health/route checks, production backup and browser verification.
+Every dispatched run ID is printed in the completion log. The authoritative
+Hermes journal is /var/lib/becore-tickets-handover/live-transfer.json.
+If a stage fails, inspect its logs and journal phase before any replay; recover
+paused/frozen state explicitly where needed. BubbleWash remains out of scope.
