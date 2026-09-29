@@ -9,6 +9,9 @@ on:
     paths-ignore:
       - '.github/workflows/tickets-vps-diagnostics.yml'
       - '.github/workflows/deploy.yml'
+      - '.github/workflows/tickets-handover.yml'
+      - 'ops/handover/**'
+      - 'tests/handover-loopback-health.test.mjs'
   workflow_dispatch:
 
 permissions:

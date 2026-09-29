@@ -32,7 +32,7 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.revision }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Connect dedicated Tickets identity
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8

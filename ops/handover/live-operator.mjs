@@ -1,3 +1,4 @@
+import { requestLoopbackHealth } from './loopback-health.mjs';
 // Root-only, explicit-stage live handover. Never infer activation from rehearsal.
 import assert from 'node:assert/strict';
 import { DatabaseSync, backup } from 'node:sqlite';
@@ -80,9 +81,8 @@ async function proxyOrigin() {
 async function localHealth(active) {
   for (let i = 0; i < 30; i++) {
     try {
-      const response = await fetch('http://127.0.0.1:3119/healthz', { headers: { host: hostname }, signal: AbortSignal.timeout(3000) });
-      const value = await response.json();
-      if (response.ok && value.revision === revision && value.active === active) return;
+      const value = await requestLoopbackHealth(hostname);
+      if (value.revision === revision && value.active === active) return;
     } catch { /* Read-only readiness retry. */ }
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
@@ -245,7 +245,15 @@ async function activate() {
     await emptyQueue();
     const db = new DatabaseSync(record.stage + '/tickets.sqlite');
     try { assert.equal(hash(exportDatabase(db).evidence), record.evidence.digest); } finally { db.close(); }
-    assert.ok(!existsSync(liveState)); renameSync(record.stage, liveState); record.stage = liveState; save();
+    if (record.stage !== liveState) {
+      assert.ok(!existsSync(liveState)); renameSync(record.stage, liveState); record.stage = liveState; save();
+    } else {
+      // A failed private readiness probe may leave the verified copy at its
+      // destination. The source fence, unchanged database digest and receipt
+      // above are still mandatory; no active handoff may be replayed.
+      assert.ok(existsSync(liveState) && !existsSync(liveState + '/handoff.json'));
+      run('systemctl', 'stop', 'becore-tickets.service');
+    }
     // Prove the exact service and credentials can start with its database still frozen.
     installService(liveState, false); run('systemctl', 'start', 'becore-tickets.service');
     await localHealth(false); run('systemctl', 'stop', 'becore-tickets.service');
