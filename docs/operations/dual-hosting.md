@@ -540,3 +540,71 @@ twelve durable-work checks, evidence preservation, late-write rejection, and
 abort restoring every obligation. Test source is tests/handover-incident-flow.test.mjs
 in ops/tickets-terminal-observer. Production capture is pending the original
 new preparation deadline of 12:49:05 UTC; do not reset it.
+
+
+The source catalogue returned HTTP 200 after abort. Cloudflare BIC rejects the
+default Python User-Agent (1010), so coordinator public probes now identify as
+Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0), verified HTTP 200. No Cloudflare
+security setting changed. This coordinator-only update retains preparation
+36568774958 and the SAME 12:49:05 UTC drain deadline; it performs no reinstallation
+or preparation. Source production audit 36567199873 overlapped the maintenance
+window (mobile Chromium passed; desktop/WebKit failures require the independent
+post-activation audit already included in the controller).
+
+
+## Credential startup repair and current continuation — 2026-09-29
+Capture 36570674982 succeeded: source frozen, zero outstanding operations,
+119 records preserved, fresh SQL/Room reverse transfer verified, encrypted
+backup artifact 11034062660 saved off-host and fully restored successfully.
+Activation 36571189795 failed while phase remained verified and TICKETS_ACTIVE=0;
+no write ownership or routing transferred. Abort 36571533604 succeeded and
+restored source availability.
+
+Root cause proven by private diagnostics: systemd-managed credential file mode
+0440 conflicted with the application's intentional 0600 requirement. Source
+configuration itself was correctly 0600. The fix retains the application guard:
+a dedicated systemd RuntimeDirectory (0700) and ExecStartPre copy produce a
+service-owned 0600 runtime configuration. Permanent drop-in:
+/etc/systemd/system/becore-tickets.service.d/private-configuration.conf.
+No application code, secrets, or other product service changed.
+
+Repair 36573494131 PASSED using the actual encrypted frozen backup, the verified
+8a46eeaae8296ab588104ea2406f5287c08e5fb6 runtime, real production configuration,
+TICKETS_ACTIVE=0 and outbound networking blocked. Private health returned the
+correct revision and inactive state. Test copy and transient unit were removed.
+
+CURRENT prepared transfer: f33a852d-72a9-469f-95a7-a64299e391ba.
+Preparation 36572410290 completed 13:04:29 UTC; drain ends 13:20:29 UTC.
+The continuation skips rebuild, installation and preparation, requires the
+successful credential repair, waits only the remaining drain, then captures,
+activates, verifies public routes, backs up and runs the production browser audit.
+Application release remains 8a46eeaae8296ab588104ea2406f5287c08e5fb6.
+Operational main 2777924ef80e6597b5066f11b52258948bc0cd57 differs only in the deployment trigger and
+scoped diagnostics workflow; automatic app deployment excludes those two paths.
+The controller verifies this exact comparison on every stage. Inspect latest
+ops/tickets-operator-request workflow run before any manual action.
+
+
+## Operator readiness repair and active continuation — 2026-09-29 13:44 UTC
+Application release remains 8a46eeaae8296ab588104ea2406f5287c08e5fb6; reuse installation 36567312960.
+Capture 36574378382 succeeded with full reverse-transfer, encrypted backup and restore verification.
+Activation remained pre-transfer/verified. The credential bridge itself passed actual startup; the next failure
+was Node 24 fetch silently dropping Host. Native node:http loopback probing now retains the canonical
+Host and has an exact regression test, run by the main operator workflow before private access.
+Verified-phase activation may safely reuse a moved but inactive copy only after source fence, unchanged
+database digest, receipt and freshness checks; no handoff.json may exist.
+Activation 36576224345 proved private readiness, then Cloudflare rejected a partial rule PATCH.
+Operator now preserves the managed redirect rule fields, validates its identity/destination and verifies
+disabled state after update, matching the established fallback monitor API behavior.
+Operational main e731f65534a2fcb7132a0eca8dbf81ce9f6cf0c8 contains these operator-only changes; app source is unchanged.
+Automatic source deployment excludes the scoped handover/operator files. Operator checkout uses exact
+main workflow SHA while runtime revision input remains the verified installed application release.
+
+The prior snapshot expired before the repaired activation ran. Run 36576967077 correctly refused stale
+activation. Abort 36577085181 succeeded, restoring source operation and retiring the inactive copy.
+Fresh preparation 36577205043 armed transfer 5cbcf694-6a7a-4bc0-a6f1-1a032a7bca30 at 13:44:04 UTC.
+ACTIVE coordinator: 36577067098, branch ops/tickets-operator-request. It waits 16 minutes from successful
+preparation completion, then captures/backs up, activates, verifies public VPS health and four routes,
+runs production backup with full restore and the three-browser audit. DO NOT re-prepare, rebuild or
+reinstall. Inspect this run and its printed dispatched run IDs before any recovery action.
+BubbleWash services, state and repository remain untouched.
