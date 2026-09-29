@@ -176,3 +176,26 @@ digests. Do not repeat old uploads against deleted targets.
 Cloudflare remains the live writer. The VPS data is a rehearsal snapshot.
 No coordinated D1/Room/queue freeze, live traffic cutover, automatic failover or
 live Durable Object reverse import is claimed. Preserve these distinctions.
+
+
+### Recovery continuation: dependency-ordered phased return
+
+The previously displayed operation was stopped: return verification 36514138922
+failed, rather than remaining active. Production routing and source data were
+unchanged. Subsequent diagnostics identified `D1_RESET_DO`; separate schema/data
+imports then exposed `FOREIGN KEY constraint failed` in run 36516716042.
+The exporter now creates schema/indexes first, emits parent-table rows before
+children, and installs triggers after data. This avoids relying on deferred
+constraints across D1 import transaction boundaries and avoids replaying trigger
+side effects. Cyclic populated foreign-key graphs fail closed for a dedicated
+import. Eleven local regression checks and focused ESLint pass.
+
+Source code: `1978b651c41fff11bdb39681fd39222714e1612b`.
+Private Hermes metadata run 36534979412 confirmed identical schema, row and
+sequence digests for all 107 tables / 430 rows. Preparation 36535071347 and
+private upload 36535132498 succeeded. Exact-state D1 verification is running as
+36535200847 at `1ba9ab96958e3dbf20153ea4998acf316795debb`.
+Next action: inspect that run's result and cleanup before any new import.
+Do not retry its manifest after cleanup. Cloudflare remains the only live writer;
+this task completes standby/export verification, not live cutover or automatic
+failover. No second live writer is authorized.
