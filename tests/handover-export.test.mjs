@@ -50,3 +50,20 @@ test('rejects invalid references and nested transactions without committing call
     assert.equal(db.isTransaction, false);
   } finally { db.close(); }
 });
+
+test('large posters and text restore exactly without oversized SQL or partial application rows', () => {
+  const source = new DatabaseSync(':memory:'), target = new DatabaseSync(':memory:');
+  try {
+    source.exec('CREATE TABLE pictures(id INTEGER PRIMARY KEY,image BLOB NOT NULL CHECK(length(image)=160000),caption TEXT NOT NULL);');
+    const picture = Uint8Array.from({ length: 160000 }, (_, i) => i % 256);
+    const caption = "quote'🔥".repeat(18000) + '\0tail';
+    source.prepare('INSERT INTO pictures VALUES(1,?,?)').run(picture, caption);
+    const snapshot = exportDatabase(source);
+    assert.ok(snapshot.sql.split('\n').every(line => Buffer.byteLength(line) <= 64000));
+    target.exec('BEGIN'); target.exec(snapshot.sql); target.exec('COMMIT');
+    assert.deepEqual(exportDatabase(target), snapshot);
+    assert.deepEqual(target.prepare('SELECT image FROM pictures').get().image, picture);
+    assert.equal(target.prepare('SELECT caption FROM pictures').get().caption, caption);
+    assert.equal(target.prepare("SELECT name FROM sqlite_master WHERE name='_bct_export_large_values'").get(), undefined);
+  } finally { source.close(); target.close(); }
+});
