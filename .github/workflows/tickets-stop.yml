@@ -1,0 +1,16 @@
+name: Stop transfer before capture after live lifecycle finding
+on:
+  push:
+    branches: [ops/tickets-stop-before-capture]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  stop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel only the waiting completion controller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh api --method POST repos/bechirobob/tickets/actions/runs/36561390383/cancel
