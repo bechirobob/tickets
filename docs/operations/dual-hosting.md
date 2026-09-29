@@ -1,5 +1,36 @@
 # Cloudflare and VPS deployments
 
+## Booking and storage cleanup — 29 September 2026, 16:43 UTC
+
+Owner authorized removal of old Tickets bookings and obsolete storage, with
+cutoff `2026-09-29T16:33:50Z`. Completed once; **do not replay cleanup**.
+Application remains `181bfc6801a4fc4c993dc0220af99bb3509e433d`.
+
+- Cleanup run [36599462727](https://github.com/bechirobob/tickets/actions/runs/36599462727)
+  removed three orders, two tickets, three event registrations and linked
+  credentials, assignments, check-in, payment bookkeeping, consent and delivery
+  records. No external payment or refund actions occurred.
+- Final verification [36599696491](https://github.com/bechirobob/tickets/actions/runs/36599696491)
+  removed one pre-existing orphan confirmation receipt. Orders, tickets,
+  registrations and confirmation deliveries are now zero. Database quick_check
+  is OK with zero foreign-key violations.
+- Preserved events, staff/host accounts, customer profiles, useful contact lists,
+  settings, room configuration, operational audit records and recovery backups.
+  No other VPS project, including BubbleWash, was changed. New bookings can start
+  fresh; deleted old passes no longer exist in the live ticket database.
+- Retired the isolated Tickets preview service (inactive and disabled) and removed
+  its obsolete state. Deleted ten unused release builds, recovering about
+  **7.7 GiB**. Root disk now has **27.5 GiB available**.
+- Retained live build `181bfc6`, rollback `8a46eea`, and recovery `18d1a08`.
+  Current/previous pointers remain aligned with the live and rollback builds.
+- Before deletion, encrypted backup
+  `tickets-2026-09-29T16-40-57.382Z.tar.gz.enc` passed a full restore test.
+  Off-host artifact `tickets-precleanup-36599462727` has 35-day retention.
+  Receipt: `/var/lib/becore-tickets-handover/booking-cleanup-36599462727.json`.
+- Live service is active, using about 69 MiB RAM, with zero automatic restarts.
+  Public health, home, events, My Nights, scanner and public event API all returned
+  HTTP 200 after cleanup; runtime health confirms the unchanged active revision.
+
 ## Operational check — 29 September 2026, 16:28 UTC
 
 Scope: focused post-launch runtime/integration check, reusing today's unchanged
