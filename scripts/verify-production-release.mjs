@@ -1,11 +1,12 @@
 import { setTimeout as wait } from "node:timers/promises";
+import { readReleaseVersion } from "./release-version-response.mjs";
 const origin = "https://tickets.becoreops.com";
 if (!process.env.GITHUB_SHA) throw new Error("Expected release SHA is required");
 let version;
 for (let attempt = 0; attempt < 12; attempt++) {
   const response = await fetch(`${origin}/api/version`, { cache: "no-store", signal: AbortSignal.timeout(15000) });
-  version = await response.json();
-  if (response.ok && version.revision === process.env.GITHUB_SHA && version.versionId) break;
+  version = await readReleaseVersion(response);
+  if (version.revision === process.env.GITHUB_SHA) break;
   if (attempt === 11) throw new Error(`Live revision does not match the release: ${JSON.stringify(version)}`);
   console.log("Waiting for the published revision to reach this edge.");
   await wait(5000);

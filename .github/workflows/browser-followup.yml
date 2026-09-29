@@ -1,12 +1,8 @@
 name: Focused production browser regressions
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - tests/e2e/navigation-audit.spec.ts
-      - tests/e2e/discovery-pass-access.spec.ts
-      - .github/workflows/browser-followup.yml
+  # Repeated live-site diagnostics are opt-in. Pull requests exercise these
+  # journeys against the isolated candidate in candidate-checks.yml.
   workflow_dispatch:
 
 permissions:
@@ -21,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
