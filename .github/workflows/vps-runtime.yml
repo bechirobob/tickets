@@ -1,3 +1,4 @@
+# Dedicated Tickets main-only OIDC connection configured separately.
 name: Verify Tickets VPS runtime
 on:
   push:

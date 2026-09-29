@@ -37,8 +37,8 @@ jobs:
       - name: Connect dedicated Tickets identity
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
-          oauth-client-id: ${{ vars.TICKETS_TS_CLIENT_ID }}
-          audience: ${{ vars.TICKETS_TS_AUDIENCE }}
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
       - name: Run explicit stage under Tickets deployment lock
