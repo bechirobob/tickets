@@ -1,0 +1,28 @@
+name: Read scanner failure evidence
+on:
+  push:
+    branches: [ops/scanner-evidence]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 36588694231 --repo bechirobob/tickets --name candidate-event-page-36588694231-mobile-webkit --dir evidence
+          python3 - <<'PY'
+          import pathlib,zipfile,json
+          for p in pathlib.Path('evidence').rglob('*'):
+              if 'gate-camera' not in str(p) or 'retry1' in str(p): continue
+              if p.name=='error-context.md': print(p.read_text())
+              if p.name=='trace.zip':
+                  with zipfile.ZipFile(p) as z:
+                      for n in z.namelist():
+                          if n.endswith('.trace'):
+                              for line in z.read(n).decode().splitlines():
+                                  d=json.loads(line)
+                                  if d.get('type') in ['console','event'] and ('console' in str(d) or 'error' in str(d).lower()): print(line[:4000])
+          PY
