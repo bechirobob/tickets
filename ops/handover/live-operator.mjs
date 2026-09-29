@@ -50,6 +50,9 @@ async function pauseQueue(paused) {
 async function emptyQueue() {
   const peek = await cloudflare(queue + '/messages/peek', 'POST', { batch_size: 100 });
   assert.ok(Array.isArray(peek.messages) && peek.messages.length === 0, 'Source queue must drain before transfer.');
+  const metrics = await cloudflare(queue + '/metrics');
+  assert.equal(metrics.backlog_count, 0, 'Delayed or leased messages still require reconciliation.');
+  assert.equal(metrics.backlog_bytes, 0);
 }
 async function inventory() {
   const rows = await cloudflare(root + '/workers/durable_objects/namespaces/683655a4b4924e54b31b9b7aad6e2e27/objects?limit=1000');
@@ -275,6 +278,7 @@ async function rollback() {
     await routeToCloudflare();
     for (const room of record.rooms) await rpc('resumeRoom', room.objectId, record.transferId);
     await rpc('resumeSource', record.transferId); await pauseQueue(false);
+    run('systemctl', 'enable', '--now', 'becore-tickets-fallback.timer');
     record.phase = 'returned'; record.returnedAt = new Date().toISOString(); save();
     rmSync(returnedFile); log('fresh-vps-state-returned-to-cloudflare');
   });
@@ -286,8 +290,8 @@ try {
   else if (mode === 'rollback') await rollback();
   else if (mode === 'abort') await withControl(revision, async rpc => { if (existsSync('/etc/systemd/system/becore-tickets.service')) run('systemctl', 'disable', '--now', 'becore-tickets.service'); await resumeBeforeActivation(rpc); if (record.stage) rmSync(record.stage, { recursive: true, force: true }); });
   else log('operator-status');
-} catch {
+} catch (error) {
   // Provider errors may quote SQL rows or credentials. Only the durable phase is public.
-  console.error(JSON.stringify({ handoverFailed: true, mode, phase: record?.phase ?? 'not-started', transferId: record?.transferId ?? null, automaticFailback: false }));
+  console.error(JSON.stringify({ handoverFailed: true, mode, phase: record?.phase ?? 'not-started', transferId: record?.transferId ?? null, automaticFailback: false, failureType: error?.name, sourceFrames: error?.stack?.split('\n').slice(1, 4) }));
   process.exitCode = 1;
 }
