@@ -28,7 +28,7 @@ def main():
     values = dict(line.split('=', 1) for line in credentials.read_text().splitlines() if '=' in line and not line.startswith('#'))
     token = values['CLOUDFLARE_API_TOKEN'].strip().strip('\"\'')
 
-    def api(path, method='GET', body=None):
+    def api(path, method='GET', body=None, allow_missing=False):
         request = urllib.request.Request('https://api.cloudflare.com/client/v4' + path,
             headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
             method=method, data=json.dumps(body).encode() if body is not None else None)
@@ -36,14 +36,33 @@ def main():
             with urllib.request.urlopen(request, timeout=30) as response:
                 payload = json.load(response)
         except urllib.error.HTTPError as error:
+            if allow_missing and error.code == 404:
+                return None
             raise RuntimeError('Origin certificate API access failed (HTTP ' + str(error.code) + ').') from None
         if not payload.get('success'):
             raise RuntimeError('Origin certificate API operation failed.')
         return payload['result']
 
     ssl = api('/zones/' + ZONE + '/settings/ssl')
+    tls_rule = None
     if ssl['value'] != 'strict':
-        raise RuntimeError('Strict origin TLS must be configured for this hostname before activation; no zone setting changed.')
+        base = '/zones/' + ZONE + '/rulesets'
+        ruleset = api(base + '/phases/http_config_settings/entrypoint', allow_missing=True)
+        desired = {'ref': 'becore_tickets_strict_origin', 'description': 'Verify TLS for Tickets VPS origin', 'action': 'set_config', 'expression': '(http.host eq "' + HOST + '")', 'action_parameters': {'ssl': 'strict'}, 'enabled': True}
+        if ruleset is None:
+            ruleset = api(base, 'POST', {'name': 'Hostname configuration', 'kind': 'zone', 'phase': 'http_config_settings', 'rules': [desired]})
+        else:
+            matches = [r for r in ruleset.get('rules', []) if r.get('ref') == desired['ref']]
+            if not matches:
+                api(base + '/' + ruleset['id'] + '/rules', 'POST', desired)
+                ruleset = api(base + '/' + ruleset['id'])
+        matches = [r for r in ruleset.get('rules', []) if r.get('ref') == desired['ref']]
+        if len(matches) != 1 or any(matches[0].get(k) != desired[k] for k in ['action', 'expression', 'action_parameters', 'enabled']):
+            raise RuntimeError('Tickets-specific TLS configuration could not be verified.')
+        if ruleset['rules'][-1]['id'] != matches[0]['id']:
+            raise RuntimeError('A later configuration rule requires review before TLS activation.')
+        tls_rule = {'rulesetId': ruleset['id'], 'ruleId': matches[0]['id']}
+
     directory = pathlib.Path('/etc/caddy/certs/becore-tickets')
     parent_was_missing = not directory.parent.exists()
     directory.mkdir(parents=True, exist_ok=True, mode=0o750)
@@ -90,7 +109,7 @@ def main():
         if changed:
             main_config.write_text(original)
         raise
-    print(json.dumps({'originPrepared': True, 'hostname': HOST, 'mode': 'maintenance-only', 'strictTls': True, 'dnsChanged': False, 'certificate': json.loads(receipt.read_text())}))
+    print(json.dumps({'originPrepared': True, 'hostname': HOST, 'mode': 'maintenance-only', 'strictTls': True, 'hostnameTlsRule': tls_rule, 'dnsChanged': False, 'certificate': json.loads(receipt.read_text())}))
 
 
 if __name__ == '__main__':
