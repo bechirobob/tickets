@@ -1,4 +1,4 @@
-name: Tickets post-launch operational health check
+name: Verify live integrations and align Tickets release pointers
 on:
   push:
     branches: [main]
@@ -17,61 +17,59 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Inspect host resources and Tickets state without mutations
+      - name: Inspect remaining alerts and align release retention with active service
         run: |
           tailscale ssh root@hermes "python3 -" <<'PY'
-          import os,json,pathlib,sqlite3,subprocess,time,datetime,collections,re,urllib.request
-          def cmd(args):
-              p=subprocess.run(args,capture_output=True,text=True,timeout=30)
-              return p.stdout.strip()
-          def props(unit,keys):
-              return dict(x.split('=',1) for x in cmd(['systemctl','show',unit]+['--property='+k for k in keys]).splitlines() if '=' in x)
-          def sample():
-              a=list(map(int,pathlib.Path('/proc/stat').read_text().splitlines()[0].split()[1:]))
-              return sum(a[:8]),a[3]+a[4]
-          a=sample();time.sleep(1);b=sample()
-          mem={k:int(v.split()[0])*1024 for k,v in (line.split(':',1) for line in pathlib.Path('/proc/meminfo').read_text().splitlines())}
-          fs=os.statvfs('/')
-          result={'checkedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'cpuCores':os.cpu_count(),'load':os.getloadavg(),'cpuBusyPercent':round(100*(1-(b[1]-a[1])/max(1,b[0]-a[0])),1),'uptimeSeconds':float(pathlib.Path('/proc/uptime').read_text().split()[0]),'memory':{k:mem[k] for k in ['MemTotal','MemAvailable','SwapTotal','SwapFree']},'disk':{'total':fs.f_blocks*fs.f_frsize,'available':fs.f_bavail*fs.f_frsize,'inodeFree':fs.f_favail,'inodeTotal':fs.f_files}}
-          result['ticketsService']=props('becore-tickets.service',['ActiveState','SubState','NRestarts','MemoryCurrent','MemoryPeak','CPUUsageNSec','ActiveEnterTimestamp','WorkingDirectory','MemoryMax','MemoryHigh','TasksCurrent'])
-          result['edgeService']=props('caddy.service',['ActiveState','NRestarts'])
-          result['retentionTimer']=props('becore-tickets-retention.timer',['ActiveState','NextElapseUSecRealtime'])
-          req=urllib.request.Request('http://127.0.0.1:3119/healthz',headers={'Host':'tickets.becoreops.com'})
-          result['health']=json.load(urllib.request.urlopen(req,timeout=10))
-          result['ticketsStorageKiB']={}
-          for p in ['/var/lib/becore-tickets','/var/backups/becore-tickets','/srv/becore-tickets/releases','/var/lib/becore-tickets-handover']:
-              output=cmd(['du','-sk',p])
-              result['ticketsStorageKiB'][p]=int(output.split()[0]) if output else None
-          result['releasePointers']={n:str((pathlib.Path('/srv/becore-tickets')/n).resolve()) for n in ['current','previous'] if (pathlib.Path('/srv/becore-tickets')/n).is_symlink()}
-          backup=pathlib.Path('/var/backups/becore-tickets/offhost.json')
-          result['offhostBackup']=json.loads(backup.read_text()) if backup.exists() else None
-          result['backupRecordAgeHours']=round((time.time()-backup.stat().st_mtime)/3600,2) if backup.exists() else None
-          db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True,timeout=15)
-          db.row_factory=sqlite3.Row
-          db.execute('PRAGMA query_only=ON')
-          result['databaseQuickCheck']=[x[0] for x in db.execute('PRAGMA quick_check')]
-          result['foreignKeyViolationsByTable']=dict(collections.Counter(x[0] for x in db.execute('PRAGMA foreign_key_check')))
-          result['counts']={}
-          for table in ['orders','tickets','delivery_events','payment_refunds','payout_transfers','event_announcement_campaigns','marketing_campaigns','system_alerts']:
-              cols={x[1] for x in db.execute('PRAGMA table_info('+table+')')}
-              if 'status' in cols: result['counts'][table]=[dict(x) for x in db.execute('SELECT status,COUNT(*) AS count FROM '+table+' GROUP BY status')]
-          result['emailOutcomes']=[dict(x) for x in db.execute('SELECT kind,status,COUNT(*) AS count,MAX(updated_at) AS latest,MAX(attempt_count) AS maxAttempts FROM delivery_events GROUP BY kind,status')]
-          result['emailFailures']=[]
-          for row in db.execute("SELECT kind,failure_reason,attempt_count,created_at,updated_at FROM delivery_events WHERE status='failed' ORDER BY updated_at DESC LIMIT 20"):
-              x=dict(row);x['failure_reason']=re.sub(r'[\w.+-]+@[\w.-]+','[email]',str(x['failure_reason']))
-              x['failure_reason']=re.sub(r'https?://\S+','[url]',x['failure_reason'])[:350]
-              result['emailFailures'].append(x)
-          result['eventState']=[dict(x) for x in db.execute('SELECT slug,schedule_status,event_state,status FROM curated_event_records WHERE removed_at IS NULL AND status=\'published\'')]
-          ops=sqlite3.connect('file:/var/lib/becore-tickets/operations.sqlite?mode=ro',uri=True,timeout=15)
-          ops.row_factory=sqlite3.Row
-          ops.execute('PRAGMA query_only=ON')
-          result['queue']=dict(ops.execute('SELECT COUNT(*) AS total,MAX(attempts) AS maxAttempts,MIN(created) AS oldestCreated, SUM(CASE WHEN available<=? AND (lease IS NULL OR lease<=?) THEN 1 ELSE 0 END) AS ready FROM delivery_queue',(int(time.time()*1000),int(time.time()*1000))).fetchone())
-          logs=cmd(['journalctl','-u','becore-tickets.service','--since','2 hours ago','-o','json','--no-pager'])
-          messages=[json.loads(l).get('MESSAGE','') for l in logs.splitlines() if l.startswith('{')]
-          result['recentLogCounts']={name:sum(bool(re.search(pattern,m,re.I)) for m in messages) for name,pattern in {'scheduledFailures':'Scheduled Tickets operation failed','databaseLocked':'database is locked|SQLITE_BUSY','uncaughtErrors':'uncaught|unhandled|TypeError|ReferenceError','outOfMemory':'out of memory|oom-kill','errors':'error|failed|exception'}.items()}
-          result['recentLogEntries']=len(messages)
-          kernel=cmd(['journalctl','-k','--since','24 hours ago','--no-pager','-o','cat'])
-          result['hostOomEvents24h']=len(re.findall('Out of memory:|oom-kill:',kernel))
-          print(json.dumps(result))
+          import sqlite3,json,pathlib,subprocess,datetime,time,os,urllib.request,urllib.error,fcntl,re
+          def cmd(args): return subprocess.check_output(args,text=True,timeout=30).strip()
+          def scrub(x):
+              s=re.sub(r'[\w.+-]+@[\w.-]+','[email]',str(x or ''))
+              s=re.sub(r'https?://\S+','[url]',s)
+              s=re.sub(r'[A-Za-z0-9_/-]{40,}','[long-value]',s)
+              return s[:500]
+          report={}
+          db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True)
+          db.row_factory=sqlite3.Row;db.execute('PRAGMA query_only=ON')
+          report['openAlerts']=[{k:scrub(v) if k in ['message','detail'] else v for k,v in dict(row).items()} for row in db.execute("SELECT id,source,severity,message,detail,created_at FROM system_alerts WHERE status='open' ORDER BY created_at DESC")]
+          report['failedEmailFollowup']=[dict(r) for r in db.execute("SELECT f.kind,f.created_at,EXISTS(SELECT 1 FROM delivery_events d WHERE d.recipient=f.recipient AND d.kind=f.kind AND d.status='delivered' AND d.created_at>f.created_at) AS laterSameKindDelivered FROM delivery_events f WHERE f.status='failed'")]
+          pid=cmd(['systemctl','show','becore-tickets.service','--property=MainPID','--value'])
+          processenv=dict(x.split('=',1) for x in pathlib.Path('/proc/'+pid+'/environ').read_text().split('\0') if '=' in x)
+          config=json.loads(pathlib.Path(processenv.get('TICKETS_CONFIG','/etc/becore-tickets/runtime.json')).read_text())
+          report['integrationReadiness']={'seevEnabled':config.get('SEEV_ENABLED'),'seevEnvironment':config.get('SEEV_ENVIRONMENT'),'seevCheckoutConfigured':bool(config.get('SEEV_CHECKOUT_API_KEY')),'seevWebhookConfigured':bool(config.get('SEEV_WEBHOOK_SECRET')),'paystackConfigured':bool(config.get('PAYSTACK_SECRET_KEY')),'paystackLiveKey':config.get('PAYSTACK_SECRET_KEY','').startswith('sk_live_'),'resendConfigured':bool(config.get('RESEND_API_KEY'))}
+          def swap():
+              v=dict(line.split() for line in pathlib.Path('/proc/vmstat').read_text().splitlines())
+              return {k:int(v[k]) for k in ['pswpin','pswpout']}
+          first=swap();time.sleep(2);second=swap()
+          report['swapPagesOverTwoSeconds']={k:second[k]-first[k] for k in first}
+          report['memoryPressure']=pathlib.Path('/proc/pressure/memory').read_text().strip()
+          root=pathlib.Path('/srv/becore-tickets')
+          release=pathlib.Path(cmd(['systemctl','show','becore-tickets.service','--property=WorkingDirectory','--value']))
+          assert release==root/'releases/181bfc6801a4fc4c993dc0220af99bb3509e433d'
+          lock=open('/run/lock/becore-tickets-deploy.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          old=root/'releases/8a46eeaae8296ab588104ea2406f5287c08e5fb6'
+          assert old.is_dir() and (root/'current').is_symlink() and (root/'current').resolve()==old
+          for name,target in [('previous',old),('current',release)]:
+              pointer=root/name
+              assert not pointer.exists() or pointer.is_symlink()
+              temp=root/(name+'.audit.tmp')
+              assert not temp.exists() and not temp.is_symlink()
+              temp.symlink_to(target);os.replace(temp,pointer)
+          report['releasePointers']={n:str((root/n).resolve()) for n in ['current','previous']}
+          report['retainedReleaseCount']=len([p for p in (root/'releases').iterdir() if p.is_dir()])
+          report['publicChecks']=[]
+          for path,expected in [('/healthz',200),('/',200),('/events',200),('/my-nights',200),('/scan',200),('/api/public/events',200),('/api/admin/events',401),('/api/admin/check-in?eventSlug=sun-chasers-labadi',401)]:
+              start=time.monotonic()
+              request=urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 BeCoreHealthCheck'})
+              try: response=urllib.request.urlopen(request,timeout=20)
+              except urllib.error.HTTPError as e: response=e
+              with response:
+                  body=response.read()
+                  status=response.status
+                  check={'path':path,'status':status,'expected':expected,'milliseconds':round((time.monotonic()-start)*1000)}
+                  if path=='/':
+                      check['securityHeaders']={k:bool(response.headers.get(k)) for k in ['Content-Security-Policy','Strict-Transport-Security','X-Content-Type-Options','Permissions-Policy']}
+                  if path=='/healthz': check['health']=json.loads(body)
+                  report['publicChecks'].append(check)
+          print(json.dumps(report))
           
           PY
