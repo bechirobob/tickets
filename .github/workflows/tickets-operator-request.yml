@@ -1,4 +1,4 @@
-name: Inspect Tickets private startup failure
+name: Activate existing verified Tickets snapshot with corrected Host probe
 on:
   push:
     branches: [ops/tickets-operator-request]
@@ -15,7 +15,8 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      TICKETS_REVISION: '2ac8fa0ae6c92215cf18fa39d96fc09a5c166bf0'
+      TICKETS_OPERATOR_HEAD: '017a1258e0595b2aa7683b0c41e4e93c042da122'
+      TICKETS_REVISION: '8a46eeaae8296ab588104ea2406f5287c08e5fb6'
       TICKETS_RUNTIME_RUN: '36566932648'
       TICKETS_DEPLOY_RUN: '36566932507'
     steps:
@@ -25,6 +26,7 @@ jobs:
           import json, os, time, urllib.request
           repo = os.environ['GITHUB_REPOSITORY']
           revision = os.environ['TICKETS_REVISION']
+          operator_head = os.environ['TICKETS_OPERATOR_HEAD']
           runtime_run = int(os.environ['TICKETS_RUNTIME_RUN'])
           deploy_run = int(os.environ['TICKETS_DEPLOY_RUN'])
           assert repo == 'bechirobob/tickets'
@@ -39,13 +41,15 @@ jobs:
                   return json.loads(body) if body else None
           
           def assert_main():
-              assert api('git/ref/heads/main')['object']['sha'] == revision, 'Main changed; explicit release review required.'
+              assert api('git/ref/heads/main')['object']['sha'] == operator_head, 'Operator head changed; review required.'
+              changed=api('compare/'+revision+'...'+operator_head)['files']
+              assert all(f['filename'] in ['.github/workflows/deploy.yml','.github/workflows/tickets-vps-diagnostics.yml','.github/workflows/tickets-handover.yml','ops/handover/live-operator.mjs','ops/handover/loopback-health.mjs','tests/handover-loopback-health.test.mjs'] for f in changed), 'Application source changed.'
           
-          def wait_run(run_id, seconds=1800):
+          def wait_run(run_id, seconds=1800, expected_sha=revision):
               deadline=time.monotonic()+seconds
               while time.monotonic()<deadline:
                   run=api('actions/runs/'+str(run_id))
-                  assert run['head_sha']==revision
+                  assert run['head_sha']==expected_sha
                   if run['status']=='completed':
                       assert run['conclusion']=='success', f'Run {run_id} finished {run["conclusion"]}; inspect its logs before retrying.'
                       return
@@ -58,18 +62,44 @@ jobs:
               api('actions/workflows/'+workflow+'/dispatches', 'POST', {'ref':'main','inputs':inputs})
               for attempt in range(24):
                   runs=api('actions/workflows/'+workflow+'/runs?event=workflow_dispatch&branch=main&per_page=30')['workflow_runs']
-                  matches=[r for r in runs if r['id'] not in existing and r['head_sha']==revision]
+                  matches=[r for r in runs if r['id'] not in existing and r['head_sha']==operator_head]
                   if matches:
                       assert len(matches)==1, 'Ambiguous dispatch; inspect runs before continuing.'
                       run_id=matches[0]['id']
                       print(json.dumps({'stage':workflow,'mode':inputs.get('mode'),'runId':run_id}),flush=True)
-                      wait_run(run_id)
+                      wait_run(run_id, expected_sha=operator_head)
                       print(json.dumps({'completedRun':run_id}),flush=True)
                       return run_id
                   time.sleep(5)
               raise RuntimeError('Dispatch response was lost; inspect existing runs, never blindly replay.')
           
           assert_main()
-          dispatch('tickets-vps-diagnostics.yml', {})
-          print('Read-only Tickets startup inspection completed.',flush=True)
+          completed_capture=api('actions/runs/36574378382')
+          assert completed_capture['conclusion']=='success'
+          print('Reusing fresh verified capture, off-host receipt and frozen copy. No capture or preparation replay.',flush=True)
+          dispatch('tickets-handover.yml', {'mode':'activate','revision':revision})
+          try:
+              health=None
+              for attempt in range(24):
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com/healthz',headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'application/json'}),timeout=10) as response:
+                          health=json.load(response)
+                      if health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True:
+                          break
+                  except Exception:
+                      pass
+                  time.sleep(5)
+              assert health and health.get('revision')==revision and health.get('runtime')=='vps' and health.get('active') is True
+              for path in ['/', '/events', '/my-nights', '/api/public/events']:
+                  with urllib.request.urlopen(urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Accept':'text/html,application/json'}),timeout=20) as response:
+                      assert response.status==200
+                      response.read()
+              print(json.dumps({'publicVpsVerified':True,'revision':revision,'routesVerified':4}),flush=True)
+          except Exception:
+              print('Public verification failed after activation; returning fresh VPS state through the verified rollback.',flush=True)
+              dispatch('tickets-handover.yml', {'mode':'rollback','revision':revision})
+              raise
+          backup=dispatch('tickets-backup.yml', {})
+          browser=dispatch('browser-audit.yml', {})
+          print(json.dumps({'complete':True,'revision':revision,'backupRun':backup,'browserRun':browser,'writer':'vps','host':'hermes'}),flush=True)
           PY
