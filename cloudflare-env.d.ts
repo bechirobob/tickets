@@ -2,6 +2,8 @@
 
 declare namespace Cloudflare {
   interface Env {
+    HANDOVER_RECIPIENT_SPKI?: string;
+    HANDOVER_EXPIRES_AT?: string;
     ADMIN_ACCESS_KEY?: string;
     STAFF_LOGIN_DECOY_SECRET?: string;
     ASSETS: Fetcher;

@@ -6,6 +6,7 @@ import { requestNonce, contentSecurityPolicy, securityResponse } from "./securit
 import { recordSecurityEvent, requestMetadata } from "../lib/admin-session";
 import { processQueue, runScheduledOperations } from "./background";
 export { TheRoom } from "./the-room";
+export { HandoverEntrypoint } from "./handover";
 
 const edgeCache = (caches as CacheStorage & { readonly default: Cache }).default;
 

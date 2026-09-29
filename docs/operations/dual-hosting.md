@@ -92,3 +92,30 @@ bounded rehearsal, not a full event-length soak or proof of provider delivery.
    and verification of the exact public release and callback paths.
 
 No live routing or customer data has changed during preparation.
+
+### Verified capacity and encrypted configuration handover
+
+Release `31989632c066fc5f6673353832483f9cde670fc0` passed the complete
+600-guest rehearsal on Hermes (run `36503361777`): wallet p95 1,953 ms,
+1,200 competing scans 2,729 ms, 72,000 chat deliveries with zero errors,
+and 599 reconnects after restart 2,506 ms. Peak application memory was
+approximately 182 MiB under the two-core/1-GiB service limit. All exact-source
+browser, native and runtime checks passed. These are same-host loopback tests,
+not public internet or payment/email delivery verification.
+
+The owner confirmed Cloudflare holds the sole credential copies and explicitly
+authorized key/data transfer and subsequent integration work. The recipient key
+was created on Hermes by run `36505027149`; its private half remains root-only
+under `/etc/becore-tickets/handover`. The checked-in recipient contains only the
+public key and fingerprint. The new named Worker entrypoint is internal-only,
+disabled without temporary recipient/expiry bindings, and encrypts an explicit
+configuration allowlist before returning anything. It never returns plaintext
+or accepts a caller-selected destination. A short-lived authenticated collector
+is removed along with the temporary bindings after collection. Only encrypted
+output may be stored in runner artifacts. VPS import authenticates metadata,
+expiry and revision, and writes `runtime.pending.json` with mode 0600 without
+activating the service or overwriting a different existing configuration.
+
+Next action: release the tested dormant entrypoint, collect and decrypt the
+configuration on Hermes, then implement consistent D1/Room handover. No live
+data transfer, freeze or traffic switch is claimed by these preparation changes.
