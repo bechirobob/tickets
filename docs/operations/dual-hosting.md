@@ -460,3 +460,13 @@ Every dispatched run ID is printed in the completion log. The authoritative
 Hermes journal is /var/lib/becore-tickets-handover/live-transfer.json.
 If a stage fails, inspect its logs and journal phase before any replay; recover
 paused/frozen state explicitly where needed. BubbleWash remains out of scope.
+
+
+Preparation run 36562005115 completed at 2026-09-29T11:29:26Z.
+Transfer 01b7d630-9512-4ddd-a6a9-d64d1591de73 is **prepared**; public source remains
+active on Cloudflare. Installer 36561619608 passed the 600-guest,
+72,000-delivery, restart and real-network checks with zero errors. The completion
+job 36561390383 is now in its required 16-minute wait, with capture
+expected around 11:46 UTC. Do not dispatch another prepare or capture while
+that completion job is active. Inspect its run log for automatically dispatched
+capture/activation/backup/browser runs.
