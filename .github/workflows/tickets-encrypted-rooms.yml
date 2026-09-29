@@ -1,0 +1,54 @@
+name: Transfer encrypted Tickets Room histories
+on:
+  push:
+    branches: [ops/tickets-encrypted-handover-20260929]
+    paths: [.github/workflows/tickets-encrypted-rooms.yml]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tickets-encrypted-handover
+  cancel-in-progress: false
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HANDOVER_MODE: rooms
+      SOURCE_SHA: 6b6fd02cf2b94501b0fdc0122c4d7a647444366c
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 6b6fd02cf2b94501b0fdc0122c4d7a647444366c
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - name: Wait for successful deployment of the verified source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in $(seq 1 100); do
+            gh api 'repos/bechirobob/tickets/actions/workflows/deploy.yml/runs?branch=main&per_page=5' > "$RUNNER_TEMP/deploy-runs.json"
+            status=$(python3 - <<'PY'
+          import json,os
+          runs=json.load(open(os.environ['RUNNER_TEMP']+'/deploy-runs.json'))['workflow_runs']
+          matches=[r for r in runs if r['head_sha']==os.environ['SOURCE_SHA']]
+          if not matches: print('waiting')
+          else: print(matches[0]['conclusion'] if matches[0]['status']=='completed' else 'waiting')
+          PY
+            )
+            if [ "$status" = success ]; then break; fi
+            if [ "$status" != waiting ]; then exit 1; fi
+            sleep 10
+          done
+          test "$status" = success
+      - name: Collect ciphertext and remove temporary transfer access
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node ops/handover/collect-configuration.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tickets-encrypted-rooms
+          path: handover-encrypted
+          retention-days: 1
