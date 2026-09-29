@@ -20,7 +20,7 @@ jobs:
       - name: Read scoped preparation manifest
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 36516258577 --repo bechirobob/tickets --name scoped-return-36516258577 --dir scoped-return
+        run: gh run download 36516637316 --repo bechirobob/tickets --name scoped-return-36516637316 --dir scoped-return
       - name: Import, compare all records and remove isolated database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
