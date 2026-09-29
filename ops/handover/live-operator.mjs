@@ -225,6 +225,11 @@ async function activate() {
   assert.ok(Date.now() - Date.parse(record.capturedAt) < 15 * 60000, 'Transfer activation window expired.');
   assert.equal(hash(privateJson('/etc/becore-tickets/runtime.json')), record.configurationHash);
   assert.ok(record.evidence.d1ReturnVerified && record.evidence.roomReturnVerified);
+  const receipt = privateJson(home + '/offhost-' + record.transferId + '.json');
+  assert.equal(receipt.transferId, record.transferId);
+  assert.equal(receipt.revision, revision);
+  assert.equal(receipt.restoreTested, true);
+  assert.ok(/^\d+$/.test(receipt.runId));
   await withControl(revision, async rpc => {
     const status = await rpc('sourceStatus'); assert.equal(status.admission.phase, 'frozen'); assert.equal(status.admission.transfer_id, record.transferId); assert.equal(status.operations.length, 0);
     await emptyQueue();

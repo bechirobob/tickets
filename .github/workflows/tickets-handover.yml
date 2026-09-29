@@ -1,0 +1,104 @@
+name: Tickets controlled live handover
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Explicit handover stage
+        required: true
+        type: choice
+        options: [prepare, capture, activate, status, abort, rollback]
+      revision:
+        description: Exact installed and deployed release SHA
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  handover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REVISION: ${{ inputs.revision }}
+      MODE: ${{ inputs.mode }}
+    steps:
+      - name: Validate operator inputs
+        run: |
+          [[ "$REVISION" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$MODE" =~ ^(prepare|capture|activate|status|abort|rollback)$ ]]
+          test "$GITHUB_REF" = refs/heads/main
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.revision }}
+          persist-credentials: false
+      - name: Connect dedicated Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: ${{ vars.TICKETS_TS_CLIENT_ID }}
+          audience: ${{ vars.TICKETS_TS_AUDIENCE }}
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Run explicit stage under Tickets deployment lock
+        run: |
+          set -euo pipefail
+          tar -cf - ops/handover worker/handover-control.ts package.json | tailscale ssh root@hermes "umask 077; mkdir -p /var/tmp/tickets-operator-$GITHUB_RUN_ID; tar -xf - -C /var/tmp/tickets-operator-$GITHUB_RUN_ID"
+          tailscale ssh root@hermes "bash -s -- '$MODE' '$REVISION' '$GITHUB_RUN_ID'" <<'SH'
+          set -euo pipefail
+          mode=$1 revision=$2 run_id=$3
+          exec 9>/run/lock/becore-tickets-deploy.lock
+          flock -n 9
+          stage="/var/tmp/tickets-operator-$run_id"
+          trap 'rm -rf -- "$stage"' EXIT
+          cd "$stage"
+          GITHUB_RUN_ID="$run_id" "/srv/becore-tickets/releases/$revision/bin/node" ops/handover/live-operator.mjs "$mode" "$revision"
+          SH
+      - name: Encrypt fresh frozen snapshot and verify full restore
+        if: inputs.mode == 'capture'
+        id: backup
+        run: |
+          set -euo pipefail
+          name="$(tailscale ssh root@hermes "bash -s -- '$REVISION'" <<'SH'
+          set -euo pipefail
+          revision=$1
+          exec 9>/run/lock/becore-tickets-deploy.lock
+          flock -n 9
+          release="/srv/becore-tickets/releases/$revision"
+          state=$(python3 -c 'import json; r=json.load(open("/var/lib/becore-tickets-handover/live-transfer.json")); assert r["phase"]=="verified"; print(r["stage"])')
+          result=$(TICKETS_BACKUP_STATE="$state" "$release/bin/node" "$release/operations/backup.mjs")
+          name=$(printf '%s' "$result" | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] and r["restoredAndAuthenticated"]; print(r["filename"])')
+          target=$(mktemp -d /var/backups/becore-tickets/restore-XXXXXX)
+          rmdir "$target"
+          trap 'rm -rf -- "$target"' EXIT
+          "$release/bin/node" "$release/operations/restore-backup.mjs" "/var/backups/becore-tickets/$name" /etc/becore-tickets/backup.key "$target" >/dev/null
+          printf '%s' "$name"
+          SH
+          )"
+          [[ "$name" =~ ^tickets-[0-9TZ.:-]+\.tar\.gz\.enc$ ]]
+          tailscale ssh root@hermes "cat '/var/backups/becore-tickets/$name'" > "$RUNNER_TEMP/$name"
+          test -s "$RUNNER_TEMP/$name"
+          echo "file=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
+      - name: Preserve encrypted preactivation backup off-host
+        if: inputs.mode == 'capture'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tickets-handover-backup-${{ github.run_id }}
+          path: ${{ steps.backup.outputs.file }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 35
+      - name: Record verified off-host receipt
+        if: inputs.mode == 'capture'
+        run: |
+          tailscale ssh root@hermes "python3 - '$GITHUB_RUN_ID' '$REVISION'" <<'PY'
+          import json,pathlib,sys
+          root=pathlib.Path('/var/lib/becore-tickets-handover')
+          r=json.loads((root/'live-transfer.json').read_text())
+          assert r['phase']=='verified' and r['revision']==sys.argv[2]
+          p=root/('offhost-'+r['transferId']+'.json')
+          p.write_text(json.dumps({'transferId':r['transferId'],'revision':sys.argv[2],'runId':sys.argv[1],'restoreTested':True}))
+          p.chmod(0o600)
+          print('Encrypted frozen state preserved off-host; full restore verified.')
+          PY
