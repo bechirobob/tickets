@@ -268,6 +268,6 @@ jobs:
           emit("known_cache_process_references", {"pidsByPath": {key: sorted(value) for key, value in refs.items()},
                                                 "permissionErrors": errors,
                                                 "coverage": "Current processes only. An empty result does not prove data is disposable or outside future service dependencies."})
-          emit("service_metadata", run(["systemctl", "show", "becore-tickets.service", "bubblewash-local.service", "caddy.service", "--no-pager", "--property=Id,ActiveState,SubState,WorkingDirectory,MainPID,NRestarts"]))
+          emit("service_metadata", run(["systemctl", "show", "becore-tickets.service", "caddy.service", "--no-pager", "--property=Id,ActiveState,SubState,WorkingDirectory,MainPID,NRestarts"]))
           emit("complete", {"readOnlyClassificationCompleted": True})
           PY
