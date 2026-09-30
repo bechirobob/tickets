@@ -1,4 +1,4 @@
-name: Read-only Tickets VPS storage audit
+name: Verify approved Tickets storage cleanup
 on:
   push:
     branches: [main]
@@ -22,24 +22,156 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Inventory storage and Tickets staging without changes
+      - name: Remove exact owner-approved failed-release upload batch once
+        if: github.event_name == 'push' && github.run_attempt == 1 && contains(github.event.head_commit.message, 'Approved cleanup 20260930 two failed Tickets uploads')
         run: |
           tailscale ssh root@hermes 'python3 -' <<'PY'
-          """Read-only Hermes storage inventory. Never opens application databases or secrets."""
+          """Delete only the six owner-approved failed-release staging files, with drift guards."""
           import datetime
-          import glob
+          import fcntl
+          import hashlib
           import json
           import os
           import pathlib
-          import pwd
-          import re
           import stat
           import subprocess
           import urllib.request
-          import urllib.error
+          
+          HOME = pathlib.Path('/srv/becore-tickets')
+          ACTIVE = '51f414132da8c41e6d6583fdfa76e709ae7516e8'
+          PREVIOUS = '8a25812f1a0fc81e4ff4f956542097b4465e050f'
+          ARCHIVE_DIGEST = '00addc9b1daa764bd64b582beb54617e7ba2d93f52d24afe53b4a2b44aceaf9f'
+          APPROVED = {
+              '/var/tmp/tickets-code-release-36730822498-1': {'inode': 254719, 'operatorBlob': '9de9be40366b1c3660dc9622d8ba3119ad06f2eb', 'files': {'code-release.py': (270231, 35685), 'provenance.json': (270225, 1622), 'runtime.tar.gz': (270198, 228439754)}},
+              '/var/tmp/tickets-code-release-36734407816-1': {'inode': 270232, 'operatorBlob': '8b57c088157bdd808f4b4556f04cd4144bde72f8', 'files': {'code-release.py': (270237, 36635), 'provenance.json': (270236, 1622), 'runtime.tar.gz': (270234, 228439754)}},
+          }
           
           
-          def run(args, timeout=30):
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+          
+          
+          def health():
+              request = urllib.request.Request('https://tickets.becoreops.com/healthz', headers={'User-Agent': 'Mozilla/5.0 BeCoreApprovedStorageCleanup'})
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  value = json.loads(response.read(65536))
+                  require(response.status == 200 and value.get('active') is True and value.get('revision') == ACTIVE, 'Live health or revision changed')
+              return {'status': 200, 'revision': ACTIVE, 'active': True}
+          
+          
+          def verify_runtime():
+              for pointer, revision in [('current', ACTIVE), ('previous', PREVIOUS)]:
+                  link = HOME / pointer
+                  require(link.is_symlink() and str(link.resolve(strict=True)) == str(HOME / 'releases' / revision), 'Protected release pointer changed')
+              props = subprocess.check_output(['systemctl', 'show', 'becore-tickets.service', '--property=ActiveState,WorkingDirectory', '--no-pager'], text=True)
+              require('ActiveState=active' in props and 'WorkingDirectory=' + str(HOME / 'releases' / ACTIVE) in props, 'Active service identity changed')
+              return health()
+          
+          
+          def references():
+              found = []
+              errors = []
+              for proc in pathlib.Path('/proc').iterdir():
+                  if not proc.name.isdigit():
+                      continue
+                  targets = []
+                  try:
+                      pointers = [proc / name for name in ['cwd', 'root', 'exe']] + list((proc / 'fd').iterdir())
+                      for pointer in pointers:
+                          try:
+                              targets.append(os.readlink(pointer))
+                          except FileNotFoundError:
+                              pass
+                      for line in (proc / 'maps').read_text().splitlines():
+                          fields = line.split(None, 5)
+                          if len(fields) == 6:
+                              targets.append(fields[5])
+                      for line in (proc / 'mountinfo').read_text().splitlines():
+                          fields = line.split()
+                          # Both filesystem root and mount target expose bind references.
+                          targets.extend([fields[3].replace('\\040', ' '), fields[4].replace('\\040', ' ')])
+                  except FileNotFoundError:
+                      continue
+                  except PermissionError:
+                      errors.append(int(proc.name))
+                  for path in APPROVED:
+                      if any(value == path or value.startswith(path + '/') for value in targets):
+                          found.append({'path': path, 'pid': int(proc.name)})
+              require(not errors, 'Could not inspect every process namespace')
+              require(not found, 'Approved staging acquired a process or mount reference')
+          
+          
+          def validate(path, expected):
+              p = pathlib.Path(path)
+              info = p.lstat()
+              require(stat.S_ISDIR(info.st_mode) and not p.is_symlink() and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o700 and info.st_dev == 2049 and info.st_ino == expected['inode'], 'Staging directory metadata changed')
+              require({child.name for child in p.iterdir()} == set(expected['files']), 'Staging directory contents changed')
+              allocated = info.st_blocks * 512
+              for name, (inode, size) in expected['files'].items():
+                  child = p / name
+                  cs = child.lstat()
+                  require(stat.S_ISREG(cs.st_mode) and cs.st_uid == 0 and stat.S_IMODE(cs.st_mode) == 0o600 and cs.st_nlink == 1 and cs.st_dev == info.st_dev and cs.st_ino == inode and cs.st_size == size, 'Approved file metadata changed')
+                  allocated += cs.st_blocks * 512
+              with (p / 'runtime.tar.gz').open('rb') as stream:
+                  require(hashlib.file_digest(stream, 'sha256').hexdigest() == ARCHIVE_DIGEST, 'Approved archive content changed')
+              operator = (p / 'code-release.py').read_bytes()
+              require(hashlib.sha1(b'blob ' + str(len(operator)).encode() + b'\0' + operator).hexdigest() == expected['operatorBlob'], 'Approved operator content changed')
+              proof = json.loads((p / 'provenance.json').read_text())
+              require(proof.get('source') == PREVIOUS and proof.get('archiveSha256') == ARCHIVE_DIGEST and str(proof.get('runtimeRun')) == '36729977021' and str(proof.get('candidateRun')) == '36727098470', 'Approved provenance changed')
+              return allocated
+          
+          
+          require(os.geteuid() == 0, 'Existing Tickets root operator required')
+          require(datetime.datetime.now(datetime.timezone.utc) < datetime.datetime(2026, 9, 30, 22, 0, tzinfo=datetime.timezone.utc), 'One-time cleanup window expired')
+          lock_fd = os.open('/run/lock/becore-tickets-deploy.lock', os.O_RDWR | os.O_NOFOLLOW)
+          with os.fdopen(lock_fd, 'a') as lock:
+              require(stat.S_ISREG(os.fstat(lock.fileno()).st_mode), 'Deployment lock must be regular')
+              fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+              before_health = verify_runtime()
+              before = os.statvfs('/')
+              allocated = sum(validate(path, expected) for path, expected in APPROVED.items())
+              references()
+              # Validate the complete approved batch before removing the first file.
+              for path, expected in APPROVED.items():
+                  validate(path, expected)
+              removed = []
+              for path, expected in APPROVED.items():
+                  fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                  try:
+                      require(os.fstat(fd).st_ino == expected['inode'], 'Directory changed at removal')
+                      for name, (inode, size) in expected['files'].items():
+                          current = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                          require(stat.S_ISREG(current.st_mode) and current.st_ino == inode and current.st_size == size and current.st_nlink == 1, 'File changed at removal')
+                          os.unlink(name, dir_fd=fd)
+                          removed.append(path + '/' + name)
+                          print(json.dumps({'removedApprovedFile': path + '/' + name}), flush=True)
+                      os.fsync(fd)
+                  finally:
+                      os.close(fd)
+                  require(os.lstat(path).st_ino == expected['inode'], 'Directory replaced after file removal')
+                  os.rmdir(path)
+              require(all(not os.path.lexists(path) for path in APPROVED), 'Approved stage remains')
+              after = os.statvfs('/')
+              after_health = verify_runtime()
+              print(json.dumps({'approvedFoldersRemoved': list(APPROVED), 'removedFileCount': len(removed), 'allocatedBytesRemoved': allocated,
+                                'beforeAvailableBytes': before.f_bavail * before.f_frsize, 'afterAvailableBytes': after.f_bavail * after.f_frsize,
+                                'freeSpaceDeltaBytes': after.f_bavail * after.f_frsize - before.f_bavail * before.f_frsize,
+                                'beforeHealth': before_health, 'afterHealth': after_health, 'protectedPrevious': PREVIOUS}, sort_keys=True))
+          PY
+      - name: Classify home and Docker storage without changes
+        if: always()
+        run: |
+          tailscale ssh root@hermes 'python3 -' <<'PY'
+          """Read-only storage classification. No user-file contents or Docker environments."""
+          import datetime
+          import json
+          import os
+          import pathlib
+          import subprocess
+          
+          
+          def run(args, timeout=45):
               try:
                   p = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
                   return {"returncode": p.returncode, "stdout": p.stdout.strip(), "stderr": p.stderr.strip()[:300]}
@@ -47,212 +179,68 @@ jobs:
                   return {"error": type(error).__name__}
           
           
-          def utc(value):
-              return datetime.datetime.fromtimestamp(value, datetime.timezone.utc).isoformat()
+          def emit(section, data):
+              print(json.dumps({"readOnly": True, "section": section, "data": data}, sort_keys=True), flush=True)
           
           
-          MOUNTPOINTS = []
-          for line in pathlib.Path("/proc/self/mountinfo").read_text().splitlines():
-              MOUNTPOINTS.append(line.split()[4].replace("\\040", " "))
+          emit("capacity", {"capturedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                            "disk": run(["df", "-B1", "/"]), "inodes": run(["df", "-i", "/"])})
+          for name in ["/home/ubuntu", "/home/ubuntu/.cache", "/home/ubuntu/.npm", "/home/ubuntu/.pnpm-store",
+                       "/home/ubuntu/.local/share/pnpm", "/home/ubuntu/.local/share/Trash", "/root/.cache", "/root/.npm"]:
+              path = pathlib.Path(name)
+              if path.is_dir() and not path.is_symlink():
+                  emit("directory_usage", {"path": name, "usage": run(["du", "-x", "-B1", "--max-depth=1", name])})
           
+          # Docker-provided accounting is classification only: reclaimable does not mean
+          # authorized to remove. Preserve all volumes and stopped containers by default.
+          for section, args in [
+              ("docker_summary", ["docker", "system", "df"]),
+              ("docker_details", ["docker", "system", "df", "-v"]),
+              ("docker_containers", ["docker", "ps", "-a", "--no-trunc", "--format", "{{json .ID}} {{json .Image}} {{json .Names}} {{json .State}} {{json .Status}}"]),
+              ("docker_images", ["docker", "image", "ls", "--no-trunc", "--digests", "--format", "{{json .ID}} {{json .Repository}} {{json .Tag}} {{json .Size}} {{json .CreatedAt}}"]),
+              ("docker_dangling_images", ["docker", "image", "ls", "--filter", "dangling=true", "--no-trunc", "--format", "{{json .ID}} {{json .Size}} {{json .CreatedAt}}"]),
+              ("docker_volumes_metadata", ["docker", "volume", "ls", "--format", "{{json .Name}} {{json .Driver}} {{json .Scope}}"]),
+          ]:
+              emit(section, run(args))
           
-          def metadata(path):
-              try:
-                  return inspect_metadata(path)
-              except OSError as error:
-                  return {"path": str(path), "error": type(error).__name__}
-          
-          
-          def inspect_metadata(path):
-              p = pathlib.Path(path)
-              s = p.lstat()
-              result = {"path": str(p), "mode": oct(stat.S_IMODE(s.st_mode)), "uid": s.st_uid,
-                        "owner": str(s.st_uid), "modified": utc(s.st_mtime),
-                        "inode": s.st_ino, "device": s.st_dev, "links": s.st_nlink,
-                        "type": "symlink" if p.is_symlink() else "directory" if p.is_dir() else "file"}
-              try:
-                  result["owner"] = pwd.getpwuid(s.st_uid).pw_name
-              except KeyError:
-                  pass
-              if p.is_symlink():
-                  result["target"] = os.readlink(p)
-                  return result
-              result["allocatedBytes"] = s.st_blocks * 512
-              result["apparentBytes"] = s.st_size
-              result["latestModification"] = utc(s.st_mtime)
-              if p.is_dir():
-                  latest = s.st_mtime
-                  count, symlinks, linked_files, errors, different_device = 0, 0, 0, 0, 0
-                  walk_errors = []
-                  for root, dirs, files in os.walk(p, followlinks=False, onerror=lambda error: walk_errors.append(type(error).__name__)):
-                      for name in list(dirs):
-                          if str(pathlib.Path(root) / name) in MOUNTPOINTS:
-                              dirs.remove(name)
-                              different_device += 1
-                      for name in list(dirs) + files:
-                          child = pathlib.Path(root) / name
-                          try:
-                              cs = child.lstat()
-                              if cs.st_dev != s.st_dev:
-                                  different_device += 1
-                                  if name in dirs:
-                                      dirs.remove(name)
-                                  continue
-                              count += 1
-                              result["allocatedBytes"] += cs.st_blocks * 512
-                              result["apparentBytes"] += cs.st_size
-                              latest = max(latest, cs.st_mtime)
-                              symlinks += stat.S_ISLNK(cs.st_mode)
-                              linked_files += stat.S_ISREG(cs.st_mode) and cs.st_nlink > 1
-                          except OSError:
-                              errors += 1
-                  result.update(latestModification=utc(latest), entryCount=count, symlinks=symlinks,
-                                multiplyLinkedFiles=linked_files, scanErrors=errors + len(walk_errors), skippedMountsOrDevices=different_device)
-              return result
-          
-          
-          def properties(unit):
-              return run(["systemctl", "show", unit, "--no-pager",
-                          "--property=LoadState,ActiveState,SubState,UnitFileState,User,WorkingDirectory,MainPID,NRestarts,MemoryCurrent,Result"])
-          
-          
-          report = {"readOnly": True, "capturedAt": utc(datetime.datetime.now().timestamp()),
-                    "disk": run(["df", "-B1", "/"]), "inodes": run(["df", "-i", "/"]),
-                    "services": {}, "usage": {}, "pointers": {}, "releases": [], "candidates": []}
-          for unit in ["becore-tickets.service", "becore-tickets-preview.service", "becore-tickets-retention.timer", "becore-tickets-retention.service", "caddy.service", "bubblewash.service", "bubble-wash.service"]:
-              report["services"][unit] = properties(unit)
-          report["runningServices"] = run(["systemctl", "list-units", "--type=service", "--state=running", "--no-pager", "--no-legend"])
-          print(json.dumps({"checkpoint": "capacity_and_services", "data": report}), flush=True)
-          for path in ["/", "/var", "/var/lib", "/var/cache", "/var/log", "/var/tmp", "/tmp", "/srv", "/root/.cache", "/root/.npm", "/home"]:
-              if pathlib.Path(path).exists():
-                  report["usage"][path] = run(["du", "-x", "-B1", "--max-depth=1", path], timeout=30)
-          report["journalUsage"] = run(["journalctl", "--disk-usage"])
-          print(json.dumps({"checkpoint": "directory_usage", "data": report["usage"]}), flush=True)
-          home = pathlib.Path("/srv/becore-tickets")
-          for name in ["current", "previous"]:
-              path = home / name
-              if os.path.lexists(path):
-                  report["pointers"][name] = metadata(path)
-                  try:
-                      report["pointers"][name]["resolved"] = str(path.resolve(strict=True))
-                  except OSError as error:
-                      report["pointers"][name]["resolutionError"] = type(error).__name__
-          for path in sorted((home / "releases").glob("*")):
-              entry = metadata(path)
-              entry["protectedPointer"] = any(v.get("resolved") == str(path) for v in report["pointers"].values())
-              report["releases"].append(entry)
-          
-          candidate_paths = set()
-          for pattern in ["/var/tmp/tickets-*", "/var/tmp/becore-tickets-*", "/tmp/tickets-*", "/tmp/becore-tickets-*", "/srv/becore-tickets/temporary/*"]:
-              candidate_paths.update(glob.glob(pattern))
-          for path in sorted(candidate_paths):
-              entry = metadata(path)
-              p = pathlib.Path(path)
-              if p.is_dir() and not p.is_symlink():
-                  entry["topLevelEntries"] = [metadata(child) for child in sorted(p.glob("*"))]
-                  proof = p / "provenance.json"
-                  if (re.fullmatch(r"/var/tmp/tickets-code-release-[1-9][0-9]*-[1-9][0-9]*", path)
-                          and proof.is_file() and not proof.is_symlink() and proof.stat().st_size < 65536):
-                      try:
-                          raw = json.loads(proof.read_text())
-                          entry["provenance"] = {}
-                          for key in ["source", "expectedActive", "archiveSha256"]:
-                              value = raw.get(key)
-                              if isinstance(value, str) and re.fullmatch("[a-f0-9]{40}|[a-f0-9]{64}", value):
-                                  entry["provenance"][key] = value
-                          for key in ["runtimeRun", "candidateRun"]:
-                              value = str(raw.get(key))
-                              if re.fullmatch("[1-9][0-9]*", value):
-                                  entry["provenance"][key] = value
-                          entry["provenance"]["ancestryVerified"] = raw.get("ancestryVerified") is True
-                      except (OSError, ValueError, AttributeError, TypeError):
-                          entry["provenanceInvalid"] = True
-              report["candidates"].append(entry)
-              print(json.dumps({"checkpoint": "staging_metadata", "data": entry}), flush=True)
-          
-          # Only metadata from process handles and mount tables; do not read environments,
-          # command arguments, private credentials, or file contents through procfs.
-          refs = {path: [] for path in candidate_paths}
-          proc_errors = 0
+          # Count current file-descriptor/cwd/executable/mapping references to known cache
+          # roots without reading any private file contents or process arguments.
+          roots = ["/home/ubuntu/.cache", "/home/ubuntu/.npm", "/home/ubuntu/.pnpm-store", "/home/ubuntu/.local/share/pnpm", "/home/ubuntu/.local/share/Trash", "/root/.cache", "/root/.npm"]
+          refs = {root: set() for root in roots}
+          errors = 0
           for proc in pathlib.Path("/proc").iterdir():
               if not proc.name.isdigit():
                   continue
+              pointers = [proc / name for name in ["cwd", "root", "exe"]]
+              try:
+                  pointers.extend((proc / "fd").iterdir())
+              except FileNotFoundError:
+                  continue
+              except PermissionError:
+                  errors += 1
               targets = []
-              for pointer in [proc / "cwd", proc / "root", proc / "exe"]:
+              for pointer in pointers:
                   try:
-                      targets.append((str(pointer.relative_to(proc)), os.readlink(pointer)))
+                      targets.append(os.readlink(pointer))
                   except FileNotFoundError:
                       pass
                   except PermissionError:
-                      proc_errors += 1
-              try:
-                  for fd in (proc / "fd").iterdir():
-                      try:
-                          targets.append(("fd", os.readlink(fd)))
-                      except FileNotFoundError:
-                          pass
-                      except PermissionError:
-                          proc_errors += 1
-              except FileNotFoundError:
-                  pass
-              except PermissionError:
-                  proc_errors += 1
+                      errors += 1
               try:
                   for line in (proc / "maps").read_text().splitlines():
                       parts = line.split(None, 5)
                       if len(parts) == 6 and parts[5].startswith("/"):
-                          targets.append(("mapping", parts[5]))
+                          targets.append(parts[5])
               except FileNotFoundError:
                   pass
               except PermissionError:
-                  proc_errors += 1
-              for path in candidate_paths:
-                  matches = sorted({kind for kind, target in targets if target == path or target.startswith(path + "/")})
-                  if matches:
-                      refs[path].append({"pid": int(proc.name), "references": matches})
-          report["processInspectionPermissionErrors"] = proc_errors
-          mountpoints = MOUNTPOINTS
-          for entry in report["candidates"]:
-              path = entry["path"]
-              entry["processReferences"] = refs[path]
-              entry["mountsAtOrBelow"] = [p for p in mountpoints if p == path or p.startswith(path + "/")]
-              entry["configuredReferenceCoverage"] = "Path-only properties of loaded service units; excludes cron and arbitrary command arguments. Empty references alone do not establish safe deletion."
-          loaded = run(["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--no-legend", "--plain"])
-          for entry in report["candidates"]:
-              entry["configuredPathReferences"] = []
-          report["configuredReferenceInspectionErrors"] = []
-          if loaded.get("returncode") == 0:
-              for line in loaded["stdout"].splitlines():
-                  unit = line.split()[0]
-                  props = run(["systemctl", "show", unit, "--no-pager", "--property=WorkingDirectory,RootDirectory,PIDFile,ReadWritePaths,ReadOnlyPaths,BindPaths,BindReadOnlyPaths,StateDirectory,CacheDirectory,LogsDirectory,RuntimeDirectory"])
-                  if props.get("returncode") != 0:
-                      report["configuredReferenceInspectionErrors"].append(unit)
-                  for entry in report["candidates"]:
-                      if entry["path"] in props.get("stdout", ""):
-                          entry["configuredPathReferences"].append(unit)
-          else:
-              report["configuredReferenceInspectionErrors"].append("loaded-service-list-unavailable")
-          report["backupDirectoryUsageOnly"] = run(["du", "-x", "-B1", "--max-depth=1", "/var/backups", "/var/lib/becore-tickets-handover"])
-          report["publicChecks"] = []
-          for path in ["/healthz", "/api/version", "/", "/events", "/api/public/events"]:
-              request = urllib.request.Request("https://tickets.becoreops.com" + path, headers={"User-Agent": "Mozilla/5.0 BeCoreStorageAudit"})
-              try:
-                  response = urllib.request.urlopen(request, timeout=20)
-              except (urllib.error.URLError, TimeoutError) as error:
-                  report["publicChecks"].append({"path": path, "error": type(error).__name__})
-                  continue
-              with response:
-                  item = {"path": path, "status": response.status}
-                  if path in ["/healthz", "/api/version"]:
-                      try:
-                          body = json.loads(response.read(65536))
-                          for key in ["service", "revision", "runtime"]:
-                              value = body.get(key)
-                              if isinstance(value, str) and re.fullmatch("[a-zA-Z0-9_-]{1,64}", value):
-                                  item[key] = value
-                          item["active"] = body.get("active") is True
-                      except (ValueError, AttributeError, TypeError):
-                          item["bodyInvalid"] = True
-                  report["publicChecks"].append(item)
-          print(json.dumps(report, sort_keys=True))
+                  errors += 1
+              for root in roots:
+                  if any(target == root or target.startswith(root + "/") for target in targets):
+                      refs[root].add(int(proc.name))
+          emit("known_cache_process_references", {"pidsByPath": {key: sorted(value) for key, value in refs.items()},
+                                                "permissionErrors": errors,
+                                                "coverage": "Current processes only. An empty result does not prove data is disposable or outside future service dependencies."})
+          emit("service_metadata", run(["systemctl", "show", "becore-tickets.service", "bubblewash-local.service", "caddy.service", "--no-pager", "--property=Id,ActiveState,SubState,WorkingDirectory,MainPID,NRestarts"]))
+          emit("complete", {"readOnlyClassificationCompleted": True})
           PY
