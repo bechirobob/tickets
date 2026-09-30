@@ -73,6 +73,8 @@ jobs:
           def references():
               found = []
               errors = []
+              approved_inodes = {(2049, item['inode']) for item in APPROVED.values()}
+              approved_inodes.update((2049, inode) for item in APPROVED.values() for inode, size in item['files'].values())
               for proc in pathlib.Path('/proc').iterdir():
                   if not proc.name.isdigit():
                       continue
@@ -82,16 +84,27 @@ jobs:
                       for pointer in pointers:
                           try:
                               targets.append(os.readlink(pointer))
+                              info = os.stat(pointer)
+                              if (info.st_dev, info.st_ino) in approved_inodes:
+                                  found.append({'pid': int(proc.name), 'kind': 'inode-reference'})
                           except FileNotFoundError:
                               pass
                       for line in (proc / 'maps').read_text().splitlines():
                           fields = line.split(None, 5)
+                          if len(fields) >= 5:
+                              major, minor = fields[3].split(':')
+                              device = os.makedev(int(major, 16), int(minor, 16))
+                              if (device, int(fields[4])) in approved_inodes:
+                                  found.append({'pid': int(proc.name), 'kind': 'mapped-inode-reference'})
                           if len(fields) == 6:
                               targets.append(fields[5])
                       for line in (proc / 'mountinfo').read_text().splitlines():
                           fields = line.split()
                           # Both filesystem root and mount target expose bind references.
-                          targets.extend([fields[3].replace('\\040', ' '), fields[4].replace('\\040', ' ')])
+                          mount_root = fields[3].replace('\\040', ' ')
+                          targets.extend([mount_root, fields[4].replace('\\040', ' ')])
+                          if mount_root != '/' and any(path.startswith(mount_root.rstrip('/') + '/') for path in APPROVED):
+                              found.append({'pid': int(proc.name), 'kind': 'ancestor-bind-mount'})
                   except FileNotFoundError:
                       continue
                   except PermissionError:
