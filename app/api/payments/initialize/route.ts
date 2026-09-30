@@ -1,7 +1,7 @@
 import { couponQuote, couponUsage } from '../../../../lib/organizer-promotions';
 import { paystackAvailable, paystackEnvironment } from "../../../../lib/paystack-environment";
 import { registrationSettings, registrationsOpen } from "../../../../lib/registrations";
-import { createSeevCheckout, seevAvailable, seevEnvironment } from "../../../../lib/seevplus";
+import { createSeevCheckout, seevAvailable, seevCryptoAvailable, seevEnvironment } from "../../../../lib/seevplus";
 import { createSecureToken, hashToken, readAttendeeIdentity } from "../../../../lib/attendee-auth";
 import { resolveTicketSelection } from "../../../../lib/ticket-selection";
 import { findCuratedEvent } from "../../../events";
@@ -10,6 +10,7 @@ import { enforceRateLimit } from "../../../../lib/security-controls";
 import { purchasePolicyKeys, recordPolicyConsents } from "../../../../lib/policies";
 import { recordProductMetric } from "../../../../lib/product-analytics";
 import { replayPaymentAttempt } from "../../../../lib/payment-attempts";
+import { isCheckoutPreviewEvent } from "../../../../lib/checkout-preview";
 
 const RESERVATION_MINUTES = 15;
 const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Send valid checkout details." }, { status: 400 });
   }
+  // Reject the presentation-only identity before runtime access, rate limits,
+  // idempotency claims, inventory reservations or any provider interaction.
+  if (isCheckoutPreviewEvent(body.eventSlug)) return Response.json({ error: "This is a no-charge preview. Live payment is not allowed." }, { status: 400, headers: { "cache-control": "no-store" } });
   if (body.acceptedPolicies !== true) return Response.json({ error: "Accept the ticket, refund and privacy terms before payment." }, { status: 400 });
   const eventSlug = body.eventSlug?.trim() ?? "";
   const { env } = await import("cloudflare:workers");
@@ -70,15 +74,18 @@ export async function POST(request: Request) {
   if (paymentProvider === "seevplus" && !seevAvailable(env, event.isTestEvent)) return Response.json({ error: "SeevPlus is not available for this event yet." }, { status: 503 });
   if (paymentProvider === "seevplus" && !body.fullName?.trim()) return Response.json({ error: "Enter your full name before payment." }, { status: 400 });
   const paymentMethod = body.paymentMethod ?? "mobile_money";
-  if (paymentMethod !== "mobile_money" && paymentMethod !== "card") return Response.json({ error: "Choose mobile money or card payment." }, { status: 400 });
-  if (paymentProvider === "seevplus" && paymentMethod !== "mobile_money") return Response.json({ error: "SeevPlus currently accepts Mobile Money." }, { status: 400 });
+  if (!["mobile_money", "card", "crypto"].includes(paymentMethod)) return Response.json({ error: "Choose an available payment method." }, { status: 400 });
+  if (paymentProvider === "seevplus" && paymentMethod === "card") return Response.json({ error: "Choose Paystack for card payment." }, { status: 400 });
+  if (paymentMethod === "crypto" && paymentProvider !== "seevplus") return Response.json({ error: "Choose SeevPlus for USDC payment." }, { status: 400 });
+  if (paymentMethod === "crypto" && !seevCryptoAvailable(env, event.isTestEvent)) return Response.json({ error: "USDC payment is not available for this event yet. Choose another payment method." }, { status: 503 });
   const provider = paystackProviders[body.network as keyof typeof paystackProviders];
   if (paymentProvider === "paystack" && paymentMethod === "mobile_money" && !provider) return Response.json({ error: "Choose a supported mobile money network." }, { status: 400 });
 
   const otherAttempt = await env.DB.prepare(`SELECT 1 AS found FROM orders WHERE event_slug = ? AND customer_email = ?
-    AND payment_provider <> ? AND status IN ('payment_pending', 'expired') LIMIT 1`)
-    .bind(eventSlug, email, paymentProvider).first();
-  if (otherAttempt) return Response.json({ error: "Your payment with the other provider is still pending. Check that payment before switching providers." }, { status: 409 });
+    AND (payment_provider <> ? OR (payment_provider = 'seevplus' AND payment_channel <> ?))
+    AND status IN ('payment_pending', 'expired') LIMIT 1`)
+    .bind(eventSlug, email, paymentProvider, paymentMethod).first();
+  if (otherAttempt) return Response.json({ error: "Your payment with another method or provider is still pending. Check that payment before switching." }, { status: 409 });
 
   const requestedPromoterCode = body.promoterCode?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const promoter = requestedPromoterCode ? await env.DB.prepare(`SELECT code,commission_bps AS commissionBps FROM event_promoter_codes WHERE event_slug = ? AND code = ? AND status = 'active' LIMIT 1`)
@@ -131,7 +138,7 @@ export async function POST(request: Request) {
         AND event.starts_at > ?
         AND (? IS NULL OR EXISTS (SELECT 1 FROM event_coupons c WHERE c.id=? AND c.status='active' AND c.starts_at<=? AND c.expires_at>? AND ${couponUsage}<c.max_uses))
         AND NOT EXISTS (SELECT 1 FROM orders previous WHERE previous.event_slug = event.slug
-          AND previous.customer_email = ? AND previous.payment_provider <> ?
+          AND previous.customer_email = ? AND (previous.payment_provider <> ? OR (previous.payment_provider = 'seevplus' AND previous.payment_channel <> ?))
           AND previous.status IN ('payment_pending', 'expired'))
         AND (
           SELECT COALESCE(SUM(existing.admission_count), 0)
@@ -142,7 +149,7 @@ export async function POST(request: Request) {
     `).bind(
       id, selection.unitQuantity, selection.ticketCount, expiresAt, createdAt, createdAt,
       eventSlug, selection.tier.recordId, selection.tier.id, createdAt, offer?.id ?? null, offer?.id ?? null,
-      createdAt, createdAt, createdAt, couponId, couponId, createdAt, createdAt, createdAt, email, paymentProvider, createdAt, selection.ticketCount,
+      createdAt, createdAt, createdAt, couponId, couponId, createdAt, createdAt, createdAt, email, paymentProvider, paymentMethod, createdAt, selection.ticketCount,
     ),
     env.DB.prepare(`
       INSERT INTO orders (
@@ -157,7 +164,7 @@ export async function POST(request: Request) {
       id, reference, eventSlug, selection.tier.id, selection.tier.recordId,
       selection.unitQuantity, selection.ticketCount, faceAmountMinor, bookingFeeMinor,
       totalAmountMinor, email, phone, body.fullName?.trim().slice(0, 120) || null,
-      paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? "mobile_money" : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, couponId, discountMinor, promoter?.commissionBps ?? 0, id,
+      paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? paymentMethod : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, couponId, discountMinor, promoter?.commissionBps ?? 0, id,
     ),
     env.DB.prepare("UPDATE orders SET announcements_opt_in=?,checkout_attendee_id=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,checkoutAttendeeId,id),
     env.DB.prepare(`
@@ -203,7 +210,7 @@ export async function POST(request: Request) {
   if (paymentProvider === "seevplus") {
     const nextUrl = `/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}&pending=1`;
     await env.DB.prepare(`INSERT INTO seev_checkout_sessions (order_id, request_json, created_at) VALUES (?, ?, ?)`)
-      .bind(id, JSON.stringify({ type: "checkout", amount: totalAmountMinor, currency: "GHS", channels: ["mobile_money"],
+      .bind(id, JSON.stringify({ type: "checkout", amount: totalAmountMinor, currency: "GHS", channels: [paymentMethod],
         recipient: { name: body.fullName!.trim().slice(0, 120), email, phone },
         redirect_url: `${origin}/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`,
         meta: paymentMetadata }), createdAt).run();

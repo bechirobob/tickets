@@ -82,7 +82,8 @@ settlement and reconciliation checks have passed.
 
 ## Optional SeevPlus payments
 
-SeevPlus Mobile Money checkout is available behind an explicit configuration
+SeevPlus Mobile Money checkout and separately gated USDC checkout are available
+behind explicit configuration
 flag. Setup, sandbox tests, recovery behavior and refund/settlement limits are
 documented in [the SeevPlus runbook](docs/runbooks/seevplus.md). Paystack remains
 the default; no SeevPlus credentials are included in the repository.

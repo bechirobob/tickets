@@ -20,6 +20,7 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
     await expect(page.getByRole("button", { name: "Preparing checkout…", exact: true })).toBeDisabled();
   } finally { releaseScripts(); }
   await expect(page.getByLabel("Full name")).toBeEnabled();
+  await expect(page.getByRole("radio", { name: /Crypto USDC/ })).toHaveCount(0);
   // Filling buyer details alone must produce guidance, not a silently disabled button.
   await page.getByLabel("Full name").fill("Test Buyer");
   await page.getByLabel("Phone number").fill("0240000000");

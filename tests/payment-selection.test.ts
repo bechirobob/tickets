@@ -210,7 +210,7 @@ describe("payment ticket validation", () => {
     body.paymentMethod = "cash";
     const response = await initializePayment(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify(body) }));
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: "Choose mobile money or card payment." });
+    await expect(response.json()).resolves.toMatchObject({ error: "Choose an available payment method." });
   });
 
   it("keeps already-open General Admission checkouts compatible during deployment", async () => {

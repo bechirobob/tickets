@@ -471,8 +471,8 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(checkout, /payment-providers\/at-money\.svg/u);
   assert.match(checkout, /Let’s make it official\./u);
   assert.match(checkout, /Mobile Money<small>MTN MoMo, Telecel Cash or AT Money/u);
-  assert.match(checkout, /Card<small>Visa or Mastercard through Paystack/u);
-  assert.match(checkout, /useState<"mobile_money" \| "card" \| null>\(null\)/u);
+  assert.match(checkout, /Cards<small>Visa or Mastercard through Paystack/u);
+  assert.match(checkout, /useState<"mobile_money" \| "card" \| "crypto" \| null>\(null\)/u);
   assert.match(checkout, /<fieldset className="payment-methods"[^>]*>/u);
   assert.match(checkout, /type="radio" name="paymentMethod"/u);
   assert.match(checkout, /paymentMethod === "mobile_money" \? <div className="payment-method-detail">/u);
@@ -489,7 +489,7 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(paymentRoute, /https:\/\/api\.paystack\.co\/transaction\/initialize/u);
   assert.match(paymentRoute, /mtn: "mtn", telecel: "vod", at: "atl"/u);
   assert.match(paymentRoute, /channels: \[paymentMethod\]/u);
-  assert.match(paymentRoute, /paymentMethod === "card" \? "card" : paymentProvider === "seevplus" \? "mobile_money" : `mobile_money:/u);
+  assert.match(paymentRoute, /paymentMethod === "card" \? "card" : paymentProvider === "seevplus" \? paymentMethod : `mobile_money:/u);
   assert.match(css, /\.payment-methods\s*\{[^}]*border:\s*0/su);
   assert.match(css, /\.payment-option\s*\{[^}]*border-top:\s*1px solid/su);
   assert.match(css, /\.card-payment-detail\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/su);

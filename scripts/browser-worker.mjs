@@ -10,6 +10,7 @@ import { unstable_getMiniflareWorkerOptions } from 'wrangler';
 const modes = {
   public: { port: 8788, bindings: {} },
   seev: { port: 8789, bindings: { ENVIRONMENT: 'test', PAYSTACK_SECRET_KEY: 'sk_test_ui_fixture', SEEV_ENABLED: 'true', SEEV_ENVIRONMENT: 'sandbox', SEEV_CHECKOUT_API_KEY: 'ui-test-only', SEEV_WEBHOOK_SECRET: 'ui-test-only' } },
+  seevCrypto: { port: 8792, bindings: { ENVIRONMENT: 'test', PAYSTACK_SECRET_KEY: 'sk_live_ui_fixture', SEEV_ENABLED: 'true', SEEV_CRYPTO_ENABLED: 'true', SEEV_ENVIRONMENT: 'production', SEEV_CHECKOUT_API_KEY: 'ui-test-only', SEEV_WEBHOOK_SECRET: 'ui-test-only' } },
   registration: { port: 8790, bindings: { ENVIRONMENT: 'test' } },
   operations: { port: 8791, https: true, bindings: { ENVIRONMENT: 'test', STAFF_LOGIN_DECOY_SECRET: 'isolated-browser-login-decoy-secret-only' } },
 };
