@@ -228,6 +228,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .payment-method-choice:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
 .payment-method-detail { padding: 0 0 17px 39px; }
 .payment-method-detail .network-list { margin: 0; }
+.supported-momo-networks { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 0; padding: 0; list-style: none; }
+.supported-momo-networks li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.supported-momo-networks img { object-fit: contain; }
 .card-payment-detail { margin: 0; padding: 4px 0 2px; border: 0; background: transparent; }
 .card-payment-detail strong { font-size: 16px; }
 .card-payment-detail p { max-width: 520px; margin: 5px 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }

@@ -22,6 +22,7 @@ APPLE_WALLET_AUTH_SECRET=replace-with-a-long-local-wallet-auth-secret
 
 # Optional SeevPlus sandbox integration (server-side only)
 SEEV_ENABLED=false
+SEEV_CRYPTO_ENABLED=false
 SEEV_ENVIRONMENT=sandbox
 SEEV_CHECKOUT_API_KEY=
 SEEV_WEBHOOK_SECRET=

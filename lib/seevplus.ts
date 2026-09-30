@@ -3,7 +3,7 @@ import { requestSeev } from "./seev-transport";
 
 const API = "https://api.seevplus.com/api/v1/developer/payments";
 export type SeevEnvironment = "sandbox" | "production";
-type Config = Pick<Cloudflare.Env, "SEEV_ENABLED" | "SEEV_ENVIRONMENT" | "SEEV_CHECKOUT_API_KEY" | "SEEV_WEBHOOK_SECRET" | "ENVIRONMENT">;
+type Config = Pick<Cloudflare.Env, "SEEV_ENABLED" | "SEEV_CRYPTO_ENABLED" | "SEEV_ENVIRONMENT" | "SEEV_CHECKOUT_API_KEY" | "SEEV_WEBHOOK_SECRET" | "ENVIRONMENT">;
 
 export function seevEnvironment(config: Config): SeevEnvironment | null {
   return config.SEEV_ENVIRONMENT === "sandbox" || config.SEEV_ENVIRONMENT === "production" ? config.SEEV_ENVIRONMENT : null;
@@ -15,6 +15,13 @@ export function seevAvailable(config: Config, isTestEvent: boolean): boolean {
     && (Boolean(config.SEEV_WEBHOOK_SECRET) || (config.ENVIRONMENT === "test" && environment === "sandbox"))
     && (!isTestEvent || environment === "sandbox")
     && (config.ENVIRONMENT !== "production" || isTestEvent || environment === "production");
+}
+
+// Enable only after the organization has an active USDC account and its live
+// checkout contract has been verified. Seev does not offer crypto in sandbox.
+export function seevCryptoAvailable(config: Config, isTestEvent: boolean): boolean {
+  return config.SEEV_CRYPTO_ENABLED === "true" && seevEnvironment(config) === "production"
+    && !isTestEvent && seevAvailable(config, isTestEvent);
 }
 
 export function validSeevCheckoutUrl(value: unknown): value is string {
@@ -36,13 +43,13 @@ export async function validSeevSignature(raw: string, headers: Headers, secret: 
 
 type StoredSession = {
   orderId: string; reference: string; providerReference: string | null; environment: string;
-  amount: number; currency: string; status: string; expiresAt: string;
+  amount: number; currency: string; channel: string; status: string; expiresAt: string;
   requestJson: string | null; checkoutUrl: string | null;
 };
 
 async function readSession(db: D1Database, reference: string) {
   return db.prepare(`SELECT o.id AS orderId, o.reference, o.provider_reference AS providerReference,
-    o.payment_environment AS environment, o.total_amount_minor AS amount, o.currency, o.status,
+    o.payment_environment AS environment, o.total_amount_minor AS amount, o.currency, o.payment_channel AS channel, o.status,
     o.reservation_expires_at AS expiresAt, s.request_json AS requestJson, s.checkout_url AS checkoutUrl
     FROM orders o JOIN seev_checkout_sessions s ON s.order_id = o.id
     WHERE o.reference = ? AND o.payment_provider = 'seevplus'`).bind(reference).first<StoredSession>();
@@ -55,6 +62,12 @@ export async function createSeevCheckout(db: D1Database, reference: string, conf
   if (!order || order.environment !== seevEnvironment(config) || !config.SEEV_CHECKOUT_API_KEY) throw new Error("SeevPlus credentials do not match this order.");
   if (order.providerReference && validSeevCheckoutUrl(order.checkoutUrl)) return order.checkoutUrl;
   if (!order.requestJson || order.status !== "payment_pending" || Date.parse(order.expiresAt) <= Date.now()) throw new Error("This SeevPlus payment needs a status review before retrying.");
+  const request = JSON.parse(order.requestJson) as { channels?: unknown; subaccount?: unknown };
+  // Never silently remove settlement splits to make a crypto request succeed.
+  if (order.channel === "crypto" && (order.environment !== "production" || request.subaccount != null
+    || !Array.isArray(request.channels) || request.channels.length !== 1 || request.channels[0] !== "crypto")) {
+    throw new Error("This crypto checkout configuration needs review before retrying.");
+  }
   const response = await requestSeev(API, {
     method: "POST", headers: { authorization: `Bearer ${config.SEEV_CHECKOUT_API_KEY}`, "content-type": "application/json", "idempotency-key": order.orderId },
     body: order.requestJson,
@@ -91,6 +104,7 @@ export async function verifySeevPayment(db: D1Database, reference: string, confi
   // checked environment at creation. Reject an explicit environment mismatch.
   if (!response.ok || payload.success !== true || !data || data.reference !== order.providerReference
     || data.amount !== order.amount || data.currency !== order.currency || (data.final_amount !== undefined && data.final_amount !== order.amount)
+    || (order.channel === "crypto" && data.final_amount !== order.amount)
     || (data.env !== undefined && data.env !== order.environment) || typeof data.status !== "string") {
     throw new Error("SeevPlus payment details did not match this order.");
   }
@@ -99,7 +113,7 @@ export async function verifySeevPayment(db: D1Database, reference: string, confi
   return fulfillVerifiedPayment(db, {
     id: typeof data.id === "string" || typeof data.id === "number" ? data.id : order.providerReference,
     reference: order.reference, provider: "seevplus", providerReference: order.providerReference,
-    status, amount: order.amount, currency: order.currency, paidAt: null, channel: "mobile_money", gatewayResponse: null,
+    status, amount: order.amount, currency: order.currency, paidAt: null, channel: order.channel, gatewayResponse: null,
   });
 }
 

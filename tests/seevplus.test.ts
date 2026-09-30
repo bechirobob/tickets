@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as initialize } from "../app/api/payments/initialize/route";
 import { POST as webhook } from "../app/api/payments/seevplus/webhook/route";
 import { POST as claimTickets } from "../app/api/customer/session/route";
-import { createSeevCheckout, recoverSeevPayment, recoverSeevPayments, seevAvailable, validSeevCheckoutUrl, verifySeevPayment } from "../lib/seevplus";
+import { createSeevCheckout, recoverSeevPayment, recoverSeevPayments, seevAvailable, seevCryptoAvailable, validSeevCheckoutUrl, verifySeevPayment } from "../lib/seevplus";
 import { expireReservations, fulfillVerifiedPayment, initiatePaystackRefund, runDailyReconciliation } from "../lib/payment-operations";
 import { recoverAbandonedPayments } from "../lib/sales-recovery";
 
 const runtime = env as unknown as Cloudflare.Env;
 const api = "https://api.seevplus.com/api/v1/developer/payments";
 const origin = "https://tickets.becoreops.com";
-let createBody: { amount: number; redirect_url: string; meta: { orderId: string }; recipient: { name: string }; channels: string[] };
+let createBody: { amount: number; currency: string; redirect_url: string; meta: { orderId: string }; recipient: { name: string }; channels: string[]; subaccount?: string; network?: string };
 let verifyOverrides: Record<string, unknown>;
 let createOverrides: Record<string, unknown>;
 let providerReference: string;
@@ -19,6 +19,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(async () => {
   runtime.SEEV_ENABLED = "true";
+  runtime.SEEV_CRYPTO_ENABLED = "false";
   runtime.SEEV_ENVIRONMENT = "sandbox";
   runtime.SEEV_CHECKOUT_API_KEY = "test-only-seev-key";
   runtime.SEEV_WEBHOOK_SECRET = "test-only-seev-signing-secret";
@@ -51,6 +52,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   delete runtime.SEEV_ENABLED;
+  delete runtime.SEEV_CRYPTO_ENABLED;
   delete runtime.SEEV_ENVIRONMENT;
   delete runtime.SEEV_CHECKOUT_API_KEY;
   delete runtime.SEEV_WEBHOOK_SECRET;
@@ -263,6 +265,138 @@ describe("SeevPlus checkout and payment safety", () => {
     await verifySeevPayment(env.DB, data.reference, runtime);
     const result = await runDailyReconciliation(env.DB, { secret: "test", periodStart: new Date(Date.now() - 3600000).toISOString(), periodEnd: new Date(Date.now() + 3600000).toISOString(), actor: "test" });
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM event_settlements WHERE run_id = ? AND event_slug = ?").bind(result.runId, slug).first()).toMatchObject({ count: 0 });
+  });
+});
+
+describe("Seev USDC checkout", () => {
+  beforeEach(async () => {
+    runtime.SEEV_CRYPTO_ENABLED = "true";
+    runtime.SEEV_ENVIRONMENT = "production";
+    createOverrides = { env: "production" };
+    verifyOverrides = { env: "production" };
+    await env.DB.prepare("UPDATE curated_event_records SET is_test_event = 0 WHERE slug = ?").bind(slug).run();
+  });
+
+  async function cryptoCheckout() {
+    const response = await initialize(request({ paymentMethod: "crypto" }));
+    expect(response.status).toBe(200);
+    return await response.json() as { reference: string; authorizationUrl: string };
+  }
+
+  it("requires explicit activation, a live environment and both secrets", () => {
+    expect(seevCryptoAvailable(runtime, false)).toBe(true);
+    expect(seevCryptoAvailable(runtime, true)).toBe(false);
+    for (const override of [
+      { SEEV_CRYPTO_ENABLED: undefined }, { SEEV_CRYPTO_ENABLED: "false" }, { SEEV_CRYPTO_ENABLED: "TRUE" },
+      { SEEV_ENABLED: "false" }, { SEEV_ENVIRONMENT: "sandbox" },
+      { SEEV_CHECKOUT_API_KEY: "" }, { SEEV_WEBHOOK_SECRET: "" },
+    ]) expect(seevCryptoAvailable({ ...runtime, ...override }, false)).toBe(false);
+  });
+
+  it.each(["disabled", "sandbox", "test event", "missing key", "missing webhook"])("rejects crypto before creating an order when %s", async (condition) => {
+    if (condition === "disabled") runtime.SEEV_CRYPTO_ENABLED = "false";
+    if (condition === "sandbox") runtime.SEEV_ENVIRONMENT = "sandbox";
+    if (condition === "test event") await env.DB.prepare("UPDATE curated_event_records SET is_test_event = 1 WHERE slug = ?").bind(slug).run();
+    if (condition === "missing key") runtime.SEEV_CHECKOUT_API_KEY = "";
+    if (condition === "missing webhook") runtime.SEEV_WEBHOOK_SECRET = "";
+    expect((await initialize(request({ paymentMethod: "crypto" }))).status).toBe(503);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug = ?").bind(slug).first()).toMatchObject({ count: 0 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM inventory_reservations WHERE event_slug = ?").bind(slug).first()).toMatchObject({ count: 0 });
+  });
+
+  it("sends only crypto, preserves the GHS total and stored method, and replays once", async () => {
+    const req = request({ paymentMethod: "crypto" });
+    const response = await initialize(req.clone() as Request);
+    expect(response.status).toBe(200);
+    const result = await response.json() as { reference: string };
+    expect(await (await initialize(req.clone() as Request)).json()).toEqual(result);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(createBody).toMatchObject({ channels: ["crypto"], currency: "GHS", amount: expect.any(Number) });
+    expect(Number.isSafeInteger(createBody.amount)).toBe(true);
+    expect(createBody.subaccount).toBeUndefined();
+    expect(createBody.network).toBeUndefined();
+    expect(await env.DB.prepare("SELECT payment_channel, currency, total_amount_minor FROM orders WHERE reference = ?").bind(result.reference).first()).toMatchObject({ payment_channel: "crypto", currency: "GHS", total_amount_minor: createBody.amount });
+    expect(await ticketCount(result.reference)).toBe(0);
+  });
+
+  it("rejects crypto via Paystack and a method change on an existing idempotency key", async () => {
+    expect((await initialize(request({ paymentMethod: "crypto", paymentProvider: "paystack" }))).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+    const key = crypto.randomUUID();
+    expect((await initialize(request({ paymentMethod: "crypto" }, key))).status).toBe(200);
+    expect((await initialize(request({ paymentMethod: "mobile_money" }, key))).status).toBe(409);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["crypto", "mobile_money"])("blocks switching away from pending or expired %s", async (firstMethod) => {
+    const response = await initialize(request({ paymentMethod: firstMethod }));
+    expect(response.status).toBe(200);
+    const result = await response.json() as { reference: string };
+    const otherMethod = firstMethod === "crypto" ? "mobile_money" : "crypto";
+    for (const status of ["payment_pending", "expired"]) {
+      await env.DB.prepare("UPDATE orders SET status = ? WHERE reference = ?").bind(status, result.reference).run();
+      expect((await initialize(request({ paymentMethod: otherMethod }))).status).toBe(409);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reserves only one payment when Seev methods race", async () => {
+    const responses = await Promise.all([initialize(request({ paymentMethod: "crypto" })), initialize(request({ paymentMethod: "mobile_money" }))]);
+    expect(responses.map(response => response.status).sort()).toEqual([200, 409]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug = ?").bind(slug).first()).toMatchObject({ count: 1 });
+  });
+
+  it.each([{ amount: 1 }, { currency: "USDC" }, { env: "sandbox" }])("does not bind mismatched crypto initiation: %j", async override => {
+    createOverrides = { ...createOverrides, ...override };
+    const response = await initialize(request({ paymentMethod: "crypto" }));
+    expect(response.status).toBe(202);
+    const result = await response.json() as { reference: string };
+    expect(await order(result.reference)).toMatchObject({ status: "payment_pending", provider_reference: null });
+    expect(await ticketCount(result.reference)).toBe(0);
+  });
+
+  it.each([{ amount: 1 }, { final_amount: 1 }, { final_amount: undefined }, { currency: "USDC" }, { reference: "PAY-other" }, { env: "sandbox" }])("rejects mismatched crypto verification: %j", async override => {
+    const result = await cryptoCheckout();
+    verifyOverrides = { ...verifyOverrides, ...override };
+    await expect(verifySeevPayment(env.DB, result.reference, runtime)).rejects.toThrow("did not match");
+    expect(await ticketCount(result.reference)).toBe(0);
+  });
+
+  it.each(["pending", "failed", "cancelled", "unknown"])("never issues crypto tickets for %s", async status => {
+    const result = await cryptoCheckout();
+    verifyOverrides = { ...verifyOverrides, status };
+    expect((await verifySeevPayment(env.DB, result.reference, runtime)).result).toBe("pending");
+    expect(await ticketCount(result.reference)).toBe(0);
+  });
+
+  it("recovers the exact crypto request after disablement and rejects a split before sending", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("Response lost"));
+    const response = await initialize(request({ paymentMethod: "crypto" }));
+    expect(response.status).toBe(202);
+    const result = await response.json() as { reference: string };
+    const firstRequest = fetchMock.mock.calls[0][1];
+    runtime.SEEV_CRYPTO_ENABLED = "false";
+    const original = JSON.parse(String(firstRequest.body));
+    await env.DB.prepare("UPDATE seev_checkout_sessions SET request_json = ? WHERE order_id = ?").bind(JSON.stringify({ ...original, subaccount: "SUB_test" }), original.meta.orderId).run();
+    await expect(createSeevCheckout(env.DB, result.reference, runtime)).rejects.toThrow("configuration needs review");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await env.DB.prepare("UPDATE seev_checkout_sessions SET request_json = ? WHERE order_id = ?").bind(String(firstRequest.body), original.meta.orderId).run();
+    await createSeevCheckout(env.DB, result.reference, runtime);
+    expect(fetchMock.mock.calls[1][1].body).toBe(firstRequest.body);
+    expect(fetchMock.mock.calls[1][1].headers).toEqual(firstRequest.headers);
+  });
+
+  it("fulfills existing crypto once through a signed notification after both flags are off", async () => {
+    const result = await cryptoCheckout();
+    runtime.SEEV_CRYPTO_ENABLED = "false";
+    runtime.SEEV_ENABLED = "false";
+    expect((await webhook(await signedWebhook({ env: "production", data: { transaction: { reference: providerReference, env: "production", amount: 1, currency: "USDC", status: "completed" } } }))).status).toBe(200);
+    // Webhook settlement fields never substitute for the verified GHS order.
+    expect((await verifySeevPayment(env.DB, result.reference, runtime)).result).toBe("paid");
+    expect(await ticketCount(result.reference)).toBe(2);
+    expect(await env.DB.prepare("SELECT payment_channel, paystack_reference FROM orders WHERE reference = ?").bind(result.reference).first()).toMatchObject({ payment_channel: "crypto", paystack_reference: null });
   });
 });
 

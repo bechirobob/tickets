@@ -27,6 +27,7 @@ declare namespace Cloudflare {
     IMAGES: ImagesBinding;
     PAYSTACK_SECRET_KEY: string;
     SEEV_ENABLED?: string;
+    SEEV_CRYPTO_ENABLED?: string;
     SEEV_ENVIRONMENT?: string;
     SEEV_CHECKOUT_API_KEY?: string;
     SEEV_WEBHOOK_SECRET?: string;

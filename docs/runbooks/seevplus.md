@@ -141,3 +141,81 @@ Targeted regression checks:
 The provider representative describes a basic webhook retry, while the public
 guide states a single automatic attempt and manual retries. The integration does
 not depend on automatic retries. Real sandbox delivery still needs verification.
+
+## Optional USDC checkout
+
+`SEEV_CRYPTO_ENABLED=true` opts into USDC collection through Seev's `crypto`
+channel. It defaults to off when absent and additionally requires all existing
+Seev settings, a production key/environment and a non-test event. Sandbox and
+preview events never expose it. Keep the flag off until the account owner has
+created the organization's USDC wallet and the live checkout contract is verified.
+No wallet is created by this application.
+
+The customer selects **Crypto · USDC through SeevPlus**, then reviews the asset,
+network and amount on Seev's hosted page. Tickets still quote and store their GHS
+price, booking fee and total. The application neither calculates a conversion nor
+instructs the customer to use a particular network. Creation must return the
+original GHS amount/currency; verification must return the same reference,
+amount, currency and confirmed `final_amount`. Any mismatch, missing crypto
+`final_amount`, or unknown status holds fulfillment for review. A USDC settlement
+amount in a webhook never substitutes for server-side order verification.
+
+The provider's Payment Methods guide confirms `channels: ["crypto"]`, production
+keys and a USDC account, but prohibits split payments. Tickets currently does not
+send Seev subaccounts; internal organizer/promoter accounting is unchanged. A
+persisted crypto request with a subaccount is rejected rather than dropping it.
+The Checkout API overview still lists USDC as upcoming, and the public examples
+do not show a GHS-quoted crypto verification response. Confirm that contract with
+Seev before activation; do not loosen amount/currency matching to make it pass.
+Source: https://docs.seevcash.com/docs/payments/channels (checked 2026-09-30).
+
+Pending or expired Seev attempts block switching between MoMo and crypto as well
+as switching providers. Same-attempt retries retain the original body and key.
+Disabling either flag prevents new crypto checkouts but does not stop verification
+or recovery of existing ones. Seev refunds, including USDC, continue to require
+finance review; no automatic crypto transfer/refund is implemented.
+
+### Release and rollback
+
+The VPS is the active writer. On an authorized VPS release, include the code and
+configuration-name allowlist update, leaving `SEEV_CRYPTO_ENABLED` absent/false.
+After the owner confirms wallet readiness and the production contract/settlement
+checks, set `SEEV_CRYPTO_ENABLED` to the string `"true"` in the VPS private runtime
+configuration using a reviewed Tickets-only code-release procedure. The current
+`tickets-vps-install.yml` workflow installs an isolated preview, not the active
+service; do not mistake its success for a live release. No migration
+or new secret is required. Do not activate the frozen Cloudflare fallback or
+change hosting ownership for this feature. For rollback, set the crypto flag to
+`"false"`; retain Seev environment/secrets to reconcile payments already started.
+Live financial transactions must be performed by the account owner.
+
+Mock-only checks:
+
+```
+npx vitest run --config vitest.vps.config.ts tests/seevplus.test.ts tests/seev-transport.test.ts tests/payment-selection.test.ts tests/payment-operations.test.ts
+node scripts/prepare-seev-browser-fixture.mjs crypto
+npx playwright test --config playwright.seev-crypto.config.ts
+```
+
+The crypto browser fixture changes only the local event to non-test and uses
+invalid credentials. It intercepts initiation before provider traffic. Run the
+regular fixture command without `crypto` to restore its sandbox-only event.
+
+### Implementation verification (2026-09-30)
+
+Candidate based on `d7206f9397fab7049c30c8eed37c39d3826d4919` passed locally:
+
+- `npm run typecheck`; lint with no errors and one pre-existing moderation warning
+- `npm test`: 19 repository, 43 UI, 1 password, 4 rendered and 503 Worker tests
+- `npm run test:vps`: 20 Node adapter/operation tests and 503 VPS application tests
+- `npm run build:vps` and `node scripts/verify-vps-runtime.mjs`
+- `npx drizzle-kit check` and Worker deployment dry-run (nothing published)
+
+Independent diff review found no blocking issue. Browser journeys were added but
+not executed successfully here: the browser archive download was invalid, the
+installed Chromium could not create its process socket, and the managed cloud
+browser blocked localhost. Desktop Chromium, mobile Chromium and mobile WebKit
+checks remain required in candidate CI. No real payment, wallet action, provider
+secret change, remote push, activation or deployment was performed. The owner
+confirmed wallet creation separately; live GHS-to-USDC contract and settlement
+evidence remain outstanding.

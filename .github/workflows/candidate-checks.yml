@@ -59,6 +59,11 @@ jobs:
         run: |
           node scripts/prepare-seev-browser-fixture.mjs
           npx playwright test --config playwright.seev.config.ts --project ${{ matrix.browser }} --output test-results/seevplus
+      - name: Verify opt-in USDC checkout without provider traffic
+        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs crypto
+          npx playwright test --config playwright.seev-crypto.config.ts --project ${{ matrix.browser }} --output test-results/seevplus-crypto
       - name: Verify RSVP and interest registration on desktop and mobile
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
