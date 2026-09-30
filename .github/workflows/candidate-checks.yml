@@ -77,14 +77,13 @@ jobs:
       - name: Verify host report fixture recovery without retries
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
-      - name: Preserve focused checkout previews
+      - name: Preserve focused checkout evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: checkout-previews-${{ github.run_id }}-${{ matrix.browser }}
           path: |
             test-results/seevplus-*.png
-            test-results/checkout-preview-*.png
           if-no-files-found: ignore
           retention-days: 7
       - name: Preserve event-page renders and browser results

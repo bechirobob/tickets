@@ -1,8 +1,0 @@
-.checkout-preview .checkout-preview-guidance { margin: 18px 0 0 49px; max-width: 60ch; color: var(--muted); font-size: 15px; line-height: 1.5; }
-.checkout-preview .checkout-preview-poster { display: block; width: 100%; height: auto; max-height: 380px; object-fit: contain; margin: 0 0 24px; }
-.checkout-preview .payment-message strong { display: block; margin-bottom: 8px; }
-.checkout-preview .form-grid input[readonly] { color: var(--muted); }
-.checkout-preview .summary-lines { margin-top: 24px; }
-@media (max-width: 700px) {
-  .checkout-preview .checkout-preview-guidance { margin-left: 0; }
-}

@@ -42,12 +42,13 @@ APPLICATION_FILES = {
     "app/api/payments/initialize/route.ts", "app/checkout/[slug]/checkout-form.tsx",
     "app/checkout/[slug]/page.tsx", "app/globals.css", "lib/seevplus.ts",
     "app/checkout-preview/page.tsx", "app/checkout-preview/preview.css",
-    "app/api/payments/preview/route.ts", "lib/checkout-preview.ts",
+    "app/api/payments/preview/route.ts", "lib/checkout-preview.ts", "lib/retired-checkout.ts",
     "cloudflare-env.d.ts", ".dev.vars.example", "README.md",
     "scripts/browser-worker.mjs", "scripts/prepare-seev-browser-fixture.mjs",
     "playwright.seev-crypto.config.ts", "package.json", "package-lock.json",
     "ops/vps/code-release.py", "ops/vps/test_code_release.py",
     ".github/workflows/tickets-code-release.yml",
+    ".github/workflows/tickets-release-operator-checks.yml", "mobile/package-lock.json",
     ".github/workflows/candidate-checks.yml", ".github/workflows/tickets-backup.yml",
     ".github/workflows/tickets-vps-diagnostics.yml",
 }
@@ -212,6 +213,23 @@ def vetted_changes(expected, source):
                     '  }\n')
         require(before.count(anchor) == 1 and after == before.replace(anchor, anchor + addition),
                 "Only the vetted preview privacy-header rule is permitted.")
+    if ".github/workflows/tickets-release-operator-checks.yml" in changed:
+        # Already-reviewed operator-only CI from the current main baseline.
+        require(git("rev-parse", source + ":.github/workflows/tickets-release-operator-checks.yml")
+                == "2dcca50f2a8403e2f06c8aa871fcaa15ecf6c0ea",
+                "Only the reviewed release-operator checks workflow is permitted.")
+    if "mobile/package-lock.json" in changed:
+        before = strict_json(git("show", expected + ":mobile/package-lock.json"))
+        after = strict_json(git("show", source + ":mobile/package-lock.json"))
+        package = before["packages"]["node_modules/brace-expansion"]
+        require(package.get("version") == "5.0.9"
+                and package.get("resolved") == "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.9.tgz"
+                and package.get("integrity") == "sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==",
+                "Mobile security patch baseline changed.")
+        package.update(version="5.0.12",
+                       resolved="https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
+                       integrity="sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==")
+        require(before == after, "Only the reviewed mobile brace-expansion lock update may change.")
     # Package security updates must not change scripts, engines, or direct runtime
     # dependencies. Full runtime and browser gates still apply to the lockfile.
     if "package.json" in changed:
@@ -271,6 +289,7 @@ def verify_jobs(runtime_jobs, candidate_jobs):
             and all(job.get("conclusion") == "success" for job in candidate_jobs),
             "All browser matrix jobs must succeed.")
     required_steps = {"Verify every browser journey before release",
+                      "Verify optional SeevPlus checkout on desktop and mobile",
                       "Verify opt-in USDC checkout without provider traffic"}
     for job in candidate_jobs:
         steps = {step.get("name"): step.get("conclusion") for step in job.get("steps", [])}
@@ -408,8 +427,11 @@ def ready(system, revision, *, candidate=False):
                 require(version.get("service") == "becore-tickets" and version.get("revision") == revision,
                         "Version route does not identify the active release.")
         if candidate:
-            code, _ = system.request("/checkout-preview", public)
-            require(code == 200, "Checkout preview is unavailable.")
+            # Deleted routes must answer directly with 404. This is candidate-only:
+            # the previous release may still expose its preview during rollback.
+            for route in ("/checkout-preview", "/api/payments/preview"):
+                code, _ = system.request(route, public)
+                require(code == 404, "Retired checkout preview route is still available: " + route)
 
 
 class Deployment:

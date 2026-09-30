@@ -180,11 +180,11 @@ finance review; no automatic crypto transfer/refund is implemented.
 
 ### Release and rollback
 
-The VPS is the active writer. On an authorized VPS release, include the code and
-configuration-name allowlist update, leaving `SEEV_CRYPTO_ENABLED` absent/false.
-After the owner confirms wallet readiness and requests activation, and verified
-CI plus release preflight pass, set `SEEV_CRYPTO_ENABLED` to the string `"true"` in the VPS private runtime
-configuration using a reviewed Tickets-only code-release procedure. The current
+The VPS is the active writer. Routine code releases preserve the existing crypto
+configuration. First-time activation requires the owner to confirm wallet
+readiness and request activation, then verified CI and release preflight must
+pass before setting `SEEV_CRYPTO_ENABLED` to the string `"true"` through the
+reviewed Tickets-only code-release procedure. The current
 `tickets-vps-install.yml` workflow installs an isolated preview, not the active
 service; do not mistake its success for a live release. No migration
 or new secret is required. Do not activate the frozen Cloudflare fallback or
@@ -204,39 +204,35 @@ The crypto browser fixture changes only the local event to non-test and uses
 invalid credentials. It intercepts initiation before provider traffic. Run the
 regular fixture command without `crypto` to restore its sandbox-only event.
 
-### Implementation verification (2026-09-30)
+### Verification and activation (2026-09-30)
 
-Candidate based on `d7206f9397fab7049c30c8eed37c39d3826d4919` passed locally:
+The owner confirmed USDC wallet creation and requested activation. The initial
+crypto release `8a25812f1a0fc81e4ff4f956542097b4465e050f` passed equivalent-tree
+three-browser candidate CI and exact-source VPS runtime CI. Release
+[36736443635](https://github.com/bechirobob/tickets/actions/runs/36736443635)
+verified the live VPS revision, preserved its private credential bridge and
+enabled `SEEV_CRYPTO_ENABLED=true`. Desktop Chromium, mobile Chromium and mobile
+WebKit completed the no-charge walkthrough. No real payment, wallet action,
+provider secret change or transfer was performed; live GHS-to-USDC payment and
+settlement evidence remain outstanding.
 
-- `npm run typecheck`; lint with no errors and one pre-existing moderation warning
-- `npm test`: 19 repository, 43 UI, 1 password, 4 rendered and 503 Worker tests
-- `npm run test:vps`: 20 Node adapter/operation tests and 503 VPS application tests
-- `npm run build:vps` and `node scripts/verify-vps-runtime.mjs`
-- `npx drizzle-kit check` and Worker deployment dry-run (nothing published)
+## Retired temporary walkthrough
 
-Independent diff review found no blocking issue. Browser journeys were added but
-not executed successfully here: the browser archive download was invalid, the
-installed Chromium could not create its process socket, and the managed cloud
-browser blocked localhost. Desktop Chromium, mobile Chromium and mobile WebKit
-checks remain required in candidate CI. No real payment, wallet action, provider
-secret change, remote push, activation or deployment was performed. The owner
-confirmed wallet creation separately; live GHS-to-USDC contract and settlement
-evidence remain outstanding.
+The owner tested and accepted the temporary checkout walkthrough, then requested
+its removal. The `/checkout-preview` page and `/api/payments/preview` endpoint
+are removed, together with demo pricing, fictional buyer details, simulation
+submission and expiry machinery. The shared paid checkout retains expandable
+Mobile Money, Cards and Crypto options.
 
-## Temporary no-charge walkthrough
+The real initialization API permanently rejects the reserved
+`checkout-preview-only` event identity before runtime access or writes, so old
+preview submissions cannot become paid orders. Retired URLs retain no-store and
+noindex response protection. Removing the walkthrough does not change event
+pricing, ticket availability, RSVP configuration or stored bookings.
 
-`/checkout-preview` uses the existing On The Guest List event artwork and the
-shared checkout form, with an in-memory demo ticket priced at GHS 100 and no
-booking fee. It does not change the event's RSVP configuration or imply actual
-pricing/availability. The page is unlisted, no-store/noindex, and expires at
-2026-10-07 23:59:59 UTC. Fictional buyer details are read-only.
-
-The only submission is a payment-method enum to `/api/payments/preview`, which
-has no database, runtime binding, provider or analytics calls. It returns a
-simulated explanation, never a checkout URL or order. The real initialization
-API permanently rejects the reserved preview identity before runtime access or
-writes. The preview skips fee/discount lookups, analytics and payment-attempt
-storage. No provider credentials, wallet, card or live money are involved.
+Candidate CI verifies the paid checkout using isolated fixtures and intercepted
+provider requests. Release checks verify the retired URLs are unavailable;
+production verification never initiates a real payment.
 
 ## Guarded VPS code release
 

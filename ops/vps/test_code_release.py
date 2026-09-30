@@ -100,6 +100,8 @@ class FakeSystem(release.System):
         if path in ("/healthz", "/api/version"):
             return 200, json.dumps({"service": "becore-tickets", "revision": self.revision,
                                     "active": True, "runtime": "vps"}).encode()
+        if path in ("/checkout-preview", "/api/payments/preview"):
+            return (404 if self.revision == NEW else 200), b""
         return (403 if path.startswith("/api/admin/") else 200), b""
 
     def application_uid(self):
@@ -272,6 +274,8 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(json.loads((d.snapshot / "result.json").read_text())["phase"], "verified")
         for public in (False, True):
             for route, _ in release.ROUTES:
+                self.assertIn((NEW, route, public), self.system.requests)
+            for route in ("/checkout-preview", "/api/payments/preview"):
                 self.assertIn((NEW, route, public), self.system.requests)
         self.assertEqual(self.system.effective_checks, [self.config_before, self.config_before])
 
@@ -789,16 +793,36 @@ class DeploymentTests(unittest.TestCase):
                 self.deployment.transact()
         self.assert_restored()
 
-    def test_preview_failure_does_not_require_preview_on_old_release(self):
+    def test_preview_retirement_failure_can_restore_old_preview_release(self):
         request = self.system.request
-        def unavailable(path, public=False):
+        def still_available(path, public=False):
             if path == "/checkout-preview":
-                return 404, b""
+                return 200, b"old preview"
             return request(path, public)
-        with patch.object(self.system, "request", side_effect=unavailable):
+        with patch.object(self.system, "request", side_effect=still_available):
             with self.assertRaisesRegex(release.ReleaseError, "previous release restored"):
                 self.deployment.transact()
         self.assert_restored()
+        self.assertEqual(self.system.restarts, 2)
+        self.assertIn((OLD, "/healthz", True), self.system.requests)
+        for public in (False, True):
+            for route in ("/checkout-preview", "/api/payments/preview"):
+                self.assertNotIn((OLD, route, public), self.system.requests)
+
+    def test_candidate_requires_direct_404_for_each_retired_route_locally_and_publicly(self):
+        self.system.revision = NEW
+        request = self.system.request
+        for route in ("/checkout-preview", "/api/payments/preview"):
+            for public in (False, True):
+                for status_code in (200, 302, 403, 405, 410, 500):
+                    with self.subTest(route=route, public=public, status=status_code):
+                        def unexpected(path, is_public=False):
+                            if path == route and is_public == public:
+                                return status_code, b"unexpected retired route"
+                            return request(path, is_public)
+                        with patch.object(self.system, "request", side_effect=unexpected):
+                            with self.assertRaisesRegex(release.ReleaseError, "Retired checkout preview route"):
+                                release.ready(self.system, NEW, candidate=True)
 
     def test_smoke_checks_never_request_canceled_paths(self):
         self.deployment.transact()
@@ -830,19 +854,21 @@ class VerifierTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(release.ReleaseError):
                 release.verify_run(dict(run, **{key: value}), workflow="vps-runtime.yml", source=NEW, repository="owner/tickets")
 
-    def test_all_browser_jobs_and_actual_crypto_steps_required(self):
+    def test_all_browser_jobs_and_paid_checkout_steps_required(self):
         runtime = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
         candidate = [{"name": "verify (" + browser + ")", "conclusion": "success", "steps": [
             {"name": "Verify every browser journey before release", "conclusion": "success"},
+            {"name": "Verify optional SeevPlus checkout on desktop and mobile", "conclusion": "success"},
             {"name": "Verify opt-in USDC checkout without provider traffic", "conclusion": "success"}]
         } for browser in release.BROWSERS]
         release.verify_jobs(runtime, candidate)
         with self.assertRaises(release.ReleaseError):
             release.verify_jobs(runtime, candidate[:2])
-        skipped = copy.deepcopy(candidate)
-        skipped[0]["steps"][1]["conclusion"] = "skipped"
-        with self.assertRaises(release.ReleaseError):
-            release.verify_jobs(runtime, skipped)
+        for index in range(3):
+            skipped = copy.deepcopy(candidate)
+            skipped[0]["steps"][index]["conclusion"] = "skipped"
+            with self.subTest(step=index), self.assertRaises(release.ReleaseError):
+                release.verify_jobs(runtime, skipped)
         with self.assertRaises(release.ReleaseError):
             release.verify_jobs(runtime[:1], candidate)
 
@@ -861,6 +887,74 @@ class VerifierTests(unittest.TestCase):
         with patch.object(release, "git", side_effect=["worker/handover.ts", before, after + "changed"]), patch.object(release.subprocess, "run"):
             with self.assertRaises(release.ReleaseError):
                 release.vetted_changes(OLD, NEW)
+
+    def test_reviewed_operator_workflow_is_bound_to_its_exact_blob(self):
+        workflow = ".github/workflows/tickets-release-operator-checks.yml"
+        for blob in ("2dcca50f2a8403e2f06c8aa871fcaa15ecf6c0ea", "f" * 40):
+            with patch.object(release, "git", side_effect=[workflow, blob]), patch.object(release.subprocess, "run"):
+                if blob.startswith("2dcca50"):
+                    self.assertEqual(release.vetted_changes(OLD, NEW), [workflow])
+                else:
+                    with self.assertRaisesRegex(release.ReleaseError, "reviewed release-operator"):
+                        release.vetted_changes(OLD, NEW)
+
+    def test_mobile_lock_allows_only_reviewed_three_field_security_patch(self):
+        before = {"lockfileVersion": 3, "packages": {
+            "node_modules/brace-expansion": {
+                "version": "5.0.9",
+                "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.9.tgz",
+                "integrity": "sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==",
+                "dev": True,
+                "license": "MIT",
+                "dependencies": {
+                    "balanced-match": "^4.0.2"
+                },
+                "engines": {
+                    "node": "20 || >=22"
+                }
+            },
+            "node_modules/other": {"version": "1.0.0"}}}
+        after = copy.deepcopy(before)
+        after["packages"]["node_modules/brace-expansion"] = {
+            "version": "5.0.12",
+            "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
+            "integrity": "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==",
+            "dev": True,
+            "license": "MIT",
+            "dependencies": {
+                "balanced-match": "^4.0.2"
+            },
+            "engines": {
+                "node": "20 || >=22"
+            }
+        }
+        name = "mobile/package-lock.json"
+        def check(value, original=before):
+            with patch.object(release, "git", side_effect=[name, json.dumps(original), json.dumps(value)]), patch.object(release.subprocess, "run"):
+                return release.vetted_changes(OLD, NEW)
+        self.assertEqual(check(after), [name])
+        for key, value in (("version", "5.0.13"), ("resolved", "https://example.com/unreviewed.tgz"),
+                           ("integrity", "unreviewed"), ("dependencies", {"balanced-match": "*"})):
+            tampered = copy.deepcopy(after)
+            tampered["packages"]["node_modules/brace-expansion"][key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(release.ReleaseError, "reviewed mobile"):
+                check(tampered)
+        for tampered in (dict(after, lockfileVersion=2), dict(after, name="changed")):
+            with self.assertRaisesRegex(release.ReleaseError, "reviewed mobile"):
+                check(tampered)
+        tampered = copy.deepcopy(after)
+        tampered["packages"]["node_modules/other"]["version"] = "2.0.0"
+        with self.assertRaisesRegex(release.ReleaseError, "reviewed mobile"):
+            check(tampered)
+        for key in ("version", "resolved", "integrity"):
+            baseline = copy.deepcopy(before)
+            baseline["packages"]["node_modules/brace-expansion"][key] = "unexpected"
+            with self.subTest(baseline=key), self.assertRaisesRegex(release.ReleaseError, "baseline"):
+                check(after, baseline)
+
+    def test_retired_checkout_guard_is_an_allowed_application_change(self):
+        with patch.object(release, "git", return_value="lib/retired-checkout.ts"), patch.object(release.subprocess, "run"):
+            self.assertEqual(release.vetted_changes(OLD, NEW), ["lib/retired-checkout.ts"])
 
     def test_package_scripts_and_direct_dependencies_cannot_change(self):
         before = {"scripts": {"test": "real-test"}, "dependencies": {"runtime": "1"}, "overrides": {"fast-uri": "3.1.7"}}
@@ -882,6 +976,7 @@ class VerifierTests(unittest.TestCase):
             runtime_jobs = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
             candidate_jobs = [{"name": "verify (" + browser + ")", "conclusion": "success", "steps": [
                 {"name": "Verify every browser journey before release", "conclusion": "success"},
+                {"name": "Verify optional SeevPlus checkout on desktop and mobile", "conclusion": "success"},
                 {"name": "Verify opt-in USDC checkout without provider traffic", "conclusion": "success"}]
             } for browser in release.BROWSERS]
             for name, value in (("runtime", runtime), ("candidate", candidate),
@@ -920,6 +1015,10 @@ class VerifierTests(unittest.TestCase):
         self.assertNotIn("install-preview.py", text)
         self.assertIn("persist-credentials: false", text)
         self.assertIn("tag:tickets-ci", text)
+        self.assertIn("tests/e2e/checkout-preview-retired.spec.ts", text)
+        self.assertNotIn("tests/e2e/checkout-preview.spec.ts", text)
+        self.assertNotIn("/scan", text)
+        self.assertNotIn("/my-nights", text)
 
 
 if __name__ == "__main__":
