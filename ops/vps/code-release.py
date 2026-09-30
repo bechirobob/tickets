@@ -327,6 +327,21 @@ class System:
     def property(self, name):
         return self.run("systemctl", "show", SERVICE, "--property=" + name, "--value")
 
+    def verify_credential_binding(self):
+        # LoadCredential is D-Bus a(ss), which systemctl show's generic property
+        # printer cannot represent. Inspect the typed value, not unit-file text.
+        try:
+            value = strict_json(self.run(
+                "busctl", "--system", "--timeout=10", "--no-pager", "--json=short",
+                "get-property", "org.freedesktop.systemd1",
+                "/org/freedesktop/systemd1/unit/becore_2dtickets_2eservice",
+                "org.freedesktop.systemd1.Service", "LoadCredential"))
+        except (OSError, subprocess.SubprocessError, UnicodeError, ReleaseError) as exc:
+            raise ReleaseError("Canonical credential bridge could not be verified.") from exc
+        require(value == {"type": "a(ss)", "data": [
+            ["runtime.json", "/etc/becore-tickets/runtime.json"]]},
+            "Canonical credential bridge binding is unexpected.")
+
     def restart(self):
         self.run("systemctl", "daemon-reload")
         self.run("systemctl", "restart", SERVICE)
@@ -484,8 +499,9 @@ class Deployment:
         require(self.system.property("WorkingDirectory") == str(self.old_release),
                 "Service working directory drifted.")
         require(self.system.property("ActiveState") == "active", "Tickets service is not active.")
-        require("runtime.json:/etc/becore-tickets/runtime.json"
-                in self.system.property("LoadCredential"), "Canonical credential bridge is missing.")
+        require(self.system.property("NeedDaemonReload") == "no",
+                "Tickets service has a pending or unknown daemon-reload state.")
+        self.system.verify_credential_binding()
         config = configuration(self.before["config"])
         require(config.get("ENVIRONMENT") == "production", "Expected production configuration.")
         if self.enable_crypto:

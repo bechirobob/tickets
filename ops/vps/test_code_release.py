@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -20,9 +21,41 @@ OLD = "1" * 40
 NEW = "2" * 40
 ORIGINAL = release.ORIGINAL_TRANSFER_REVISION
 TREE = "4" * 40
+CREDENTIAL_COMMAND = (
+    "busctl", "--system", "--timeout=10", "--no-pager", "--json=short",
+    "get-property", "org.freedesktop.systemd1",
+    "/org/freedesktop/systemd1/unit/becore_2dtickets_2eservice",
+    "org.freedesktop.systemd1.Service", "LoadCredential")
+CREDENTIAL_DOCUMENT = '{"type":"a(ss)","data":[["runtime.json","/etc/becore-tickets/runtime.json"]]}'
+INVALID_CREDENTIAL_DOCUMENTS = (
+    "", " \n", "[unprintable]", "runtime.json:/etc/becore-tickets/runtime.json",
+    'a(ss) 1 "runtime.json" "/etc/becore-tickets/runtime.json"',
+    "{", CREDENTIAL_DOCUMENT + " trailing", "null", "true", "[]", "{}",
+    '{"data":[["runtime.json","/etc/becore-tickets/runtime.json"]]}',
+    '{"type":"a(ss)"}',
+    '{"type":"a(ss)","data":[]}',
+    '{"type":"a(ss)","data":null}',
+    '{"type":"a(ss)","data":"runtime.json:/etc/becore-tickets/runtime.json"}',
+    '{"type":"a(ss)","data":["runtime.json","/etc/becore-tickets/runtime.json"]}',
+    '{"type":"a(ss)","data":[["runtime.json"]]}',
+    '{"type":"a(ss)","data":[["runtime.json","/etc/becore-tickets/runtime.json","extra"]]}',
+    '{"type":"a(ss)","data":[[null,"/etc/becore-tickets/runtime.json"]]}',
+    '{"type":"a(ss)","data":[["runtime.json",true]]}',
+    CREDENTIAL_DOCUMENT.replace('"a(ss)"', '"as"'),
+    CREDENTIAL_DOCUMENT.replace('"runtime.json"', '"other.json"'),
+    CREDENTIAL_DOCUMENT.replace('/etc/becore-tickets/runtime.json', 'etc/becore-tickets/runtime.json'),
+    CREDENTIAL_DOCUMENT.replace('/etc/becore-tickets/runtime.json', '/run/becore-tickets-runtime/runtime.json'),
+    CREDENTIAL_DOCUMENT.replace('/etc/becore-tickets/runtime.json', '/etc/becore-tickets/runtime.json.bak'),
+    CREDENTIAL_DOCUMENT.replace('/etc/becore-tickets/runtime.json', '/etc/becore-tickets/../becore-tickets/runtime.json'),
+    CREDENTIAL_DOCUMENT.replace(']]}', '],["runtime.json","/etc/becore-tickets/runtime.json"]]}'),
+    CREDENTIAL_DOCUMENT.replace(']]}', '],["extra.json","/etc/becore-tickets/extra.json"]]}'),
+    CREDENTIAL_DOCUMENT.replace(']}', '],"extra":true}'),
+    CREDENTIAL_DOCUMENT.replace('"type":', '"type":"a(ss)","type":'),
+    CREDENTIAL_DOCUMENT.replace('"data":', '"data":[],"data":'),
+)
 
 
-class FakeSystem:
+class FakeSystem(release.System):
     def __init__(self, root):
         self.root = root
         self.revision = OLD
@@ -32,15 +65,20 @@ class FakeSystem:
         self.commands = []
         self.working_directory = str(root / "srv/becore-tickets/releases" / OLD)
         self.active_state = "active"
-        self.credential = "runtime.json:/etc/becore-tickets/runtime.json"
+        self.need_daemon_reload = "no"
+        self.credential_document = CREDENTIAL_DOCUMENT
         self.effective_checks = []
 
     def property(self, name):
         return {"WorkingDirectory": self.working_directory, "ActiveState": self.active_state,
-                "LoadCredential": self.credential}[name]
+                "NeedDaemonReload": self.need_daemon_reload}[name]
 
     def run(self, *args):
         self.commands.append(args)
+        if args[0] == "busctl":
+            if args != CREDENTIAL_COMMAND:
+                raise AssertionError("Unexpected credential property command")
+            return self.credential_document
         return ""
 
     def restart(self):
@@ -74,6 +112,45 @@ class FakeSystem:
 
     def sleep(self):
         pass
+
+
+class SystemCredentialTests(unittest.TestCase):
+    def test_real_run_accepts_only_the_exact_typed_binding(self):
+        documents = (CREDENTIAL_DOCUMENT + "\n", json.dumps({
+            "data": [["runtime.json", "/etc/becore-tickets/runtime.json"]],
+            "type": "a(ss)"}, indent=2))
+        for document in documents:
+            with self.subTest(document=document):
+                with patch.object(release.subprocess, "check_output", return_value=document) as command:
+                    release.System().verify_credential_binding()
+                command.assert_called_once_with(
+                    CREDENTIAL_COMMAND, text=True, stderr=subprocess.PIPE, timeout=90)
+
+    def test_real_run_rejects_unprintable_malformed_or_noncanonical_bindings(self):
+        for document in INVALID_CREDENTIAL_DOCUMENTS:
+            with self.subTest(document=document):
+                with patch.object(release.subprocess, "check_output", return_value=document) as command:
+                    with self.assertRaisesRegex(release.ReleaseError, "credential bridge"):
+                        release.System().verify_credential_binding()
+                command.assert_called_once_with(
+                    CREDENTIAL_COMMAND, text=True, stderr=subprocess.PIPE, timeout=90)
+
+    def test_real_run_command_errors_fail_closed_without_exposing_output(self):
+        failures = (
+            subprocess.CalledProcessError(1, CREDENTIAL_COMMAND, output=CREDENTIAL_DOCUMENT,
+                                          stderr="private diagnostic output"),
+            subprocess.TimeoutExpired(CREDENTIAL_COMMAND, 90, output=CREDENTIAL_DOCUMENT),
+            FileNotFoundError("private diagnostic output"),
+            UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid output"),
+        )
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                with patch.object(release.subprocess, "check_output", side_effect=failure) as command:
+                    with self.assertRaisesRegex(release.ReleaseError, "credential bridge") as raised:
+                        release.System().verify_credential_binding()
+                self.assertEqual(str(raised.exception), "Canonical credential bridge could not be verified.")
+                command.assert_called_once_with(
+                    CREDENTIAL_COMMAND, text=True, stderr=subprocess.PIPE, timeout=90)
 
 
 class DeploymentTests(unittest.TestCase):
@@ -250,9 +327,51 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.system.restarts, 0)
 
     def test_missing_load_credential_rejected(self):
-        self.system.credential = ""
+        self.system.credential_document = ""
         with self.assertRaisesRegex(release.ReleaseError, "credential bridge"):
             self.deployment.preflight()
+
+    def test_pending_or_unknown_daemon_reload_rejected_before_mutation(self):
+        self.deployment = self.new_deployment(enable_crypto=True)
+        for state in ("yes", "", "unknown", "no\nyes"):
+            with self.subTest(state=state):
+                self.system.need_daemon_reload = state
+                with self.assertRaisesRegex(release.ReleaseError, "daemon-reload"):
+                    self.deployment.transact()
+                self.assert_restored()
+                self.assertEqual(self.system.restarts, 0)
+                self.assertFalse(self.deployment.release.exists())
+                self.assertFalse(self.deployment.snapshot.exists())
+                self.assertEqual(self.system.commands, [])
+                self.assertEqual(self.system.effective_checks, [])
+
+    def test_rejected_credential_binding_never_mutates_release_state(self):
+        self.deployment = self.new_deployment(enable_crypto=True)
+        for document in INVALID_CREDENTIAL_DOCUMENTS:
+            with self.subTest(document=document):
+                self.system.credential_document = document
+                with self.assertRaisesRegex(release.ReleaseError, "credential bridge"):
+                    self.deployment.transact()
+                self.assert_restored()
+                self.assertEqual(self.system.restarts, 0)
+                self.assertFalse(self.deployment.release.exists())
+                self.assertFalse(self.deployment.snapshot.exists())
+                self.assertEqual(self.system.effective_checks, [])
+        self.assertEqual(self.system.commands,
+                         [CREDENTIAL_COMMAND] * len(INVALID_CREDENTIAL_DOCUMENTS))
+
+    def test_credential_command_failure_never_mutates_release_state(self):
+        self.deployment = self.new_deployment(enable_crypto=True)
+        with patch.object(self.system, "run", side_effect=subprocess.CalledProcessError(
+                1, CREDENTIAL_COMMAND, output=CREDENTIAL_DOCUMENT)) as command:
+            with self.assertRaisesRegex(release.ReleaseError, "credential bridge"):
+                self.deployment.transact()
+        command.assert_called_once_with(*CREDENTIAL_COMMAND)
+        self.assert_restored()
+        self.assertEqual(self.system.restarts, 0)
+        self.assertFalse(self.deployment.release.exists())
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.system.effective_checks, [])
 
     def test_public_revision_mismatch_rejected_before_mutation(self):
         request = self.system.request
