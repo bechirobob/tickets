@@ -65,7 +65,8 @@ jobs:
                   link = HOME / pointer
                   require(link.is_symlink() and str(link.resolve(strict=True)) == str(HOME / 'releases' / revision), 'Protected release pointer changed')
               props = subprocess.check_output(['systemctl', 'show', 'becore-tickets.service', '--property=ActiveState,WorkingDirectory', '--no-pager'], text=True)
-              require('ActiveState=active' in props and 'WorkingDirectory=' + str(HOME / 'releases' / ACTIVE) in props, 'Active service identity changed')
+              values = dict(line.split('=', 1) for line in props.splitlines() if '=' in line)
+              require(values.get('ActiveState') == 'active' and values.get('WorkingDirectory') == str(HOME / 'releases' / ACTIVE), 'Active service identity changed')
               return health()
           
           
@@ -139,10 +140,11 @@ jobs:
               for path, expected in APPROVED.items():
                   fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
                   try:
-                      require(os.fstat(fd).st_ino == expected['inode'], 'Directory changed at removal')
+                      opened = os.fstat(fd)
+                      require(stat.S_ISDIR(opened.st_mode) and opened.st_ino == expected['inode'] and opened.st_dev == 2049 and opened.st_uid == 0 and stat.S_IMODE(opened.st_mode) == 0o700, 'Directory changed at removal')
                       for name, (inode, size) in expected['files'].items():
                           current = os.stat(name, dir_fd=fd, follow_symlinks=False)
-                          require(stat.S_ISREG(current.st_mode) and current.st_ino == inode and current.st_size == size and current.st_nlink == 1, 'File changed at removal')
+                          require(stat.S_ISREG(current.st_mode) and current.st_ino == inode and current.st_size == size and current.st_nlink == 1 and current.st_dev == opened.st_dev and current.st_uid == 0 and stat.S_IMODE(current.st_mode) == 0o600, 'File changed at removal')
                           os.unlink(name, dir_fd=fd)
                           removed.append(path + '/' + name)
                           print(json.dumps({'removedApprovedFile': path + '/' + name}), flush=True)
@@ -195,7 +197,6 @@ jobs:
           # authorized to remove. Preserve all volumes and stopped containers by default.
           for section, args in [
               ("docker_summary", ["docker", "system", "df"]),
-              ("docker_details", ["docker", "system", "df", "-v"]),
               ("docker_containers", ["docker", "ps", "-a", "--no-trunc", "--format", "{{json .ID}} {{json .Image}} {{json .Names}} {{json .State}} {{json .Status}}"]),
               ("docker_images", ["docker", "image", "ls", "--no-trunc", "--digests", "--format", "{{json .ID}} {{json .Repository}} {{json .Tag}} {{json .Size}} {{json .CreatedAt}}"]),
               ("docker_dangling_images", ["docker", "image", "ls", "--filter", "dangling=true", "--no-trunc", "--format", "{{json .ID}} {{json .Size}} {{json .CreatedAt}}"]),
