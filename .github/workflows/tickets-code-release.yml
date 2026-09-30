@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: Exact main SHA with successful VPS and equivalent-tree browser CI
+        description: Verified application SHA on main with successful VPS and equivalent-tree browser CI
         required: true
         type: string
       runtime_run:
@@ -42,6 +42,7 @@ jobs:
     timeout-minutes: 15
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
+      OPERATOR_SHA: ${{ github.sha }}
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
       RUNTIME_RUN: ${{ inputs.runtime_run }}
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
@@ -67,8 +68,25 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           git merge-base --is-ancestor "$SOURCE_SHA" origin/main
           git merge-base --is-ancestor "$EXPECTED_ACTIVE" "$SOURCE_SHA"
+      - name: Stage reviewed main operator without changing the verified application tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$OPERATOR_SHA" =~ ^[a-f0-9]{40}$ ]]
+          git merge-base --is-ancestor "$SOURCE_SHA" "$OPERATOR_SHA"
+          git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
+          python3 - <<'PYOP'
+          import os,subprocess
+          allowed={'.github/workflows/tickets-code-release.yml','.github/workflows/tickets-release-operator-checks.yml','ops/vps/code-release.py','ops/vps/test_code_release.py'}
+          changed=subprocess.check_output(['git','diff','--name-only',os.environ['SOURCE_SHA'],os.environ['OPERATOR_SHA']],text=True).splitlines()
+          if not set(changed)<=allowed: raise SystemExit('Operator revision includes application changes; require fresh application CI/artifact.')
+          PYOP
+          operator="$RUNNER_TEMP/tickets-operator"
+          mkdir -m 700 "$operator"
+          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml | tar -x -C "$operator"
+          printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
       - name: Verify updater regression suite
-        run: python3 -m unittest discover -s ops/vps -p 'test_*.py'
+        run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
       - name: Verify exact CI runs, source tree, ancestry and artifact provenance
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,7 +103,7 @@ jobs:
           [[ "$candidate_sha" =~ ^[a-f0-9]{40}$ ]]
           git fetch --no-tags origin "$candidate_sha"
           gh run download "$RUNTIME_RUN" --repo "$GITHUB_REPOSITORY" --name "tickets-vps-$SOURCE_SHA" --dir "$metadata/artifact"
-          python3 ops/vps/code-release.py verify-ci \
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
             --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
             --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
             --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
@@ -96,6 +114,9 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
+      - name: Inspect loaded credential binding metadata without reading secret values
+        run: |
+          tailscale ssh root@hermes "systemctl show becore-tickets.service --no-pager --property=NeedDaemonReload --property=WorkingDirectory --property=ActiveState && busctl --system --timeout=10 --no-pager --json=short get-property org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/becore_2dtickets_2eservice org.freedesktop.systemd1.Service LoadCredential"
       - name: Apply reversible Tickets-only code transaction
         shell: bash
         run: |
@@ -104,12 +125,12 @@ jobs:
           stage="/var/tmp/tickets-code-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           digest=$(sha256sum "$metadata/artifact/tickets-vps-runtime.tar.gz" | cut -d ' ' -f 1)
           proof_digest=$(sha256sum "$metadata/provenance.json" | cut -d ' ' -f 1)
-          script_digest=$(sha256sum ops/vps/code-release.py | cut -d ' ' -f 1)
+          script_digest=$(sha256sum "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" | cut -d ' ' -f 1)
           # Exclusive staging prevents blind retry over an earlier uncertain run.
           tailscale ssh root@hermes "umask 077; mkdir '$stage'"
           tailscale ssh root@hermes "umask 077; cat > '$stage/runtime.tar.gz'" < "$metadata/artifact/tickets-vps-runtime.tar.gz"
           tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
-          tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < ops/vps/code-release.py
+          tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py"
           tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO'"
           # Only this successful run's three staged files are removed. Private
           # rollback snapshots and prior releases remain untouched on the host.
