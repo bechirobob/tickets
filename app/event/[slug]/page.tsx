@@ -74,6 +74,6 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
   return <>
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
-    <EventScreen event={customerEvent(event)} host={host} registration={registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), deadline: registration.closesAt ?? null } : null} promoterCode={promoterCode} />
+    <EventScreen event={customerEvent(event)} host={host} registration={registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), roomAccess: Boolean(registration.roomAccess), deadline: registration.closesAt ?? null } : null} promoterCode={promoterCode} />
   </>;
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit, code-only Tickets VPS release. No install, handover or data mutation.
+"""Explicit Tickets VPS release with reviewed additive-only schema support.
 
 The CI verifier binds successful main-runtime and browser runs to exact Git trees.
 The host transaction runs under the existing deployment lock, keeps private rollback
@@ -7,6 +7,7 @@ snapshots, and never edits the private credential bridge or original handover fi
 """
 import argparse
 import copy
+from contextlib import closing
 import fcntl
 import hashlib
 import json
@@ -15,6 +16,7 @@ import pwd
 from pathlib import Path, PurePosixPath
 import re
 import signal
+import sqlite3
 import shutil
 import stat
 import subprocess
@@ -36,8 +38,9 @@ ROUTES = (("/", 200), ("/events", 200), ("/api/public/events", 200),
 # retention.py protects current/previous and has a two-day grace. A release must
 # retain at least one hour of that grace before any pointer can lose protection.
 RETENTION_SAFE_AGE = 2 * 86400 - 3600
-# This release intentionally cannot carry database, migration, runtime, handover
-# protocol, routing, service-unit, or arbitrary build-script changes.
+# Only individually reviewed blobs below may extend the application/runtime or
+# create additive tables. Handover, routing, service units and arbitrary scripts
+# remain outside this operator. Existing customer rows are never rewritten.
 APPLICATION_FILES = {
     "app/api/payments/initialize/route.ts", "app/checkout/[slug]/checkout-form.tsx",
     "app/checkout/[slug]/page.tsx", "app/globals.css", "lib/seevplus.ts",
@@ -52,7 +55,110 @@ APPLICATION_FILES = {
     ".github/workflows/candidate-checks.yml", ".github/workflows/tickets-backup.yml",
     ".github/workflows/tickets-vps-diagnostics.yml",
 }
+# Exact reviewed application outputs for the app-experience increment. This is
+# deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
+REVIEWED_APPLICATION_BLOBS = {
+    ".github/workflows/browser-audit.yml": "255462dfbd7807dfc7d276da3d60e7ebc919bad9",
+    ".github/workflows/candidate-checks.yml": "6befb6651e354eb242b4ee0ba99874a245d38beb",
+    "app/active-night-experience.tsx": "331774c8e5554721f69835234a3229350613f943",
+    "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
+    "app/admin/operations/event-operations-hub.tsx": "5f76745b78170bcaa8b4b59a8a41d4acd3ab4c83",
+    "app/admin/orders/order-operations.tsx": "303053bb1c16089966bef372f83652424d3a912a",
+    "app/admin/orders/page.tsx": "358e1bc0a8b75d8e2036ff0217e03e3d8a690f61",
+    "app/admin/orders/provider-case-form.tsx": "d4070f19c7ff040b80b5b898720a2b6f4821ae94",
+    "app/admin/orders/provider-tracking.css": "94b8fc95e2d3c314039913f4a32fe7f834adcd9b",
+    "app/api/admin/operations/route.ts": "9453bb41c5541d5ac85a39a83960301124126eec",
+    "app/api/admin/orders/route.ts": "ce1f0e1ba9dedf372890cd7b24c5e9ab9c094cfb",
+    "app/api/organizer/business/route.ts": "79360f2c8430ee3dc65e0edf8e05cca6b6164afe",
+    "app/api/organizer/team/accept/route.ts": "b365543775898855e77fa06566d11b24d3abd10e",
+    "app/api/public/events/route.ts": "7893a675d91939964c96808f30b87d1a71aeb26a",
+    "app/customer-dock.tsx": "18a4264821dd0af9700f88edc046a109ef458ab0",
+    "app/discovery-back-link.tsx": "1b4ca8d4348b1a940c18b1aa9327a8a764b4c631",
+    "app/event/[slug]/event-screen.tsx": "d18772a3aaed511808ea61c05ff48e530f2e66a7",
+    "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
+    "app/help/help-centre.tsx": "9382a80c7f05030b7f9b0563bb8f376dc043b7b7",
+    "app/iphone-interface.css": "5bb7c4121cb0d61924cb5363e95fd5ff45fd16fd",
+    "app/layout.tsx": "056b004843736b4c37bf6f1ea256fd1b8ab9e0b7",
+    "app/mobile-app-frame.tsx": "33559c6475f4b025e821b33c13d55a5b062391e9",
+    "app/my-nights/my-nights-client.tsx": "b05968170e75ccab34adef706700fa935f28155f",
+    "app/organizer/layout.tsx": "64f7c8b3f26dc0b06ad9fe7dbe6a729d5477fa99",
+    "app/organizer/team/accept/accept-invitation.tsx": "07200cb844273d05589d6bbd0ac77de565ff2592",
+    "app/organizer/workspace/host-start.tsx": "5bbea7dfe02494f50630a4fec30d0ee26fe02185",
+    "app/organizer/workspace/organizer-suite.tsx": "201520d988292c058a8004854fa331d204a72607",
+    "app/organizer/workspace/suite-promote.tsx": "5a0dcbc1b25c956fbde6ef19f44b0c0e54e3e2fd",
+    "app/organizer/workspace/suite-records.tsx": "2f6f2c6a3881cfcea6f9b2c89a6697e8b26e97dd",
+    "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
+    "app/registration-form.tsx": "892574dd3198a410d5fea00232e607783d2e77df",
+    "app/registration-manager.tsx": "4ce3a328ef9db472e3b45743f06ef49296be17da",
+    "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
+    "app/room/[slug]/room-client.tsx": "043000a1a4d51ea07acd170046f4898894a3945e",
+    "app/rsvp/[slug]/page.tsx": "40ba4869d74f15e722834a9e682bc0867e2b054a",
+    "app/scan/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
+    "app/scan/page.tsx": "14c9facaac5aadd32c63bea083b8bf5c2d034874",
+    "app/scan/scanner.tsx": "69d9bf7cf154bc7b7aaeca6a7bf26ab5d083a085",
+    "app/use-header-panel.ts": "f2ab8ce01887ba400a927f15f921f80f87eaf2f8",
+    "app/use-layer-history.ts": "8f6421c896a29e90ff1f2bd5742f677c6543a2d2",
+    "app/workspace-chrome.tsx": "f6b90f36cec6914e9b36570c52dd9c53870a5e70",
+    "app/workspace.css": "8c3881d31c50a13246219e74262c27b542e36880",
+    "db/schema.ts": "ee50c0c9821c0d4f47e5b0bfb86df6b902e11afb",
+    "lib/admin-session.ts": "85cee053c45355b40a7d6824cc1283f4768b744c",
+    "lib/background-health.ts": "4793c1cd2a5204371e75495d9d1b218f24a0a092",
+    "lib/customer-screen.ts": "9546a787d811e4a8351e16e30693639c26743b26",
+    "lib/event-guest.ts": "376bf08ff8b52898a4bbc3ab913ea0350134d1db",
+    "lib/operations-exceptions.ts": "ad4ba837129ba67ffa08745bdb3ff6ea4c838800",
+    "lib/organizer-team.ts": "0214111d285e2bb19ee95af1934df68307126919",
+    "lib/payment-operations.ts": "d2ab7cbca6f7ff9a7a1b2e86f9e88cb89240d899",
+    "lib/provider-operation-tracking.ts": "63288d84fa93f0a97ee01909a68a654272151cbb",
+    "lib/registration-draft.ts": "633cdb6e22cb28a1c8002fab96da0bf9fe6eb91b",
+    "lib/registration-guidance.ts": "16bf24b5c2c23fa18e1dd16d14563cbed33164b2",
+    "lib/scanner-sync.ts": "68d45f670f1cf1d3a26c9ff10c5fbdbf21bb8243",
+    "mobile/src/adapters/navigation.tsx": "475edbb849c70e265e5fbdff6931511b40138f52",
+    "mobile/src/screen-catalogue.ts": "3c7030e0374696f31af397e7970be77173418194",
+    "mobile/tests/app.spec.ts": "53a908fb903b47a3270c36711eb4c194be34c9f2",
+    "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
+    "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
+    "styles/customer.css": "25b9f8f4a3bc53416f3fdb4530067d44ae41f885",
+    "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
+    "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b"
+}
+REVIEWED_MIGRATIONS = {
+    "drizzle/0057_background_job_health.sql": {
+        "blob": "d364b92ad1ab40981729f7fcd5cce862adc8138e",
+        "sha256": "8cb7462bfbd7d6f4bdd4e1f8570486b392b8f22018986f6904d818d5e5687293",
+        "schemaSha256": "4a8083c4b452cc9840acc9c7de7a7a21bd722044f1cec8429a45b19bcb9fed56",
+        "tables": [
+            "background_job_health"
+        ]
+    },
+    "drizzle/0058_provider_operations_tracking.sql": {
+        "blob": "0b14dbd4ced9acd9111a72dd6aceeb54aae492c4",
+        "sha256": "6b26e900ab82b3bcdb2505e2271e83814b41903a31bf6f1cb86737bccfa6a151",
+        "schemaSha256": "effd6b20bd1c75692334c6eef40132c784216ea8b7abaa67a140a6073de91c6a",
+        "tables": [
+            "provider_operation_records"
+        ],
+        "triggers": {
+            "provider_refund_reservation_guard": "payment_refunds"
+        }
+    }
+}
 BROWSERS = {"desktop-chromium", "mobile-chromium", "mobile-webkit"}
+CANDIDATE_CORE_STEPS = {
+    "Verify exact candidate source", "Audit dependencies", "Lint application",
+    "Check application types", "Verify unit tests and rendered production build",
+    "Check database schema", "Validate the deployable Worker without publishing",
+    "Package verified browser build", "Preserve verified browser build",
+}
+CANDIDATE_BROWSER_STEPS = {
+    "Download the verified browser build", "Verify and restore the exact candidate build",
+    "Prepare isolated event fixtures", "Verify every browser journey before release",
+    "Verify keyboard navigation focus without retries",
+    "Verify optional SeevPlus checkout on desktop and mobile",
+    "Verify opt-in USDC checkout without provider traffic",
+    "Verify RSVP and interest registration on desktop and mobile",
+    "Verify owner Operations workflows on desktop and mobile",
+    "Verify host report fixture recovery without retries",
+}
 
 
 class ReleaseError(RuntimeError):
@@ -194,6 +300,11 @@ def vetted_changes(expected, source):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     changed = git("diff", "--name-only", expected, source).splitlines()
     for name in changed:
+        if name in REVIEWED_APPLICATION_BLOBS or name in REVIEWED_MIGRATIONS:
+            reviewed = REVIEWED_APPLICATION_BLOBS.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
+            require(git("rev-parse", source + ":" + name) == reviewed,
+                    "Application or additive schema differs from reviewed source: " + name)
+            continue
         require(name in APPLICATION_FILES or name.startswith(("docs/", "tests/"))
                 or name in ("worker/handover.ts", "worker/security-response.ts"), "Unvetted source path: " + name)
     if "worker/handover.ts" in changed:
@@ -267,22 +378,25 @@ def verify_run(run, *, workflow, source=None, repository):
 
 
 def verify_jobs(runtime_jobs, candidate_jobs):
-    require(all(job.get("conclusion") == "success" for job in runtime_jobs),
-            "Runtime contains a failed or skipped job.")
+    require(len(runtime_jobs) == 2
+            and all(job.get("conclusion") == "success" for job in runtime_jobs),
+            "Runtime contains a failed, skipped or unexpected job.")
     require({job.get("name") for job in runtime_jobs} == {"verify", "handoff"},
             "Runtime verification jobs missing.")
-    require(len(candidate_jobs) == len(BROWSERS), "Browser matrix incomplete.")
-    require({job.get("name") for job in candidate_jobs}
-            == {"verify (" + browser + ")" for browser in BROWSERS}
-            and all(job.get("conclusion") == "success" for job in candidate_jobs),
-            "All browser matrix jobs must succeed.")
-    required_steps = {"Verify every browser journey before release",
-                      "Verify optional SeevPlus checkout on desktop and mobile",
-                      "Verify opt-in USDC checkout without provider traffic"}
+    # The shared build is a required gate, not an optional cache. Keep the
+    # existing browser check identities while requiring every producer/consumer.
+    expected = {"core"} | {"verify (" + browser + ")" for browser in BROWSERS}
+    require(len(candidate_jobs) == len(expected)
+            and {job.get("name") for job in candidate_jobs} == expected,
+            "Candidate core or browser matrix incomplete.")
+    require(all(job.get("conclusion") == "success" for job in candidate_jobs),
+            "All candidate core and browser jobs must succeed.")
     for job in candidate_jobs:
-        steps = {step.get("name"): step.get("conclusion") for step in job.get("steps", [])}
-        require(all(steps.get(name) == "success" for name in required_steps),
-                "Required browser journeys were skipped or failed.")
+        required_steps = CANDIDATE_CORE_STEPS if job["name"] == "core" else CANDIDATE_BROWSER_STEPS
+        for name in required_steps:
+            matching = [step for step in job.get("steps", []) if step.get("name") == name]
+            require(len(matching) == 1 and matching[0].get("conclusion") == "success",
+                    "Required candidate checks were skipped, failed or duplicated: " + name)
 
 
 def verify_ci(args):
@@ -315,9 +429,138 @@ def verify_ci(args):
                   "candidateSha": candidate["head_sha"], "runtimeRun": args.runtime_run,
                   "candidateRun": args.candidate_run, "archiveSha256": digest,
                   "repository": args.repository, "ancestryVerified": True,
-                  "changedFiles": changes}
+                  "changedFiles": changes, "migrations": migration_plan(changes)}
     write_json(args.output, provenance)
     print("Exact runtime/browser CI, ancestry, source scope and artifact digest verified.")
+
+
+def schema_rows(database):
+    return database.execute("SELECT type,name,tbl_name,sql FROM sqlite_schema "
+                            "WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
+
+
+def schema_digest(rows):
+    return hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest()
+
+
+def additive_statements(raw, specification):
+    """Accept new tables/indexes and the exact reviewed refund rollback guard."""
+    require(hashlib.sha256(raw).hexdigest() == specification["sha256"],
+            "Additive migration content differs from reviewed source.")
+    # The reviewed migrations contain no comment markers in quoted literals.
+    text = re.sub(r"--[^\n]*", "", raw.decode("utf-8"))
+    statements, pending = [], ""
+    for character in text:
+        pending += character
+        if character == ";" and sqlite3.complete_statement(pending):
+            statements.append(pending.strip())
+            pending = ""
+    require(not pending.strip() and statements, "Incomplete additive migration.")
+    tables, triggers = [], []
+    reviewed_triggers = specification.get("triggers", {})
+    require(isinstance(reviewed_triggers, dict)
+            and all(table == "payment_refunds" for table in reviewed_triggers.values()),
+            "Only the reviewed refund rollback guard may target an existing table.")
+    with closing(sqlite3.connect(":memory:")) as temporary:
+        if reviewed_triggers:
+            # Schema-only stand-in for validating the exact new guard. This
+            # existing table is never created or changed in the live database.
+            temporary.execute("CREATE TABLE payment_refunds (order_id TEXT, status TEXT)")
+        existing = schema_rows(temporary)
+        for statement in statements:
+            table = re.match(r"CREATE TABLE (`[a-z][a-z0-9_]*`|[a-z][a-z0-9_]*)\s*\(", statement)
+            index = re.match(r"CREATE (?:UNIQUE )?INDEX (?:`[a-z][a-z0-9_]*`|[a-z][a-z0-9_]*) ON (`[a-z][a-z0-9_]*`|[a-z][a-z0-9_]*)\s*\(", statement)
+            trigger = re.match(r"CREATE TRIGGER (`[a-z][a-z0-9_]*`|[a-z][a-z0-9_]*)\s+BEFORE INSERT ON (`[a-z][a-z0-9_]*`|[a-z][a-z0-9_]*)(?=\s|$)", statement)
+            require(bool(table or index or trigger), "Only reviewed additive schema creation is permitted.")
+            if trigger:
+                name, target = (part.strip("`") for part in trigger.groups())
+                require(reviewed_triggers.get(name) == target,
+                        "Migration contains an unreviewed existing-table trigger.")
+                triggers.append(name)
+            else:
+                name = (table or index).group(1).strip("`")
+                require(name in specification["tables"], "Migration targets an unreviewed table.")
+                if table:
+                    tables.append(name)
+            temporary.execute(statement)
+        rows = [row for row in schema_rows(temporary) if row not in existing]
+    require(sorted(tables) == sorted(specification["tables"])
+            and sorted(triggers) == sorted(reviewed_triggers)
+            and schema_digest(rows) == specification["schemaSha256"],
+            "Migration schema differs from the reviewed additive schema.")
+    return statements, rows
+
+
+def migration_plan(changes):
+    return [dict(path=name, **copy.deepcopy(REVIEWED_MIGRATIONS[name]))
+            for name in sorted(set(changes) & REVIEWED_MIGRATIONS.keys())]
+
+
+def migrate_database(database, staging, migrations):
+    """Service-user SQLite transaction. Never restore, replace or delete live data."""
+    database, staging = Path(database), Path(staging)
+    metadata = database.lstat()
+    require(stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+            and metadata.st_uid == os.geteuid() and stat.S_IMODE(metadata.st_mode) == 0o600,
+            "Live database must remain a private service-owned regular file.")
+    for suffix in ("-wal", "-shm", "-journal"):
+        path = Path(str(database) + suffix)
+        if os.path.lexists(path):
+            info = path.lstat()
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+                    and info.st_uid == os.geteuid() and not stat.S_IMODE(info.st_mode) & 0o077,
+                    "Unsafe live database sidecar.")
+    reviewed, additions = [], []
+    for specification, raw in migrations:
+        statements, rows = additive_statements(raw, specification)
+        reviewed.extend(statements)
+        additions.extend(rows)
+    names = [row[1] for row in additions]
+    require(len(names) == len(set(names)), "Additive migration objects overlap.")
+    staging.mkdir(mode=0o700)
+    backup = staging / "before.sqlite"
+    fd = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(fd)
+    started = time.monotonic()
+    def progress(_status, _remaining, _total):
+        require(time.monotonic() - started < 120, "Private database backup timed out.")
+    with closing(sqlite3.connect(database.as_uri() + "?mode=rw", uri=True, timeout=30)) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA synchronous=FULL")
+        needed = connection.execute("PRAGMA page_count").fetchone()[0] * connection.execute("PRAGMA page_size").fetchone()[0]
+        require(shutil.disk_usage(database.parent).free > needed + 512 * 1024 * 1024,
+                "Insufficient free space for a private migration backup.")
+        with closing(sqlite3.connect(backup.as_uri() + "?mode=rw", uri=True)) as saved:
+            connection.backup(saved, pages=256, progress=progress, sleep=0.1)
+            require(saved.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+                    and saved.execute("PRAGMA foreign_key_check").fetchall() == [],
+                    "Private migration backup failed integrity verification.")
+        with backup.open("rb") as stream:
+            os.fsync(stream.fileno())
+        write_json(staging / "result.json", {"phase": "backed-up", "backupSha256": digest_file(backup)})
+        connection.execute("BEGIN IMMEDIATE")
+        before = schema_rows(connection)
+        present = [row for row in before if row[1] in names]
+        # Reapplication is a no-op only when every reviewed object matches exactly.
+        require(not present or sorted(present) == sorted(additions),
+                "Existing additive schema is partial or differs from reviewed source.")
+        if not present:
+            for statement in reviewed:
+                connection.execute(statement)
+        after = schema_rows(connection)
+        require(sorted(row for row in after if row[1] in names) == sorted(additions)
+                and [row for row in after if row[1] not in names]
+                    == [row for row in before if row[1] not in names],
+                "An existing database schema changed during additive migration.")
+        require(connection.execute("PRAGMA foreign_key_check").fetchall() == [],
+                "Additive migration failed foreign-key verification.")
+        connection.commit()
+    result = {"phase": "verified", "backupSha256": digest_file(backup),
+              "schemaSha256": schema_digest(sorted(additions)),
+              "created": not bool(present), "tablesPreservedOnRollback": True,
+              "migrations": [specification for specification, _ in migrations]}
+    write_json(staging / "result.json", result)
+    return result
 
 
 class NoRouteRedirect(urllib.request.HTTPRedirectHandler):
@@ -348,6 +591,17 @@ class System:
         require(value == {"type": "a(ss)", "data": [
             ["runtime.json", "/etc/becore-tickets/runtime.json"]]},
             "Canonical credential bridge binding is unexpected.")
+
+    def verify_database_binding(self):
+        pid = self.property("MainPID")
+        require(NUMBER.fullmatch(pid), "Tickets service PID missing.")
+        entries = (Path("/proc") / pid / "environ").read_bytes().split(b"\0")
+        values = [item.split(b"=", 1)[1] for item in entries if item.startswith(b"TICKETS_STATE=")]
+        require(values == [b"/var/lib/becore-tickets"],
+                "Service is not using the canonical Tickets database directory.")
+
+    def application_gid(self):
+        return pwd.getpwnam("becore-tickets").pw_gid
 
     def restart(self):
         self.run("systemctl", "daemon-reload")
@@ -453,6 +707,8 @@ class Deployment:
         self.bridge = self.override.parent / "private-configuration.conf"
         self.snapshot = self.journal.parent / ("code-release-" + self.identity)
         self.lock = self.root / "run/lock/becore-tickets-deploy.lock"
+        self.migrations = []
+        self.migration_result = None
 
     def file(self, path, private=False, owner=None):
         info = path.lstat()
@@ -485,6 +741,19 @@ class Deployment:
                 and SHA.fullmatch(self.proof.get("sourceTree", ""))
                 and self.proof.get("candidateTree") == self.proof["sourceTree"],
                 "Release provenance does not match the transaction.")
+        changes = self.proof.get("changedFiles", [])
+        require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
+                "Release changed-file manifest is invalid.")
+        self.migrations = migration_plan(changes)
+        require(self.proof.get("migrations", []) == self.migrations,
+                "Release migrations differ from the reviewed source manifest.")
+        if self.migrations:
+            self.system.verify_database_binding()
+            state = self.root / "var/lib/becore-tickets"
+            info = state.lstat()
+            require(stat.S_ISDIR(info.st_mode) and info.st_uid == self.system.application_uid()
+                    and stat.S_IMODE(info.st_mode) == 0o700,
+                    "Canonical database directory is not private and service-owned.")
         self.before = {"journal": self.file(self.journal, private=True),
                        "handoff": self.file(self.handoff, private=True, owner=self.system.application_uid()),
                        "config": self.file(self.config, private=True),
@@ -551,7 +820,7 @@ class Deployment:
             "version": 1, "phase": "prepared", "runId": run_id, "attempt": attempt,
             "source": self.source, "previous": self.expected,
             "archiveSha256": self.archive_digest, "provenanceSha256": self.provenance_digest,
-            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": False},
+            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": bool(self.migrations)},
             "Prepared recovery evidence does not match this exact failed transaction.")
         for name, raw in self.before.items():
             require(self.file(failed / (name + ".before"), private=True) == raw,
@@ -632,12 +901,83 @@ class Deployment:
                 "Runtime executables missing or unsafe.")
         self.system.run(str(self.release / "bin/node"), "--check", str(self.release / "server.mjs"))
 
+    def migrate(self):
+        if not self.migrations:
+            return
+        self.system.verify_database_binding()
+        migrations = []
+        for specification in self.migrations:
+            file = self.release / "migrations" / Path(specification["path"]).name
+            raw = self.file(file)
+            additive_statements(raw, specification)
+            migrations.append((specification, raw))
+        state = self.root / "var/lib/becore-tickets"
+        staging = state / (".code-release-migration-" + self.identity)
+        require(not os.path.lexists(staging), "Migration evidence already exists; inspect before retrying.")
+        # SQLite must create WAL/SHM files as the existing application identity,
+        # never as root. The private backup is moved into root-only evidence.
+        child = os.fork()
+        if child == 0:
+            try:
+                if os.geteuid() == 0:
+                    os.setgroups([])
+                os.setgid(self.system.application_gid())
+                os.setuid(self.system.application_uid())
+                migrate_database(state / "tickets.sqlite", staging, migrations)
+                os._exit(0)
+            except BaseException as failure:
+                try:
+                    if staging.is_dir() and not staging.is_symlink():
+                        write_json(staging / "failure.json", {
+                            "phase": "failed", "errorType": type(failure).__name__,
+                            "reason": str(failure) if isinstance(failure, ReleaseError) else
+                                      "SQLite or filesystem operation failed; inspect the preserved backup."})
+                except BaseException:
+                    pass  # A full disk must not erase the existing backup/evidence.
+                os._exit(1)
+        interrupted = None
+        try:
+            _, status = os.waitpid(child, 0)
+        except BaseException as failure:
+            interrupted = failure
+            try:
+                os.kill(child, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            _, status = os.waitpid(child, 0)
+        if os.path.lexists(staging):
+            info = staging.lstat()
+            require(stat.S_ISDIR(info.st_mode) and info.st_uid == self.system.application_uid()
+                    and stat.S_IMODE(info.st_mode) == 0o700,
+                    "Unsafe private migration evidence directory.")
+            staging.rename(self.snapshot / "database")
+            for directory in (state, self.snapshot):
+                fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+        if interrupted is not None:
+            raise interrupted
+        require(os.waitstatus_to_exitcode(status) == 0, "Additive migration failed; inspect private backup evidence.")
+        self.migration_result = strict_json(self.file(
+            self.snapshot / "database/result.json", private=True, owner=self.system.application_uid()))
+        require(self.migration_result.get("phase") == "verified"
+                and self.migration_result.get("migrations") == self.migrations,
+                "Additive migration evidence does not match the reviewed source.")
+        backup = self.snapshot / "database/before.sqlite"
+        info = backup.lstat()
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+                and info.st_uid == self.system.application_uid() and stat.S_IMODE(info.st_mode) == 0o600
+                and digest_file(backup) == self.migration_result.get("backupSha256"),
+                "Private migration backup evidence could not be verified.")
+
     def evidence(self, phase):
         write_json(self.snapshot / "result.json", {
             "version": 1, "phase": phase, "runId": self.run_id, "attempt": self.attempt,
             "source": self.source, "previous": self.expected,
             "archiveSha256": self.archive_digest, "provenanceSha256": self.provenance_digest,
-            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": False})
+            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": bool(self.migrations)})
 
     def preserved(self):
         require(self.file(self.handoff, private=True, owner=self.system.application_uid()) == self.before["handoff"], "Handoff state changed.")
@@ -655,6 +995,11 @@ class Deployment:
         atomic_write(self.snapshot / "provenance.json", self.provenance.read_bytes())
         self.evidence("prepared")
         self.unpack()  # no service/configuration changes before archive validation
+        try:
+            self.migrate()
+        except BaseException:
+            self.evidence("migration-failed")
+            raise
         journal_after = None
         try:
             self.evidence("activating")
@@ -688,12 +1033,15 @@ class Deployment:
                 "revision": self.source, "archiveSha256": self.archive_digest,
                 "provenanceSha256": self.provenance_digest,
                 "cryptoEnabledRequested": self.enable_crypto}
+            if self.migrations:
+                record["lastCodeRelease"]["additiveMigrations"] = self.migrations
+                record["lastCodeRelease"]["databaseBackupSha256"] = self.migration_result["backupSha256"]
             require(self.file(self.journal, private=True) == self.before["journal"], "Handover journal drifted before commit.")
             journal_after = (json.dumps(record, sort_keys=True) + "\n").encode()
             atomic_write(self.journal, journal_after)
             self.evidence("verified")
             return {"released": self.source, "previous": self.expected, "active": True,
-                    "runtime": "vps", "publicVerified": True, "dataMigration": False,
+                    "runtime": "vps", "publicVerified": True, "dataMigration": bool(self.migrations),
                     "cryptoEnabledRequested": self.enable_crypto}
         except BaseException as failure:
             try:

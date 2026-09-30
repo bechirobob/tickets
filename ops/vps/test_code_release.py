@@ -107,6 +107,12 @@ class FakeSystem(release.System):
     def application_uid(self):
         return os.geteuid()
 
+    def application_gid(self):
+        return os.getegid()
+
+    def verify_database_binding(self):
+        pass
+
     def verify_effective_config(self, expected):
         self.effective_checks.append(expected)
         if self.fail == "effective-config" and self.revision == NEW:
@@ -137,6 +143,18 @@ class SystemCredentialTests(unittest.TestCase):
                 command.assert_called_once_with(
                     CREDENTIAL_COMMAND, text=True, stderr=subprocess.PIPE, timeout=90)
 
+    def test_database_binding_requires_one_canonical_live_process_state_path(self):
+        for raw in (b"TICKETS_STATE=/var/lib/becore-tickets\0OTHER=value\0",
+                    b"TICKETS_STATE=/tmp/elsewhere\0", b"OTHER=value\0",
+                    b"TICKETS_STATE=/tmp/elsewhere\0TICKETS_STATE=/var/lib/becore-tickets\0"):
+            with self.subTest(raw=raw), patch.object(release.System, "property", return_value="123"):
+                with patch.object(Path, "read_bytes", return_value=raw):
+                    if raw.startswith(b"TICKETS_STATE=/var/lib/becore-tickets\0"):
+                        release.System().verify_database_binding()
+                    else:
+                        with self.assertRaisesRegex(release.ReleaseError, "canonical Tickets database"):
+                            release.System().verify_database_binding()
+
     def test_real_run_command_errors_fail_closed_without_exposing_output(self):
         failures = (
             subprocess.CalledProcessError(1, CREDENTIAL_COMMAND, output=CREDENTIAL_DOCUMENT,
@@ -155,7 +173,7 @@ class SystemCredentialTests(unittest.TestCase):
                     CREDENTIAL_COMMAND, text=True, stderr=subprocess.PIPE, timeout=90)
 
 
-class DeploymentTests(unittest.TestCase):
+class DeploymentFixture(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -254,6 +272,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(d.bridge.read_bytes(), b"private bridge unchanged\n")
         self.assertEqual(d.handoff.read_bytes(), b'{"source":"cloudflare","writer":"vps"}\n')
 
+class DeploymentTests(DeploymentFixture):
     def test_success_preserves_original_handover_fields_and_canonical_config(self):
         result = self.deployment.transact()
         d = self.deployment
@@ -830,6 +849,317 @@ class DeploymentTests(unittest.TestCase):
         self.assertNotIn("/my-nights", [path for _, path, _ in self.system.requests])
 
 
+class AdditiveMigrationTests(unittest.TestCase):
+    SQL = b"CREATE TABLE new_evidence (id TEXT PRIMARY KEY, status TEXT NOT NULL);\nCREATE INDEX new_evidence_status ON new_evidence (status);\n"
+
+    @classmethod
+    def specification(cls, raw=None, tables=None, triggers=None):
+        raw = cls.SQL if raw is None else raw
+        with release.sqlite3.connect(":memory:") as database:
+            if triggers:
+                database.execute("CREATE TABLE payment_refunds (order_id TEXT, status TEXT)")
+            existing = release.schema_rows(database)
+            database.executescript(raw.decode())
+            digest = release.schema_digest([row for row in release.schema_rows(database) if row not in existing])
+        result = {"path": "drizzle/test.sql", "blob": "5" * 40,
+                  "sha256": release.hashlib.sha256(raw).hexdigest(), "schemaSha256": digest,
+                  "tables": tables or ["new_evidence"]}
+        if triggers:
+            result["triggers"] = triggers
+        return result
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.database = self.root / "tickets.sqlite"
+        with release.sqlite3.connect(self.database) as database:
+            database.execute("CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            database.execute("INSERT INTO orders VALUES ('preserved-order', 'paid')")
+        self.database.chmod(0o600)
+        self.staging = self.root / "backup"
+        self.spec = self.specification()
+
+    def migrate(self):
+        return release.migrate_database(self.database, self.staging, [(self.spec, self.SQL)])
+
+    def test_additive_transaction_preserves_rows_and_has_private_verified_prechange_backup(self):
+        result = self.migrate()
+        self.assertEqual(result["phase"], "verified")
+        self.assertTrue(result["created"])
+        self.assertTrue(result["tablesPreservedOnRollback"])
+        self.assertEqual(stat.S_IMODE(self.staging.stat().st_mode), 0o700)
+        backup = self.staging / "before.sqlite"
+        self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+        self.assertEqual(release.digest_file(backup), result["backupSha256"])
+        with release.sqlite3.connect(self.database) as database:
+            self.assertEqual(database.execute("SELECT * FROM orders").fetchall(), [("preserved-order", "paid")])
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM new_evidence").fetchone(), (0,))
+        with release.sqlite3.connect(backup) as database:
+            self.assertEqual(database.execute("SELECT * FROM orders").fetchall(), [("preserved-order", "paid")])
+            self.assertEqual([row[1] for row in release.schema_rows(database)], ["orders"])
+
+    def test_reapplication_preserves_new_data_and_verifies_identical_schema(self):
+        self.migrate()
+        with release.sqlite3.connect(self.database) as database:
+            database.execute("INSERT INTO new_evidence VALUES ('job', 'done')")
+        self.staging = self.root / "second-backup"
+        result = self.migrate()
+        self.assertFalse(result["created"])
+        with release.sqlite3.connect(self.database) as database:
+            self.assertEqual(database.execute("SELECT * FROM new_evidence").fetchall(), [("job", "done")])
+
+    def test_partial_or_drifted_schema_aborts_without_row_changes(self):
+        for sql in ("CREATE TABLE new_evidence(id TEXT PRIMARY KEY, status TEXT NOT NULL)",
+                    "CREATE TABLE new_evidence(id INTEGER PRIMARY KEY, private TEXT)"):
+            with self.subTest(sql=sql):
+                with release.sqlite3.connect(self.database) as database:
+                    database.execute(sql)
+                with self.assertRaisesRegex(release.ReleaseError, "partial or differs"):
+                    self.migrate()
+                with release.sqlite3.connect(self.database) as database:
+                    self.assertEqual(database.execute("SELECT * FROM orders").fetchall(), [("preserved-order", "paid")])
+                    database.execute("DROP TABLE new_evidence")
+                self.staging = self.root / "second-backup"
+
+    def test_unreviewed_content_or_schema_is_rejected_before_backup_or_mutation(self):
+        for key, value in (("sha256", "a" * 64), ("schemaSha256", "b" * 64), ("tables", ["orders"])):
+            with self.subTest(key=key):
+                specification = dict(self.spec, **{key: value})
+                with self.assertRaises(release.ReleaseError):
+                    release.migrate_database(self.database, self.staging, [(specification, self.SQL)])
+                self.assertFalse(self.staging.exists())
+
+    def test_exact_reviewed_refund_guard_is_additive_and_preserves_existing_schema_and_rows(self):
+        trigger = b"""CREATE TRIGGER `provider_refund_reservation_guard`
+BEFORE INSERT ON `payment_refunds`
+WHEN NEW.status IN ('pending','processing') AND EXISTS (
+  SELECT 1 FROM new_evidence WHERE id=NEW.order_id AND status='completed'
+)
+BEGIN
+  SELECT RAISE(ABORT, 'External refund already recorded.');
+END;
+"""
+        raw = self.SQL + trigger
+        specification = self.specification(raw, triggers={"provider_refund_reservation_guard": "payment_refunds"})
+        with release.sqlite3.connect(self.database) as database:
+            database.execute("CREATE TABLE payment_refunds (order_id TEXT, status TEXT)")
+            database.execute("INSERT INTO payment_refunds VALUES ('old-refund', 'processed')")
+            before = release.schema_rows(database)
+        release.migrate_database(self.database, self.staging, [(specification, raw)])
+        with release.sqlite3.connect(self.database) as database:
+            after = release.schema_rows(database)
+            self.assertTrue(all(row in after for row in before))
+            self.assertEqual(database.execute("SELECT * FROM payment_refunds").fetchall(), [("old-refund", "processed")])
+            database.execute("INSERT INTO new_evidence VALUES ('refunded-order', 'completed')")
+            for status in ("pending", "processing"):
+                with self.assertRaises(release.sqlite3.IntegrityError):
+                    database.execute("INSERT INTO payment_refunds VALUES (?,?)", ("refunded-order", status))
+            database.execute("INSERT INTO payment_refunds VALUES ('refunded-order','failed')")
+            database.execute("INSERT INTO payment_refunds VALUES ('other-order','pending')")
+        with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
+            release.additive_statements(raw.replace(b"RAISE(ABORT", b"RAISE(FAIL"), specification)
+        with self.assertRaisesRegex(release.ReleaseError, "unreviewed existing-table trigger"):
+            release.additive_statements(raw, dict(specification, triggers={}))
+        with self.assertRaisesRegex(release.ReleaseError, "refund rollback guard"):
+            release.additive_statements(raw, dict(specification, triggers={"provider_refund_reservation_guard": "orders"}))
+
+    def test_create_only_validator_rejects_all_other_statement_classes(self):
+        statements = ("DROP TABLE orders;", "DELETE FROM orders;", "UPDATE orders SET status='bad';",
+                      "ALTER TABLE orders ADD COLUMN unsafe TEXT;", "PRAGMA user_version=9;",
+                      "ATTACH DATABASE ':memory:' AS other;", "CREATE VIEW leaked AS SELECT * FROM orders;",
+                      "CREATE TRIGGER change_rows AFTER INSERT ON orders BEGIN DELETE FROM orders; END;",
+                      "CREATE TABLE new_evidence AS SELECT * FROM orders;",
+                      "CREATE INDEX unsafe ON orders (id);")
+        for statement in statements:
+            raw = statement.encode()
+            specification = dict(self.spec, sha256=release.hashlib.sha256(raw).hexdigest())
+            with self.subTest(statement=statement), self.assertRaises(release.ReleaseError):
+                release.additive_statements(raw, specification)
+
+    def test_overlapping_schema_plans_fail_before_any_mutation(self):
+        # A cross-plan object collision is rejected before touching the database.
+        with self.assertRaisesRegex(release.ReleaseError, "overlap"):
+            release.migrate_database(self.database, self.staging, [(self.spec, self.SQL), (self.spec, self.SQL)])
+        self.assertFalse(self.staging.exists())
+        with release.sqlite3.connect(self.database) as database:
+            self.assertEqual([row[1] for row in release.schema_rows(database)], ["orders"])
+
+    def test_midtransaction_error_rolls_back_created_objects_without_touching_customer_rows(self):
+        connect = release.sqlite3.connect
+        class FailingConnection:
+            def __init__(self, connection):
+                self.connection = connection
+            def __enter__(self):
+                self.connection.__enter__()
+                return self
+            def __exit__(self, *args):
+                return self.connection.__exit__(*args)
+            def __getattr__(self, name):
+                return getattr(self.connection, name)
+            def execute(self, statement, *args):
+                if statement.startswith("CREATE INDEX new_evidence_status"):
+                    raise release.sqlite3.OperationalError("simulated additive-index failure")
+                return self.connection.execute(statement, *args)
+        def failing_connect(filename, *args, **kwargs):
+            connection = connect(filename, *args, **kwargs)
+            return FailingConnection(connection) if str(filename).startswith(self.database.as_uri()) else connection
+        with patch.object(release.sqlite3, "connect", side_effect=failing_connect):
+            with self.assertRaises(release.sqlite3.OperationalError):
+                self.migrate()
+        self.assertTrue((self.staging / "before.sqlite").is_file())
+        with connect(self.database) as database:
+            self.assertEqual([row[1] for row in release.schema_rows(database)], ["orders"])
+            self.assertEqual(database.execute("SELECT * FROM orders").fetchall(), [("preserved-order", "paid")])
+
+    def test_backup_space_shortage_fails_before_schema_changes(self):
+        with patch.object(release.shutil, "disk_usage", return_value=type("Space", (), {"free": 512 * 1024 * 1024})()):
+            with self.assertRaisesRegex(release.ReleaseError, "free space"):
+                self.migrate()
+        with release.sqlite3.connect(self.database) as database:
+            self.assertEqual([row[1] for row in release.schema_rows(database)], ["orders"])
+
+    def test_failed_backup_durability_check_prevents_schema_changes(self):
+        with patch.object(release.os, "fsync", side_effect=OSError("simulated disk failure")):
+            with self.assertRaises(OSError):
+                self.migrate()
+        with release.sqlite3.connect(self.database) as database:
+            self.assertEqual([row[1] for row in release.schema_rows(database)], ["orders"])
+            self.assertEqual(database.execute("SELECT * FROM orders").fetchall(), [("preserved-order", "paid")])
+
+    def test_missing_database_links_or_public_mode_fail_closed(self):
+        original = self.database.read_bytes()
+        for kind in ("missing", "symlink", "hardlink", "public"):
+            with self.subTest(kind=kind):
+                self.database.unlink()
+                if kind == "symlink":
+                    other = self.root / "elsewhere.sqlite"
+                    other.write_bytes(original)
+                    self.database.symlink_to(other)
+                elif kind == "hardlink":
+                    other = self.root / "linked.sqlite"
+                    other.write_bytes(original)
+                    os.link(other, self.database)
+                elif kind == "public":
+                    self.database.write_bytes(original)
+                    self.database.chmod(0o644)
+                with self.assertRaises((release.ReleaseError, FileNotFoundError)):
+                    self.migrate()
+                self.assertFalse(self.staging.exists())
+                if os.path.lexists(self.database):
+                    self.database.unlink()
+                self.database.write_bytes(original)
+                self.database.chmod(0o600)
+
+
+class AdditiveDeploymentTests(DeploymentFixture):
+    def prepare_migration(self):
+        state = self.root / "var/lib/becore-tickets"
+        state.chmod(0o700)
+        with release.sqlite3.connect(state / "tickets.sqlite") as database:
+            database.execute("CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            database.execute("INSERT INTO orders VALUES ('preserved-order', 'paid')")
+        (state / "tickets.sqlite").chmod(0o600)
+        specification = AdditiveMigrationTests.specification()
+        name = specification.pop("path")
+        self.patch_migrations = patch.dict(release.REVIEWED_MIGRATIONS, {name: specification}, clear=True)
+        self.patch_migrations.start()
+        self.addCleanup(self.patch_migrations.stop)
+        member = tarfile.TarInfo("migrations/test.sql")
+        member.mode = 0o644
+        self.make_archive(extra=(member, AdditiveMigrationTests.SQL))
+        self.proof["changedFiles"] = [name]
+        self.proof["migrations"] = release.migration_plan([name])
+        self.refresh_digests()
+        return state
+
+    def test_additive_prepared_recovery_only_accepts_empty_candidate_before_migration(self):
+        self.prepare_migration()
+        failed = self.prepared_failure()
+        self.deployment.preflight()
+        result = self.deployment.transact()
+        self.assertTrue(result["dataMigration"])
+        self.assertTrue((failed.snapshot / "empty-release.quarantined").is_dir())
+        self.assertTrue((self.deployment.snapshot / "database/before.sqlite").is_file())
+
+    def test_additive_prepared_recovery_rejects_any_migration_evidence(self):
+        self.prepare_migration()
+        failed = self.prepared_failure()
+        (failed.snapshot / "database").mkdir(mode=0o700)
+        with self.assertRaisesRegex(release.ReleaseError, "unexpected entries"):
+            self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_schema_precedes_candidate_and_application_rollback_preserves_tables_and_rows(self):
+        state = self.prepare_migration()
+        self.system.fail = "local"
+        restart = self.system.restart
+        def checked_restart():
+            with release.sqlite3.connect(state / "tickets.sqlite") as database:
+                self.assertEqual(database.execute("SELECT COUNT(*) FROM new_evidence").fetchone(), (0,))
+                self.assertEqual(database.execute("SELECT * FROM orders").fetchall(), [("preserved-order", "paid")])
+            restart()
+        self.system.restart = checked_restart
+        with self.assertRaisesRegex(release.ReleaseError, "previous release restored"):
+            self.deployment.transact()
+        self.assertEqual(self.system.revision, OLD)
+        self.assertEqual(release.strict_json((self.deployment.snapshot / "result.json").read_bytes())["phase"], "rolled-back")
+        self.assertTrue((self.deployment.snapshot / "database/before.sqlite").is_file())
+        with release.sqlite3.connect(state / "tickets.sqlite") as database:
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM new_evidence").fetchone(), (0,))
+
+    def test_application_rollback_preserves_customer_and_evidence_writes_after_activation(self):
+        state = self.prepare_migration()
+        self.system.fail = "local"
+        restart = self.system.restart
+        def write_after_candidate_starts():
+            restart()
+            if self.system.revision == NEW:
+                with release.sqlite3.connect(state / "tickets.sqlite") as database:
+                    database.execute("INSERT INTO orders VALUES ('new-paid-order', 'paid')")
+                    database.execute("INSERT INTO new_evidence VALUES ('new-job', 'done')")
+        self.system.restart = write_after_candidate_starts
+        with self.assertRaisesRegex(release.ReleaseError, "previous release restored"):
+            self.deployment.transact()
+        self.assertEqual(self.system.revision, OLD)
+        with release.sqlite3.connect(state / "tickets.sqlite") as database:
+            self.assertEqual(database.execute("SELECT * FROM orders ORDER BY id").fetchall(),
+                             [("new-paid-order", "paid"), ("preserved-order", "paid")])
+            self.assertEqual(database.execute("SELECT * FROM new_evidence").fetchall(), [("new-job", "done")])
+        # The older backup was retained for inspection, never copied over live writes.
+        with release.sqlite3.connect(self.deployment.snapshot / "database/before.sqlite") as saved:
+            self.assertEqual(saved.execute("SELECT * FROM orders").fetchall(), [("preserved-order", "paid")])
+
+    def test_verified_release_records_additive_schema_and_backup(self):
+        self.prepare_migration()
+        result = self.deployment.transact()
+        self.assertTrue(result["dataMigration"])
+        record = release.strict_json(self.deployment.journal.read_bytes())["lastCodeRelease"]
+        self.assertEqual(record["additiveMigrations"], self.proof["migrations"])
+        self.assertEqual(record["databaseBackupSha256"], release.digest_file(self.deployment.snapshot / "database/before.sqlite"))
+
+    def test_missing_or_tampered_migration_never_restarts_service(self):
+        self.prepare_migration()
+        member = tarfile.TarInfo("migrations/test.sql")
+        member.mode = 0o644
+        self.make_archive(extra=(member, AdditiveMigrationTests.SQL + b"DELETE FROM orders;"))
+        self.refresh_digests()
+        with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
+            self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assertEqual(self.system.revision, OLD)
+
+    def test_omitted_or_forged_migration_plan_rejected_before_extraction(self):
+        self.prepare_migration()
+        for value in ([], [dict(self.proof["migrations"][0], sha256="a" * 64)]):
+            self.proof["migrations"] = value
+            self.refresh_digests()
+            with self.assertRaisesRegex(release.ReleaseError, "reviewed source manifest"):
+                self.deployment.transact()
+            self.assertFalse(self.deployment.release.exists())
+            self.assertEqual(self.system.restarts, 0)
+
+
 class VerifierTests(unittest.TestCase):
     def test_crypto_json_edit_preserves_unrelated_bytes_and_escaped_keys(self):
         self.assertEqual(release.enable_crypto_bytes(b'{ "key":"value" }\n'),
@@ -854,23 +1184,69 @@ class VerifierTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(release.ReleaseError):
                 release.verify_run(dict(run, **{key: value}), workflow="vps-runtime.yml", source=NEW, repository="owner/tickets")
 
-    def test_all_browser_jobs_and_paid_checkout_steps_required(self):
+    @staticmethod
+    def candidate_jobs():
+        return [{"name": "core", "conclusion": "success", "steps": [
+            {"name": name, "conclusion": "success"} for name in release.CANDIDATE_CORE_STEPS
+        ]}] + [{"name": "verify (" + browser + ")", "conclusion": "success", "steps": [
+            {"name": name, "conclusion": "success"} for name in release.CANDIDATE_BROWSER_STEPS
+        ]} for browser in sorted(release.BROWSERS)]
+
+    def test_core_and_all_browser_jobs_required(self):
         runtime = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
-        candidate = [{"name": "verify (" + browser + ")", "conclusion": "success", "steps": [
-            {"name": "Verify every browser journey before release", "conclusion": "success"},
-            {"name": "Verify optional SeevPlus checkout on desktop and mobile", "conclusion": "success"},
-            {"name": "Verify opt-in USDC checkout without provider traffic", "conclusion": "success"}]
-        } for browser in release.BROWSERS]
+        candidate = self.candidate_jobs()
         release.verify_jobs(runtime, candidate)
-        with self.assertRaises(release.ReleaseError):
-            release.verify_jobs(runtime, candidate[:2])
-        for index in range(3):
-            skipped = copy.deepcopy(candidate)
-            skipped[0]["steps"][index]["conclusion"] = "skipped"
-            with self.subTest(step=index), self.assertRaises(release.ReleaseError):
-                release.verify_jobs(runtime, skipped)
-        with self.assertRaises(release.ReleaseError):
-            release.verify_jobs(runtime[:1], candidate)
+        for index in range(len(candidate)):
+            with self.subTest(missing_job=candidate[index]["name"]), self.assertRaises(release.ReleaseError):
+                release.verify_jobs(runtime, candidate[:index] + candidate[index + 1:])
+            for result in ("failure", "skipped", "cancelled", None):
+                failed = copy.deepcopy(candidate)
+                failed[index]["conclusion"] = result
+                with self.subTest(job=index, result=result), self.assertRaises(release.ReleaseError):
+                    release.verify_jobs(runtime, failed)
+        for invalid in (candidate + [candidate[0]], candidate[:-1] + [candidate[0]]):
+            with self.assertRaises(release.ReleaseError):
+                release.verify_jobs(runtime, invalid)
+        for invalid_runtime in (runtime[:1], runtime + [runtime[0]]):
+            with self.assertRaises(release.ReleaseError):
+                release.verify_jobs(invalid_runtime, candidate)
+
+    def test_every_core_and_browser_gate_must_run_once_and_succeed(self):
+        runtime = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
+        candidate = self.candidate_jobs()
+        for job_index, job in enumerate(candidate):
+            for step_index, step in enumerate(job["steps"]):
+                for result in ("failure", "skipped", "cancelled", None, "missing", "duplicate"):
+                    altered = copy.deepcopy(candidate)
+                    steps = altered[job_index]["steps"]
+                    if result == "missing":
+                        steps.pop(step_index)
+                    elif result == "duplicate":
+                        steps.append(copy.deepcopy(step))
+                    else:
+                        steps[step_index]["conclusion"] = result
+                    with self.subTest(job=job["name"], step=step["name"], result=result):
+                        with self.assertRaises(release.ReleaseError):
+                            release.verify_jobs(runtime, altered)
+
+    def test_reviewed_application_and_migration_blobs_are_exact_and_no_other_paths_expand(self):
+        name = "runtime/vps/server.mjs"
+        with patch.dict(release.REVIEWED_APPLICATION_BLOBS, {name: "6" * 40}, clear=True):
+            for blob in ("6" * 40, "7" * 40):
+                with patch.object(release, "git", side_effect=[name, blob]), patch.object(release.subprocess, "run"):
+                    if blob == "6" * 40:
+                        self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                    else:
+                        with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
+                            release.vetted_changes(OLD, NEW)
+        for name, specification in release.REVIEWED_MIGRATIONS.items():
+            for blob in (specification["blob"], "f" * 40):
+                with patch.object(release, "git", side_effect=[name, blob]), patch.object(release.subprocess, "run"):
+                    if blob == specification["blob"]:
+                        self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                    else:
+                        with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
+                            release.vetted_changes(OLD, NEW)
 
     def test_source_allowlist_denies_schema_runtime_and_unknown_scripts(self):
         for name in ("db/schema.ts", "drizzle/0001.sql", "runtime/vps/server.mjs", "ops/handover/live-operator.mjs",
@@ -996,11 +1372,7 @@ class VerifierTests(unittest.TestCase):
                        "repository": {"full_name": "owner/tickets"}, "head_repository": {"full_name": "owner/tickets"}}
             candidate = dict(runtime, id=456, path=".github/workflows/candidate-checks.yml", event="pull_request", head_sha=OLD)
             runtime_jobs = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
-            candidate_jobs = [{"name": "verify (" + browser + ")", "conclusion": "success", "steps": [
-                {"name": "Verify every browser journey before release", "conclusion": "success"},
-                {"name": "Verify optional SeevPlus checkout on desktop and mobile", "conclusion": "success"},
-                {"name": "Verify opt-in USDC checkout without provider traffic", "conclusion": "success"}]
-            } for browser in release.BROWSERS]
+            candidate_jobs = self.candidate_jobs()
             for name, value in (("runtime", runtime), ("candidate", candidate),
                                 ("runtime-jobs", runtime_jobs), ("candidate-jobs", candidate_jobs)):
                 release.write_json(root / (name + ".json"), value)

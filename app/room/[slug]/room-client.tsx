@@ -24,6 +24,10 @@ type Policy = { eventSlug: string; eventTitle: string; readOnlyAt: string; readO
 type VipSettings = { bottleServiceEnabled: boolean; bottleMenu: string | null; songSuggestionsEnabled: boolean; assistanceEnabled: boolean };
 type VipRequest = { id: string; kind: string; detail: string; location: string | null; status: string; organizerNote: string | null; createdAt: string };
 
+// Draft text stays in this tab's memory and is restored only after access is
+// checked for the same attendee and Room. It is never written to web storage.
+const roomDrafts = new Map<string, string>();
+
 export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventImage }: { slug: string; fallbackTitle: string; fallbackDate: string; eventImage: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
@@ -175,11 +179,14 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
         if (cancelled) return;
         if (!data.allowed || !data.attendee) {
           setNotice(data.error ?? "Open your ticket to join the Room.");
+          for (const key of roomDrafts.keys()) if (key.endsWith(`:${slug}`)) roomDrafts.delete(key);
+          setDraft("");
           setStatus("denied");
           return;
         }
         attendeeIdRef.current = data.attendee.id;
         setSelfId(data.attendee.id);
+        setDraft(roomDrafts.get(`${data.attendee.id}:${slug}`) ?? "");
         setSelfRoomBadge(data.attendee.roomBadge ?? null);
         setPolicy(data.room ?? null);
         if (data.attendee.roomBadge === "VIP") {
@@ -284,6 +291,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     socketRef.current.send(JSON.stringify({ type: "message", content, parentId: replyingTo?.id ?? null }));
     nearBottomRef.current = true;
     setHasUnread(false);
+    roomDrafts.delete(`${selfId}:${slug}`);
     setDraft("");
     setReplyingTo(null);
   }
@@ -419,7 +427,10 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
           <RoomComposeContent accessory={<>
             {selfRoomBadge === "VIP" && vipSettings ? <button type="button" className="room-concierge" onClick={() => { setFormError(""); setVipSent(""); setVipOpen(true); }} aria-label="Open VIP services" title="VIP services"><ConciergeBell aria-hidden="true" size={19} /></button> : null}
             <button type="button" className="room-camera" onClick={() => setCaptureRequest((value) => value + 1)} aria-label="Share a Flash"><Camera aria-hidden="true" size={21} /></button>
-          </>} field={<textarea ref={composerRef} aria-label="Message The Room" value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 500))} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && window.matchMedia("(hover: hover) and (pointer: fine)").matches) { event.preventDefault(); sendMessage(); } }} placeholder={status === "connected" ? "Message The Room" : "Reconnecting…"} rows={1} maxLength={500} />}
+          </>} field={<textarea ref={composerRef} aria-label="Message The Room" value={draft} onChange={(event) => {
+            const value = event.target.value.slice(0, 500); setDraft(value);
+            if (selfId) { const key = `${selfId}:${slug}`; roomDrafts.delete(key); if (value) roomDrafts.set(key, value); while (roomDrafts.size > 10) roomDrafts.delete(roomDrafts.keys().next().value!); }
+          }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && window.matchMedia("(hover: hover) and (pointer: fine)").matches) { event.preventDefault(); sendMessage(); } }} placeholder={status === "connected" ? "Message The Room" : "Reconnecting…"} rows={1} maxLength={500} />}
           detail={draft.length > 450 ? <span className="near-limit">{draft.length}/500</span> : null}
           send={<button className="chat-send" aria-label="Send message" disabled={!draft.trim() || status !== "connected"}><ArrowUp aria-hidden="true" size={20} /></button>} />
         </form>}

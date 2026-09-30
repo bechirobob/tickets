@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const bookingFeeRules = sqliteTable("booking_fee_rules", {
   id: text("id").primaryKey(),
@@ -1223,3 +1223,26 @@ export const roomAnnouncementDeliveries = sqliteTable("room_announcement_deliver
   payloadJson: text("payload_json").notNull(), status: text("status").notNull().default("pending"), attempts: integer("attempts").notNull().default(0),
   nextAttemptAt: text("next_attempt_at").notNull(), leaseToken: text("lease_token"), leaseUntil: text("lease_until"), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
 }, table => [index("room_announcement_pending_idx").on(table.status, table.nextAttemptAt)]);
+
+export const backgroundJobHealth = sqliteTable("background_job_health", {
+  jobKey: text("job_key").primaryKey().notNull(), runId: text("run_id").notNull(), startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at"), lastSuccessAt: text("last_success_at"), lastFailureAt: text("last_failure_at"), failureCount: integer("failure_count").notNull().default(0),
+});
+
+export const providerOperationRecords = sqliteTable("provider_operation_records", {
+  id: text("id").primaryKey(), orderId: text("order_id").notNull().references(() => orders.id),
+  provider: text("provider", { enum: ["paystack", "seevplus"] }).notNull(),
+  kind: text("kind", { enum: ["refund", "settlement"] }).notNull(), status: text("status", { enum: ["pending", "completed", "closed_unpaid"] }).notNull(),
+  version: integer("version").notNull(), caseReference: text("case_reference").notNull(), amountMinor: integer("amount_minor"), currency: text("currency").notNull(), evidenceAt: text("evidence_at"),
+  recordedBy: text("recorded_by").notNull(), recordedAt: text("recorded_at").notNull(),
+}, table => [
+  uniqueIndex("provider_operation_version_unique").on(table.orderId, table.kind, table.version),
+  index("provider_operation_order_idx").on(table.orderId, table.kind, table.recordedAt),
+  check("provider_operation_provider", sql`${table.provider} IN ('paystack','seevplus')`),
+  check("provider_operation_kind", sql`${table.kind} IN ('refund','settlement')`),
+  check("provider_operation_status", sql`${table.status} IN ('pending','completed','closed_unpaid')`),
+  check("provider_operation_version", sql`${table.version} > 0`),
+  check("provider_operation_amount", sql`(${table.kind}='refund' AND ${table.amountMinor} IS NOT NULL AND ${table.amountMinor}>0) OR (${table.kind}='settlement' AND ${table.amountMinor} IS NULL)`),
+  check("provider_operation_evidence", sql`(${table.status}='completed' AND ${table.evidenceAt} IS NOT NULL) OR (${table.status} IN ('pending','closed_unpaid') AND ${table.evidenceAt} IS NULL)`),
+  check("provider_operation_unpaid", sql`${table.status}<>'closed_unpaid' OR ${table.kind}='refund'`),
+]);

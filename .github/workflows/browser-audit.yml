@@ -2,7 +2,7 @@ name: Production browser audit
 
 on:
   workflow_run:
-    workflows: ["Deploy to Cloudflare"]
+    workflows: ["Deploy to Cloudflare", "Release verified Tickets VPS code"]
     types: [completed]
   pull_request:
     branches: [main]
@@ -25,9 +25,81 @@ jobs:
       matrix:
         browser: [desktop-chromium, mobile-chromium, mobile-webkit]
     steps:
+      # Candidate verification tests the full PR tree against its isolated build.
+      # This separate audit must use the tests belonging to the actual live build.
+      - name: Resolve and verify the active production revision
+        id: deployed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          mkdir -p "$RUNNER_TEMP/production-browser-audit"
+          cat > "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" <<'SH'
+          set -euo pipefail
+          phase="${1:?Missing verification phase}"
+          [[ "$phase" =~ ^(resolved|before|after)$ ]]
+          metadata="$RUNNER_TEMP/production-browser-audit"
+          status="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            -H 'Cache-Control: no-cache' -H 'Accept: application/json' \
+            --write-out '%{http_code}' --output "$metadata/health-$phase.json" https://tickets.becoreops.com/healthz)"
+          test "$status" = 200
+          status="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            -H 'Cache-Control: no-cache' -H 'Accept: application/json' \
+            --write-out '%{http_code}' --output "$metadata/version-$phase.json" https://tickets.becoreops.com/api/version)"
+          test "$status" = 200
+          PHASE="$phase" python3 - <<'PYVERIFY'
+          import datetime, json, os, pathlib, re
+          directory = pathlib.Path(os.environ["RUNNER_TEMP"]) / "production-browser-audit"
+          phase = os.environ["PHASE"]
+          health = json.loads((directory / f"health-{phase}.json").read_text())
+          version = json.loads((directory / f"version-{phase}.json").read_text())
+          if not isinstance(health, dict) or not isinstance(version, dict):
+              raise SystemExit("Production identity responses must be objects")
+          revision = version.get("revision")
+          if version.get("service") != "becore-tickets" or health.get("service") != "becore-tickets":
+              raise SystemExit("Production service identity does not match Tickets")
+          if health.get("runtime") != "vps" or health.get("active") is not True:
+              raise SystemExit("Production must be served by the active Tickets VPS")
+          if not isinstance(revision, str) or re.fullmatch(r"[a-f0-9]{40}", revision) is None:
+              raise SystemExit("Production revision must be an exact full commit SHA")
+          if health.get("revision") != revision:
+              raise SystemExit("Health and application revisions do not match")
+          expected = os.environ.get("DEPLOYED_SHA")
+          if phase != "resolved" and (not expected or revision != expected):
+              raise SystemExit("Production changed during the audit; rerun against the new revision")
+          evidence = {"service": "becore-tickets", "runtime": "vps", "active": True,
+                      "revision": revision, "phase": phase,
+                      "verifiedAt": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          (directory / f"baseline-{phase}.json").write_text(json.dumps(evidence, indent=2) + "\n")
+          if phase == "resolved":
+              with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+                  output.write(f"revision={revision}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Production browser audit ({phase}): becore-tickets / active VPS / {revision}\n\n")
+          PYVERIFY
+          SH
+          bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" resolved
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
+          repository: bechirobob/tickets
+          ref: ${{ steps.deployed.outputs.revision }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify deployed source belongs to this repository main history
+        id: source
+        shell: bash
+        env:
+          DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOYED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          origin="$(git remote get-url origin)"
+          [[ "$origin" = https://github.com/bechirobob/tickets || "$origin" = https://github.com/bechirobob/tickets.git ]]
+          test "$(git rev-parse HEAD)" = "$DEPLOYED_SHA"
+          git merge-base --is-ancestor "$DEPLOYED_SHA" refs/remotes/origin/main
+          printf '%s\n' "$DEPLOYED_SHA" > "$RUNNER_TEMP/production-browser-audit/checked-out-revision.txt"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/production-browser-audit/checked-out-tree.txt"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
@@ -35,8 +107,17 @@ jobs:
       - run: npm ci
       - name: Install real-browser engines
         run: npx playwright install --with-deps chromium webkit
+      - name: Confirm production still matches the audited source
+        env:
+          DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
+        run: bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" before
       - name: Audit production in desktop Chrome, mobile Chrome and mobile WebKit
         run: npm run test:e2e:production -- --project ${{ matrix.browser }} --workers=1 --retries=0
+      - name: Confirm production stayed on the audited source
+        if: ${{ always() && steps.source.outcome == 'success' }}
+        env:
+          DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
+        run: bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" after
       - name: Preserve browser results and isolated Room renders
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -45,5 +126,7 @@ jobs:
           path: |
             playwright-report
             test-results
+            ${{ runner.temp }}/production-browser-audit/*.json
+            ${{ runner.temp }}/production-browser-audit/checked-out-*.txt
           if-no-files-found: ignore
           retention-days: 14

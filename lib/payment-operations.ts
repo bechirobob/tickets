@@ -234,6 +234,8 @@ export async function initiatePaystackRefund(db: D1Database, input: { orderId: s
     .bind(input.orderId).first<{id:string;reference:string;totalAmountMinor:number;refundedAmountMinor:number;status:string;provider:string}>();
   if (!order) throw new Error('Order not found.');
   if (order.provider !== 'paystack') throw new Error('SeevPlus refunds require finance review with SeevPlus.');
+  if (await db.prepare("SELECT r.id FROM provider_operation_records r WHERE r.order_id=? AND r.kind='refund' AND (r.status='completed' OR (r.status='pending' AND NOT EXISTS (SELECT 1 FROM provider_operation_records n WHERE n.order_id=r.order_id AND n.kind=r.kind AND n.version>r.version))) LIMIT 1").bind(order.id).first())
+    throw new Error('An external refund case is recorded. Check the provider record before any further refund.');
   if (!['paid','requires_refund'].includes(order.status)) throw new Error('This order is not available for another refund.');
   const reason = input.reason.trim().slice(0,500);
   if (reason.length < 8) throw new Error('Add a clear refund reason.');
@@ -255,6 +257,7 @@ export async function initiatePaystackRefund(db: D1Database, input: { orderId: s
       SELECT ?,id,?,'pending',?,?,?,?,?,?,status FROM orders WHERE id=? AND status IN ('paid','requires_refund')
         AND refunded_amount_minor=? AND total_amount_minor-refunded_amount_minor>=?
         AND NOT EXISTS (SELECT 1 FROM payment_refunds r WHERE r.order_id=orders.id AND r.status IN ('pending','processing'))
+        AND NOT EXISTS (SELECT 1 FROM provider_operation_records r WHERE r.order_id=orders.id AND r.kind='refund' AND (r.status='completed' OR (r.status='pending' AND NOT EXISTS (SELECT 1 FROM provider_operation_records n WHERE n.order_id=r.order_id AND n.kind=r.kind AND n.version>r.version))))
         AND (status='requires_refund' OR NOT EXISTS (SELECT 1 FROM tickets WHERE order_id=orders.id AND status='checked_in' ${filter}))`)
       .bind(refundId,amountMinor,reason,input.actor,now,now,JSON.stringify(disabled),input.batchId??null,order.id,order.refundedAmountMinor,amountMinor,...selected),
     db.prepare(`UPDATE orders SET status=CASE WHEN ? THEN 'refund_pending' ELSE status END,refund_status='pending',payment_updated_at=? WHERE id=? AND ${reserved}`).bind(full?1:0,now,order.id,refundId),

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { observeBackgroundJob } from '../../lib/background-health.ts';
 import { request as httpRequest } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
@@ -86,7 +87,7 @@ server.on('upgrade', (incoming, socket, head) => {
   })().catch(() => socket.destroy());
 });
 
-let jobsBusy = false, closing = false, lastMinute = -1;
+let jobsBusy = false, queueBusy = false, closing = false, lastMinute = -1, lastQueueObservation = -1;
 const liveConnections = new Set();
 server.on('connection', socket => { liveConnections.add(socket); socket.on('close', () => liveConnections.delete(socket)); });
 const timer = setInterval(() => {
@@ -102,14 +103,26 @@ const timer = setInterval(() => {
       const date = new Date();
       if (date.getUTCHours() === 3 && date.getUTCMinutes() === 15) await runScheduledOperations({ cron: '15 3 * * *', scheduledTime: minute * 60000 }, env);
     }
-    await env.EMAIL_DELIVERY_QUEUE.process(batch => processQueue(batch, env));
   })().catch(() => console.error('Scheduled Tickets operation failed; persistent tasks remain queued.')).finally(() => { jobsBusy = false; });
 }, 1000);
 timer.unref();
+// The queue keeps moving if a scheduled provider operation is slow. Both paths
+// keep their existing leases and handover guards; neither creates a second writer.
+const queueTimer = setInterval(() => {
+  if (!active || closing || queueBusy) return;
+  queueBusy = true;
+  const minute = Math.floor(Date.now() / 60000);
+  const poll = () => env.EMAIL_DELIVERY_QUEUE.process(batch => processQueue(batch, env));
+  const work = minute !== lastQueueObservation
+    ? observeBackgroundJob(env.DB, 'delivery-loop', poll).then(result => { lastQueueObservation = minute; return result; })
+    : poll();
+  void work.catch(() => console.error('Tickets delivery queue poll failed; persistent tasks remain queued.')).finally(() => { queueBusy = false; });
+}, 1000);
+queueTimer.unref();
 
 async function shutdown() {
   if (closing) return;
-  closing = true; clearInterval(timer);
+  closing = true; clearInterval(timer); clearInterval(queueTimer);
   const drained = new Promise(resolve => server.close(resolve));
   for (const client of sockets.clients) client.close(1012, 'Service restarting');
   const forceClose = setTimeout(() => { for (const socket of liveConnections) socket.destroy(); }, 20000);
@@ -117,8 +130,8 @@ async function shutdown() {
   await drained;
   clearTimeout(forceClose);
   const deadline = Date.now() + 25000;
-  while (jobsBusy && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
-  if (jobsBusy) process.exit(1); // Persisted leases recover after restart.
+  while ((jobsBusy || queueBusy) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
+  if (jobsBusy || queueBusy) process.exit(1); // Persisted leases recover after restart.
   await runtime.close();
   process.exit(0);
 }

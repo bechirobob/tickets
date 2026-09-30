@@ -55,8 +55,12 @@ for (const [path, heading] of [
     expect(errors).toEqual([]); expect(apiErrors).toEqual([]);
     if((page.viewportSize()?.width??1280)<=760){const gap=await page.evaluate(()=>{const nav=document.querySelector('.workspace-topbar')!.getBoundingClientRect();const content=document.querySelector('.ops-main,.curation-main,.room-ops > section,.host-applications')!.getBoundingClientRect();return content.top-nav.bottom;});expect(gap,`${path} space below mobile navigation`).toBeLessThan(40);}
 
+    // Expand content before opening the mobile navigation overlay; do not click
+    // through an open menu. Both expanded content and navigation retain coverage.
+    for(const summary of await page.locator('details:not([open]):not(.workspace-tools) > summary').all()){if(await summary.isVisible())await summary.click();}
+    const expandedContentAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedContentAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     await openWorkspaceMenu(page);
-    for(const summary of await page.locator('details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
+    for(const summary of await page.locator('.workspace-sidebar details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     // Inspect the final cascade: generic Operations controls previously restored
@@ -70,6 +74,23 @@ for (const [path, heading] of [
     await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true, scale: 'css' });
   });
 }
+test('mobile workspace navigation closes when keyboard focus leaves and restores focus on Escape', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) > 760, 'The persistent desktop sidebar does not overlay content.');
+  await page.goto('/admin/help');
+  const toggle = page.getByRole('button', { name: 'Toggle workspace navigation', exact: true });
+  const close = page.getByRole('button', { name: 'Close workspace navigation', exact: true });
+  await toggle.focus(); await toggle.press('Enter');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeFocused();
+  await expect(page).toHaveURL(/\/admin\/help$/);
+  await toggle.focus(); await toggle.press('Enter');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+});
 test('event save survives a dropped connection and retains the draft', async ({ page }) => {
   await page.goto('/admin/events?event=after-dark-osu');
   const title = page.getByLabel('Title', { exact: true }); await expect(title).toBeVisible();
@@ -317,7 +338,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const submitted=page.waitForResponse(r=>r.url().endsWith('/api/registrations')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'Send RSVP'}).click();expect((await submitted).status()).toBe(202);
   await expect(page.getByRole('status')).toContainText('RSVP received.');
-  await expect(page.getByRole('status')).toContainText('Now we wait for the host’s nod.');
+  await expect(page.getByRole('status')).toContainText('Your request is not a confirmed spot.');
   await expect(page.getByRole('button',{name:/confirmation link/i})).toHaveCount(0);
   await page.screenshot({path:info.outputPath('guest-rsvp-success.png'),fullPage:true});
   await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeVisible();
@@ -381,7 +402,7 @@ test('every organizer task and expanded panel remains compact and readable',asyn
   const axe=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),name).toEqual([]);
   await page.screenshot({path:info.outputPath(`organizer-${name.replaceAll(/[^a-z]/gi,'-')}.png`),fullPage:true});
  }
- await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await page.getByLabel('Venue',{exact:true}).fill('Keep my venue draft');await tabs.getByRole('button',{name:'Room & VIP',exact:true}).click();await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
+ await tabs.getByRole('button',{name:'Details',exact:true}).click();await page.getByLabel('Venue',{exact:true}).fill('Keep my venue draft');await tabs.getByRole('button',{name:'Room & VIP',exact:true}).click();await tabs.getByRole('button',{name:'Details',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
  for(const name of ['Audience','Promote','Money','Team','Overview']){
   await hostArea(page,name);
   await expect(page.locator('.suite-content h1:visible,.suite-content h2:visible').first()).toBeVisible();
@@ -389,7 +410,7 @@ test('every organizer task and expanded panel remains compact and readable',asyn
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
   await page.screenshot({path:info.outputPath(`organizer-area-${name.toLowerCase()}.png`),fullPage:true});
  }
- await hostArea(page,'Events');await tabs.getByRole('button',{name:'Tickets',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
+ await hostArea(page,'Events');await tabs.getByRole('button',{name:'Details',exact:true}).click();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
  await page.goBack();await expect(tabs.getByRole('button',{name:'Overview',exact:true})).toHaveAttribute('aria-current','page');await page.goForward();await expect(page.getByLabel('Venue',{exact:true})).toHaveValue('Keep my venue draft');
  expect(apiErrors).toEqual([]);
  await page.goto('/organizer/analytics');await expect(page.locator('.analytics-overview')).toBeVisible();await expectVisibleLettering(page,'.organizer-analytics');const analyticsAxe=await new AxeBuilder({page}).include('.organizer-analytics').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(analyticsAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),'Analytics').toEqual([]);
@@ -504,7 +525,7 @@ test('host lands on their event with a useful overview and recoverable report pr
  const axe=await new AxeBuilder({page}).include('.host-start').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
  await expectVisibleLettering(page,'.host-start');expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  await page.screenshot({path:info.outputPath('host-first-login.png'),fullPage:true});
- await overview.getByRole('button',{name:'Review Guest setup',exact:true}).click();await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();await expect(page.locator('.registration-manager:visible')).toBeVisible();
+ await overview.getByRole('button',{name:'Review Guest setup',exact:true}).click();await expect(page.locator('.registration-manager:visible')).toBeVisible();await expect(page.getByRole('heading',{name:'How should guests join?'})).toBeVisible();expect(new URL(page.url()).searchParams.get('tab')).toBe('settings');
  // Fetch the real isolated summary once, then keep a single synchronous mock.
  // Replacing a handler during route.fetch can leave it fulfilling an already
  // handled request when overview activation and manual refresh overlap.
@@ -716,4 +737,166 @@ test('gate camera survives scan results, repeated starts and camera failure', as
   await page.getByRole('button', { name: 'Start camera', exact: true }).click();
   await expect.poll(() => video.evaluate(v => !(v as HTMLVideoElement).paused && Boolean((v as HTMLVideoElement).srcObject))).toBe(true);
   expect(errors).toEqual([]);
+});
+
+
+test('host attention opens pending RSVP decisions directly and survives back navigation',async({page,context,baseURL})=>{
+ await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
+ const response=await context.request.get(`${baseURL}/api/organizer/reports?eventSlug=rsvp-browser`);expect(response.ok()).toBe(true);const actual=await response.json();
+ await page.route('**/api/organizer/reports?**',route=>route.fulfill({json:{...actual,summary:{...actual.summary,pending:3}}}));
+ await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=overview');
+ await page.getByRole('button',{name:/3 RSVP requests need your nod/}).click();
+ const manager=page.locator('.registration-manager:visible');
+ await expect(manager.getByRole('heading',{name:'Guest list',exact:true})).toBeVisible();
+ await expect(manager.getByRole('combobox',{name:'Status',exact:true})).toHaveValue('requested');
+ expect(new URL(page.url()).searchParams.get('event')).toBe('rsvp-browser');expect(new URL(page.url()).searchParams.get('status')).toBe('requested');
+ await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Details',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Venue & line-up'})).toBeVisible();
+ await page.goBack();await expect(manager.getByRole('heading',{name:'Guest list',exact:true})).toBeVisible();await expect(manager.getByRole('combobox',{name:'Status',exact:true})).toHaveValue('requested');
+ await page.reload();await expect(manager.getByRole('combobox',{name:'Status',exact:true})).toHaveValue('requested');
+});
+
+test('scanner preserves mixed offline conflicts and never claims network availability is synchronized',async({page})=>{
+ await page.addInitScript(()=>{
+  if(sessionStorage.getItem('scanner-recovery-fixture'))return;sessionStorage.setItem('scanner-recovery-fixture','1');
+  localStorage.setItem('bct:gate-review:v1','[]');
+  localStorage.setItem('bct:gate-queue:v1',JSON.stringify(['accepted','duplicate'].map(id=>({clientScanId:id,code:'BCT-AAAA-BBBB-CCCC-DDDD',eventSlug:'rsvp-browser',gate:'Main gate',deviceId:'isolated-browser',ticket:{ticketId:id,attendeeName:`Offline ${id}`,ticketType:'general'},savedAt:new Date().toISOString()}))));
+ });
+ await page.route('**/api/admin/check-in**',route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{issued:2,checkedIn:1,tiers:[],canUndo:true,manifest:[],generatedAt:new Date().toISOString()}});
+  const body=route.request().postDataJSON();
+  if(body.action==='heartbeat')return route.fulfill({json:{online:true}});
+  return body.clientScanId==='duplicate'?route.fulfill({status:409,json:{result:'duplicate',error:'Already admitted at another door',ticket:{ticketId:'duplicate',attendeeName:'Offline duplicate',ticketType:'general'}}}):route.fulfill({json:{result:'valid'}});
+ });
+ await page.goto('/scan?event=rsvp-browser');await expect(page.getByRole('combobox',{name:'Event',exact:true})).toHaveValue('rsvp-browser');
+ await expect(page.locator('.scanner-header')).toContainText('Needs supervisor review');
+ await expect(page.getByRole('region',{name:'Offline entries needing review'})).toContainText('Offline duplicate');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('bct:gate-queue:v1')??'[]'))).toHaveLength(0);
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('bct:gate-review:v1')??'[]'))).toHaveLength(1);
+ await page.reload();await expect(page.locator('.scanner-header')).toContainText('Needs supervisor review');
+ await page.getByRole('button',{name:'Mark reviewed',exact:true}).click();await expect(page.locator('.scanner-header')).toContainText('Connected');
+ await page.route('**/api/admin/check-in**',route=>route.abort('failed'));
+ await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.scanner-header')).toContainText('Connection not confirmed');
+ expect(await page.evaluate(()=>navigator.onLine)).toBe(true);
+ await expect(page.locator('.scanner-header')).not.toContainText('Connected');
+});
+
+test('team invitations show delivery recovery and return acceptance to the assigned event',async({page,context,baseURL})=>{
+ await context.clearCookies();await context.addCookies([{name:'bct_staff',value:fixture.organizerToken,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
+ let resends=0;
+ await page.route('**/api/organizer/business**',route=>{
+  const url=new URL(route.request().url());
+  if(route.request().method()==='GET'&&url.searchParams.get('section')==='team')return route.fulfill({json:{canManage:true,members:[],invites:[{id:'recovery-invite',email:'door@example.com',role:'gate',createdAt:'2026-09-01T00:00:00Z',expiresAt:'2099-01-01T00:00:00Z',usedAt:null,revokedAt:null,expired:0,deliveryStatus:resends?'queued':'failed',nextAttemptAt:null,deliveryAttempts:3}]}});
+  if(route.request().method()==='POST'&&route.request().postDataJSON().action==='team_resend_invite'){
+   expect(route.request().postDataJSON()).toEqual({action:'team_resend_invite',eventSlug:'rsvp-browser',id:'recovery-invite'});resends++;return route.fulfill({json:{id:'fresh-invite',queued:true}});
+  }
+  return route.continue();
+ });
+ await page.goto('/organizer/workspace?area=team&event=rsvp-browser');await expect(page.getByText('Email needs attention',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Resend invitation',exact:true}).click();await expect(page.getByRole('status')).toContainText('Fresh invitation queued');await expect(page.getByText('Email queued',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Refresh team status',exact:true}).click();await expect(page.getByText('Email queued',{exact:true})).toBeVisible();expect(resends).toBe(1);
+ await page.route('**/api/organizer/team/accept',route=>route.fulfill({json:route.request().postDataJSON().action==='inspect'?{email:'door@example.com',role:'gate',eventTitle:'RSVP browser gathering',eventSlug:'rsvp-browser',needsPassword:false}:{accepted:true,role:'gate',eventSlug:'rsvp-browser'}}));
+ await page.goto('/organizer/team/accept#token=isolated-test-invitation');await expect(page.getByRole('button',{name:'Accept invitation',exact:true})).toBeVisible();expect(new URL(page.url()).hash).toBe('');
+ await page.getByRole('button',{name:'Accept invitation',exact:true}).click();
+ const href=await page.getByRole('link',{name:'Sign in',exact:true}).getAttribute('href');expect(new URL(href!,baseURL).searchParams.get('returnTo')).toBe('/scan?event=rsvp-browser');
+});
+
+
+test('provider records keep event scope and survive an uncertain save without claiming settlement', async ({ page }, info) => {
+  const item = { id: 'provider-ui', reference: 'BCT-PROVIDER-UI', eventSlug: 'after-dark-osu', eventTitle: 'Provider evidence test', ticketType: 'general', unitQuantity: 1, quantity: 1, totalAmountMinor: 10000, refundedAmountMinor: 0, currency: 'GHS', customerEmail: 'guest@example.com', customerPhone: '233000000000', customerName: 'Test guest', status: 'paid', paymentProvider: 'paystack', providerStatus: 'success', providerReference: 'PROVIDER-REF', paymentEnvironment: 'production', failureReason: null, refundStatus: null, disputeStatus: null, createdAt: '2026-01-01T00:00:00.000Z', paidAt: '2026-01-01T00:01:00.000Z', paymentVerifiedAt: '2026-01-01T00:01:00.000Z', checkedInCount: 0, issuedTicketCount: 1, deliveryStatus: 'sent', providerCases: [] as Array<Record<string, unknown>> };
+  const submissions: Array<Record<string, unknown>> = [];
+  const scopes: Array<{ event: string | null; status: string | null; provider: string | null }> = [];
+  let externalCalls = 0;
+  await page.route(/https:\/\/(api\.paystack\.co|[^/]*seev[^/]*)(\/|$)/, route => { externalCalls++; return route.abort(); });
+  await page.route('**/api/admin/orders**', async route => {
+    if (route.request().method() === 'GET') {
+      const query = new URL(route.request().url()).searchParams;
+      scopes.push({ event: query.get('event'), status: query.get('status'), provider: query.get('provider') });
+      return route.fulfill({ json: { orders: [item], events: [{ slug: 'after-dark-osu', title: 'Provider evidence test' }], total: 1, page: 1, pageSize: 10, reconciliationRuns: [], settlements: [], disputes: [] } });
+    }
+    const body = route.request().postDataJSON(); submissions.push(body);
+    expect(body.action).toBe('record_provider_case');
+    if (submissions.length === 1) return route.abort('failed');
+    item.providerCases = [{ id: body.operationId, orderId: item.id, provider: 'paystack', kind: body.kind, status: body.status, version: Number(body.expectedVersion) + 1, caseReference: body.caseReference, amountMinor: body.amountMinor, currency: 'GHS', evidenceAt: null, recordedAt: new Date().toISOString() }];
+    return route.fulfill({ json: { result: 'provider_case_recorded' } });
+  });
+  await page.goto('/admin/orders?event=after-dark-osu&status=paid&provider=paystack');
+  await expect(page.getByText('Payment verified · Settlement: not confirmed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Confirmation email: sent', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('paid');
+  await expect(page.getByLabel('Payment method', { exact: true })).toHaveValue('paystack');
+  await page.getByRole('button', { name: 'Provider record', exact: true }).click();
+  const form = page.getByRole('region', { name: 'Record provider case' });
+  await expect(form).toBeVisible();
+  await expect(form.getByText(/ticket access stays unchanged/)).toBeVisible();
+  await form.getByLabel('Provider case or receipt reference').fill('SUPPORT-123');
+  await form.getByLabel('External refund amount (GHS)').fill('50.00');
+  await form.getByRole('checkbox').check();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  const accessibility = await new AxeBuilder({ page }).include('.provider-tracking').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath('provider-case-form.png'), fullPage: true });
+  await form.getByRole('button', { name: 'Save provider record', exact: true }).click();
+  await expect(form.getByRole('alert')).toContainText('Your last action may have completed. Refresh to check before trying again.');
+  await expect(form.getByLabel('Provider case or receipt reference')).toHaveValue('SUPPORT-123');
+  await form.getByRole('button', { name: 'Save provider record', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  expect(submissions).toHaveLength(2); expect(submissions[1]).toEqual(submissions[0]);
+  expect(submissions[0].amountMinor).toBe(5000);
+  expect(scopes.length).toBeGreaterThan(1);
+  expect(scopes.every(scope => scope.event === 'after-dark-osu' && scope.status === 'paid' && scope.provider === 'paystack')).toBe(true);
+  await expect(page.getByText(/External refund case: pending/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start Paystack refund', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Provider record', exact: true }).click();
+  await expect(form.getByLabel('Provider case or receipt reference')).toHaveValue('SUPPORT-123');
+  await expect(form.getByRole('checkbox')).not.toBeChecked();
+  await form.getByLabel('Provider case status').selectOption('closed_unpaid');
+  await expect(form.getByLabel('Provider case or receipt reference')).toBeDisabled();
+  await expect(form.getByLabel('External refund amount (GHS)')).toBeDisabled();
+  await form.getByRole('checkbox', { name: /confirmed no refund was made/ }).check();
+  await form.getByRole('button', { name: 'Save provider record', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  expect(submissions[2]).toMatchObject({ status: 'closed_unpaid', confirmedNoRefund: true });
+  await expect(page.getByText(/External refund case: closed without refund/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start Paystack refund', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Provider record', exact: true }).click();
+  await form.getByLabel('Case type').selectOption('settlement');
+  await expect(form.getByText(/Checkout totals are not proof of a payout/)).toBeVisible();
+  await form.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  expect(externalCalls).toBe(0);
+});
+
+test('Orders preserves validated payment exception filters and rejects unknown query values', async ({ page }) => {
+  const queries: URLSearchParams[] = [];
+  const latest = () => queries.at(-1);
+  await page.route('**/api/admin/orders**', route => {
+    queries.push(new URL(route.request().url()).searchParams);
+    return route.fulfill({ json: { orders: [], events: [], total: 0, page: 1, pageSize: 10, reconciliationRuns: [], settlements: [], disputes: [] } });
+  });
+  for (const provider of ['seevplus', 'paystack']) {
+    await page.goto('/admin/orders?status=payment_pending&removed=1&provider=' + provider);
+    await expect.poll(() => latest()?.get('provider')).toBe(provider);
+    expect(latest()!.get('status')).toBe('payment_pending');
+    expect(latest()!.get('removed')).toBe('1');
+    await page.getByText('Filter by event or payment method', { exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: 'Include removed events', exact: true })).toBeChecked();
+    await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('payment_pending');
+    await expect(page.getByLabel('Payment method', { exact: true })).toHaveValue(provider);
+    const beforeSearch = queries.length;
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect.poll(() => queries.length).toBeGreaterThan(beforeSearch);
+    await expect.poll(() => latest()?.get('status')).toBe('payment_pending');
+    expect(latest()!.get('removed')).toBe('1');
+    const beforeReload = queries.length;
+    await page.reload();
+    await expect.poll(() => queries.length).toBeGreaterThan(beforeReload);
+    await page.getByText('Filter by event or payment method', { exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: 'Include removed events', exact: true })).toBeChecked();
+    expect(latest()!.get('removed')).toBe('1');
+  }
+  await page.goto('/admin/orders?status=untrusted&provider=untrusted&event=%3Cscript%3E&removed=untrusted');
+  await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('');
+  await expect.poll(() => latest()?.has('status')).toBe(false);
+  expect(latest()!.has('provider')).toBe(false); expect(latest()!.has('event')).toBe(false); expect(latest()!.has('removed')).toBe(false);
 });

@@ -135,7 +135,7 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /id="the-room"/u);
   assert.match(home, /The night has a Room\./u);
   assert.match(home, /Flashes you get one look at/u);
-  assert.match(home, /Private to verified ticket holders/u);
+  assert.match(home, /Private to guests with Room access/u);
   assert.match(home, />Preview</u);
   assert.doesNotMatch(home, /Illustrative preview|Demo chat/u);
   assert.match(home, /HOST UPDATE/u);
@@ -700,7 +700,8 @@ test("operations lists stay bounded and dashboard selections use straight marker
 
   assert.match(ordersApi, /const pageSize = 10/u);
   assert.match(ordersApi, /LIMIT \? OFFSET \?/u);
-  assert.match(ordersApi, /orders: orders\.results, total, page, pageSize/u);
+  assert.match(ordersApi, /orders: orders\.results\.map/u);
+  assert.match(ordersApi, /total, page, pageSize/u);
   assert.match(orders, /className="order-pagination"/u);
   assert.match(orders, /Showing \{firstVisible\}–\{lastVisible\} of \{total\}/u);
   assert.match(staff, /className=\{`staff-list__new/u);
@@ -864,7 +865,8 @@ test("ticket entry uses a protected real scanner and printable QR receipt", asyn
     readFile(cssUrl, "utf8"),
   ]);
 
-  assert.match(scanPage, /requireAdminSession\("\/scan", "gate\.scan"\)/u);
+  assert.match(scanPage, /requireAdminSession\(returnTo, "gate\.scan"\)/u);
+  assert.match(scanPage, /\/scan\?event=\$\{encodeURIComponent\(requested\)\}/u);
   assert.match(scanPage, /staff_event_assignments/u);
   assert.match(scanner, /new QrScanner/u);
   assert.match(scanner, /\/api\/admin\/check-in/u);

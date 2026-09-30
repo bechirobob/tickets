@@ -12,34 +12,115 @@ concurrency:
   group: candidate-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+      source_tree: ${{ steps.source.outputs.tree }}
+      archive_sha256: ${{ steps.build.outputs.sha256 }}
+      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact candidate source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          echo "sha=$BECORE_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
+      - name: Lint application
+        run: npm run lint
+      - name: Check application types
+        run: npm run typecheck
+      # npm test includes the production build, deployment preparation, rendered
+      # assertions and Worker unit suite. Browser jobs consume that same build.
+      - name: Verify unit tests and rendered production build
+        run: npm test
+      - name: Check database schema
+        run: npx drizzle-kit check
+      - name: Validate the deployable Worker without publishing
+        run: npx wrangler deploy --config dist/server/wrangler.json --dry-run --outdir dist/worker-dry-run
+      - name: Package verified browser build
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; const config = JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")); assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
+          mkdir -p "$RUNNER_TEMP/candidate-build"
+          archive="$RUNNER_TEMP/candidate-build/browser-build.tar.gz"
+          # A tarball preserves hidden Vite manifests as well as the exact bytes.
+          tar -czf "$archive" dist/client dist/server
+          echo "sha256=$(sha256sum "$archive" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Preserve verified browser build
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: candidate-build-${{ env.BECORE_RELEASE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate-build/browser-build.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
   verify:
+    needs: core
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         browser: [desktop-chromium, mobile-chromium, mobile-webkit]
-    env:
-      BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm audit --audit-level=moderate
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npx drizzle-kit check
-      - name: Validate the deployable Worker without publishing
-        run: npx wrangler deploy --config dist/server/wrangler.json --dry-run --outdir dist/worker-dry-run
+      - run: npm ci --no-audit
+      - name: Download the verified browser build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.core.outputs.artifact_id }}
+          # v4 ID-based downloads otherwise add an artifact-name subdirectory,
+          # even when exactly one ID is selected. Keep the verified archive flat.
+          merge-multiple: true
+          path: ${{ runner.temp }}/candidate-build
+      - name: Verify and restore the exact candidate build
+        shell: bash
+        env:
+          BUILD_SHA: ${{ needs.core.outputs.source_sha }}
+          BUILD_TREE: ${{ needs.core.outputs.source_tree }}
+          BUILD_DIGEST: ${{ needs.core.outputs.archive_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_SHA" =~ ^[a-f0-9]{40}$ && "$BUILD_TREE" =~ ^[a-f0-9]{40}$ && "$BUILD_DIGEST" =~ ^[a-f0-9]{64}$ ]]
+          test "$BUILD_SHA" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BUILD_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$BUILD_TREE"
+          archive="$RUNNER_TEMP/candidate-build/browser-build.tar.gz"
+          test "$(sha256sum "$archive" | cut -d ' ' -f 1)" = "$BUILD_DIGEST"
+          tar -xzf "$archive"
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; const config = JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")); assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
       - name: Install browsers for event-page verification
-        run: npx playwright install --with-deps chromium webkit
+        run: npx playwright install --with-deps ${{ matrix.browser == 'mobile-webkit' && 'webkit' || 'chromium' }}
       - name: Prepare isolated event fixtures
         id: browser_fixtures
         run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
@@ -49,11 +130,6 @@ jobs:
       - name: Verify keyboard navigation focus without retries
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: npx playwright test tests/e2e/navigation-audit.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
-      - name: Verify organizer suite on desktop and mobile
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
-        run: |
-          node scripts/prepare-operations-browser-fixture.mjs
-          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'every organizer task|organizer can manage|organizer overview keeps|host lands on their event|workspace submission|host edits ticket' --workers=1 --retries=0 --output test-results/organizer-suite
       - name: Verify optional SeevPlus checkout on desktop and mobile
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
@@ -73,7 +149,7 @@ jobs:
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: |
           node scripts/prepare-operations-browser-fixture.mjs
-          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --output test-results/operations
+          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --workers=1 --retries=0 --output test-results/operations
       - name: Verify host report fixture recovery without retries
         if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
         run: npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
