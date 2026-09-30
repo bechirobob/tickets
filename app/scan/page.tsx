@@ -4,8 +4,10 @@ import { getPublicEvents } from "../events";
 
 export const dynamic = "force-dynamic";
 
-export default async function ScanPage() {
-  const session = await requireAdminSession("/scan", "gate.scan");
+export default async function ScanPage({ searchParams }: { searchParams: Promise<{ event?: string }> }) {
+  const requested = (await searchParams).event;
+  const returnTo = typeof requested === "string" && /^[a-z0-9-]{1,80}$/u.test(requested) ? `/scan?event=${encodeURIComponent(requested)}` : "/scan";
+  const session = await requireAdminSession(returnTo, "gate.scan");
   const allEvents = await getPublicEvents();
   let events = allEvents;
   if (session.role !== "owner") {
@@ -15,5 +17,5 @@ export default async function ScanPage() {
     const allowed = new Set(assignments.results.map((item) => item.eventSlug));
     events = allEvents.filter((event) => allowed.has(event.slug));
   }
-  return <Scanner actor={session.actor} role={session.role} events={events.map(({ slug, title, fullDate, venue }) => ({ slug, title, fullDate, venue }))} />;
+  return <Scanner actor={session.actor} role={session.role} initialEvent={events.some(event => event.slug === requested) ? requested : undefined} events={events.map(({ slug, title, fullDate, venue }) => ({ slug, title, fullDate, venue }))} />;
 }

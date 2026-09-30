@@ -117,3 +117,37 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
 .discovery-directory .directory-intro { grid-template-columns: 1fr; gap: 12px; padding-top: 24px; padding-bottom: 18px; }
 .discovery-directory .directory-intro h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.12; }
 .discovery-directory .discovery-search { margin-bottom: 12px; }
+
+/* A single mobile chrome layer. Content, tickets and forms remain matte. */
+:root { --app-viewport-height: 100dvh; --app-keyboard-inset: 0px; }
+.workspace-return { display:flex; align-items:center; justify-content:center; gap:16px; min-height:44px; padding:8px 16px; background:#eee7f0; color:#4b2852; font:500 13px/1.4 var(--font-system); }
+.workspace-return a { font-weight:650; color:inherit; text-decoration:underline; text-underline-offset:3px; }
+.workspace-return :focus-visible { outline:3px solid #666; outline-offset:3px; }
+@media (max-width: 760px) {
+  html { scroll-padding-top: calc(72px + env(safe-area-inset-top)); }
+  .night-header, .sub-header { padding-top:env(safe-area-inset-top); min-height:calc(60px + env(safe-area-inset-top)); }
+  .night-mobile-menu__panel, .notification-panel--dropdown { max-height:calc(var(--app-viewport-height) - 90px - env(safe-area-inset-top)); overscroll-behavior:contain; }
+  .night-mobile-menu__panel { overflow:auto; }
+  .room-overlay--sheet { max-height:var(--app-viewport-height); overscroll-behavior:contain; }
+  .room-sheet { max-height:calc(var(--app-viewport-height) - 12px); padding-bottom:max(24px, env(safe-area-inset-bottom)); overflow:auto; }
+  .room-sheet__header { touch-action:pan-x; }
+  :is(.my-nights-page,.event-page,.help-page,.checkout-page,.submission-page) :is(input:not([type=checkbox]):not([type=radio]),select,textarea) { font-size:max(16px,1em); scroll-margin-bottom:100px; }
+  .workspace-return { font-size:12px; gap:10px; }
+  .workspace-return span { max-width:160px; }
+}
+@media (max-width: 700px) {
+  .customer-dock { background:#281b2b; box-shadow:inset 0 1px 0 rgb(255 255 255 / .08); transition:transform var(--ui-panel) var(--ui-ease); }
+  .customer-dock a { border-radius:12px; }
+  .customer-dock a:active { background:rgb(255 255 255 / .07); }
+  html[data-keyboard=open] .customer-dock { display:none; }
+  .customer-dock a:focus-visible { outline:2px solid currentColor; outline-offset:-2px; }
+  @supports ((backdrop-filter:blur(16px)) or (-webkit-backdrop-filter:blur(16px))) {
+    .customer-dock { background:rgb(40 27 43 / .82); backdrop-filter:blur(24px) saturate(115%); -webkit-backdrop-filter:blur(24px) saturate(115%); }
+    body:has(.poster-event-page) .customer-dock { background:color-mix(in srgb,var(--event-shell-paper) 84%,transparent); }
+  }
+}
+@media (prefers-reduced-transparency:reduce) {
+  .customer-dock { background:#281b2b; backdrop-filter:none; -webkit-backdrop-filter:none; }
+  body:has(.poster-event-page) .customer-dock { background:var(--event-shell-paper); }
+}
+@media (prefers-reduced-motion:reduce) { .customer-dock { transition:none; } }

@@ -1,0 +1,12 @@
+.provider-tracking{margin:1rem 0;padding:1rem;border:1px solid var(--line,#d8d8d8);border-radius:12px;max-width:56rem}
+.provider-tracking header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.provider-tracking h2{font-size:1.15rem;margin:0}
+.provider-tracking p{font-size:.9rem;line-height:1.5;overflow-wrap:anywhere}
+.provider-tracking fieldset{border:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}
+.provider-tracking label{display:flex;flex-direction:column;gap:.35rem;font-size:.9rem;min-width:0}
+.provider-tracking input,.provider-tracking select{min-height:44px;width:100%;min-width:0;padding:.6rem;font:inherit;border:1px solid var(--line,#d8d8d8);border-radius:8px;background:var(--paper,#fff);color:inherit}
+.provider-tracking .provider-tracking-confirm{grid-column:1/-1;flex-direction:row;align-items:center}
+.provider-tracking-confirm input{width:20px;min-height:20px;flex:0 0 20px}
+.provider-tracking fieldset>p{grid-column:1/-1;margin:0}
+.provider-tracking button{min-height:44px}
+@media(max-width:600px){.provider-tracking fieldset{grid-template-columns:minmax(0,1fr)}}

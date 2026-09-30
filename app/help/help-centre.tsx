@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowUpRight, BookOpenText, Check, ChevronDown, CircleHelp, Headphones, Search, ShieldCheck, Sparkles, TicketCheck, UsersRound, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Audience = "Everyone" | "Going out" | "Organising" | "At the door" | "The Room";
 
@@ -29,7 +29,7 @@ const guides: Guide[] = [
   {
     id: "rsvp-guest", audience: "Going out", category: "RSVP", title: "RSVP for a Night",
     summary: "Found your plans? Put your name down.",
-    steps: ["Open the RSVP link or choose RSVP on the event page.", "Add your details and send your request. You’ll see a message when it lands.", "If the host is reviewing requests, your spot still needs their nod. Paid registration takes you to checkout."],
+    steps: ["Open the RSVP link or choose RSVP on the event page. If the date is coming soon, it has not been announced yet.", "Add your details and send your request. Request received means the host has it; it does not guarantee a place.", "Open My Nights → RSVPs to see whether you’re waiting for review, waitlisted or confirmed. Confirmed RSVPs have QR passes in My Nights.", "Optional event and host announcements are separate from RSVP confirmations and status updates. Those updates stay in My Nights, with a notification when available or email delivery.", "Room access is included only when the host enables it for confirmed RSVPs. Paid registration takes you to checkout."],
     action: { href: "/events", label: "Find your Night" },
   },
   {
@@ -47,6 +47,12 @@ const guides: Guide[] = [
     steps: ["Open My Nights.", "Enter the email used for payment.", "Open the link in your email. Your tickets and updates will be waiting."],
     action: { href: "/my-nights", label: "Open My Nights" },
     popular: true,
+  },
+  {
+    id: "recover-access", audience: "Going out", category: "Tickets & RSVPs", title: "No access link, wrong email or locked out?",
+    summary: "Get back to your tickets and RSVPs without booking again.",
+    steps: ["Use the same email you entered at checkout or registration. Check your inbox and spam folder for the latest access link.", "Spotted a typo? Choose Use another email in My Nights after sending the request, then enter the correct address. An expired link needs a fresh request.", "If you no longer have access to that inbox, or booked with the wrong address, email tickets@becoreops.com with the event name and booking reference if you have one. The team will need to verify the booking before helping with access.", "Never send passwords, access links or QR screenshots. Don’t buy another ticket to recover one you already have."],
+    action: { href: "/my-nights", label: "Try My Nights again" },
   },
   {
     id: "payment-methods",
@@ -205,8 +211,8 @@ const guides: Guide[] = [
     audience: "The Room",
     category: "Privacy",
     title: "Who can see a Night's Room",
-    summary: "The Room is part of the ticket, not a public comment section.",
-    steps: ["Got a ticket? You’re in. The host’s team is there too.", "Each Night has its own Room, looked after by the host’s team.", "Ticket-holder content stays private; do not repost someone else's message or Flash without permission."],
+    summary: "A private space for guests whose passes include Room access.",
+    steps: ["Paid ticket holders and the authorised host team can enter the Night’s Room while it is open.", "For an RSVP, your place must be confirmed and the host must have included Room access. A pending request or waitlist place does not unlock it.", "Check the RSVP form before registering. When your pass includes access, open the Night in My Nights to find The Room. The Room may be unavailable before the event schedule is confirmed, after it closes, or if the event is cancelled or postponed.", "Guest content stays private; do not repost someone else's message or Flash without permission."],
     action: { href: "/privacy", label: "Read the privacy notice" },
   },
   {
@@ -247,6 +253,15 @@ function normalise(value: string) {
 export default function HelpCentre({ workspace = false, onNavigate, event = "" }: { workspace?: boolean; onNavigate?: (href: string) => void; event?: string } = {}) {
   const [query, setQuery] = useState("");
   const [audience, setAudience] = useState<Audience>(workspace ? "Organising" : "Everyone");
+  useEffect(() => {
+    const openLinkedGuide = () => {
+      const guide = document.getElementById(window.location.hash.slice(1));
+      if (guide instanceof HTMLDetailsElement && guide.classList.contains("help-guide")) guide.open = true;
+    };
+    openLinkedGuide();
+    window.addEventListener("hashchange", openLinkedGuide);
+    return () => window.removeEventListener("hashchange", openLinkedGuide);
+  }, []);
   const filtered = useMemo(() => {
     const search = normalise(query.trim());
     return guides.filter((guide) => {

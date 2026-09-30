@@ -1,3 +1,4 @@
+import { observeBackgroundJob } from "../lib/background-health";
 import { trackedOperation, HandoverPaused } from "./handover-control";
 import { queueOwnerApprovalAlerts } from '../lib/owner-approval-alerts';
 import { processPendingHostAccess } from '../lib/host-applications';
@@ -46,27 +47,29 @@ async function recordSystemAlert(env: Cloudflare.Env, source: string, error: unk
   try { await sendOperationalAlert(env, { source, severity: "critical", message: `${source} failed`, detail }); } catch { console.error(JSON.stringify({message:"Could not save operational alert",source})); }
 }
 
-async function runScheduledOperationsUntracked(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
-  if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await recordSystemAlert(env, "preview-cleanup", error); } }
-  if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await recordSystemAlert(env,"event-announcements",error); } return;}
-  try { await retryEventRemovals(env); } catch (error) { await recordSystemAlert(env, "event-removal-cleanup", error); }
-  try { await retryHostAnnouncements(env); } catch (error) { await recordSystemAlert(env, 'host-announcements', error); }
-  try { await retryOrderConfirmations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "order-confirmations", error); }
-  try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await recordSystemAlert(env, "event-registrations", error); }
+async function runScheduledOperationsUntracked(controller: ScheduledController, env: Cloudflare.Env): Promise<number> {
+  let failures = 0;
+  const failed = async (source: string, error: unknown) => { failures++; await recordSystemAlert(env, source, error); };
+  if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await failed("preview-cleanup", error); } }
+  if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await failed("event-announcements",error); } return failures;}
+  try { await retryEventRemovals(env); } catch (error) { await failed("event-removal-cleanup", error); }
+  try { await retryHostAnnouncements(env); } catch (error) { await failed('host-announcements', error); }
+  try { await retryOrderConfirmations(env, "https://tickets.becoreops.com"); } catch (error) { await failed("order-confirmations", error); }
+  try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await failed("event-registrations", error); }
   try {
     await purgeExpiredFlashes(env.DB);
   } catch (error) {
-    await recordSystemAlert(env, "flash-expiry", error);
+    await failed("flash-expiry", error);
   }
   try {
     await expireReservations(env.DB);
   } catch (error) {
-    await recordSystemAlert(env, "reservation-expiry", error);
+    await failed("reservation-expiry", error);
   }
   try {
     await releaseWaitlistOffers(env, "https://tickets.becoreops.com");
   } catch (error) {
-    await recordSystemAlert(env, "waitlist-offers", error);
+    await failed("waitlist-offers", error);
   }
   try {
     if (new Date(controller.scheduledTime).getUTCHours() < 8) { /* Reports begin at 8am Accra time. */ }
@@ -74,7 +77,7 @@ async function runScheduledOperationsUntracked(controller: ScheduledController, 
     else if (env.ENVIRONMENT !== "production") await processOrganizerReports(env.DB);
     else throw new Error("Host report queue is not configured.");
   } catch (error) {
-    await recordSystemAlert(env, "organizer-reports", error);
+    await failed("organizer-reports", error);
   }
   try {
     await processPendingOrganizerAccess(env.DB);
@@ -82,40 +85,40 @@ async function runScheduledOperationsUntracked(controller: ScheduledController, 
     await queueOwnerApprovalAlerts(env);
     await retryFailedDeliveries(env, 20, 'standard');
   } catch (error) {
-    await recordSystemAlert(env, "email-delivery-retry", error);
+    await failed("email-delivery-retry", error);
   }
   if (env.PAYSTACK_SECRET_KEY) {
     try {
       await processRefundBatches(env);
     } catch (error) {
-      await recordSystemAlert(env, "approved-refund-batch", error);
+      await failed("approved-refund-batch", error);
     }
   }
   try {
     const recovery = await recoverSeevPayments(env, "https://tickets.becoreops.com");
     if (recovery.failed) throw new Error(`${recovery.failed} SeevPlus payments need verification; review order records.`);
   } catch (error) {
-    await recordSystemAlert(env, "seevplus-payment-recovery", error);
+    await failed("seevplus-payment-recovery", error);
   }
   if (env.PAYSTACK_SECRET_KEY) {
     try {
       await recoverAbandonedPayments(env, "https://tickets.becoreops.com");
     } catch (error) {
-      await recordSystemAlert(env, "abandoned-payment-recovery", error);
+      await failed("abandoned-payment-recovery", error);
     }
   }
   if (controller.cron === "15 3 * * *") {
     try {
       if (env.ENVIRONMENT !== "production") await refreshExpiredPreviewEvents(env.DB);
     } catch (error) {
-      await recordSystemAlert(env, "preview-event-rollover", error);
+      await failed("preview-event-rollover", error);
     }
   }
   if (controller.cron === "15 3 * * *") {
     try {
       await env.DB.prepare("DELETE FROM product_metrics_daily WHERE day < date('now', '-180 days')").run();
     } catch (error) {
-      await recordSystemAlert(env, "analytics-retention", error);
+      await failed("analytics-retention", error);
     }
   }
   if (controller.cron === "15 3 * * *" && env.PAYSTACK_SECRET_KEY) {
@@ -125,9 +128,10 @@ async function runScheduledOperationsUntracked(controller: ScheduledController, 
       const periodStart = new Date(periodEnd.getTime() - 24 * 60 * 60 * 1000);
       await runDailyReconciliation(env.DB, { secret: env.PAYSTACK_SECRET_KEY, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString(), actor: "system:daily-reconciliation" });
     } catch (error) {
-      await recordSystemAlert(env, "daily-payment-reconciliation", error);
+      await failed("daily-payment-reconciliation", error);
     }
   }
+  return failures;
 }
 
 
@@ -136,6 +140,6 @@ export async function processQueue(batch: MessageBatch<{ deliveryId: string }>, 
   catch (error) { if (!(error instanceof HandoverPaused)) throw error; batch.retryAll({ delaySeconds: 60 }); }
 }
 export async function runScheduledOperations(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
-  try { await trackedOperation(env, 'scheduled', () => runScheduledOperationsUntracked(controller, env)); }
+  try { await trackedOperation(env, 'scheduled', () => observeBackgroundJob(env.DB, controller.cron === '* * * * *' ? 'scheduled:minute' : controller.cron === '*/5 * * * *' ? 'scheduled:five-minute' : 'scheduled:daily', () => runScheduledOperationsUntracked(controller, env), failures => failures)); }
   catch (error) { if (!(error instanceof HandoverPaused)) throw error; }
 }

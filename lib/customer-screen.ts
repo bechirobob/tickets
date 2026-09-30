@@ -44,7 +44,7 @@ export type CuratedEvent = {
 export type CustomerEventScreen = {
   event: CustomerEvent;
   host: { slug: string; name: string; role: string; city: string; verificationStatus: string; profileImageUrl?: string | null } | null;
-  registration: { mode: 'paid' | 'rsvp' | 'interest'; open: boolean; maxPartySize: number; approvalRequired: boolean; deadline: string | null } | null;
+  registration: { mode: 'paid' | 'rsvp' | 'interest'; open: boolean; maxPartySize: number; approvalRequired: boolean; deadline: string | null; roomAccess?: boolean } | null;
 };
 
 export type CustomerEvent = Omit<CuratedEvent, 'price' | 'bookingFeeBasisPoints' | 'capacity' | 'ticketTiers'> & {

@@ -41,6 +41,10 @@ test('event screens share the full facts, original icons, countdown and signup a
   await expect(page.locator('.event-coming-soon')).toContainText('Coming soon');
   await expect(page.getByRole('timer')).toHaveCount(0);
   await expect(page.locator('.event-detail-poster img')).toHaveCSS('object-fit', 'contain');
+  await expect(page.locator('.event-detail-poster')).toHaveClass(/event-detail-poster--portrait/);
+  await expect(page.locator('.event-practical-details')).toContainText('Special Guest DJ');
+  await expect(page.locator('.event-practical-details')).toContainText('Cuppy');
+  await expect(page.locator('.cuppy-guest')).toBeVisible();
   const popup = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Keep me posted', exact: true }).click();
   const opened = await popup; await expect.poll(() => opened.url()).toBe(`${origin}/rsvp/${guest.slug}`); await opened.close();

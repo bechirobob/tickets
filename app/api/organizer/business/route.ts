@@ -3,7 +3,7 @@ import { mutationHasValidOrigin, recordAudit, requestMetadata } from '../../../.
 import { csvResponse, OrganizerError, organizerScope, organizerSession, privateHeaders, requireOrganizerEvent, textInput } from '../../../../lib/organizer-access';
 import { listOrganizerEvents,readMoney,readGuests,guestDetails,readAudience } from '../../../../lib/organizer-records';
 import { createCoupon,couponUsage,managePromoter,listPromoterReports } from '../../../../lib/organizer-promotions';
-import { readTeam,inviteTeam,revokeTeam } from '../../../../lib/organizer-team';
+import { readTeam,inviteTeam,resendTeamInvite,revokeTeam } from '../../../../lib/organizer-team';
 import { duplicateEvent,issueComplimentary,saveDraft,saveQuestion } from '../../../../lib/organizer-events';
 import { issueRecoveryGrant } from '../../../../lib/email-delivery';
 import { enforceRateLimit } from '../../../../lib/security-controls';
@@ -66,6 +66,7 @@ export async function POST(request:Request){
       await db.prepare('UPDATE event_coupons SET status=? WHERE id=? AND event_slug=?').bind(b.status,textInput(b.id,'coupon',120),e.slug).run();result={saved:true};
     }else if(action.startsWith('promoter_'))result=await managePromoter(db,session,b);
     else if(action==='team_invite')result=await inviteTeam(db,session,b);
+    else if(action==='team_resend_invite')result=await resendTeamInvite(db,session,b);
     else if(action==='team_remove'||action==='team_revoke_invite')result=await revokeTeam(db,session,b);
     else if(action==='duplicate')result=await duplicateEvent(db,session,b);
     else if(action==='complimentary')result=await issueComplimentary(db,session,b);

@@ -6,6 +6,7 @@ import {eventPresentationStyle} from '../../../lib/event-presentation';
 import {notFound} from 'next/navigation';
 import {findCuratedEvent} from '../../events';
 import RegistrationForm from '../../registration-form';
+import {eventSpecialGuest} from '../../../lib/event-guest';
 import BrandLogo from '../../brand-logo';
 import {registrationSettings,registrationShareState,registrationScheduleReady} from '../../../lib/registrations';
 
@@ -24,6 +25,7 @@ export default async function EventRegistrationPage({params}:{params:Promise<{sl
   const [event,settings]=await Promise.all([findCuratedEvent(slug),registrationSettings(env.DB,slug)]);
   if(!event||!settings||settings.publication!=='published')notFound();
   const sharing=registrationShareState(settings);
+  const specialGuest=eventSpecialGuest(event);
   const label=settings.mode==='rsvp'?'RSVP':settings.mode==='interest'?'Event updates':'Paid registration';
   const schedulePending=settings.mode==='rsvp'?!registrationScheduleReady(settings):settings.mode==='paid'&&settings.scheduleStatus!=='confirmed';
   const unavailable=settings.eventState==='cancelled'?'This one’s been called off.':settings.eventState==='postponed'?'The date’s getting a remix. RSVPs are on pause.':schedulePending?'The host is putting the date together. RSVPs open soon.':'The guest list is closed for this one.';
@@ -34,9 +36,10 @@ export default async function EventRegistrationPage({params}:{params:Promise<{sl
         <a className="rsvp-signup__poster" href={eventImageUrl(event.image,1440,90)} target="_blank" rel="noreferrer" aria-label={`View full flier for ${event.title}`}><Image src={eventImageUrl(event.image,960,82)} width={960} height={1423} sizes="(max-width: 700px) 90vw, 400px" alt={`Event flier for ${event.title}`} priority unoptimized/></a>
         <p className="eyebrow">{label} · {event.vibe}</p><h1 id="rsvp-event-title">{event.title}</h1>
         <div className="rsvp-signup__facts"><p><CalendarDays size={17} aria-hidden="true"/><span>{event.fullDate}{event.startsAt?<small>{event.time} · Accra time</small>:null}</span></p><p><MapPin size={17} aria-hidden="true"/><span>{event.venue}<small>{event.area}</small></span></p></div>
+        {specialGuest?<p>{specialGuest.role} · {specialGuest.name}</p>:null}
       </section>
       <section className="rsvp-signup__response" aria-label="Guest registration">
-    {!sharing.ready?<section className="rsvp-signup__notice"><h2>{unavailable}</h2><p>The latest word from the host is on the event page.</p><Link href={`/event/${encodeURIComponent(slug)}`}>View event</Link></section>:settings.mode==='paid'?<section className="rsvp-signup__notice"><h2>This one needs a ticket</h2><p>Pick your ticket, bring your people. You’re in once payment clears.</p><Link className="ticket-action" href={`/checkout/${encodeURIComponent(slug)}`}>Choose tickets</Link></section>:<RegistrationForm eventSlug={slug} mode={settings.mode} maxPartySize={settings.maxPartySize} approvalRequired={Boolean(settings.approvalRequired)} initiallyOpen deadline={settings.closesAt??undefined}/>}
+    {!sharing.ready?<section className="rsvp-signup__notice"><h2>{unavailable}</h2><p>The latest word from the host is on the event page.</p><Link href={`/event/${encodeURIComponent(slug)}`}>View event</Link></section>:settings.mode==='paid'?<section className="rsvp-signup__notice"><h2>This one needs a ticket</h2><p>Pick your ticket, bring your people. You’re in once payment clears.</p><Link className="ticket-action" href={`/checkout/${encodeURIComponent(slug)}`}>Choose tickets</Link></section>:<RegistrationForm eventSlug={slug} mode={settings.mode} maxPartySize={settings.maxPartySize} approvalRequired={Boolean(settings.approvalRequired)} schedulePending={!event.startsAt} roomAccess={Boolean(settings.roomAccess)} initiallyOpen deadline={settings.closesAt??undefined}/>}
       </section>
     </div>
   </main>;

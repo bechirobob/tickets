@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useLayerHistory } from "./use-layer-history";
 
 const subscribeToReadiness = () => () => {};
 const clientIsReady = () => true;
@@ -12,6 +13,7 @@ export function useHeaderPanel() {
   const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const id = useId();
   const pathname = usePathname();
+  const router = useRouter();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,6 +25,7 @@ export function useHeaderPanel() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPhase("closed");
     else { setPhase("closing"); timer.current = setTimeout(() => setPhase("closed"), 180); }
   }, []);
+  const releaseHistory = useLayerHistory(phase === "open", () => close(true));
   const toggle = (keyboard = false) => {
     if (phase === "open") { close(true); return; }
     if (timer.current) clearTimeout(timer.current);
@@ -43,21 +46,40 @@ export function useHeaderPanel() {
       focusFrame = requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>('button, a[href]')?.focus({ preventScroll: true }));
     }
     const contains = (target: EventTarget | null) => target instanceof Node && (panel.current?.contains(target) || trigger.current?.contains(target));
-    const pointer = (event: PointerEvent) => { if (!contains(event.target)) close(); };
-    const focus = (event: FocusEvent) => { if (!contains(event.target)) close(); };
+    let pointerDestination: Element | null = null;
+    const pointer = (event: PointerEvent) => {
+      // A destination click consumes the layer before routing in the click
+      // handler below. Closing on pointerdown would race that navigation.
+      pointerDestination = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (pointerDestination) return;
+      if (!contains(event.target)) close();
+    };
+    const focus = (event: FocusEvent) => { if (!contains(event.target) && event.target !== pointerDestination) close(); };
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); close(true); } };
     const other = (event: Event) => { if ((event as CustomEvent).detail !== id) close(); };
+    const navigate = (event: MouseEvent) => {
+      if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !(event.target instanceof Element)) return;
+      const link = event.target.closest<HTMLAnchorElement>("a[href]");
+      if (!link || link.target || link.download || link.origin !== window.location.origin || !window.matchMedia("(max-width: 760px)").matches) return;
+      event.preventDefault();
+      const href = link.pathname + link.search + link.hash;
+      const finished = releaseHistory();
+      close();
+      void finished.then(() => router.push(href));
+    };
     document.addEventListener("pointerdown", pointer);
     document.addEventListener("focusin", focus);
     document.addEventListener("keydown", key);
     window.addEventListener("becore:header-panel", other);
+    document.addEventListener("click", navigate, true);
     return () => {
       if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
       document.removeEventListener("pointerdown", pointer);
       document.removeEventListener("focusin", focus);
       document.removeEventListener("keydown", key);
       window.removeEventListener("becore:header-panel", other);
+      document.removeEventListener("click", navigate, true);
     };
-  }, [close, id, phase]);
+  }, [close, id, phase, releaseHistory, router]);
   return { id, trigger, panel, ready, phase, open: phase === "open", mounted: phase !== "closed", toggle, close };
 }

@@ -1,3 +1,4 @@
+import { ProviderCaseError, readProviderCases, recordProviderCase } from "../../../../lib/provider-operation-tracking";
 import { verifyOrderPayment } from "../../../../lib/seevplus";
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { issueRecoveryGrant } from "../../../../lib/email-delivery";
@@ -59,7 +60,9 @@ export async function GET(request: Request) {
            orders.payment_environment AS paymentEnvironment, orders.failure_reason AS failureReason,
            orders.refund_status AS refundStatus, orders.dispute_status AS disputeStatus,
            orders.reservation_expires_at AS reservationExpiresAt,
-           orders.created_at AS createdAt, orders.paid_at AS paidAt,
+           orders.created_at AS createdAt, orders.paid_at AS paidAt, orders.payment_verified_at AS paymentVerifiedAt,
+           (SELECT COUNT(*) FROM tickets WHERE tickets.order_id = orders.id AND tickets.status IN ('issued','checked_in')) AS issuedTicketCount,
+           (SELECT status FROM delivery_events WHERE delivery_events.order_id = orders.id AND kind = 'payment_confirmation' ORDER BY created_at DESC LIMIT 1) AS deliveryStatus,
            (SELECT COUNT(*) FROM tickets WHERE tickets.order_id = orders.id AND tickets.status = 'checked_in') AS checkedInCount,
            (SELECT status FROM payment_refunds WHERE payment_refunds.order_id = orders.id ORDER BY requested_at DESC LIMIT 1) AS latestRefundStatus
     FROM orders LEFT JOIN curated_event_records event ON event.slug = orders.event_slug
@@ -74,7 +77,8 @@ export async function GET(request: Request) {
     env.DB.prepare("SELECT * FROM event_settlements ORDER BY period_end DESC, event_slug LIMIT 100").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT slug, title FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all(),
   ]);
-  return Response.json({ orders: orders.results, total, page, pageSize, events: eventOptions.results, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
+  const providerCases = await readProviderCases(env.DB, orders.results.map(order => String(order.id)));
+  return Response.json({ orders: orders.results.map(order => ({ ...order, providerCases: providerCases.filter(item => item.orderId === order.id) })), total, page, pageSize, events: eventOptions.results, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -82,9 +86,17 @@ export async function POST(request: Request) {
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session || !hasPermission(session, "orders.manage")) return Response.json({ error: "Finance access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
-  const body = await request.json() as { action?: string; orderId?: string; reason?: string; periodStart?: string; periodEnd?: string; amountMinor?: number; ticketIds?: string[]; disputeId?: string; resolution?: "merchant-accepted" | "declined" };
+  let body: { action?: string; orderId?: string; reason?: string; periodStart?: string; periodEnd?: string; amountMinor?: number; ticketIds?: string[]; disputeId?: string; resolution?: "merchant-accepted" | "declined"; [key: string]: unknown };
+  try {
+    const value: unknown = await request.json();
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid body");
+    body = value as typeof body;
+  } catch { return Response.json({ error: "Enter valid operation details." }, { status: 400 }); }
   if (!env.PAYSTACK_SECRET_KEY && ["refund", "reconcile", "dispute_resolve"].includes(body.action ?? "")) return Response.json({ error: "Paystack credentials are not configured." }, { status: 503 });
   try {
+    if (body.action === "record_provider_case") {
+      return Response.json(await recordProviderCase(env.DB, session, body), { headers: { "cache-control": "no-store" } });
+    }
     if (body.action === "expire") {
       const result = await expireReservations(env.DB);
       await recordAudit(env.DB, { session, action: "payments.expire_reservations", targetType: "inventory", outcome: "success", requestId: requestMetadata(request).requestId });
@@ -134,6 +146,6 @@ export async function POST(request: Request) {
     }
     return Response.json({ error: "Invalid operation." }, { status: 400 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "The payment operation failed." }, { status: 400 });
+    return Response.json({ error: error instanceof Error ? error.message : "The payment operation failed." }, { status: error instanceof ProviderCaseError ? error.status : 400 });
   }
 }

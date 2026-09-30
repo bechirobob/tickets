@@ -1,3 +1,4 @@
+import { readOperationExceptions } from "../../../../lib/operations-exceptions";
 import { readAnalyticsBaseline } from '../../../../lib/analytics-baseline';
 import {
   hasPermission,
@@ -143,6 +144,7 @@ export async function GET(request: Request) {
       const result = await env.DB.prepare(`SELECT request.id, request.event_slug AS eventSlug, request.ticket_id AS ticketId, request.status, request.face_value_minor AS faceValueMinor, request.currency, request.waitlist_demand_at_request AS waitlistDemand, request.requested_at AS requestedAt, attendee.normalized_email AS attendeeEmail FROM ticket_return_requests request JOIN attendee_profiles attendee ON attendee.id = request.attendee_id WHERE request.status IN ('requested','matched','refund_pending') ORDER BY request.requested_at ASC LIMIT 100`).all<Record<string, unknown>>();
       returns = result.results;
   }
+  const background = isOwner ? await readOperationExceptions(env.DB) : undefined;
   const scopedMetrics = metrics.results.map((metric) => ({
     slug: metric.slug,
     title: metric.title,
@@ -175,6 +177,7 @@ export async function GET(request: Request) {
       events: events.results,
       metrics: scopedMetrics,
       analyticsBaseline,
+      ...(background ? { background } : {}),
       checks: canEvents ? checks.results : [],
       devices: canEvents ? devices.results : [],
       incidents: canEvents ? incidents.results : [],

@@ -33,7 +33,7 @@ export async function GET() {
       return {
         event: customerEvent(event),
         host: host ? { slug: host.slug, name: host.name, role: host.role, city: host.city, verificationStatus: host.verificationStatus, profileImageUrl: host.profileImageUrl } : null,
-        registration: registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), deadline: registration.closesAt ?? null } : null,
+        registration: registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), roomAccess: Boolean(registration.roomAccess), deadline: registration.closesAt ?? null } : null,
       };
     }));
     return Response.json({ version: 1, events, screens, updatedAt: new Date().toISOString() } satisfies PublicCatalogue, { headers });

@@ -9,7 +9,9 @@ export async function readTeam(db:D1Database,session:AdminSession,slug:string){
   const event=await requireOrganizerEvent(db,session,slug);
   const members=await db.prepare(`SELECT a.id,a.display_name AS name,a.normalized_email AS email,a.role,a.status FROM staff_event_assignments s JOIN staff_accounts a ON a.id=s.account_id WHERE s.event_slug=? AND a.role IN ('organizer','gate') ORDER BY a.display_name`).bind(slug).all();
   const invites=await db.prepare(`SELECT i.id,i.account_email AS email,i.role,i.created_at AS createdAt,i.expires_at AS expiresAt,i.used_at AS usedAt,i.revoked_at AS revokedAt,(julianday(i.expires_at)<julianday('now')) AS expired,
-    (SELECT status FROM delivery_events d WHERE d.id='team-invitation/'||i.id) AS deliveryStatus FROM organizer_team_invites i WHERE event_slug=? ORDER BY created_at DESC LIMIT 100`).bind(slug).all();
+    (SELECT status FROM delivery_events d WHERE d.id='team-invitation/'||i.id) AS deliveryStatus,
+    (SELECT next_attempt_at FROM delivery_events d WHERE d.id='team-invitation/'||i.id) AS nextAttemptAt,
+    (SELECT attempt_count FROM delivery_events d WHERE d.id='team-invitation/'||i.id) AS deliveryAttempts FROM organizer_team_invites i WHERE event_slug=? ORDER BY created_at DESC LIMIT 100`).bind(slug).all();
   return {members:members.results,invites:invites.results,canManage:session.role==='owner'||Boolean(event.isLead)};
 }
 export async function inviteTeam(db:D1Database,session:AdminSession,b:Record<string,unknown>){
@@ -37,6 +39,16 @@ export async function inviteTeam(db:D1Database,session:AdminSession,b:Record<str
   ]);
   return {id,queued:true};
 }
+/** Resend the exact current invitation; never take recipient or role from the browser. */
+export async function resendTeamInvite(db:D1Database,session:AdminSession,b:Record<string,unknown>){
+  const event=await requireOrganizerEvent(db,session,b.eventSlug,true),id=textInput(b.id,'invitation',120);
+  const invite=await db.prepare(`SELECT i.account_email AS email,i.role,a.display_name AS name
+    FROM organizer_team_invites i JOIN staff_accounts a ON a.id=i.account_id
+    WHERE i.id=? AND i.event_slug=? AND i.used_at IS NULL AND i.revoked_at IS NULL
+      AND a.normalized_email=i.account_email AND a.role=i.role AND a.status='active'`).bind(id,event.slug).first<{email:string;role:string;name:string}>();
+  if(!invite)throw new OrganizerError('This invitation changed or was already accepted. Refresh the team before trying again.',409);
+  return inviteTeam(db,session,{eventSlug:event.slug,...invite});
+}
 // Lead access is rechecked at acceptance and again before delayed email delivery.
 export const validTeamInvite=`i.revoked_at IS NULL AND i.used_at IS NULL AND i.expires_at>? AND a.status='active' AND a.role=i.role AND a.normalized_email=i.account_email
   AND e.removed_at IS NULL AND EXISTS (SELECT 1 FROM staff_accounts lead WHERE lead.id=i.invited_by AND lead.status='active' AND
@@ -63,7 +75,7 @@ export async function acceptTeamInvite(db:D1Database,token:string,payload:StaffP
     db.prepare(`UPDATE delivery_events SET payload_json=NULL,next_attempt_at=NULL WHERE id IN (SELECT 'team-invitation/'||id FROM organizer_team_invites WHERE claim_id=?)`).bind(claim),
   ]);
   if(result[0].meta.changes!==1)throw new OrganizerError('This invitation changed. Open the latest invite and try again.',409);
-  return {accepted:true,role:invite.role};
+  return {accepted:true,role:invite.role,eventSlug:invite.eventSlug};
 }
 export async function revokeTeam(db:D1Database,session:AdminSession,b:Record<string,unknown>){
   const e=await requireOrganizerEvent(db,session,b.eventSlug,true),id=textInput(b.id,'team member',120),now=new Date().toISOString();

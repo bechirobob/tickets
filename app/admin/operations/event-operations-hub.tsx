@@ -1,5 +1,7 @@
 "use client";
 
+import type { BackgroundHealth } from "../../../lib/background-health";
+import type { OperationException } from "../../../lib/operations-exceptions";
 import { operationsFetch } from "../../../lib/operations-client";
 
 import {
@@ -129,6 +131,7 @@ export default function EventOperationsHub({
   role: StaffRole;
 }) {
   const [data, setData] = useState<{
+    background?: { exceptions: OperationException[]; jobs: BackgroundHealth[] };
     events: Event[];
     metrics: Metric[];
     analyticsBaseline?: string | null;
@@ -349,7 +352,13 @@ export default function EventOperationsHub({
                   </article>
                 </div>
                 <nav className="ops-tabs operations-views" aria-label="Operations views">{[['overview','Overview'],...(canEvents?[['readiness','Event readiness']]:[]),['issues','Issues'],['approvals','Approvals']].map(([key,label])=><button key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>
-                {view==='overview'?<section className="operations-next"><header><h3>Next actions</h3><span>Updates automatically</span></header><div>{canEvents?<><ActionLink href={`/admin/registrations?event=${selected}`} icon={<Users size={17}/>}>RSVP & guests</ActionLink><ActionLink href={`/admin/events?event=${selected}`} variant="secondary">Edit event</ActionLink></>:null}{canFinance?<ActionLink href="/admin/orders" variant="secondary">Orders & payments</ActionLink>:null}</div><div className="operations-attention">{canEvents&&readiness<100?<button onClick={()=>setView('readiness')}><ClipboardCheck size={18}/><span><b>Finish event checks</b><small>{checks.filter(c=>c.status!=='passed').length} checks remaining</small></span><span aria-hidden="true">→</span></button>:null}{incidents.length||data.alerts.length?<button onClick={()=>setView('issues')}><ShieldAlert size={18}/><span><b>Review open issues</b><small>{incidents.length} incidents · {data.alerts.length} system alerts</small></span><span aria-hidden="true">→</span></button>:null}{data.approvals.filter(a=>(!a.event_slug||a.event_slug===selected)&&a.status==='pending').length?<button onClick={()=>setView('approvals')}><Users size={18}/><span><b>Approvals waiting</b><small>Review requests from your team</small></span><span aria-hidden="true">→</span></button>:null}</div></section>:null}
+                {view==='overview'?<section className="operations-next"><header><h3>Next actions</h3><span>Updates automatically</span></header><div>{canEvents?<><ActionLink href={`/admin/registrations?event=${selected}`} icon={<Users size={17}/>}>RSVP & guests</ActionLink><ActionLink href={`/admin/events?event=${selected}`} variant="secondary">Edit event</ActionLink></>:null}{canFinance?<ActionLink href={`/admin/orders?event=${encodeURIComponent(selected)}`} variant="secondary">Orders & payments</ActionLink>:null}</div><div className="operations-attention">{canEvents&&readiness<100?<button onClick={()=>setView('readiness')}><ClipboardCheck size={18}/><span><b>Finish event checks</b><small>{checks.filter(c=>c.status!=='passed').length} checks remaining</small></span><span aria-hidden="true">→</span></button>:null}{incidents.length||data.alerts.length?<button onClick={()=>setView('issues')}><ShieldAlert size={18}/><span><b>Review open issues</b><small>{incidents.length} incidents · {data.alerts.length} system alerts</small></span><span aria-hidden="true">→</span></button>:null}{data.approvals.filter(a=>(!a.event_slug||a.event_slug===selected)&&a.status==='pending').length?<button onClick={()=>setView('approvals')}><Users size={18}/><span><b>Approvals waiting</b><small>Review requests from your team</small></span><span aria-hidden="true">→</span></button>:null}</div></section>:null}
+                {role === "owner" && data.background && view === "overview" ? <section className="operations-background" aria-labelledby="background-heading">
+                  <header><h3 id="background-heading">Delivery & background work</h3><span>Last completed work, separate from website availability</span></header>
+                  <ul>{data.background.jobs.map(job => <li key={job.key}><div><b>{job.label}</b><small>{job.lastSuccessAt ? `Last successful run ${new Date(job.lastSuccessAt).toLocaleString("en-GH")}` : "No successful run recorded yet"}</small></div><span data-state={job.status}>{({ healthy: "Up to date", running: "Running", stale: "Needs attention", needs_review: "Needs review", not_observed: "Awaiting first run" })[job.status]}</span></li>)}</ul>
+                  {data.background.exceptions.length ? <div className="operations-exception-list">{data.background.exceptions.map(item => <a key={item.key} href={item.href}><div><b>{item.count} {item.label}</b><small>Oldest waiting {new Date(item.oldestAt).toLocaleString("en-GH")}</small></div><span>{item.state === "retry_scheduled" ? "Retry scheduled" : "Review"} →</span></a>)}</div> : <p>No waiting payment checks or delivery exceptions found.</p>}
+                  <p className="operations-background-note">A successful run means the job finished. Provider delivery and settlement are checked separately.</p>
+                </section> : null}
                 {journey && view==='overview' ? (
                   <section className="operations-journey">{data.analyticsBaseline ? <p>Analytics start {new Date(data.analyticsBaseline).toLocaleString("en-GB", {timeZone:"Africa/Accra"})} (Accra). Admission and support totals remain current.</p> : null}
                     <header>

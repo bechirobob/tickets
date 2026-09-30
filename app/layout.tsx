@@ -1,9 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "../styles/customer.css";
 import CustomerDock from "./customer-dock";
 import PwaRegistration from "./pwa-registration";
 import WorkspaceReturn from "./workspace-return";
 import AnalyticsBeacon from "./analytics-beacon";
+import MobileAppFrame from "./mobile-app-frame";
+
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", interactiveWidget: "resizes-content", themeColor: "#281b2b" };
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tickets.becoreops.com"),
@@ -50,7 +53,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
-      <body><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
+      <body><MobileAppFrame /><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
     </html>
   );
 }

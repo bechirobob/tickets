@@ -10,8 +10,15 @@ type Draft=Omit<Settings,'capacity'|'priceMinor'> & {capacity:string;price:strin
 type Row={id:string;guestName:string;email:string;partySize:number;kind:string;status:string};
 const statusNames:Record<string,string>={requested:'Needs approval',confirmed:'Confirmed',waitlisted:'Waitlisted',declined:'Declined',cancelled:'Cancelled',interested:'Email list'};
 function draftOf(s:Settings,pricing?:{priceMinor:number;capacity:number}|null):Draft{return {...s,capacity:String(s.capacity||pricing?.capacity||100),price:String((pricing?.priceMinor??0)/100)};}
-export default function RegistrationManager({eventSlug,expanded=false,showAnnouncements=true}:{eventSlug:string;expanded?:boolean;showAnnouncements?:boolean}){
- const [view,setView]=useState('settings'),[settings,setSettings]=useState<Draft|null>(null),[saved,setSaved]=useState(''),[rows,setRows]=useState<Row[]>([]),[offset,setOffset]=useState(0),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState(''),[total,setTotal]=useState(0),[counts,setCounts]=useState<{status:string;guests:number}[]>([]);
+export type RegistrationView='settings'|'roster'|'guests'|'announcements';
+export default function RegistrationManager({eventSlug,expanded=false,showAnnouncements=true,view:requestedView,status:requestedStatus,onNavigate}:{eventSlug:string;expanded?:boolean;showAnnouncements?:boolean;view?:RegistrationView;status?:string;onNavigate?:(view:RegistrationView,status:string)=>void}){
+ const [ownView,setOwnView]=useState<RegistrationView>('settings'),[settings,setSettings]=useState<Draft|null>(null),[saved,setSaved]=useState(''),[rows,setRows]=useState<Row[]>([]),[offset,setOffset]=useState(0),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[ownFilter,setOwnFilter]=useState(''),[total,setTotal]=useState(0),[counts,setCounts]=useState<{status:string;guests:number}[]>([]);
+ const view=requestedView??ownView,filter=requestedStatus??ownFilter;
+ const setView=(next:string)=>{setOwnView(next as RegistrationView);onNavigate?.(next as RegistrationView,filter);};
+ const setFilter=(next:string)=>{setOwnFilter(next);onNavigate?.(view,next);};
+ const [navigation,setNavigation]=useState(`${eventSlug}:${requestedView??''}:${requestedStatus??''}`);
+ const nextNavigation=`${eventSlug}:${requestedView??''}:${requestedStatus??''}`;
+ if(navigation!==nextNavigation){setNavigation(nextNavigation);setOffset(0);}
  const saving=useRef(false),revision=useRef(0),loadedEvent=useRef('');
  const load=useCallback(async(preserveDraft=true)=>{const version=++revision.current;const r=await operationsFetch(`/api/admin/registrations?eventSlug=${encodeURIComponent(eventSlug)}&offset=${offset}&q=${encodeURIComponent(query)}&status=${filter}`);const d=await r.json() as {error?:string;settings:Settings;registrations:Row[];total?:number;counts:{status:string;guests:number}[];pricing?:{priceMinor:number;capacity:number}|null};if(version!==revision.current)return;if(!r.ok){setMessage(d.error??'Could not load registrations.');return;}if(!preserveDraft||loadedEvent.current!==eventSlug){const draft=draftOf(d.settings,d.pricing);setSettings(draft);setSaved(JSON.stringify(draft));loadedEvent.current=eventSlug;}setRows(d.registrations);setCounts(d.counts);setTotal(d.total??d.registrations.length);},[eventSlug,offset,query,filter]);
  useEffect(()=>{const timer=setTimeout(()=>void load(),180);return()=>{clearTimeout(timer);};},[load]);
