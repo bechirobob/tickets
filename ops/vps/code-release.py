@@ -414,7 +414,8 @@ def ready(system, revision, *, candidate=False):
 
 class Deployment:
     def __init__(self, *, source, expected, run_id, attempt, archive, provenance,
-                 archive_digest, provenance_digest, enable_crypto=False, root=Path("/"), system=None):
+                 archive_digest, provenance_digest, enable_crypto=False, recover_prepared=None,
+                 root=Path("/"), system=None):
         require(SHA.fullmatch(source) and SHA.fullmatch(expected) and source != expected,
                 "Distinct exact release SHAs required.")
         require(NUMBER.fullmatch(run_id) and NUMBER.fullmatch(attempt), "Invalid deployment identity.")
@@ -423,6 +424,10 @@ class Deployment:
         self.source, self.expected = source, expected
         self.identity = run_id + "-" + attempt
         self.run_id, self.attempt = run_id, attempt
+        self.recover_prepared = recover_prepared or None
+        require(self.recover_prepared is None or (
+            re.fullmatch(r"[1-9][0-9]*-[1-9][0-9]*", self.recover_prepared)
+            and self.recover_prepared != self.identity), "Invalid prepared recovery identity.")
         self.archive, self.provenance = Path(archive), Path(provenance)
         self.archive_digest, self.provenance_digest = archive_digest, provenance_digest
         self.enable_crypto = enable_crypto
@@ -456,7 +461,8 @@ class Deployment:
     def preflight(self):
         for directory in (self.home, self.releases, self.journal.parent, self.override.parent):
             require(directory.is_dir() and not directory.is_symlink(), "Unsafe deployment directory.")
-        require(not os.path.lexists(self.release) and not os.path.lexists(self.snapshot),
+        require((not os.path.lexists(self.release) or self.recover_prepared)
+                and not os.path.lexists(self.snapshot),
                 "Release or evidence already exists; inspect before retrying.")
         self.file(self.archive)
         require(digest_file(self.archive) == self.archive_digest
@@ -512,6 +518,61 @@ class Deployment:
         self.next_config = enable_crypto_bytes(self.before["config"]) if self.enable_crypto else self.before["config"]
         health(self.system, self.expected)
         health(self.system, self.expected, public=True)
+        if self.recover_prepared:
+            self.check_prepared_recovery()
+
+    def check_prepared_recovery(self):
+        """Prove an explicitly selected failure never reached live activation."""
+        failed = self.journal.parent / ("code-release-" + self.recover_prepared)
+        for directory in (failed, self.release):
+            info = directory.lstat()
+            mode = stat.S_IMODE(info.st_mode)
+            require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+                    and (mode == 0o700 if directory == failed else
+                         mode & 0o700 == 0o700 and mode & ~0o755 == 0),
+                    "Prepared recovery requires owned real directories with original modes.")
+        require(not any(self.release.iterdir()), "Prepared recovery requires an empty candidate directory.")
+        expected_files = {name + ".before" for name in self.before} | {
+            "pointers.before.json", "modes.before.json", "provenance.json", "result.json"}
+        require({path.name for path in failed.iterdir()} == expected_files,
+                "Prepared recovery evidence contains missing or unexpected entries.")
+        run_id, attempt = self.recover_prepared.split("-")
+        require(strict_json(self.file(failed / "result.json", private=True)) == {
+            "version": 1, "phase": "prepared", "runId": run_id, "attempt": attempt,
+            "source": self.source, "previous": self.expected,
+            "archiveSha256": self.archive_digest, "provenanceSha256": self.provenance_digest,
+            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": False},
+            "Prepared recovery evidence does not match this exact failed transaction.")
+        for name, raw in self.before.items():
+            require(self.file(failed / (name + ".before"), private=True) == raw,
+                    "Prepared recovery snapshot differs from live inputs.")
+        require(strict_json(self.file(failed / "pointers.before.json", private=True)) == self.links
+                and strict_json(self.file(failed / "modes.before.json", private=True)) == self.modes
+                and self.file(failed / "provenance.json", private=True) == self.file(self.provenance),
+                "Prepared recovery pointers, modes or provenance do not match.")
+        self.preserved()
+        for name, path in (("config", self.config), ("journal", self.journal), ("override", self.override)):
+            require(self.file(path, private=(name != "override")) == self.before[name],
+                    "Live input drifted during prepared recovery.")
+        require(all(os.readlink(self.home / name) == target for name, target in self.links.items()),
+                "Live pointers drifted during prepared recovery.")
+        return failed
+
+    def quarantine_prepared(self):
+        # Validate the replacement archive before preserving the empty failed
+        # candidate. Never delete/overwrite old evidence or a populated release.
+        with tarfile.open(self.archive, "r:gz") as archive:
+            self.archive_members(archive)
+        failed = self.check_prepared_recovery()
+        print(json.dumps({"preparedRecovery": self.recover_prepared, "phase": "prepared",
+                          "emptyCandidateConfirmed": True, "originalStateHashesMatch": True}, sort_keys=True))
+        self.release.rename(failed / "empty-release.quarantined")
+        for directory in (self.releases, failed):
+            fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
 
     def retention_safe(self):
         require(all(target.is_dir() and not target.is_symlink()
@@ -519,21 +580,41 @@ class Deployment:
                     for target in self.rollback_releases),
                 "Rollback release is outside the safe retention grace; inspect before releasing.")
 
+    def archive_members(self, archive):
+        """Validate the whole archive before creating any extraction directory."""
+        members = archive.getmembers()
+        seen = {}
+        for item in members:
+            name = PurePosixPath(item.name)
+            require(not name.is_absolute() and ".." not in name.parts,
+                    "Archive path escapes release.")
+            require(str(name) not in seen and (str(name) != "." or item.isdir()),
+                    "Archive has a duplicate or invalid root member.")
+            require(item.isfile() or item.isdir() or item.issym() or item.islnk(),
+                    "Unsafe archive member.")
+            if item.islnk():
+                target = PurePosixPath(item.linkname)
+                require(not target.is_absolute() and ".." not in target.parts
+                        and str(target) in seen and seen[str(target)].isfile()
+                        and str(target) != "release.json" and item.size == 0,
+                        "Archive hardlink must reference an earlier internal regular file.")
+            # Preserve data_filter both here and at extraction time. GNU tar
+            # deduplicates esbuild as a hardlink to its earlier packaged binary.
+            tarfile.data_filter(item, str(self.release))
+            seen[str(name)] = item
+        for name in seen:
+            require(all(str(parent) not in seen or seen[str(parent)].isdir()
+                        for parent in PurePosixPath(name).parents),
+                    "Archive member has a non-directory parent.")
+        return members
+
     def unpack(self):
         with tarfile.open(self.archive, "r:gz") as archive:
-            members = archive.getmembers()
+            members = self.archive_members(archive)
             needed = sum(item.size for item in members if item.isfile())
             require(shutil.disk_usage(self.releases).free > needed + 512 * 1024 * 1024,
                     "Insufficient free space for safe release extraction.")
             self.release.mkdir(mode=0o755)
-            for item in members:
-                name = PurePosixPath(item.name)
-                require(not name.is_absolute() and ".." not in name.parts,
-                        "Archive path escapes release.")
-                require(item.isfile() or item.isdir() or item.issym(), "Unsafe archive member.")
-                # data_filter checks symlink targets and rejects paths outside the
-                # extraction root; apply before extraction as well as during it.
-                tarfile.data_filter(item, str(self.release))
             archive.extractall(self.release, filter="data")
         self.manifest(self.release, self.source)
         require((self.release / "bin/node").is_file() and not (self.release / "bin/node").is_symlink()
@@ -554,6 +635,8 @@ class Deployment:
 
     def transact(self):
         self.preflight()
+        if self.recover_prepared:
+            self.quarantine_prepared()
         self.snapshot.mkdir(mode=0o700)
         for name, raw in self.before.items():
             atomic_write(self.snapshot / (name + ".before"), raw)
@@ -663,6 +746,8 @@ def main():
     for name in ("source", "expected", "run-id", "attempt", "archive", "provenance", "archive-digest", "provenance-digest"):
         apply.add_argument("--" + name, required=True)
     apply.add_argument("--enable-crypto", choices=("true", "false"), default="false")
+    apply.add_argument("--recover-prepared", default="",
+                       help="Exact failed run-attempt identity; only a proven prepared empty release is quarantined.")
     args = parser.parse_args()
     try:
         if args.command == "verify-ci":

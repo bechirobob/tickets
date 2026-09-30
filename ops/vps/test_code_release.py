@@ -205,7 +205,13 @@ class DeploymentTests(unittest.TestCase):
                 member.mode = 0o755 if name == "bin/node" else 0o644
                 archive.addfile(member, io.BytesIO(data))
             if extra:
-                archive.addfile(extra)
+                for item in extra if isinstance(extra, list) else [extra]:
+                    if isinstance(item, tuple):
+                        member, data = item
+                        member.size = len(data)
+                        archive.addfile(member, io.BytesIO(data))
+                    else:
+                        archive.addfile(item)
 
     def new_deployment(self, **kwargs):
         values = dict(source=NEW, expected=OLD, run_id="123", attempt="1", archive=self.archive,
@@ -218,6 +224,21 @@ class DeploymentTests(unittest.TestCase):
         self.proof["archiveSha256"] = release.digest_file(self.archive)
         release.write_json(self.provenance, self.proof)
         self.deployment = self.new_deployment()
+
+    def prepared_failure(self):
+        """Reproduce the old operator's prepared snapshot and empty directory."""
+        failed = self.deployment
+        failed.preflight()
+        failed.snapshot.mkdir(mode=0o700)
+        for name, raw in failed.before.items():
+            release.atomic_write(failed.snapshot / (name + ".before"), raw)
+        release.write_json(failed.snapshot / "pointers.before.json", failed.links)
+        release.write_json(failed.snapshot / "modes.before.json", failed.modes)
+        release.atomic_write(failed.snapshot / "provenance.json", failed.provenance.read_bytes())
+        failed.evidence("prepared")
+        failed.release.mkdir(mode=0o755)
+        self.deployment = self.new_deployment(run_id="456", recover_prepared=failed.identity)
+        return failed
 
     def assert_restored(self):
         d = self.deployment
@@ -408,6 +429,155 @@ class DeploymentTests(unittest.TestCase):
                 self.deployment.preflight()
             target.rmdir()
 
+    def test_prepared_recovery_quarantines_only_the_proven_empty_directory(self):
+        failed = self.prepared_failure()
+        before = {path.name: path.read_bytes() for path in failed.snapshot.iterdir()}
+        inode = failed.release.stat().st_ino
+        with patch("builtins.print") as output:
+            result = self.deployment.transact()
+        self.assertEqual(result["released"], NEW)
+        quarantine = failed.snapshot / "empty-release.quarantined"
+        self.assertEqual(quarantine.stat().st_ino, inode)
+        self.assertEqual(list(quarantine.iterdir()), [])
+        self.assertEqual({path.name: path.read_bytes() for path in failed.snapshot.iterdir()
+                          if path.is_file()}, before)
+        self.assertEqual(json.loads((failed.snapshot / "result.json").read_text())["phase"], "prepared")
+        self.assertEqual(json.loads((self.deployment.snapshot / "result.json").read_text())["phase"], "verified")
+        output.assert_called_once()
+        self.assertEqual(json.loads(output.call_args.args[0]), {
+            "preparedRecovery": failed.identity, "phase": "prepared",
+            "emptyCandidateConfirmed": True, "originalStateHashesMatch": True})
+        self.assertNotIn("secret", output.call_args.args[0])
+        self.assertEqual(self.system.restarts, 1)
+
+    def test_prepared_recovery_accepts_the_original_directory_under_restrictive_umask(self):
+        failed = self.prepared_failure()
+        for mode in (0o700, 0o750, 0o755):
+            with self.subTest(mode=mode):
+                failed.release.chmod(mode)
+                self.deployment.preflight()
+        for mode in (0o775, 0o777, 0o4755, 0o655):
+            with self.subTest(mode=mode):
+                failed.release.chmod(mode)
+                with self.assertRaisesRegex(release.ReleaseError, "original modes"):
+                    self.deployment.preflight()
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_prepared_recovery_requires_exact_failed_identity_phase_and_hashes(self):
+        failed = self.prepared_failure()
+        record = json.loads((failed.snapshot / "result.json").read_text())
+        for field, value in (("phase", "activating"), ("phase", "rolled-back"), ("phase", "verified"),
+                             ("runId", "999"), ("attempt", "2"), ("source", OLD), ("previous", ORIGINAL),
+                             ("archiveSha256", "b" * 64), ("provenanceSha256", "c" * 64),
+                             ("cryptoEnabledRequested", True), ("dataMigration", True), ("extra", "field")):
+            with self.subTest(field=field, value=value):
+                release.write_json(failed.snapshot / "result.json", dict(record, **{field: value}))
+                with self.assertRaisesRegex(release.ReleaseError, "exact failed transaction"):
+                    self.deployment.transact()
+                self.assertTrue(failed.release.is_dir())
+                self.assertFalse((failed.snapshot / "empty-release.quarantined").exists())
+                self.assertFalse(self.deployment.snapshot.exists())
+                self.assertEqual(self.system.restarts, 0)
+                self.assert_restored()
+
+    def test_prepared_recovery_requires_exact_snapshot_bytes_pointers_modes_and_provenance(self):
+        failed = self.prepared_failure()
+        for name in ("config.before", "journal.before", "handoff.before", "override.before", "bridge.before",
+                     "pointers.before.json", "modes.before.json", "provenance.json"):
+            with self.subTest(name=name):
+                path = failed.snapshot / name
+                before = path.read_bytes()
+                release.atomic_write(path, b"{}\n")
+                with self.assertRaises(release.ReleaseError):
+                    self.deployment.transact()
+                release.atomic_write(path, before)
+                self.assertFalse((failed.snapshot / "empty-release.quarantined").exists())
+                self.assertFalse(self.deployment.snapshot.exists())
+                self.assertEqual(self.system.restarts, 0)
+                self.assert_restored()
+
+    def test_prepared_recovery_rejects_live_drift_and_populated_candidate(self):
+        failed = self.prepared_failure()
+        release.atomic_write(self.deployment.config, self.config_before + b"\n")
+        with self.assertRaisesRegex(release.ReleaseError, "snapshot differs"):
+            self.deployment.transact()
+        release.atomic_write(self.deployment.config, self.config_before)
+        (failed.release / "unrelated").write_text("retain this data")
+        with self.assertRaisesRegex(release.ReleaseError, "empty candidate"):
+            self.deployment.transact()
+        self.assertEqual((failed.release / "unrelated").read_text(), "retain this data")
+        self.assertFalse((failed.snapshot / "empty-release.quarantined").exists())
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.system.restarts, 0)
+        self.assert_restored()
+
+    def test_prepared_recovery_rechecks_live_state_immediately_before_quarantine(self):
+        failed = self.prepared_failure()
+        self.deployment.preflight()
+        release.atomic_write(self.deployment.config, self.config_before + b"\n")
+        with self.assertRaisesRegex(release.ReleaseError, "Live input drifted"):
+            self.deployment.quarantine_prepared()
+        self.assertTrue(failed.release.is_dir())
+        self.assertFalse((failed.snapshot / "empty-release.quarantined").exists())
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_prepared_recovery_never_overwrites_or_accepts_incomplete_evidence(self):
+        failed = self.prepared_failure()
+        quarantine = failed.snapshot / "empty-release.quarantined"
+        quarantine.mkdir()
+        (quarantine / "preserve").write_text("old quarantine")
+        with self.assertRaisesRegex(release.ReleaseError, "unexpected entries"):
+            self.deployment.transact()
+        self.assertEqual((quarantine / "preserve").read_text(), "old quarantine")
+        (quarantine / "preserve").unlink()
+        quarantine.rmdir()
+        (failed.snapshot / "bridge.before").unlink()
+        with self.assertRaisesRegex(release.ReleaseError, "missing or unexpected"):
+            self.deployment.transact()
+        self.assertTrue(failed.release.is_dir())
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_prepared_recovery_rejects_linked_directories_and_unowned_evidence(self):
+        failed = self.prepared_failure()
+        failed.release.rmdir()
+        failed.release.symlink_to(failed.old_release)
+        with self.assertRaisesRegex(release.ReleaseError, "owned real directories"):
+            self.deployment.transact()
+        failed.release.unlink()
+        failed.release.mkdir()
+        metadata = failed.snapshot.lstat()
+        with patch.object(Path, "lstat", autospec=True, side_effect=lambda path: (
+                os.stat_result(tuple([metadata.st_mode, metadata.st_ino, metadata.st_dev, metadata.st_nlink,
+                                      os.geteuid() + 1, metadata.st_gid, metadata.st_size,
+                                      metadata.st_atime, metadata.st_mtime, metadata.st_ctime]))
+                if path == failed.snapshot else os.lstat(path))):
+            with self.assertRaisesRegex(release.ReleaseError, "owned real directories"):
+                self.deployment.transact()
+        self.assertFalse((failed.snapshot / "empty-release.quarantined").exists())
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_prepared_recovery_rejects_unsafe_archive_before_quarantine(self):
+        unsafe = tarfile.TarInfo("unsafe")
+        unsafe.type = tarfile.FIFOTYPE
+        self.make_archive(extra=unsafe)
+        self.refresh_digests()
+        failed = self.prepared_failure()
+        with self.assertRaisesRegex(release.ReleaseError, "Unsafe archive member"):
+            self.deployment.transact()
+        self.assertTrue(failed.release.is_dir())
+        self.assertFalse((failed.snapshot / "empty-release.quarantined").exists())
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_prepared_recovery_identity_is_explicit_and_bounded(self):
+        self.assertIsNone(self.new_deployment(recover_prepared="").recover_prepared)
+        for identity in ("123-1", "../123-1", "123-1/child", "123", "0-1", "123-0", "123-1\n"):
+            with self.subTest(identity=identity):
+                with self.assertRaisesRegex(release.ReleaseError, "recovery identity"):
+                    self.new_deployment(recover_prepared=identity)
+
     def test_digest_tampering_rejected(self):
         self.archive.write_bytes(self.archive.read_bytes() + b"tampered")
         with self.assertRaisesRegex(release.ReleaseError, "digest"):
@@ -429,6 +599,7 @@ class DeploymentTests(unittest.TestCase):
             self.deployment.transact()
         self.assert_restored()
         self.assertEqual(self.system.restarts, 0)
+        self.assertFalse(self.deployment.release.exists())
 
     def test_archive_escaping_symlink_rejected(self):
         member = tarfile.TarInfo("escape")
@@ -439,6 +610,87 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaises(tarfile.FilterError):
             self.deployment.transact()
         self.assert_restored()
+        self.assertFalse(self.deployment.release.exists())
+
+    def test_archive_gnu_tar_esbuild_hardlink_to_earlier_regular_file_permitted(self):
+        target = tarfile.TarInfo("./node_modules/@esbuild/linux-x64/bin/esbuild")
+        target.mode = 0o755
+        link = tarfile.TarInfo("./node_modules/esbuild/bin/esbuild")
+        link.type = tarfile.LNKTYPE
+        link.linkname = target.name
+        link.mode = 0o755
+        alias = tarfile.TarInfo("./node_modules/.bin/esbuild")
+        alias.type = tarfile.SYMTYPE
+        alias.linkname = "../esbuild/bin/esbuild"
+        self.make_archive(extra=[(target, b"packaged esbuild binary\n"), link, alias])
+        self.refresh_digests()
+        self.deployment.transact()
+        binary = self.deployment.release / link.name
+        self.assertEqual(binary.read_bytes(), b"packaged esbuild binary\n")
+        self.assertEqual(binary.stat().st_ino, (self.deployment.release / target.name).stat().st_ino)
+        self.assertEqual(binary.stat().st_nlink, 2)
+        self.assertEqual((self.deployment.release / alias.name).read_bytes(), binary.read_bytes())
+
+    def test_archive_unsafe_hardlinks_fail_before_creating_release(self):
+        directory = tarfile.TarInfo("directory")
+        directory.type = tarfile.DIRTYPE
+        symlink = tarfile.TarInfo("node-symlink")
+        symlink.type = tarfile.SYMTYPE
+        symlink.linkname = "bin/node"
+        for target in ("/bin/node", "../../outside", "bin/../bin/node", "missing", "future",
+                       "alias", "directory", "node-symlink", "release.json"):
+            with self.subTest(target=target):
+                link = tarfile.TarInfo("alias")
+                link.type = tarfile.LNKTYPE
+                link.linkname = target
+                self.make_archive(extra=[directory, symlink, link, (tarfile.TarInfo("future"), b"later")])
+                with self.assertRaisesRegex(release.ReleaseError, "hardlink"):
+                    self.deployment.unpack()
+                self.assertFalse(self.deployment.release.exists())
+                self.assertEqual(self.system.commands, [])
+
+    def test_archive_hardlink_chains_cycles_and_nonzero_payload_rejected(self):
+        first = tarfile.TarInfo("first")
+        first.type = tarfile.LNKTYPE
+        second = tarfile.TarInfo("second")
+        second.type = tarfile.LNKTYPE
+        second.linkname = "first"
+        for target in ("bin/node", "second"):
+            with self.subTest(target=target):
+                first.linkname = target
+                self.make_archive(extra=[first, second])
+                with self.assertRaisesRegex(release.ReleaseError, "hardlink"):
+                    self.deployment.unpack()
+                self.assertFalse(self.deployment.release.exists())
+        first.linkname = "bin/node"
+        first.size = 1
+        self.make_archive(extra=[first])
+        with self.assertRaisesRegex(release.ReleaseError, "hardlink"):
+            self.deployment.unpack()
+        self.assertFalse(self.deployment.release.exists())
+
+    def test_archive_special_members_and_duplicate_paths_rejected_before_mkdir(self):
+        for kind in (tarfile.CHRTYPE, tarfile.BLKTYPE, tarfile.FIFOTYPE, b"s"):
+            with self.subTest(kind=kind):
+                member = tarfile.TarInfo("unsafe")
+                member.type = kind
+                self.make_archive(extra=member)
+                with self.assertRaisesRegex(release.ReleaseError, "Unsafe archive"):
+                    self.deployment.unpack()
+                self.assertFalse(self.deployment.release.exists())
+        self.make_archive(extra=tarfile.TarInfo("./bin/node"))
+        with self.assertRaisesRegex(release.ReleaseError, "duplicate"):
+            self.deployment.unpack()
+        self.assertFalse(self.deployment.release.exists())
+
+    def test_archive_member_cannot_traverse_a_link_parent(self):
+        parent = tarfile.TarInfo("alias")
+        parent.type = tarfile.SYMTYPE
+        parent.linkname = "bin"
+        self.make_archive(extra=[parent, (tarfile.TarInfo("alias/child"), b"unsafe")])
+        with self.assertRaisesRegex(release.ReleaseError, "non-directory parent"):
+            self.deployment.unpack()
+        self.assertFalse(self.deployment.release.exists())
 
     def test_archive_internal_node_module_symlink_permitted(self):
         member = tarfile.TarInfo("node-alias")

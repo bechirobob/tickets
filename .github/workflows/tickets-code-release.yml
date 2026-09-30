@@ -20,6 +20,11 @@ on:
         description: Exact SHA currently serving active VPS traffic
         required: true
         type: string
+      recover_prepared:
+        description: Optional exact failed run-attempt whose prepared empty candidate must be quarantined after byte-for-byte state checks
+        required: false
+        default: ''
+        type: string
       enable_crypto:
         description: Enable requested USDC checkout after owner-confirmed merchant wallet setup (no payment test)
         required: false
@@ -46,6 +51,7 @@ jobs:
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
       RUNTIME_RUN: ${{ inputs.runtime_run }}
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
+      RECOVER_PREPARED: ${{ inputs.recover_prepared }}
       ENABLE_CRYPTO: ${{ inputs.enable_crypto && 'true' || 'false' }}
     steps:
       - name: Require main and exact bounded release inputs
@@ -55,6 +61,7 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ -z "$RECOVER_PREPARED" || "$RECOVER_PREPARED" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -131,7 +138,7 @@ jobs:
           tailscale ssh root@hermes "umask 077; cat > '$stage/runtime.tar.gz'" < "$metadata/artifact/tickets-vps-runtime.tar.gz"
           tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
           tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py"
-          tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO'"
+          tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --recover-prepared '$RECOVER_PREPARED'"
           # Only this successful run's three staged files are removed. Private
           # rollback snapshots and prior releases remain untouched on the host.
           tailscale ssh root@hermes "rm -- '$stage/runtime.tar.gz' '$stage/provenance.json' '$stage/code-release.py' && rmdir -- '$stage'"
