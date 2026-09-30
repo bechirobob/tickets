@@ -1,0 +1,60 @@
+name: Prepare Next.js security lockfile
+
+on:
+  push:
+    branches: [ops/next-security-lock-20260930]
+    paths: [.github/workflows/next-security-lock.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: 25b9a30c2afd1913fea8e63ae6c2c35b38e80533
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Generate the minimal patched dependency lock
+        run: |
+          npm install --package-lock-only --ignore-scripts --save-exact --no-fund next@16.3.6
+          npm install --package-lock-only --ignore-scripts --save-dev --save-exact --no-fund eslint-config-next@16.3.6
+          git diff --check
+          git diff --stat -- package.json package-lock.json
+      - name: Export generated dependency sources
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          const oldLock = JSON.parse(execFileSync('git', ['show', 'HEAD:package-lock.json'], { encoding: 'utf8' }));
+          const newLock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          const changes = [];
+          for (const path of new Set([...Object.keys(oldLock.packages), ...Object.keys(newLock.packages)])) {
+            const before = oldLock.packages[path];
+            const after = newLock.packages[path];
+            if (JSON.stringify(before) !== JSON.stringify(after)) changes.push({ path, from: before?.version ?? null, to: after?.version ?? null, added: !before, removed: !after });
+          }
+          console.log('TICKETS_NPM_CHANGES|' + JSON.stringify(changes));
+          console.log('TICKETS_NPM_SOURCES_BEGIN');
+          for (const path of ['package.json', 'package-lock.json']) {
+            const source = readFileSync(path, 'utf8');
+            const bytes = Buffer.byteLength(source);
+            const blob = createHash('sha1').update('blob ' + bytes + '\0').update(source).digest('hex');
+            console.log('TICKETS_NPM_FILE|' + path + '|' + bytes + '|' + blob);
+            for (let offset = 0; offset < source.length; offset += 8192) {
+              console.log('TICKETS_NPM_CHUNK|' + path + '|' + offset + '|' + JSON.stringify(source.slice(offset, offset + 8192)));
+            }
+          }
+          console.log('TICKETS_NPM_SOURCES_END');
+          NODE
+      - name: Audit all dependencies
+        run: npm audit --audit-level=moderate
+      - name: Audit production dependencies
+        if: ${{ !cancelled() }}
+        run: npm audit --omit=dev --audit-level=moderate
