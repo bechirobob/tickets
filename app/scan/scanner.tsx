@@ -81,7 +81,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
   const openReviews = reviews.filter(item => item.eventSlug === eventSlug && !item.reviewedAt);
   const connected = connection.event === eventSlug ? connection : { reachable: false, lastContact: 0, lastSync: 0 };
   const connectionState = gateConnectionState({ online, ...connected, now: clock, pending, reviews: openReviews.length, syncing });
-  const connectionLabel = { offline: 'Offline', review: 'Needs supervisor review', syncing: 'Synchronizing entries…', disconnected: 'Connection not confirmed', pending: 'Entries waiting to sync', connected: 'Doors synchronized' }[connectionState];
+  const connectionLabel = { offline: 'Offline', review: 'Needs supervisor review', syncing: 'Synchronizing entries…', disconnected: 'Connection not confirmed', pending: 'Entries waiting to sync', connected: 'Connected' }[connectionState];
 
   const saveQueue = useCallback((next: QueuedScan[]) => {
     window.localStorage.setItem(QUEUE_KEY, JSON.stringify(next));

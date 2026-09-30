@@ -55,8 +55,12 @@ for (const [path, heading] of [
     expect(errors).toEqual([]); expect(apiErrors).toEqual([]);
     if((page.viewportSize()?.width??1280)<=760){const gap=await page.evaluate(()=>{const nav=document.querySelector('.workspace-topbar')!.getBoundingClientRect();const content=document.querySelector('.ops-main,.curation-main,.room-ops > section,.host-applications')!.getBoundingClientRect();return content.top-nav.bottom;});expect(gap,`${path} space below mobile navigation`).toBeLessThan(40);}
 
+    // Expand content before opening the mobile navigation overlay; do not click
+    // through an open menu. Both expanded content and navigation retain coverage.
+    for(const summary of await page.locator('details:not([open]):not(.workspace-tools) > summary').all()){if(await summary.isVisible())await summary.click();}
+    const expandedContentAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedContentAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     await openWorkspaceMenu(page);
-    for(const summary of await page.locator('details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
+    for(const summary of await page.locator('.workspace-sidebar details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     // Inspect the final cascade: generic Operations controls previously restored
@@ -70,6 +74,23 @@ for (const [path, heading] of [
     await page.screenshot({ path: info.outputPath(`${path.replaceAll('/','-') || 'admin'}.png`), fullPage: true, scale: 'css' });
   });
 }
+test('mobile workspace navigation closes when keyboard focus leaves and restores focus on Escape', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) > 760, 'The persistent desktop sidebar does not overlay content.');
+  await page.goto('/admin/help');
+  const toggle = page.getByRole('button', { name: 'Toggle workspace navigation', exact: true });
+  const close = page.getByRole('button', { name: 'Close workspace navigation', exact: true });
+  await toggle.focus(); await toggle.press('Enter');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeFocused();
+  await expect(page).toHaveURL(/\/admin\/help$/);
+  await toggle.focus(); await toggle.press('Enter');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+});
 test('event save survives a dropped connection and retains the draft', async ({ page }) => {
   await page.goto('/admin/events?event=after-dark-osu');
   const title = page.getByLabel('Title', { exact: true }); await expect(title).toBeVisible();
@@ -317,7 +338,7 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   const submitted=page.waitForResponse(r=>r.url().endsWith('/api/registrations')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'Send RSVP'}).click();expect((await submitted).status()).toBe(202);
   await expect(page.getByRole('status')).toContainText('RSVP received.');
-  await expect(page.getByRole('status')).toContainText('Now we wait for the host’s nod.');
+  await expect(page.getByRole('status')).toContainText('Your request is not a confirmed spot.');
   await expect(page.getByRole('button',{name:/confirmation link/i})).toHaveCount(0);
   await page.screenshot({path:info.outputPath('guest-rsvp-success.png'),fullPage:true});
   await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeVisible();
@@ -727,12 +748,12 @@ test('host attention opens pending RSVP decisions directly and survives back nav
  await page.getByRole('button',{name:/3 RSVP requests need your nod/}).click();
  const manager=page.locator('.registration-manager:visible');
  await expect(manager.getByRole('heading',{name:'Guest list',exact:true})).toBeVisible();
- await expect(manager.getByLabel('Status',{exact:true})).toHaveValue('requested');
+ await expect(manager.getByRole('combobox',{name:'Status',exact:true})).toHaveValue('requested');
  expect(new URL(page.url()).searchParams.get('event')).toBe('rsvp-browser');expect(new URL(page.url()).searchParams.get('status')).toBe('requested');
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Details',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Venue & line-up'})).toBeVisible();
- await page.goBack();await expect(manager.getByRole('heading',{name:'Guest list',exact:true})).toBeVisible();await expect(manager.getByLabel('Status',{exact:true})).toHaveValue('requested');
- await page.reload();await expect(manager.getByLabel('Status',{exact:true})).toHaveValue('requested');
+ await page.goBack();await expect(manager.getByRole('heading',{name:'Guest list',exact:true})).toBeVisible();await expect(manager.getByRole('combobox',{name:'Status',exact:true})).toHaveValue('requested');
+ await page.reload();await expect(manager.getByRole('combobox',{name:'Status',exact:true})).toHaveValue('requested');
 });
 
 test('scanner preserves mixed offline conflicts and never claims network availability is synchronized',async({page})=>{
@@ -747,17 +768,17 @@ test('scanner preserves mixed offline conflicts and never claims network availab
   if(body.action==='heartbeat')return route.fulfill({json:{online:true}});
   return body.clientScanId==='duplicate'?route.fulfill({status:409,json:{result:'duplicate',error:'Already admitted at another door',ticket:{ticketId:'duplicate',attendeeName:'Offline duplicate',ticketType:'general'}}}):route.fulfill({json:{result:'valid'}});
  });
- await page.goto('/scan?event=rsvp-browser');await expect(page.getByLabel('Event',{exact:true})).toHaveValue('rsvp-browser');
+ await page.goto('/scan?event=rsvp-browser');await expect(page.getByRole('combobox',{name:'Event',exact:true})).toHaveValue('rsvp-browser');
  await expect(page.locator('.scanner-header')).toContainText('Needs supervisor review');
  await expect(page.getByRole('region',{name:'Offline entries needing review'})).toContainText('Offline duplicate');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('bct:gate-queue:v1')??'[]'))).toHaveLength(0);
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('bct:gate-review:v1')??'[]'))).toHaveLength(1);
  await page.reload();await expect(page.locator('.scanner-header')).toContainText('Needs supervisor review');
- await page.getByRole('button',{name:'Mark reviewed',exact:true}).click();await expect(page.locator('.scanner-header')).toContainText('Doors synchronized');
+ await page.getByRole('button',{name:'Mark reviewed',exact:true}).click();await expect(page.locator('.scanner-header')).toContainText('Connected');
  await page.route('**/api/admin/check-in**',route=>route.abort('failed'));
  await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.scanner-header')).toContainText('Connection not confirmed');
  expect(await page.evaluate(()=>navigator.onLine)).toBe(true);
- await expect(page.locator('.scanner-header')).not.toContainText('Doors synchronized');
+ await expect(page.locator('.scanner-header')).not.toContainText('Connected');
 });
 
 test('team invitations show delivery recovery and return acceptance to the assigned event',async({page,context,baseURL})=>{
@@ -816,7 +837,7 @@ test('provider records keep event scope and survive an uncertain save without cl
   expect(accessibility.violations).toEqual([]);
   await page.screenshot({ path: info.outputPath('provider-case-form.png'), fullPage: true });
   await form.getByRole('button', { name: 'Save provider record', exact: true }).click();
-  await expect(form.getByRole('alert')).toContainText('result could not be confirmed');
+  await expect(form.getByRole('alert')).toContainText('Your last action may have completed. Refresh to check before trying again.');
   await expect(form.getByLabel('Provider case or receipt reference')).toHaveValue('SUPPORT-123');
   await form.getByRole('button', { name: 'Save provider record', exact: true }).click();
   await expect(form).toHaveCount(0);

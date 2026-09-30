@@ -29,8 +29,9 @@ export default function WorkspaceChrome({ actor, role, active, host = false, eve
     if (!open) return;
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); closeMenu(); } };
     const outside = (event: PointerEvent) => { if (event.target instanceof Node && !menuPanel.current?.contains(event.target) && !menuTrigger.current?.contains(event.target)) setOpen(false); };
-    document.addEventListener("keydown", key); document.addEventListener("pointerdown", outside);
-    return () => { document.removeEventListener("keydown", key); document.removeEventListener("pointerdown", outside); };
+    const focus = (event: FocusEvent) => { if (event.target instanceof Node && !menuPanel.current?.contains(event.target) && !menuTrigger.current?.contains(event.target)) setOpen(false); };
+    document.addEventListener("keydown", key); document.addEventListener("pointerdown", outside); document.addEventListener("focusin", focus);
+    return () => { document.removeEventListener("keydown", key); document.removeEventListener("pointerdown", outside); document.removeEventListener("focusin", focus); };
   }, [closeMenu, open]);
   const pathname = usePathname(), params = useSearchParams(), router = useRouter();
   const hostHref = (area: string) => `/organizer/workspace?area=${area}${event ? `&event=${encodeURIComponent(event)}` : ""}`;

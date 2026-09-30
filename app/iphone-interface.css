@@ -126,7 +126,8 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
 @media (max-width: 760px) {
   html { scroll-padding-top: calc(72px + env(safe-area-inset-top)); }
   .night-header, .sub-header { padding-top:env(safe-area-inset-top); min-height:calc(60px + env(safe-area-inset-top)); }
-  .night-mobile-menu__panel, .notification-panel--dropdown { max-height:calc(var(--app-viewport-height) - 90px - env(safe-area-inset-top)); overscroll-behavior:contain; }
+  .night-mobile-menu__panel { max-height:calc(var(--app-viewport-height) - 90px - env(safe-area-inset-top)); overscroll-behavior:contain; }
+  .notification-panel--dropdown { max-height:min(460px, calc(var(--app-viewport-height) - var(--notification-top) - 20px - env(safe-area-inset-bottom))); overscroll-behavior:contain; }
   .night-mobile-menu__panel { overflow:auto; }
   .room-overlay--sheet { max-height:var(--app-viewport-height); overscroll-behavior:contain; }
   .room-sheet { max-height:calc(var(--app-viewport-height) - 12px); padding-bottom:max(24px, env(safe-area-inset-bottom)); overflow:auto; }
