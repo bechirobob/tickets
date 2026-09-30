@@ -1,15 +1,20 @@
-name: Verify cleaned Tickets booking state and public health
+name: Read-only Tickets VPS storage audit
 on:
   push:
     branches: [main]
     paths: ['.github/workflows/tickets-vps-diagnostics.yml']
+  workflow_dispatch:
 permissions:
   contents: read
   id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
 jobs:
   inspect:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
@@ -17,27 +22,237 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Verify empty booking state, remove orphan confirmation receipt and check live routes
+      - name: Inventory storage and Tickets staging without changes
         run: |
-          tailscale ssh root@hermes "python3 -" <<'PY'
-          import sqlite3,json,datetime,uuid,urllib.request,urllib.error,os,subprocess
-          db=sqlite3.connect('/var/lib/becore-tickets/tickets.sqlite',timeout=20)
-          with db:
-              # Legacy confirmation receipts can outlive their deleted order; they carry no useful live task.
-              count=db.execute('DELETE FROM confirmation_deliveries WHERE NOT EXISTS (SELECT 1 FROM orders WHERE orders.id=confirmation_deliveries.order_id)').rowcount
-              db.execute("INSERT INTO operational_audit_events(id,actor_role,action,target_type,outcome,detail,created_at) VALUES(?,?,?,?,?,?,?)",(str(uuid.uuid4()),'system','booking_cleanup_orphan_check','booking_history','success',json.dumps({'removedOrphanConfirmations':count,'cleanupRun':'36599462727'}),datetime.datetime.now(datetime.timezone.utc).isoformat()))
-          report={'remaining':{t:db.execute('SELECT COUNT(*) FROM '+t).fetchone()[0] for t in ['orders','tickets','event_registrations','confirmation_deliveries']},'removedOrphanConfirmations':count,'databaseQuickCheck':db.execute('PRAGMA quick_check').fetchone()[0],'foreignKeyViolations':len(db.execute('PRAGMA foreign_key_check').fetchall()),'publicChecks':[]}
-          for path in ['/healthz','/','/events','/my-nights','/scan','/api/public/events']:
-              req=urllib.request.Request('https://tickets.becoreops.com'+path,headers={'User-Agent':'Mozilla/5.0 BeCoreCleanupVerification'})
-              with urllib.request.urlopen(req,timeout=20) as response:
-                  body=response.read();assert response.status==200
-                  item={'path':path,'status':response.status}
-                  if path=='/healthz':
-                      h=json.loads(body);assert h['active'] and h['revision']=='181bfc6801a4fc4c993dc0220af99bb3509e433d'
-                  report['publicChecks'].append(item)
-          report['previewState']=subprocess.check_output(['systemctl','show','becore-tickets-preview.service','--property=ActiveState','--property=UnitFileState'],text=True).strip()
-          report['liveState']=subprocess.check_output(['systemctl','show','becore-tickets.service','--property=ActiveState','--property=MemoryCurrent','--property=NRestarts'],text=True).strip()
-          fs=os.statvfs('/');report['diskAvailableBytes']=fs.f_bavail*fs.f_frsize
-          print(json.dumps(report))
+          tailscale ssh root@hermes 'python3 -' <<'PY'
+          """Read-only Hermes storage inventory. Never opens application databases or secrets."""
+          import datetime
+          import glob
+          import json
+          import os
+          import pathlib
+          import pwd
+          import re
+          import stat
+          import subprocess
+          import urllib.request
+          import urllib.error
           
+          
+          def run(args, timeout=30):
+              try:
+                  p = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+                  return {"returncode": p.returncode, "stdout": p.stdout.strip(), "stderr": p.stderr.strip()[:300]}
+              except (OSError, subprocess.TimeoutExpired) as error:
+                  return {"error": type(error).__name__}
+          
+          
+          def utc(value):
+              return datetime.datetime.fromtimestamp(value, datetime.timezone.utc).isoformat()
+          
+          
+          MOUNTPOINTS = []
+          for line in pathlib.Path("/proc/self/mountinfo").read_text().splitlines():
+              MOUNTPOINTS.append(line.split()[4].replace("\\040", " "))
+          
+          
+          def metadata(path):
+              try:
+                  return inspect_metadata(path)
+              except OSError as error:
+                  return {"path": str(path), "error": type(error).__name__}
+          
+          
+          def inspect_metadata(path):
+              p = pathlib.Path(path)
+              s = p.lstat()
+              result = {"path": str(p), "mode": oct(stat.S_IMODE(s.st_mode)), "uid": s.st_uid,
+                        "owner": str(s.st_uid), "modified": utc(s.st_mtime),
+                        "inode": s.st_ino, "device": s.st_dev, "links": s.st_nlink,
+                        "type": "symlink" if p.is_symlink() else "directory" if p.is_dir() else "file"}
+              try:
+                  result["owner"] = pwd.getpwuid(s.st_uid).pw_name
+              except KeyError:
+                  pass
+              if p.is_symlink():
+                  result["target"] = os.readlink(p)
+                  return result
+              result["allocatedBytes"] = s.st_blocks * 512
+              result["apparentBytes"] = s.st_size
+              result["latestModification"] = utc(s.st_mtime)
+              if p.is_dir():
+                  latest = s.st_mtime
+                  count, symlinks, linked_files, errors, different_device = 0, 0, 0, 0, 0
+                  walk_errors = []
+                  for root, dirs, files in os.walk(p, followlinks=False, onerror=lambda error: walk_errors.append(type(error).__name__)):
+                      for name in list(dirs):
+                          if str(pathlib.Path(root) / name) in MOUNTPOINTS:
+                              dirs.remove(name)
+                              different_device += 1
+                      for name in list(dirs) + files:
+                          child = pathlib.Path(root) / name
+                          try:
+                              cs = child.lstat()
+                              if cs.st_dev != s.st_dev:
+                                  different_device += 1
+                                  if name in dirs:
+                                      dirs.remove(name)
+                                  continue
+                              count += 1
+                              result["allocatedBytes"] += cs.st_blocks * 512
+                              result["apparentBytes"] += cs.st_size
+                              latest = max(latest, cs.st_mtime)
+                              symlinks += stat.S_ISLNK(cs.st_mode)
+                              linked_files += stat.S_ISREG(cs.st_mode) and cs.st_nlink > 1
+                          except OSError:
+                              errors += 1
+                  result.update(latestModification=utc(latest), entryCount=count, symlinks=symlinks,
+                                multiplyLinkedFiles=linked_files, scanErrors=errors + len(walk_errors), skippedMountsOrDevices=different_device)
+              return result
+          
+          
+          def properties(unit):
+              return run(["systemctl", "show", unit, "--no-pager",
+                          "--property=LoadState,ActiveState,SubState,UnitFileState,User,WorkingDirectory,MainPID,NRestarts,MemoryCurrent,Result"])
+          
+          
+          report = {"readOnly": True, "capturedAt": utc(datetime.datetime.now().timestamp()),
+                    "disk": run(["df", "-B1", "/"]), "inodes": run(["df", "-i", "/"]),
+                    "services": {}, "usage": {}, "pointers": {}, "releases": [], "candidates": []}
+          for unit in ["becore-tickets.service", "becore-tickets-preview.service", "becore-tickets-retention.timer", "becore-tickets-retention.service", "caddy.service", "bubblewash.service", "bubble-wash.service"]:
+              report["services"][unit] = properties(unit)
+          report["runningServices"] = run(["systemctl", "list-units", "--type=service", "--state=running", "--no-pager", "--no-legend"])
+          print(json.dumps({"checkpoint": "capacity_and_services", "data": report}), flush=True)
+          for path in ["/", "/var", "/var/lib", "/var/cache", "/var/log", "/var/tmp", "/tmp", "/srv", "/root/.cache", "/root/.npm", "/home"]:
+              if pathlib.Path(path).exists():
+                  report["usage"][path] = run(["du", "-x", "-B1", "--max-depth=1", path], timeout=30)
+          report["journalUsage"] = run(["journalctl", "--disk-usage"])
+          print(json.dumps({"checkpoint": "directory_usage", "data": report["usage"]}), flush=True)
+          home = pathlib.Path("/srv/becore-tickets")
+          for name in ["current", "previous"]:
+              path = home / name
+              if os.path.lexists(path):
+                  report["pointers"][name] = metadata(path)
+                  try:
+                      report["pointers"][name]["resolved"] = str(path.resolve(strict=True))
+                  except OSError as error:
+                      report["pointers"][name]["resolutionError"] = type(error).__name__
+          for path in sorted((home / "releases").glob("*")):
+              entry = metadata(path)
+              entry["protectedPointer"] = any(v.get("resolved") == str(path) for v in report["pointers"].values())
+              report["releases"].append(entry)
+          
+          candidate_paths = set()
+          for pattern in ["/var/tmp/tickets-*", "/var/tmp/becore-tickets-*", "/tmp/tickets-*", "/tmp/becore-tickets-*", "/srv/becore-tickets/temporary/*"]:
+              candidate_paths.update(glob.glob(pattern))
+          for path in sorted(candidate_paths):
+              entry = metadata(path)
+              p = pathlib.Path(path)
+              if p.is_dir() and not p.is_symlink():
+                  entry["topLevelEntries"] = [metadata(child) for child in sorted(p.glob("*"))]
+                  proof = p / "provenance.json"
+                  if (re.fullmatch(r"/var/tmp/tickets-code-release-[1-9][0-9]*-[1-9][0-9]*", path)
+                          and proof.is_file() and not proof.is_symlink() and proof.stat().st_size < 65536):
+                      try:
+                          raw = json.loads(proof.read_text())
+                          entry["provenance"] = {}
+                          for key in ["source", "expectedActive", "archiveSha256"]:
+                              value = raw.get(key)
+                              if isinstance(value, str) and re.fullmatch("[a-f0-9]{40}|[a-f0-9]{64}", value):
+                                  entry["provenance"][key] = value
+                          for key in ["runtimeRun", "candidateRun"]:
+                              value = str(raw.get(key))
+                              if re.fullmatch("[1-9][0-9]*", value):
+                                  entry["provenance"][key] = value
+                          entry["provenance"]["ancestryVerified"] = raw.get("ancestryVerified") is True
+                      except (OSError, ValueError, AttributeError, TypeError):
+                          entry["provenanceInvalid"] = True
+              report["candidates"].append(entry)
+              print(json.dumps({"checkpoint": "staging_metadata", "data": entry}), flush=True)
+          
+          # Only metadata from process handles and mount tables; do not read environments,
+          # command arguments, private credentials, or file contents through procfs.
+          refs = {path: [] for path in candidate_paths}
+          proc_errors = 0
+          for proc in pathlib.Path("/proc").iterdir():
+              if not proc.name.isdigit():
+                  continue
+              targets = []
+              for pointer in [proc / "cwd", proc / "root", proc / "exe"]:
+                  try:
+                      targets.append((str(pointer.relative_to(proc)), os.readlink(pointer)))
+                  except FileNotFoundError:
+                      pass
+                  except PermissionError:
+                      proc_errors += 1
+              try:
+                  for fd in (proc / "fd").iterdir():
+                      try:
+                          targets.append(("fd", os.readlink(fd)))
+                      except FileNotFoundError:
+                          pass
+                      except PermissionError:
+                          proc_errors += 1
+              except FileNotFoundError:
+                  pass
+              except PermissionError:
+                  proc_errors += 1
+              try:
+                  for line in (proc / "maps").read_text().splitlines():
+                      parts = line.split(None, 5)
+                      if len(parts) == 6 and parts[5].startswith("/"):
+                          targets.append(("mapping", parts[5]))
+              except FileNotFoundError:
+                  pass
+              except PermissionError:
+                  proc_errors += 1
+              for path in candidate_paths:
+                  matches = sorted({kind for kind, target in targets if target == path or target.startswith(path + "/")})
+                  if matches:
+                      refs[path].append({"pid": int(proc.name), "references": matches})
+          report["processInspectionPermissionErrors"] = proc_errors
+          mountpoints = MOUNTPOINTS
+          for entry in report["candidates"]:
+              path = entry["path"]
+              entry["processReferences"] = refs[path]
+              entry["mountsAtOrBelow"] = [p for p in mountpoints if p == path or p.startswith(path + "/")]
+              entry["configuredReferenceCoverage"] = "Path-only properties of loaded service units; excludes cron and arbitrary command arguments. Empty references alone do not establish safe deletion."
+          loaded = run(["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--no-legend", "--plain"])
+          for entry in report["candidates"]:
+              entry["configuredPathReferences"] = []
+          report["configuredReferenceInspectionErrors"] = []
+          if loaded.get("returncode") == 0:
+              for line in loaded["stdout"].splitlines():
+                  unit = line.split()[0]
+                  props = run(["systemctl", "show", unit, "--no-pager", "--property=WorkingDirectory,RootDirectory,PIDFile,ReadWritePaths,ReadOnlyPaths,BindPaths,BindReadOnlyPaths,StateDirectory,CacheDirectory,LogsDirectory,RuntimeDirectory"])
+                  if props.get("returncode") != 0:
+                      report["configuredReferenceInspectionErrors"].append(unit)
+                  for entry in report["candidates"]:
+                      if entry["path"] in props.get("stdout", ""):
+                          entry["configuredPathReferences"].append(unit)
+          else:
+              report["configuredReferenceInspectionErrors"].append("loaded-service-list-unavailable")
+          report["backupDirectoryUsageOnly"] = run(["du", "-x", "-B1", "--max-depth=1", "/var/backups", "/var/lib/becore-tickets-handover"])
+          report["publicChecks"] = []
+          for path in ["/healthz", "/api/version", "/", "/events", "/api/public/events"]:
+              request = urllib.request.Request("https://tickets.becoreops.com" + path, headers={"User-Agent": "Mozilla/5.0 BeCoreStorageAudit"})
+              try:
+                  response = urllib.request.urlopen(request, timeout=20)
+              except (urllib.error.URLError, TimeoutError) as error:
+                  report["publicChecks"].append({"path": path, "error": type(error).__name__})
+                  continue
+              with response:
+                  item = {"path": path, "status": response.status}
+                  if path in ["/healthz", "/api/version"]:
+                      try:
+                          body = json.loads(response.read(65536))
+                          for key in ["service", "revision", "runtime"]:
+                              value = body.get(key)
+                              if isinstance(value, str) and re.fullmatch("[a-zA-Z0-9_-]{1,64}", value):
+                                  item[key] = value
+                          item["active"] = body.get("active") is True
+                      except (ValueError, AttributeError, TypeError):
+                          item["bodyInvalid"] = True
+                  report["publicChecks"].append(item)
+          print(json.dumps(report, sort_keys=True))
           PY
