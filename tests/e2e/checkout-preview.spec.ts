@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+// Route stubs must own requests; WebKit service workers can bypass page routing.
+test.use({ serviceWorkers: "block" });
+
 // PR production audits still serve the previous release; candidate CI tests this route.
 test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === "pull_request", "Preview is verified against the candidate, then the deployed release.");
 
@@ -31,6 +34,8 @@ test("no-charge preview shows every method and submits only a simulated method",
   await expect(page.getByRole("link", { name: "Back to event" })).toHaveAttribute("href", "/event/sun-chasers-labadi");
   const poster = page.getByRole("img", { name: "On The Guest List event poster" });
   await expect(poster).toBeVisible();
+  // Safari loads this below-the-fold poster only once it approaches the viewport.
+  await poster.scrollIntoViewIfNeeded();
   await expect.poll(() => poster.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
   await expect(page.getByText("Demo total")).toContainText("GH₵100");
   await expect(page.getByText("Booking fee (0%)")).toContainText("GH₵0");
