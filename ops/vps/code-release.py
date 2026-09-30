@@ -58,6 +58,7 @@ APPLICATION_FILES = {
 # Exact reviewed application outputs for the app-experience increment. This is
 # deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
 REVIEWED_APPLICATION_BLOBS = {
+    ".github/workflows/browser-audit.yml": "255462dfbd7807dfc7d276da3d60e7ebc919bad9",
     ".github/workflows/candidate-checks.yml": "deb810db66fef37b65504492ad3a4bf4111ffa1e",
     "app/active-night-experience.tsx": "331774c8e5554721f69835234a3229350613f943",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",

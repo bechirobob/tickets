@@ -239,3 +239,158 @@ test("candidate artifact scripts preserve hidden build files and fail closed on 
   const digest = execFileSync("sha256sum", [archive], { encoding: "utf8" }).split(" ")[0];
   assert.notEqual(run(restore, consumer, { ...build, BUILD_DIGEST: digest }).status, 0);
 });
+
+test("production audit covers the deployed main revision while candidate CI covers the entire PR", async () => {
+  const workflow = load(await readFile(new URL("browser-audit.yml", workflowsDirectory), "utf8"));
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.deepEqual(workflow.on.workflow_run, {
+    workflows: ["Deploy to Cloudflare", "Release verified Tickets VPS code"], types: ["completed"],
+  });
+  const job = workflow.jobs["browser-audit"];
+  assert.equal(job.if, "github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'");
+  assert.deepEqual(job.strategy.matrix.browser, ["desktop-chromium", "mobile-chromium", "mobile-webkit"]);
+  const resolve = candidateStep(job, "Resolve and verify the active production revision");
+  assert.equal(job.steps[0], resolve, "No repository code may run before production identity is verified");
+  assert.match(resolve.run, /--proto '=https' --tlsv1\.2 --connect-timeout 5 --max-time 20 --max-filesize 65536/u);
+  assert.doesNotMatch(resolve.run, /--location|--insecure|curl\s+-[^\s]*[Lk]/u);
+  assert.equal(resolve.run.match(/test "\$status" = 200/gu)?.length, 2);
+  const checkout = job.steps.find((step) => step.uses?.startsWith("actions/checkout@"));
+  assert.deepEqual(checkout.with, {
+    repository: "bechirobob/tickets", ref: "${{ steps.deployed.outputs.revision }}",
+    "fetch-depth": 0, "persist-credentials": false,
+  });
+  const source = candidateStep(job, "Verify deployed source belongs to this repository main history");
+  assert.ok(job.steps.indexOf(source) > job.steps.indexOf(checkout));
+  assert.ok(job.steps.indexOf(source) < job.steps.findIndex((step) => step.run === "npm ci"));
+  assert.match(source.run, /git merge-base --is-ancestor "\$DEPLOYED_SHA" refs\/remotes\/origin\/main/u);
+  const audit = candidateStep(job, "Audit production in desktop Chrome, mobile Chrome and mobile WebKit");
+  assert.equal(audit.run, "npm run test:e2e:production -- --project ${{ matrix.browser }} --workers=1 --retries=0");
+  assert.equal(audit.if, undefined);
+  const before = candidateStep(job, "Confirm production still matches the audited source");
+  const after = candidateStep(job, "Confirm production stayed on the audited source");
+  assert.ok(job.steps.indexOf(before) < job.steps.indexOf(audit));
+  assert.ok(job.steps.indexOf(after) > job.steps.indexOf(audit));
+  assert.equal(after.if, "${{ always() && steps.source.outcome == 'success' }}");
+  for (const step of [source, before, after]) assert.equal(step.env.DEPLOYED_SHA, "${{ steps.deployed.outputs.revision }}");
+  const evidence = candidateStep(job, "Preserve browser results and isolated Room renders");
+  assert.equal(evidence.if, "always()");
+  assert.ok(evidence.with.path.includes("${{ runner.temp }}/production-browser-audit/*.json"));
+  assert.ok(evidence.with.path.includes("${{ runner.temp }}/production-browser-audit/checked-out-*.txt"));
+  const candidate = await candidateWorkflow();
+  assert.equal(candidate.env.BECORE_RELEASE_SHA, "${{ github.event.pull_request.head.sha || github.sha }}");
+  assert.equal(candidateStep(candidate.jobs.verify, "Verify every browser journey before release").run, "npx playwright test --project ${{ matrix.browser }}");
+  const config = await readFile(new URL("../playwright.config.ts", import.meta.url), "utf8");
+  assert.match(config, /testDir: "\.\/tests\/e2e"/u);
+  assert.doesNotMatch(config, /testIgnore|testMatch|grepInvert|grep:/u);
+  for (const name of ["guest-clarity.spec.ts", "mobile-app-behavior.spec.ts"]) {
+    assert.ok((await readFile(new URL(`../tests/e2e/${name}`, import.meta.url), "utf8")).length > 0);
+  }
+});
+
+test("production audit identity and main ancestry gates fail closed on mismatches and deployment drift", async (t) => {
+  const workflow = load(await readFile(new URL("browser-audit.yml", workflowsDirectory), "utf8"));
+  const job = workflow.jobs["browser-audit"];
+  const resolve = candidateStep(job, "Resolve and verify the active production revision");
+  const source = candidateStep(job, "Verify deployed source belongs to this repository main history");
+  const temporary = await mkdtemp(join(tmpdir(), "tickets-production-audit-"));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const repository = join(temporary, "repository");
+  const bin = join(temporary, "bin");
+  const runner = join(temporary, "runner");
+  for (const directory of [repository, bin, runner]) await mkdir(directory);
+  const git = (...args) => execFileSync("git", args, { cwd: repository, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "--initial-branch=main");
+  git("-c", "user.name=CI Test", "-c", "user.email=ci-test@example.invalid", "commit", "--allow-empty", "-m", "Deployed source");
+  const revision = git("rev-parse", "HEAD");
+  git("remote", "add", "origin", "https://github.com/bechirobob/tickets");
+  git("update-ref", "refs/remotes/origin/main", revision);
+  // Public identity responses are fixtures: this test never contacts production.
+  await writeFile(join(bin, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+output=""
+url=""
+while (( $# )); do
+  case "$1" in
+    --output) output="$2"; shift 2 ;;
+    https://tickets.becoreops.com/healthz|https://tickets.becoreops.com/api/version) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+[[ -n "$output" && -n "$url" ]]
+[[ "\${FAIL_REQUEST:-0}" = 0 ]]
+if [[ "$url" = */healthz ]]; then
+  cp "$FIXTURE/health.json" "$output"
+  printf '%s' "\${HEALTH_STATUS:-200}"
+else
+  cp "$FIXTURE/version.json" "$output"
+  printf '%s' "\${VERSION_STATUS:-200}"
+fi
+`, { mode: 0o755 });
+  const environment = {
+    ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE: temporary,
+    RUNNER_TEMP: runner, GITHUB_REPOSITORY: "bechirobob/tickets",
+    GITHUB_OUTPUT: join(temporary, "output"), GITHUB_STEP_SUMMARY: join(temporary, "summary"), DEPLOYED_SHA: "",
+  };
+  const run = (command, overrides = {}) => spawnSync("bash", ["-c", command], {
+    cwd: repository, env: { ...environment, ...overrides }, encoding: "utf8",
+  });
+  const health = { service: "becore-tickets", runtime: "vps", active: true, revision };
+  const version = { service: "becore-tickets", revision };
+  const fixture = async (healthResponse = health, versionResponse = version) => {
+    await writeFile(join(temporary, "health.json"), JSON.stringify(healthResponse));
+    await writeFile(join(temporary, "version.json"), JSON.stringify(versionResponse));
+    await writeFile(environment.GITHUB_OUTPUT, "");
+  };
+  await fixture();
+  let result = run(resolve.run);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(environment.GITHUB_OUTPUT, "utf8"), `revision=${revision}\n`);
+  const baseline = JSON.parse(await readFile(join(runner, "production-browser-audit/baseline-resolved.json"), "utf8"));
+  assert.equal(baseline.revision, revision);
+  assert.equal(baseline.active, true);
+  assert.equal(baseline.runtime, "vps");
+  result = run(source.run, { DEPLOYED_SHA: revision });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(join(runner, "production-browser-audit/checked-out-revision.txt"), "utf8"), `${revision}\n`);
+  for (const phase of ["before", "after"]) {
+    const command = `bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" ${phase}`;
+    assert.equal(run(command, { DEPLOYED_SHA: revision }).status, 0);
+    assert.notEqual(run(command, { DEPLOYED_SHA: "b".repeat(40) }).status, 0, "Deployment drift cannot pass the audit");
+    assert.notEqual(run(command).status, 0, "Rechecks require the original baseline");
+  }
+  for (const [healthResponse, versionResponse] of [
+    [{ ...health, service: "another-service" }, version],
+    [health, { ...version, service: "another-service" }],
+    [{ ...health, runtime: "edge" }, version],
+    [{ ...health, active: false }, version],
+    [{ ...health, active: "true" }, version],
+    [{ ...health, revision: "b".repeat(40) }, version],
+    [{ ...health, revision: "abc123" }, { ...version, revision: "abc123" }],
+    [{ ...health, revision: `${revision}\ninjected=value` }, { ...version, revision: `${revision}\ninjected=value` }],
+    [health, { ...version, revision: null }],
+    [[], version],
+    [health, null],
+  ]) {
+    await fixture(healthResponse, versionResponse);
+    assert.notEqual(run(resolve.run).status, 0, `Rejected invalid identity: ${JSON.stringify([healthResponse, versionResponse])}`);
+    assert.equal(await readFile(environment.GITHUB_OUTPUT, "utf8"), "", "Invalid responses must not supply a checkout SHA");
+  }
+  await fixture();
+  assert.notEqual(run(resolve.run, { FAIL_REQUEST: "1" }).status, 0, "Failed public request must stop checkout");
+  for (const field of ["HEALTH_STATUS", "VERSION_STATUS"]) {
+    for (const status of ["201", "301", "302", "503"]) {
+      await fixture();
+      assert.notEqual(run(resolve.run, { [field]: status }).status, 0, "A JSON-shaped non-200 response cannot establish a healthy baseline");
+      assert.equal(await readFile(environment.GITHUB_OUTPUT, "utf8"), "");
+    }
+  }
+  assert.notEqual(run(resolve.run, { GITHUB_REPOSITORY: "someone/else" }).status, 0);
+  assert.notEqual(run(source.run, { DEPLOYED_SHA: "b".repeat(40) }).status, 0, "Checkout must equal the deployed SHA");
+  assert.notEqual(run(source.run, { DEPLOYED_SHA: revision, GITHUB_REPOSITORY: "someone/else" }).status, 0);
+  git("remote", "set-url", "origin", "https://github.com/someone/else");
+  assert.notEqual(run(source.run, { DEPLOYED_SHA: revision }).status, 0, "An unrelated repository is rejected");
+  git("remote", "set-url", "origin", "https://github.com/bechirobob/tickets.git");
+  assert.equal(run(source.run, { DEPLOYED_SHA: revision }).status, 0);
+  git("-c", "user.name=CI Test", "-c", "user.email=ci-test@example.invalid", "commit", "--allow-empty", "-m", "Unmerged source");
+  assert.notEqual(run(source.run, { DEPLOYED_SHA: git("rev-parse", "HEAD") }).status, 0, "A matching checkout outside origin/main is rejected");
+});
