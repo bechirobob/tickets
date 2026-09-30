@@ -114,3 +114,41 @@ jobs:
           # Only this successful run's three staged files are removed. Private
           # rollback snapshots and prior releases remain untouched on the host.
           tailscale ssh root@hermes "rm -- '$stage/runtime.tar.gz' '$stage/provenance.json' '$stage/code-release.py' && rmdir -- '$stage'"
+
+  preview:
+    name: Verify live no-charge preview (${{ matrix.browser }})
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
+    env:
+      E2E_BASE_URL: https://tickets.becoreops.com
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
+      - name: Exercise only the deployed no-charge preview
+        run: npx playwright test tests/e2e/checkout-preview.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0
+      - name: Preserve live preview evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-checkout-preview-${{ github.run_id }}-${{ matrix.browser }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

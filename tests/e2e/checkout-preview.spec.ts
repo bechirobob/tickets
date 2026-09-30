@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+// PR production audits still serve the previous release; candidate CI tests this route.
+test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === "pull_request", "Preview is verified against the candidate, then the deployed release.");
+
 test("no-charge preview shows every method and submits only a simulated method", async ({ page }) => {
   // This walkthrough is temporary; API/unit tests exercise expiry independently.
   test.skip(Date.now() >= Date.parse("2026-10-07T23:59:59Z"), "The temporary checkout preview has expired.");
