@@ -29,6 +29,7 @@ jobs:
           """Delete only the six owner-approved failed-release staging files, with drift guards."""
           import datetime
           import fcntl
+          import errno
           import hashlib
           import json
           import os
@@ -98,7 +99,19 @@ jobs:
                                   found.append({'pid': int(proc.name), 'kind': 'mapped-inode-reference'})
                           if len(fields) == 6:
                               targets.append(fields[5])
-                      for line in (proc / 'mountinfo').read_text().splitlines():
+                      try:
+                          mount_lines = (proc / 'mountinfo').read_text().splitlines()
+                      except OSError as error:
+                          if error.errno != errno.EINVAL:
+                              raise
+                          # A disappearing/zombie task has no live mount namespace. Prove
+                          # that state; never skip an unreadable live task on a guess.
+                          state_line = next((line for line in (proc / 'status').read_text().splitlines() if line.startswith('State:')), '')
+                          task_state = state_line.split()[1] if len(state_line.split()) > 1 else ''
+                          require(task_state in {'Z', 'X'}, 'Live process mount namespace could not be inspected')
+                          require(not list((proc / 'fd').iterdir()), 'Exited task still has file descriptors')
+                          mount_lines = []
+                      for line in mount_lines:
                           fields = line.split()
                           # Both filesystem root and mount target expose bind references.
                           mount_root = fields[3].replace('\\040', ' ')
@@ -175,7 +188,7 @@ jobs:
                                 'beforeHealth': before_health, 'afterHealth': after_health, 'protectedPrevious': PREVIOUS}, sort_keys=True))
           PY
       - name: Classify home and Docker storage without changes
-        if: always()
+        if: github.event_name == 'workflow_dispatch'
         run: |
           tailscale ssh root@hermes 'python3 -' <<'PY'
           """Read-only storage classification. No user-file contents or Docker environments."""
