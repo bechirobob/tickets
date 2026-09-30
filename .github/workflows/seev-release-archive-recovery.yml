@@ -1,0 +1,383 @@
+name: Recover verified Seev checkout archive release
+
+# LOCAL FILE ONLY. Exact reviewed PR #202 merge and operator CI are pinned.
+# Publish only as .github/workflows/seev-release-archive-recovery.yml
+# on ops/seev-checkout-archive-recovery. Publishing is the explicit one-shot trigger.
+# Application artifact, runtime CI and browser CI remain pinned to PR #200.
+# This separate recovery is permitted only for the exact terminal archive
+# failure below and its prepared transaction. Never rerun an uncertain dispatch.
+# The unchanged runtime archive was independently verified as SHA-256:
+# 00addc9b1daa764bd64b582beb54617e7ba2d93f52d24afe53b4a2b44aceaf9f
+on:
+  push:
+    branches: [ops/seev-checkout-archive-recovery]
+    paths: [.github/workflows/seev-release-archive-recovery.yml]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: seev-checkout-archive-recovery-coordinator
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/seev-checkout-archive-recovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 8a25812f1a0fc81e4ff4f956542097b4465e050f
+      OPERATOR_SHA: bed2db17d94dfcd596fc757e48cf98562ef1b23f
+      OPERATOR_TREE: 1c41915d7aa75b7206cc10409af13aa42c53a14f
+      OPERATOR_CHECK_RUN: '36736030027'
+      OPERATOR_PR: '202'
+      REVIEWED_OPERATOR_SHA: 2332dddfa1f4a2fa4fe0dde5f2022e03607cc77c
+      PREVIOUS_OPERATOR_SHA: 6061d8631bab3997906a00dd8045f03a28535c32
+      PREVIOUS_FAILED_RUN: '36734407816'
+      PREVIOUS_FAILED_JOB: '109952192432'
+      RECOVER_PREPARED: '36734407816-1'
+      RUNTIME_RUN: '36729977021'
+      CANDIDATE_SHA: 252323c6b312200fd8e79b5dd63c19c6f7f337f6
+      CANDIDATE_RUN: '36727098470'
+      EXPECTED_ACTIVE: 181bfc6801a4fc4c993dc0220af99bb3509e433d
+    steps:
+      - name: Verify reviewed recovery and dispatch the main release once
+        id: coordinate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPO = 'bechirobob/tickets'
+          RELEASE_FILE = 'tickets-code-release.yml'
+          WORKFLOW = 'actions/workflows/' + RELEASE_FILE
+          RUNS_URL = 'https://github.com/' + REPO + '/actions/workflows/' + RELEASE_FILE
+          SOURCE = os.environ['SOURCE_SHA']
+          OPERATOR = os.environ['OPERATOR_SHA']
+          OPERATOR_TREE = os.environ['OPERATOR_TREE']
+          OPERATOR_CHECK_RUN = os.environ['OPERATOR_CHECK_RUN']
+          OPERATOR_PR = os.environ['OPERATOR_PR']
+          PREVIOUS_OPERATOR = os.environ['PREVIOUS_OPERATOR_SHA']
+          RECOVER_PREPARED = os.environ['RECOVER_PREPARED']
+          REVIEWED_OPERATOR = os.environ['REVIEWED_OPERATOR_SHA']
+          PREVIOUS_RUN = os.environ['PREVIOUS_FAILED_RUN']
+          PREVIOUS_JOB = os.environ['PREVIOUS_FAILED_JOB']
+          OPERATOR_FILES = {
+              'ops/vps/code-release.py',
+              'ops/vps/test_code_release.py',
+              '.github/workflows/tickets-code-release.yml',
+              '.github/workflows/tickets-release-operator-checks.yml',
+          }
+          CANDIDATE = os.environ['CANDIDATE_SHA']
+          RUNTIME_RUN = os.environ['RUNTIME_RUN']
+          CANDIDATE_RUN = os.environ['CANDIDATE_RUN']
+          EXPECTED = os.environ['EXPECTED_ACTIVE']
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          def api(path, payload=None):
+              # No retry for any request, especially the single consequential POST.
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + REPO + '/' + path,
+                  data=None if payload is None else json.dumps(payload).encode(),
+                  headers={
+                      'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                      'Accept': 'application/vnd.github+json',
+                      'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              try:
+                  with urllib.request.build_opener(NoRedirect()).open(request, timeout=30) as response:
+                      body = response.read()
+                      require(response.status == (200 if payload is None else 204),
+                              'Unexpected GitHub response status')
+                      return json.loads(body) if body else None
+              except urllib.error.HTTPError as error:
+                  # Never log response bodies, headers, credentials, or private artifacts.
+                  raise RuntimeError('GitHub request failed with HTTP ' + str(error.code)) from None
+              except (urllib.error.URLError, TimeoutError):
+                  raise RuntimeError('GitHub request failed or timed out') from None
+
+          def note(message):
+              print(message, flush=True)
+              if os.environ.get('GITHUB_STEP_SUMMARY'):
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                      summary.write(message + '\n\n')
+
+          def verify_main():
+              require(api('git/ref/heads/main')['object']['sha'] == OPERATOR,
+                      'main has moved or differs from the reviewed operator SHA; do not dispatch')
+
+          def workflow_identity(filename):
+              workflow = api('actions/workflows/' + filename)
+              require(workflow.get('path') == '.github/workflows/' + filename
+                      and workflow.get('state') == 'active', 'Unexpected or inactive workflow identity')
+              return workflow['id']
+
+          def verify_run(run, run_id, workflow_id, filename, source, *, runtime=False, completed=True):
+              require(str(run.get('id')) == str(run_id)
+                      and run.get('workflow_id') == workflow_id
+                      and run.get('path') == '.github/workflows/' + filename,
+                      'Workflow run identity does not match the requested run')
+              require(run.get('repository', {}).get('full_name') == REPO
+                      and run.get('head_repository', {}).get('full_name') == REPO,
+                      'Workflow run repository identity mismatch')
+              require(run.get('head_sha') == source, 'Workflow run source SHA mismatch')
+              if runtime:
+                  require(run.get('event') == 'push' and run.get('head_branch') == 'main',
+                          'VPS runtime must be an exact main push')
+              if completed:
+                  require(run.get('status') == 'completed' and run.get('conclusion') == 'success',
+                          'Required workflow has not completed successfully')
+
+          def jobs_for(run_id):
+              jobs = []
+              for page in range(1, 11):
+                  result = api('actions/runs/' + str(run_id) + '/jobs?per_page=100&page=' + str(page))
+                  jobs.extend(result['jobs'])
+                  if len(jobs) == result['total_count']:
+                      return jobs
+                  require(len(result['jobs']) == 100, 'Incomplete workflow-job listing')
+              raise RuntimeError('Workflow-job listing exceeded its safe bound')
+
+          def dispatches_for(head_sha):
+              # Server-side exact-SHA filtering covers all statuses, including failed,
+              # cancelled and queued runs. Fail closed if the listing is incomplete.
+              query = urllib.parse.urlencode({'head_sha': head_sha, 'event': 'workflow_dispatch', 'per_page': 100})
+              result = api(WORKFLOW + '/runs?' + query)
+              runs = result['workflow_runs']
+              require(result['total_count'] == len(runs), 'Incomplete existing-dispatch listing; inspect manually')
+              require(all(run.get('head_sha') == head_sha and run.get('event') == 'workflow_dispatch'
+                          for run in runs), 'Unexpected release listing identity')
+              return runs
+
+          def tree_entries(commit):
+              tree_sha = commit.get('tree', {}).get('sha', '')
+              require(re.fullmatch(r'[a-f0-9]{40}', tree_sha), 'Invalid operator tree identity')
+              tree = api('git/trees/' + tree_sha + '?recursive=1')
+              require(tree.get('sha') == tree_sha and tree.get('truncated') is False
+                      and isinstance(tree.get('tree'), list), 'Incomplete Git tree; do not dispatch')
+              entries = [entry for entry in tree['tree'] if entry.get('type') != 'tree']
+              require(all(isinstance(entry.get('path'), str) and entry.get('path')
+                          and re.fullmatch(r'[a-f0-9]{40}', entry.get('sha', '')) for entry in entries),
+                      'Invalid Git tree entry')
+              by_path = {entry['path']: (entry.get('mode'), entry.get('type'), entry['sha']) for entry in entries}
+              require(len(by_path) == len(entries), 'Duplicate Git tree path')
+              return by_path
+
+          def verify_operator(source_commit):
+              require(OPERATOR != SOURCE, 'Recovery requires a distinct reviewed operator revision')
+              operator = api('git/commits/' + OPERATOR)
+              reviewed = api('git/commits/' + REVIEWED_OPERATOR)
+              require(operator.get('sha') == OPERATOR and reviewed.get('sha') == REVIEWED_OPERATOR
+                      and re.fullmatch(r'[a-f0-9]{40}', operator.get('tree', {}).get('sha', ''))
+                      and operator['tree']['sha'] == reviewed.get('tree', {}).get('sha') == OPERATOR_TREE,
+                      'Merged operator tree differs from the independently reviewed recovery PR head')
+              pull = api('pulls/' + OPERATOR_PR)
+              require(pull.get('merged') is True and pull.get('merge_commit_sha') == OPERATOR
+                      and pull.get('head', {}).get('sha') == REVIEWED_OPERATOR
+                      and pull.get('head', {}).get('repo', {}).get('full_name') == REPO
+                      and pull.get('base', {}).get('ref') == 'main'
+                      and pull.get('base', {}).get('repo', {}).get('full_name') == REPO,
+                      'Reviewed recovery PR must be merged normally into the exact main operator revision')
+              ancestry = api('compare/' + SOURCE + '...' + OPERATOR)
+              require(ancestry.get('status') == 'ahead'
+                      and ancestry.get('base_commit', {}).get('sha') == SOURCE
+                      and ancestry.get('merge_base_commit', {}).get('sha') == SOURCE,
+                      'Application source is not an ancestor of the reviewed operator')
+              source_entries = tree_entries(source_commit)
+              operator_entries = tree_entries(operator)
+              changed = {path for path in set(source_entries) | set(operator_entries)
+                         if source_entries.get(path) != operator_entries.get(path)}
+              require(changed == OPERATOR_FILES
+                      and all(operator_entries.get(path, ())[:2] == ('100644', 'blob') for path in changed),
+                      'Operator delta must contain exactly the four reviewed ordinary files and no application changes')
+
+          def verify_previous_failure(release_id):
+              previous = api('actions/runs/' + PREVIOUS_RUN)
+              verify_run(previous, PREVIOUS_RUN, release_id, RELEASE_FILE, PREVIOUS_OPERATOR, completed=False)
+              require(previous.get('event') == 'workflow_dispatch' and previous.get('head_branch') == 'main'
+                      and previous.get('status') == 'completed' and previous.get('conclusion') == 'failure'
+                      and previous.get('run_attempt') == 1,
+                      'Previous release must remain the exact original terminal failure, never an uncertain or rerun result')
+              previous_jobs = jobs_for(PREVIOUS_RUN)
+              releases = [job for job in previous_jobs if job.get('name') == 'release']
+              require(len(previous_jobs) == 2 and len(releases) == 1
+                      and str(releases[0].get('id')) == PREVIOUS_JOB
+                      and str(releases[0].get('run_id')) == PREVIOUS_RUN
+                      and releases[0].get('status') == 'completed'
+                      and releases[0].get('conclusion') == 'failure',
+                      'Previous release job does not match the inspected failed job')
+              steps = releases[0].get('steps', [])
+              by_name = {step.get('name'): step.get('conclusion') for step in steps}
+              require(all(by_name.get(name) == 'success' for name in (
+                  'Require main and exact bounded release inputs',
+                  'Reject unmerged source before executing checkout code',
+                  'Verify updater regression suite',
+                  'Verify exact CI runs, source tree, ancestry and artifact provenance',
+                  'Connect existing dedicated Tickets identity',
+                  'Stage reviewed main operator without changing the verified application tree',
+                  'Inspect loaded credential binding metadata without reading secret values',
+              )), 'Previous release did not reach the known archive failure through successful verification')
+              require([step.get('name') for step in steps if step.get('conclusion') == 'failure']
+                      == ['Apply reversible Tickets-only code transaction'],
+                      'Previous release failed at a different or ambiguous step')
+              require(all(job.get('status') == 'completed' and job.get('conclusion') == 'skipped'
+                          and job.get('name', '').startswith('Verify live no-charge preview')
+                          for job in previous_jobs if job is not releases[0]),
+                      'Previous release preview state changed; inspect before recovery')
+              # The pinned run/job logs were already inspected: Unsafe archive member,
+              # before activation, after successful typed credential metadata checks.
+              # Only the main operator may recover this exact prepared transaction
+              # after independently proving snapshot, live bytes, pointer and health.
+              previous_dispatches = dispatches_for(PREVIOUS_OPERATOR)
+              require(len(previous_dispatches) == 1
+                      and str(previous_dispatches[0].get('id')) == PREVIOUS_RUN,
+                      'Unexpected additional dispatch for the previous operator; inspect before recovery')
+
+          def main():
+              require(os.environ.get('GITHUB_REPOSITORY') == REPO
+                      and os.environ.get('GITHUB_REF') == 'refs/heads/ops/seev-checkout-archive-recovery'
+                      and os.environ.get('GITHUB_EVENT_NAME') == 'push', 'Unexpected coordinator context')
+              require(os.environ.get('GITHUB_RUN_ATTEMPT') == '1',
+                      'Coordinator reruns are forbidden; inspect the original release run')
+              require(all(re.fullmatch(r'[a-f0-9]{40}', value) for value in (SOURCE, OPERATOR, OPERATOR_TREE, REVIEWED_OPERATOR, PREVIOUS_OPERATOR, CANDIDATE, EXPECTED)),
+                      'All source/operator/tree identities must be pinned exact SHA values')
+              require(all(re.fullmatch(r'[1-9][0-9]*', value) for value in (RUNTIME_RUN, CANDIDATE_RUN, OPERATOR_CHECK_RUN, OPERATOR_PR, PREVIOUS_RUN, PREVIOUS_JOB)),
+                      'Pinned CI and previous-failure IDs must be valid run/job IDs')
+              require(RECOVER_PREPARED == PREVIOUS_RUN + '-1',
+                      'Prepared recovery must identify only the exact failed first attempt')
+              require(OPERATOR not in (SOURCE, PREVIOUS_OPERATOR), 'Archive recovery requires the newly reviewed operator')
+              verify_main()
+              runtime_id = workflow_identity('vps-runtime.yml')
+              candidate_id = workflow_identity('candidate-checks.yml')
+              release_id = workflow_identity(RELEASE_FILE)
+              runtime = api('actions/runs/' + RUNTIME_RUN)
+              candidate = api('actions/runs/' + CANDIDATE_RUN)
+              verify_run(runtime, RUNTIME_RUN, runtime_id, 'vps-runtime.yml', SOURCE, runtime=True)
+              verify_run(candidate, CANDIDATE_RUN, candidate_id, 'candidate-checks.yml', CANDIDATE)
+              require(candidate.get('event') in ('pull_request', 'workflow_dispatch'),
+                      'Unexpected candidate workflow event')
+              source_commit = api('git/commits/' + SOURCE)
+              candidate_commit = api('git/commits/' + CANDIDATE)
+              require(source_commit.get('sha') == SOURCE and candidate_commit.get('sha') == CANDIDATE
+                      and re.fullmatch(r'[a-f0-9]{40}', source_commit.get('tree', {}).get('sha', ''))
+                      and source_commit['tree']['sha'] == candidate_commit.get('tree', {}).get('sha'),
+                      'Merged source and verified candidate must have identical full Git trees')
+              verify_operator(source_commit)
+              operator_id = workflow_identity('tickets-release-operator-checks.yml')
+              operator_check = api('actions/runs/' + OPERATOR_CHECK_RUN)
+              verify_run(operator_check, OPERATOR_CHECK_RUN, operator_id,
+                         'tickets-release-operator-checks.yml', REVIEWED_OPERATOR)
+              require(operator_check.get('event') == 'pull_request', 'Unexpected operator CI event')
+              operator_jobs = jobs_for(OPERATOR_CHECK_RUN)
+              require(len(operator_jobs) == 1 and operator_jobs[0].get('name') == 'verify'
+                      and operator_jobs[0].get('conclusion') == 'success', 'Reviewed operator CI job did not succeed')
+              operator_steps = {step.get('name'): step.get('conclusion')
+                                for step in operator_jobs[0].get('steps', [])}
+              require(all(operator_steps.get(name) == 'success' for name in (
+                  'Verify release guards and rollback without host access',
+                  'Verify the exact staged operator layout used for release',
+              )), 'Both full and staged operator regression suites must have succeeded')
+              ancestry = api('compare/' + EXPECTED + '...' + SOURCE)
+              require(ancestry.get('status') in ('ahead', 'identical')
+                      and ancestry.get('merge_base_commit', {}).get('sha') == EXPECTED,
+                      'Expected active source is not an ancestor of the intended release')
+              runtime_jobs = jobs_for(RUNTIME_RUN)
+              require(len(runtime_jobs) == 2 and {job.get('name') for job in runtime_jobs} == {'verify', 'handoff'}
+                      and all(job.get('conclusion') == 'success' for job in runtime_jobs),
+                      'Both runtime jobs must have succeeded')
+              candidate_jobs = jobs_for(CANDIDATE_RUN)
+              browsers = {'desktop-chromium', 'mobile-chromium', 'mobile-webkit'}
+              require(len(candidate_jobs) == 3
+                      and {job.get('name') for job in candidate_jobs} == {'verify (' + browser + ')' for browser in browsers}
+                      and all(job.get('conclusion') == 'success' for job in candidate_jobs),
+                      'All three browser matrix jobs must have succeeded')
+              for job in candidate_jobs:
+                  steps = {step.get('name'): step.get('conclusion') for step in job.get('steps', [])}
+                  require(all(steps.get(name) == 'success' for name in (
+                      'Verify every browser journey before release',
+                      'Verify opt-in USDC checkout without provider traffic',
+                  )), 'Required checkout browser journeys were skipped or failed')
+              verify_previous_failure(release_id)
+              existing = dispatches_for(OPERATOR)
+              require(not existing, 'A release dispatch already exists for this operator; inspect ' + RUNS_URL)
+              # Recheck immediately before the only POST. Main is deliberately the
+              # dispatch ref; the release workflow independently revalidates inputs,
+              # source, CI, artifact provenance, host state and rollback safety.
+              verify_main()
+              note('Reviewed main operator, four-file delta, original terminal failure and application CI verified.')
+              note('Application: ' + SOURCE + '; operator: ' + OPERATOR + '; prepared recovery: ' + RECOVER_PREPARED)
+              try:
+                  api(WORKFLOW + '/dispatches', {
+                      'ref': 'main',
+                      'inputs': {
+                          'source_sha': SOURCE,
+                          'runtime_run': RUNTIME_RUN,
+                          'candidate_run': CANDIDATE_RUN,
+                          'expected_active': EXPECTED,
+                          'enable_crypto': 'true',
+                          'recover_prepared': RECOVER_PREPARED,
+                      },
+                  })
+              except Exception:
+                  raise RuntimeError('Dispatch outcome is uncertain; do not retry. Inspect ' + RUNS_URL) from None
+              note('Dispatch accepted once. Never redispatch while waiting: ' + RUNS_URL)
+
+              discovery_deadline = time.monotonic() + 300
+              release = None
+              while time.monotonic() < discovery_deadline:
+                  matches = dispatches_for(OPERATOR)
+                  require(len(matches) <= 1, 'Multiple matching dispatches found; inspect ' + RUNS_URL)
+                  if matches:
+                      release = matches[0]
+                      break
+                  time.sleep(5)
+              require(release is not None, 'Dispatch accepted but run not yet identified. Do not retry; continue monitoring ' + RUNS_URL)
+              run_id = release['id']
+              run_url = 'https://github.com/' + REPO + '/actions/runs/' + str(run_id)
+              verify_run(release, run_id, release_id, RELEASE_FILE, OPERATOR, completed=False)
+              require(release.get('event') == 'workflow_dispatch' and release.get('head_branch') == 'main'
+                      and release.get('html_url') == run_url, 'Dispatched run does not match the reviewed main operator')
+              note('Verified recovery release run: ' + run_url)
+              if os.environ.get('GITHUB_OUTPUT'):
+                  with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                      output.write('release_run_id=' + str(run_id) + '\nrelease_run_url=' + run_url + '\n')
+
+              completion_deadline = time.monotonic() + 1800
+              while time.monotonic() < completion_deadline:
+                  release = api('actions/runs/' + str(run_id))
+                  verify_run(release, run_id, release_id, RELEASE_FILE, OPERATOR, completed=False)
+                  require(release.get('event') == 'workflow_dispatch' and release.get('head_branch') == 'main',
+                          'Release identity changed while monitoring')
+                  if release.get('status') == 'completed':
+                      require(release.get('conclusion') == 'success', 'Release finished without success: ' + run_url)
+                      note('Verified recovery release workflow succeeded: ' + run_url)
+                      return
+                  time.sleep(15)
+              raise RuntimeError('Release remains nonterminal; continue monitoring ' + run_url + '. Do not redispatch.')
+
+          if __name__ == '__main__':
+              try:
+                  main()
+              except Exception as error:
+                  note('Coordinator stopped: ' + str(error))
+                  sys.exit(1)
+          PY
