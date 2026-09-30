@@ -230,34 +230,22 @@ def vetted_changes(expected, source):
                        resolved="https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
                        integrity="sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==")
         require(before == after, "Only the reviewed mobile brace-expansion lock update may change.")
-    # Package security updates must not change scripts, engines, or direct runtime
-    # dependencies. Full runtime and browser gates still apply to the lockfile.
-    if "package.json" in changed:
-        before = strict_json(git("show", expected + ":package.json"))
-        after = strict_json(git("show", source + ":package.json"))
-        old_overrides = before.pop("overrides", {})
-        new_overrides = after.pop("overrides", {})
-        require(before == after and old_overrides.get("fast-uri") == "3.1.7"
-                and new_overrides == dict(old_overrides, **{"fast-uri": "3.1.8"}),
-                "Only the vetted fast-uri security override may change.")
-    if "package-lock.json" in changed:
-        before = strict_json(git("show", expected + ":package-lock.json"))
-        after = strict_json(git("show", source + ":package-lock.json"))
-        patches = {
-            "node_modules/@typescript-eslint/typescript-estree/node_modules/brace-expansion":
-                ("5.0.9", "5.0.12", "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ=="),
-            "node_modules/brace-expansion":
-                ("1.1.18", "1.1.21", "sha512-9zeA+KLZNNzglF2TPKRQEDyx6Yby7daAkuy8MiPzpXPsYDWi/DRM8jmwUDxokQjYqBpv5DgPiwD4h4ZZSy1Ujw=="),
-            "node_modules/fast-uri":
-                ("3.1.7", "3.1.8", "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg=="),
-        }
-        for name, (old_version, version, integrity) in patches.items():
-            package = before["packages"][name]
-            require(package["version"] == old_version, "Security patch baseline changed.")
-            dependency = name.rsplit("/", 1)[-1]
-            package.update(version=version, integrity=integrity,
-                           resolved=f"https://registry.npmjs.org/{dependency}/-/{dependency}-{version}.tgz")
-        require(before == after, "Only the three vetted dependency lock updates may change.")
+    # Next 16.3.6 security remediation, including npm's reviewed lock metadata.
+    # Pin both complete inputs and outputs: scripts, other dependency versions,
+    # and every unrelated byte must match this reviewed patch exactly.
+    root_dependency_patch = {
+        "package.json": ("f5b97ad99e9f3c5c74abfde84ed87b03577b1a24",
+                         "dc6e4e1cfa53b05beb3b5f70c7a5d07dd5e07b23"),
+        "package-lock.json": ("3916f840669463f8ac586dc25d715456a5d9d0b8",
+                              "759d34af76287e214f03def74be98ddefb33780a"),
+    }
+    if root_dependency_patch.keys() & set(changed):
+        require(root_dependency_patch.keys() <= set(changed),
+                "The reviewed root dependency patch requires both package files.")
+        for name, (baseline, reviewed) in root_dependency_patch.items():
+            require(git("rev-parse", expected + ":" + name) == baseline
+                    and git("rev-parse", source + ":" + name) == reviewed,
+                    "Root dependency files differ from the reviewed security patch: " + name)
     return changed
 
 

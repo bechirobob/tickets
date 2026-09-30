@@ -12,7 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 spec = importlib.util.spec_from_file_location("code_release", Path(__file__).with_name("code-release.py"))
 release = importlib.util.module_from_spec(spec)
@@ -956,15 +956,37 @@ class VerifierTests(unittest.TestCase):
         with patch.object(release, "git", return_value="lib/retired-checkout.ts"), patch.object(release.subprocess, "run"):
             self.assertEqual(release.vetted_changes(OLD, NEW), ["lib/retired-checkout.ts"])
 
-    def test_package_scripts_and_direct_dependencies_cannot_change(self):
-        before = {"scripts": {"test": "real-test"}, "dependencies": {"runtime": "1"}, "overrides": {"fast-uri": "3.1.7"}}
-        after = dict(before, overrides={"fast-uri": "3.1.8"})
-        with patch.object(release, "git", side_effect=["package.json", json.dumps(before), json.dumps(after)]), patch.object(release.subprocess, "run"):
-            release.vetted_changes(OLD, NEW)
-        after = dict(after, scripts={"test": "true"})
-        with patch.object(release, "git", side_effect=["package.json", json.dumps(before), json.dumps(after)]), patch.object(release.subprocess, "run"):
-            with self.assertRaises(release.ReleaseError):
-                release.vetted_changes(OLD, NEW)
+    def test_root_dependency_patch_requires_exact_reviewed_input_and_output_blobs(self):
+        changed = "package.json\npackage-lock.json"
+        blobs = ["f5b97ad99e9f3c5c74abfde84ed87b03577b1a24",
+                 "dc6e4e1cfa53b05beb3b5f70c7a5d07dd5e07b23",
+                 "3916f840669463f8ac586dc25d715456a5d9d0b8",
+                 "759d34af76287e214f03def74be98ddefb33780a"]
+        with patch.object(release, "git", side_effect=[changed, *blobs]) as git, patch.object(release.subprocess, "run"):
+            self.assertEqual(release.vetted_changes(OLD, NEW), changed.splitlines())
+            self.assertEqual(git.call_args_list, [
+                call("diff", "--name-only", OLD, NEW),
+                call("rev-parse", OLD + ":package.json"),
+                call("rev-parse", NEW + ":package.json"),
+                call("rev-parse", OLD + ":package-lock.json"),
+                call("rev-parse", NEW + ":package-lock.json")])
+        # Either baseline or output changing invalidates the reviewed patch,
+        # including changes to scripts, engines, dependencies or lock metadata.
+        for index in range(len(blobs)):
+            tampered = list(blobs)
+            tampered[index] = "f" * 40
+            with self.subTest(blob=index):
+                with patch.object(release, "git", side_effect=[changed, *tampered]), patch.object(release.subprocess, "run"):
+                    with self.assertRaisesRegex(release.ReleaseError, "reviewed security patch"):
+                        release.vetted_changes(OLD, NEW)
+
+    def test_root_dependency_patch_rejects_a_partial_package_pair(self):
+        for name in ("package.json", "package-lock.json"):
+            with self.subTest(name=name):
+                with patch.object(release, "git", return_value=name) as git, patch.object(release.subprocess, "run"):
+                    with self.assertRaisesRegex(release.ReleaseError, "both package files"):
+                        release.vetted_changes(OLD, NEW)
+                    git.assert_called_once_with("diff", "--name-only", OLD, NEW)
 
     def test_full_ci_tree_equivalence_and_artifact_digest(self):
         with tempfile.TemporaryDirectory() as directory:
