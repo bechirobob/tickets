@@ -18,7 +18,7 @@ export function seevAvailable(config: Config, isTestEvent: boolean): boolean {
 }
 
 // Enable only after the organization has an active USDC account and its live
-// checkout contract has been verified. Seev does not offer crypto in sandbox.
+// release checks have passed. Seev does not offer crypto in sandbox.
 export function seevCryptoAvailable(config: Config, isTestEvent: boolean): boolean {
   return config.SEEV_CRYPTO_ENABLED === "true" && seevEnvironment(config) === "production"
     && !isTestEvent && seevAvailable(config, isTestEvent);

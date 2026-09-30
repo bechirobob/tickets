@@ -147,8 +147,10 @@ not depend on automatic retries. Real sandbox delivery still needs verification.
 `SEEV_CRYPTO_ENABLED=true` opts into USDC collection through Seev's `crypto`
 channel. It defaults to off when absent and additionally requires all existing
 Seev settings, a production key/environment and a non-test event. Sandbox and
-preview events never expose it. Keep the flag off until the account owner has
-created the organization's USDC wallet and the live checkout contract is verified.
+preview events never expose it. Keep the flag off until the account owner has created the organization's USDC
+wallet, requested activation and the code-release checks have passed. A real
+crypto payment remains an owner-operated acceptance check; no automated test
+transfers funds.
 No wallet is created by this application.
 
 The customer selects **Crypto · USDC through SeevPlus**, then reviews the asset,
@@ -165,8 +167,9 @@ keys and a USDC account, but prohibits split payments. Tickets currently does no
 send Seev subaccounts; internal organizer/promoter accounting is unchanged. A
 persisted crypto request with a subaccount is rejected rather than dropping it.
 The Checkout API overview still lists USDC as upcoming, and the public examples
-do not show a GHS-quoted crypto verification response. Confirm that contract with
-Seev before activation; do not loosen amount/currency matching to make it pass.
+do not show a GHS-quoted crypto verification response. Preserve the documented original-order verification contract; if a live response
+differs, hold fulfillment for review with Seev. Never loosen amount/currency
+matching to make it pass.
 Source: https://docs.seevcash.com/docs/payments/channels (checked 2026-09-30).
 
 Pending or expired Seev attempts block switching between MoMo and crypto as well
@@ -179,8 +182,8 @@ finance review; no automatic crypto transfer/refund is implemented.
 
 The VPS is the active writer. On an authorized VPS release, include the code and
 configuration-name allowlist update, leaving `SEEV_CRYPTO_ENABLED` absent/false.
-After the owner confirms wallet readiness and the production contract/settlement
-checks, set `SEEV_CRYPTO_ENABLED` to the string `"true"` in the VPS private runtime
+After the owner confirms wallet readiness and requests activation, and verified
+CI plus release preflight pass, set `SEEV_CRYPTO_ENABLED` to the string `"true"` in the VPS private runtime
 configuration using a reviewed Tickets-only code-release procedure. The current
 `tickets-vps-install.yml` workflow installs an isolated preview, not the active
 service; do not mistake its success for a live release. No migration
@@ -219,3 +222,34 @@ checks remain required in candidate CI. No real payment, wallet action, provider
 secret change, remote push, activation or deployment was performed. The owner
 confirmed wallet creation separately; live GHS-to-USDC contract and settlement
 evidence remain outstanding.
+
+## Temporary no-charge walkthrough
+
+`/checkout-preview` uses the existing On The Guest List event artwork and the
+shared checkout form, with an in-memory demo ticket priced at GHS 100 and no
+booking fee. It does not change the event's RSVP configuration or imply actual
+pricing/availability. The page is unlisted, no-store/noindex, and expires at
+2026-10-07 23:59:59 UTC. Fictional buyer details are read-only.
+
+The only submission is a payment-method enum to `/api/payments/preview`, which
+has no database, runtime binding, provider or analytics calls. It returns a
+simulated explanation, never a checkout URL or order. The real initialization
+API permanently rejects the reserved preview identity before runtime access or
+writes. The preview skips fee/discount lookups, analytics and payment-attempt
+storage. No provider credentials, wallet, card or live money are involved.
+
+## Guarded VPS code release
+
+`.github/workflows/tickets-code-release.yml` is the explicit Tickets-only live
+code-release path. It does not run on push. It requires the exact main source,
+successful matching VPS artifact and complete equivalent-tree three-browser CI,
+expected current VPS revision and optional requested crypto activation. The host
+transaction validates private configuration, existing service/pointers, archive
+provenance and retention safety, preserves transfer state and credential bridge,
+and restores its own previous bytes/pointers if verification fails. Unexpected
+external state changes are preserved and reported for operator review.
+
+This workflow does not run migrations, cleanup, provider transactions, hosting
+handover, DNS changes or Bubble Wash operations. The previously canceled public
+`/scan` and `/my-nights` probes are excluded from its smoke list. A real USDC
+payment remains unverified and must be performed by the account owner.

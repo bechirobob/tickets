@@ -10,6 +10,7 @@ import { ActionButton } from "../../action";
 import type { CuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import { trackProductMetric } from "../../../lib/client-analytics";
+import { CHECKOUT_PREVIEW_SOURCE_SLUG } from "../../../lib/checkout-preview";
 
 const subscribeToReadiness = () => () => {};
 const clientIsReady = () => true;
@@ -21,7 +22,7 @@ const paymentNetworks = [
   { id: "at", label: "AT Money", icon: "/payment-providers/at-money.svg" },
 ] as const;
 
-export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled = false, seevCryptoEnabled = false, paystackEnabled = true }: { paystackEnabled?: boolean; seevEnabled?: boolean; seevCryptoEnabled?: boolean; slug: string; event: CuratedEvent; feeBasisPoints: number }) {
+export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled = false, seevCryptoEnabled = false, paystackEnabled = true, preview = false }: { paystackEnabled?: boolean; seevEnabled?: boolean; seevCryptoEnabled?: boolean; slug: string; event: CuratedEvent; feeBasisPoints: number; preview?: boolean }) {
   const params = useSearchParams();
   const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const [couponCode,setCouponCode]=useState('');
@@ -37,9 +38,10 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const [network, setNetwork] = useState("mtn");
   const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | "crypto" | null>(null);
   const [message, setMessage] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [fullName, setFullName] = useState(preview ? "Preview Guest" : "");
+  const [email, setEmail] = useState(preview ? "guest@example.invalid" : "");
+  const [phone, setPhone] = useState(preview ? "000 000 0000" : "");
+  const [previewComplete, setPreviewComplete] = useState(false);
   const [feePercent, setFeePercent] = useState(feeBasisPoints / 100);
   const [isPaying, setIsPaying] = useState(false);
   const [announcementsOptIn, setAnnouncementsOptIn] = useState(false);
@@ -59,6 +61,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const feeMinor = useMemo(() => Math.round((ticketTotalMinor-discountMinor) * feePercent / 100), [ticketTotalMinor,discountMinor,feePercent]);
   const totalMinor = ticketTotalMinor-discountMinor+feeMinor;
   async function applyCoupon(){
+    if (preview) return;
     if(quoting||isPaying)return;setQuoting(true);setCouponMessage('');setCoupon(null);
     try{const r=await fetch('/api/payments/quote',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({eventSlug:slug,tierId:selectedTierId,quantity,code:couponCode}),signal:AbortSignal.timeout(15000)});const d=await r.json() as {discountMinor:number;error?:string};if(!r.ok)throw new Error(d.error??'The code could not be applied.');setCoupon({code:couponCode.trim().toUpperCase(),tierId:selectedTierId,quantity,discountMinor:d.discountMinor});setCouponMessage('Discount applied.');}catch(e){setCouponMessage(e instanceof Error?e.message:'Try again.');}finally{setQuoting(false);}
   }
@@ -66,6 +69,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const maxPurchasableUnits = Math.max(1, Math.min(selectedTier.maxUnitsPerOrder, Math.floor(selectedTier.remainingAdmissions / selectedTier.admissionsPerUnit)));
 
   useEffect(() => {
+    if (preview) return;
     fetch(`/api/config/booking-fee?event=${encodeURIComponent(slug)}`)
       .then(async (response): Promise<{ percentage?: number } | null> =>
         response.ok ? response.json() as Promise<{ percentage?: number }> : null,
@@ -74,13 +78,52 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
         if (typeof data?.percentage === "number") setFeePercent(data.percentage);
       })
       .catch(() => undefined);
-  }, [slug]);
+  }, [slug, preview]);
+
+  async function continuePreview() {
+    if (!paymentMethod) return;
+    setIsPaying(true);
+    paying.current = true;
+    setPreviewComplete(false);
+    setMessage("Preparing your no-charge preview…");
+    try {
+      const response = await fetch("/api/payments/preview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "omit",
+        cache: "no-store",
+        body: JSON.stringify({ paymentMethod }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const data = await response.json() as { simulated?: boolean; message?: string; error?: string };
+      if (!response.ok || data.simulated !== true || !data.message) throw new Error(data.error || "The preview could not load. Try again.");
+      setMessage(data.message);
+      setPreviewComplete(true);
+    } catch (error) {
+      setMessage(error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")
+        ? "The preview timed out. No payment was started. Try again."
+        : error instanceof Error ? error.message : "The preview could not load. Try again.");
+    } finally {
+      setIsPaying(false);
+      paying.current = false;
+    }
+  }
 
   async function continueToPay() {
     if (!ready || quoting || paying.current || (!paystackEnabled && !seevEnabled)) return;
+    if (preview) setPreviewComplete(false);
     if (!paymentMethod) {
       setMessage("Choose a payment method before continuing.");
       paymentChoice.current?.focus();
+      return;
+    }
+    if (preview) {
+      if (!acceptedPolicies) {
+        setMessage("Confirm this is a no-charge preview before continuing.");
+        policyChoice.current?.focus();
+        return;
+      }
+      await continuePreview();
       return;
     }
     if (!fullName.trim()) {
@@ -152,15 +195,15 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   }
 
   return (
-    <main className="checkout-page">
+    <main className={`checkout-page${preview ? " checkout-preview" : ""}`}>
       <header className="checkout-header">
-        <Link href={`/event/${slug}`}><ArrowLeft size={17} /> Back to event</Link>
+        <Link href={`/event/${preview ? CHECKOUT_PREVIEW_SOURCE_SLUG : slug}`}><ArrowLeft size={17} /> Back to event</Link>
         <Link href="/" className="brand-mark"><BrandLogo /></Link>
-        <span><LockKeyhole size={15} /> Good plans. Safe payment.</span>
+        <span><LockKeyhole size={15} /> {preview ? "Preview only. No charge." : "Good plans. Safe payment."}</span>
       </header>
       <div className="checkout-layout">
         <section className="checkout-main">
-          {event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. For Paystack, test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP. {seevEnabled ? "SeevPlus offers success and decline actions in its sandbox checkout." : ""}</span></div> : null}
+          {preview ? <div className="preview-checkout-note"><strong>No-charge preview</strong><span>Try the checkout with <b>demo pricing</b>. No payment, booking or ticket will be created. The event’s RSVP setup stays unchanged. Available until 7 October 2026, 23:59 UTC.</span></div> : event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. For Paystack, test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP. {seevEnabled ? "SeevPlus offers success and decline actions in its sandbox checkout." : ""}</span></div> : null}
           <div className="checkout-step">
             <span>1</span><div><small>Your order</small><h1>{event.title}</h1></div>
           </div>
@@ -189,7 +232,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                       <button type="button" onClick={() => setQuantity((value) => Math.min(maxPurchasableUnits, value + 1))} disabled={!ready || quantity >= maxPurchasableUnits} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
                     </div>
                   )}
-                  {selected && !soldOut ? <small className="tier-availability">{tier.remainingAdmissions} admissions currently available</small> : null}
+                  {selected && !soldOut ? <small className="tier-availability">{preview ? "Demo quantity only · not live availability" : `${tier.remainingAdmissions} admissions currently available`}</small> : null}
                 </div>
               );
             })}
@@ -199,10 +242,11 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
           <div className="checkout-step checkout-step--second">
             <span>2</span><div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
           </div>
+          {preview ? <p className="checkout-preview-guidance">Fictional details are filled in for this walkthrough. Don’t enter personal or payment details; these sample details are never sent.</p> : null}
           <div className="form-grid">
-            <label>Full name<input disabled={!ready} ref={nameInput} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); }} /></label>
-            <label>Phone number<input disabled={!ready} ref={phoneInput} type="tel" placeholder="024 000 0000" autoComplete="tel" value={phone} onChange={(event) => { setPhone(event.target.value); setMessage(""); }} /></label>
-            <label className="full-field">Email address<input disabled={!ready} ref={emailInput} type="email" placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); }} /></label>
+            <label>Full name<input disabled={!ready} readOnly={preview} ref={nameInput} type="text" placeholder="Your full name" autoComplete={preview ? "off" : "name"} value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); }} /></label>
+            <label>Phone number<input disabled={!ready} readOnly={preview} ref={phoneInput} type="tel" placeholder="024 000 0000" autoComplete={preview ? "off" : "tel"} value={phone} onChange={(event) => { setPhone(event.target.value); setMessage(""); }} /></label>
+            <label className="full-field">Email address<input disabled={!ready} readOnly={preview} ref={emailInput} type="email" placeholder="you@example.com" autoComplete={preview ? "off" : "email"} value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); }} /></label>
           </div>
 
           <div className="checkout-step checkout-step--second">
@@ -225,7 +269,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                   <ul className="supported-momo-networks" aria-label="Available mobile money networks">
                     {paymentNetworks.map(item => <li key={item.id}><Image src={item.icon} alt="" width={30} height={30} /><span>{item.label}</span></li>)}
                   </ul>
-                  <p className="secure-note">Choose your network and approve payment on SeevPlus.</p>
+                  <p className="secure-note">{preview ? "In a real checkout, you would choose your network and approve payment on SeevPlus." : "Choose your network and approve payment on SeevPlus."}</p>
                 </> : <div className="network-list" role="radiogroup" aria-label="Choose mobile money service">
                 {paymentNetworks.map((item) => (
                   <button type="button" role="radio" aria-checked={network === item.id} key={item.id} className={network === item.id ? "selected" : ""} onClick={() => setNetwork(item.id)}>
@@ -242,7 +286,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                 <CreditCard size={20} aria-hidden="true" /><span>Cards<small>Visa or Mastercard through Paystack</small></span>
               </label>
               {paymentMethod === "card" ? <div className="payment-method-detail"><div className="card-payment-detail">
-                <div><strong>Secure card checkout</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
+                <div><strong>Secure card checkout</strong><p>{preview ? "In a real checkout, you would enter card details securely on Paystack. This preview never opens Paystack or asks for your card details." : "Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number."}</p><span className="accepted-card-brands" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
               </div></div> : null}
             </section> : null}
             {seevEnabled && seevCryptoEnabled ? <section className={`payment-option${paymentMethod === "crypto" ? " selected" : ""}`}>
@@ -250,29 +294,30 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                 <input type="radio" name="paymentMethod" value="crypto" checked={paymentMethod === "crypto"} onChange={() => { setPaymentMethod("crypto"); setMessage(""); }} />
                 <Wallet size={20} aria-hidden="true" /><span>Crypto<small>USDC through SeevPlus</small></span>
               </label>
-              {paymentMethod === "crypto" ? <div className="payment-method-detail"><p className="secure-note">Continue to SeevPlus and review the USDC amount. Use only the asset and network shown there, then follow the payment instructions. Your tickets appear once payment is confirmed.</p></div> : null}
+              {paymentMethod === "crypto" ? <div className="payment-method-detail"><p className="secure-note">{preview ? "In a real checkout, SeevPlus would show the USDC amount. Use only the asset and network shown there. This preview has no wallet address and never asks you to transfer funds." : "Continue to SeevPlus and review the USDC amount. Use only the asset and network shown there, then follow the payment instructions. Your tickets appear once payment is confirmed."}</p></div> : null}
             </section> : null}
           </fieldset>
-          <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label>
-          <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
+          {!preview ? <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label> : null}
+          <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>{preview ? "I understand this is a no-charge preview. No booking will be made." : <>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</>}</span></label>
           </>}
         </section>
 
         <aside className="order-summary">
-          <p className="eyebrow">Order summary</p>
+          {preview ? <Image className="checkout-preview-poster" src={event.image} alt={`${event.title} event poster`} width={600} height={750} unoptimized /> : null}
+          <p className="eyebrow">{preview ? "Demo order summary" : "Order summary"}</p>
           <h2>{event.title}</h2>
           <p>{event.shortDate} · {event.time.split(" — ")[0]}<br />{event.venue}, {event.area}</p>
-          <div className="checkout-coupon"><label htmlFor="checkout-coupon">Discount code</label><div><input id="checkout-coupon" value={couponCode} maxLength={32} disabled={isPaying||quoting} onChange={e=>{setCouponCode(e.target.value);setCoupon(null);setCouponMessage('');}}/><button type="button" disabled={!ready||quoting||isPaying||!couponCode.trim()} onClick={()=>void applyCoupon()}>{quoting?'Checking…':'Apply'}</button>{activeCoupon?<button type="button" disabled={isPaying} onClick={()=>{setCoupon(null);setCouponCode('');setCouponMessage('');}}>Remove</button>:null}</div><p role="status">{coupon&&!activeCoupon?'Your ticket selection changed. Apply the code again.':couponMessage}</p></div>
+          {!preview ? <div className="checkout-coupon"><label htmlFor="checkout-coupon">Discount code</label><div><input id="checkout-coupon" value={couponCode} maxLength={32} disabled={isPaying||quoting} onChange={e=>{setCouponCode(e.target.value);setCoupon(null);setCouponMessage('');}}/><button type="button" disabled={!ready||quoting||isPaying||!couponCode.trim()} onClick={()=>void applyCoupon()}>{quoting?'Checking…':'Apply'}</button>{activeCoupon?<button type="button" disabled={isPaying} onClick={()=>{setCoupon(null);setCouponCode('');setCouponMessage('');}}>Remove</button>:null}</div><p role="status">{coupon&&!activeCoupon?'Your ticket selection changed. Apply the code again.':couponMessage}</p></div> : null}
           <div className="summary-lines">
             <span>{quantity} × {selectedTier.name} <b>{formatGhanaCedis(ticketTotalMinor)}</b></span>
             {discountMinor>0?<span>Discount · {activeCoupon?.code}<b>−{formatGhanaCedis(discountMinor)}</b></span>:null}
             {selectedTier.admissionsPerUnit > 1 && <span>Admissions included <b>{admissionCount}</b></span>}
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
-            <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
+            <strong>{preview ? "Demo total" : "Total"} <b>{formatGhanaCedis(totalMinor)}</b></strong>
           </div>
-          <ActionButton type="button" className="pay-button" aria-busy={!ready || isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={!ready || quoting || isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : !ready ? "Preparing checkout…" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "crypto" ? `Continue to USDC payment · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
-          <p id="checkout-payment-message" className="payment-message" role="status" aria-atomic="true">{message}</p>
-          {paystackEnabled || seevEnabled ? <p className="secure-note"><ShieldCheck size={15} /> {paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.</p> : null}
+          <ActionButton type="button" className="pay-button" aria-busy={!ready || isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={!ready || quoting || isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : !ready ? "Preparing checkout…" : preview ? isPaying ? "Preparing preview…" : paymentMethod ? `Preview ${paymentMethod === "card" ? "card checkout" : paymentMethod === "crypto" ? "USDC checkout" : "MoMo checkout"} · no charge` : "Choose a payment method" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "crypto" ? `Continue to USDC payment · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>
+          <p id="checkout-payment-message" className="payment-message" role="status" aria-atomic="true">{preview && previewComplete && message ? <strong>Preview complete</strong> : null}{message}</p>
+          {paystackEnabled || seevEnabled ? <p className="secure-note"><ShieldCheck size={15} /> {preview ? "Simulation only. No payment service is contacted." : `${paymentProvider === "seevplus" ? "SeevPlus" : "Paystack"} handles the money. We handle the night.`}</p> : null}
         </aside>
       </div>
     </main>

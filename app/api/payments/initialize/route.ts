@@ -10,6 +10,7 @@ import { enforceRateLimit } from "../../../../lib/security-controls";
 import { purchasePolicyKeys, recordPolicyConsents } from "../../../../lib/policies";
 import { recordProductMetric } from "../../../../lib/product-analytics";
 import { replayPaymentAttempt } from "../../../../lib/payment-attempts";
+import { isCheckoutPreviewEvent } from "../../../../lib/checkout-preview";
 
 const RESERVATION_MINUTES = 15;
 const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Send valid checkout details." }, { status: 400 });
   }
+  // Reject the presentation-only identity before runtime access, rate limits,
+  // idempotency claims, inventory reservations or any provider interaction.
+  if (isCheckoutPreviewEvent(body.eventSlug)) return Response.json({ error: "This is a no-charge preview. Live payment is not allowed." }, { status: 400, headers: { "cache-control": "no-store" } });
   if (body.acceptedPolicies !== true) return Response.json({ error: "Accept the ticket, refund and privacy terms before payment." }, { status: 400 });
   const eventSlug = body.eventSlug?.trim() ?? "";
   const { env } = await import("cloudflare:workers");

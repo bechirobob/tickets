@@ -1,0 +1,116 @@
+name: Release verified Tickets VPS code
+
+# Explicit activation only. Changing this file never deploys or runs diagnostics.
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact main SHA with successful VPS and equivalent-tree browser CI
+        required: true
+        type: string
+      runtime_run:
+        description: Successful Verify Tickets VPS runtime run ID on main
+        required: true
+        type: string
+      candidate_run:
+        description: Successful three-browser Candidate verification run ID
+        required: true
+        type: string
+      expected_active:
+        description: Exact SHA currently serving active VPS traffic
+        required: true
+        type: string
+      enable_crypto:
+        description: Enable requested USDC checkout after owner-confirmed merchant wallet setup (no payment test)
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      EXPECTED_ACTIVE: ${{ inputs.expected_active }}
+      RUNTIME_RUN: ${{ inputs.runtime_run }}
+      CANDIDATE_RUN: ${{ inputs.candidate_run }}
+      ENABLE_CRYPTO: ${{ inputs.enable_crypto && 'true' || 'false' }}
+    steps:
+      - name: Require main and exact bounded release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject unmerged source before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          git merge-base --is-ancestor "$EXPECTED_ACTIVE" "$SOURCE_SHA"
+      - name: Verify updater regression suite
+        run: python3 -m unittest discover -s ops/vps -p 'test_*.py'
+      - name: Verify exact CI runs, source tree, ancestry and artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          mkdir -m 700 "$metadata"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/runtime-jobs.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/candidate-jobs.json"
+          candidate_sha=$(jq -r '.head_sha' "$metadata/candidate.json")
+          [[ "$candidate_sha" =~ ^[a-f0-9]{40}$ ]]
+          git fetch --no-tags origin "$candidate_sha"
+          gh run download "$RUNTIME_RUN" --repo "$GITHUB_REPOSITORY" --name "tickets-vps-$SOURCE_SHA" --dir "$metadata/artifact"
+          python3 ops/vps/code-release.py verify-ci \
+            --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
+      - name: Connect existing dedicated Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Apply reversible Tickets-only code transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          stage="/var/tmp/tickets-code-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          digest=$(sha256sum "$metadata/artifact/tickets-vps-runtime.tar.gz" | cut -d ' ' -f 1)
+          proof_digest=$(sha256sum "$metadata/provenance.json" | cut -d ' ' -f 1)
+          script_digest=$(sha256sum ops/vps/code-release.py | cut -d ' ' -f 1)
+          # Exclusive staging prevents blind retry over an earlier uncertain run.
+          tailscale ssh root@hermes "umask 077; mkdir '$stage'"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/runtime.tar.gz'" < "$metadata/artifact/tickets-vps-runtime.tar.gz"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < ops/vps/code-release.py
+          tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO'"
+          # Only this successful run's three staged files are removed. Private
+          # rollback snapshots and prior releases remain untouched on the host.
+          tailscale ssh root@hermes "rm -- '$stage/runtime.tar.gz' '$stage/provenance.json' '$stage/code-release.py' && rmdir -- '$stage'"
