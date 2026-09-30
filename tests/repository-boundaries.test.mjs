@@ -149,6 +149,7 @@ test("candidate CI runs the core gates once and fans the same build out to all b
   const download = candidateStep(verify, "Download the verified browser build");
   assert.deepEqual(download.with, {
     "artifact-ids": "${{ needs.core.outputs.artifact_id }}",
+    "merge-multiple": true,
     path: "${{ runner.temp }}/candidate-build",
   });
   candidateStep(verify, "Verify and restore the exact candidate build");
@@ -180,13 +181,14 @@ test("candidate browser coverage retains full journeys and deliberate no-retry r
   assert.equal(candidateStep(verify, "Preserve focused checkout evidence").if, "always()");
 });
 
-test("candidate artifact scripts preserve hidden build files and fail closed on source or byte mismatches", async (t) => {
+test("candidate artifact download layout preserves hidden build files and fails closed on source or byte mismatches", async (t) => {
   const { core, verify } = (await candidateWorkflow()).jobs;
   const temporary = await mkdtemp(join(tmpdir(), "tickets-candidate-ci-"));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const producer = join(temporary, "producer");
   const consumer = join(temporary, "consumer");
-  const runnerTemp = join(temporary, "runner");
+  const runnerTemp = join(temporary, "producer-runner");
+  const browserRunner = join(temporary, "browser-runner");
   const output = join(temporary, "outputs");
   await mkdir(producer);
   await mkdir(runnerTemp);
@@ -217,7 +219,30 @@ test("candidate artifact scripts preserve hidden build files and fail closed on 
   assert.equal(outputs.sha, sha);
   assert.equal(outputs.tree, tree);
   assert.match(outputs.sha256, /^[a-f0-9]{64}$/u);
-  const build = { BUILD_SHA: outputs.sha, BUILD_TREE: outputs.tree, BUILD_DIGEST: outputs.sha256 };
+  const download = candidateStep(verify, "Download the verified browser build");
+  const artifact = { id: "123456", name: `candidate-build-${sha}-100-1` };
+  const packedArchive = join(runnerTemp, "candidate-build/browser-build.tar.gz");
+  // Match the pinned v4.3.0 action's path selection, not newer README behavior:
+  // src/download-artifact.ts treats only a name input as a single download.
+  // artifact-ids selects the multi-artifact path even for exactly one ID.
+  const downloadById = async (destination, inputs) => {
+    assert.equal(inputs["artifact-ids"], artifact.id);
+    const resolvedPath = join(destination, "candidate-build");
+    const extracted = inputs.name || inputs["merge-multiple"] === true
+      ? resolvedPath : join(resolvedPath, artifact.name);
+    await mkdir(extracted, { recursive: true });
+    await cp(packedArchive, join(extracted, "browser-build.tar.gz"));
+    return extracted;
+  };
+  const inputs = { ...download.with, "artifact-ids": artifact.id };
+  const extracted = await downloadById(browserRunner, inputs);
+  assert.equal(extracted, join(browserRunner, "candidate-build"));
+  const build = { BUILD_SHA: outputs.sha, BUILD_TREE: outputs.tree, BUILD_DIGEST: outputs.sha256, RUNNER_TEMP: browserRunner };
+  const nestedRunner = join(temporary, "unmerged-browser-runner");
+  assert.equal(await downloadById(nestedRunner, { ...inputs, "merge-multiple": false }),
+    join(nestedRunner, "candidate-build", artifact.name));
+  assert.notEqual(run(restore, consumer, { ...build, RUNNER_TEMP: nestedRunner }).status, 0,
+    "The old ID-based default nests the archive and must reproduce the missing-file failure");
   const restored = run(restore, consumer, build);
   assert.equal(restored.status, 0, restored.stderr);
   assert.equal(await readFile(join(consumer, "dist/client/.vite/manifest.json"), "utf8"), '{"asset":"unchanged"}\n');
@@ -229,12 +254,12 @@ test("candidate artifact scripts preserve hidden build files and fail closed on 
     assert.notEqual(run(restore, consumer, { ...build, ...overrides }).status, 0, `Rejected ${JSON.stringify(overrides)}`);
   }
   assert.notEqual(run(source, producer, { BECORE_RELEASE_SHA: "a".repeat(40) }).status, 0);
-  await appendFile(join(runnerTemp, "candidate-build/browser-build.tar.gz"), "tampered");
+  await appendFile(join(browserRunner, "candidate-build/browser-build.tar.gz"), "tampered");
   assert.notEqual(run(restore, consumer, build).status, 0, "Corrupt archive must not be restored");
   await writeFile(join(producer, "dist/server/wrangler.json"), JSON.stringify({ vars: { RELEASE_SHA: "e".repeat(40) } }));
   assert.notEqual(run(pack, producer).status, 0, "Build with a stale revision must not be published");
   // Even a digest-consistent artifact must identify the exact checked-out SHA.
-  const archive = join(runnerTemp, "candidate-build/browser-build.tar.gz");
+  const archive = join(browserRunner, "candidate-build/browser-build.tar.gz");
   execFileSync("tar", ["-czf", archive, "dist/client", "dist/server"], { cwd: producer });
   const digest = execFileSync("sha256sum", [archive], { encoding: "utf8" }).split(" ")[0];
   assert.notEqual(run(restore, consumer, { ...build, BUILD_DIGEST: digest }).status, 0);

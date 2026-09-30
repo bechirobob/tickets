@@ -16,7 +16,7 @@ test('mobile Back closes navigation before leaving and outside destinations keep
   await trigger.click(); await expect(menu).toBeVisible();
   await page.getByRole('navigation', { name: 'Customer navigation' }).getByRole('link', { name: 'My Nights' }).click();
   await expect(page).toHaveURL(/\/my-nights$/);
-  await expect(page.getByRole('heading', { name: 'My Nights', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My Nights.', exact: true })).toBeVisible();
   await page.goBack(); await expect(page).toHaveURL(/\/events$/);
   await expect(menu).toHaveCount(0);
 });
