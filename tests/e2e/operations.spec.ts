@@ -875,16 +875,28 @@ test('Orders preserves validated payment exception filters and rejects unknown q
     return route.fulfill({ json: { orders: [], events: [], total: 0, page: 1, pageSize: 10, reconciliationRuns: [], settlements: [], disputes: [] } });
   });
   for (const provider of ['seevplus', 'paystack']) {
-    await page.goto('/admin/orders?status=payment_pending&provider=' + provider);
+    await page.goto('/admin/orders?status=payment_pending&removed=1&provider=' + provider);
     await expect.poll(() => latest()?.get('provider')).toBe(provider);
     expect(latest()!.get('status')).toBe('payment_pending');
+    expect(latest()!.get('removed')).toBe('1');
+    await page.getByText('Filter by event or payment method', { exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: 'Include removed events', exact: true })).toBeChecked();
     await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('payment_pending');
     await expect(page.getByLabel('Payment method', { exact: true })).toHaveValue(provider);
+    const beforeSearch = queries.length;
     await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect.poll(() => queries.length).toBeGreaterThan(beforeSearch);
     await expect.poll(() => latest()?.get('status')).toBe('payment_pending');
+    expect(latest()!.get('removed')).toBe('1');
+    const beforeReload = queries.length;
+    await page.reload();
+    await expect.poll(() => queries.length).toBeGreaterThan(beforeReload);
+    await page.getByText('Filter by event or payment method', { exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: 'Include removed events', exact: true })).toBeChecked();
+    expect(latest()!.get('removed')).toBe('1');
   }
-  await page.goto('/admin/orders?status=untrusted&provider=untrusted&event=%3Cscript%3E');
+  await page.goto('/admin/orders?status=untrusted&provider=untrusted&event=%3Cscript%3E&removed=untrusted');
   await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('');
   await expect.poll(() => latest()?.has('status')).toBe(false);
-  expect(latest()!.has('provider')).toBe(false); expect(latest()!.has('event')).toBe(false);
+  expect(latest()!.has('provider')).toBe(false); expect(latest()!.has('event')).toBe(false); expect(latest()!.has('removed')).toBe(false);
 });

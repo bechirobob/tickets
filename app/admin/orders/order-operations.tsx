@@ -16,13 +16,13 @@ type Dispute = { id: string; reference: string; status: string; category: string
 
 const money = (minor: number, currency: string) => new Intl.NumberFormat("en-GH", { style: "currency", currency }).format(minor / 100);
 
-export default function OrderOperations({ actor, role, initialEvent = "", initialStatus = "", initialProvider = "" }: { actor: string; role: StaffRole; initialEvent?: string; initialStatus?: string; initialProvider?: string }) {
+export default function OrderOperations({ actor, role, initialEvent = "", initialStatus = "", initialProvider = "", initialRemoved = false }: { actor: string; role: StaffRole; initialEvent?: string; initialStatus?: string; initialProvider?: string; initialRemoved?: boolean }) {
   const [view, setView] = useState("orders");
   const [provider, setProvider] = useState(initialProvider);
   const [eventSlug, setEventSlug] = useState(initialEvent);
   const [caseOrder, setCaseOrder] = useState<Order | null>(null);
   const [events, setEvents] = useState<Array<{ slug: string; title: string }>>([]);
-  const [includeRemoved, setIncludeRemoved] = useState(false);
+  const [includeRemoved, setIncludeRemoved] = useState(initialRemoved);
   const [orders, setOrders] = useState<Order[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -49,6 +49,7 @@ export default function OrderOperations({ actor, role, initialEvent = "", initia
     if (initialEvent) params.set("event", initialEvent);
     if (initialStatus) params.set("status", initialStatus);
     if (initialProvider) params.set("provider", initialProvider);
+    if (initialRemoved) params.set("removed", "1");
     operationsFetch(`/api/admin/orders?${params}`, { cache: "no-store" })
       .then(async (response) => ({ response, data: await response.json() as { orders?: Order[]; events?: Array<{ slug: string; title: string }>; total?: number; page?: number; pageSize?: number; reconciliationRuns?: Run[]; settlements?: Settlement[]; disputes?: Dispute[]; error?: string } }))
       .then(({ response, data }) => {
@@ -62,7 +63,7 @@ export default function OrderOperations({ actor, role, initialEvent = "", initia
         }
       })
       .catch(() => setMessage("Orders could not be loaded."));
-  }, [initialEvent, initialStatus, initialProvider]);
+  }, [initialEvent, initialStatus, initialProvider, initialRemoved]);
 
   async function operate(action: string, order?: Order, extra: Record<string, unknown> = {}) {
     if (working) return;

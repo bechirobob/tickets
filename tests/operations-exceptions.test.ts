@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { observeBackgroundJob, readBackgroundHealth } from '../lib/background-health';
 import { readOperationExceptions } from '../lib/operations-exceptions';
+import { GET as orders } from '../app/api/admin/orders/route';
 import { GET as operations } from '../app/api/admin/operations/route';
 import { createStaffSession, type StaffRole } from '../lib/admin-session';
 
@@ -40,6 +41,27 @@ describe('owner background work evidence', () => {
     expect(data.exceptions.find(item => item.key === 'delivery:host_application_decision:needs_review')?.count).toBe(1);
     expect(data.exceptions.find(item => item.key === 'delivery:host_application_decision:retry_scheduled')?.count).toBe(1);
     expect(JSON.stringify(data)).not.toContain('@example.com');
+  });
+  it('keeps removed-event payment exceptions reachable without changing the default Orders view', async () => {
+    const id = crypto.randomUUID(), slug = `removed-${id}`, now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO curated_event_records(id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,image_url,curation_note,status,created_at,updated_at,removed_at)
+      VALUES(?,?,?,'Removed test event','Venue','Accra',?,?,'Night',10000,'/events/test.webp','Test','unpublished',?,?,?)`).bind(slug,slug,slug,now,now,now,now,now).run();
+    await env.DB.prepare(`INSERT INTO orders(id,reference,event_slug,ticket_type,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,payment_provider,status,created_at)
+      VALUES(?,?,?,'general',1,10000,0,10000,'GHS','guest@example.com','233000000000','mobile_money:mtn','seevplus','payment_pending',?)`).bind(id,`BCT-${id}`,slug,new Date(Date.now()-900_000).toISOString()).run();
+    const data = await readOperationExceptions(env.DB);
+    const attention = data.exceptions.find(item => item.key === 'payment:seevplus')!;
+    expect(attention.count).toBeGreaterThan(0);
+    expect(attention.href).toBe('/admin/orders?status=payment_pending&provider=seevplus&removed=1');
+    const cookie = await staff('owner');
+    const hidden = await (await orders(new Request(`https://tickets.becoreops.com/api/admin/orders?event=${slug}`, {headers:{cookie}}))).json() as {orders:Array<{id:string}>};
+    expect(hidden.orders).toEqual([]);
+    const reachable = await (await orders(new Request(`https://tickets.becoreops.com/api${attention.href}&event=${slug}`, {headers:{cookie}}))).json() as {orders:Array<{id:string}>};
+    expect(reachable.orders.map(order => order.id)).toContain(id);
+    await env.DB.prepare("UPDATE orders SET status='paid',payment_verified_at=? WHERE id=?").bind(now,id).run();
+    await env.DB.prepare(`INSERT INTO provider_operation_records(id,order_id,provider,kind,status,version,case_reference,amount_minor,currency,recorded_by,recorded_at)
+      VALUES(?,?,'seevplus','refund','pending',1,'TEST-CASE',10000,'GHS','test',?)`).bind(crypto.randomUUID(),id,now).run();
+    const refund = (await readOperationExceptions(env.DB)).exceptions.find(item => item.key === 'external-refund:seevplus')!;
+    expect(refund.href).toBe('/admin/orders?provider=seevplus&removed=1');
   });
   it('does not expose the owner queue projection to finance or curator roles', async () => {
     for (const role of ['finance', 'curator', 'owner'] as const) {

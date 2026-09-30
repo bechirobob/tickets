@@ -23,8 +23,8 @@ export async function readOperationExceptions(db: D1Database) {
     readBackgroundHealth(db),
   ]);
   const exceptions: OperationException[] = deliveries.results.map(item => ({ key: `delivery:${item.kind}:${item.state}`, label: item.kind.replaceAll("_", " "), count: item.count, oldestAt: item.oldestAt, state: item.state,
-    href: item.kind === "team_invitation" ? "/organizer/workspace?area=team" : item.kind.includes("invitation") || item.kind.startsWith("host_application") ? "/admin/hosts" : item.kind.startsWith("registration") ? "/admin/registrations" : "/admin/orders" }));
-  for (const item of pending.results) exceptions.push({ key: `payment:${item.provider}`, label: `${item.provider === "seevplus" ? "SeevPlus" : "Paystack"} payment verification`, count: item.count, oldestAt: item.oldestAt, state: "needs_review", href: `/admin/orders?status=payment_pending&provider=${item.provider}` });
-  for (const item of externalRefunds.results) exceptions.push({ key: `external-refund:${item.provider}`, label: `${item.provider === "seevplus" ? "SeevPlus" : "Paystack"} external refund cases pending`, count: item.count, oldestAt: item.oldestAt, state: "needs_review", href: `/admin/orders?provider=${item.provider}` });
+    href: item.kind === "team_invitation" ? "/organizer/workspace?area=team" : item.kind.includes("invitation") || item.kind.startsWith("host_application") ? "/admin/hosts" : item.kind.startsWith("registration") ? "/admin/registrations" : "/admin/orders?removed=1" }));
+  for (const item of pending.results) exceptions.push({ key: `payment:${item.provider}`, label: `${item.provider === "seevplus" ? "SeevPlus" : "Paystack"} payment verification`, count: item.count, oldestAt: item.oldestAt, state: "needs_review", href: `/admin/orders?status=payment_pending&provider=${item.provider}&removed=1` });
+  for (const item of externalRefunds.results) exceptions.push({ key: `external-refund:${item.provider}`, label: `${item.provider === "seevplus" ? "SeevPlus" : "Paystack"} external refund cases pending`, count: item.count, oldestAt: item.oldestAt, state: "needs_review", href: `/admin/orders?provider=${item.provider}&removed=1` });
   return { exceptions, jobs };
 }
