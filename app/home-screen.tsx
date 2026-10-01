@@ -31,7 +31,7 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
       </div>
       <figure className="backstage-bridge__image"><Image src="/atmospheres/behind-the-night.webp" width={1100} height={733} sizes="(max-width: 700px) 100vw, 50vw" alt="" aria-hidden="true" unoptimized /><figcaption>Good nights don’t happen by accident.</figcaption></figure>
       <dl>
-        <div><dt><Ticket aria-hidden="true" size={20} /> Sell tickets</dt><dd>MoMo, cards and ticket tiers. Give the group chat a deadline.</dd></div>
+        <div><dt><Ticket aria-hidden="true" size={20} /> Sell tickets</dt><dd>MoMo, cards, USDC and ticket tiers. Give the group chat a deadline.</dd></div>
         <div><dt><MessageCircle aria-hidden="true" size={20} /> Run the night</dt><dd>Guest updates, a private Room and passes ready for the door.</dd></div>
         <div><dt><ChartNoAxesCombined aria-hidden="true" size={20} /> Plan the next</dt><dd>See what sold, who brought the crowd and when they showed up.</dd></div>
       </dl>

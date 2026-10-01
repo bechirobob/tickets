@@ -1160,6 +1160,213 @@ class AdditiveDeploymentTests(DeploymentFixture):
             self.assertEqual(self.system.restarts, 0)
 
 
+class HostVerificationMigrationTests(unittest.TestCase):
+    SQL = (b"-- Owner-confirmed public verification for the existing Kofi Bills profile.\n"
+           b"-- No account roles, permissions, event assignments or other hosts are changed.\n"
+           b"UPDATE hosts\nSET verification_status = 'verified', updated_at = CURRENT_TIMESTAMP\n"
+           b"WHERE id = 'host:kofi-bills' AND slug = 'kofi-bills'\n"
+           b"  AND verification_status = 'reviewed';\n")
+
+    @staticmethod
+    def seed(database):
+        database.executescript("""
+            CREATE TABLE hosts (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL, verification_status TEXT NOT NULL, updated_at TEXT NOT NULL,
+                account_id TEXT, permission_marker TEXT);
+            INSERT INTO hosts VALUES ('host:kofi-bills','kofi-bills','Kofi Bills','reviewed','before',NULL,'unchanged');
+            INSERT INTO hosts VALUES ('host:other','other','Other host','reviewed','before',NULL,'unchanged');
+            CREATE TABLE staff (id TEXT PRIMARY KEY, role TEXT NOT NULL);
+            INSERT INTO staff VALUES ('staff','scanner');
+            CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT NOT NULL);
+            INSERT INTO orders VALUES ('preserved-order','paid');
+        """)
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.database = self.root / "tickets.sqlite"
+        with release.sqlite3.connect(self.database) as connection:
+            self.seed(connection)
+        self.database.chmod(0o600)
+        self.staging = self.root / "backup"
+        self.spec = release.migration_plan([release.HOST_VERIFICATION_PATH])[0]
+
+    def migrate(self):
+        return release.migrate_database(self.database, self.staging, [(self.spec, self.SQL)])
+
+    def rows(self, table="hosts"):
+        with release.sqlite3.connect(self.database) as connection:
+            return connection.execute('SELECT * FROM "' + table + '" ORDER BY id').fetchall()
+
+    def test_exact_correction_preserves_all_other_values_with_private_backup(self):
+        before = self.rows()
+        result = self.migrate()
+        self.assertEqual(result["publicHostCorrection"], {
+            "hostId": "host:kofi-bills", "changed": True, "beforeStatus": "reviewed",
+            "afterStatus": "verified", "preservedOnCodeRollback": True})
+        self.assertFalse(result["created"])
+        after = self.rows()
+        self.assertEqual(after[1:], before[1:])
+        self.assertEqual(after[0][:3] + after[0][5:], before[0][:3] + before[0][5:])
+        self.assertEqual(after[0][3], "verified")
+        self.assertEqual(self.rows("staff"), [("staff", "scanner")])
+        self.assertEqual(self.rows("orders"), [("preserved-order", "paid")])
+        backup = self.staging / "before.sqlite"
+        self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+        self.assertEqual(result["backupSha256"], release.digest_file(backup))
+        with release.sqlite3.connect(backup) as saved:
+            self.assertEqual(saved.execute("SELECT * FROM hosts ORDER BY id").fetchall(), before)
+
+    def test_already_verified_and_repeat_are_byte_preserving_noops(self):
+        self.migrate()
+        before = self.rows()
+        self.staging = self.root / "repeat"
+        result = self.migrate()
+        self.assertFalse(result["publicHostCorrection"]["changed"])
+        self.assertEqual(self.rows(), before)
+
+    def test_unexpected_missing_or_mismatched_identity_fails_closed(self):
+        for statement in (
+            "DELETE FROM hosts WHERE id='host:kofi-bills'",
+            "UPDATE hosts SET slug='different' WHERE id='host:kofi-bills'",
+            "UPDATE hosts SET id='host:different' WHERE slug='kofi-bills'",
+            "UPDATE hosts SET verification_status='unverified' WHERE id='host:kofi-bills'",
+            "UPDATE hosts SET verification_status='revoked' WHERE id='host:kofi-bills'",
+        ):
+            with self.subTest(statement=statement):
+                with release.sqlite3.connect(self.database) as connection:
+                    connection.execute("DELETE FROM hosts")
+                    connection.execute("INSERT INTO hosts VALUES ('host:kofi-bills','kofi-bills','Kofi Bills','reviewed','before',NULL,'unchanged')")
+                    connection.execute(statement)
+                before = self.rows()
+                self.staging = self.root / ("case-" + str(len(list(self.root.iterdir()))))
+                with self.assertRaises(release.ReleaseError):
+                    self.migrate()
+                self.assertEqual(self.rows(), before)
+                self.assertEqual(self.rows("staff"), [("staff", "scanner")])
+
+    def test_hosts_trigger_is_rejected_before_any_indirect_write(self):
+        with release.sqlite3.connect(self.database) as connection:
+            connection.execute("CREATE TRIGGER unsafe AFTER UPDATE ON hosts BEGIN UPDATE staff SET role='owner'; END")
+        before = self.rows()
+        with self.assertRaisesRegex(release.ReleaseError, "hosts triggers"):
+            self.migrate()
+        self.assertEqual(self.rows(), before)
+        self.assertEqual(self.rows("staff"), [("staff", "scanner")])
+
+    def test_sql_spec_and_batch_must_match_only_the_exact_reviewed_correction(self):
+        for raw, spec in ((self.SQL + b"DELETE FROM staff;", self.spec),
+                          (self.SQL.replace(b"= 'reviewed'", b"<> 'verified'"), self.spec),
+                          (self.SQL, dict(self.spec, path="drizzle/other.sql")),
+                          (self.SQL, dict(self.spec, sha256="a" * 64)),
+                          (self.SQL, dict(self.spec, extra="unexpected")),
+                          (self.SQL, dict(self.spec, kind="arbitrary-update"))):
+            with self.subTest(raw=raw, spec=spec), self.assertRaises(release.ReleaseError):
+                release.migrate_database(self.database, self.staging, [(spec, raw)])
+        with self.assertRaisesRegex(release.ReleaseError, "only migration"):
+            release.migrate_database(self.database, self.staging,
+                [(self.spec, self.SQL), (AdditiveMigrationTests.specification(), AdditiveMigrationTests.SQL)])
+        self.assertFalse(self.staging.exists())
+        self.assertEqual(self.rows()[0][3], "reviewed")
+
+    def test_authorizer_denies_other_columns_tables_and_cascade_side_effects(self):
+        # Even an internal caller bypassing the exact-byte admission cannot use
+        # the restricted execution boundary for permissions or other data.
+        for raw in (b"UPDATE hosts SET account_id='new' WHERE id='host:kofi-bills';",
+                    b"UPDATE staff SET role='owner';",
+                    b"DELETE FROM hosts;"):
+            with self.subTest(raw=raw), release.closing(release.sqlite3.connect(self.database)) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                with self.assertRaises(release.sqlite3.DatabaseError):
+                    release.correct_host_verification(connection, raw)
+                connection.rollback()
+        with release.sqlite3.connect(self.database) as connection:
+            connection.executescript("""
+                CREATE UNIQUE INDEX host_status_identity ON hosts(id,verification_status);
+                CREATE TABLE permission_link (host_id TEXT, status TEXT,
+                    FOREIGN KEY(host_id,status) REFERENCES hosts(id,verification_status) ON UPDATE CASCADE);
+                INSERT INTO permission_link VALUES ('host:kofi-bills','reviewed');
+            """)
+        with self.assertRaises(release.sqlite3.DatabaseError):
+            self.migrate()
+        self.assertEqual(self.rows()[0][3], "reviewed")
+        self.assertEqual(self.rows("staff"), [("staff", "scanner")])
+
+    def test_postcondition_failure_rolls_back_the_exact_row(self):
+        before = self.rows()
+        original = release.schema_rows
+        count = [0]
+        def altered_schema(connection):
+            count[0] += 1
+            rows = original(connection)
+            return rows + [("table", "unexpected", "unexpected", "unexpected")] if count[0] == 3 else rows
+        with patch.object(release, "schema_rows", side_effect=altered_schema):
+            with self.assertRaisesRegex(release.ReleaseError, "unrelated host values or database schema"):
+                self.migrate()
+        self.assertEqual(self.rows(), before)
+
+    def test_writes_after_backup_before_lock_survive_and_define_the_baseline(self):
+        write = release.write_json
+        def write_between_backup_and_transaction(path, value):
+            write(path, value)
+            if value.get("phase") == "backed-up":
+                with release.sqlite3.connect(self.database) as connection:
+                    connection.execute("INSERT INTO orders VALUES ('concurrent-order','paid')")
+                    connection.execute("UPDATE hosts SET name='Existing corrected display name' WHERE id='host:kofi-bills'")
+        with patch.object(release, "write_json", side_effect=write_between_backup_and_transaction):
+            self.migrate()
+        self.assertEqual(self.rows()[0][2], "Existing corrected display name")
+        self.assertEqual(self.rows("orders"), [("concurrent-order", "paid"), ("preserved-order", "paid")])
+        with release.sqlite3.connect(self.staging / "before.sqlite") as saved:
+            self.assertEqual(saved.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 1)
+
+
+class HostVerificationDeploymentTests(DeploymentFixture):
+    def prepare_correction(self):
+        state = self.root / "var/lib/becore-tickets"
+        state.chmod(0o700)
+        with release.sqlite3.connect(state / "tickets.sqlite") as database:
+            HostVerificationMigrationTests.seed(database)
+        (state / "tickets.sqlite").chmod(0o600)
+        member = tarfile.TarInfo("migrations/0059_kofi_bills_verified_host.sql")
+        member.mode = 0o644
+        self.make_archive(extra=(member, HostVerificationMigrationTests.SQL))
+        self.proof["changedFiles"] = [release.HOST_VERIFICATION_PATH]
+        self.proof["migrations"] = release.migration_plan(self.proof["changedFiles"])
+        self.refresh_digests()
+        return state
+
+    def test_code_rollback_keeps_correction_and_customer_writes(self):
+        state = self.prepare_correction()
+        self.system.fail = "local"
+        restart = self.system.restart
+        def write_after_activation():
+            restart()
+            if self.system.revision == NEW:
+                with release.sqlite3.connect(state / "tickets.sqlite") as database:
+                    self.assertEqual(database.execute("SELECT verification_status FROM hosts WHERE id='host:kofi-bills'").fetchone(), ("verified",))
+                    database.execute("INSERT INTO orders VALUES ('new-paid-order','paid')")
+        self.system.restart = write_after_activation
+        with self.assertRaisesRegex(release.ReleaseError, "previous release restored"):
+            self.deployment.transact()
+        self.assertEqual(self.system.revision, OLD)
+        with release.sqlite3.connect(state / "tickets.sqlite") as database:
+            self.assertEqual(database.execute("SELECT verification_status FROM hosts WHERE id='host:kofi-bills'").fetchone(), ("verified",))
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM orders").fetchone(), (2,))
+        with release.sqlite3.connect(self.deployment.snapshot / "database/before.sqlite") as saved:
+            self.assertEqual(saved.execute("SELECT verification_status FROM hosts WHERE id='host:kofi-bills'").fetchone(), ("reviewed",))
+            self.assertEqual(saved.execute("SELECT COUNT(*) FROM orders").fetchone(), (1,))
+
+    def test_release_records_exact_data_correction_and_backup(self):
+        self.prepare_correction()
+        self.assertTrue(self.deployment.transact()["dataMigration"])
+        record = release.strict_json(self.deployment.journal.read_bytes())["lastCodeRelease"]
+        self.assertEqual(record["reviewedDataMigrations"], self.proof["migrations"])
+        self.assertNotIn("additiveMigrations", record)
+        self.assertEqual(record["databaseBackupSha256"], release.digest_file(self.deployment.snapshot / "database/before.sqlite"))
+
+
 class VerifierTests(unittest.TestCase):
     def test_crypto_json_edit_preserves_unrelated_bytes_and_escaped_keys(self):
         self.assertEqual(release.enable_crypto_bytes(b'{ "key":"value" }\n'),

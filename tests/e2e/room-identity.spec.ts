@@ -40,8 +40,11 @@ for (const route of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/$
     await expect(logo).toHaveAccessibleName("BeCore Tickets");
     await expect(logo.locator("b")).toBeVisible();
     await expect.poll(() => logo.locator("img").evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-    const bounds = await logo.boundingBox();
-    expect(bounds?.height).toBeGreaterThanOrEqual(38);
+    // Hydration can replace an already-visible node between image readiness
+    // and measurement. Re-resolve its box without relaxing the size contract.
+    await expect.poll(async () => (await logo.boundingBox({ timeout: 1000 }))?.height ?? 0, {
+      timeout: 5000, intervals: [50, 100, 250], message: 'The rendered logo remains at least 38px tall',
+    }).toBeGreaterThanOrEqual(38);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     if (path === "/") {
       const footer = page.locator(".compact-footer");
@@ -51,6 +54,38 @@ for (const route of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/$
     if (["/help", "/terms", "/admin/login", "/admin/recover"].includes(path)) {
       await page.screenshot({ path: testInfo.outputPath(`brand-${path.replaceAll("/", "-")}.png`), fullPage: true });
     }
+  });
+}
+
+for (const route of ['/help', '/terms']) {
+  test(`support email stays intact through hydration on ${route}`, async ({ page }) => {
+    const hydrationErrors: string[] = [];
+    page.on('pageerror', error => {
+      if (/hydration|Minified React error #(418|423|425)/iu.test(error.message)) hydrationErrors.push(error.message);
+    });
+    page.on('console', message => {
+      if (message.type() === 'error' && /hydration|Minified React error #(418|423|425)/iu.test(message.text())) hydrationErrors.push(message.text());
+    });
+    const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
+    expect(response?.status()).toBe(200);
+    const html = await response!.text();
+    expect(html).toContain('<a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a>');
+    if (route === '/help') expect(html).toMatch(/<span>(?:<!--email_off-->)?tickets@becoreops\.com(?:<!--\/email_off-->)?<\/span>/u);
+    expect(html).not.toMatch(/__cf_email__|data-cfemail|\/cdn-cgi\/l\/email-protection/u);
+    await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeEnabled();
+    if (route === '/help') {
+      await page.getByRole('searchbox', { name: 'Search BeCore Help' }).fill('No access link');
+      await expect(page.locator('#recover-access')).toBeVisible();
+      await expect(page.locator('#recover-access')).toHaveJSProperty('open', true);
+    } else {
+      await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+      await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeFocused();
+    }
+    await expect(page.locator('.__cf_email__, [data-cfemail], a[href*="/cdn-cgi/l/email-protection"]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'tickets@becoreops.com', exact: true })).toHaveAttribute('href', 'mailto:tickets@becoreops.com');
+    expect(hydrationErrors).toEqual([]);
   });
 }
 

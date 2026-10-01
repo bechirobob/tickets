@@ -4,6 +4,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {tmpdir} from 'node:os';
+import {captureWebsiteComparison} from './iphone-layout-evidence.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = process.env.LAYOUT_OUTPUT || path.join(tmpdir(), 'becore-iphone-layouts');
@@ -28,7 +29,17 @@ if(!catalogue.screens || !catalogue.events?.length) throw new Error('No live eve
 const server = spawn(process.execPath, [path.join(repo,'mobile/node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', '4174'], {cwd:path.join(repo,'mobile'),stdio:'inherit'});
 for(let i=0;i<50;i++){try{if((await fetch('http://127.0.0.1:4174')).ok)break;}catch{} await new Promise(r=>setTimeout(r,200));}
 const browser = await webkit.launch();
-const context = await browser.newContext({extraHTTPHeaders:{'x-becore-analytics':'exclude'},...devices['iPhone 13'], deviceScaleFactor:2, reducedMotion: 'reduce', serviceWorkers: 'block'});
+const device = {extraHTTPHeaders:{'x-becore-analytics':'exclude'},...devices['iPhone 13'], deviceScaleFactor:2, reducedMotion: 'reduce', serviceWorkers: 'block'};
+// Capture the real live baseline and exact local candidate first, before the
+// longer existing app/website sweep. This uses separate, unmocked contexts.
+if (candidate) {
+  try {
+    await captureWebsiteComparison({browser, device, outputDir:out, repo, candidateOrigin:websiteOrigin,
+      sourceRevision:process.env.LAYOUT_SOURCE_SHA || process.env.GITHUB_SHA,
+      expectedBaselineRevision:process.env.LAYOUT_BASELINE_SHA});
+  } catch (error) {await browser.close();server.kill();websiteServer?.kill();throw error;}
+}
+const context = await browser.newContext(device);
 const page = await context.newPage();
 const origin = 'https://tickets.becoreops.com';
 await page.route(`${origin}/api/public/events`, route => route.fulfill({json:catalogue,headers:{'access-control-allow-origin':'*'}}));

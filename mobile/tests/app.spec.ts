@@ -14,6 +14,8 @@ test.beforeEach(async ({ page }) => {
 test('shared Home, Drop, full posters and menu use the website destinations', async ({ page }, info) => {
   await page.goto('/');
   await expect(page.locator('.night-home')).toBeVisible();
+  await expect(page.locator('.payment-footer__crypto')).toHaveText('CryptoUSDC through SeevPlus');
+  await expect(page.locator('.payment-footer')).not.toContainText('Coming soon');
   const dock = page.getByRole('navigation', { name: 'Customer navigation' });
   await expect(dock.getByRole('link')).toHaveText(['Home', 'The Drop', 'My Nights']);
   await dock.getByRole('link', { name: 'The Drop', exact: true }).click();

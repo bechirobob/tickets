@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit Tickets VPS release with reviewed additive-only schema support.
+"""Explicit Tickets VPS release with narrowly reviewed database changes.
 
 The CI verifier binds successful main-runtime and browser runs to exact Git trees.
 The host transaction runs under the existing deployment lock, keeps private rollback
@@ -39,8 +39,9 @@ ROUTES = (("/", 200), ("/events", 200), ("/api/public/events", 200),
 # retain at least one hour of that grace before any pointer can lose protection.
 RETENTION_SAFE_AGE = 2 * 86400 - 3600
 # Only individually reviewed blobs below may extend the application/runtime or
-# create additive tables. Handover, routing, service units and arbitrary scripts
-# remain outside this operator. Existing customer rows are never rewritten.
+# create additive tables, plus one exact owner-requested public host label fix.
+# Handover, routing, service units and arbitrary scripts remain outside this
+# operator. Existing customer rows are never rewritten.
 APPLICATION_FILES = {
     "app/api/payments/initialize/route.ts", "app/checkout/[slug]/checkout-form.tsx",
     "app/checkout/[slug]/page.tsx", "app/globals.css", "lib/seevplus.ts",
@@ -62,6 +63,7 @@ REVIEWED_APPLICATION_BLOBS = {
     ".github/workflows/candidate-checks.yml": "6befb6651e354eb242b4ee0ba99874a245d38beb",
     "app/active-night-experience.tsx": "331774c8e5554721f69835234a3229350613f943",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
+    "app/admin/login/login-form.tsx": "ee7957582f7e959106766fb4b418f6524766d386",
     "app/admin/operations/event-operations-hub.tsx": "5f76745b78170bcaa8b4b59a8a41d4acd3ab4c83",
     "app/admin/orders/order-operations.tsx": "303053bb1c16089966bef372f83652424d3a912a",
     "app/admin/orders/page.tsx": "358e1bc0a8b75d8e2036ff0217e03e3d8a690f61",
@@ -74,12 +76,15 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/api/public/events/route.ts": "7893a675d91939964c96808f30b87d1a71aeb26a",
     "app/customer-dock.tsx": "18a4264821dd0af9700f88edc046a109ef458ab0",
     "app/discovery-back-link.tsx": "1b4ca8d4348b1a940c18b1aa9327a8a764b4c631",
-    "app/event/[slug]/event-screen.tsx": "d18772a3aaed511808ea61c05ff48e530f2e66a7",
+    "app/event/[slug]/event-screen.tsx": "3700cc0de1f68a63912d9caf428d48908ee266e4",
     "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
-    "app/help/help-centre.tsx": "9382a80c7f05030b7f9b0563bb8f376dc043b7b7",
-    "app/iphone-interface.css": "5bb7c4121cb0d61924cb5363e95fd5ff45fd16fd",
+    "app/help/help-centre.tsx": "f0b4617a6a6b704aefc81bfa1e2744377c18b026",
+    "app/home-screen.tsx": "b629019108100f15889edaccd6ac1ee21d4e436d",
+    "app/hosts/page.tsx": "f5d2b1129968ba51dc95a6208a408e60f200b05b",
+    "app/iphone-interface.css": "3dd3b6b529819123cbc6fa9e71f48a95b193cb1d",
     "app/layout.tsx": "056b004843736b4c37bf6f1ea256fd1b8ab9e0b7",
     "app/mobile-app-frame.tsx": "33559c6475f4b025e821b33c13d55a5b062391e9",
+    "app/mobile-navigation.tsx": "cc9e7844b263a473f590b749de26c9c4d91d0773",
     "app/my-nights/my-nights-client.tsx": "b05968170e75ccab34adef706700fa935f28155f",
     "app/organizer/layout.tsx": "64f7c8b3f26dc0b06ad9fe7dbe6a729d5477fa99",
     "app/organizer/team/accept/accept-invitation.tsx": "07200cb844273d05589d6bbd0ac77de565ff2592",
@@ -87,6 +92,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/organizer/workspace/organizer-suite.tsx": "201520d988292c058a8004854fa331d204a72607",
     "app/organizer/workspace/suite-promote.tsx": "5a0dcbc1b25c956fbde6ef19f44b0c0e54e3e2fd",
     "app/organizer/workspace/suite-records.tsx": "2f6f2c6a3881cfcea6f9b2c89a6697e8b26e97dd",
+    "app/payment-footer.tsx": "bd75bc7b041ebe776877a668a6417a787f020e98",
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
     "app/registration-form.tsx": "892574dd3198a410d5fea00232e607783d2e77df",
     "app/registration-manager.tsx": "4ce3a328ef9db472e3b45743f06ef49296be17da",
@@ -96,6 +102,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/scan/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/scan/page.tsx": "14c9facaac5aadd32c63bea083b8bf5c2d034874",
     "app/scan/scanner.tsx": "69d9bf7cf154bc7b7aaeca6a7bf26ab5d083a085",
+    "app/support-email.tsx": "98bc769b8cb2b34ae363a488b1e6c343c6399921",
+    "app/terms/page.tsx": "419f0978b0e03084cc99738a6404c3f132f93bef",
     "app/use-header-panel.ts": "f2ab8ce01887ba400a927f15f921f80f87eaf2f8",
     "app/use-layer-history.ts": "8f6421c896a29e90ff1f2bd5742f677c6543a2d2",
     "app/workspace-chrome.tsx": "f6b90f36cec6914e9b36570c52dd9c53870a5e70",
@@ -114,13 +122,17 @@ REVIEWED_APPLICATION_BLOBS = {
     "lib/scanner-sync.ts": "68d45f670f1cf1d3a26c9ff10c5fbdbf21bb8243",
     "mobile/src/adapters/navigation.tsx": "475edbb849c70e265e5fbdff6931511b40138f52",
     "mobile/src/screen-catalogue.ts": "3c7030e0374696f31af397e7970be77173418194",
-    "mobile/tests/app.spec.ts": "53a908fb903b47a3270c36711eb4c194be34c9f2",
+    "mobile/tests/app.spec.ts": "1625439651312ebe4e8bb597d02bb0cdebeec255",
     "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
+    "mobile/tsconfig.json": "be7802b84428c49a3ddeb14b79373b8cdae64234",
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
+    "scripts/capture-iphone-layouts.mjs": "ab21b98960ebbeaeaa43b45d7f88d641ac69daf0",
+    "scripts/iphone-layout-evidence.mjs": "32cafa40c84ab7e0610cb24537227f571317de37",
     "styles/customer.css": "25b9f8f4a3bc53416f3fdb4530067d44ae41f885",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b"
 }
+HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
 REVIEWED_MIGRATIONS = {
     "drizzle/0057_background_job_health.sql": {
         "blob": "d364b92ad1ab40981729f7fcd5cce862adc8138e",
@@ -140,7 +152,12 @@ REVIEWED_MIGRATIONS = {
         "triggers": {
             "provider_refund_reservation_guard": "payment_refunds"
         }
-    }
+    },
+    HOST_VERIFICATION_PATH: {
+        "kind": "kofi-bills-public-verification",
+        "blob": "0f3409624ac689c4b0d3ef8cb1c21244283974a2",
+        "sha256": "51791db6eb79061c8074c8ff96a0b225aecaca96e30ae21214c7711e7c40564d",
+    },
 }
 BROWSERS = {"desktop-chromium", "mobile-chromium", "mobile-webkit"}
 CANDIDATE_CORE_STEPS = {
@@ -496,6 +513,80 @@ def migration_plan(changes):
             for name in sorted(set(changes) & REVIEWED_MIGRATIONS.keys())]
 
 
+def reviewed_migration(raw, specification):
+    if specification.get("kind") == "kofi-bills-public-verification":
+        expected = dict(path=HOST_VERIFICATION_PATH, **REVIEWED_MIGRATIONS[HOST_VERIFICATION_PATH])
+        require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
+                and hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == expected["blob"],
+                "Host verification migration differs from the exact reviewed source.")
+        return [], []
+    require("kind" not in specification, "Unreviewed data migration kind.")
+    return additive_statements(raw, specification)
+
+
+def correct_host_verification(connection, raw):
+    """One display-only correction under BEGIN IMMEDIATE, never a general DML runner."""
+    require(connection.in_transaction, "Host correction requires the migration transaction.")
+    definition = connection.execute("SELECT type,sql FROM sqlite_schema WHERE name='hosts'").fetchall()
+    require(len(definition) == 1 and definition[0][0] == "table"
+            and re.match(r"CREATE TABLE\s", definition[0][1], re.I),
+            "Host correction requires the existing ordinary hosts table.")
+    require(not connection.execute("SELECT 1 FROM sqlite_schema WHERE type='trigger' AND tbl_name='hosts'").fetchall()
+            and not connection.execute("SELECT 1 FROM sqlite_temp_schema WHERE type='trigger' AND tbl_name='hosts'").fetchall(),
+            "Host correction refuses hosts triggers.")
+    columns = connection.execute("PRAGMA table_xinfo(hosts)").fetchall()
+    require(all(column[6] == 0 for column in columns), "Host correction refuses hidden or generated columns.")
+    columns = [column[1] for column in columns]
+    require({"id", "slug", "verification_status", "updated_at"} <= set(columns),
+            "Host correction columns are missing.")
+    before_schema = schema_rows(connection)
+    before = connection.execute("SELECT * FROM hosts ORDER BY id").fetchall()
+    identity, slug, status, updated = (columns.index(name) for name in
+                                       ("id", "slug", "verification_status", "updated_at"))
+    targets = [index for index, row in enumerate(before)
+               if row[identity] == "host:kofi-bills" or row[slug] == "kofi-bills"]
+    require(len(targets) == 1 and before[targets[0]][identity] == "host:kofi-bills"
+            and before[targets[0]][slug] == "kofi-bills",
+            "Exact existing Kofi Bills host identity is missing or ambiguous.")
+    target = targets[0]
+    previous = before[target][status]
+    require(previous in ("reviewed", "verified"), "Unexpected Kofi Bills verification baseline.")
+    expected = list(before)
+    changed = previous == "reviewed"
+    if changed:
+        earliest = connection.execute("SELECT CURRENT_TIMESTAMP").fetchone()[0]
+        changes = connection.total_changes
+        def authorize(action, table, column, database, origin):
+            if action == sqlite3.SQLITE_UPDATE:
+                allowed = (database == "main" and table == "hosts"
+                           and column in ("verification_status", "updated_at") and origin is None)
+            else:
+                allowed = action in (sqlite3.SQLITE_READ, sqlite3.SQLITE_SELECT) or (
+                    action == sqlite3.SQLITE_FUNCTION and column == "current_timestamp")
+            return sqlite3.SQLITE_OK if allowed else sqlite3.SQLITE_DENY
+        connection.set_authorizer(authorize)
+        try:
+            cursor = connection.execute(raw.decode("utf-8"))
+        finally:
+            connection.set_authorizer(None)
+        require(cursor.rowcount == 1 and connection.total_changes - changes == 1,
+                "Host correction did not change exactly one row.")
+        latest = connection.execute("SELECT CURRENT_TIMESTAMP").fetchone()[0]
+    after = connection.execute("SELECT * FROM hosts ORDER BY id").fetchall()
+    if changed:
+        require(len(after) == len(before), "Host correction changed the host row count.")
+        timestamp = after[target][updated]
+        require(isinstance(timestamp, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", timestamp)
+                and earliest <= timestamp <= latest, "Host correction timestamp is unexpected.")
+        row = list(expected[target])
+        row[status], row[updated] = "verified", timestamp
+        expected[target] = tuple(row)
+    require(after == expected and schema_rows(connection) == before_schema,
+            "Host correction changed unrelated host values or database schema.")
+    return {"hostId": "host:kofi-bills", "changed": changed,
+            "beforeStatus": previous, "afterStatus": "verified", "preservedOnCodeRollback": True}
+
+
 def migrate_database(database, staging, migrations):
     """Service-user SQLite transaction. Never restore, replace or delete live data."""
     database, staging = Path(database), Path(staging)
@@ -510,11 +601,15 @@ def migrate_database(database, staging, migrations):
             require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
                     and info.st_uid == os.geteuid() and not stat.S_IMODE(info.st_mode) & 0o077,
                     "Unsafe live database sidecar.")
-    reviewed, additions = [], []
+    reviewed, additions, corrections = [], [], []
     for specification, raw in migrations:
-        statements, rows = additive_statements(raw, specification)
+        statements, rows = reviewed_migration(raw, specification)
         reviewed.extend(statements)
         additions.extend(rows)
+        if specification.get("kind"):
+            corrections.append(raw)
+    require(not corrections or len(corrections) == len(migrations) == 1,
+            "The exact host correction must be the only migration in its release.")
     names = [row[1] for row in additions]
     require(len(names) == len(set(names)), "Additive migration objects overlap.")
     staging.mkdir(mode=0o700)
@@ -547,6 +642,7 @@ def migrate_database(database, staging, migrations):
         if not present:
             for statement in reviewed:
                 connection.execute(statement)
+        correction = correct_host_verification(connection, corrections[0]) if corrections else None
         after = schema_rows(connection)
         require(sorted(row for row in after if row[1] in names) == sorted(additions)
                 and [row for row in after if row[1] not in names]
@@ -557,8 +653,10 @@ def migrate_database(database, staging, migrations):
         connection.commit()
     result = {"phase": "verified", "backupSha256": digest_file(backup),
               "schemaSha256": schema_digest(sorted(additions)),
-              "created": not bool(present), "tablesPreservedOnRollback": True,
+              "created": bool(additions) and not bool(present), "tablesPreservedOnRollback": True,
               "migrations": [specification for specification, _ in migrations]}
+    if correction is not None:
+        result["publicHostCorrection"] = correction
     write_json(staging / "result.json", result)
     return result
 
@@ -909,7 +1007,7 @@ class Deployment:
         for specification in self.migrations:
             file = self.release / "migrations" / Path(specification["path"]).name
             raw = self.file(file)
-            additive_statements(raw, specification)
+            reviewed_migration(raw, specification)
             migrations.append((specification, raw))
         state = self.root / "var/lib/becore-tickets"
         staging = state / (".code-release-migration-" + self.identity)
@@ -1034,7 +1132,8 @@ class Deployment:
                 "provenanceSha256": self.provenance_digest,
                 "cryptoEnabledRequested": self.enable_crypto}
             if self.migrations:
-                record["lastCodeRelease"]["additiveMigrations"] = self.migrations
+                key = "reviewedDataMigrations" if any(item.get("kind") for item in self.migrations) else "additiveMigrations"
+                record["lastCodeRelease"][key] = self.migrations
                 record["lastCodeRelease"]["databaseBackupSha256"] = self.migration_result["backupSha256"]
             require(self.file(self.journal, private=True) == self.before["journal"], "Handover journal drifted before commit.")
             journal_after = (json.dumps(record, sort_keys=True) + "\n").encode()

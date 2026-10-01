@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { load } from "js-yaml";
 import test from "node:test";
 import { hasRequiredTicketsSpendLimits } from "../scripts/ai-gateway-policy.mjs";
+import './iphone-layout-evidence.test.mjs';
+import './support-email-rendering.test.mjs';
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 

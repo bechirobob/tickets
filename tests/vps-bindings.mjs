@@ -7,11 +7,13 @@ import { environmentKey } from '../runtime/vps/cloudflare-workers.mjs';
 import { RateLimiter } from '../runtime/vps/rate-limit.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { addTestTransport } from './vps-sockets.mjs';
+import { readD1Migrations } from '@cloudflare/vitest-pool-workers';
 
 const directory = mkdtempSync(path.join(tmpdir(), 'tickets-vps-test-'));
 export const env = {
   ...JSON.parse(readFileSync('wrangler.test.jsonc', 'utf8')).vars,
   DB: new SqliteDatabase(':memory:'), ENVIRONMENT: 'test',
+  TEST_MIGRATIONS: await readD1Migrations('./drizzle'),
   PAYSTACK_SECRET_KEY: 'sk_test_payment-operations', RESEND_API_KEY: 're_test_delivery',
   ADMIN_ACCESS_KEY: 'bootstrap-test-key', STAFF_LOGIN_DECOY_SECRET: 'test-only-login-decoy-key-at-least-32-characters',
 };
