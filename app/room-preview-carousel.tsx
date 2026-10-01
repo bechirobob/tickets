@@ -11,6 +11,7 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
   const trackRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [interacting, setInteracting] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(true);
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -32,8 +33,8 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
   };
 
   return <div className="room-product-preview" data-active={active} role="region" aria-roledescription="carousel" aria-label="The Room preview">
-    <Playback value={{ paused, reducedMotion }}>
-    <div ref={trackRef} className="room-product-scene__phones" tabIndex={0} onScroll={trackPosition} onPointerDown={() => setPaused(true)} onFocus={() => setPaused(true)} aria-live="off">
+    <Playback value={{ paused: paused || interacting, reducedMotion }}>
+    <div ref={trackRef} className="room-product-scene__phones" tabIndex={0} onScroll={trackPosition} onPointerDown={() => setInteracting(true)} onPointerUp={() => setInteracting(false)} onPointerCancel={() => setInteracting(false)} onPointerLeave={() => setInteracting(false)} onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setPaused(true); }} aria-live="off">
       {children}
     </div>
     </Playback>
