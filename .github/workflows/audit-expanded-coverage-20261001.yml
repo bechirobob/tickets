@@ -1,0 +1,129 @@
+name: Verify exact-source expanded audit coverage
+on:
+  push:
+    branches: [ops/audit-expanded-coverage-20261001]
+    paths: [.github/workflows/audit-expanded-coverage-20261001.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  expanded:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/audit-expanded-coverage-20261001' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
+    env:
+      BECORE_RELEASE_SHA: 53f5a0615b80f59d1e84a0098061fed4330fb107
+      OVERLAY_WORKFLOW_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 53f5a0615b80f59d1e84a0098061fed4330fb107
+          persist-credentials: false
+      - name: Verify frozen application identity
+        run: |
+          test "$(git rev-parse HEAD)" = 53f5a0615b80f59d1e84a0098061fed4330fb107
+          test "$(git rev-parse HEAD^{tree})" = 51004be28aeae024e286f50b8ddb8c76690db246
+          git diff --exit-code
+      - name: Restore immutable core build without rebuilding application
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYRESTORE'
+          import hashlib,io,json,os,pathlib,stat,sys,tarfile,urllib.request,urllib.error,urllib.parse,zipfile
+          sys.excepthook=lambda kind,*args: print('Immutable build restoration stopped: '+kind.__name__,file=sys.stderr)
+          REPO='bechirobob/tickets'; ID=11195102960; RUN=36929202481
+          SHA='53f5a0615b80f59d1e84a0098061fed4330fb107'; TREE='51004be28aeae024e286f50b8ddb8c76690db246'
+          DIGEST='450c0c6fe374b19d8969c69aa268d8b85e820aa9622ee10639f09dd08b18b18c'
+          MAX=32*1024*1024
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):return None
+          opener=urllib.request.build_opener(NoRedirect())
+          def api(path):
+              req=urllib.request.Request('https://api.github.com/repos/'+REPO+'/'+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with opener.open(req,timeout=20) as r:
+                  raw=r.read(MAX+1);assert len(raw)<=MAX;return json.loads(raw)
+          a=api('actions/artifacts/'+str(ID));w=a['workflow_run']
+          assert a['id']==ID and not a['expired'] and a['digest']=='sha256:'+DIGEST
+          assert w['id']==RUN and w['head_sha']==SHA
+          print('Artifact metadata identity verified.')
+          r=api('actions/runs/'+str(RUN));assert r['repository']['full_name']==REPO and r['head_sha']==SHA
+          jobs=api('actions/runs/'+str(RUN)+'/jobs?per_page=100');assert jobs['total_count']==len(jobs['jobs'])
+          core=[j for j in jobs['jobs'] if j['name']=='core'];assert len(core)==1 and core[0]['conclusion']=='success' and core[0]['head_sha']==SHA
+          for step in ('Verify exact candidate source','Verify unit tests and rendered production build','Package verified browser build','Preserve verified browser build'):
+              matching=[s for s in core[0]['steps'] if s['name']==step];assert len(matching)==1 and matching[0]['conclusion']=='success'
+          print('Exact candidate core steps verified.')
+          req=urllib.request.Request('https://api.github.com/repos/'+REPO+'/actions/artifacts/'+str(ID)+'/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+          try:opener.open(req,timeout=20);raise RuntimeError('Expected signed download')
+          except urllib.error.HTTPError as e:
+              assert e.code==302;url=e.headers['Location']
+          p=urllib.parse.urlsplit(url);assert p.scheme=='https' and p.hostname and p.port in (None,443) and not p.username and not p.password
+          with opener.open(url,timeout=20) as response:
+              raw=response.read(MAX+1);assert len(raw)<=MAX
+          assert hashlib.sha256(raw).hexdigest()==DIGEST
+          print('Immutable ZIP digest verified.')
+          with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+              matches=[i for i in archive.infolist() if i.filename=='browser-build.tar.gz'];assert len(matches)==1 and matches[0].file_size<=MAX
+              build=archive.read(matches[0]);assert len(build)<=MAX
+          with tarfile.open(fileobj=io.BytesIO(build),mode='r:gz') as archive:
+              entries=archive.getmembers();assert len(entries)<30000 and sum(x.size for x in entries)<256*1024*1024
+              for item in entries:
+                  p=pathlib.PurePosixPath(item.name)
+                  assert not p.is_absolute() and '..' not in p.parts and len(p.parts)>=2 and p.parts[0]=='dist' and p.parts[1] in ('server','client')
+                  assert item.isfile() or item.isdir()
+              archive.extractall('.',filter='data')
+          config=json.loads(pathlib.Path('dist/server/wrangler.json').read_text());assert config['vars']['RELEASE_SHA']==SHA
+          pathlib.Path('overlay-evidence').mkdir()
+          pathlib.Path('overlay-evidence/provenance.json').write_text(json.dumps({'applicationSource':SHA,'applicationTree':TREE,'candidateRun':RUN,'buildArtifact':ID,'buildArchiveZipSha256':DIGEST,'buildTarSha256':hashlib.sha256(build).hexdigest(),'coreConclusion':'success','applicationRebuilt':False,'productionDataTouched':False},indent=2))
+          print('Verified and restored exact53f5 immutable candidate build; no application rebuild.')
+          PYRESTORE
+      - name: Apply independently identified test-only coverage overlay
+        run: |
+          python3 - <<'PYOVERLAY'
+          import base64,hashlib,json,os,pathlib,subprocess
+          raw=base64.b64decode('LS0tIC9kZXYvbnVsbAorKysgYi9wbGF5d3JpZ2h0LmF1ZGl0LWV4cGFuZGVkLmNvbmZpZy50cwpAQCAtMCwwICsxLDEzIEBACitpbXBvcnQgeyBkZWZpbmVDb25maWcgfSBmcm9tICdAcGxheXdyaWdodC90ZXN0JzsKK2ltcG9ydCBiYXNlIGZyb20gJy4vcGxheXdyaWdodC5jb25maWcnOworZXhwb3J0IGRlZmF1bHQgZGVmaW5lQ29uZmlnKHsKKyAgLi4uYmFzZSwKKyAgdGVzdE1hdGNoOiAnYXVkaXQtZXhwYW5kZWQtb3ZlcmxheS5zcGVjLnRzJywKKyAgd29ya2VyczogMSwKKyAgcmV0cmllczogMCwKKyAgdXNlOiB7IC4uLmJhc2UudXNlLCBiYXNlVVJMOiAnaHR0cHM6Ly8xMjcuMC4wLjE6ODc5MScsIHNlcnZpY2VXb3JrZXJzOiAnYmxvY2snLCBpZ25vcmVIVFRQU0Vycm9yczogdHJ1ZSwgdHJhY2U6ICdyZXRhaW4tb24tZmFpbHVyZScgfSwKKyAgd2ViU2VydmVyOiB7CisgICAgY29tbWFuZDogJ25vZGUgc2NyaXB0cy9icm93c2VyLXdvcmtlci5tanMgb3BlcmF0aW9ucycsCisgICAgdXJsOiAnaHR0cHM6Ly8xMjcuMC4wLjE6ODc5MScsIHJldXNlRXhpc3RpbmdTZXJ2ZXI6IGZhbHNlLCBpZ25vcmVIVFRQU0Vycm9yczogdHJ1ZSwgdGltZW91dDogMTIwXzAwMCwKKyAgfSwKK30pOwotLS0gL2Rldi9udWxsCisrKyBiL3Rlc3RzL2UyZS9hdWRpdC1leHBhbmRlZC1vdmVybGF5LnNwZWMudHMKQEAgLTAsMCArMSw4MCBAQAoraW1wb3J0IHsgcmVhZEZpbGVTeW5jIH0gZnJvbSAnbm9kZTpmcyc7CitpbXBvcnQgeyB3cml0ZUZpbGUgfSBmcm9tICdub2RlOmZzL3Byb21pc2VzJzsKK2ltcG9ydCBBeGVCdWlsZGVyIGZyb20gJ0BheGUtY29yZS9wbGF5d3JpZ2h0JzsKK2ltcG9ydCB7IGV4cGVjdCwgdGVzdCwgdHlwZSBQYWdlIH0gZnJvbSAnQHBsYXl3cmlnaHQvdGVzdCc7CisKKy8vIFJlYWQtb25seSBjb3ZlcmFnZSBvdmVybGF5LiBBcHBsaWNhdGlvbiBzb3VyY2UvYnVpbGQgcmVtYWlucyBwaW5uZWQgc2VwYXJhdGVseS4KK2NvbnN0IGZpeHR1cmUgPSBKU09OLnBhcnNlKHJlYWRGaWxlU3luYygnLndyYW5nbGVyL29wZXJhdGlvbnMtZml4dHVyZS5qc29uJywgJ3V0ZjgnKSk7Cit0ZXN0LnVzZSh7IHNlcnZpY2VXb3JrZXJzOiAnYmxvY2snIH0pOwordGVzdC5iZWZvcmVFYWNoKGFzeW5jICh7IGNvbnRleHQsIHBhZ2UsIGJhc2VVUkwgfSkgPT4geworICBleHBlY3QoYmFzZVVSTCwgJ05ldmVyIHJ1biB0aGlzIHN0YWZmIGZpeHR1cmUgYWdhaW5zdCBwcm9kdWN0aW9uJykudG9CZSgnaHR0cHM6Ly8xMjcuMC4wLjE6ODc5MScpOworICBhd2FpdCBjb250ZXh0LmFkZENvb2tpZXMoW3sgbmFtZTogJ2JjdF9zdGFmZicsIHZhbHVlOiBmaXh0dXJlLnRva2VuLCB1cmw6IGJhc2VVUkwhLCBodHRwT25seTogdHJ1ZSwgc2FtZVNpdGU6ICdTdHJpY3QnIH1dKTsKKyAgYXdhaXQgcGFnZS5lbXVsYXRlTWVkaWEoeyByZWR1Y2VkTW90aW9uOiAncmVkdWNlJyB9KTsKKyAgYXdhaXQgcGFnZS5yb3V0ZSgnKiovYXBpLyoqJywgcm91dGUgPT4gWydHRVQnLCAnSEVBRCddLmluY2x1ZGVzKHJvdXRlLnJlcXVlc3QoKS5tZXRob2QoKSkgPyByb3V0ZS5jb250aW51ZSgpIDogcm91dGUuYWJvcnQoJ2Jsb2NrZWRieWNsaWVudCcpKTsKK30pOworCithc3luYyBmdW5jdGlvbiBleHBhbmRFdmVyeVZpc2libGVEaXNjbG9zdXJlKHBhZ2U6IFBhZ2UpIHsKKyAgY29uc3Qgb3BlbmVkOiBzdHJpbmdbXSA9IFtdOworICAvLyBSZS1yZXNvbHZlIHRoZSBmaXJzdCBjbG9zZWQsIHZpc2libGUgZGlzY2xvc3VyZSBhZnRlciBlYWNoIGFjdGlvbi4gQSBzYXZlZAorICAvLyBhcnJheSBvZiBudGggbG9jYXRvcnMgZnJvbSA6bm90KFtvcGVuXSkgc2hyaW5rcyBhbmQgc2tpcHMgYWx0ZXJuYXRpbmcgcm93cy4KKyAgZm9yIChsZXQgYXR0ZW1wdCA9IDA7IGF0dGVtcHQgPCAxNTA7IGF0dGVtcHQrKykgeworICAgIGxldCB0YXJnZXQ7CisgICAgZm9yIChjb25zdCBzdW1tYXJ5IG9mIGF3YWl0IHBhZ2UubG9jYXRvcignZGV0YWlsczpub3QoW29wZW5dKSA+IHN1bW1hcnknKS5hbGwoKSkgeworICAgICAgaWYgKGF3YWl0IHN1bW1hcnkuaXNWaXNpYmxlKCkpIHsgdGFyZ2V0ID0gc3VtbWFyeTsgYnJlYWs7IH0KKyAgICB9CisgICAgaWYgKCF0YXJnZXQpIHJldHVybiBvcGVuZWQ7CisgICAgY29uc3QgbGFiZWwgPSAoYXdhaXQgdGFyZ2V0LmlubmVyVGV4dCgpKS50cmltKCk7CisgICAgYXdhaXQgdGFyZ2V0LmNsaWNrKCk7CisgICAgb3BlbmVkLnB1c2gobGFiZWwpOworICB9CisgIHRocm93IG5ldyBFcnJvcignRGlzY2xvc3VyZXMgZGlkIG5vdCByZWFjaCBhIHN0YWJsZSBleHBhbmRlZCBzdGF0ZSBhZnRlciAxNTAgYWN0aW9ucy4nKTsKK30KKworY29uc3Qgcm91dGVzID0gWycvaGVscCcsICcvYWRtaW4nLCAnL2FkbWluL29wZXJhdGlvbnMnLCAnL2FkbWluL2V2ZW50cycsICcvYWRtaW4vcmVnaXN0cmF0aW9ucycsICcvYWRtaW4vb3JkZXJzJywgJy9hZG1pbi9zdXBwb3J0JywgJy9hZG1pbi9wcm9tb3RlcnMnLCAnL2FkbWluL3Jvb21zJywgJy9hZG1pbi9mZWVzJywgJy9hZG1pbi9hY2NvdW50cycsICcvYWRtaW4vYWNjb3VudCcsICcvYWRtaW4vaGVscCcsICcvYWRtaW4vaG9zdHMnXTsKK2ZvciAoY29uc3Qgcm91dGUgb2Ygcm91dGVzKSB7CisgIHRlc3QoYGV4cGFuZGVkIG92ZXJsYXkgJHtyb3V0ZX1gLCBhc3luYyAoeyBwYWdlIH0sIGluZm8pID0+IHsKKyAgICB0ZXN0LnNldFRpbWVvdXQoNjBfMDAwKTsgLy8gQWxsIGRpc2Nsb3N1cmVzLCByYXRoZXIgdGhhbiB0aGUgcHJldmlvdXMgYWx0ZXJuYXRpbmcgaGFsZi4KKyAgICBhd2FpdCBwYWdlLmdvdG8ocm91dGUpOworICAgIGF3YWl0IGV4cGVjdChwYWdlLmxvY2F0b3IoJ2gxJykuZmlyc3QoKSkudG9CZVZpc2libGUoKTsKKyAgICBhd2FpdCBleHBlY3QocGFnZS5nZXRCeVRleHQoL0xvYWRpbmcgKHJlYWwgaW52ZW50b3J5fGFjY291bnRzfG9wZXJhdGlvbnN8ZXZlbnRzfHN1Ym1pc3Npb25zKS9pKSkudG9IYXZlQ291bnQoMCk7CisgICAgY29uc3Qgb3BlbmVkID0gYXdhaXQgZXhwYW5kRXZlcnlWaXNpYmxlRGlzY2xvc3VyZShwYWdlKTsKKyAgICBjb25zdCB2aXNpYmxlQ2xvc2VkID0gYXdhaXQgcGFnZS5sb2NhdG9yKCdkZXRhaWxzOm5vdChbb3Blbl0pID4gc3VtbWFyeScpLmV2YWx1YXRlQWxsKGVsZW1lbnRzID0+IGVsZW1lbnRzLmZpbHRlcihlbGVtZW50ID0+IHsKKyAgICAgIGNvbnN0IGJveCA9IGVsZW1lbnQuZ2V0Qm91bmRpbmdDbGllbnRSZWN0KCk7IGNvbnN0IHN0eWxlID0gZ2V0Q29tcHV0ZWRTdHlsZShlbGVtZW50KTsKKyAgICAgIHJldHVybiBib3gud2lkdGggPiAwICYmIGJveC5oZWlnaHQgPiAwICYmIHN0eWxlLnZpc2liaWxpdHkgIT09ICdoaWRkZW4nICYmICFlbGVtZW50LmNsb3Nlc3QoJ1toaWRkZW5dJyk7CisgICAgfSkubWFwKGVsZW1lbnQgPT4gZWxlbWVudC50ZXh0Q29udGVudCkpOworICAgIGNvbnN0IGd1aWRlQ291bnRzID0gYXdhaXQgcGFnZS5sb2NhdG9yKCcuaGVscC1ndWlkZScpLmV2YWx1YXRlQWxsKGd1aWRlcyA9PiAoeyB0b3RhbDogZ3VpZGVzLmxlbmd0aCwgb3BlbjogZ3VpZGVzLmZpbHRlcihndWlkZSA9PiBndWlkZS5oYXNBdHRyaWJ1dGUoJ29wZW4nKSkubGVuZ3RoIH0pKTsKKyAgICBpZiAocm91dGUgPT09ICcvaGVscCcpIGV4cGVjdChndWlkZUNvdW50cykudG9FcXVhbCh7IHRvdGFsOiAyOCwgb3BlbjogMjggfSk7CisgICAgaWYgKHJvdXRlID09PSAnL2FkbWluL2hlbHAnKSBleHBlY3QoZ3VpZGVDb3VudHMpLnRvRXF1YWwoeyB0b3RhbDogMTYsIG9wZW46IDE2IH0pOworICAgIGV4cGVjdCh2aXNpYmxlQ2xvc2VkKS50b0VxdWFsKFtdKTsKKyAgICBleHBlY3QoYXdhaXQgcGFnZS5ldmFsdWF0ZSgoKSA9PiBkb2N1bWVudC5kb2N1bWVudEVsZW1lbnQuc2Nyb2xsV2lkdGggPiBpbm5lcldpZHRoICsgMSkpLnRvQmUoZmFsc2UpOworICAgIGNvbnN0IGF4ZSA9IGF3YWl0IG5ldyBBeGVCdWlsZGVyKHsgcGFnZSB9KS53aXRoVGFncyhbJ3djYWcyYScsICd3Y2FnMmFhJywgJ3djYWcyMWFhJ10pLmFuYWx5emUoKTsKKyAgICBjb25zdCBldmlkZW5jZSA9IHsgcm91dGUsIHByb2plY3Q6IGluZm8ucHJvamVjdC5uYW1lLCBvcGVuZWQsIGd1aWRlQ291bnRzLCB2aXNpYmxlQ2xvc2VkLCB2aW9sYXRpb25zOiBheGUudmlvbGF0aW9ucyB9OworICAgIGF3YWl0IHdyaXRlRmlsZShpbmZvLm91dHB1dFBhdGgoJ2V4cGFuZGVkLXN0YXRlLmpzb24nKSwgSlNPTi5zdHJpbmdpZnkoZXZpZGVuY2UsIG51bGwsIDIpKTsKKyAgICBhd2FpdCBwYWdlLnNjcmVlbnNob3QoeyBwYXRoOiBpbmZvLm91dHB1dFBhdGgoJ2FsbC1kaXNjbG9zdXJlcy1leHBhbmRlZC5wbmcnKSwgZnVsbFBhZ2U6IHRydWUsIHNjYWxlOiAnY3NzJyB9KTsKKyAgICBleHBlY3QoYXhlLnZpb2xhdGlvbnMubWFwKGl0ZW0gPT4gKHsgaWQ6IGl0ZW0uaWQsIHRhcmdldHM6IGl0ZW0ubm9kZXMubWFwKG5vZGUgPT4gbm9kZS50YXJnZXQpIH0pKSkudG9FcXVhbChbXSk7CisgIH0pOworfQorCit0ZXN0KCdwcm92aWRlciByZWNvcmQgb3BlbnMgdXNpbmcgbmF0dXJhbCBUYWIgbmF2aWdhdGlvbiBhbmQgRW50ZXInLCBhc3luYyAoeyBwYWdlIH0sIGluZm8pID0+IHsKKyAgbGV0IHdyaXRlcyA9IDA7CisgIGNvbnN0IG9yZGVyID0geyBpZDogJ292ZXJsYXktcHJvdmlkZXInLCByZWZlcmVuY2U6ICdPVkVSTEFZJywgZXZlbnRTbHVnOiAnYWZ0ZXItZGFyay1vc3UnLCBldmVudFRpdGxlOiAnUHJvdmlkZXIgcmVjb3JkIGtleWJvYXJkIGZpeHR1cmUnLCB0aWNrZXRUeXBlOiAnZ2VuZXJhbCcsIHVuaXRRdWFudGl0eTogMSwgcXVhbnRpdHk6IDEsIHRvdGFsQW1vdW50TWlub3I6IDEwMDAwLCByZWZ1bmRlZEFtb3VudE1pbm9yOiAwLCBjdXJyZW5jeTogJ0dIUycsIGN1c3RvbWVyRW1haWw6ICdmaXh0dXJlQGV4YW1wbGUuY29tJywgY3VzdG9tZXJQaG9uZTogJzIzMzAwMDAwMDAwMCcsIGN1c3RvbWVyTmFtZTogJ0lzb2xhdGVkIGd1ZXN0Jywgc3RhdHVzOiAncGFpZCcsIHBheW1lbnRQcm92aWRlcjogJ3BheXN0YWNrJywgcHJvdmlkZXJTdGF0dXM6ICdzdWNjZXNzJywgcHJvdmlkZXJSZWZlcmVuY2U6ICdGSVhUVVJFJywgcGF5bWVudEVudmlyb25tZW50OiAndGVzdCcsIGZhaWx1cmVSZWFzb246IG51bGwsIHJlZnVuZFN0YXR1czogbnVsbCwgZGlzcHV0ZVN0YXR1czogbnVsbCwgY3JlYXRlZEF0OiAnMjAyNi0xMC0wMVQwMDowMDowMFonLCBwYWlkQXQ6ICcyMDI2LTEwLTAxVDAwOjAwOjAwWicsIHBheW1lbnRWZXJpZmllZEF0OiAnMjAyNi0xMC0wMVQwMDowMDowMFonLCBjaGVja2VkSW5Db3VudDogMCwgaXNzdWVkVGlja2V0Q291bnQ6IDEsIGRlbGl2ZXJ5U3RhdHVzOiAnc2VudCcsIHByb3ZpZGVyQ2FzZXM6IFtdIH07CisgIGF3YWl0IHBhZ2Uucm91dGUoJyoqL2FwaS9hZG1pbi9vcmRlcnMqKicsIHJvdXRlID0+IHsKKyAgICBpZiAocm91dGUucmVxdWVzdCgpLm1ldGhvZCgpICE9PSAnR0VUJykgeyB3cml0ZXMrKzsgcmV0dXJuIHJvdXRlLmFib3J0KCk7IH0KKyAgICByZXR1cm4gcm91dGUuZnVsZmlsbCh7IGpzb246IHsgb3JkZXJzOiBbb3JkZXJdLCBldmVudHM6IFt7IHNsdWc6IG9yZGVyLmV2ZW50U2x1ZywgdGl0bGU6IG9yZGVyLmV2ZW50VGl0bGUgfV0sIHRvdGFsOiAxLCBwYWdlOiAxLCBwYWdlU2l6ZTogMTAsIHJlY29uY2lsaWF0aW9uUnVuczogW10sIHNldHRsZW1lbnRzOiBbXSwgZGlzcHV0ZXM6IFtdIH0gfSk7CisgIH0pOworICBhd2FpdCBwYWdlLmdvdG8oJy9hZG1pbi9vcmRlcnMnKTsKKyAgY29uc3QgdHJpZ2dlciA9IHBhZ2UuZ2V0QnlSb2xlKCdidXR0b24nLCB7IG5hbWU6ICdQcm92aWRlciByZWNvcmQnLCBleGFjdDogdHJ1ZSB9KTsKKyAgYXdhaXQgZXhwZWN0KHRyaWdnZXIpLnRvQmVWaXNpYmxlKCk7CisgIGxldCB0YWJzID0gMDsKKyAgZm9yICg7IHRhYnMgPCAxMDA7IHRhYnMrKykgeworICAgIGF3YWl0IHBhZ2Uua2V5Ym9hcmQucHJlc3MoJ1RhYicpOworICAgIGlmIChhd2FpdCB0cmlnZ2VyLmV2YWx1YXRlKGVsZW1lbnQgPT4gZG9jdW1lbnQuYWN0aXZlRWxlbWVudCA9PT0gZWxlbWVudCkpIGJyZWFrOworICB9CisgIGF3YWl0IGV4cGVjdCh0cmlnZ2VyKS50b0JlRm9jdXNlZCgpOworICBhd2FpdCBwYWdlLnNjcmVlbnNob3QoeyBwYXRoOiBpbmZvLm91dHB1dFBhdGgoJ3Byb3ZpZGVyLXRyaWdnZXIta2V5Ym9hcmQtZm9jdXMucG5nJykgfSk7CisgIGF3YWl0IHBhZ2Uua2V5Ym9hcmQucHJlc3MoJ0VudGVyJyk7CisgIGF3YWl0IGV4cGVjdChwYWdlLmdldEJ5Um9sZSgncmVnaW9uJywgeyBuYW1lOiAnUmVjb3JkIHByb3ZpZGVyIGNhc2UnIH0pKS50b0JlVmlzaWJsZSgpOworICBleHBlY3Qod3JpdGVzKS50b0JlKDApOworICBhd2FpdCB3cml0ZUZpbGUoaW5mby5vdXRwdXRQYXRoKCdwcm92aWRlci1rZXlib2FyZC5qc29uJyksIEpTT04uc3RyaW5naWZ5KHsgdGFiczogdGFicyArIDEsIG9wZW5lZDogdHJ1ZSwgd3JpdGVzIH0sIG51bGwsIDIpKTsKKyAgYXdhaXQgcGFnZS5zY3JlZW5zaG90KHsgcGF0aDogaW5mby5vdXRwdXRQYXRoKCdwcm92aWRlci1rZXlib2FyZC1vcGVuZWQucG5nJyksIGZ1bGxQYWdlOiB0cnVlLCBzY2FsZTogJ2NzcycgfSk7Cit9KTsK')
+          expected='01b7e01c3a3c517d53c9cdd47455d8e9879041bb3e642d9b8ff6f2b4f3e7ebf5'
+          assert hashlib.sha256(raw).hexdigest()==expected
+          allowed={'playwright.audit-expanded.config.ts','tests/e2e/audit-expanded-overlay.spec.ts'}
+          headers={line[6:] for line in raw.decode().splitlines() if line.startswith('+++ b/')}
+          assert headers==allowed and all(not pathlib.Path(p).exists() for p in allowed)
+          subprocess.run(['git','apply','--check','-'],input=raw,check=True)
+          subprocess.run(['git','apply','-'],input=raw,check=True)
+          subprocess.run(['git','diff','--exit-code'],check=True)
+          manifest=pathlib.Path('overlay-evidence/provenance.json')
+          value=json.loads(manifest.read_text());value.update(overlayPatchSha256=expected,overlayWorkflowSha=os.environ['OVERLAY_WORKFLOW_SHA'],overlayFiles={p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in sorted(allowed)})
+          manifest.write_text(json.dumps(value,indent=2))
+          pathlib.Path('overlay-evidence/test-only.patch').write_bytes(raw)
+          print('Only two new test/config files added; tracked application source unchanged.')
+          PYOVERLAY
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit
+      - name: Install requested engine
+        run: npx playwright install --with-deps ${{ matrix.browser == 'mobile-webkit' && 'webkit' || 'chromium' }}
+      - name: Prepare local-only synthetic owner and RSVP fixtures
+        run: |
+          npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+          node scripts/prepare-registration-browser-fixture.mjs
+          node scripts/prepare-operations-browser-fixture.mjs
+      - name: Verify every requested expanded state and natural keyboard activation
+        run: npx playwright test --config playwright.audit-expanded.config.ts --project ${{ matrix.browser }} --workers=1 --retries=0 --output=test-results/expanded-overlay
+      - name: Verify tracked application source remained frozen
+        if: always()
+        run: git diff --exit-code
+      - name: Preserve source, test identity, every view, axe results and first failure trace
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: expanded-audit-${{ github.run_id }}-${{ matrix.browser }}
+          path: |
+            overlay-evidence
+            test-results/expanded-overlay
+            playwright-report
+          if-no-files-found: error
+          retention-days: 30
