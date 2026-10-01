@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 12
     env:
       TICKETS_SOURCE: ${{ github.workspace }}/tickets
-      PROBE_OUT: ${{ runner.temp }}/public-artwork-policy
+      PROBE_OUT: ${{ github.workspace }}/public-artwork-policy
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -44,6 +44,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: public-artwork-policy-${{ github.run_id }}
-          path: ${{ runner.temp }}/public-artwork-policy
+          path: ${{ github.workspace }}/public-artwork-policy
           if-no-files-found: error
           retention-days: 14
