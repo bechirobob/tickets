@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { ArrowUpRight, BookOpenText, Check, ChevronDown, CircleHelp, Headphones, Search, ShieldCheck, Sparkles, TicketCheck, UsersRound, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import SupportEmail, { SUPPORT_EMAIL } from "../support-email";
 
 type Audience = "Everyone" | "Going out" | "Organising" | "At the door" | "The Room";
 
@@ -318,7 +319,7 @@ export default function HelpCentre({ workspace = false, onNavigate, event = "" }
             <ChevronDown aria-hidden="true" size={19} />
           </summary>
           <div>
-            <ol>{guide.steps.map((step) => <li key={step}><Check aria-hidden="true" size={15} /><span>{step}</span></li>)}</ol>
+            <ol>{guide.steps.map((step) => <li key={step}><Check aria-hidden="true" size={15} /><span>{step.split(SUPPORT_EMAIL).map((part, index) => <Fragment key={index}>{index > 0 ? <SupportEmail /> : null}{part}</Fragment>)}</span></li>)}</ol>
             {guide.action ? <Link href={actionHref(guide.action.href)} onClick={e=>{const href=actionHref(guide.action!.href);if(onNavigate&&href.startsWith("/organizer/workspace")&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey){e.preventDefault();onNavigate(href);}}}>{guide.action.label}<ArrowUpRight size={15} /></Link> : null}
           </div>
         </details>)}
@@ -329,7 +330,7 @@ export default function HelpCentre({ workspace = false, onNavigate, event = "" }
         <div>
           <article><TicketCheck size={19} /><h3>Ticket holders</h3><p>Open your night, then Purchase. We’ll have your booking ready when you ask for help.</p><Link href="/my-nights">Open My Nights <ArrowUpRight size={15} /></Link></article>
           <article><UsersRound size={19} /><h3>Organisers</h3><p>Open your event’s Requests tab and choose Make a request. We’ll have the event details handy, so you can skip the long introduction.</p><Link href="/organizer/workspace">Open workspace <ArrowUpRight size={15} /></Link></article>
-          <article><ShieldCheck size={19} /><h3>Everything else</h3><p>Email <a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a>. Include the account email and reference. Never send passwords or QR screenshots.</p></article>
+          <article><ShieldCheck size={19} /><h3>Everything else</h3><p>Email <SupportEmail linked />. Include the account email and reference. Never send passwords or QR screenshots.</p></article>
         </div>
       </section>
     </section>

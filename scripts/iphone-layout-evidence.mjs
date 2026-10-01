@@ -23,6 +23,86 @@ export function isReadOnlyRequest(method) {
   return method === 'GET' || method === 'HEAD';
 }
 
+export function isInsideViewport(bounds, viewport) {
+  if (!bounds || !viewport || ![bounds.x, bounds.y, bounds.width, bounds.height, viewport.width, viewport.height].every(Number.isFinite)) return false;
+  return viewport.width > 0 && viewport.height > 0 && bounds.width > 0 && bounds.height > 0 &&
+    bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height;
+}
+
+export function assessMenuGeometry(geometry) {
+  const problems = [];
+  const excludedControls = [];
+  const check = (name, element) => {
+    if (!isInsideViewport(element?.bounds, geometry.viewport)) problems.push(`${name} must have positive dimensions fully inside the viewport`);
+    if (element?.visible !== true || element?.inert || element?.ariaHidden === 'true') problems.push(`${name} is hidden or inert`);
+    if (element?.visibilityAncestors?.some(ancestor => !ancestor.visible || ancestor.inert || ancestor.ariaHidden === 'true')) problems.push(`${name} has a hidden or inert ancestor inside the panel`);
+  };
+  check('Menu panel', geometry.panel);
+  check('Menu close control', geometry.close);
+  if (!geometry.controls?.length) problems.push('Menu must contain visible navigation controls');
+  for (const [index, control] of (geometry.controls ?? []).entries()) {
+    // notifications.css intentionally removes only these dock duplicates at
+    // <=700px. Hidden secondary or unexpected controls must still fail.
+    const primaryDuplicate = geometry.viewport?.width <= 700 && geometry.customerDockPresent === true &&
+      control.tag === 'A' && ['/', '/events', '/my-nights'].includes(control.href) &&
+      control.className?.split(/\s+/u).includes('menu-primary-route') && control.computed?.display === 'none';
+    if (primaryDuplicate) excludedControls.push({ index, href: control.href, reason: 'Intentional hidden duplicate of mobile dock destination' });
+    else check(`Menu control ${index + 1}`, control);
+  }
+  for (const href of ['/hosts', '/organizer/submit', '/about', '/help']) {
+    if (!geometry.controls?.some(control => control.tag === 'A' && control.href === href)) problems.push(`Required menu destination is missing: ${href}`);
+  }
+  for (const ancestor of geometry.ancestors ?? []) {
+    if (!ancestor.visible || ancestor.inert || ancestor.ariaHidden === 'true') problems.push('Menu has a hidden or inert ancestor');
+  }
+  return { passed: problems.length === 0, problems, ...(excludedControls.length ? { excludedControls } : {}) };
+}
+
+async function measureMenuGeometry(page) {
+  return page.evaluate(viewport => {
+    const panel = document.querySelector('.night-mobile-menu__panel');
+    const describe = element => {
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const visibilityAncestors = [];
+      if (element !== panel) {
+        for (let ancestor = element.parentElement; ancestor && ancestor !== panel; ancestor = ancestor.parentElement) {
+          const inherited = getComputedStyle(ancestor);
+          visibilityAncestors.push({
+            tag: ancestor.tagName, className: ancestor.className, inert: ancestor.inert, ariaHidden: ancestor.getAttribute('aria-hidden'),
+            display: inherited.display, visibility: inherited.visibility, opacity: inherited.opacity,
+            visible: inherited.display !== 'none' && inherited.visibility === 'visible' && Number(inherited.opacity) > 0,
+          });
+        }
+      }
+      const computed = Object.fromEntries([
+        'display', 'visibility', 'opacity', 'position', 'top', 'right', 'bottom', 'left',
+        'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+        'justifySelf', 'alignSelf', 'justifyContent', 'alignItems', 'gridTemplateColumns', 'gridTemplateRows',
+        'transform', 'translate', 'zIndex', 'pointerEvents', 'overflow', 'overflowX', 'overflowY',
+      ].map(property => [property, style[property]]));
+      return {
+        tag: element.tagName, className: element.className, id: element.id, href: element.getAttribute('href'),
+        label: element.getAttribute('aria-label'), phase: element.getAttribute('data-phase'),
+        ariaHidden: element.getAttribute('aria-hidden'), inert: element.inert, visibilityAncestors,
+        bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, computed,
+        visible: style.display !== 'none' && style.visibility === 'visible' && Number(style.opacity) > 0,
+      };
+    };
+    const ancestors = [];
+    for (let element = panel?.parentElement; element; element = element.parentElement) ancestors.push(describe(element));
+    return {
+      viewport, layoutViewport: { width: innerWidth, height: innerHeight }, customerDockPresent: Boolean(document.querySelector('.customer-dock')),
+      visualViewport: visualViewport ? { width: visualViewport.width, height: visualViewport.height, offsetLeft: visualViewport.offsetLeft, offsetTop: visualViewport.offsetTop, scale: visualViewport.scale } : null,
+      scroll: { x: scrollX, y: scrollY },
+      panel: describe(panel), close: describe(panel?.querySelector('.night-mobile-menu__close')),
+      controls: [...(panel?.querySelectorAll('a[href], button:not(.night-mobile-menu__close)') ?? [])].map(describe),
+      ancestors,
+    };
+  }, page.viewportSize());
+}
+
 async function readJson(origin, pathname) {
   const response = await fetch(new URL(pathname, origin), {
     redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(30000),
@@ -111,7 +191,7 @@ export async function captureWebsiteComparison({ browser, device, outputDir, rep
     viewport: device.viewport, deviceScaleFactor: device.deviceScaleFactor,
     authentication: 'Fresh anonymous contexts; no account data entered',
     requestPolicy: 'GET and HEAD only; other requests and WebSockets blocked; no response substitutions',
-    baseline: null, candidate: null, screenshots: [], blockedRequests: [],
+    baseline: null, candidate: null, screenshots: [], menuChecks: [], blockedRequests: [],
   };
   const save = () => writeFile(path.join(directory, 'comparison.json'), JSON.stringify(manifest, null, 2) + '\n');
   await save();
@@ -143,15 +223,25 @@ export async function captureWebsiteComparison({ browser, device, outputDir, rep
             await page.getByRole('button', { name: 'Open navigation', exact: true }).waitFor({ state: 'visible' });
           } else {
             await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-            await page.getByRole('navigation', { name: 'Main navigation', exact: true }).waitFor({ state: 'visible' });
+            await page.locator('.night-mobile-menu__panel').waitFor({ state: 'attached' });
           }
           await settleVisiblePage(page);
           const actualUrl = new URL(page.url());
           if (actualUrl.origin !== origin || actualUrl.pathname !== route) throw new Error(`${side} ${state} navigated away from the expected public page`);
+          let menuCheck;
+          if (state === 'menu') {
+            const geometry = await measureMenuGeometry(page);
+            menuCheck = { side, sourceRevision: revision, measuredAt: new Date().toISOString(), geometry, assessment: assessMenuGeometry(geometry) };
+            manifest.menuChecks.push(menuCheck);
+            // Save even invalid geometry before taking the diagnostic image or
+            // throwing: an offscreen sheet must never produce green evidence.
+            await save();
+          }
           const filename = `${side}-${state}.png`;
           await page.screenshot({ path: path.join(directory, filename), animations: 'disabled', fullPage: false });
           manifest.screenshots.push({ side, state, filename, url: page.url(), sourceRevision: revision, capturedAt: new Date().toISOString(), viewport: page.viewportSize(), horizontalOverflow: await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1) });
           await save();
+          if (menuCheck && !menuCheck.assessment.passed) throw new Error(`${side} menu geometry failed: ${menuCheck.assessment.problems.join('; ')}`);
           console.log(`Website comparison ${side}: ${state} (${revision})`);
         }
       } finally { await context.close(); }

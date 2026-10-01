@@ -125,7 +125,7 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .workspace-return span { max-width:160px; }
 }
 /* The guest shell has one obvious, reachable mobile navigation system. */
-.night-mobile-menu__trigger-label { display: none; }
+.night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: none; margin: 0; color: inherit; font: inherit; letter-spacing: inherit; }
 @media (max-width: 760px) {
   body {
     --mobile-dock-bottom: max(12px, env(safe-area-inset-bottom));
@@ -133,6 +133,9 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
     --mobile-chrome-solid: #281b2b;
     --mobile-chrome-fill: rgb(40 27 43 / .86);
   }
+  /* Clip decorative overflow without creating a scroll container that
+     captures the sticky header instead of letting it track the viewport. */
+  body .discovery-home { overflow: clip; }
   body :is(.discovery-home, .discovery-directory, .my-nights-page, .buzz-page, .hosts-page, .host-page, .about-page, .account-privacy) > :is(.night-header, .directory-header),
   body :is(.event-page, .help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) {
     position: sticky; top: 0; z-index: 60;
@@ -143,12 +146,12 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
     border-bottom: 1px solid rgb(255 255 255 / .14);
     box-shadow: none;
   }
-  body .poster-event-page > .sub-header {
+  body .poster-event-page > .sub-header:has(.night-mobile-menu) {
     --mobile-chrome-solid: var(--event-paper);
     --mobile-chrome-fill: color-mix(in srgb, var(--event-paper) 86%, transparent);
     color: var(--event-ink); border-color: color-mix(in srgb, var(--event-ink) 16%, transparent);
   }
-  body :is(.help-page, .policy-page, .legal-page) > header {
+  body :is(.help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) {
     --mobile-chrome-solid: #f4f1e9;
     --mobile-chrome-fill: rgb(244 241 233 / .9);
     color: #281b2b; border-color: rgb(0 0 0 / .14);
@@ -158,15 +161,19 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .night-mobile-menu .night-mobile-menu__trigger {
     width: auto; min-width: 44px; gap: 6px; padding: 0 9px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 12px; background: rgb(128 128 128 / .13);
+    border-radius: 12px; background: rgb(128 128 128 / .13); color: inherit;
     font-size: 13px; font-weight: 550; line-height: 1; letter-spacing: 0;
     box-shadow: none;
   }
-  .night-mobile-menu__trigger-label { display: inline; }
+  .night-hub__header .night-mobile-menu { color: #f8eee7; }
+  .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: inline; }
   .night-mobile-menu .night-mobile-menu__trigger svg { width: 18px; height: 18px; }
   body:has(.night-mobile-menu--sheet.is-open) { overflow: hidden; }
   .night-mobile-menu.night-mobile-menu--sheet {
-    position: fixed; inset: 0 0 auto; height: var(--app-viewport-height); z-index: 70; pointer-events: none;
+    /* Reset the inline trigger container's end alignment. Absolute children
+       cannot provide an intrinsic width for this viewport-sized portal. */
+    position: fixed; inset: 0 0 auto; width: 100%; max-width: none; height: var(--app-viewport-height);
+    margin: 0; justify-self: stretch; align-self: stretch; z-index: 70; pointer-events: none;
     color: #f8eee7; --focus-ring: #eee;
   }
   .night-mobile-menu--sheet .night-mobile-menu__scrim {
@@ -258,7 +265,7 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
 }
 @media (max-width: 360px) {
   .night-mobile-menu .night-mobile-menu__trigger { width: 44px; padding: 0; }
-  .night-mobile-menu__trigger-label { display: none; }
+  .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: none; }
 }
 @media (max-width: 760px) and (prefers-reduced-transparency: reduce) {
   body :is(.discovery-home, .discovery-directory, .my-nights-page, .buzz-page, .hosts-page, .host-page, .about-page, .account-privacy) > :is(.night-header, .directory-header),

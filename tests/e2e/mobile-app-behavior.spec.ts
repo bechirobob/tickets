@@ -61,8 +61,17 @@ test('mobile menu is a compact reachable sheet with working drag, focus and outs
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('button', { name: 'Close navigation', exact: true })).toBeFocused();
   await expect(menu).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  const layer = page.locator('.night-mobile-menu--sheet');
+  const scrim = page.locator('.night-mobile-menu__scrim');
+  const layerBox = await layer.boundingBox();
+  expect(layerBox!.x).toBe(0);
+  expect(layerBox!.width).toBe(page.viewportSize()!.width);
+  await expect(menu).toBeInViewport({ ratio: 1 });
+  await expect(scrim).toBeInViewport({ ratio: 1 });
   const sheetBox = await menu.boundingBox();
   const dockBox = await dock.boundingBox();
+  expect(sheetBox!.x).toBeGreaterThanOrEqual(12);
+  expect(sheetBox!.x + sheetBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width - 12);
   expect(sheetBox).not.toBeNull();
   expect(dockBox).not.toBeNull();
   expect(sheetBox!.height).toBeLessThan(340);
@@ -219,4 +228,29 @@ test('reduced-transparency preference preserves desktop header backgrounds', asy
     await expect(header).toHaveCSS('background-color', background);
   }
   await session.detach();
+});
+
+test('menu labels and light guest headers keep their responsive visibility and foreground', async ({ page }) => {
+  await page.setViewportSize({ width: 980, height: 664 });
+  await page.goto('/help');
+  const trigger = page.locator('.night-mobile-menu__trigger');
+  const label = trigger.locator('.night-mobile-menu__trigger-label');
+  await expect(trigger).toBeEnabled();
+  await expect(label).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 664 });
+  await expect(label).toBeVisible();
+  for (const path of ['/help', '/privacy', '/terms']) {
+    await page.goto(path);
+    await expect(trigger).toBeEnabled();
+    const header = page.locator('main > header').first();
+    await expect(header).toHaveCSS('color', 'rgb(40, 27, 43)');
+    await expect(label).toBeVisible();
+    const triggerStyle = await trigger.evaluate(element => ({ color: getComputedStyle(element).color, font: getComputedStyle(element).fontSize }));
+    await expect(label).toHaveCSS('color', triggerStyle.color);
+    await expect(label).toHaveCSS('font-size', triggerStyle.font);
+    expect(Number.parseFloat(triggerStyle.font)).toBeGreaterThanOrEqual(13);
+  }
+  await page.setViewportSize({ width: 350, height: 664 });
+  await expect(label).toBeHidden();
+  await expect(trigger).toBeInViewport();
 });
