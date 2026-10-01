@@ -23,7 +23,7 @@ jobs:
           tags: tag:tickets-ci
           ping: hermes
       - name: Inventory VPS storage metadata without changes
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect failed Tickets stage 36804472437 metadata only')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Reconcile Tickets release storage 20261001 metadata only')
         run: |
           tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1 --stage-run 36804472437-1' <<'PY'
           #!/usr/bin/env python3
@@ -54,6 +54,7 @@ jobs:
               raise SystemExit('Exact release hashes are required')
           if not all(re.fullmatch(r'[1-9][0-9]*-[1-9][0-9]*', s) for s in a.stage_run):
               raise SystemExit('Exact reviewed run-attempt identifiers are required')
+          PUBLIC_RELEASES = set(["7b9db84ddff94a8b54324241dc855d3ab9ac8a8f","2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004","2266b65a282772375da97ccc5ed9942e489a2b7d","7a090331436541a964752f3d5cfdfffbbc1de823","a34bd37d8fad68e200239f497c3ae4a2074d45b6","4cd96fb13e99b4eddd22466e03142d934b4bba49","de2830b851370ad98899d86e9b0b7a1360d4658b","dc8ab0bec317d2143f4e05f43dbb630e03bc6e57","ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe","45ec44e35f8b0e5099a328ce219df2529374f9ee","51f414132da8c41e6d6583fdfa76e709ae7516e8","8a25812f1a0fc81e4ff4f956542097b4465e050f"])
           HOME = Path('/srv/becore-tickets')
           RELEASES = HOME / 'releases'
           DEADLINE = time.monotonic() + 180
@@ -84,7 +85,7 @@ jobs:
               if not stat.S_ISDIR(root_stat.st_mode):
                   raise RuntimeError('Inventory directory is not a plain directory')
               stack = [path]
-              total = allocated = count = links = 0
+              total = allocated = count = links = multiple_links = 0
               while stack:
                   directory = stack.pop()
                   with os.scandir(directory) as entries:
@@ -99,12 +100,13 @@ jobs:
                               stack.append(Path(item.path))
                           elif stat.S_ISREG(s.st_mode):
                               total += s.st_size
+                              if s.st_nlink > 1: multiple_links += 1
                               allocated += s.st_blocks * 512
                               count += 1
                           else:
                               raise RuntimeError('Inventory encountered a special file')
               return {'regular_files': count, 'logical_bytes': total, 'regular_file_allocated_bytes': allocated,
-                      'symlinks_not_followed': links, 'inode': root_stat.st_ino, 'owner_uid': root_stat.st_uid}
+                      'symlinks_not_followed': links, 'multiply_linked_files': multiple_links, 'inode': root_stat.st_ino, 'owner_uid': root_stat.st_uid}
           
           # Use the established transaction lock, without creating or modifying it.
           lock_fd = os.open('/run/lock/becore-tickets-deploy.lock', os.O_RDONLY | os.O_NOFOLLOW)
@@ -140,14 +142,17 @@ jobs:
                   guard()
                   if re.fullmatch(r'[a-f0-9]{40}', item.name) and item.is_dir(follow_symlinks=False):
                       info = directory_info(Path(item.path))
-                      release_sizes.append({'revision': item.name if item.name in {a.active, a.previous} else None,
+                      release_sizes.append({'revision': item.name if item.name in PUBLIC_RELEASES else None,
+                                            'directory_birth_epoch': int(subprocess.check_output(['stat', '--format=%W', '--', item.path], text=True, stderr=subprocess.DEVNULL, timeout=5).strip()),
+                                            'directory_mtime_ns': item.stat(follow_symlinks=False).st_mtime_ns,
+                                            'directory_ctime_ns': item.stat(follow_symlinks=False).st_ctime_ns,
                                             'protected': True, **info})
           if identity() != before:
               raise RuntimeError('Protected runtime changed during inventory')
           # Broad triage emits only these reviewed generic root labels and aggregates.
           # No discovered directory/file names, unit names, arguments, environments or
           # file contents are included in logs. Every active project remains protected.
-          ROOTS = ['/var/tmp/tickets-code-release-36804472437-1']
+          ROOTS = ['/var/lib/becore-tickets-handover', '/var/lib/becore-tickets']
           
           def aggregate(root):
               result = {'root': root, 'logical_bytes': 0, 'regular_file_allocated_bytes': 0,
@@ -234,6 +239,15 @@ jobs:
                                   reference_counts[root] += 1
                       except OSError:
                           reference_errors += 1
+          # Same du accounting as the prior public metadata baseline, fixed roots only.
+          comparable_usage = {}
+          for root in ['/srv', '/home', '/var/lib', '/var/log']:
+              try:
+                  raw = subprocess.check_output(['du', '--summarize', '--one-file-system', '--block-size=1', '--', root],
+                      text=True, stderr=subprocess.DEVNULL, timeout=20)
+                  comparable_usage[root] = int(raw.split()[0])
+              except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+                  comparable_usage[root] = None
           service_summary = {'active_projects_protected': True, 'contents_or_environments_read': False}
           try:
               raw = subprocess.check_output(['systemctl', 'list-units', '--type=service',
@@ -271,7 +285,7 @@ jobs:
                             'broad_fixed_root_totals': broad, 'service_summary': service_summary,
                             'other_ticket_stages': other_ticket_stages,
                             'cache_open_reference_counts': reference_counts, 'reference_scan_errors': reference_errors,
-                            'docker_aggregate_summary': docker_summary,
+                            'docker_aggregate_summary': docker_summary, 'comparable_du_allocated_bytes': comparable_usage,
                             'backup_contents_accessed': False, 'credential_contents_accessed': False,
                             'deleted_bytes': 0, 'all_active_projects_protected': True,
                             'allocation_note': 'Metadata totals only; no ownership/use/recovery or reclaimable-space approval inferred. Root categories may omit other mounts and system roots.'}, indent=2))
