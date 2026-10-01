@@ -96,7 +96,8 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await track.dispatchEvent("pointercancel", { pointerType: "touch", pointerId: 1 });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   await track.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 2 });
-  await track.dispatchEvent("pointerleave", { pointerType: "touch", pointerId: 2 });
+  // React synthesizes onPointerLeave from the browser's pointerout event.
+  await track.dispatchEvent("pointerout", { pointerType: "touch", pointerId: 2, relatedTarget: null });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
 
   // Touch interaction must never erase an explicit pause.
