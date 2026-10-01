@@ -82,7 +82,7 @@ for (const short of [false, true]) {
         } else {
           // Mobile WebKit has no wheel or drag input API. Incremental viewport
           // scrolling is explicitly not physical iPhone touch evidence.
-          await page.evaluate(amount => window.scrollBy(0, amount), distance);
+          await page.evaluate(amount => window.scrollBy({ top: amount, behavior: "instant" }), distance);
         }
         await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(current.scrollY);
       }
