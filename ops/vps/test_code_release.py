@@ -1162,6 +1162,15 @@ class AdditiveDeploymentTests(DeploymentFixture):
 
 
 class HostVerificationMigrationTests(unittest.TestCase):
+    # Actual writerGuardStatements output; also checked against the source generator when available.
+    WRITER_GUARD_STATEMENTS = (
+        'CREATE TABLE IF NOT EXISTS _bct_handover_state(id INTEGER PRIMARY KEY CHECK(id=1), frozen INTEGER NOT NULL CHECK(frozen IN (0,1)), transfer_id TEXT NOT NULL)',
+        "INSERT OR IGNORE INTO _bct_handover_state(id,frozen,transfer_id) VALUES(1,0,'')",
+        'CREATE TRIGGER IF NOT EXISTS "_bct_guard_hosts_insert" BEFORE INSERT ON "hosts" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END',
+        'CREATE TRIGGER IF NOT EXISTS "_bct_guard_hosts_update" BEFORE UPDATE ON "hosts" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END',
+        'CREATE TRIGGER IF NOT EXISTS "_bct_guard_hosts_delete" BEFORE DELETE ON "hosts" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END',
+    )
+
     SQL = (b"-- Owner-confirmed public verification for the existing Kofi Bills profile.\n"
            b"-- No account roles, permissions, event assignments or other hosts are changed.\n"
            b"UPDATE hosts\nSET verification_status = 'verified', updated_at = CURRENT_TIMESTAMP\n"
@@ -1181,6 +1190,9 @@ class HostVerificationMigrationTests(unittest.TestCase):
             CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT NOT NULL);
             INSERT INTO orders VALUES ('preserved-order','paid');
         """)
+        for statement in HostVerificationMigrationTests.WRITER_GUARD_STATEMENTS:
+            database.execute(statement)
+        database.commit()
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -1202,6 +1214,10 @@ class HostVerificationMigrationTests(unittest.TestCase):
 
     def test_exact_correction_preserves_all_other_values_with_private_backup(self):
         before = self.rows()
+        with release.sqlite3.connect(self.database) as connection:
+            connection.execute("UPDATE _bct_handover_state SET transfer_id='preserved-transfer-identity'")
+            control = connection.execute("SELECT * FROM _bct_handover_state").fetchall()
+            schema = release.schema_rows(connection)
         result = self.migrate()
         self.assertEqual(result["publicHostCorrection"], {
             "hostId": "host:kofi-bills", "changed": True, "beforeStatus": "reviewed",
@@ -1213,6 +1229,9 @@ class HostVerificationMigrationTests(unittest.TestCase):
         self.assertEqual(after[0][3], "verified")
         self.assertEqual(self.rows("staff"), [("staff", "scanner")])
         self.assertEqual(self.rows("orders"), [("preserved-order", "paid")])
+        with release.sqlite3.connect(self.database) as connection:
+            self.assertEqual(connection.execute("SELECT * FROM _bct_handover_state").fetchall(), control)
+            self.assertEqual(release.schema_rows(connection), schema)
         backup = self.staging / "before.sqlite"
         self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
         self.assertEqual(result["backupSha256"], release.digest_file(backup))
@@ -1226,6 +1245,23 @@ class HostVerificationMigrationTests(unittest.TestCase):
         result = self.migrate()
         self.assertFalse(result["publicHostCorrection"]["changed"])
         self.assertEqual(self.rows(), before)
+
+    def test_successful_correction_preserves_all_three_writer_fences(self):
+        self.migrate()
+        before = self.rows()
+        with release.sqlite3.connect(self.database) as connection:
+            schema = release.schema_rows(connection)
+            connection.execute("UPDATE _bct_handover_state SET frozen=1")
+            for sql in (
+                "INSERT INTO hosts VALUES ('host:new','new','New host','reviewed','before',NULL,'unchanged')",
+                "UPDATE hosts SET name='blocked-change' WHERE id='host:kofi-bills'",
+                "DELETE FROM hosts WHERE id='host:other'",
+            ):
+                with self.subTest(sql=sql), self.assertRaisesRegex(release.sqlite3.IntegrityError, "Source writer is paused"):
+                    connection.execute(sql)
+            self.assertEqual(connection.execute("SELECT * FROM hosts ORDER BY id").fetchall(), before)
+            self.assertEqual(release.schema_rows(connection), schema)
+            self.assertEqual(connection.execute("SELECT frozen FROM _bct_handover_state").fetchone(), (1,))
 
     def test_unexpected_missing_or_mismatched_identity_fails_closed(self):
         for statement in (
@@ -1276,6 +1312,7 @@ class HostVerificationMigrationTests(unittest.TestCase):
         # the restricted execution boundary for permissions or other data.
         for raw in (b"UPDATE hosts SET account_id='new' WHERE id='host:kofi-bills';",
                     b"UPDATE staff SET role='owner';",
+                    b"UPDATE _bct_handover_state SET frozen=1;",
                     b"DELETE FROM hosts;"):
             with self.subTest(raw=raw), release.closing(release.sqlite3.connect(self.database)) as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -1321,6 +1358,105 @@ class HostVerificationMigrationTests(unittest.TestCase):
         self.assertEqual(self.rows("orders"), [("concurrent-order", "paid"), ("preserved-order", "paid")])
         with release.sqlite3.connect(self.staging / "before.sqlite") as saved:
             self.assertEqual(saved.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 1)
+
+    def test_writer_fixture_matches_actual_generator_and_reviewed_fingerprints(self):
+        root = Path(__file__).resolve().parents[2]
+        generator = root / "ops/handover/writer-lock.mjs"
+        if generator.is_file():
+            actual = json.loads(subprocess.check_output(["node", "--input-type=module", "-e",
+                "import {writerGuardStatements} from './ops/handover/writer-lock.mjs'; "
+                "console.log(JSON.stringify(writerGuardStatements(['hosts'])))"], cwd=root, text=True))
+            self.assertEqual(actual, list(self.WRITER_GUARD_STATEMENTS))
+        # The staged operator intentionally contains only ops/vps. Its same
+        # generator-derived fixture must still match every reviewed fingerprint.
+        with release.sqlite3.connect(self.database) as connection:
+            guards = connection.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name='hosts'").fetchall()
+            self.assertEqual({name: release.hashlib.sha256(sql.encode()).hexdigest() for name, sql in guards},
+                             release.HOST_WRITER_GUARDS)
+            control = connection.execute("SELECT sql FROM sqlite_schema WHERE name='_bct_handover_state'").fetchone()[0]
+            self.assertEqual(release.hashlib.sha256(control.encode()).hexdigest(), release.HOST_WRITER_CONTROL_SCHEMA)
+
+    def test_absent_partial_altered_guards_and_control_drift_reject_before_update(self):
+        original = self.database.read_bytes()
+        connect = release.sqlite3.connect
+        attempted = []
+        class ObservedConnection:
+            def __init__(self, connection):
+                self.connection = connection
+            def __getattr__(self, name):
+                return getattr(self.connection, name)
+            def execute(self, statement, *args):
+                attempted.append(statement)
+                return self.connection.execute(statement, *args)
+        def observed_connect(filename, *args, **kwargs):
+            connection = connect(filename, *args, **kwargs)
+            return ObservedConnection(connection) if str(filename) == self.database.as_uri() + "?mode=rw" else connection
+        cases = (
+            "DROP TRIGGER _bct_guard_hosts_insert; DROP TRIGGER _bct_guard_hosts_update; DROP TRIGGER _bct_guard_hosts_delete;",
+            "DROP TRIGGER _bct_guard_hosts_update;",
+            "DROP TRIGGER _bct_guard_hosts_update; " + self.WRITER_GUARD_STATEMENTS[3].replace("WHERE id=1)=1", "WHERE id=1)=0") + ";",
+            "ALTER TABLE _bct_handover_state ADD COLUMN unexpected TEXT;",
+            "DROP TABLE _bct_handover_state;",
+            "DELETE FROM _bct_handover_state;",
+            "UPDATE _bct_handover_state SET frozen=1;",
+        )
+        for index, statement in enumerate(cases):
+            with self.subTest(statement=statement):
+                self.database.write_bytes(original)
+                self.staging = self.root / ("rejected-" + str(index))
+                with release.sqlite3.connect(self.database) as connection:
+                    connection.executescript(statement)
+                    before = connection.execute("SELECT * FROM hosts ORDER BY id").fetchall()
+                    schema = release.schema_rows(connection)
+                attempted.clear()
+                with patch.object(release.sqlite3, "connect", side_effect=observed_connect):
+                    with self.assertRaises(release.ReleaseError):
+                        self.migrate()
+                self.assertFalse(any(release.re.search(r"\bUPDATE\s+hosts\b", sql, release.re.I) for sql in attempted))
+                self.assertEqual(self.rows(), before)
+                with release.sqlite3.connect(self.database) as connection:
+                    self.assertEqual(release.schema_rows(connection), schema)
+
+    def test_already_verified_noop_still_requires_complete_unfrozen_guards(self):
+        self.migrate()
+        before = self.rows()
+        self.staging = self.root / "verified-but-frozen"
+        with release.sqlite3.connect(self.database) as connection:
+            connection.execute("UPDATE _bct_handover_state SET frozen=1")
+        with self.assertRaisesRegex(release.ReleaseError, "unfrozen"):
+            self.migrate()
+        self.assertEqual(self.rows(), before)
+
+    def test_freeze_between_backup_and_live_transaction_is_obeyed(self):
+        write = release.write_json
+        def freeze_after_backup(path, value):
+            write(path, value)
+            if value.get("phase") == "backed-up":
+                with release.sqlite3.connect(self.database) as connection:
+                    connection.execute("UPDATE _bct_handover_state SET frozen=1")
+        with patch.object(release, "write_json", side_effect=freeze_after_backup):
+            with self.assertRaisesRegex(release.ReleaseError, "unfrozen"):
+                self.migrate()
+        self.assertEqual(self.rows()[0][3], "reviewed")
+        with release.sqlite3.connect(self.database) as connection:
+            self.assertEqual(connection.execute("SELECT frozen FROM _bct_handover_state").fetchone(), (1,))
+            with self.assertRaisesRegex(release.sqlite3.IntegrityError, "Source writer is paused"):
+                connection.execute("UPDATE hosts SET verification_status='verified'")
+        with release.sqlite3.connect(self.staging / "before.sqlite") as saved:
+            self.assertEqual(saved.execute("SELECT frozen FROM _bct_handover_state").fetchone(), (0,))
+
+    def test_control_value_postcondition_drift_rolls_back_host_correction(self):
+        original = release.host_writer_state
+        count = [0]
+        def changed_result(connection):
+            state = original(connection)
+            count[0] += 1
+            return [(1, 0, "unexpected-transfer-change")] if count[0] == 2 else state
+        before = self.rows()
+        with patch.object(release, "host_writer_state", side_effect=changed_result):
+            with self.assertRaisesRegex(release.ReleaseError, "control values"):
+                self.migrate()
+        self.assertEqual(self.rows(), before)
 
 
 class HostVerificationDeploymentTests(DeploymentFixture):

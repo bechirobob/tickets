@@ -17,10 +17,18 @@ export function useHeaderPanel() {
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusFrame = useRef<number | null>(null);
   const [phase, setPhase] = useState<"closed" | "open" | "closing">("closed");
   const keyboardOpen = useRef(false);
   const close = useCallback((restore = false) => {
     if (timer.current) clearTimeout(timer.current);
+    // A breakpoint close can precede the opening frame's passive cleanup.
+    // Cancel it before restoring focus so it cannot enter the replacement panel.
+    keyboardOpen.current = false;
+    if (focusFrame.current !== null) {
+      cancelAnimationFrame(focusFrame.current);
+      focusFrame.current = null;
+    }
     if (restore) trigger.current?.focus({ preventScroll: true });
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPhase("closed");
     else { setPhase("closing"); timer.current = setTimeout(() => setPhase("closed"), 180); }
@@ -38,12 +46,17 @@ export function useHeaderPanel() {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   useEffect(() => {
     if (phase !== "open") return;
-    let focusFrame: number | undefined;
     if (keyboardOpen.current) {
       keyboardOpen.current = false;
+      const openingPanel = panel.current;
       // Wait for WebKit to apply the disclosure's inert/visibility change and
       // finish the trigger's native keyboard activation before moving focus.
-      focusFrame = requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>('button, a[href]')?.focus({ preventScroll: true }));
+      const frame = requestAnimationFrame(() => {
+        if (focusFrame.current !== frame) return;
+        focusFrame.current = null;
+        if (panel.current === openingPanel) openingPanel?.querySelector<HTMLElement>('button, a[href]')?.focus({ preventScroll: true });
+      });
+      focusFrame.current = frame;
     }
     const contains = (target: EventTarget | null) => target instanceof Node && (panel.current?.contains(target) || trigger.current?.contains(target));
     let pointerDestination: Element | null = null;
@@ -73,7 +86,10 @@ export function useHeaderPanel() {
     window.addEventListener("becore:header-panel", other);
     document.addEventListener("click", navigate, true);
     return () => {
-      if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
+      if (focusFrame.current !== null) {
+        cancelAnimationFrame(focusFrame.current);
+        focusFrame.current = null;
+      }
       document.removeEventListener("pointerdown", pointer);
       document.removeEventListener("focusin", focus);
       document.removeEventListener("keydown", key);
