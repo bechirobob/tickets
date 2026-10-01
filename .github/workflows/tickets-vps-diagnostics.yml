@@ -23,7 +23,7 @@ jobs:
           tags: tag:tickets-ci
           ping: hermes
       - name: Inventory VPS storage metadata without changes
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Reconcile Tickets release storage 20261001 metadata only')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect superseded Tickets release dependencies 20261001')
         run: |
           tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1 --stage-run 36804472437-1' <<'PY'
           #!/usr/bin/env python3
@@ -272,6 +272,124 @@ jobs:
                   docker_summary.append(safe)
           except (OSError, subprocess.SubprocessError, ValueError):
               pass
+          # Inspect only public release manifests and non-secret rollback metadata.
+          CANDIDATES = ['45ec44e35f8b0e5099a328ce219df2529374f9ee', 'ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe',
+                        '4cd96fb13e99b4eddd22466e03142d934b4bba49', 'a34bd37d8fad68e200239f497c3ae4a2074d45b6',
+                        '7a090331436541a964752f3d5cfdfffbbc1de823']
+          refs = {sha: {'snapshot_source': 0, 'snapshot_previous': 0, 'snapshot_pointer': 0,
+                        'migration_snapshot': 0, 'current_journal_reference': 0, 'service_working_directory': 0,
+                        'process_symlink': 0, 'process_mapping': 0} for sha in CANDIDATES}
+          reference_permission_errors = 0
+          reference_races = 0
+          
+          def small_json(path):
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+              try:
+                  info = os.fstat(fd)
+                  if not stat.S_ISREG(info.st_mode) or info.st_size > 1024 * 1024:
+                      raise RuntimeError('Metadata file exceeds reviewed contract')
+                  with os.fdopen(fd, 'r', closefd=False) as stream:
+                      return json.load(stream)
+              finally:
+                  os.close(fd)
+          
+          journal = small_json(Path('/var/lib/becore-tickets-handover/live-transfer.json'))
+          # Restrict interpretation/output to documented public revision fields.
+          for sha in CANDIDATES:
+              fields = [journal.get('revision'), journal.get('activeRevision')]
+              last = journal.get('lastCodeRelease', {})
+              if isinstance(last, dict): fields.extend([last.get('revision'), last.get('previous')])
+              refs[sha]['current_journal_reference'] = sum(value == sha for value in fields)
+          
+          manifests = {}
+          for sha in CANDIDATES:
+              value = small_json(RELEASES / sha / 'release.json')
+              manifests[sha] = {'revision_matches': value.get('revision') == sha, 'clean': value.get('dirty') is False}
+              raw = subprocess.check_output(['du', '--summarize', '--one-file-system', '--block-size=1', '--', str(RELEASES / sha)],
+                  text=True, stderr=subprocess.DEVNULL, timeout=10)
+              manifests[sha]['du_allocated_bytes'] = int(raw.split()[0])
+          
+          snapshot_count = 0
+          migration_snapshot_count = 0
+          unknown_snapshot_metadata_count = 0
+          with os.scandir('/var/lib/becore-tickets-handover') as entries:
+              for entry in entries:
+                  guard()
+                  if not re.fullmatch(r'code-release-[1-9][0-9]*-[1-9][0-9]*', entry.name) or not entry.is_dir(follow_symlinks=False): continue
+                  path = Path(entry.path)
+                  try:
+                      result = small_json(path / 'result.json')
+                      pointers = small_json(path / 'pointers.before.json')
+                      if not isinstance(result, dict) or not isinstance(pointers, dict): raise ValueError('Unexpected metadata shape')
+                  except (OSError, ValueError):
+                      unknown_snapshot_metadata_count += 1
+                      continue
+                  snapshot_count += 1
+                  if result.get('dataMigration'): migration_snapshot_count += 1
+                  for sha in CANDIDATES:
+                      if result.get('source') == sha: refs[sha]['snapshot_source'] += 1
+                      if result.get('previous') == sha: refs[sha]['snapshot_previous'] += 1
+                      if any(str(value) == str(RELEASES / sha) for value in pointers.values()): refs[sha]['snapshot_pointer'] += 1
+                      if result.get('dataMigration') and sha in (result.get('source'), result.get('previous')): refs[sha]['migration_snapshot'] += 1
+          
+          raw = subprocess.check_output(['systemctl', 'list-units', '--type=service', '--all', '--no-legend', '--plain', '--no-pager'],
+              text=True, stderr=subprocess.DEVNULL, timeout=10)
+          units = [line.split()[0] for line in raw.splitlines() if line.strip()]
+          if units:
+              raw = subprocess.check_output(['systemctl', 'show', '--property=WorkingDirectory', '--value', '--', *units],
+                  text=True, stderr=subprocess.DEVNULL, timeout=10)
+              for value in raw.splitlines():
+                  for sha in CANDIDATES:
+                      if value == str(RELEASES / sha) or value.startswith(str(RELEASES / sha) + '/'):
+                          refs[sha]['service_working_directory'] += 1
+          
+          with os.scandir('/proc') as processes:
+              for process in processes:
+                  if not process.name.isdigit(): continue
+                  guard()
+                  targets = [Path(process.path) / 'cwd', Path(process.path) / 'exe']
+                  try:
+                      with os.scandir(Path(process.path) / 'fd') as descriptors:
+                          for entry in descriptors:
+                              guard()
+                              targets.append(Path(entry.path))
+                  except FileNotFoundError: reference_races += 1
+                  except PermissionError: reference_permission_errors += 1
+                  for target in targets:
+                      guard()
+                      try:
+                          value = os.readlink(target)
+                          for sha in CANDIDATES:
+                              if value == str(RELEASES / sha) or value.startswith(str(RELEASES / sha) + '/'):
+                                  refs[sha]['process_symlink'] += 1
+                      except FileNotFoundError: reference_races += 1
+                      except PermissionError: reference_permission_errors += 1
+                  try:
+                      with open(Path(process.path) / 'maps', 'r') as stream:
+                          mapped = stream.read(4 * 1024 * 1024 + 1)
+                      if len(mapped) > 4 * 1024 * 1024: raise RuntimeError('Process metadata exceeded bound')
+                      for sha in CANDIDATES:
+                          if str(RELEASES / sha) + '/' in mapped: refs[sha]['process_mapping'] += 1
+                  except FileNotFoundError: reference_races += 1
+                  except PermissionError: reference_permission_errors += 1
+          
+          retention_status = {}
+          for unit, fields in [('becore-tickets-retention.timer', ['ActiveState', 'LastTriggerUSec', 'NextElapseUSecRealtime']),
+                               ('becore-tickets-retention.service', ['ActiveState', 'Result', 'ExecMainStatus'])]:
+              raw = subprocess.check_output(['systemctl', 'show', unit, '--no-pager', '--property=' + ','.join(fields)],
+                  text=True, stderr=subprocess.DEVNULL, timeout=10)
+              retention_status[unit] = dict(line.split('=', 1) for line in raw.splitlines() if '=' in line)
+          with open(HOME / 'current' / 'operations' / 'retention.py', 'rb') as stream:
+              import hashlib
+              retention_source_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+          dependency_evidence = {'manifests': manifests, 'references': refs,
+              'reference_permission_errors': reference_permission_errors, 'reference_races_or_missing_metadata': reference_races,
+              'snapshot_metadata_count': snapshot_count, 'unknown_snapshot_metadata_count': unknown_snapshot_metadata_count,
+              'migration_snapshot_count': migration_snapshot_count,
+              'retention_status': retention_status, 'public_retention_source_sha256': retention_source_sha256,
+              'snapshot_metadata_read': True, 'backup_database_and_credential_contents_read': False,
+              'deletion_authorized': False, 'normal_recovery_established': False}
+          
           if identity() != before:
               raise RuntimeError('Protected runtime changed during inventory')
           known_releases = [row for row in release_sizes if row['revision'] is not None]
@@ -285,7 +403,7 @@ jobs:
                             'broad_fixed_root_totals': broad, 'service_summary': service_summary,
                             'other_ticket_stages': other_ticket_stages,
                             'cache_open_reference_counts': reference_counts, 'reference_scan_errors': reference_errors,
-                            'docker_aggregate_summary': docker_summary, 'comparable_du_allocated_bytes': comparable_usage,
+                            'release_dependency_evidence': dependency_evidence, 'docker_aggregate_summary': docker_summary, 'comparable_du_allocated_bytes': comparable_usage,
                             'backup_contents_accessed': False, 'credential_contents_accessed': False,
                             'deleted_bytes': 0, 'all_active_projects_protected': True,
                             'allocation_note': 'Metadata totals only; no ownership/use/recovery or reclaimable-space approval inferred. Root categories may omit other mounts and system roots.'}, indent=2))
