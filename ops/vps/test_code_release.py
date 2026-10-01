@@ -11,6 +11,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import call, patch
 
@@ -1620,6 +1621,104 @@ class VerifierTests(unittest.TestCase):
         self.assertNotIn("tests/e2e/checkout-preview.spec.ts", text)
         self.assertNotIn("/scan", text)
         self.assertNotIn("/my-nights", text)
+
+
+class FailedReleaseDiagnosticTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/tickets-code-release.yml").read_text()
+        cls.source = textwrap.dedent(cls.workflow.split("<<'PYDIAG'\n", 1)[1].split("          PYDIAG", 1)[0])
+        cls.diagnostic = {"__name__": "read_only_diagnostic_test"}
+        exec(compile(cls.source, "failed-release-diagnostic", "exec"), cls.diagnostic)
+
+    def job(self, name):
+        text = self.workflow.split("\n  " + name + ":\n", 1)[1]
+        return release.re.split(r"\n  [a-z_]+:\n", text, maxsplit=1)[0]
+
+    def test_boolean_mode_is_opt_in_and_release_is_mutually_exclusive(self):
+        self.assertIn("inspect_failed_release:\n        description:", self.workflow)
+        mode = self.workflow.split("      inspect_failed_release:\n", 1)[1].split("      recover_prepared:", 1)[0]
+        self.assertIn("default: false", mode)
+        self.assertIn("type: boolean", mode)
+        self.assertIn("if: github.ref == 'refs/heads/main' && !inputs.inspect_failed_release", self.job("release"))
+        self.assertIn("if: github.ref == 'refs/heads/main' && inputs.inspect_failed_release", self.job("inspect_failure"))
+        self.assertIn("needs: release", self.job("retired_preview"))
+        self.assertNotIn("always()", self.job("retired_preview").split("steps:", 1)[0])
+        for main in (False, True):
+            for inspect in (False, True):
+                release_runs, inspect_runs = main and not inspect, main and inspect
+                self.assertFalse(release_runs and inspect_runs)
+                self.assertEqual(release_runs or inspect_runs, main)
+
+    def test_inspection_hard_pins_failed_inputs_before_existing_identity_connects(self):
+        job = self.job("inspect_failure")
+        for value in ("refs/heads/main", "workflow_dispatch", "ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe",
+                      "45ec44e35f8b0e5099a328ce219df2529374f9ee", "36804016094", "36801064451"):
+            self.assertIn(value, job.split("- name: Connect", 1)[0])
+        self.assertIn('test -z "$RECOVER_PREPARED"', job)
+        self.assertIn('test "$ENABLE_CRYPTO" = false', job)
+        for value in ("tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8",
+                      "oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL",
+                      "audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL",
+                      "tags: tag:tickets-ci", "ping: hermes"):
+            self.assertIn(value, job)
+        self.assertIn("group: tickets-vps-handover", self.workflow)
+        self.assertEqual(self.diagnostic["RUN"], "36804472437-1")
+        self.assertEqual(str(self.diagnostic["SNAPSHOT"]),
+                         "/var/lib/becore-tickets-handover/code-release-36804472437-1")
+
+    def test_inspection_has_no_deployment_database_or_write_commands(self):
+        job = self.job("inspect_failure")
+        for forbidden in ("actions/checkout", " apply ", " restart", "daemon-reload", "rm --", "rmdir",
+                          "sqlite3", "runtime.json", "live-transfer.json", ".write(", "write_text",
+                          "os.O_CREAT", "os.O_WRONLY", "os.O_RDWR", "unlink(", "rename(", "mkdir("):
+            self.assertNotIn(forbidden, job)
+        self.assertEqual(job.count("tailscale ssh root@hermes"), 1)
+        self.assertIn('os.O_RDONLY | os.O_NOFOLLOW', self.source)
+        self.assertEqual(self.source.count('os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK'), 2)
+        self.assertIn('fcntl.LOCK_SH | fcntl.LOCK_NB', self.source)
+        self.assertIn('["systemctl", "show", "becore-tickets.service"', self.source)
+        self.assertNotIn('os.environ', self.source)
+
+    def test_only_known_safe_error_fields_and_digests_can_be_printed(self):
+        safe = self.diagnostic["safe_fields"]
+        self.assertEqual(safe({"phase": "failed", "errorType": "OperationalError",
+                              "reason": "unexpected secret content", "password": "must-not-print",
+                              "source": "invalid", "backupSha256": "f" * 64}),
+                         {"phase": "failed", "errorType": "OperationalError",
+                          "reason": "unrecognized-redacted", "backupSha256": "f" * 64})
+        for reason in self.diagnostic["SAFE_REASONS"]:
+            self.assertEqual(safe({"reason": reason}), {"reason": reason})
+        self.assertEqual(safe({"errorType": "arbitrary value"}), {"errorType": "unrecognized-redacted"})
+        self.assertEqual(safe({"publicHostCorrection": {"changed": True, "private": "hidden"}}),
+                         {"hostCorrectionEvidencePresent": True, "hostCorrectionChanged": True})
+
+    def test_private_reads_are_bounded_digest_only_and_reject_links_and_public_files(self):
+        read = self.diagnostic["read_private"]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "result.json"
+            raw = b'{"phase":"failed"}'
+            path.write_bytes(raw)
+            path.chmod(0o600)
+            self.assertEqual(read(path, os.geteuid()), {"phase": "failed"})
+            self.assertEqual(read(path, os.geteuid(), digest=True), release.hashlib.sha256(raw).hexdigest())
+            with self.assertRaises(RuntimeError):
+                read(path, os.geteuid(), limit=1)
+            path.chmod(0o644)
+            with self.assertRaises(RuntimeError):
+                read(path, os.geteuid())
+            path.chmod(0o600)
+            link = Path(directory) / "link"
+            link.symlink_to(path)
+            with self.assertRaises(OSError):
+                read(link, os.geteuid())
+            fifo = Path(directory) / "fifo"
+            os.mkfifo(fifo, 0o600)
+            with self.assertRaises(RuntimeError):
+                read(fifo, os.geteuid())
+            path.write_text('[]')
+            with self.assertRaises(RuntimeError):
+                read(path, os.geteuid())
 
 
 if __name__ == "__main__":

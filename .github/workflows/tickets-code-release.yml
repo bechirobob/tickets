@@ -20,6 +20,11 @@ on:
         description: Exact SHA currently serving active VPS traffic
         required: true
         type: string
+      inspect_failed_release:
+        description: Read only the hard-pinned failed release 36804472437-1 metadata; never deploy
+        required: false
+        default: false
+        type: boolean
       recover_prepared:
         description: Optional exact failed run-attempt whose prepared empty candidate must be quarantined after byte-for-byte state checks
         required: false
@@ -42,7 +47,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && !inputs.inspect_failed_release
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -142,6 +147,225 @@ jobs:
           # Only this successful run's three staged files are removed. Private
           # rollback snapshots and prior releases remain untouched on the host.
           tailscale ssh root@hermes "rm -- '$stage/runtime.tar.gz' '$stage/provenance.json' '$stage/code-release.py' && rmdir -- '$stage'"
+
+  inspect_failure:
+    # This branch is mutually exclusive with release; no application checkout or apply.
+    if: github.ref == 'refs/heads/main' && inputs.inspect_failed_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      EXPECTED_ACTIVE: ${{ inputs.expected_active }}
+      RUNTIME_RUN: ${{ inputs.runtime_run }}
+      CANDIDATE_RUN: ${{ inputs.candidate_run }}
+      RECOVER_PREPARED: ${{ inputs.recover_prepared }}
+      ENABLE_CRYPTO: ${{ inputs.enable_crypto && 'true' || 'false' }}
+    steps:
+      - name: Require exact read-only diagnostic context and failed release pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$SOURCE_SHA" = ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe
+          test "$EXPECTED_ACTIVE" = 45ec44e35f8b0e5099a328ce219df2529374f9ee
+          test "$RUNTIME_RUN" = 36804016094
+          test "$CANDIDATE_RUN" = 36801064451
+          test -z "$RECOVER_PREPARED"
+          test "$ENABLE_CRYPTO" = false
+      - name: Connect existing dedicated Tickets identity for read-only inspection
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Read failed release metadata without customer rows or secret values
+        shell: bash
+        run: |
+          set -euo pipefail
+          tailscale ssh root@hermes 'python3 -' <<'PYDIAG'
+          """Read-only, non-secret metadata for the single failed Tickets release."""
+          import fcntl
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import pwd
+          import re
+          import stat
+          import subprocess
+
+          RUN = "36804472437-1"
+          HOME = Path("/srv/becore-tickets")
+          STATE = Path("/var/lib/becore-tickets")
+          SNAPSHOT = Path("/var/lib/becore-tickets-handover") / ("code-release-" + RUN)
+          SOURCE = "ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe"
+          SHA = re.compile(r"[a-f0-9]{40}\Z")
+          DIGEST = re.compile(r"[a-f0-9]{64}\Z")
+          SAFE_REASONS = {
+              "Live database must remain a private service-owned regular file.",
+              "Unsafe live database sidecar.",
+              "Host verification migration differs from the exact reviewed source.",
+              "The exact host correction must be the only migration in its release.",
+              "Private database backup timed out.",
+              "Insufficient free space for a private migration backup.",
+              "Private migration backup failed integrity verification.",
+              "Host correction requires the migration transaction.",
+              "Host correction requires the existing ordinary hosts table.",
+              "Host correction refuses hosts triggers.",
+              "Host correction refuses hidden or generated columns.",
+              "Host correction columns are missing.",
+              "Exact existing Kofi Bills host identity is missing or ambiguous.",
+              "Unexpected Kofi Bills verification baseline.",
+              "Host correction did not change exactly one row.",
+              "Host correction changed the host row count.",
+              "Host correction timestamp is unexpected.",
+              "Host correction changed unrelated host values or database schema.",
+              "An existing database schema changed during additive migration.",
+              "Additive migration failed foreign-key verification.",
+              "SQLite or filesystem operation failed; inspect the preserved backup.",
+          }
+          SAFE_ERRORS = {"ReleaseError", "DatabaseError", "OperationalError", "IntegrityError",
+                         "ProgrammingError", "PermissionError", "FileNotFoundError", "OSError",
+                         "ValueError", "TypeError", "OverflowError", "MemoryError"}
+
+
+          def metadata(path):
+              try:
+                  value = path.lstat()
+              except FileNotFoundError:
+                  return {"exists": False}
+              kind = "regular" if stat.S_ISREG(value.st_mode) else "directory" if stat.S_ISDIR(value.st_mode) else "symlink" if stat.S_ISLNK(value.st_mode) else "other"
+              return {"exists": True, "kind": kind, "mode": oct(stat.S_IMODE(value.st_mode)),
+                      "uid": value.st_uid, "gid": value.st_gid, "bytes": value.st_size,
+                      "links": value.st_nlink, "inode": value.st_ino, "device": value.st_dev}
+
+
+          def read_private(path, uid, limit=65536, digest=False):
+              # Never follow symlinks, read arbitrary paths, or output private file bytes.
+              if any(parent.is_symlink() for parent in path.parents):
+                  raise RuntimeError("Evidence ancestor is a symlink")
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+              with os.fdopen(fd, "rb") as stream:
+                  info = os.fstat(stream.fileno())
+                  if not (stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid in (0, uid)
+                          and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= limit):
+                      raise RuntimeError("Evidence metadata is unsafe or exceeds its bound")
+                  if digest:
+                      value = hashlib.sha256()
+                      remaining = limit + 1
+                      while remaining:
+                          chunk = stream.read(min(1048576, remaining))
+                          if not chunk:
+                              break
+                          value.update(chunk)
+                          remaining -= len(chunk)
+                      if remaining == 0:
+                          raise RuntimeError("Evidence exceeded its read bound")
+                      return value.hexdigest()
+                  raw = stream.read(limit + 1)
+                  if len(raw) > limit:
+                      raise RuntimeError("Evidence exceeded its read bound")
+                  value = json.loads(raw)
+                  if not isinstance(value, dict):
+                      raise RuntimeError("Evidence is not a JSON object")
+                  return value
+
+
+          def safe_fields(value):
+              result = {}
+              phase = value.get("phase")
+              if phase in {"prepared", "backed-up", "verified", "activating", "rolled-back", "migration-failed", "failed"}:
+                  result["phase"] = phase
+              for key in ("runId", "attempt"):
+                  if isinstance(value.get(key), str) and re.fullmatch(r"[1-9][0-9]*", value[key]):
+                      result[key] = value[key]
+              for key in ("source", "previous"):
+                  if isinstance(value.get(key), str) and SHA.fullmatch(value[key]):
+                      result[key] = value[key]
+              for key in ("archiveSha256", "provenanceSha256", "backupSha256", "schemaSha256"):
+                  if isinstance(value.get(key), str) and DIGEST.fullmatch(value[key]):
+                      result[key] = value[key]
+              for key in ("dataMigration", "cryptoEnabledRequested", "created", "tablesPreservedOnRollback"):
+                  if isinstance(value.get(key), bool):
+                      result[key] = value[key]
+              if "errorType" in value:
+                  result["errorType"] = value["errorType"] if value["errorType"] in SAFE_ERRORS else "unrecognized-redacted"
+              if "reason" in value:
+                  result["reason"] = value["reason"] if value["reason"] in SAFE_REASONS else "unrecognized-redacted"
+              correction = value.get("publicHostCorrection")
+              if isinstance(correction, dict):
+                  result["hostCorrectionEvidencePresent"] = True
+                  if isinstance(correction.get("changed"), bool):
+                      result["hostCorrectionChanged"] = correction["changed"]
+              return result
+
+
+          def inspect():
+              uid = pwd.getpwnam("becore-tickets").pw_uid
+              # Open the existing deployment lock read-only: no file creation or writes.
+              fd = os.open("/run/lock/becore-tickets-deploy.lock", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+              with os.fdopen(fd, "rb") as lock:
+                  if not stat.S_ISREG(os.fstat(lock.fileno()).st_mode):
+                      raise RuntimeError("Deployment lock is not regular")
+                  fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                  output = {"run": RUN, "serviceUid": uid, "files": {}, "evidence": {}, "pointers": {}}
+                  for name in ("current", "previous"):
+                      path = HOME / name
+                      value = metadata(path)
+                      if value.get("kind") == "symlink":
+                          target = os.readlink(path)
+                          if re.fullmatch(r"/srv/becore-tickets/releases/[a-f0-9]{40}", target):
+                              value["target"] = target
+                          else:
+                              value["target"] = "unexpected-redacted"
+                      output["pointers"][name] = value
+                  roots = [("snapshot", SNAPSHOT), ("residual-staging", STATE / (".code-release-migration-" + RUN))]
+                  for label, root in roots:
+                      output["files"][label] = metadata(root)
+                      folder = root / "database" if label == "snapshot" else root
+                      for leaf in ("result.json", "failure.json", "before.sqlite"):
+                          path = folder / leaf
+                          key = label + "/database/" + leaf
+                          value = metadata(path)
+                          output["files"][key] = value
+                          if value.get("exists"):
+                              try:
+                                  if leaf == "before.sqlite":
+                                      output["evidence"][key] = {"sha256": read_private(path, uid, 512 * 1024 * 1024, digest=True)}
+                                  else:
+                                      output["evidence"][key] = safe_fields(read_private(path, uid))
+                              except Exception as error:
+                                  output["evidence"][key] = {"readErrorType": type(error).__name__}
+                  path = SNAPSHOT / "result.json"
+                  output["files"]["snapshot/result.json"] = metadata(path)
+                  if output["files"]["snapshot/result.json"].get("exists"):
+                      try:
+                          output["evidence"]["snapshot/result.json"] = safe_fields(read_private(path, uid))
+                      except Exception as error:
+                          output["evidence"]["snapshot/result.json"] = {"readErrorType": type(error).__name__}
+                  for label, path in [("live-state", STATE), ("live-database", STATE / "tickets.sqlite"),
+                                      ("live-wal", STATE / "tickets.sqlite-wal"), ("live-shm", STATE / "tickets.sqlite-shm"),
+                                      ("candidate", HOME / "releases" / SOURCE),
+                                      ("upload-stage", Path("/var/tmp") / ("tickets-code-release-" + RUN))]:
+                      output["files"][label] = metadata(path)
+                  raw = subprocess.check_output(["systemctl", "show", "becore-tickets.service", "--no-pager",
+                      "--property=ActiveState,SubState,WorkingDirectory,NeedDaemonReload"], text=True, timeout=15)
+                  values = dict(line.split("=", 1) for line in raw.splitlines() if "=" in line)
+                  output["service"] = {key: value for key, value in values.items()
+                      if (key in {"ActiveState", "SubState", "NeedDaemonReload"} and re.fullmatch(r"[a-z-]{1,30}", value))
+                      or (key == "WorkingDirectory" and re.fullmatch(r"/srv/becore-tickets/releases/[a-f0-9]{40}", value))}
+                  print(json.dumps(output, sort_keys=True))
+
+
+          if __name__ == "__main__":
+              try:
+                  inspect()
+              except Exception as error:
+                  print(json.dumps({"diagnosticStopped": type(error).__name__}))
+                  raise SystemExit(1)
+          PYDIAG
 
   retired_preview:
     name: Verify retired checkout preview (${{ matrix.browser }})
