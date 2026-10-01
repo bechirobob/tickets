@@ -43,7 +43,7 @@
 }
 .discovery-home .room-product-phone .scene-message--own .room-demo-reaction { right: auto; left: 5px; transform-origin: 20% 100%; }
 .discovery-home .room-product-phone .room-demo-reaction[data-reaction-visible='false'] { opacity: 0; visibility: hidden; }
-.discovery-home .room-product-phone[data-demo-ready='true'] .room-demo-reaction[data-reaction-visible='true'] { animation: room-demo-tapback 360ms cubic-bezier(.22,1,.36,1) var(--reaction-delay, 450ms) both; }
+.discovery-home .room-product-phone[data-demo-ready='true'] .room-demo-reaction[data-reaction-visible='true'] { animation: room-demo-tapback 360ms cubic-bezier(.22,1,.36,1) var(--reaction-delay, 450ms) backwards; }
 .discovery-home .room-product-phone[data-demo-ready='true'][data-demo-running='false'] .room-demo-reaction[data-reaction-visible='true'] { animation-play-state: paused; }
 .discovery-home .room-product-phone .room-demo-reaction .chat-reaction {
   min-height: 23px; min-width: 29px; padding: 2px 6px; gap: 3px; border: 1.5px solid #30202d;

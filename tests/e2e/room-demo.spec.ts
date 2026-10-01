@@ -126,6 +126,7 @@ test("Room hardware and independent tapbacks retain a clear mobile silhouette", 
   await page.goto("/");
   const phone = page.locator(".room-product-phone--arrival");
   await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
   const message = phone.locator('[data-room-item="arrival-3"]');
   const reaction = message.locator(".room-demo-reaction");
   await expect(message).toBeVisible({ timeout: 12000 });
@@ -139,6 +140,10 @@ test("Room hardware and independent tapbacks retain a clear mobile silhouette", 
   await expect(reaction).toHaveCSS("animation-play-state", "paused");
   await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
   await expect(reaction).toHaveCSS("animation-play-state", "running");
+  // A settled tapback must not rewind its finished arrival when playback resumes.
+  expect(Number(await reaction.evaluate(node => getComputedStyle(node).opacity))).toBe(1);
+  await page.waitForTimeout(200);
+  await expect(reaction).toHaveCSS("opacity", "1");
   const bubble = await message.locator(".scene-message__bubble").boundingBox();
   const badge = await reaction.boundingBox();
   expect(bubble).not.toBeNull();
