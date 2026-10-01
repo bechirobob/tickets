@@ -42,7 +42,25 @@ export async function boundedFormData(request: Request, maximumBytes: number): P
 export async function limitRequestBody(request: Request, maximumBytes = 1024 * 1024): Promise<Request | Response> {
   try {
     const bytes = await boundedRequestBytes(request, maximumBytes);
-    return new Request(request, { body: bytes });
+    // App Router wrappers may come from another realm and cannot be passed as
+    // a branded Request input. Rebuild from the validated URL and Web API fields
+    // without decoding signed bytes or dropping authentication/abort metadata.
+    return new Request(new URL(request.url).href, {
+      method: request.method,
+      headers: [...request.headers],
+      body: request.body === null ? null : bytes,
+      signal: request.signal,
+      redirect: request.redirect,
+      integrity: request.integrity,
+      cache: request.cache,
+      // Incoming form navigations can carry a mode that RequestInit forbids.
+      // This local parsing clone retains Origin/cookies/credentials unchanged.
+      mode: request.mode === 'navigate' ? 'same-origin' : request.mode,
+      credentials: request.credentials,
+      keepalive: request.keepalive,
+      referrer: request.referrer,
+      referrerPolicy: request.referrerPolicy,
+    });
   } catch (error) {
     if (error instanceof RequestBodyTooLarge) return Response.json({ error: 'This request is too large.' }, {
       status: 413, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },

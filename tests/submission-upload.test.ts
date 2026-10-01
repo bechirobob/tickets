@@ -1,3 +1,4 @@
+import { securityResponse } from "../worker/security-response";
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { GET as readSubmissionMedia } from "../app/api/media/[id]/route";
@@ -52,6 +53,7 @@ describe("organiser flyer upload", () => {
     const denied = await load();
     expect(denied.status).toBe(404);
     expect(denied.headers.get('cache-control')).toContain('no-store');
+    expect(denied.headers.get('cross-origin-resource-policy')).toBe('same-origin');
     const staffId = crypto.randomUUID(), now = new Date().toISOString();
     await env.DB.prepare(`INSERT INTO staff_accounts (id,normalized_email,display_name,role,password_hash,password_salt,password_iterations,must_change_password,status,password_changed_at,created_at,created_by,updated_at)
       VALUES (?,?,'Curator','curator','test','test',?,0,'active',?,?,'test',?)`).bind(staffId,`${staffId}@example.com`,PASSWORD_ITERATIONS,now,now,now).run();
@@ -60,6 +62,7 @@ describe("organiser flyer upload", () => {
     expect(media.status).toBe(200);
     expect(media.headers.get('cache-control')).toContain('no-store');
     expect(media.headers.get("content-type")).toBe("image/webp");
+    expect(media.headers.get("cross-origin-resource-policy")).toBe("same-origin");
     expect(media.headers.get("content-length")).toBe("12");
     expect(new Uint8Array(await media.arrayBuffer())).toEqual(new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 69, 66, 80]));
     await env.DB.prepare("UPDATE curated_event_records SET submission_id=?,status='scheduled',scheduled_publish_at=?,is_test_event=0,is_verified=1 WHERE slug='after-dark-osu'").bind(result.id,new Date(Date.now()+86400000).toISOString()).run();
@@ -68,9 +71,15 @@ describe("organiser flyer upload", () => {
     const published = await load();
     expect(published.status).toBe(200);
     expect(published.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
+    expect(published.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+    expect(securityResponse(published, 'fixture-nonce', `/api/media/${result.id}`).headers.get('cross-origin-resource-policy')).toBe('cross-origin');
     await env.DB.prepare("UPDATE curated_event_records SET status='unpublished',removed_at=? WHERE slug='after-dark-osu'").bind(now).run();
     expect((await load()).status).toBe(404);
-    expect((await load(cookie)).status).toBe(200);
+    const withdrawnPreview = await load(cookie);
+    expect(withdrawnPreview.status).toBe(200);
+    expect(withdrawnPreview.headers.get('cache-control')).toContain('no-store');
+    expect(withdrawnPreview.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+    expect(securityResponse(withdrawnPreview, 'fixture-nonce', `/api/media/${result.id}`).headers.get('cross-origin-resource-policy')).toBe('same-origin');
   });
 
   it("rejects an event submission that has no flyer", async () => {

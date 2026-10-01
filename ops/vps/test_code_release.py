@@ -1624,6 +1624,21 @@ class VerifierTests(unittest.TestCase):
                         with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
                             release.vetted_changes(OLD, NEW)
 
+    def test_security_policy_changes_require_an_explicit_exact_reviewed_blob(self):
+        name = "worker/security-response.ts"
+        with patch.dict(release.REVIEWED_APPLICATION_BLOBS, {name: "6" * 40}, clear=True):
+            for blob in ("6" * 40, "7" * 40):
+                with patch.object(release, "git", side_effect=[name, blob]), patch.object(release.subprocess, "run"):
+                    if blob == "6" * 40:
+                        self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                    else:
+                        with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
+                            release.vetted_changes(OLD, NEW)
+        with patch.dict(release.REVIEWED_APPLICATION_BLOBS, {}, clear=True):
+            with patch.object(release, "git", return_value=name), patch.object(release.subprocess, "run"):
+                with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                    release.vetted_changes(OLD, NEW)
+
     def test_source_allowlist_denies_schema_runtime_and_unknown_scripts(self):
         for name in ("db/schema.ts", "drizzle/0001.sql", "runtime/vps/server.mjs", "ops/handover/live-operator.mjs",
                      "wrangler.jsonc", "scripts/build-vps.mjs", "ops/vps/install-preview.py", "app/api/admin/route.ts"):

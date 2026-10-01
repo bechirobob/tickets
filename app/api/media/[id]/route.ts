@@ -1,7 +1,7 @@
 import { hasPermission, readAdminSession } from '../../../../lib/admin-session';
 
 export const dynamic = 'force-dynamic';
-const privateHeaders = { 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' };
+const privateHeaders = { 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'cross-origin-resource-policy': 'same-origin' };
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,5 +25,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // Revalidate public artwork so withdrawal takes effect without a week-long
     // stale-while-revalidate window; private previews must never populate caches.
     'cache-control':media.public ? 'public, max-age=0, must-revalidate' : 'private, no-store',
+    'cross-origin-resource-policy':media.public ? 'cross-origin' : 'same-origin',
   } });
 }

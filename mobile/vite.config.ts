@@ -11,7 +11,7 @@ export default defineConfig({
   plugins: [react(), {
     name: 'shared-customer-assets',
     generateBundle() {
-      for (const folder of ['brand', 'devices', 'atmospheres', 'textures']) {
+      for (const folder of ['brand', 'devices', 'atmospheres', 'textures', 'payment-providers']) {
         for (const file of readdirSync(path.join(here, '../public', folder))) {
           this.emitFile({ type: 'asset', fileName: `${folder}/${file}`, source: readFileSync(path.join(here, '../public', folder, file)) });
         }

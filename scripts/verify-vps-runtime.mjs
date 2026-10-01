@@ -37,7 +37,7 @@ try {
     db.prepare("INSERT INTO tickets (id,order_id,event_slug,ticket_type,admission_number,qr_token_hash,status,issued_at) VALUES (?,?,?,'general',1,?,'issued',?)").bind(id,id,slug,id,now),
     db.prepare("INSERT INTO ticket_assignments (ticket_id,attendee_id,assigned_by,status,assigned_at) VALUES (?,?,'fixture','active',?)").bind(id,id,now),
   ]);
-  writeFileSync(path.join(directory, 'config.json'), JSON.stringify({ ENVIRONMENT: 'test', STAFF_LOGIN_DECOY_SECRET: 'isolated-vps-network-test-key-with-no-production-access' }));
+  writeFileSync(path.join(directory, 'config.json'), JSON.stringify({ ENVIRONMENT: 'test', STAFF_LOGIN_DECOY_SECRET: 'isolated-vps-network-test-key-with-no-production-access', PAYSTACK_SECRET_KEY: 'sk_test_isolated_unsigned_webhook_no_provider_access' }));
   await start();
   for (const route of ['/', '/my-nights', '/api/public/events', '/api/version']) {
     const response = await fetch(base + route);
@@ -49,6 +49,15 @@ try {
       assert.ok(text.includes(`nonce="${nonce}"`), 'SSR script nonce matches the response security policy');
     }
   }
+  for (const artwork of ['/hosts/kofi-bills.webp', '/events/on-the-guest-list.webp']) {
+    const response = await fetch(base + artwork);
+    assert.equal(response.status, 200, 'public artwork exists');
+    assert.equal(response.headers.get('cross-origin-resource-policy'), 'cross-origin', 'native public artwork embedding');
+    await response.arrayBuffer();
+  }
+  const privateMedia = await fetch(base + '/api/media/isolated-not-a-public-poster');
+  assert.equal(privateMedia.status, 404);
+  assert.equal(privateMedia.headers.get('cross-origin-resource-policy'), 'same-origin');
   const invalidHost = await new Promise((resolve, reject) => {
     get(base + '/healthz', { headers: { host: 'untrusted.example' } }, response => { response.resume(); resolve(response.statusCode); }).once('error', reject);
   });
@@ -62,6 +71,26 @@ try {
   }
   assert.equal((await fetch(base + '/api/customer/tickets', { method: 'POST', headers: { origin: 'https://untrusted.example', cookie: `bct_attendee=${session}` } })).status, 403);
   assert.equal((await fetch(base + '/api/admin/check-in', { method: 'POST', headers: { origin: base }, body: 'x'.repeat(32769) })).status, 413);
+  // Exercise a compiled Vinext route outside the three direct fast APIs. Its
+  // Request wrapper crosses a realm boundary that native handler unit tests do
+  // not reproduce; body limits must preserve URL, method, cookies and origin.
+  const privateHeaders = { origin: base, cookie: `bct_attendee=${session}`, 'content-type': 'application/json' };
+  const privacy = await fetch(base + '/api/customer/privacy', { method: 'PUT', headers: privateHeaders,
+    body: JSON.stringify({ defaultAttendeeVisible: true, allowHostUpdates: false }) });
+  assert.equal(privacy.status, 200, 'compiled generic route accepts bounded JSON');
+  assert.equal((await privacy.json()).saved, true);
+  const persistedPrivacy = await fetch(base + '/api/customer/privacy', { headers: privateHeaders });
+  assert.equal(persistedPrivacy.status, 200);
+  assert.equal(persistedPrivacy.headers.get('cross-origin-resource-policy'), 'same-origin');
+  assert.deepEqual(await persistedPrivacy.json(), { defaultAttendeeVisible: true, allowHostUpdates: false });
+  assert.equal((await fetch(base + '/api/customer/privacy', { method: 'PUT',
+    headers: { ...privateHeaders, origin: 'https://untrusted.example' },
+    body: JSON.stringify({ defaultAttendeeVisible: false, allowHostUpdates: true }) })).status, 403);
+  assert.equal((await fetch(base + '/api/customer/privacy', { method: 'PUT', headers: privateHeaders,
+    body: 'x'.repeat(1024 * 1024 + 1) })).status, 413);
+  const unsignedWebhook = await fetch(base + '/api/payments/webhook', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: '{"event":"charge.success","data":{}}' });
+  assert.equal(unsignedWebhook.status, 401, 'unsigned compiled webhook is denied rather than crashing');
   const wallet = await fetch(base + '/api/customer/tickets', { method: 'POST', headers: { origin: base, cookie: `bct_attendee=${session}` } });
   assert.equal(wallet.status, 200);
   const walletBody = await wallet.json();
@@ -98,7 +127,7 @@ try {
   socket.send(JSON.stringify({ type: 'reaction', messageId: 'does-not-matter', emoji: '🔥' }));
   const close = await Promise.race([closed, new Promise((_, reject) => setTimeout(() => reject(new Error('Revoked socket remained open.')), 8000).unref())]);
   assert.equal(close[0], 4003);
-  console.log('VPS HTTP, SSR/CSP, private access, QR wallet, real Room WebSocket, restart persistence and session revocation passed.');
+  console.log('VPS HTTP, SSR/CSP, generic bounded JSON, unsigned webhook denial, private access, QR wallet, real Room WebSocket, restart persistence and session revocation passed.');
 } catch (error) {
   console.error(output);
   throw error;

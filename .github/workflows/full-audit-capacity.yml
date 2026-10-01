@@ -27,6 +27,8 @@ jobs:
       - run: npm ci --no-audit
       - name: Build the exact isolated VPS candidate
         run: npm run build:vps
+      - name: Verify compiled generic request and private runtime boundaries
+        run: node scripts/verify-vps-runtime.mjs
       - name: Verify 600 isolated guests, duplicate scans, Room delivery and restart
         shell: bash
         run: |

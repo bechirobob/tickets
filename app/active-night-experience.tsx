@@ -26,6 +26,7 @@ import { useRoomDemo } from "./use-room-demo";
 import { FlashMarker, RoomComposeContent, RoomReaction } from "./room-chat-parts";
 import { ActionLink } from "./action";
 import { discoveryOffer } from "../lib/event-pricing";
+import { eventArtworkPath } from "../lib/event-guest";
 
 const sceneInterval = 4_500;
 const fallbackImage = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
@@ -177,8 +178,8 @@ export default function ActiveNightExperience({ events }: { events: CustomerEven
       onFocusCapture={() => setInteractionPause(true)}
       onBlurCapture={leaveFocus}
     >
-      {previous ? <Image key={`previous-${previous.slug}`} className="compact-hero__image compact-hero__image--outgoing" data-portrait-crop={previous.image === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(previous.image, 1600, 78)} width={1600} height={900} sizes="100vw" alt="" aria-hidden="true" unoptimized /> : null}
-      <Image key={active?.slug ?? "waiting"} className="compact-hero__image compact-hero__image--active" data-portrait-crop={heroImage === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={active ? `Atmosphere for ${active.title}` : "A crowd under warm stage lights at night"} priority={activeIndex === 0} unoptimized />
+      {previous ? <Image key={`previous-${previous.slug}`} className="compact-hero__image compact-hero__image--outgoing" data-portrait-crop={eventArtworkPath(previous.image) === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(previous.image, 1600, 78)} width={1600} height={900} sizes="100vw" alt="" aria-hidden="true" unoptimized /> : null}
+      <Image key={active?.slug ?? "waiting"} className="compact-hero__image compact-hero__image--active" data-portrait-crop={eventArtworkPath(heroImage) === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={active ? `Atmosphere for ${active.title}` : "A crowd under warm stage lights at night"} priority={activeIndex === 0} unoptimized />
       <div key={`shade-${active?.slug ?? "waiting"}`} className="compact-hero__shade" />
       <div key={`copy-${active?.slug ?? "waiting"}`} className="compact-hero__copy" aria-live={autoplayRunning ? "off" : "polite"} aria-atomic="true">
         <p className="night-kicker hero-editor-note"><span /> {active ? active.quip : "Your next good excuse to go out."}{active?.isTestEvent ? <small> / Preview</small> : null}</p>

@@ -115,3 +115,42 @@ test('small screens, larger text and empty states keep visible lettering intact'
   await page.goto('/events');
   await expect(page.getByRole('heading', { name: 'The next plan is still cooking.' })).toBeVisible();
 });
+
+
+test('packaged public screens load bundled payment marks and the current host portrait', async ({ page }, info) => {
+  const withHost = { ...catalogue, events: [guest], screens: [{ ...catalogue.screens![1], host: { slug: 'kofi-bills', name: 'Kofi Bills', role: 'Host', city: 'Accra', verificationStatus: 'verified', profileImageUrl: '/hosts/kofi-bills.webp' } }] };
+  await page.route(`${origin}/api/public/events`, route => route.fulfill({ json: withHost, headers: { 'access-control-allow-origin': '*' } }));
+  // Host portraits are current public catalogue assets, not private/local state.
+  // The server's actual cross-origin response policy is covered by its own gate.
+  await page.route(`${origin}/hosts/kofi-bills.webp`, async route => route.fulfill({ body: await readFile(new URL('../../public/hosts/kofi-bills.webp', import.meta.url)), contentType: 'image/webp', headers: { 'cross-origin-resource-policy': 'cross-origin' } }));
+  await page.goto('/');
+  const footer = page.locator('.payment-footer');
+  await footer.scrollIntoViewIfNeeded();
+  const marks = footer.locator('img');
+  await expect(marks).toHaveCount(7);
+  await expect.poll(() => marks.evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  expect(await marks.evaluateAll(images => images.every(image => new URL((image as HTMLImageElement).currentSrc).origin === location.origin))).toBe(true);
+  await page.screenshot({ path: info.outputPath('bundled-payment-marks.png') });
+  await page.goto(`/event/${guest.slug}`);
+  const portrait = page.locator('.event-host img');
+  await portrait.scrollIntoViewIfNeeded();
+  await expect(portrait).toHaveAttribute('src', `${origin}/hosts/kofi-bills.webp`);
+  await expect.poll(() => portrait.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await expect(page.locator('.event-host')).toContainText('Verified host');
+  await page.screenshot({ path: info.outputPath('current-host-portrait.png') });
+});
+
+test('absolute native artwork keeps the same portrait hero geometry as the website', async ({ page }, info) => {
+  await page.route(`${origin}/api/public/events`, route => route.fulfill({ json: { ...catalogue, events: [guest], screens: [catalogue.screens![1]] }, headers: { 'access-control-allow-origin': '*' } }));
+  await page.goto('/');
+  const hero = page.locator('.compact-hero');
+  const artwork = hero.locator('img.compact-hero__image--active');
+  await expect(artwork).toHaveAttribute('data-portrait-crop', 'true');
+  await expect(hero).toHaveCSS('height', '560px');
+  await expect(artwork).toHaveCSS('height', '300px');
+  const copy = await hero.locator('.compact-hero__copy').boundingBox();
+  const image = await artwork.boundingBox();
+  expect(copy!.y).toBeGreaterThan(image!.y + image!.height);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  await page.screenshot({ path: info.outputPath('shared-portrait-hero.png') });
+});

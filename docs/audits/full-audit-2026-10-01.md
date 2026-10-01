@@ -31,7 +31,7 @@ browser APIs. Physical-device and provider acceptance remain separate gates.
 | Medium | Concurrent staff demotion/disable requests could remove the last active owner; concurrent failed logins lost increments and avoided lockout | Add exact additive database owner guard; atomic failure counters preserve lockout; test two simultaneous owner changes and ten concurrent failed logins |
 | Medium | A temporary-password account could read organizer activity; password/support actions lacked some dedicated abuse controls | Enforce the same permission boundary and bounded identity throttles; malformed support payloads return validation errors; refund request conversations deduplicate transactionally |
 | Medium | Draft/future/withdrawn uploaded event posters were anonymously readable with long-lived caching | Require curation authorization until actual public publication; private previews no-store, public responses revalidate. Previously cached browser copies remain a residual until prior expiry |
-| Medium | Valid Room guests could multiply their flood allowance across unlimited sockets | Shared per-attendee action/slow-mode budget, four connections per identity and2,048 per Room, reject excess with retryable1013 without evicting current guests; reconnect/revocation/window and600-guest headroom regressions |
+| Medium | Valid Room guests could multiply their flood allowance across unlimited sockets | Shared per-attendee action/slow-mode budget, four connections per identity and 2,048 per Room, reject excess with retryable 1013 without evicting current guests; reconnect/revocation/window and 600-guest headroom regressions |
 | Medium | Most API parsers trusted transport/body size implicitly, and upload checks relied on Content-Length | Bound actual stream bytes before JSON/text/form parsing, preserving tighter route limits and exact signed webhook bytes; exercise absent/forged lengths and oversized streams |
 | Medium | VPS confirmation scheduler called an unimplemented batch queue method; stale queue consumers could delete newer lease work | Implement durable deduplicated batch enqueue; fence acknowledge/retry by claimed attempt; five queue/rate-limit adapter tests now run through the established VPS suite |
 | Medium | Receipts created during missing email configuration could remain without a retry; explicit receipt resend reused callback deduplication identity | Preserve due retries without burning provider budget; separate deliberate resend identity while retaining payment-callback idempotency |
@@ -71,7 +71,7 @@ verified release. A pending check is not a pass.
 - Packaged mobile: clean dependency installation with scripts disabled for the
   audit install, 13 Node tests, four iOS release-script tests, Android and iOS
   release-identity validators and production TypeScript/Vite build passed.
-- Release/retention/read-only diagnostic tests: 119 passed, including an
+- Release/retention/read-only diagnostic tests: 120 passed, including an
   independently reproduced staged-operator-only layout. The new owner trigger is
   pinned by exact source blob, SHA-256 and schema fingerprint; no general
   existing-table trigger permission was broadened.
@@ -87,9 +87,9 @@ verified release. A pending check is not a pass.
 
 ## Current-day operational receipts retained with their original time
 
-- Read-only storage/health verification [36915375619](https://github.com/bechirobob/tickets/actions/runs/36915375619), 1 October 19:35 UTC: active application7b9, previous2c3, third2266; free22,038,310,912 bytes; no deletion by that check; health and version200. This predates this audit release.
-- Backup [36832627387](https://github.com/bechirobob/tickets/actions/runs/36832627387), 1 October07:50 UTC: encrypted backup, complete isolated restore and off-host upload all passed. Artifact11147432902 expires5November, 35-day retention. Workflow source4cd96fb. This is current-day backup evidence, not a post-candidate restore or total-host-loss exercise.
-- Historical host-capacity evidence from29September remains dated and is not treated as fresh performance. The new candidate additionally runs the existing600-guest VPS harness in an isolated hosted runner: wallet isolation, duplicate gate races,72,000 expected Room deliveries, revocation and restart. Runner measurements are not an SLA for the live VPS.
+- Read-only storage/health verification [36915375619](https://github.com/bechirobob/tickets/actions/runs/36915375619), 1 October 19:35 UTC: active application 7b9, previous 2c3, third 2266; free 22,038,310,912 bytes; no deletion by that check; health and version200. This predates this audit release.
+- Backup [36832627387](https://github.com/bechirobob/tickets/actions/runs/36832627387), 1 October 07:50 UTC: encrypted backup, complete isolated restore and off-host upload all passed. Artifact11147432902 expires 5 November, 35-day retention. Workflow source 4cd96fb. This is current-day backup evidence, not a post-candidate restore or total-host-loss exercise.
+- Historical host-capacity evidence from 29 September remains dated and is not treated as fresh performance. The new candidate additionally runs the existing 600-guest VPS harness in an isolated hosted runner: wallet isolation, duplicate gate races, 72,000 expected Room deliveries, revocation and restart. Runner measurements are not an SLA for the live VPS.
 
 ## Release safety
 
@@ -122,6 +122,39 @@ replacement. No earlier cleanup, handover or failed deployment is replayed.
 - A restored encrypted backup on the existing host proves that rehearsal. Total
   host-loss recovery on a replacement machine and ongoing provider account quotas
   must not be inferred solely from source or an earlier receipt.
+
+## Candidate verification corrections, before any deployment
+
+- First candidate `901e5c7`: build, lint, types and rendered checks passed; Worker
+  suite passed 606 of 607. The one old gate fixture demoted its only owner and was
+  correctly blocked by the new invariant. Retaining a second fixture owner kept
+  all assertions intact; focused Worker and VPS gate suites each passed 4/4.
+- Candidate `bfd0706`: complete core passed 607 Worker tests plus 82 repository,
+  44 UI, two password-client and four rendered checks, schema and Worker dry-run.
+  Exact-source operator, isolated 600-guest capacity, native Android/iOS and mobile
+  browser validation passed. The 600-guest test delivered 72,000 messages with zero
+  errors; measurements are isolated hosted-runner observations.
+- Its complete three-engine browser matrix was **not green**. All three engines
+  found the same privacy helper-text contrast defect (4.02:1). Real compiled
+  Operations writes exposed an audit-introduced request-wrapper integration bug:
+  native unit Requests passed, but Vinext's cross-realm wrapper could not be used
+  as a branded Request constructor input. No failing candidate was deployed.
+- The corrected bounded parser reconstructs from URL and explicit metadata,
+  preserves signed bytes and cancellation, and normalizes nonconstructible
+  navigation mode for its parsing clone. Foreign-wrapper tests reproduce the
+  failure before repair; Worker and VPS each pass 12 focused cases afterwards.
+  The compiled VPS verifier now exercises real generic JSON persistence, origin
+  rejection, 413 size rejection and an unsigned webhook, beyond the fast API path.
+- Actual native screenshots additionally exposed omitted payment-logo assets,
+  a missed portrait-crop identity after URL absolutization, and public artwork
+  blocked by same-origin resource policy. The corrected client bundles its shared
+  payment assets, uses normalized artwork identity, and verifies image loading and
+  geometry. Only flat known public artwork and explicitly publication-verified
+  public poster responses may embed cross-origin. Private/draft/denied media and
+  API responses remain protected; no credentialed CORS access was added.
+- The first failures, dates and original artifacts remain attached to the runs.
+  These corrections require fresh exact-candidate complete gates and changed-view
+  pixel review; earlier partial passes do not establish the corrected release.
 
 ## Final results and receipts
 

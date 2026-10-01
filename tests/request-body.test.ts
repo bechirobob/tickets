@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundedFormData, RequestBodyTooLarge } from '../lib/request-body';
+import { boundedFormData, limitRequestBody, RequestBodyTooLarge } from '../lib/request-body';
 import { POST as submitParty } from '../app/api/submissions/route';
 
 function streamed(chunks: Uint8Array[], headers: HeadersInit = {}) {
@@ -13,6 +13,77 @@ function streamed(chunks: Uint8Array[], headers: HeadersInit = {}) {
   } as RequestInit);
   return { request, cancelled:()=>cancelled };
 }
+
+// Vinext can supply a Request-shaped wrapper that has no native Request brand.
+function foreignRequest(request: Request): Request {
+  return {
+    [Symbol.toStringTag]: 'Request',
+    url: request.url, method: request.method, headers: request.headers, body: request.body,
+    signal: request.signal, redirect: request.redirect, integrity: request.integrity,
+    cache: request.cache, mode: request.mode, credentials: request.credentials,
+    keepalive: request.keepalive, referrer: request.referrer, referrerPolicy: request.referrerPolicy,
+  } as unknown as Request;
+}
+
+it('rebuilds foreign Request wrappers without losing signed bytes, headers or cancellation', async () => {
+  const controller = new AbortController();
+  const bytes = new Uint8Array([32, 123, 34, 255, 0, 34, 125, 13, 10]);
+  const source = new Request('https://tickets.becoreops.com/api/payments/webhook?ref=a%2Fb', {
+    method: 'POST', body: bytes, signal: controller.signal,
+    headers: { 'content-type': 'application/json', 'x-paystack-signature': 'exact-signature', cookie: 'fixture=opaque', origin: 'https://tickets.becoreops.com' },
+    redirect: 'manual', cache: 'no-store', credentials: 'include', mode: 'same-origin',
+    referrer: 'https://tickets.becoreops.com/orders', referrerPolicy: 'no-referrer', integrity: '', keepalive: true,
+  });
+  const wrapper = foreignRequest(source);
+  expect(wrapper).not.toBeInstanceOf(Request);
+  expect(String(wrapper)).toBe('[object Request]');
+  const result = await limitRequestBody(wrapper, bytes.length);
+  expect(result).toBeInstanceOf(Request);
+  const bounded = result as Request;
+  expect(bounded.url).toBe(source.url);
+  expect(bounded.method).toBe(source.method);
+  expect([...bounded.headers]).toEqual([...source.headers]);
+  for (const key of ['redirect', 'cache', 'credentials', 'mode', 'referrer', 'referrerPolicy', 'integrity', 'keepalive'] as const) {
+    expect(bounded[key]).toBe(source[key]);
+  }
+  expect(new Uint8Array(await bounded.arrayBuffer())).toEqual(bytes);
+  controller.abort();
+  expect(bounded.signal.aborted).toBe(true);
+});
+
+it('still cancels and rejects an oversized foreign Request stream', async () => {
+  const input = streamed([new Uint8Array(8), new Uint8Array(8), new Uint8Array(8)], { 'content-length': '1' });
+  const result = await limitRequestBody(foreignRequest(input.request), 10);
+  expect(result).toBeInstanceOf(Response);
+  expect((result as Response).status).toBe(413);
+  expect(input.cancelled()).toBe(true);
+});
+
+it('preserves an absent body when reconstructing a foreign Request', async () => {
+  const source = new Request('https://tickets.becoreops.com/api/customer/privacy');
+  const result = await limitRequestBody(foreignRequest(source));
+  expect(result).toBeInstanceOf(Request);
+  expect((result as Request).body).toBeNull();
+  expect((result as Request).method).toBe('GET');
+});
+
+it('accepts foreign navigation requests without changing form bytes or authentication metadata', async () => {
+  const source = new Request('https://tickets.becoreops.com/api/announcements/unsubscribe', {
+    method: 'POST', body: 'token=opaque%2Bvalue', credentials: 'include',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: 'fixture=opaque', origin: 'https://tickets.becoreops.com', 'sec-fetch-mode': 'navigate' },
+  });
+  const wrapper = foreignRequest(source);
+  Object.defineProperty(wrapper, 'mode', { value: 'navigate' });
+  const result = await limitRequestBody(wrapper);
+  expect(result).toBeInstanceOf(Request);
+  const bounded = result as Request;
+  expect(bounded.url).toBe(source.url);
+  expect(bounded.method).toBe('POST');
+  expect([...bounded.headers]).toEqual([...source.headers]);
+  expect(bounded.credentials).toBe(source.credentials);
+  expect(bounded.mode).toBe(new Request(source.url, { mode: 'same-origin' }).mode);
+  expect(new Uint8Array(await bounded.arrayBuffer())).toEqual(new TextEncoder().encode('token=opaque%2Bvalue'));
+});
 
 describe('actual streamed upload size boundaries',()=>{
   for (const headers of [{},{'content-length':'1'}] as Array<Record<string,string>>) it(`rejects oversized chunks with ${'content-length' in headers ? 'a forged' : 'no'} length header`,async()=>{

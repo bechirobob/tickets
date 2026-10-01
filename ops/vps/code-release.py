@@ -62,12 +62,12 @@ REVIEWED_APPLICATION_BLOBS = {
     ".github/workflows/browser-audit.yml": "266d11a65a580809689c806cc93ca06ebaa25858",
     ".github/workflows/candidate-checks.yml": "9f88c33d06ba1666221482f9817d8c770be06893",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
-    ".github/workflows/full-audit-capacity.yml": "da84507832526ff004b90f80491557f5667a48d2",
+    ".github/workflows/full-audit-capacity.yml": "db91fb6671d84dc46e5d50f70e7298093feeab9b",
     ".github/workflows/tickets-readiness-audit.yml": "f47378c33914b0005ec15598fb0f9110d6882c6d",
     "README.md": "d104e3598aadc56d2d410dedf7c25b95570bc90c",
     "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
     "app/account/privacy/privacy-settings.tsx": "b04b3a832f8e0acdc33e95952875801191a579ef",
-    "app/active-night-experience.tsx": "ec9f28d2da1c9d997307463707938640ed740cff",
+    "app/active-night-experience.tsx": "7627990fbd1f6fbb15a340ae1c01a7421164a5e8",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/admin/login/login-form.tsx": "ee7957582f7e959106766fb4b418f6524766d386",
     "app/admin/operations/event-operations-hub.tsx": "5f76745b78170bcaa8b4b59a8a41d4acd3ab4c83",
@@ -118,7 +118,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/api/email/webhook/route.ts": "41d92572f62ef1526e52bdd69f97577b78c21c66",
     "app/api/host-applications/confirm/route.ts": "7931324a2f6af90cd327a437512ffe61f02f8fdf",
     "app/api/host-applications/route.ts": "8674d37bd4187de02526eeb39e7d88d09cb01b83",
-    "app/api/media/[id]/route.ts": "e46efb819112fb2f56c48ad4af0646d468125d5a",
+    "app/api/media/[id]/route.ts": "0a2abe456d7a0fc4d6b4d32d036fbff12a51e02f",
     "app/api/organizer/activate/route.ts": "241596207d77a14eb3878c449252fb419febda62",
     "app/api/organizer/assistant/route.ts": "a6f27a7d6e9bbcb535fb4394e83d41a6a0a225bd",
     "app/api/organizer/business/route.ts": "b38ea5b0afc3e21713fb658890370e2f88f64472",
@@ -149,6 +149,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/event-explorer.tsx": "27c001bd0ba7742b251a7f03252c3dbaf5b2a3fe",
     "app/event/[slug]/event-screen.tsx": "3700cc0de1f68a63912d9caf428d48908ee266e4",
     "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
+    "app/globals.css": "47ac30d9300a709feeca94ede7c950ea2fc5255f",
     "app/help/help-centre.tsx": "f0b4617a6a6b704aefc81bfa1e2744377c18b026",
     "app/home-screen.tsx": "b629019108100f15889edaccd6ac1ee21d4e436d",
     "app/hosts/page.tsx": "f5d2b1129968ba51dc95a6208a408e60f200b05b",
@@ -204,23 +205,26 @@ REVIEWED_APPLICATION_BLOBS = {
     "lib/provider-operation-tracking.ts": "63288d84fa93f0a97ee01909a68a654272151cbb",
     "lib/registration-draft.ts": "633cdb6e22cb28a1c8002fab96da0bf9fe6eb91b",
     "lib/registration-guidance.ts": "16bf24b5c2c23fa18e1dd16d14563cbed33164b2",
-    "lib/request-body.ts": "1309e5426637294327a428798fcc8c2e861c3ea4",
+    "lib/request-body.ts": "4dd233620243973be544b540bcd619ce37bee380",
     "lib/scanner-sync.ts": "68d45f670f1cf1d3a26c9ff10c5fbdbf21bb8243",
     "mobile/src/adapters/navigation.tsx": "475edbb849c70e265e5fbdff6931511b40138f52",
     "mobile/src/screen-catalogue.ts": "3c7030e0374696f31af397e7970be77173418194",
-    "mobile/tests/app.spec.ts": "1625439651312ebe4e8bb597d02bb0cdebeec255",
+    "mobile/tests/app.spec.ts": "ed9eb85ef361bf49c51d6ddf1ab896563a47972e",
     "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
     "mobile/tsconfig.json": "be7802b84428c49a3ddeb14b79373b8cdae64234",
+    "mobile/vite.config.ts": "985e6a0bab112aeb54e470a7bd6a34bdeccf0b5e",
     "ops/vps/audit-readiness.py": "0de0b0f96343bbd6acb3b2f800ec2e2983505d22",
     "ops/vps/test_audit_readiness.py": "226ab932b1b851a4b2c0eb6ede8bc17e66e5bfa9",
     "public/devices/iphone-titanium-front.svg": "9b3995ea6e27f358d03816d603f96466fa8e9acd",
     "runtime/vps/queue.mjs": "67018da3a3683aca80661e29e64f0fd3e5a37e9c",
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
-    "scripts/capture-iphone-layouts.mjs": "ab21b98960ebbeaeaa43b45d7f88d641ac69daf0",
+    "scripts/capture-iphone-layouts.mjs": "839a80d36411096418ee0b5968624b0fab840000",
     "scripts/iphone-layout-evidence.mjs": "32cafa40c84ab7e0610cb24537227f571317de37",
+    "scripts/verify-vps-runtime.mjs": "68602650d47f9b987fc839f0411442ac2578d78a",
     "styles/customer.css": "c6d3cc402fcb37287444c9ac75777424ceeac891",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b",
+    "worker/security-response.ts": "3d9d92746405583edcd173694d763c868a1b09fd",
     "worker/the-room.ts": "e6c0a8b1e39e20b939e3e322ebc44675b8bab7ed"
 }
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
@@ -432,7 +436,7 @@ def vetted_changes(expected, source):
                     "Application or additive schema differs from reviewed source: " + name)
             continue
         require(name in APPLICATION_FILES or name.startswith(("docs/", "tests/"))
-                or name in ("worker/handover.ts", "worker/security-response.ts"), "Unvetted source path: " + name)
+                or name == "worker/handover.ts", "Unvetted source path: " + name)
     if "worker/handover.ts" in changed:
         before = git("show", expected + ":worker/handover.ts")
         after = git("show", source + ":worker/handover.ts")
@@ -440,16 +444,8 @@ def vetted_changes(expected, source):
         require(before.count(original) == 1 and after == before.replace(
             original, "'SEEV_ENABLED', 'SEEV_CRYPTO_ENABLED', 'SEEV_ENVIRONMENT',"),
             "Only the vetted crypto configuration-name addition is permitted.")
-    if "worker/security-response.ts" in changed:
-        before = git("show", expected + ":worker/security-response.ts")
-        after = git("show", source + ":worker/security-response.ts")
-        anchor = '  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");\n'
-        addition = ('  if (path === "/checkout-preview" || path.startsWith("/checkout-preview/") || path === "/api/payments/preview") {\n'
-                    '    headers.set("Cache-Control", "no-store");\n'
-                    '    headers.set("X-Robots-Tag", "noindex, nofollow");\n'
-                    '  }\n')
-        require(before.count(anchor) == 1 and after == before.replace(anchor, anchor + addition),
-                "Only the vetted preview privacy-header rule is permitted.")
+    # Security-response changes require their exact entry in the reviewed blob
+    # manifest above; there is no broad header-policy or path-pattern exception.
     if ".github/workflows/tickets-release-operator-checks.yml" in changed:
         # Already-reviewed operator-only CI from the current main baseline.
         require(git("rev-parse", source + ":.github/workflows/tickets-release-operator-checks.yml")

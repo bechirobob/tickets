@@ -43,6 +43,17 @@ const context = await browser.newContext(device);
 const page = await context.newPage();
 const origin = 'https://tickets.becoreops.com';
 await page.route(`${origin}/api/public/events`, route => route.fulfill({json:catalogue,headers:{'access-control-allow-origin':'*'}}));
+if (candidate) {
+  // Native catalogue URLs point to production. During a candidate comparison,
+  // load its host artwork from the real candidate server and preserve headers.
+  // This keeps a not-yet-deployed public-image policy from mixing revisions.
+  await page.route(`${origin}/hosts/*`, async route => {
+    const source = new URL(new URL(route.request().url()).pathname, websiteOrigin).href;
+    const response = await route.fetch({url:source});
+    await route.fulfill({response});
+  });
+}
+
 await page.route(`${origin}/events/*`, async route => {
   const name = path.basename(new URL(route.request().url()).pathname);
   await route.fulfill({body:await readFile(path.join(repo,'public/events',name)),contentType:name.endsWith('.webp')?'image/webp':'image/jpeg'});
@@ -62,6 +73,8 @@ async function capture(title,kind='App screen',single=false) {
       new Promise((_,reject)=>setTimeout(()=>reject(new Error('Image loading timed out')),15000)),
     ]);
   });
+  const brokenImages=await page.evaluate(()=>[...document.images].filter(image=>image.currentSrc&&(!image.complete||image.naturalWidth===0)).map(image=>image.currentSrc));
+  if(brokenImages.length)throw new Error(`Broken public images on ${title}: ${brokenImages.join(', ')}`);
   await page.waitForTimeout(250);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
   if(overflow) throw new Error(`Horizontal clipping: ${title}`);
@@ -79,10 +92,11 @@ async function capture(title,kind='App screen',single=false) {
   const route = new URL(page.url()).pathname;
   if (['/', '/events', ...catalogue.events.map(event => '/event/' + event.slug)].includes(route)) {
     const snapshot = await page.evaluate(() => {
-      const selector = 'main h1, .drop-card h3, .drop-card__schedule, .event-detail-facts, .event-story-content, .compact-ticket-panel, .event-detail-toolbar, .customer-dock';
+      const selector = '.compact-hero, .compact-hero__image--active, main h1, .drop-card h3, .drop-card__schedule, .event-detail-facts, .event-story-content, .compact-ticket-panel, .event-detail-toolbar, .customer-dock';
       return [...document.querySelectorAll(selector)].map(element => {
         const style = getComputedStyle(element);
-        return { tag: element.tagName, text: element.textContent.replace(/\s+/g, ' ').trim(), font: style.fontFamily, size: style.fontSize, color: style.color };
+        const hero = element.matches('.compact-hero, .compact-hero__image--active');
+        return { tag: element.tagName, text: element.textContent.replace(/\s+/g, ' ').trim(), font: style.fontFamily, size: style.fontSize, color: style.color, ...(hero?{width:style.width,height:style.height,objectFit:style.objectFit,objectPosition:style.objectPosition,portraitCrop:element.getAttribute('data-portrait-crop')}: {}) };
       });
     });
     if (kind === 'App screen') appSnapshots.set(route, snapshot);
