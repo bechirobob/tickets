@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- event artwork is already governed by the platform image source */
 
+import SegmentedControl from "../../segmented-control";
 import ConfirmationNotifications from "../../confirmation-notifications";
 import Link from "next/link";
 import BrandLogo from "../../brand-logo";
@@ -321,11 +322,11 @@ export default function NightHub({ event }: { event: EventSummary }) {
               : "The night is happening"}
         </p>
       </section>
-      <nav className="night-hub__tabs night-glass" aria-label="Night views">
+      <SegmentedControl as="nav" className="night-hub__tabs" aria-label="Night views">
         <button type="button" aria-current={view === "passes" ? "page" : undefined} onClick={() => chooseView("passes")}><QrCode size={17} /> Ticket <span>{tickets.length}</span></button>
         <button type="button" aria-current={view === "details" ? "page" : undefined} onClick={() => chooseView("details")}><CalendarDays size={17} /> The Night</button>
         {orders.some((order) => order.roomAccess !== false) ? <Link href={`/room/${event.slug}`}><MessageCircle size={17} /> Room</Link> : null}
-      </nav>
+      </SegmentedControl>
       <section className="night-hub__view">
         {notice ? <div className="night-hub__notice" role="status"><span>{notice}</span><button type="button" aria-label="Dismiss notice" onClick={() => setNotice("")}><X size={17} /></button></div> : null}
 

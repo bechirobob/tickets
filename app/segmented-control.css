@@ -1,0 +1,69 @@
+/* Shared view selectors. Neutral material, with caller-owned state and semantics. */
+.segmented-control.segmented-control.segmented-control {
+  --segment-surface: #392d3e;
+  --segment-selected: #eee9ef;
+  --segment-ink: #eee9ef;
+  --segment-selected-ink: #2b202f;
+  position: relative; isolation: isolate;
+  display: flex; align-items: stretch; flex-wrap: wrap;
+  width: fit-content; max-width: 100%; min-width: 0;
+  gap: 2px; padding: 4px; border: 0; border-radius: 14px;
+  background: var(--segment-surface); color: var(--segment-ink);
+  box-shadow: none; backdrop-filter: none; overflow: visible;
+}
+.segmented-control.segmented-control.segmented-control > :is(button, a) {
+  position: relative; z-index: 1; display: inline-flex; justify-content: center; align-items: center;
+  gap: 6px; flex: 1 1 auto; min-width: 44px; min-height: 44px; height: auto;
+  padding: 8px 14px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--segment-ink); box-shadow: none; text-shadow: none;
+  font: inherit; font-size: 14px; font-weight: 650; line-height: 1.25;
+  text-decoration: none; white-space: normal; text-align: center; overflow-wrap: anywhere;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+.segmented-control.segmented-control.segmented-control > :is(button, a)::before,
+.segmented-control.segmented-control.segmented-control > :is(button, a)::after { content: none; display: none; }
+.segmented-control.segmented-control.segmented-control > :is([aria-pressed="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"])) {
+  color: var(--segment-selected-ink); background: var(--segment-selected); box-shadow: none;
+}
+.segmented-control.segmented-control.segmented-control[data-measured] > :is([aria-pressed="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"])) { background: transparent; }
+.segmented-control.segmented-control.segmented-control > :is(button, a):hover { color: var(--segment-ink); background: #ffffff0d; }
+.segmented-control.segmented-control.segmented-control > :is([aria-pressed="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"])):hover { color: var(--segment-selected-ink); }
+.segmented-control.segmented-control.segmented-control > :is(button, a):focus-visible { outline: 2px solid currentColor; outline-offset: -4px; }
+.segmented-control.segmented-control.segmented-control > :is(button, a):disabled { cursor: default; }
+.segmented-control > .segmented-control__selection {
+  position: absolute; z-index: 0; pointer-events: none; display: none;
+  left: 0; top: 0; width: var(--segment-width); height: var(--segment-height);
+  transform: translate(var(--segment-x), var(--segment-y));
+  border-radius: 10px; background: var(--segment-selected); box-shadow: none;
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), width 180ms cubic-bezier(.2,.8,.2,1), height 180ms cubic-bezier(.2,.8,.2,1);
+}
+.segmented-control[data-measured] > .segmented-control__selection { display: block; }
+.segmented-control--light.segmented-control.segmented-control {
+  --segment-surface: #ece6ee; --segment-selected: #fff; --segment-ink: #615366; --segment-selected-ink: #322139;
+}
+/* Keep existing customer margins and short labels compact at narrow widths. */
+.night-hub__tabs.segmented-control.segmented-control { max-width: calc(100% - 40px); }
+@media (max-width: 600px) {
+  .my-nights-tabs.segmented-control.segmented-control > button {
+    padding-inline: 6px; gap: 4px; font-size: 13px; white-space: nowrap;
+  }
+  .night-hub__tabs.segmented-control.segmented-control > :is(button, a) { padding-inline: 6px; }
+  /* The legacy Operations button rule used !important for all tab labels. */
+  .registration-view-switch.segmented-control > button { font-size: 13px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .segmented-control.segmented-control.segmented-control > :is(button, a), .segmented-control > .segmented-control__selection { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .segmented-control.segmented-control.segmented-control { backdrop-filter: none; }
+}
+/* Retain a non-colour-only selection in system high-contrast themes. */
+@media (forced-colors: active) {
+  .segmented-control.segmented-control.segmented-control > :is(button, a) { forced-color-adjust: auto; }
+  .segmented-control.segmented-control.segmented-control > :is([aria-pressed="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"])) { outline: 2px solid Highlight; outline-offset: -3px; }
+  .segmented-control.segmented-control.segmented-control > :is(button, a):focus-visible { outline: 2px dashed CanvasText; outline-offset: 1px; }
+  .segmented-control > .segmented-control__selection { visibility: hidden; }
+}
+@media print {
+  .night-hub__tabs.segmented-control.segmented-control { display: none; }
+}

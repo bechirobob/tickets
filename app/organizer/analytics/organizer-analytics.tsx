@@ -1,5 +1,6 @@
 "use client";
 
+import SegmentedControl from "../../segmented-control";
 import { percentageChange } from "../../../lib/analytics-period";
 import RsvpReport from "./rsvp-analytics";
 import type { RsvpAnalytics } from "../../../lib/rsvp-analytics";
@@ -169,7 +170,7 @@ export default function OrganizerAnalytics({ actor, role, initialEvent = "all", 
         <div><h2>Let the numbers come to you.</h2><p>Weekly roundups and next-day recaps. Choose your email reports in the workspace.</p></div>
         <Link href={`${workspaceUrl}#email-reports`}>Email report settings</Link>
       </section>
-      <nav className="analytics-views" aria-label="Analytics views">{[["guests","Guest list"],["sales","Sales"],["reach","Reach"],["door","Door & Room"]].map(([id,label]) => <button key={id} type="button" aria-pressed={view === id} aria-controls={`analytics-${id}`} onClick={() => setView(id)}>{label}</button>)}</nav>
+      <SegmentedControl as="nav" className="analytics-views segmented-control--light" aria-label="Analytics views">{[["guests","Guest list"],["sales","Sales"],["reach","Reach"],["door","Door & Room"]].map(([id,label]) => <button key={id} type="button" aria-pressed={view === id} aria-controls={`analytics-${id}`} onClick={() => setView(id)}>{label}</button>)}</SegmentedControl>
       <div id="analytics-guests" hidden={view !== "guests"}>
         <RsvpReport key={data.scope.eventSlug} data={data.rsvp} eventSlug={data.scope.eventSlug} />
       </div>

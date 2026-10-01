@@ -1,3 +1,4 @@
+import { expectSegmentedSelection } from "./segmented-control";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
@@ -34,14 +35,20 @@ test("plans filter, search and restore without duplicated navigation", async ({ 
   await expect(page.getByRole("heading", { name: "No matching nights." })).toBeVisible();
   await page.getByRole("button", { name: "Clear search", exact: true }).first().click();
   const nav = page.getByRole("navigation", { name: "My Nights views" });
+  await expectSegmentedSelection(nav);
   await nav.getByRole("button", { name: /^Past/ }).click();
   await expect(page.locator(".night-listing")).toContainText("Last Summer");
   await page.reload();
   await expect(nav.getByRole("button", { name: /^Past/ })).toHaveAttribute("aria-current", "page");
   await nav.getByRole("button", { name: /^Following/ }).click();
   await expect(page.locator(".night-listing")).toContainText("Sunday Social");
+  await expectSegmentedSelection(nav);
   await expect(page.getByRole("link", { name: "The Room", exact: true })).toHaveCount(0);
-  await nav.getByRole("button", { name: /^RSVPs/ }).click();
+  const rsvps = nav.getByRole("button", { name: /^RSVPs/ });
+  await rsvps.focus();
+  await rsvps.press("Enter");
+  await expect(rsvps).toBeFocused();
+  await expectSegmentedSelection(nav);
   await expect(page.getByRole("heading", { name: "No RSVPs yet." })).toBeVisible();
 });
 
@@ -100,4 +107,20 @@ test("inactive payments remain booking history without entry or Room promises", 
   await expect(page.getByText("You’re going", { exact:true })).toHaveCount(0);
   expect((await new AxeBuilder({ page }).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   await page.screenshot({ path:info.outputPath("my-nights-inactive-booking.png"),fullPage:true });
+});
+
+
+test("narrow My Nights selectors keep readable targets with reduced motion", async ({ page }, info) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/customer/my-nights", route => route.fulfill({ json: { attendee: { displayName: "Ama" }, nights: [] } }));
+  await page.goto("/my-nights");
+  const nav = page.getByRole("navigation", { name: "My Nights views", exact: true });
+  await expectSegmentedSelection(nav);
+  await nav.getByRole("button", { name: /^Following/ }).click();
+  await expectSegmentedSelection(nav);
+  await expect(page.getByRole("heading", { name: "Something catch your eye?", exact: true })).toBeVisible();
+  expect(await nav.locator(".segmented-control__selection").evaluate(el => getComputedStyle(el).transitionDuration)).toBe("0s");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  await page.screenshot({ path: info.outputPath("my-nights-narrow-selector.png"), fullPage: true });
 });
