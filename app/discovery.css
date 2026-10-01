@@ -44,13 +44,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-home .compact-section-head .night-kicker { margin: 0 0 10px; color: #605e56; font-size: 12px; }
 .discovery-home .compact-section-head h2 { font-size: clamp(30px, 3.3vw, 46px); line-height: 1.08; font-weight: 730; letter-spacing: -.05em; }
 .discovery-home .compact-section-head > a { min-height: 44px; align-items: center; padding: 0; border: 0; color: #292a24; white-space: nowrap; }
-.discovery-explorer .drop-controls { min-height: 48px; margin-bottom: 10px; gap: 16px; border-color: #cecac0; }
-.discovery-explorer .drop-controls > div { gap: 26px; }
-.discovery-explorer .drop-controls button { min-height: 46px; color: #5a584f; font-size: 14px; }
-.discovery-explorer .drop-controls button[aria-pressed="true"] { color: #10110f; }
-.discovery-explorer .drop-controls button[aria-pressed="true"]::after { content: ""; position: absolute; inset: auto 0 0; height: 2px; background: #10110f; }
 .discovery-explorer { min-width: 0; max-width: 100%; }
-.discovery-explorer .drop-controls > div { min-width: 0; flex-wrap: wrap; }
 .discovery-explorer .drop-controls label { min-width: 0; width: min(100%, 360px); max-width: 100%; flex: 0 1 auto; }
 .discovery-explorer .drop-controls label > svg { flex: 0 0 auto; }
 .discovery-explorer .drop-controls select { min-width: 0; width: 0; max-width: 100%; flex: 1; min-height: 44px; font-size: 16px; }
@@ -62,7 +56,7 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-explorer .drop-vibes button::after { display: none; }
 .discovery-explorer button:focus-visible,
 .discovery-explorer a:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 4px; }
-.discovery-result-count { margin: 8px 0 16px; font-size: 12px; color: #656259; }
+.discovery-result-count { margin: 0; flex: 1 1 auto; font-size: 13px; line-height: 1.4; color: #656259; }
 .discovery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px 24px; }
 .discovery-grid .drop-card { --poster-ink: #d7f45b; }
 .discovery-grid .drop-card[data-vibe="Day party"] { --poster-ink: #f4ce78; }
@@ -119,13 +113,9 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-directory .directory-intro .eyebrow { color: var(--acid); }
 .discovery-home .compact-section-head > a,
 .discovery-directory .directory-intro > p { color: #d2d0c6; }
-.discovery-explorer .drop-controls { border-color: #645269; }
-.discovery-explorer .drop-controls button,
 .discovery-explorer .drop-vibes button,
 .discovery-result-count { color: #b8b8ac; }
-.discovery-explorer .drop-controls button[aria-pressed="true"],
 .discovery-explorer .drop-vibes button[aria-pressed="true"] { color: var(--acid); }
-.discovery-explorer .drop-controls button[aria-pressed="true"]::after { background: var(--acid); transform: scaleX(1); }
 .discovery-explorer .drop-controls select { color: #f4f1ea; }
 .discovery-grid .drop-card h3,
 .discovery-grid .drop-card__body > a,
@@ -147,19 +137,18 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 .discovery-search { background: #3b2a3e; border-color: #9b829f; color: #d0c5d0; }
 .discovery-search input { color: #f4f1ea; }
 .discovery-search input::placeholder { color: #b8b8ac; }
-.discovery-explorer .drop-controls { flex-wrap: wrap; }
-.discovery-explorer .drop-controls > div { flex: 1 0 100%; gap: 8px 24px; }
-.discovery-refinements { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 4px 16px; color: #f4f1ea; }
+.discovery-refinements { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 6px 0 16px; color: #f4f1ea; }
 .discovery-date { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 16px; }
 .discovery-date input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; opacity: 0; cursor: pointer; }
 .discovery-date:focus-within { outline: 2px solid var(--focus-ring, #666); outline-offset: 2px; }
 .discovery-filters { min-width: 0; max-width: 100%; }
-.discovery-filters[open] { flex-basis: 100%; }
+.discovery-filters[open] { display: contents; }
+.discovery-filters[open] summary { margin-left: auto; }
 .discovery-filters summary { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; font-size: 14px; list-style: none; }
 .discovery-filters summary::-webkit-details-marker { display: none; }
 .discovery-filters[open] summary > svg { transform: rotate(180deg); }
 .discovery-filters summary:focus-visible { outline: 2px solid var(--focus-ring, #666); outline-offset: 2px; }
-.discovery-filters__body { padding: 8px 0; border-top: 1px solid #645269; }
+.discovery-filters__body { flex-basis: 100%; padding: 8px 12px; border: 0; border-radius: 12px; background: #392d3e; }
 .discovery-filters__body > label { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
 .discovery-filters select { min-width: 0; width: 100%; min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 16px; }
 .discovery-search:focus-within { outline-color: var(--focus-ring, #666); }
@@ -229,9 +218,6 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
   .discovery-home .compact-section-head { align-items: flex-end; }
   .discovery-home .compact-section-head h2 { font-size: 30px; }
   .discovery-home .compact-section-head > a { margin: 0; font-size: 13px; }
-  .discovery-explorer .drop-controls { flex-direction: row; flex-wrap: wrap; padding: 0; gap: 0 12px; }
-  .discovery-explorer .drop-controls > div { gap: 18px; }
-  .discovery-explorer .drop-controls button { font-size: 13px; }
   .discovery-explorer .drop-controls label { min-height: 44px; }
   .discovery-explorer .drop-vibes { gap: 0 14px; }
   .discovery-explorer .drop-vibes button b { font-size: 12px; }
@@ -279,4 +265,19 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
   .discovery-home .payment-footer { gap: 22px; padding-top: 0; }
   .discovery-home .payment-footer__group { flex-basis: 100%; }
   .discovery-home .payment-footer__methods { gap: 14px; }
+}
+
+/* Discovery is one compact sequence: heading, date, count/refinements, cards. */
+.discovery-explorer .drop-controls { display: block; min-height: 0; margin: 0; padding: 0; border: 0; }
+.discovery-explorer .drop-controls > .segmented-control.discovery-window { width: min(100%, 580px); }
+.discovery-home .compact-section-head { margin-bottom: 14px; }
+.discovery-home .compact-section-head .night-kicker { margin-bottom: 8px; }
+@media (max-width: 700px) {
+  .discovery-home .compact-section-head h2 { font-size: 28px; }
+  .discovery-home .compact-section-head { gap: 12px; }
+  .discovery-explorer .drop-controls > .segmented-control.discovery-window > button { padding: 8px 6px; font-size: 13px; }
+  .discovery-refinements { gap: 0 12px; margin-bottom: 12px; }
+}
+@media (max-width: 359px) {
+  .discovery-explorer .drop-controls > .segmented-control.discovery-window { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

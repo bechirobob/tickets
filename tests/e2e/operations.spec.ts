@@ -1,3 +1,4 @@
+import { expectSegmentedSelection } from "./segmented-control";
 import { readFileSync, existsSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { expectVisibleLettering } from './text-visibility';
@@ -67,7 +68,8 @@ for (const [path, heading] of [
     // rounded bottom borders even when the shared tab stylesheet removed them.
     const decoratedTabs = await page.locator('.ops-tabs > button, .suite-event-nav > button, .host-applications nav > button').evaluateAll(buttons => buttons.flatMap(button => {
       const style = getComputedStyle(button);
-      return style.borderBottomWidth !== '0px' || style.borderBottomLeftRadius !== '0px' || style.boxShadow !== 'none'
+      const segmented = button.parentElement?.classList.contains('segmented-control');
+      return style.borderBottomWidth !== '0px' || (!segmented && style.borderBottomLeftRadius !== '0px') || style.boxShadow !== 'none'
         ? [{ text: button.textContent, border: style.borderBottomWidth, radius: style.borderBottomLeftRadius, shadow: style.boxShadow }] : [];
     }));
     expect(decoratedTabs, `${path} tabs must not have curved underlines or shadows`).toEqual([]);
@@ -947,4 +949,45 @@ test('Orders preserves validated payment exception filters and rejects unknown q
   await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('');
   await expect.poll(() => latest()?.has('status')).toBe(false);
   expect(latest()!.has('provider')).toBe(false); expect(latest()!.has('event')).toBe(false); expect(latest()!.has('removed')).toBe(false);
+});
+
+test('organizer segmented views preserve drafts, guest loading guards and history', async ({ page }, info) => {
+  await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=details');
+  const tools = page.getByRole('navigation', { name: 'Event tools', exact: true });
+  await expectSegmentedSelection(tools);
+  const venue = page.getByLabel('Venue', { exact: true });
+  await expect(venue).toBeVisible();
+  await venue.fill('Preserved selector draft');
+  await tools.getByRole('button', { name: 'Guests', exact: true }).click();
+  const guests = page.locator('.suite-segments[aria-label="Guest tools"]');
+  await expectSegmentedSelection(guests);
+  await guests.getByRole('button', { name: 'RSVP review & setup', exact: true }).click();
+  const registrations = page.getByRole('navigation', { name: 'Registration tools', exact: true });
+  const roster = registrations.getByRole('button', { name: /^Guest list/ });
+  await expect(roster).toBeEnabled();
+  await expectSegmentedSelection(registrations);
+  await roster.focus();
+  await roster.press('Enter');
+  await expect(roster).toBeFocused();
+  await expect(roster).toHaveAttribute('aria-pressed', 'true');
+  await expectSegmentedSelection(registrations);
+  await expect(page).toHaveURL(/tab=roster/);
+  await page.goBack();
+  await expect(registrations.getByRole('button', { name: 'Setup', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expectSegmentedSelection(registrations);
+  await tools.getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(venue).toHaveValue('Preserved selector draft');
+  await expectSegmentedSelection(tools);
+  await page.screenshot({ path: info.outputPath('organizer-segmented-views.png'), fullPage: true });
+  await tools.getByRole('button', { name: 'Insights', exact: true }).click();
+  const analytics = page.getByRole('navigation', { name: 'Analytics views', exact: true });
+  await analytics.getByRole('button', { name: 'Sales', exact: true }).click();
+  await expect(analytics.getByRole('button', { name: 'Sales', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expectSegmentedSelection(analytics);
+  await hostArea(page, 'Promote');
+  const promotion = page.locator('.suite-segments[aria-label="Promotion tools"]');
+  await promotion.getByRole('button', { name: 'Coupons', exact: true }).click();
+  await expect(promotion.getByRole('button', { name: 'Coupons', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expectSegmentedSelection(promotion);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
 });

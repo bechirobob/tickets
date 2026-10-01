@@ -1,4 +1,5 @@
 import { expect, test } from "./catalogue";
+import { expectSegmentedSelection } from "./segmented-control";
 
 test.use({ serviceWorkers: "block" });
 
@@ -37,6 +38,17 @@ test("date selection survives an event visit and clearing restores the catalogue
   await expect(page.locator(".discovery-filters summary")).toContainText("Filters (1)");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("discovery-filters-expanded.png"), fullPage: true });
+  await page.setViewportSize({ width: 320, height: 850 });
+  await date.fill(selectedDate);
+  await expect(date).toHaveValue(selectedDate);
+  await expect(page.getByLabel("Area", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  await expect(page.locator(".discovery-filters summary")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("discovery-narrow-date-expanded.png"), fullPage: true });
+  // An explicit date legitimately clears the relative date-window selection.
+  await page.getByRole("button", { name: "Next up", exact: true }).click();
+  await expectSegmentedSelection(page.getByRole("group", { name: "When", exact: true }));
+  await page.screenshot({ path: info.outputPath("discovery-narrow-expanded.png"), fullPage: true });
 });
 
 test("an active night leads with its pass and keeps the Room within reach", async ({ page, eventSlug }, info) => {

@@ -1,3 +1,4 @@
+import { expectSegmentedSelection } from "./segmented-control";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./catalogue";
 
@@ -27,6 +28,7 @@ test("the pass leads, supporting tools expand, and the plan preserves answers", 
   await page.goto(`/my-nights/${eventSlug}`);
   const nav = page.getByRole("navigation", { name: "Night views" });
   await expect(nav.getByRole("button")).toHaveCount(2);
+  await expectSegmentedSelection(nav);
   await expect(nav.getByRole("link", { name: "Room", exact: true })).toHaveAttribute("href", `/room/${eventSlug}`);
   await expect(nav.getByRole("button", { name: "Ticket 1" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("img", { name: "Entry QR code for ticket 1" })).toBeVisible();
@@ -42,7 +44,10 @@ test("the pass leads, supporting tools expand, and the plan preserves answers", 
   await expect(page.getByText("BECORE-FIXTURE", { exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
   await page.screenshot({ path: info.outputPath("my-nights-booking-expanded.png"), fullPage: true });
-  await nav.getByRole("button", { name: "The Night", exact: true }).click();
+  await nav.getByRole("button", { name: "The Night", exact: true }).focus();
+  await nav.getByRole("button", { name: "The Night", exact: true }).press("Enter");
+  await expect(nav.getByRole("button", { name: "The Night", exact: true })).toBeFocused();
+  await expectSegmentedSelection(nav);
   await expect(page).toHaveURL(/view=details$/);
   await expect(page.getByText("Meet us at the main gate", { exact: true })).toBeVisible();
   await page.getByLabel("When are you joining us?").fill("Around five");

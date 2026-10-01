@@ -1,5 +1,6 @@
 "use client";
 
+import SegmentedControl from "./segmented-control";
 import { useDiscoveryState } from "./discovery-state";
 import Link from "next/link";
 import Image from "next/image";
@@ -57,14 +58,15 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
   return <div className={`drop-explorer discovery-explorer${full ? " drop-explorer--full" : ""}`}>
     {full ? <label className="discovery-search"><Search size={19} aria-hidden="true" /><span className="sr-only">Search events, artists or venues</span><input type="search" disabled={!ready} value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search events, artists or venues" /></label> : null}
     <div className="drop-controls" aria-label="Filter The Drop">
-      <div role="group" aria-label="When">
+      <SegmentedControl className="discovery-window" role="group" aria-label="When">
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "tonight"} onClick={() => changeWindow("tonight")}>Tonight</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "tomorrow"} onClick={() => changeWindow("tomorrow")}>Tomorrow</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "weekend"} onClick={() => changeWindow("weekend")}>This weekend</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
-      </div>
+      </SegmentedControl>
     </div>
     <div className="discovery-refinements">
+      <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
       {full ? <label className="discovery-date"><CalendarDays size={16} aria-hidden="true" /><span>{selectedDate ? new Intl.DateTimeFormat("en-GH", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Accra" }).format(new Date(`${selectedDate}T00:00:00Z`)) : "Pick a date"}</span><input aria-label="Pick a date" type="date" disabled={!ready} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label> : null}
       <details className="discovery-filters">
         <summary>Filters{area !== "All areas" || vibe !== "All" ? ` (${Number(area !== "All areas") + Number(vibe !== "All")})` : ""}<ChevronDown size={16} aria-hidden="true" /></summary>
@@ -76,8 +78,6 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
         </div>
       </details>
     </div>
-
-    <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
 
     {pageEvents.length ? <div key={`${windowFilter}:${selectedDate}:${area}:${vibe}:${currentPage}:${search}`} className={`drop-grid discovery-grid${full ? " drop-grid--full" : pageEvents.length === 1 ? " discovery-grid--spotlight" : ""}`} data-count={pageEvents.length}>
       {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-colour-scheme={eventColourScheme(event)} style={eventPresentationStyle(event)} data-featured={event.slug === featuredSlug ? "true" : undefined}>
