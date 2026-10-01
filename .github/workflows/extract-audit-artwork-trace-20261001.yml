@@ -33,7 +33,7 @@ jobs:
           a=get('actions/artifacts/'+str(ID));w=a['workflow_run']
           assert a['id']==ID and not a['expired'] and a['digest']=='sha256:'+DIGEST and 0<a['size_in_bytes']<=MAX
           assert w['id']==RUN and w['head_sha']==SHA
-          run=get('actions/runs/'+str(RUN));assert run['repository']['full_name']==REPO and run['head_sha']==SHA and run['conclusion']=='failure'
+          run=get('actions/runs/'+str(RUN));assert run['repository']['full_name']==REPO and run['head_sha']==SHA and run['status'] in ('in_progress','completed') and run['conclusion'] in (None,'failure')
           req=urllib.request.Request('https://api.github.com/repos/'+REPO+'/actions/artifacts/'+str(ID)+'/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
           try:
               opener.open(req,timeout=30);raise RuntimeError('Expected signed artifact redirect')
@@ -59,7 +59,7 @@ jobs:
                   target=part.joinpath(*p.parts);target.parent.mkdir(parents=True,exist_ok=True);assert not target.exists();target.write_bytes(data);size+=len(data)
                   entries.append({'part':part.name,'path':info.filename,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
           assert entries and len(parts)<=20
-          manifest={'originalRepository':REPO,'originalArtifact':ID,'originalRun':RUN,'originalSource':SHA,'originalArchiveSha256':DIGEST,'entries':entries,'originalRunConclusion':run['conclusion'],'partialEvidence':True,'renderingRerun':False,'applicationChanged':False}
+          manifest={'originalRepository':REPO,'originalArtifact':ID,'originalRun':RUN,'originalSource':SHA,'originalArchiveSha256':DIGEST,'entries':entries,'originalRunStatus':run['status'],'originalRunConclusion':run['conclusion'],'partialEvidence':True,'renderingRerun':False,'applicationChanged':False}
           for p in parts:(p/'split-provenance.json').write_text(json.dumps(manifest,indent=2))
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('parts='+json.dumps([p.name for p in parts])+'\n')
           print(json.dumps({'verifiedArtifact':ID,'parts':[p.name for p in parts],'files':len(entries),'uncompressedBytes':total,'source':SHA}))
