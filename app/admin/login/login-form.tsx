@@ -1,13 +1,18 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { deriveStaffPasswordProof } from "../../../lib/staff-password-client";
 
 type AuthenticationOptions = Parameters<typeof startAuthentication>[0]["optionsJSON"];
 
+const subscribeToReadiness = () => () => {};
+const clientIsReady = () => true;
+const serverIsReady = () => false;
+
 export default function AdminLoginForm() {
+  const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,11 +88,11 @@ export default function AdminLoginForm() {
   return (
     <form className="admin-login__form" onSubmit={submit}>
       <label htmlFor="staff-email">Work email</label>
-      <input id="staff-email" autoComplete="username" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+      <input id="staff-email" autoComplete="username" type="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={!ready} required />
       <label htmlFor="staff-password">Password</label>
-      <input id="staff-password" autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+      <input id="staff-password" autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={!ready} required />
       {error ? <p role="alert">{error}</p> : null}
-      <button disabled={busy} type="submit">{busy ? "Checking…" : "Sign in"}</button>
+      <button disabled={!ready || busy} type="submit">{busy ? "Checking…" : "Sign in"}</button>
     </form>
   );
 }

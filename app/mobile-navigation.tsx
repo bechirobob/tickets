@@ -106,7 +106,7 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
       <Menu size={20} aria-hidden="true" /><span className="night-mobile-menu__trigger-label">Menu</span>
     </button>
     {mobile ? createPortal(<div className={`${menuClass} night-mobile-menu--sheet`} data-phase={phase}>
-      <div className="night-mobile-menu__scrim" aria-hidden="true" onPointerDown={() => close(true)} />
+      <div className="night-mobile-menu__scrim" aria-hidden="true" onPointerDown={(event) => { event.preventDefault(); close(true); }} />
       {navigation}
     </div>, document.body) : navigation}
   </div>;

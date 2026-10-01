@@ -146,6 +146,9 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
     border-bottom: 1px solid rgb(255 255 255 / .14);
     box-shadow: none;
   }
+  /* Keep sibling header controls available for one-click panel switching;
+     all page content below the header remains behind the dismissing scrim. */
+  body :is(.night-header, .directory-header, .sub-header, .night-hub__header, .help-page > header, .policy-page > header, .legal-page > header):has(.night-mobile-menu.is-open) { z-index: 90; }
   body .poster-event-page > .sub-header:has(.night-mobile-menu) {
     --mobile-chrome-solid: var(--event-paper);
     --mobile-chrome-fill: color-mix(in srgb, var(--event-paper) 86%, transparent);
@@ -187,7 +190,7 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .night-mobile-menu--sheet .night-mobile-menu__panel {
     position: absolute; inset: auto max(12px, env(safe-area-inset-right)) var(--mobile-menu-bottom) max(12px, env(safe-area-inset-left));
     width: auto; max-width: 480px; height: auto; margin-inline: auto; padding: 8px 14px 12px;
-    max-height: calc(var(--app-viewport-height) - var(--mobile-menu-bottom) - max(20px, env(safe-area-inset-top)));
+    max-height: calc(var(--app-viewport-height) - var(--mobile-menu-bottom) - 72px - env(safe-area-inset-top));
     align-content: start; border-radius: 24px; border: 1px solid rgb(255 255 255 / .2);
     background: #30212c; color: #f8eee7; box-shadow: none;
     backdrop-filter: none; -webkit-backdrop-filter: none;
@@ -233,7 +236,7 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
     body :is(.event-page, .help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) {
       background: var(--mobile-chrome-fill); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
     }
-    .night-mobile-menu--sheet .night-mobile-menu__panel { background: rgb(48 33 44 / .92); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
+    .night-mobile-menu--sheet .night-mobile-menu__panel { background: rgb(48 33 44 / .98); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
   }
 }
 @media (max-width: 700px) {
@@ -262,6 +265,22 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
     body nav.customer-dock { background: rgb(40 27 43 / .84); backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px); }
     body:has(.poster-event-page) nav.customer-dock { background: color-mix(in srgb, var(--event-shell-paper) 86%, transparent); }
   }
+}
+/* Member headers keep the complete brand between independent touch targets. */
+@media (max-width: 430px) {
+  body :is(.my-nights-page > .directory-header, .night-hub__header) {
+    grid-template-columns: minmax(44px, 1fr) auto minmax(96px, 1fr); column-gap: 8px;
+  }
+  body :is(.my-nights-page > .directory-header, .night-hub__header) > a:first-child {
+    width: 44px; min-width: 44px; min-height: 44px; justify-content: center;
+  }
+  body :is(.my-nights-page > .directory-header, .night-hub__header) > :is(.my-nights-header-actions, .night-hub__header-actions) {
+    width: 96px; gap: 8px;
+  }
+  :is(.my-nights-header-actions, .night-hub__header-actions) .night-mobile-menu .night-mobile-menu__trigger {
+    width: 44px; padding: 0;
+  }
+  :is(.my-nights-header-actions, .night-hub__header-actions) .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: none; }
 }
 @media (max-width: 360px) {
   .night-mobile-menu .night-mobile-menu__trigger { width: 44px; padding: 0; }

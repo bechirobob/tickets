@@ -77,7 +77,7 @@ async function measureMenuGeometry(page) {
         }
       }
       const computed = Object.fromEntries([
-        'display', 'visibility', 'opacity', 'position', 'top', 'right', 'bottom', 'left',
+        'display', 'visibility', 'opacity', 'backgroundColor', 'backdropFilter', 'webkitBackdropFilter', 'position', 'top', 'right', 'bottom', 'left',
         'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
         'justifySelf', 'alignSelf', 'justifyContent', 'alignItems', 'gridTemplateColumns', 'gridTemplateRows',
         'transform', 'translate', 'zIndex', 'pointerEvents', 'overflow', 'overflowX', 'overflowY',

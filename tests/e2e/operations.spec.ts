@@ -242,9 +242,57 @@ test('support reply and room memory retain content after failed writes', async (
   await expect(page.getByRole('button', { name: 'Publish memory' })).toBeEnabled();
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('A night to remember');
 });
+test('owner login waits for hydration before accepting input and preserves both values', async ({ page, context }) => {
+  await context.clearCookies();
+  let signInRequests = 0;
+  await page.route('**/api/admin/session**', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { passwordSalt: 'AAECAwQFBgcICQoLDA0ODw', passwordIterations: 600000 } });
+    expect(route.request().method()).toBe('POST');
+    signInRequests++;
+    expect(route.request().postDataJSON().email).toBe(fixture.email);
+    return route.fulfill({ status: 401, json: { error: 'Readiness fixture: no session created.' } });
+  });
+  let releaseScripts!: () => void;
+  const scriptsReady = new Promise<void>(resolve => { releaseScripts = resolve; });
+  await page.route('**/_next/static/**/*.js', async route => {
+    await scriptsReady;
+    await route.continue();
+  });
+  try {
+    await page.goto('/admin/login?returnTo=%2Fadmin%2Foperations', { waitUntil: 'commit' });
+    const email = page.getByLabel('Work email');
+    const password = page.getByLabel('Password', { exact: true });
+    const submit = page.getByRole('button', { name: 'Sign in', exact: true });
+    await expect(email).toBeVisible();
+    await expect(email).toBeDisabled();
+    await expect(password).toBeDisabled();
+    await expect(submit).toBeDisabled();
+    await expect(email).toHaveValue('');
+    await expect(password).toHaveValue('');
+    releaseScripts();
+    await expect(email).toBeEnabled();
+    await expect(password).toBeEnabled();
+    await expect(submit).toBeEnabled();
+    await email.fill(fixture.email);
+    await password.fill(fixture.password);
+    await expect(email).toHaveValue(fixture.email);
+    await expect(password).toHaveValue(fixture.password);
+    await submit.click();
+    await expect(page.getByRole('alert')).toHaveText('Readiness fixture: no session created.');
+    expect(signInRequests).toBe(1);
+    await expect(email).toHaveValue(fixture.email);
+    await expect(password).toHaveValue(fixture.password);
+  } finally {
+    releaseScripts();
+    await page.unroute('**/_next/static/**/*.js');
+  }
+});
+
 test('owner signs in through the real password flow and signs out', async ({ page, context }) => {
   await context.clearCookies(); await page.goto('/admin/login?returnTo=%2Fadmin%2Foperations');
   await page.getByLabel('Work email').fill(fixture.email); await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+  await expect(page.getByLabel('Work email')).toHaveValue(fixture.email);
+  await expect(page.getByLabel('Password', { exact: true })).toHaveValue(fixture.password);
   await page.getByRole('button', { name: 'Sign in' }).click(); await expect(page).toHaveURL(/\/admin\/operations$/);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expect(page).toHaveURL('https://127.0.0.1:8791/');
   await page.goto('/admin/accounts'); await expect(page).toHaveURL(/\/admin\/login/);

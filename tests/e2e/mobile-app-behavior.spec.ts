@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from '@playwright/test';
 test.use({ serviceWorkers: 'block' });
 
@@ -80,6 +81,12 @@ test('mobile menu is a compact reachable sheet with working drag, focus and outs
   for (const destination of ['Hosts', 'Organisers', 'About us', 'Help']) {
     await expect(menu.getByRole('link', { name: destination, exact: true })).toBeInViewport();
   }
+  const sheetBacking = await menu.evaluate(element => {
+    const channels = getComputedStyle(element).backgroundColor.match(/[\d.]+/g)?.map(Number) ?? [];
+    return channels.length === 4 ? channels[3] : 1;
+  });
+  expect(sheetBacking).toBeGreaterThanOrEqual(.97);
+  expect((await new AxeBuilder({ page }).include('.night-mobile-menu--sheet').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   await page.screenshot({ path: info.outputPath('mobile-bottom-menu.png') });
 
   const handle = menu.locator('.night-mobile-menu__panel-header');
@@ -253,4 +260,78 @@ test('menu labels and light guest headers keep their responsive visibility and f
   await page.setViewportSize({ width: 350, height: 664 });
   await expect(label).toBeHidden();
   await expect(trigger).toBeInViewport();
+});
+
+test('dense My Nights headers keep the full brand and separate 44px controls at narrow widths', async ({ page }, info) => {
+  await page.route('**/api/**', route => route.fulfill({ status: 401, json: { error: 'Isolated header geometry' } }));
+  await page.goto('/my-nights');
+  const header = page.locator('.my-nights-page > .directory-header');
+  const back = header.getByRole('link', { name: 'Back to The Drop', exact: true });
+  const brand = header.locator('.brand-mark');
+  const menu = header.getByRole('button', { name: 'Open navigation', exact: true });
+  const bell = header.getByRole('button', { name: 'Notifications', exact: true });
+  const geometries = [];
+  for (const width of [320, 350, 390, 430]) {
+    await page.setViewportSize({ width, height: 664 });
+    await expect(menu).toBeEnabled();
+    for (const element of [back, brand, menu, bell]) await expect(element).toBeInViewport({ ratio: 1 });
+    await expect(brand.getByRole('img', { name: 'BeCore Tickets', exact: true })).toBeVisible();
+    await expect(brand.locator('.brand-logo__type')).toBeVisible();
+    await expect(menu.locator('.night-mobile-menu__trigger-label')).toBeHidden();
+    const boxes = await Promise.all([back, brand, menu, bell].map(element => element.boundingBox()));
+    geometries.push({ width, back: boxes[0], brand: boxes[1], menu: boxes[2], bell: boxes[3] });
+    for (const box of boxes) {
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+    for (let index = 1; index < boxes.length; index++) {
+      expect(boxes[index]!.x - boxes[index - 1]!.x - boxes[index - 1]!.width).toBeGreaterThanOrEqual(8);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  }
+  await info.attach('member-header-geometry.json', { body: JSON.stringify(geometries, null, 2), contentType: 'application/json' });
+  // Dense member headers do not remove the discoverable label elsewhere.
+  await page.setViewportSize({ width: 390, height: 664 });
+  await page.goto('/events');
+  await expect(page.locator('.night-mobile-menu__trigger-label')).toBeVisible();
+});
+
+test('an open mobile sheet keeps one-click notification switching and its short-screen close control reachable', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1000) > 760, 'Mobile sheet interaction');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route('**/api/**', route => route.fulfill({ status: 401, json: { error: 'Isolated panel interaction' } }));
+  await page.route('**/api/customer/notifications', route => route.fulfill({ json: { notifications: [], unread: 0 } }));
+  await page.setViewportSize({ width: 390, height: 664 });
+  await page.goto('/my-nights');
+  const header = page.locator('.my-nights-page > .directory-header');
+  const trigger = header.getByRole('button', { name: 'Open navigation', exact: true });
+  const bell = header.getByRole('button', { name: 'Notifications', exact: true });
+  const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'The Buzz', exact: true });
+  const reachableAtCenter = (element: Element) => {
+    const bounds = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    return hit === element || (hit !== null && element.contains(hit));
+  };
+  await trigger.click();
+  await expect(menu).toBeInViewport({ ratio: 1 });
+  expect(await bell.evaluate(reachableAtCenter)).toBe(true);
+  // The rest of the page still dismisses through the scrim, not click-through.
+  expect(await page.locator('.night-mobile-menu__scrim').evaluate(element => document.elementFromPoint(25, 200) === element)).toBe(true);
+  await bell.click();
+  await expect(menu).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close notifications', exact: true }).click();
+  await trigger.click();
+  await page.setViewportSize({ width: 390, height: 320 });
+  await expect(menu).toBeInViewport({ ratio: 1 });
+  const close = menu.getByRole('button', { name: 'Close navigation', exact: true });
+  await expect(close).toBeInViewport({ ratio: 1 });
+  const headerBounds = await header.boundingBox();
+  const menuBounds = await menu.boundingBox();
+  expect(menuBounds!.y - headerBounds!.y - headerBounds!.height).toBeGreaterThanOrEqual(8);
+  expect(await close.evaluate(reachableAtCenter)).toBe(true);
+  await close.click();
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
 });
