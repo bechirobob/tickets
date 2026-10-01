@@ -1,8 +1,8 @@
-name: Verify Tickets storage cleanup read-only
+name: Classify retained Tickets delivery failures read-only
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/tickets-vps-diagnostics.yml']
+    paths: [.github/workflows/tickets-vps-diagnostics.yml]
 permissions:
   contents: read
   id-token: write
@@ -11,9 +11,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Classify retained Tickets delivery failures read-only 20261001'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
@@ -21,67 +21,108 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Verify completed cleanup without changes
-        if: github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify completed Tickets cleanup 20261001'
+      - name: Classify fixed failed-delivery metadata without recipients or resends
         run: |
-          tailscale ssh root@hermes 'python3 -' <<'PY'
-          """Read-only verification of completed three-folder cleanup."""
-          import os, sys, stat, re, json, time, fcntl, shutil, subprocess, hashlib, urllib.request
+          tailscale ssh root@hermes 'python3 -' <<'PYREAD'
+          """Read-only fixed metadata classification. No recipients, payloads or free-form errors leave the host."""
+          import collections
+          import datetime as dt
+          import fcntl
+          import json
+          import os
           from pathlib import Path
-          sys.excepthook = lambda *args: print('Cleanup stopped; detailed private paths suppressed', file=sys.stderr)
-          HOME=Path('/srv/becore-tickets'); RELEASES=HOME/'releases'
-          ACTIVE='7b9db84ddff94a8b54324241dc855d3ab9ac8a8f'
-          PREVIOUS='2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004'
-          THIRD='2266b65a282772375da97ccc5ed9942e489a2b7d'
-          APPROVED=['a34bd37d8fad68e200239f497c3ae4a2074d45b6','7a090331436541a964752f3d5cfdfffbbc1de823']
-          TARGETS=[RELEASES/x for x in APPROVED]+[Path('/var/tmp/tickets-code-release-36804472437-1')]
-          EXPECTED=[(2268946,24997,769717088,838791168,20),(2508802,24997,769730893,838881280,20),(259251,3,228622988,228634624,0)]
-          END=time.monotonic()+180
+          import re
+          import sqlite3
+          import stat
+          import subprocess
+          import sys
+          import time
           
-          def guard():
-              if time.monotonic()>END: raise RuntimeError('Time bound exceeded')
-          def output(argv):
-              guard(); return subprocess.check_output(argv,text=True,stderr=subprocess.DEVNULL,timeout=15)
-          def small_json(path):
-              fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+          EXPECTED='473bbf40afe1a77a722c8399f91c4dd95f3e40ce'
+          KINDS=('owner_approval_request','host_application_decision','host_application_verify','team_invitation','organizer_report','organizer_invitation','organizer_signup','registration_access','registration_update','event_announcement','payment_confirmation','ticket_recovery','ticket_transfer','waitlist_offer','payment_recovery','support_update','operational_alert')
+          ONBOARDING=('host_application_decision','host_application_verify','team_invitation','organizer_invitation')
+          CATEGORIES="""CASE
+           WHEN failure_reason='Transactional email is not configured.' THEN 'transactional_email_not_configured'
+           WHEN lower(failure_reason) LIKE '%quota%' OR lower(failure_reason) LIKE '%rate limit%' OR lower(failure_reason) LIKE '%too many requests%' THEN 'provider_quota_or_rate_limit'
+           WHEN lower(failure_reason) LIKE '%domain%' AND lower(failure_reason) LIKE '%verif%' THEN 'sender_domain_verification'
+           WHEN lower(failure_reason) LIKE '%api key%' OR lower(failure_reason) LIKE '%unauthorized%' OR lower(failure_reason) LIKE '%forbidden%' THEN 'provider_authentication_or_permission'
+           WHEN lower(failure_reason) LIKE '%timeout%' OR lower(failure_reason) LIKE '%timed out%' OR lower(failure_reason) LIKE '%fetch failed%' OR lower(failure_reason) LIKE '%econn%' OR lower(failure_reason) LIKE '%network%' THEN 'transport_failure'
+           WHEN failure_reason IN ('Email provider rejected the message.','Email retry was rejected.') THEN 'generic_provider_rejection'
+           WHEN failure_reason IS NULL OR trim(failure_reason)='' THEN 'failure_reason_absent'
+           ELSE 'unclassified_failure' END"""
+          
+          def stamp(value):
+              if not value:return None
               try:
-                  if not stat.S_ISREG(os.fstat(fd).st_mode): raise RuntimeError('Metadata shape')
-                  data=os.read(fd,1048577)
-                  if len(data)>1048576: raise RuntimeError('Metadata size')
-                  return json.loads(data)
-              finally: os.close(fd)
-          def plain(path):
-              s=path.lstat()
-              if not stat.S_ISDIR(s.st_mode) or s.st_uid!=0: raise RuntimeError('Directory identity')
-              return s
+                  result=dt.datetime.fromisoformat(value.replace('Z','+00:00'))
+                  if result.tzinfo is None:result=result.replace(tzinfo=dt.timezone.utc)
+                  return result.astimezone(dt.timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z')
+              except (ValueError,TypeError):return None
           
-          def identity():
-              for p in [HOME,RELEASES,Path('/var/tmp')]: plain(p)
-              for name,sha in [('current',ACTIVE),('previous',PREVIOUS)]:
-                  p=HOME/name
-                  if not p.is_symlink() or p.resolve(strict=True)!=RELEASES/sha: raise RuntimeError('Protected pointer drift')
-              recent=sorted([p for p in RELEASES.iterdir() if re.fullmatch('[a-f0-9]{40}',p.name) and p.is_dir() and not p.is_symlink()],key=lambda p:p.stat().st_mtime,reverse=True)[:3]
-              if [p.name for p in recent]!=[ACTIVE,PREVIOUS,THIRD]: raise RuntimeError('Newest three drift')
-              props=dict(x.split('=',1) for x in output(['systemctl','show','becore-tickets.service','--property=ActiveState,WorkingDirectory']).splitlines() if '=' in x)
-              if props!={'ActiveState':'active','WorkingDirectory':str(RELEASES/ACTIVE)}: raise RuntimeError('Service drift')
-              return {'active':ACTIVE,'previous':PREVIOUS,'third':THIRD}
-          def health():
-              result={}
-              for endpoint,path in [('health','/healthz'),('version','/api/version')]:
-                  url='https://tickets.becoreops.com'+path
-                  request=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Cache-Control':'no-cache'})
-                  with urllib.request.urlopen(request,timeout=15) as r:
-                      if r.geturl()!=url: raise RuntimeError('Health redirect')
-                      if r.status!=200: raise RuntimeError('Health failed')
-                      data=json.loads(r.read(1048576)); result[endpoint]=data
-              h=result['health']
-              if h.get('service')!='becore-tickets' or h.get('runtime')!='vps' or h.get('active') is not True or h.get('revision')!=ACTIVE: raise RuntimeError('Health identity drift')
-              if result['version'].get('revision')!=ACTIVE or result['version'].get('service')!='becore-tickets': raise RuntimeError('Live revision drift')
-              return {'health_status':200,'version_status':200,'revision':ACTIVE}
-          fd=os.open('/run/lock/becore-tickets-deploy.lock',os.O_RDONLY|os.O_NOFOLLOW)
-          if not stat.S_ISREG(os.fstat(fd).st_mode): raise RuntimeError('Lock shape')
-          fcntl.flock(fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
-          protected=identity(); live=health()
-          if any(t.exists() or t.is_symlink() for t in TARGETS): raise RuntimeError('Removed target reappeared')
-          print(json.dumps({'read_only':True,'approved_targets_absent':True,'protected':protected,'health':live,'free_bytes':shutil.disk_usage(HOME).free,'deleted_bytes':0}),flush=True)
-          PY
+          def classify(db, now):
+              count=db.execute("SELECT count(*) FROM delivery_events WHERE status='failed'").fetchone()[0]
+              assert count<=100,'Failed-record bound exceeded'
+              db.row_factory=sqlite3.Row
+              rows=db.execute(f"""SELECT f.kind,{CATEGORIES} AS category, f.attempt_count,
+                f.created_at,f.updated_at,f.next_attempt_at,
+                (f.payload_json IS NOT NULL) AS payload_present,
+                (SELECT MIN(COALESCE(s.provider_event_at,s.updated_at,s.created_at)) FROM delivery_events s
+                 WHERE s.recipient=f.recipient AND s.kind=f.kind AND s.status='delivered'
+                 AND julianday(COALESCE(s.provider_event_at,s.updated_at,s.created_at))>julianday(f.updated_at)) AS later_same_kind_delivered,
+                (SELECT MIN(COALESCE(s.provider_event_at,s.updated_at,s.created_at)) FROM delivery_events s
+                 WHERE s.recipient=f.recipient AND s.status='delivered'
+                 AND julianday(COALESCE(s.provider_event_at,s.updated_at,s.created_at))>julianday(f.updated_at)) AS later_any_kind_delivered
+                FROM delivery_events f WHERE f.status='failed' ORDER BY f.created_at LIMIT 101""").fetchall()
+              assert len(rows)==count
+              groups={}
+              for row in rows:
+                  kind=row['kind'] if row['kind'] in KINDS else 'unrecognized_kind'
+                  key=(kind,row['category'])
+                  item=groups.setdefault(key,{'kind':kind,'failure_category':row['category'],'count':0,'onboarding_related':kind in ONBOARDING,'guest_signup_notice_to_existing_host':kind=='organizer_signup','created':[],'updated':[],'attempts':[],'retry_timestamp_present':0,'currently_due_under_retry_selection':0,'payload_present':0,'failed_records_with_later_same_kind_delivered':0,'failed_records_with_later_any_kind_delivered':0,'later_delivered_timestamps':[],'failed_records_updated_last_24h':0,'unparseable_timestamps':0})
+                  item['count']+=1
+                  created,updated,next_at=(stamp(row[k]) for k in ('created_at','updated_at','next_attempt_at'))
+                  for name,value in (('created',created),('updated',updated)):
+                      if value:item[name].append(value)
+                      else:item['unparseable_timestamps']+=1
+                  attempts=row['attempt_count'];assert isinstance(attempts,int) and 0<=attempts<100000
+                  item['attempts'].append(attempts)
+                  item['retry_timestamp_present']+=int(bool(next_at))
+                  item['payload_present']+=int(bool(row['payload_present']))
+                  if next_at and dt.datetime.fromisoformat(next_at.replace('Z','+00:00'))<=now and attempts<3:item['currently_due_under_retry_selection']+=1
+                  if updated and dt.datetime.fromisoformat(updated.replace('Z','+00:00'))>=now-dt.timedelta(hours=24):item['failed_records_updated_last_24h']+=1
+                  for source,destination in (('later_same_kind_delivered','failed_records_with_later_same_kind_delivered'),('later_any_kind_delivered','failed_records_with_later_any_kind_delivered')):
+                      value=stamp(row[source]);item[destination]+=int(bool(value))
+                      if value:item['later_delivered_timestamps'].append(value)
+              for item in groups.values():
+                  for field in ('created','updated','attempts','later_delivered_timestamps'):
+                      values=item.pop(field);item[field+'_oldest_or_min']=min(values) if values else None;item[field+'_newest_or_max']=max(values) if values else None
+              successes=[]
+              for kind in KINDS:
+                  row=db.execute("SELECT count(*),MIN(COALESCE(provider_event_at,updated_at,created_at)),MAX(COALESCE(provider_event_at,updated_at,created_at)) FROM delivery_events WHERE kind=? AND status='delivered'",(kind,)).fetchone()
+                  if row[0]:successes.append({'kind':kind,'delivered_count':row[0],'first_delivered_at':stamp(row[1]),'latest_delivered_at':stamp(row[2])})
+              onboarding_failed=sum(item['count'] for item in groups.values() if item['onboarding_related'])
+              return {'failed_total':count,'failed_onboarding_related':onboarding_failed,'groups':list(groups.values()),'successful_delivery_history':successes,'scope_note':'Later delivery to the same recipient does not establish that an earlier failed message was resent or delivered. No resend or state change was performed.'}
+          
+          def main():
+              assert os.geteuid()==0
+              lock=os.open('/run/lock/becore-tickets-deploy.lock',os.O_RDONLY|os.O_NOFOLLOW)
+              fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+              props=dict(line.split('=',1) for line in subprocess.check_output(['systemctl','show','becore-tickets.service','--property=ActiveState,WorkingDirectory'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines())
+              assert props=={'ActiveState':'active','WorkingDirectory':'/srv/becore-tickets/releases/'+EXPECTED}
+              path=Path('/var/lib/becore-tickets/tickets.sqlite');metadata=path.lstat()
+              assert stat.S_ISREG(metadata.st_mode) and stat.S_IMODE(metadata.st_mode)==0o600 and metadata.st_nlink==1
+              db=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=5)
+              deadline=time.monotonic()+20;db.set_progress_handler(lambda:int(time.monotonic()>deadline),1000)
+              try:
+                  db.execute('PRAGMA query_only=ON');db.execute('BEGIN')
+                  result=classify(db,dt.datetime.now(dt.timezone.utc))
+                  assert db.total_changes==0
+                  result.update(read_only=True,active_revision=EXPECTED,observed_at=dt.datetime.now(dt.timezone.utc).isoformat(),recipient_values_exported=False,free_form_errors_exported=False,resends=0)
+                  print(json.dumps(result,sort_keys=True))
+              finally:db.close()
+          
+          if __name__=='__main__':
+              try:main()
+              except Exception:
+                  print('Read-only delivery classification stopped; private details suppressed.',file=sys.stderr);sys.exit(1)
+          PYREAD
