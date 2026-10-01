@@ -71,10 +71,15 @@ jobs:
               return {'active':ACTIVE,'previous':PREVIOUS,'third':THIRD}
           def health():
               result={}
-              for endpoint in ['health','version']:
-                  with urllib.request.urlopen('https://tickets.becoreops.com/api/'+endpoint,timeout=15) as r:
+              for endpoint,path in [('health','/healthz'),('version','/api/version')]:
+                  url='https://tickets.becoreops.com'+path
+                  request=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; BeCoreTicketsHealth/1.0)','Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(request,timeout=15) as r:
+                      if r.geturl()!=url: raise RuntimeError('Health redirect')
                       if r.status!=200: raise RuntimeError('Health failed')
                       data=json.loads(r.read(1048576)); result[endpoint]=data
+              h=result['health']
+              if h.get('service')!='becore-tickets' or h.get('runtime')!='vps' or h.get('active') is not True or h.get('revision')!=ACTIVE: raise RuntimeError('Health identity drift')
               if result['version'].get('revision')!=ACTIVE or result['version'].get('service')!='becore-tickets': raise RuntimeError('Live revision drift')
               return {'health_status':200,'version_status':200,'revision':ACTIVE}
           def tree(path):
