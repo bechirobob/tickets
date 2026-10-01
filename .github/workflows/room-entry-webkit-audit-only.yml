@@ -1,0 +1,189 @@
+name: Verify exact live Room entry with reviewed readiness harness
+on:
+  push:
+    branches: [ops/room-entry-webkit-audit-only]
+    paths: [.github/workflows/room-entry-webkit-audit-only.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tickets-room-entry-webkit-audit-only
+  cancel-in-progress: false
+
+jobs:
+  browser-audit:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/room-entry-webkit-audit-only' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    # Fresh hosted runners may spend several minutes installing WebKit system
+    # dependencies before the production checks can begin. Keep enough headroom
+    # for all three browser projects and evidence upload on a slow mirror.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [mobile-webkit]
+    env:
+      APP_SHA: 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f
+      APP_TREE: c1d1854788b6a8a1ea53537e5c3e28380f4ff6c9
+      HARNESS_SHA: 044cd3c4f6f406305a67dd68c3698c29a69636dc
+      HARNESS_TREE: 19a64e1c4d8e629bc633575569ad840f07e7cd0e
+      ORIGINAL_TEST_BLOB: 649f7488dec0cd05e230db4f97bb4e1e1e9b2c49
+      CORRECTED_TEST_BLOB: 5e2289aab89fc2a2c875a0221545301201e40e20
+    steps:
+      - name: Require one-time pinned read-only audit context
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_REF" = refs/heads/ops/room-entry-webkit-audit-only
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          [[ "$HARNESS_SHA" =~ ^[a-f0-9]{40}$ && "$HARNESS_TREE" =~ ^[a-f0-9]{40}$ ]]
+      # Candidate verification tests the full PR tree against its isolated build.
+      # This separate audit must use the tests belonging to the actual live build.
+      - name: Resolve and verify the active production revision
+        id: deployed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          mkdir -p "$RUNNER_TEMP/production-browser-audit"
+          cat > "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" <<'SH'
+          set -euo pipefail
+          phase="${1:?Missing verification phase}"
+          [[ "$phase" =~ ^(resolved|before|after)$ ]]
+          metadata="$RUNNER_TEMP/production-browser-audit"
+          status="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            -H 'Cache-Control: no-cache' -H 'Accept: application/json' \
+            --write-out '%{http_code}' --output "$metadata/health-$phase.json" https://tickets.becoreops.com/healthz)"
+          test "$status" = 200
+          status="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            -H 'Cache-Control: no-cache' -H 'Accept: application/json' \
+            --write-out '%{http_code}' --output "$metadata/version-$phase.json" https://tickets.becoreops.com/api/version)"
+          test "$status" = 200
+          PHASE="$phase" python3 - <<'PYVERIFY'
+          import datetime, json, os, pathlib, re
+          directory = pathlib.Path(os.environ["RUNNER_TEMP"]) / "production-browser-audit"
+          phase = os.environ["PHASE"]
+          health = json.loads((directory / f"health-{phase}.json").read_text())
+          version = json.loads((directory / f"version-{phase}.json").read_text())
+          if not isinstance(health, dict) or not isinstance(version, dict):
+              raise SystemExit("Production identity responses must be objects")
+          revision = version.get("revision")
+          if version.get("service") != "becore-tickets" or health.get("service") != "becore-tickets":
+              raise SystemExit("Production service identity does not match Tickets")
+          if health.get("runtime") != "vps" or health.get("active") is not True:
+              raise SystemExit("Production must be served by the active Tickets VPS")
+          if not isinstance(revision, str) or re.fullmatch(r"[a-f0-9]{40}", revision) is None:
+              raise SystemExit("Production revision must be an exact full commit SHA")
+          if health.get("revision") != revision:
+              raise SystemExit("Health and application revisions do not match")
+          expected = os.environ.get("DEPLOYED_SHA")
+          if phase != "resolved" and (not expected or revision != expected):
+              raise SystemExit("Production changed during the audit; rerun against the new revision")
+          evidence = {"service": "becore-tickets", "runtime": "vps", "active": True,
+                      "revision": revision, "phase": phase,
+                      "verifiedAt": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          (directory / f"baseline-{phase}.json").write_text(json.dumps(evidence, indent=2) + "\n")
+          if phase == "resolved":
+              with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+                  output.write(f"revision={revision}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Production browser audit ({phase}): becore-tickets / active VPS / {revision}\n\n")
+          PYVERIFY
+          SH
+          bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" resolved
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: bechirobob/tickets
+          ref: ${{ steps.deployed.outputs.revision }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify deployed source belongs to this repository main history
+        id: source
+        shell: bash
+        env:
+          DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOYED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          origin="$(git remote get-url origin)"
+          [[ "$origin" = https://github.com/bechirobob/tickets || "$origin" = https://github.com/bechirobob/tickets.git ]]
+          test "$DEPLOYED_SHA" = "$APP_SHA"
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$APP_TREE"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$APP_SHA"
+          git merge-base --is-ancestor "$DEPLOYED_SHA" refs/remotes/origin/main
+          printf '%s\n' "$DEPLOYED_SHA" > "$RUNNER_TEMP/production-browser-audit/checked-out-revision.txt"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/production-browser-audit/checked-out-tree.txt"
+      - name: Apply only the exact reviewed readiness test correction
+        id: harness
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$HARNESS_SHA"
+          metadata="$RUNNER_TEMP/production-browser-audit"
+          cat > "$metadata/verify-harness.py" <<'PYHARNESS'
+          import datetime, json, os, pathlib, subprocess, sys
+          path = 'tests/e2e/room-natural-entry.spec.ts'
+          phase = sys.argv[1]
+          if phase not in ('before', 'after'): raise SystemExit('Unexpected phase')
+          def git(*args): return subprocess.check_output(['git', *args], text=True).strip()
+          app, harness = os.environ['APP_SHA'], os.environ['HARNESS_SHA']
+          assert git('rev-parse', 'HEAD') == app
+          assert git('rev-parse', 'HEAD^{tree}') == os.environ['APP_TREE']
+          assert git('rev-parse', 'refs/remotes/origin/main') == app
+          assert git('rev-parse', harness + '^{tree}') == os.environ['HARNESS_TREE']
+          assert git('rev-list', '--parents', '-n', '1', harness).split() == [harness, app]
+          assert git('diff', '--name-only', app, harness).splitlines() == [path]
+          assert git('rev-parse', app + ':' + path) == os.environ['ORIGINAL_TEST_BLOB']
+          assert git('rev-parse', harness + ':' + path) == os.environ['CORRECTED_TEST_BLOB']
+          if phase == 'before':
+              assert git('status', '--porcelain', '--untracked-files=no') == ''
+              pathlib.Path(path).write_bytes(subprocess.check_output(['git', 'show', harness + ':' + path]))
+          assert git('diff', '--name-only').splitlines() == [path]
+          assert git('diff', '--cached', '--name-only') == ''
+          assert git('hash-object', '--', path) == os.environ['CORRECTED_TEST_BLOB']
+          metadata = pathlib.Path(os.environ['RUNNER_TEMP']) / 'production-browser-audit'
+          evidence = {'phase': phase, 'applicationRevision': app, 'applicationTree': os.environ['APP_TREE'],
+              'testSourceRevision': harness, 'testSourceTree': os.environ['HARNESS_TREE'],
+              'onlyOverlaidPath': path, 'originalTestBlob': os.environ['ORIGINAL_TEST_BLOB'],
+              'correctedTestBlob': os.environ['CORRECTED_TEST_BLOB'], 'applicationFilesChanged': False,
+              'verifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          (metadata / ('test-harness-' + phase + '.json')).write_text(json.dumps(evidence, indent=2) + '\n')
+          (metadata / 'test-harness-diff.patch').write_text(git('diff', '--', path) + '\n')
+          print(json.dumps(evidence, sort_keys=True))
+          PYHARNESS
+          python3 "$metadata/verify-harness.py" before
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install real-browser engines
+        run: npx playwright install --with-deps chromium webkit
+      - name: Confirm production still matches the audited source
+        env:
+          DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
+        run: bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" before
+      - name: Audit production in desktop Chrome, mobile Chrome and mobile WebKit
+        run: npm run test:e2e:production -- --project ${{ matrix.browser }} --workers=1 --retries=0
+      - name: Confirm application and corrected harness stayed exact
+        if: ${{ always() && steps.harness.outcome == 'success' }}
+        run: python3 "$RUNNER_TEMP/production-browser-audit/verify-harness.py" after
+      - name: Confirm production stayed on the audited source
+        if: ${{ always() && steps.source.outcome == 'success' }}
+        env:
+          DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
+        run: bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" after
+      - name: Preserve browser results and isolated Room renders
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: room-entry-corrected-harness-${{ github.run_id }}-${{ matrix.browser }}
+          path: |
+            playwright-report
+            test-results
+            ${{ runner.temp }}/production-browser-audit/*.json
+            ${{ runner.temp }}/production-browser-audit/checked-out-*.txt
+            ${{ runner.temp }}/production-browser-audit/test-harness-diff.patch
+          if-no-files-found: ignore
+          retention-days: 14
