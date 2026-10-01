@@ -1,4 +1,4 @@
-name: Remove four explicitly approved historical delivery failures
+name: Verify approved historical delivery cleanup read-only
 on:
   push:
     branches: [main]
@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Remove four approved historical delivery failures 20261001'
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify approved historical delivery cleanup 20261001'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -21,145 +21,47 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Remove only four approved historical records with drift guards
+      - name: Verify exact removal and public health without changing records
         run: |
-          set -euo pipefail
-          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-          tailscale ssh root@hermes "python3 - '$GITHUB_RUN_ID'" <<'PYREMOVE'
-          """One-shot deletion of exactly four owner-approved historical delivery records."""
-          import datetime,fcntl,hashlib,json,os,pwd,re,shutil,signal,sqlite3,stat,subprocess,sys,time
+          tailscale ssh root@hermes 'python3 -' <<'PYVERIFY'
+          """Read-only verification of the exact owner-approved four-record removal."""
+          import fcntl,hashlib,json,os,pwd,sqlite3,stat,subprocess,sys,time,urllib.request
           from pathlib import Path
-          ACTIVE='473bbf40afe1a77a722c8399f91c4dd95f3e40ce'
-          REASON='Transactional email is not configured.'
-          EXPECTED_TARGETS = {'2368e1c63e3dcccea923fd66947dc070a85d8bd1902ad7b7cadaf87025c3a262': {'row_sha256': '1f586b201a81992cebd29ac3ed4baf5478fa188058061a892abb8af69fec1387', 'created_at': '2026-08-13T07:15:35.880Z'}, 'd3d0825042e43f9f455a938a053bc77d81969027ddf364e47120ee3b483774df': {'row_sha256': 'f1d50baef6b3b73ea1236b71a33267ac9c3a562eb6d02a827167075e42058084', 'created_at': '2026-09-10T02:39:57.625Z'}, '99567a0617c2b5c06dfa9100d31bbd585a0121cf6c1dcff064dedc300e18af15': {'row_sha256': 'a2f66f3109c2c3770703e8fb38ccbff94a8284420dc9d1b09a99fbf017efaf21', 'created_at': '2026-08-18T05:10:31.562Z'}, '57bca64a209b041e9dbd2b15120bdf2ec931f9b4abec88a4d2c9287d95007238': {'row_sha256': '90540ee0faa18bc157187ac5cd8d2ae9cfbda8feb8873de2910e512dd6ef7cc3', 'created_at': '2026-09-15T22:25:41.010Z'}}
-          
-          def require(condition, message):
-              if not condition:raise RuntimeError(message)
-          def fingerprint(value):
-              raw=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode();require(len(raw)<4*1024*1024,'Fingerprint bound')
-              return hashlib.sha256(raw).hexdigest()
-          def file_digest(path):
-              h=hashlib.sha256()
-              with path.open('rb') as f:
-                  while block:=f.read(1024*1024):h.update(block)
-              return h.hexdigest()
-          def write_receipt(path,value):
-              with path.open('x',encoding='utf8') as f:
-                  json.dump(value,f,sort_keys=True);f.flush();os.fsync(f.fileno())
-          def targets(db):
-              rows=[dict(r) for r in db.execute("SELECT * FROM delivery_events WHERE status='failed' ORDER BY id LIMIT 101")]
-              require(len(rows)<=100,'Failure count changed beyond bound')
-              selected=[]
-              for row in rows:
-                  key=hashlib.sha256(row['id'].encode()).hexdigest()
-                  if key not in EXPECTED_TARGETS:continue
-                  expected=EXPECTED_TARGETS[key]
-                  require(fingerprint(row)==expected['row_sha256'],'Exact approved row changed')
-                  require(row['status']=='failed' and row['kind']=='operational_alert' and row['failure_reason']==REASON,'Target classification changed')
-                  require(row['created_at']==row['updated_at']==expected['created_at'],'Target date changed')
-                  require(row['attempt_count']==1 and row['next_attempt_at'] is None and row['order_id'] is None and row['recovery_grant_id'] is None,'Target relationships or retry changed')
-                  selected.append(row)
-              require(len(selected)==len(EXPECTED_TARGETS)==4,'Exact four targets missing or changed')
-              return selected
-          
-          def table_counts(db):
-              names=[row[0] for row in db.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
-              require(len(names)<300,'Table bound')
-              return {name:db.execute('SELECT count(*) FROM "'+name.replace('"','""')+'"').fetchone()[0] for name in names}
-          def other_rows(db,ids):
-              rows=[dict(r) for r in db.execute('SELECT * FROM delivery_events WHERE id NOT IN (?,?,?,?) ORDER BY id',ids)]
-              require(len(rows)<1000,'History bound');return fingerprint(rows)
-          def integrity(db):
-              require([tuple(r) for r in db.execute('PRAGMA quick_check')]==[('ok',)],'Database integrity check failed')
-              require(db.execute('PRAGMA foreign_key_check').fetchall()==[],'Foreign-key check failed')
-          
-          def mutate(database,stage):
-              require(os.geteuid()!=0,'Database work must use existing service identity')
-              stage.mkdir(mode=0o700)
-              metadata=database.lstat();require(stat.S_ISREG(metadata.st_mode) and metadata.st_uid==os.geteuid() and stat.S_IMODE(metadata.st_mode)==0o600 and metadata.st_nlink==1,'Database ownership changed')
-              db=sqlite3.connect(database.as_uri()+'?mode=rw',uri=True,timeout=10);db.row_factory=sqlite3.Row
-              end=time.monotonic()+60;db.set_progress_handler(lambda:int(time.monotonic()>end),1000)
+          ACTIVE='473bbf40afe1a77a722c8399f91c4dd95f3e40ce';RUN='36937809865'
+          TARGET_HASHES=['2368e1c63e3dcccea923fd66947dc070a85d8bd1902ad7b7cadaf87025c3a262', '57bca64a209b041e9dbd2b15120bdf2ec931f9b4abec88a4d2c9287d95007238', '99567a0617c2b5c06dfa9100d31bbd585a0121cf6c1dcff064dedc300e18af15', 'd3d0825042e43f9f455a938a053bc77d81969027ddf364e47120ee3b483774df']
+          def read_json(path,owner):
+              fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
               try:
-                  db.execute('PRAGMA foreign_keys=ON');db.execute('PRAGMA synchronous=FULL')
-                  targets(db);integrity(db)
-                  needed=db.execute('PRAGMA page_count').fetchone()[0]*db.execute('PRAGMA page_size').fetchone()[0]
-                  require(shutil.disk_usage(database.parent).free>needed+512*1024*1024,'Backup free-space bound')
-                  backup=stage/'before.sqlite';fd=os.open(backup,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600);os.close(fd)
-                  saved=sqlite3.connect(str(backup))
-                  try:
-                      db.backup(saved,pages=128,progress=lambda *_:require(time.monotonic()<end,'Backup timeout'),sleep=0.05)
-                      integrity(saved)
-                  finally:saved.close()
-                  with backup.open('rb') as f:os.fsync(f.fileno())
-                  write_receipt(stage/'prepared.json',{'phase':'backed_up','backup_sha256':file_digest(backup),'target_id_hashes':sorted(EXPECTED_TARGETS),'authorized_count':4})
-                  db.execute('BEGIN IMMEDIATE')
-                  selected=targets(db);ids=[row['id'] for row in selected]
-                  # A historical failure must not still be referenced by a durable queue.
-                  queue=sqlite3.connect((database.parent/'operations.sqlite').as_uri()+'?mode=ro',uri=True,timeout=5)
-                  try:
-                      queue.execute('PRAGMA query_only=ON')
-                      require(queue.execute("SELECT count(*) FROM delivery_queue WHERE json_extract(body,'$.deliveryId') IN (?,?,?,?)",ids).fetchone()[0]==0,'Target is present in delivery queue')
-                  finally:queue.close()
-                  counts_before=table_counts(db);history_before=other_rows(db,ids);changes=db.total_changes
-                  for row in selected:
-                      deleted=db.execute("DELETE FROM delivery_events WHERE id=? AND kind='operational_alert' AND status='failed' AND failure_reason=? AND created_at=? AND updated_at=? AND attempt_count=1 AND next_attempt_at IS NULL AND order_id IS NULL AND recovery_grant_id IS NULL",(row['id'],REASON,row['created_at'],row['updated_at'])).rowcount
-                      require(deleted==1,'Target row count changed')
-                  require(db.total_changes-changes==4,'Unexpected triggered or cascading change')
-                  expected_counts=dict(counts_before);expected_counts['delivery_events']-=4
-                  require(table_counts(db)==expected_counts,'Unrelated table row counts changed')
-                  require(other_rows(db,ids)==history_before,'Unrelated delivery history changed')
-                  require(db.execute('SELECT count(*) FROM delivery_events WHERE id IN (?,?,?,?)',ids).fetchone()[0]==0,'Target remains')
-                  integrity(db)
-                  failed=db.execute("SELECT count(*) FROM delivery_events WHERE status='failed'").fetchone()[0]
-                  db.commit()
-                  write_receipt(stage/'result.json',{'phase':'verified','deleted_records':4,'remaining_failed_records':failed,'remaining_delivery_records':expected_counts['delivery_events'],'other_delivery_rows_unchanged':True,'other_table_counts_unchanged':True,'foreign_key_violations':0,'quick_check_ok':True,'resends':0,'recipient_values_exported':False,'backup_sha256':file_digest(backup),'target_id_hashes':sorted(EXPECTED_TARGETS)})
-              except BaseException:
-                  if db.in_transaction:db.rollback()
-                  raise
-              finally:db.close()
-          
-          def service_identity():
-              props=dict(line.split('=',1) for line in subprocess.check_output(['systemctl','show','becore-tickets.service','--property=ActiveState,WorkingDirectory'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines())
-              require(props=={'ActiveState':'active','WorkingDirectory':'/srv/becore-tickets/releases/'+ACTIVE},'Live service changed')
+                  s=os.fstat(fd);assert stat.S_ISREG(s.st_mode) and s.st_uid==owner and stat.S_IMODE(s.st_mode)==0o600 and s.st_size<65536
+                  return json.loads(os.read(fd,65536))
+              finally:os.close(fd)
           def main():
-              require(os.geteuid()==0,'Root coordinator required');os.umask(0o077)
-              def stop(*_):raise RuntimeError('Approved cleanup interrupted or timed out')
-              signal.signal(signal.SIGALRM,stop);signal.signal(signal.SIGTERM,stop);signal.alarm(150)
-              run=sys.argv[1];require(re.fullmatch('[1-9][0-9]{5,25}',run),'Run identity invalid')
-              lock=os.open('/run/lock/becore-tickets-deploy.lock',os.O_RDONLY|os.O_NOFOLLOW);fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-              service_identity();account=pwd.getpwnam('becore-tickets')
-              state=Path('/var/lib/becore-tickets');root=Path('/var/lib/becore-tickets-handover')
-              require(state.is_dir() and not state.is_symlink() and state.stat().st_uid==account.pw_uid,'Private state identity')
-              require(root.is_dir() and not root.is_symlink() and root.stat().st_uid==0 and root.stat().st_dev==state.stat().st_dev,'Evidence root identity')
-              stage=state/('.approved-delivery-removal-'+run);receipt=root/('approved-delivery-removal-'+run)
-              require(not os.path.lexists(stage) and not os.path.lexists(receipt),'Execution already attempted; inspect evidence, never replay')
-              receipt.mkdir(mode=0o700)
-              child=os.fork()
-              if child==0:
-                  try:
-                      os.setgroups([]);os.setgid(account.pw_gid);os.setuid(account.pw_uid)
-                      mutate(state/'tickets.sqlite',stage);os._exit(0)
-                  except BaseException:
-                      os._exit(1)
-              interrupted=None
-              try:_,status=os.waitpid(child,0)
-              except BaseException as error:
-                  interrupted=error
-                  try:os.kill(child,signal.SIGTERM)
-                  except ProcessLookupError:pass
-                  _,status=os.waitpid(child,0)
-              if stage.exists():
-                  metadata=stage.lstat();require(stat.S_ISDIR(metadata.st_mode) and metadata.st_uid==account.pw_uid and stat.S_IMODE(metadata.st_mode)==0o700,'Evidence stage identity')
-                  stage.rename(receipt/'database')
-                  for directory in (state,receipt):
-                      fd=os.open(directory,os.O_RDONLY|os.O_DIRECTORY);os.fsync(fd);os.close(fd)
-              if interrupted is not None:raise interrupted
-              require(os.waitstatus_to_exitcode(status)==0,'Deletion did not finish; inspect preserved private evidence without replay')
-              result=json.loads((receipt/'database/result.json').read_text());require(result['phase']=='verified' and result['deleted_records']==4,'Receipt invalid')
-              service_identity()
-              result.update(active_revision=ACTIVE,run_id=run,completed_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),protected_existing_backups_unchanged=True)
-              print(json.dumps(result,sort_keys=True))
+              assert os.geteuid()==0
+              lock=os.open('/run/lock/becore-tickets-deploy.lock',os.O_RDONLY|os.O_NOFOLLOW);fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+              props=dict(line.split('=',1) for line in subprocess.check_output(['systemctl','show','becore-tickets.service','--property=ActiveState,WorkingDirectory'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines())
+              assert props=={'ActiveState':'active','WorkingDirectory':'/srv/becore-tickets/releases/'+ACTIVE}
+              account=pwd.getpwnam('becore-tickets')
+              result=read_json(Path('/var/lib/becore-tickets-handover')/('approved-delivery-removal-'+RUN)/'database/result.json',account.pw_uid)
+              assert result['phase']=='verified' and result['deleted_records']==4 and result['target_id_hashes']==TARGET_HASHES
+              assert result['other_delivery_rows_unchanged'] and result['other_table_counts_unchanged'] and result['resends']==0
+              db=sqlite3.connect('file:/var/lib/becore-tickets/tickets.sqlite?mode=ro',uri=True,timeout=5)
+              end=time.monotonic()+20;db.set_progress_handler(lambda:int(time.monotonic()>end),1000)
+              try:
+                  db.execute('PRAGMA query_only=ON');db.execute('BEGIN')
+                  ids=db.execute('SELECT id FROM delivery_events ORDER BY id LIMIT 1001').fetchall();assert len(ids)<=1000
+                  assert not any(hashlib.sha256(row[0].encode()).hexdigest() in TARGET_HASHES for row in ids)
+                  assert db.execute('PRAGMA quick_check').fetchall()==[('ok',)] and db.execute('PRAGMA foreign_key_check').fetchall()==[]
+                  counts={s:db.execute('SELECT count(*) FROM delivery_events WHERE status=?',(s,)).fetchone()[0] for s in ('failed','delivered','queued','sent','suppressed','bounced','complained','delayed')}
+                  counts['total']=len(ids)
+                  assert db.total_changes==0
+              finally:db.close()
+              class NoRedirect(urllib.request.HTTPRedirectHandler):
+                  def redirect_request(self,*_):raise RuntimeError('Unexpected health redirect')
+              req=urllib.request.Request('https://tickets.becoreops.com/healthz',headers={'Cache-Control':'no-cache','User-Agent':'BeCoreTicketsReadOnlyVerification/1.0'})
+              with urllib.request.build_opener(NoRedirect()).open(req,timeout=15) as response:
+                  health=json.loads(response.read(65536));assert response.status==200 and health.get('revision')==ACTIVE and health.get('active') is True
+              print(json.dumps({'read_only':True,'deleted_target_hashes_absent':True,'verified_deleted_records':4,'remaining_delivery_counts':counts,'other_history_unchanged_at_transaction':True,'quick_check_ok':True,'foreign_key_violations':0,'public_health_status':200,'active_revision':ACTIVE,'resends':0,'new_deletions':0},sort_keys=True))
           if __name__=='__main__':
               try:main()
-              except Exception as error:print('Approved deletion stopped: '+(str(error) if isinstance(error,RuntimeError) else type(error).__name__),file=sys.stderr);sys.exit(1)
-          PYREMOVE
+              except Exception:print('Read-only cleanup verification stopped; private details suppressed.',file=sys.stderr);sys.exit(1)
+          PYVERIFY
