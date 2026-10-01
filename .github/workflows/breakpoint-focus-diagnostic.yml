@@ -1,0 +1,273 @@
+name: One-time breakpoint focus diagnostic
+
+on:
+  push:
+    branches: [ops/breakpoint-focus-b5dc843-20261001]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/breakpoint-focus-b5dc843-20261001'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      BECORE_RELEASE_SHA: b5dc843516e0f38a66d7bcaf823f57dceb95a166
+      SOURCE_TREE: 2a5d856b1c67b35a27badb83b4b37154edb0f8ed
+      BUILD_RUN: '36801064451'
+      BUILD_ARTIFACT: '11135407725'
+      BUILD_ZIP_SHA256: 5993b7a66c7a82f66c62b90404be752dd08163e48b8668488b928f8463fc15b9
+      BUILD_TAR_SHA256: 6bb1bdaee65ad32ecf5b791b488db52505b2ef7ad530567f0dcfdd84c43f7149
+      TEST_SHA256: e2226c2520848de23d126d0af5a941f8710a688fd9b97c81a1c6cd74355bf14c
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: b5dc843516e0f38a66d7bcaf823f57dceb95a166
+          persist-credentials: false
+      - name: Verify exact source and unchanged regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$SOURCE_TREE"
+          test "$(sha256sum tests/e2e/mobile-app-behavior.spec.ts | cut -d ' ' -f 1)" = "$TEST_SHA256"
+          test -z "${E2E_BASE_URL:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit
+      - name: Retrieve immutable attempt-one build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p focus-evidence "$RUNNER_TEMP/focus-build"
+          gh api "repos/bechirobob/tickets/actions/runs/$BUILD_RUN/attempts/1" > "$RUNNER_TEMP/focus-build/run.json"
+          gh api "repos/bechirobob/tickets/actions/artifacts/$BUILD_ARTIFACT" > "$RUNNER_TEMP/focus-build/artifact.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          folder = Path(os.environ['RUNNER_TEMP']) / 'focus-build'
+          run = json.loads((folder / 'run.json').read_text())
+          artifact = json.loads((folder / 'artifact.json').read_text())
+          sha = os.environ['BECORE_RELEASE_SHA']
+          assert run['id'] == int(os.environ['BUILD_RUN'])
+          assert run['run_attempt'] == 1 and run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['head_sha'] == sha and run['path'] == '.github/workflows/candidate-checks.yml'
+          assert artifact['id'] == int(os.environ['BUILD_ARTIFACT']) and artifact['expired'] is False
+          assert artifact['name'] == f"candidate-build-{sha}-{os.environ['BUILD_RUN']}-1"
+          assert artifact['workflow_run']['id'] == int(os.environ['BUILD_RUN'])
+          assert artifact['workflow_run']['head_sha'] == sha
+          assert artifact['digest'] == 'sha256:' + os.environ['BUILD_ZIP_SHA256']
+          Path('focus-evidence/source.json').write_text(json.dumps({
+            'source': sha, 'tree': os.environ['SOURCE_TREE'], 'buildRun': run['id'], 'buildAttempt': 1,
+            'artifactId': artifact['id'], 'artifactName': artifact['name'], 'zipSha256': os.environ['BUILD_ZIP_SHA256'],
+            'tarSha256': os.environ['BUILD_TAR_SHA256'], 'originalTestSha256': os.environ['TEST_SHA256'],
+            'testMode': 'Existing breakpoint assertion, 10 repeats, zero retries, local fixtures only',
+          }, indent=2) + '\n')
+          PY
+          # curl does not forward Authorization on the cross-host artifact redirect.
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/bechirobob/tickets/actions/artifacts/$BUILD_ARTIFACT/zip" \
+            --output "$RUNNER_TEMP/focus-build/build.zip"
+      - name: Verify both archive digests and restore the compiled build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, io, json, os, tarfile, zipfile
+          from pathlib import Path, PurePosixPath
+          archive = Path(os.environ['RUNNER_TEMP']) / 'focus-build/build.zip'
+          assert hashlib.sha256(archive.read_bytes()).hexdigest() == os.environ['BUILD_ZIP_SHA256']
+          with zipfile.ZipFile(archive) as zipped:
+            assert zipped.namelist() == ['browser-build.tar.gz']
+            contents = zipped.read('browser-build.tar.gz')
+          assert hashlib.sha256(contents).hexdigest() == os.environ['BUILD_TAR_SHA256']
+          with tarfile.open(fileobj=io.BytesIO(contents), mode='r:gz') as tar:
+            for member in tar.getmembers():
+              path = PurePosixPath(member.name)
+              assert not path.is_absolute() and '..' not in path.parts
+              assert path.parts[:2] in [('dist', 'client'), ('dist', 'server')]
+              assert member.isfile() or member.isdir()
+            tar.extractall('.', filter='data')
+          config = json.loads(Path('dist/server/wrangler.json').read_text())
+          assert config['vars']['RELEASE_SHA'] == os.environ['BECORE_RELEASE_SHA']
+          PY
+      - name: Install desktop Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Prepare isolated local fixtures
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Create temporary observation hooks without changing assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .focus-diagnostic
+          cat > .focus-diagnostic/focus-hooks.ts <<'TS'
+          import { test, type Page } from '@playwright/test';
+
+          type RecordEntry = Record<string, unknown>;
+          type Evidence = { events: RecordEntry[]; dropped: number };
+          const evidence = new WeakMap<Page, Evidence>();
+          declare global {
+            interface Window {
+              __becoreFocusEmit: (entry: RecordEntry) => Promise<void>;
+              __becoreFocusDiagnostic?: { flush: () => Promise<void> };
+            }
+          }
+
+          test.beforeEach(async ({ page }) => {
+            const log: Evidence = { events: [], dropped: 0 };
+            evidence.set(page, log);
+            await page.exposeBinding('__becoreFocusEmit', (_source, entry: RecordEntry) => {
+              if (log.events.length < 4000) log.events.push(entry);
+              else log.dropped++;
+            });
+            await page.addInitScript(() => {
+              // Observe only. Do not focus, delay, route, retry or change app state.
+              // No input values, text content, URLs, request data or storage is read.
+              let sequence = 0;
+              let dropped = 0;
+              const pending = new Set<Promise<void>>();
+              const media = matchMedia('(max-width: 760px)');
+              const describe = (target: EventTarget | null) => {
+                if (target === window) return 'window';
+                if (target === document) return 'document';
+                if (!(target instanceof Element)) return target === null ? null : 'other';
+                for (const [selector, label] of [
+                  ['.night-mobile-menu__trigger', 'menu-trigger'],
+                  ['.night-mobile-menu__close', 'menu-close'],
+                  ['.night-mobile-menu__panel a', 'menu-link'],
+                  ['.night-mobile-menu__panel', 'menu-panel'],
+                  ['input[type="search"]', 'search'], ['body', 'body'], ['html', 'html'],
+                ]) if (target.matches(selector)) return label;
+                return target.tagName.toLowerCase();
+              };
+              const record = (kind: string, details: Record<string, unknown> = {}) => {
+                if (sequence >= 1800) { dropped++; return; }
+                const entry = {
+                  sequence: ++sequence, kind, time: performance.now(), timeOrigin: performance.timeOrigin,
+                  activeElement: describe(document.activeElement), documentHasFocus: document.hasFocus(),
+                  visibility: document.visibilityState, mobile: media.matches,
+                  width: innerWidth, height: innerHeight,
+                  phase: document.querySelector('.night-mobile-menu__panel')?.getAttribute('data-phase') ?? null,
+                  expanded: document.querySelector('.night-mobile-menu__trigger')?.getAttribute('aria-expanded') ?? null,
+                  ...details,
+                };
+                const delivery = window.__becoreFocusEmit(entry).catch(() => {});
+                pending.add(delivery);
+                void delivery.finally(() => pending.delete(delivery));
+              };
+              for (const kind of ['focusin', 'focusout', 'focus', 'blur']) {
+                addEventListener(kind, event => record(kind, {
+                  target: describe(event.target), relatedTarget: describe((event as FocusEvent).relatedTarget),
+                }), true);
+              }
+              media.addEventListener('change', () => record('media-change'));
+              addEventListener('resize', () => record('resize'));
+              addEventListener('popstate', () => record('popstate'));
+              document.addEventListener('visibilitychange', () => record('visibility-change'));
+              const request = requestAnimationFrame.bind(window);
+              const cancel = cancelAnimationFrame.bind(window);
+              window.requestAnimationFrame = callback => {
+                const id = request(time => {
+                  record('raf-fire-before', { id, frameTime: time });
+                  try { callback.call(window, time); }
+                  finally { record('raf-fire-after', { id, frameTime: time }); }
+                });
+                record('raf-schedule', { id });
+                return id;
+              };
+              window.cancelAnimationFrame = id => { record('raf-cancel', { id }); cancel(id); };
+              document.addEventListener('DOMContentLoaded', () => {
+                record('dom-ready');
+                const root = document.querySelector('.night-mobile-menu');
+                if (root) new MutationObserver(() => record('menu-state')).observe(root, {
+                  subtree: true, childList: true, attributes: true,
+                  attributeFilter: ['aria-expanded', 'data-phase', 'inert', 'aria-hidden'],
+                });
+              }, { once: true });
+              window.__becoreFocusDiagnostic = {
+                flush: async () => {
+                  record('after-test', { droppedInDocument: dropped });
+                  await Promise.all([...pending]);
+                },
+              };
+              record('init');
+            });
+          });
+
+          test.afterEach(async ({ page }, info) => {
+            let flushError = false;
+            if (!page.isClosed()) {
+              try { await page.evaluate(() => window.__becoreFocusDiagnostic?.flush()); }
+              catch { flushError = true; }
+            }
+            const log = evidence.get(page) ?? { events: [], dropped: 0 };
+            await info.attach('focus-timing.json', {
+              body: JSON.stringify({
+                source: process.env.BECORE_RELEASE_SHA, repeat: info.repeatEachIndex, retry: info.retry,
+                status: info.status, expectedStatus: info.expectedStatus, flushError,
+                observationOnly: true, ...log,
+              }, null, 2),
+              contentType: 'application/json',
+            });
+          });
+          TS
+          cat > .focus-diagnostic/playwright.config.ts <<'TS'
+          import { defineConfig } from '@playwright/test';
+          import base from '../playwright.config';
+          export default defineConfig({
+            ...base,
+            testDir: '.', testMatch: 'mobile-app-behavior.spec.ts',
+            outputDir: '../test-results/focus-diagnostic',
+            workers: 1, retries: 0, fullyParallel: false,
+            reporter: [['line'], ['html', { open: 'never', outputFolder: 'playwright-report-focus' }], ['json', { outputFile: 'focus-evidence/results.json' }]],
+            projects: base.projects!.filter(project => project.name === 'desktop-chromium'),
+            use: { ...base.use, baseURL: 'http://127.0.0.1:8788', trace: 'on', screenshot: 'on' },
+            webServer: { command: 'node scripts/browser-worker.mjs public', cwd: process.cwd(), url: 'http://127.0.0.1:8788', reuseExistingServer: false, timeout: 120000 },
+          });
+          TS
+          python3 - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          source = Path('tests/e2e/mobile-app-behavior.spec.ts').read_bytes()
+          assert hashlib.sha256(source).hexdigest() == os.environ['TEST_SHA256']
+          prefix = b"import './focus-hooks';\n"
+          target = Path('.focus-diagnostic/mobile-app-behavior.spec.ts')
+          target.write_bytes(prefix + source)
+          assert target.read_bytes()[len(prefix):] == source
+          PY
+          git diff --exit-code
+      - name: Diagnose the unchanged breakpoint regression ten times without retries
+        run: >-
+          npx playwright test --config .focus-diagnostic/playwright.config.ts
+          --project desktop-chromium
+          --grep 'crossing the sheet breakpoint closes the old layout and releases only its owned history$'
+          --workers=1 --retries=0 --repeat-each=10 --trace=on
+      - name: Confirm tracked source remained unchanged
+        if: always()
+        run: git diff --exit-code
+      - name: Preserve every passing and failing trace and bounded focus log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: breakpoint-focus-b5dc843-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            focus-evidence
+            playwright-report-focus
+            test-results/focus-diagnostic
+            .focus-diagnostic/focus-hooks.ts
+            .focus-diagnostic/playwright.config.ts
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
