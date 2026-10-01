@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import {
   allowedWorkspaceReturn,
   adminCookieHeader,
@@ -73,6 +74,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const metadata = requestMetadata(request);
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
@@ -118,6 +123,10 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
   const metadata = requestMetadata(request);
@@ -156,10 +165,19 @@ export async function PUT(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session) return Response.json({ error: "Sign in is required." }, { status: 401 });
+  const metadata = requestMetadata(request);
+  if (!(await enforceCompositeRateLimit(env.LOGIN_RATE_LIMITER, [
+    `password-change-ip:${await hashToken(metadata.ip || "unknown")}`,
+    `password-change-account:${await hashToken(session.accountId)}`,
+  ]))) return Response.json({ error: "Too many password attempts. Wait a minute and try again." }, { status: 429, headers: { "cache-control": "no-store" } });
   const body = await request.json() as Partial<StaffPasswordPayload> & { currentPasswordProof?: string };
   const account = await env.DB.prepare(`
     SELECT password_hash AS passwordHash, password_salt AS passwordSalt, password_iterations AS passwordIterations
@@ -191,6 +209,10 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);

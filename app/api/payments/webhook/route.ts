@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { paystackEnvironment } from "../../../../lib/paystack-environment";
 import {
   applyRefundWebhook,
@@ -32,6 +33,10 @@ function transactionReference(data: Record<string, unknown> | undefined) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!env.PAYSTACK_SECRET_KEY) return new Response("Unavailable", { status: 503 });
   const raw = await request.text();

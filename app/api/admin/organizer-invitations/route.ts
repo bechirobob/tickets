@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasPermission, hashToken, mutationHasValidOrigin, readAdminSession, requestMetadata } from "../../../../lib/admin-session";
 import { ensureOrganizerAccess, organizerAccessStatus, type InvitationTarget } from "../../../../lib/organizer-invitations";
 import { retryFailedDeliveries } from "../../../../lib/email-delivery";
@@ -25,6 +26,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request, 1024);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error:"This request was not accepted." },{ status:403 });
   const raw = await request.text();
   if (raw.length > 1024) return Response.json({ error:"This request is too large." },{ status:413 });

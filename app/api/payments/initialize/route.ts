@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { couponQuote, couponUsage } from '../../../../lib/organizer-promotions';
 import { paystackAvailable, paystackEnvironment } from "../../../../lib/paystack-environment";
 import { registrationSettings, registrationsOpen } from "../../../../lib/registrations";
@@ -16,6 +17,10 @@ const RESERVATION_MINUTES = 15;
 const paystackProviders = { mtn: "mtn", telecel: "vod", at: "atl" } as const;
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
   type PaymentBody = { couponCode?: string; paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
   let body: PaymentBody;
@@ -131,8 +136,10 @@ export async function POST(request: Request) {
         AND NOT EXISTS (SELECT 1 FROM event_registration_settings registration WHERE registration.event_slug = event.slug AND (registration.mode <> 'paid' OR registration.accepting=0 OR (registration.closes_at IS NOT NULL AND registration.closes_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now')))) AND tier.id = ? AND tier.code = ?
         AND (event.status = 'published' OR (event.status = 'scheduled' AND event.scheduled_publish_at <= ?))
         AND event.schedule_status = 'confirmed'
-        AND (event.event_state IN ('on_sale', 'rescheduled') OR ? IS NOT NULL)
+        AND (event.event_state IN ('on_sale', 'rescheduled') OR (event.event_state = 'sold_out' AND ? IS NOT NULL))
         AND (tier.status = 'available' OR ? IS NOT NULL)
+        AND (? IS NULL OR EXISTS (SELECT 1 FROM event_waitlist_entries w WHERE w.id=?
+          AND w.event_slug=event.slug AND w.ticket_tier_id=tier.id AND w.status='offered' AND w.offer_expires_at>?))
         AND (COALESCE(tier.sales_open_at, event.sales_open_at) IS NULL OR COALESCE(tier.sales_open_at, event.sales_open_at) <= ?)
         AND (COALESCE(tier.sales_close_at, event.sales_close_at, event.starts_at) > ?)
         AND event.starts_at > ?
@@ -149,6 +156,7 @@ export async function POST(request: Request) {
     `).bind(
       id, selection.unitQuantity, selection.ticketCount, expiresAt, createdAt, createdAt,
       eventSlug, selection.tier.recordId, selection.tier.id, createdAt, offer?.id ?? null, offer?.id ?? null,
+      offer?.id ?? null, offer?.id ?? null, createdAt,
       createdAt, createdAt, createdAt, couponId, couponId, createdAt, createdAt, createdAt, email, paymentProvider, paymentMethod, createdAt, selection.ticketCount,
     ),
     env.DB.prepare(`
@@ -171,6 +179,9 @@ export async function POST(request: Request) {
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
       SELECT ?, ?, ?, ? FROM orders WHERE id = ?
     `).bind(id, claimTokenHash, new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), createdAt, id),
+    env.DB.prepare(`UPDATE event_waitlist_entries SET status='claimed',updated_at=?
+      WHERE id=? AND status='offered' AND EXISTS (SELECT 1 FROM orders WHERE id=? AND waitlist_entry_id=event_waitlist_entries.id)`)
+      .bind(createdAt, offer?.id ?? null, id),
   ]);
 
   if (reservation.meta.changes !== 1) {
@@ -186,10 +197,6 @@ export async function POST(request: Request) {
     userAgent: metadata.userAgent,
     acceptedAt: createdAt,
   });
-  if (offer) {
-    await env.DB.prepare("UPDATE event_waitlist_entries SET status = 'claimed', updated_at = ? WHERE id = ? AND status = 'offered'")
-      .bind(new Date().toISOString(), offer.id).run();
-  }
 
   const paymentMetadata = {
     orderId: id,

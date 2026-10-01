@@ -35,3 +35,49 @@ test('rate limits persist across process adapters without storing raw client ide
   } finally { db.close(); }
 });
 
+
+
+test('confirmation batches persist every unique delivery and preserve per-message delays', async () => {
+  const connection = new DatabaseSync(':memory:');
+  try {
+    const queue = new DeliveryQueue(connection);
+    const messages = [
+      { body: { deliveryId: 'order-confirmation:BCT-one' } },
+      { body: { deliveryId: 'order-confirmation:BCT-two' }, delaySeconds: 120 },
+    ];
+    await queue.sendBatch(messages);
+    await queue.sendBatch(messages);
+    assert.equal(connection.prepare('SELECT COUNT(*) AS n FROM delivery_queue').get().n, 2);
+    const rows = connection.prepare('SELECT available-created AS delay FROM delivery_queue ORDER BY available').all();
+    assert.deepEqual(rows.map(row => row.delay), [0, 120000]);
+    const received = [];
+    assert.equal(await queue.process(async batch => { received.push(batch.messages[0].body.deliveryId); batch.messages[0].ack(); }), true);
+    assert.deepEqual(received, ['order-confirmation:BCT-one']);
+    assert.equal(connection.prepare('SELECT COUNT(*) AS n FROM delivery_queue').get().n, 1);
+  } finally { connection.close(); }
+});
+
+for (const action of ['ack', 'retry']) test(`a stale queue consumer cannot ${action} a reclaimed delivery`, async () => {
+  const connection = new DatabaseSync(':memory:');
+  try {
+    const queue = new DeliveryQueue(connection);
+    await queue.send({ deliveryId: 'order-confirmation:BCT-leased' });
+    let finishOld;
+    const old = queue.process(async batch => {
+      await new Promise(resolve => { finishOld = resolve; });
+      batch.messages[0][action]();
+    });
+    connection.prepare('UPDATE delivery_queue SET lease=0').run();
+    let finishNew;
+    const current = queue.process(async batch => {
+      await new Promise(resolve => { finishNew = resolve; });
+      batch.messages[0].ack();
+    });
+    const held = connection.prepare('SELECT attempts,lease,available FROM delivery_queue').get();
+    assert.equal(held.attempts, 2);
+    finishOld(); await old;
+    assert.deepEqual(connection.prepare('SELECT attempts,lease,available FROM delivery_queue').get(), held);
+    finishNew(); await current;
+    assert.equal(connection.prepare('SELECT COUNT(*) AS n FROM delivery_queue').get().n, 0);
+  } finally { connection.close(); }
+});

@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../../lib/request-body';
 import { readAttendeeRoomAccess } from "../../../../../../lib/attendee-auth";
 import { mutationHasValidOrigin } from "../../../../../../lib/admin-session";
 
@@ -16,6 +17,10 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug } = await context.params;
   const { env } = await import("cloudflare:workers");
   const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug, false);

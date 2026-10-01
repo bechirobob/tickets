@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { ensureOrganizerAccess } from "../../../../lib/organizer-invitations";
 import { retryFailedDeliveries } from "../../../../lib/email-delivery";
 import { normalizeEventTagline, assertOriginalEventTagline } from "../../../../lib/event-copy";
@@ -51,6 +52,10 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const actor = await actorOrUnauthorized(request);
   if (!actor) return Response.json({ error: "Sign in is required." }, { status: 401 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });

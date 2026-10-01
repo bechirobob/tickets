@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { readAttendeeIdentity } from '../../../../lib/attendee-auth';
 import { mutationHasValidOrigin } from '../../../../lib/admin-session';
 import { cancelRegistration, promoteRegistrations, readRegistration, registrationSettings, registrationsOpen } from '../../../../lib/registrations';
@@ -13,6 +14,10 @@ export async function GET(request: Request) {
   return Response.json({ registrations: rows.results }, { headers: { 'cache-control': 'no-store, private' } });
 }
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This registration action was not accepted.' }, { status: 403 });
   const { env } = await import('cloudflare:workers');
   const identity = await readAttendeeIdentity(env.DB, request.headers.get('cookie'));

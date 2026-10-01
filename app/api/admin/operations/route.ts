@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { readOperationExceptions } from "../../../../lib/operations-exceptions";
 import { readAnalyticsBaseline } from '../../../../lib/analytics-baseline';
 import {
@@ -195,6 +196,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session || !hasPermission(session, "operations.view"))

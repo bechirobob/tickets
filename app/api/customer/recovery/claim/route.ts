@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from '../../../../../lib/attendee-auth';
 import { mutationHasValidOrigin } from '../../../../../lib/admin-session';
 import { accessLanding, customerAccessHeaders, readAccessToken, recoverableTickets } from '../../../../../lib/ticket-recovery';
@@ -5,6 +6,9 @@ import { accessLanding, customerAccessHeaders, readAccessToken, recoverableTicke
 export function GET(request: Request) { return accessLanding(request, 'recovery'); }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request, 512);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
   const headers = customerAccessHeaders();
   const invalid = () => Response.json({ error: 'That link has expired or already been used. Request a fresh one in My Nights.' }, { status: 400, headers });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This ticket request was not accepted.' }, { status: 403, headers });

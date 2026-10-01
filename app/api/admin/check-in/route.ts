@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, prepareAudit, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { hashGateToken, normalizeGateToken } from "../../../../lib/gate-pass";
 
@@ -83,6 +84,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await requireGateAdmin(request);
   if (!session) {
     return Response.json({ error: "Gate staff access required." }, { status: 401, headers: { "cache-control": "no-store" } });
@@ -166,6 +171,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session || !hasPermission(session, "gate.undo")) return Response.json({ error: "Supervisor access required." }, { status: 403 });

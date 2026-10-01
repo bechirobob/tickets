@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
 import { mutationHasValidOrigin, recordSecurityEvent, requestMetadata } from "../../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../../lib/security-controls";
@@ -21,6 +22,10 @@ async function allowBlockWrite(request: Request, attendeeId: string, slug: strin
 }
 
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug } = await context.params;
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This block request was not accepted." }, { status: 403 });
   const body = await request.json() as { attendeeId?: string };
@@ -48,6 +53,10 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
 }
 
 export async function DELETE(request: Request, context: { params: Promise<{ slug: string }> }) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug } = await context.params;
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This unblock request was not accepted." }, { status: 403 });
   const body = await request.json() as { attendeeId?: string };

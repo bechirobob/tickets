@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 
 async function access(request: Request) {
@@ -24,6 +25,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await access(request);
   if (!session) return Response.json({ error: "Curation access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This promoter action was not accepted." }, { status: 403 });

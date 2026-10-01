@@ -1,3 +1,4 @@
+import { boundedFormData, RequestBodyTooLarge } from "../../../lib/request-body";
 import { getDb } from "../../../db";
 import { partySubmissions } from "../../../db/schema";
 import { hashToken, mutationHasValidOrigin, requestMetadata, recordSecurityEvent } from "../../../lib/admin-session";
@@ -45,13 +46,18 @@ export async function POST(request: Request) {
       return Response.json({ error: "The complete submission must stay under 9 MB." }, { status: 413 });
     }
 
-    const form = await request.formData();
+    const form = await boundedFormData(request, 9 * 1024 * 1024);
     if (String(form.get("website") ?? "").trim()) {
       return Response.json({ accepted: true }, { status: 202 });
     }
     if (form.get("acceptedPolicies") !== "yes") return Response.json({ error: "Accept the organiser agreement before submitting." }, { status: 400 });
     const { env } = await import("cloudflare:workers");
     const contactEmail = String(form.get("contactEmail") ?? "").trim().toLowerCase();
+    if (contactEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(contactEmail)) {
+      return Response.json({ error: "Add a valid contact email address." }, { status: 400 });
+    }
+    const socialInput = String(form.get("socialUrl") ?? "").trim();
+    const socialUrl = socialInput ? requiredHttpUrl(form, "socialUrl") : null;
     const metadata = requestMetadata(request);
     const [ipRateAllowed, organizerRateAllowed] = await Promise.all([
       enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `submission-ip:${await hashToken(metadata.ip || "anonymous")}`),
@@ -118,7 +124,7 @@ export async function POST(request: Request) {
       capacity,
       priceFromMinor: Math.round(priceFrom * 100),
       ageRestriction: required(form, "ageRestriction", 20),
-      socialUrl: String(form.get("socialUrl") ?? "").trim() || null,
+      socialUrl,
       posterObjectKey,
       posterContentType,
       posterData: Buffer.from(posterBytes),
@@ -142,6 +148,7 @@ export async function POST(request: Request) {
     }
     return Response.json({ id, reference: `BC-${id.slice(0, 8).toUpperCase()}`, status: record.status }, { status: 201 });
   } catch (error) {
+    if (error instanceof RequestBodyTooLarge) return Response.json({ error: "The complete submission must stay under 9 MB." }, { status: 413 });
     const message = error instanceof Error ? error.message : "We could not save this submission.";
     return Response.json({ error: message }, { status: 400 });
   }

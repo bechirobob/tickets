@@ -9,6 +9,23 @@ export function contentSecurityPolicy(nonce: string): string {
   return `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; media-src 'self' blob:; worker-src 'self' blob:`;
 }
 
+/** Only already-public, flat static artwork paths may be embedded by packaged clients.
+ * API uploads, draft/private media, nested paths and encoded/traversal names stay private.
+ * No CORS credentials or API access is granted by this resource-embedding policy.
+ */
+export function publicArtworkPath(path: string): boolean {
+  return /^\/(?:events|hosts)\/[a-z0-9][a-z0-9_-]{0,119}\.(?:webp|png|jpe?g|avif)$/iu.test(path);
+}
+
+function publishedMediaResponse(response: Response, path: string): boolean {
+  return /^\/api\/media\/[a-z0-9][a-z0-9_-]{0,119}$/iu.test(path)
+    && response.status === 200
+    && ["image/jpeg", "image/png", "image/webp"].includes(response.headers.get("content-type") ?? "")
+    && response.headers.get("cache-control") === "public, max-age=0, must-revalidate"
+    && response.headers.get("cross-origin-resource-policy") === "cross-origin"
+    && !response.headers.has("set-cookie");
+}
+
 export function securityResponse(response: Response, nonce = requestNonce(), path = ""): Response {
   const headers = new Headers(response.headers);
   if (!headers.has("Content-Security-Policy")) headers.set("Content-Security-Policy", contentSecurityPolicy(nonce));
@@ -31,7 +48,7 @@ export function securityResponse(response: Response, nonce = requestNonce(), pat
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
   headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  headers.set("Cross-Origin-Resource-Policy", publicArtworkPath(path) || publishedMediaResponse(response, path) ? "cross-origin" : "same-origin");
   headers.delete("X-Powered-By");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

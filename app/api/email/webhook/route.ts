@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { applyDeliveryWebhook } from "../../../../lib/email-delivery";
 
 function decodeBase64(value: string) {
@@ -26,6 +27,10 @@ async function validSignature(raw: string, id: string, timestamp: string, signat
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!env.RESEND_WEBHOOK_SECRET) return new Response("Unavailable", { status: 503 });
   const raw = await request.text();

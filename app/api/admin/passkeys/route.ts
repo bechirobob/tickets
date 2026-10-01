@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 import { mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { beginPasskeyRegistration, finishPasskeyRegistration } from "../../../../lib/staff-passkeys";
@@ -17,6 +18,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session) return Response.json({ error: "Sign in is required." }, { status: 401 });
@@ -36,6 +41,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session) return Response.json({ error: "Sign in is required." }, { status: 401 });

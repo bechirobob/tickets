@@ -59,36 +59,97 @@ APPLICATION_FILES = {
 # Exact reviewed application outputs for the app-experience increment. This is
 # deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
 REVIEWED_APPLICATION_BLOBS = {
-    "public/devices/iphone-titanium-front.svg": "9b3995ea6e27f358d03816d603f96466fa8e9acd",
-    "app/use-room-demo.ts": "7ea2ec4191b5f5b9dff10cdfa2925a69514a434f",
-    "app/room-preview-carousel.tsx": "dfe945d41d18bab7d04a02fe008432671d8a08c3",
-    "app/room-demo.css": "c20cebf43c61a736a84af67e710d32916a0e81a8",
-    "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
-    "app/segmented-control.tsx": "d68e0038b37928467b25f62780a91ffd61b82eac",
-    "app/segmented-control.css": "b4b85d7656046b56447728a292b2f70e30127c14",
-    "app/organizer/analytics/organizer-analytics.tsx": "c89f3ca78804491b5fec4048d7aa049b9146b011",
-    "app/my-nights/[slug]/night-hub.tsx": "ffda3dff3c3fa47e4b3805873298a36681dbb487",
-    "app/event-explorer.tsx": "27c001bd0ba7742b251a7f03252c3dbaf5b2a3fe",
-    "app/discovery.css": "1a7f0dd172987dcc84c156dac0685237cbcb1e94",
     ".github/workflows/browser-audit.yml": "266d11a65a580809689c806cc93ca06ebaa25858",
     ".github/workflows/candidate-checks.yml": "9f88c33d06ba1666221482f9817d8c770be06893",
-    "app/active-night-experience.tsx": "ec9f28d2da1c9d997307463707938640ed740cff",
+    ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
+    ".github/workflows/full-audit-capacity.yml": "67ea27fb202cf216596bd27d73e51515f656b19c",
+    ".github/workflows/tickets-readiness-audit.yml": "f47378c33914b0005ec15598fb0f9110d6882c6d",
+    "README.md": "d104e3598aadc56d2d410dedf7c25b95570bc90c",
+    "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
+    "app/account/privacy/privacy-settings.tsx": "b04b3a832f8e0acdc33e95952875801191a579ef",
+    "app/active-night-experience.tsx": "7627990fbd1f6fbb15a340ae1c01a7421164a5e8",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/admin/login/login-form.tsx": "ee7957582f7e959106766fb4b418f6524766d386",
     "app/admin/operations/event-operations-hub.tsx": "5f76745b78170bcaa8b4b59a8a41d4acd3ab4c83",
-    "app/admin/orders/order-operations.tsx": "303053bb1c16089966bef372f83652424d3a912a",
+    "app/admin/orders/order-operations.tsx": "4595067c2c8c9eebd2c824d711ab9b80357d5e26",
     "app/admin/orders/page.tsx": "358e1bc0a8b75d8e2036ff0217e03e3d8a690f61",
     "app/admin/orders/provider-case-form.tsx": "d4070f19c7ff040b80b5b898720a2b6f4821ae94",
     "app/admin/orders/provider-tracking.css": "94b8fc95e2d3c314039913f4a32fe7f834adcd9b",
-    "app/api/admin/operations/route.ts": "9453bb41c5541d5ac85a39a83960301124126eec",
-    "app/api/admin/orders/route.ts": "ce1f0e1ba9dedf372890cd7b24c5e9ab9c094cfb",
-    "app/api/organizer/business/route.ts": "79360f2c8430ee3dc65e0edf8e05cca6b6164afe",
-    "app/api/organizer/team/accept/route.ts": "b365543775898855e77fa06566d11b24d3abd10e",
+    "app/admin/recover/recovery-form.tsx": "ff13d13d262994352f6075fc939ffbecffa23cf9",
+    "app/api/admin/accounts/route.ts": "39d1045033f62f4adf3d3bb9923ab7eb582209fb",
+    "app/api/admin/audience/route.ts": "afd964f61a4562b9645bbbe6dc80c3ca73e0721e",
+    "app/api/admin/bootstrap/route.ts": "eee09caf675f70c541fc44be3d439dae252279fb",
+    "app/api/admin/campaigns/route.ts": "ab71777a32bee7da2587fef31c349fd255926ada",
+    "app/api/admin/check-in/route.ts": "cc4a9a5c8385ef45b40a61f5dcd69f8e150d62e2",
+    "app/api/admin/door/route.ts": "daa101c2705f7840713d999ebd28dfc59c548f49",
+    "app/api/admin/events/removal/route.ts": "b96e133d328b61ab595e44a01b835b6c110d6c15",
+    "app/api/admin/events/route.ts": "9ce5f1ad64d193390c43102c3de112aaae1375d4",
+    "app/api/admin/host-applications/route.ts": "42eec212b69a889c142c342b8fd1d5770b2687fd",
+    "app/api/admin/operations/route.ts": "3bb93ada96792a026e88ce23758a74c679a974dc",
+    "app/api/admin/orders/route.ts": "445a090d14b9899721901ec067a88393e2b2de89",
+    "app/api/admin/organizer-activity/route.ts": "55e329829de87408906533f878872c9b9e3b3a4b",
+    "app/api/admin/organizer-invitations/route.ts": "d09f93e647bfc0cbbb964652fc42dde1956b99bc",
+    "app/api/admin/passkeys/route.ts": "45400f1c39e84a30385bba9447096c3af12783f9",
+    "app/api/admin/promoters/route.ts": "691f389e6acfd5c123c34e1559047a22e5b5020c",
+    "app/api/admin/recovery/route.ts": "9f5835d36613c643125f066cd55b66dba3a857f5",
+    "app/api/admin/registrations/route.ts": "4620df0aaf3ac2167a45d2af5a204fa5ee3ca52f",
+    "app/api/admin/rooms/route.ts": "c6205c1e216d3dc27c7cfdcf3144fc3ad4070d65",
+    "app/api/admin/session/route.ts": "8e068ea9a269991b3a2d30b621ad35684cb33723",
+    "app/api/admin/submissions/route.ts": "9449f177f04e05d1c3d4dff1564072b11e288010",
+    "app/api/admin/support/route.ts": "4f43a1e69eb7cf7c1a3f3922b5cbf67afd7b3471",
+    "app/api/analytics/route.ts": "b4ff36aba06b9fbd5f56bbbcbb0572388832dd8d",
+    "app/api/announcements/unsubscribe/route.ts": "df474780f499a18c561f2a957253b7dc9a01aecb",
+    "app/api/config/booking-fee/route.ts": "1ed72177a2a34fbfb20124965f95da977492e886",
+    "app/api/customer/experience/[slug]/route.ts": "160798eefef97900258aedcbd06e2c0e075fc475",
+    "app/api/customer/notifications/preferences/[slug]/route.ts": "609e4daac5e8d070c897ac90d75fca6e51e386d5",
+    "app/api/customer/notifications/route.ts": "02de8003b110c8add50f2d75d024a44e15164e5d",
+    "app/api/customer/notifications/subscription/route.ts": "0caa626c7e4280f9996f4b31b2a4e973fd541d09",
+    "app/api/customer/notifications/test/route.ts": "9c19d117ecae64463ae5d2391b2429ae965e283d",
+    "app/api/customer/preferences/route.ts": "a37a2b56facb1c370f6c43280ddceb8e771094cb",
+    "app/api/customer/privacy/route.ts": "627451c277db3d9f1a6c4f07ea5b7ecc9165b712",
+    "app/api/customer/recovery/claim/route.ts": "3e0156f04c0ea06dc74f94970f22203663f7b499",
+    "app/api/customer/recovery/route.ts": "0f2059fcb5c20222756c6ec9174c10ac58a7cdae",
+    "app/api/customer/registrations/route.ts": "975428e5c4b3d8da9931a8cceaaae01efbbe8b80",
+    "app/api/customer/returns/route.ts": "2a7a3b5b5b44a7e3b21ec51d667ae5c9b2513911",
+    "app/api/customer/session/route.ts": "b20f8da2dc415e02b0005c33dccbff1c1d969ba6",
+    "app/api/customer/support/[slug]/route.ts": "dffd32322c1e870878fb5b8915f03b313d1d26c7",
+    "app/api/customer/transfers/claim/route.ts": "a7180053b01388293d0d344788876a3bb875bab5",
+    "app/api/customer/transfers/route.ts": "1059a16f04eb7be618431ae2b354c805950083c1",
+    "app/api/email/webhook/route.ts": "41d92572f62ef1526e52bdd69f97577b78c21c66",
+    "app/api/host-applications/confirm/route.ts": "7931324a2f6af90cd327a437512ffe61f02f8fdf",
+    "app/api/host-applications/route.ts": "8674d37bd4187de02526eeb39e7d88d09cb01b83",
+    "app/api/media/[id]/route.ts": "0a2abe456d7a0fc4d6b4d32d036fbff12a51e02f",
+    "app/api/organizer/activate/route.ts": "241596207d77a14eb3878c449252fb419febda62",
+    "app/api/organizer/assistant/route.ts": "a6f27a7d6e9bbcb535fb4394e83d41a6a0a225bd",
+    "app/api/organizer/business/route.ts": "b38ea5b0afc3e21713fb658890370e2f88f64472",
+    "app/api/organizer/reports/route.ts": "9ce231e9df04ca00c6cd80c2011185e250622481",
+    "app/api/organizer/team/accept/route.ts": "6726cc0bf08a38878540f4dd54c83c8e0e6c7648",
+    "app/api/organizer/workspace/route.ts": "cc4d7ed4ee18f6c8c3ef5084865cdab314e6e672",
+    "app/api/payments/initialize/route.ts": "abbb1f8040a09c7c094e3319ca360dae80c8cc29",
+    "app/api/payments/quote/route.ts": "9b483e873c82a3c2dccddfba55fa455a06c1386d",
+    "app/api/payments/seevplus/webhook/route.ts": "bfe1b94c32768cf5689c823195f0fd1e45064d68",
+    "app/api/payments/webhook/route.ts": "9197d6f67bcd7d172e2d344c744ba77012efda3f",
+    "app/api/promoter/route.ts": "9037908c9b60c828b79136674289b9fe48e221e2",
     "app/api/public/events/route.ts": "7893a675d91939964c96808f30b87d1a71aeb26a",
+    "app/api/registrations/claim/route.ts": "ab509df1fa78aafe06655505a9ec69f8b5eb5d7a",
+    "app/api/registrations/route.ts": "2fa745f4f4fc205390f351fc235e4bb6e84fe20e",
+    "app/api/rooms/[slug]/block/route.ts": "c539eaf68f271bebc5bb0c5a125fbf71bd67c2af",
+    "app/api/rooms/[slug]/flashes/[id]/report/route.ts": "67afcc73600e25a221bc39960d84d19d3027257d",
+    "app/api/rooms/[slug]/flashes/[id]/route.ts": "2f38f44cd8f938c38190ca8c4707402877ea6635",
+    "app/api/rooms/[slug]/flashes/route.ts": "5810834ccc987c3ba329db3e9399bab445da0bfa",
+    "app/api/rooms/[slug]/report/route.ts": "c7ac4e96365c1ad32320ffb8f47e451bc07aa837",
+    "app/api/rooms/[slug]/vip/route.ts": "cfde6eff9677c70bd92e25c612119ad1203850c7",
+    "app/api/submissions/route.ts": "b756b05cc321fcc6cfa6680a9981d4b037b940a2",
+    "app/api/waitlist/route.ts": "0c11daf732b8ab7924816537c8f43ebb3d1226db",
+    "app/api/wallet/apple/v1/devices/[deviceLibraryId]/registrations/[passTypeIdentifier]/[serialNumber]/route.ts": "53d429c88170cea0cb376c25d8dbdb84febc3abc",
+    "app/api/wallet/apple/v1/log/route.ts": "3fbfc4213812e6066d3d44177762f4ee7a5ff567",
     "app/customer-dock.tsx": "18a4264821dd0af9700f88edc046a109ef458ab0",
     "app/discovery-back-link.tsx": "1b4ca8d4348b1a940c18b1aa9327a8a764b4c631",
+    "app/discovery.css": "1a7f0dd172987dcc84c156dac0685237cbcb1e94",
+    "app/event-explorer.tsx": "27c001bd0ba7742b251a7f03252c3dbaf5b2a3fe",
     "app/event/[slug]/event-screen.tsx": "3700cc0de1f68a63912d9caf428d48908ee266e4",
     "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
+    "app/globals.css": "47ac30d9300a709feeca94ede7c950ea2fc5255f",
     "app/help/help-centre.tsx": "f0b4617a6a6b704aefc81bfa1e2744377c18b026",
     "app/home-screen.tsx": "b629019108100f15889edaccd6ac1ee21d4e436d",
     "app/hosts/page.tsx": "f5d2b1129968ba51dc95a6208a408e60f200b05b",
@@ -96,53 +157,77 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/layout.tsx": "056b004843736b4c37bf6f1ea256fd1b8ab9e0b7",
     "app/mobile-app-frame.tsx": "33559c6475f4b025e821b33c13d55a5b062391e9",
     "app/mobile-navigation.tsx": "cc9e7844b263a473f590b749de26c9c4d91d0773",
+    "app/my-nights/[slug]/night-hub.tsx": "ffda3dff3c3fa47e4b3805873298a36681dbb487",
     "app/my-nights/my-nights-client.tsx": "f337d0fe7a5837ecb0447689dc92f5322aefab8d",
+    "app/organizer/activate/activation-form.tsx": "bb4014c48d2f84e7e7d865f85bf744cccc05bc65",
+    "app/organizer/analytics/organizer-analytics.tsx": "c89f3ca78804491b5fec4048d7aa049b9146b011",
+    "app/organizer/join/confirm/confirm-application.tsx": "6aa1f5de46680858a77c69673d032ec24630d512",
     "app/organizer/layout.tsx": "64f7c8b3f26dc0b06ad9fe7dbe6a729d5477fa99",
-    "app/organizer/team/accept/accept-invitation.tsx": "07200cb844273d05589d6bbd0ac77de565ff2592",
+    "app/organizer/team/accept/accept-invitation.tsx": "f629b25c9bf1dd0440a036a54777f04a20ba5c34",
     "app/organizer/workspace/host-start.tsx": "5bbea7dfe02494f50630a4fec30d0ee26fe02185",
     "app/organizer/workspace/organizer-suite.tsx": "862a58d8943098467ae3f8bfb026d3ce4201eea8",
+    "app/organizer/workspace/page.tsx": "13657322abdb8645e203ac6e1b3ea982de2332f3",
     "app/organizer/workspace/suite-promote.tsx": "3cf32f511abc810e8758346a929f011ec55f99c5",
     "app/organizer/workspace/suite-records.tsx": "418120b13234eee93fd9f43d9225a3557035555c",
     "app/payment-footer.tsx": "bd75bc7b041ebe776877a668a6417a787f020e98",
+    "app/promoter/promoter-portal.tsx": "a3a61075a0d532c1f027cb05f723c6f88e8dbf0c",
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
     "app/registration-form.tsx": "892574dd3198a410d5fea00232e607783d2e77df",
     "app/registration-manager.tsx": "cd0b22d16d2ff9bd45adbd917744a3248e2cb04e",
+    "app/room-demo.css": "c20cebf43c61a736a84af67e710d32916a0e81a8",
     "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
+    "app/room-preview-carousel.tsx": "dfe945d41d18bab7d04a02fe008432671d8a08c3",
     "app/room/[slug]/room-client.tsx": "043000a1a4d51ea07acd170046f4898894a3945e",
     "app/rsvp/[slug]/page.tsx": "40ba4869d74f15e722834a9e682bc0867e2b054a",
+    "app/rsvp/access/page.tsx": "02c302374244f4e73436acdc2dc80d99e8326d86",
     "app/scan/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/scan/page.tsx": "14c9facaac5aadd32c63bea083b8bf5c2d034874",
     "app/scan/scanner.tsx": "69d9bf7cf154bc7b7aaeca6a7bf26ab5d083a085",
+    "app/segmented-control.css": "b4b85d7656046b56447728a292b2f70e30127c14",
+    "app/segmented-control.tsx": "d68e0038b37928467b25f62780a91ffd61b82eac",
     "app/support-email.tsx": "98bc769b8cb2b34ae363a488b1e6c343c6399921",
     "app/terms/page.tsx": "419f0978b0e03084cc99738a6404c3f132f93bef",
     "app/use-header-panel.ts": "24a3e6e3fb54ed67b28c348d77f1b92e60310448",
     "app/use-layer-history.ts": "8f6421c896a29e90ff1f2bd5742f677c6543a2d2",
+    "app/use-room-demo.ts": "7ea2ec4191b5f5b9dff10cdfa2925a69514a434f",
     "app/workspace-chrome.tsx": "f6b90f36cec6914e9b36570c52dd9c53870a5e70",
     "app/workspace.css": "8c3881d31c50a13246219e74262c27b542e36880",
     "db/schema.ts": "ee50c0c9821c0d4f47e5b0bfb86df6b902e11afb",
-    "lib/admin-session.ts": "85cee053c45355b40a7d6824cc1283f4768b744c",
+    "lib/admin-session.ts": "2e587fc729a69c667fb851d69d0053f0ac58527b",
     "lib/background-health.ts": "4793c1cd2a5204371e75495d9d1b218f24a0a092",
     "lib/customer-screen.ts": "9546a787d811e4a8351e16e30693639c26743b26",
+    "lib/email-delivery.ts": "6046a9696d8f3002c23d0af54e08fa93179e0ee5",
     "lib/event-guest.ts": "376bf08ff8b52898a4bbc3ab913ea0350134d1db",
+    "lib/operational-finance.ts": "7e910e7765074c174695ca32338dee0fd9ae0681",
     "lib/operations-exceptions.ts": "ad4ba837129ba67ffa08745bdb3ff6ea4c838800",
     "lib/organizer-team.ts": "0214111d285e2bb19ee95af1934df68307126919",
-    "lib/payment-operations.ts": "d2ab7cbca6f7ff9a7a1b2e86f9e88cb89240d899",
+    "lib/payment-operations.ts": "9935707757fe77069210f2f72b510ad09656b781",
     "lib/provider-operation-tracking.ts": "63288d84fa93f0a97ee01909a68a654272151cbb",
     "lib/registration-draft.ts": "633cdb6e22cb28a1c8002fab96da0bf9fe6eb91b",
     "lib/registration-guidance.ts": "16bf24b5c2c23fa18e1dd16d14563cbed33164b2",
+    "lib/request-body.ts": "3a948295f1551a837bd71e6cb45b46548db38c27",
     "lib/scanner-sync.ts": "68d45f670f1cf1d3a26c9ff10c5fbdbf21bb8243",
     "mobile/src/adapters/navigation.tsx": "475edbb849c70e265e5fbdff6931511b40138f52",
     "mobile/src/screen-catalogue.ts": "3c7030e0374696f31af397e7970be77173418194",
-    "mobile/tests/app.spec.ts": "1625439651312ebe4e8bb597d02bb0cdebeec255",
+    "mobile/tests/app.spec.ts": "8dc775ae5404008dbe34714639a0c0bd0a3fe904",
     "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
     "mobile/tsconfig.json": "be7802b84428c49a3ddeb14b79373b8cdae64234",
+    "mobile/vite.config.ts": "985e6a0bab112aeb54e470a7bd6a34bdeccf0b5e",
+    "ops/vps/audit-readiness.py": "0de0b0f96343bbd6acb3b2f800ec2e2983505d22",
+    "ops/vps/test_audit_readiness.py": "226ab932b1b851a4b2c0eb6ede8bc17e66e5bfa9",
+    "public/devices/iphone-titanium-front.svg": "9b3995ea6e27f358d03816d603f96466fa8e9acd",
+    "runtime/vps/queue.mjs": "67018da3a3683aca80661e29e64f0fd3e5a37e9c",
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
-    "scripts/capture-iphone-layouts.mjs": "ab21b98960ebbeaeaa43b45d7f88d641ac69daf0",
+    "scripts/capture-iphone-layouts.mjs": "862635516cbda29023eef741e59d75fb360ec46a",
     "scripts/iphone-layout-evidence.mjs": "32cafa40c84ab7e0610cb24537227f571317de37",
+    "scripts/verify-vps-runtime.mjs": "cce13d6b123abb4a7da7341a854de54f049fadef",
     "styles/customer.css": "c6d3cc402fcb37287444c9ac75777424ceeac891",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
-    "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b"
+    "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b",
+    "worker/security-response.ts": "3d9d92746405583edcd173694d763c868a1b09fd",
+    "worker/the-room.ts": "e6c0a8b1e39e20b939e3e322ebc44675b8bab7ed"
 }
+STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
 # Confirmed in the immutable pre-failure backup and generated from the original
 # handover writerGuardStatements(['hosts']). Never remove or disable these guards.
@@ -153,6 +238,15 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    STAFF_OWNER_GUARD_PATH: {
+        "blob": "72a0d09ba331f2e8463782ef016ba16c50a5d471",
+        "sha256": "0b790e43fdde094e465f88218fda35d222bbbba8b8f81aaa9e15eeb60737118a",
+        "schemaSha256": "3b79658f26d1f08041f51ed864867798771dbb60cd8456699f3451da4f057f2b",
+        "tables": [],
+        "triggers": {
+            "staff_last_active_owner_update_guard": "staff_accounts"
+        }
+    },
     "drizzle/0057_background_job_health.sql": {
         "blob": "d364b92ad1ab40981729f7fcd5cce862adc8138e",
         "sha256": "8cb7462bfbd7d6f4bdd4e1f8570486b392b8f22018986f6904d818d5e5687293",
@@ -342,7 +436,7 @@ def vetted_changes(expected, source):
                     "Application or additive schema differs from reviewed source: " + name)
             continue
         require(name in APPLICATION_FILES or name.startswith(("docs/", "tests/"))
-                or name in ("worker/handover.ts", "worker/security-response.ts"), "Unvetted source path: " + name)
+                or name == "worker/handover.ts", "Unvetted source path: " + name)
     if "worker/handover.ts" in changed:
         before = git("show", expected + ":worker/handover.ts")
         after = git("show", source + ":worker/handover.ts")
@@ -350,16 +444,8 @@ def vetted_changes(expected, source):
         require(before.count(original) == 1 and after == before.replace(
             original, "'SEEV_ENABLED', 'SEEV_CRYPTO_ENABLED', 'SEEV_ENVIRONMENT',"),
             "Only the vetted crypto configuration-name addition is permitted.")
-    if "worker/security-response.ts" in changed:
-        before = git("show", expected + ":worker/security-response.ts")
-        after = git("show", source + ":worker/security-response.ts")
-        anchor = '  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");\n'
-        addition = ('  if (path === "/checkout-preview" || path.startsWith("/checkout-preview/") || path === "/api/payments/preview") {\n'
-                    '    headers.set("Cache-Control", "no-store");\n'
-                    '    headers.set("X-Robots-Tag", "noindex, nofollow");\n'
-                    '  }\n')
-        require(before.count(anchor) == 1 and after == before.replace(anchor, anchor + addition),
-                "Only the vetted preview privacy-header rule is permitted.")
+    # Security-response changes require their exact entry in the reviewed blob
+    # manifest above; there is no broad header-policy or path-pattern exception.
     if ".github/workflows/tickets-release-operator-checks.yml" in changed:
         # Already-reviewed operator-only CI from the current main baseline.
         require(git("rev-parse", source + ":.github/workflows/tickets-release-operator-checks.yml")
@@ -533,6 +619,23 @@ def migration_plan(changes):
 
 
 def reviewed_migration(raw, specification):
+    if specification.get("path") == STAFF_OWNER_GUARD_PATH:
+        # Only this exact additive UPDATE guard is permitted. Do not broaden the
+        # general migration grammar or permit arbitrary existing-table triggers.
+        expected = dict(path=STAFF_OWNER_GUARD_PATH, **REVIEWED_MIGRATIONS[STAFF_OWNER_GUARD_PATH])
+        require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
+                and hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == expected["blob"],
+                "Staff owner guard differs from the exact reviewed source.")
+        with closing(sqlite3.connect(":memory:")) as temporary:
+            temporary.execute("CREATE TABLE staff_accounts (id TEXT PRIMARY KEY, role TEXT, status TEXT)")
+            before = schema_rows(temporary)
+            temporary.execute(raw.decode("utf-8"))
+            rows = [row for row in schema_rows(temporary) if row not in before]
+        require(len(rows) == 1 and rows[0][0] == "trigger"
+                and rows[0][1] == "staff_last_active_owner_update_guard"
+                and schema_digest(rows) == expected["schemaSha256"],
+                "Staff owner guard schema differs from reviewed source.")
+        return [raw.decode("utf-8")], rows
     if specification.get("kind") == "kofi-bills-public-verification":
         expected = dict(path=HOST_VERIFICATION_PATH, **REVIEWED_MIGRATIONS[HOST_VERIFICATION_PATH])
         require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]

@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../../lib/request-body';
 import { env } from "cloudflare:workers";
 import { mutationHasValidOrigin } from "../../../../../../lib/admin-session";
 import { readAttendeeRoomAccess } from "../../../../../../lib/attendee-auth";
@@ -35,6 +36,10 @@ const privateHeaders = { "cache-control": "private, no-store, max-age=0", "x-rob
 const viewIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export async function POST(request: Request, context: Context) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug, id } = await context.params;
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403, headers: privateHeaders });
   const body = await request.json().catch(() => null) as { viewId?: unknown } | null;
@@ -65,6 +70,10 @@ export async function POST(request: Request, context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug, id } = await context.params;
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403, headers: privateHeaders });
   const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug);
@@ -105,6 +114,10 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function DELETE(request: Request, context: Context) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug, id } = await context.params;
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
   const { access, flash } = await authorisedFlash(request, slug, id);

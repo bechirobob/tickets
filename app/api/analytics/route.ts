@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../lib/request-body';
 import { hashToken, mutationHasValidOrigin, requestMetadata } from "../../../lib/admin-session";
 import { isProductMetric, recordProductMetric, validAnalyticsSlug } from "../../../lib/product-analytics";
 import { enforceRateLimit } from "../../../lib/security-controls";
@@ -15,6 +16,10 @@ const clientMetrics = new Set([
 ]);
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return new Response(null, { status: 204 });
   // Release checks identify themselves; their visits must never become guest analytics.
   if (request.headers.get('x-becore-analytics') === 'exclude' || /HeadlessChrome|Playwright|bot|crawler|spider/iu.test(request.headers.get('user-agent') ?? '')) return new Response(null, { status: 204 });

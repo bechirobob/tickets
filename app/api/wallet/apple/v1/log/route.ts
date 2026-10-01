@@ -1,9 +1,14 @@
+import { limitRequestBody } from '../../../../../../lib/request-body';
 import { appleWalletUpdatesConfigured } from "@/lib/apple-wallet-updates";
 import { requestMetadata } from "@/lib/admin-session";
 import { hashToken } from "@/lib/attendee-auth";
 import { enforceRateLimit } from "@/lib/security-controls";
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!appleWalletUpdatesConfigured(env)) return new Response(null, { status: 404 });
   const metadata = requestMetadata(request);

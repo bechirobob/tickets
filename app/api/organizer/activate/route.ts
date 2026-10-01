@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { expiredAdminCookieHeader, hashToken, mutationHasValidOrigin, requestMetadata } from "../../../../lib/admin-session";
 import { claimOrganizerInvitation, inspectOrganizerInvitation } from "../../../../lib/organizer-invitations";
 import { isRecoveryToken, RECOVERY_ERROR } from "../../../../lib/staff-password-recovery-client";
@@ -5,6 +6,10 @@ import { enforceRateLimit } from "../../../../lib/security-controls";
 
 const headers = { "cache-control":"no-store", "referrer-policy":"no-referrer" };
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request, 4096);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const respond = (body: object,status: number) => Response.json(body,{ status,headers });
   if (!mutationHasValidOrigin(request)) return respond({ error:"This request was not accepted." },403);
   const { env } = await import("cloudflare:workers");

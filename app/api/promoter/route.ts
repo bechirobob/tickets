@@ -1,8 +1,13 @@
+import { limitRequestBody } from '../../../lib/request-body';
 import { hashToken,mutationHasValidOrigin,requestMetadata } from '../../../lib/admin-session';
 import { privateHeaders } from '../../../lib/organizer-access';
 import { promoterReport } from '../../../lib/organizer-promotions';
 import { enforceRateLimit } from '../../../lib/security-controls';
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request, 512);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if(!mutationHasValidOrigin(request))return Response.json({error:'Request not accepted.'},{status:403,headers:privateHeaders});
   const {env}=await import('cloudflare:workers');
   if(!await enforceRateLimit(env.LOGIN_RATE_LIMITER,`promoter-report:${await hashToken(requestMetadata(request).ip??'unknown')}`))return Response.json({error:'Give it a minute.'},{status:429,headers:privateHeaders});

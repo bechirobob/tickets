@@ -11,12 +11,23 @@ const out = process.env.LAYOUT_OUTPUT || path.join(tmpdir(), 'becore-iphone-layo
 await mkdir(out, {recursive:true});
 const candidate = process.env.LAYOUT_CANDIDATE === '1';
 const websiteOrigin = candidate ? 'http://127.0.0.1:8788' : 'https://tickets.becoreops.com';
-const websiteServer = candidate ? spawn(process.execPath, [path.join(repo, 'node_modules/wrangler/bin/wrangler.js'), 'dev', '--config', 'dist/server/wrangler.json', '--port', '8788', '--local', '--persist-to', '.wrangler/state'], {cwd: repo, stdio: 'inherit'}) : null;
+const websiteServer = candidate ? spawn(process.execPath, [path.join(repo, 'scripts/browser-worker.mjs'), 'public'], {cwd: repo, stdio: 'inherit'}) : null;
+let websiteServerFailure = null, stoppingWebsite = false;
+function checkWebsiteServer() { if (websiteServerFailure) throw websiteServerFailure; }
+function stopWebsiteServer() { stoppingWebsite = true; websiteServer?.kill(); }
 if (websiteServer) {
-  process.on('exit', () => websiteServer.kill());
+  process.on('exit', stopWebsiteServer);
+  websiteServer.once('error', error => { websiteServerFailure = new Error(`Candidate browser Worker failed to start: ${error.message}`); console.error(websiteServerFailure.message); });
+  websiteServer.once('exit', (code, signal) => { if (!stoppingWebsite) { websiteServerFailure = new Error(`Candidate browser Worker exited unexpectedly (code=${code}, signal=${signal ?? 'none'}). Capture is incomplete; no restart attempted.`); console.error(websiteServerFailure.message); } });
   let ready = false;
-  for (let i = 0; i < 120; i++) { try { if ((await fetch(websiteOrigin + '/api/version')).ok) { ready = true; break; } } catch {} await new Promise(resolve => setTimeout(resolve, 500)); }
-  if (!ready) throw new Error('Candidate website did not start');
+  const startupDeadline = Date.now() + 60_000;
+  while (Date.now() < startupDeadline) {
+    checkWebsiteServer();
+    try { if ((await fetch(websiteOrigin + '/api/version', {signal:AbortSignal.timeout(1000)})).ok) { ready = true; break; } } catch {}
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  checkWebsiteServer();
+  if (!ready) { stopWebsiteServer(); throw new Error('Candidate website did not start within 60 seconds.'); }
 }
 const webVersionResponse = await fetch(websiteOrigin + '/api/version' , {signal:AbortSignal.timeout(30000)});
 if(!webVersionResponse.ok) throw new Error('Website release identity unavailable');
@@ -37,12 +48,23 @@ if (candidate) {
     await captureWebsiteComparison({browser, device, outputDir:out, repo, candidateOrigin:websiteOrigin,
       sourceRevision:process.env.LAYOUT_SOURCE_SHA || process.env.GITHUB_SHA,
       expectedBaselineRevision:process.env.LAYOUT_BASELINE_SHA});
-  } catch (error) {await browser.close();server.kill();websiteServer?.kill();throw error;}
+  } catch (error) {await browser.close();server.kill();stopWebsiteServer();throw error;}
 }
 const context = await browser.newContext(device);
 const page = await context.newPage();
 const origin = 'https://tickets.becoreops.com';
 await page.route(`${origin}/api/public/events`, route => route.fulfill({json:catalogue,headers:{'access-control-allow-origin':'*'}}));
+if (candidate) {
+  // Native catalogue URLs point to production. During a candidate comparison,
+  // load its host artwork from the real candidate server and preserve headers.
+  // This keeps a not-yet-deployed public-image policy from mixing revisions.
+  await page.route(`${origin}/hosts/*`, async route => {
+    const source = new URL(new URL(route.request().url()).pathname, websiteOrigin).href;
+    const response = await route.fetch({url:source});
+    await route.fulfill({response});
+  });
+}
+
 await page.route(`${origin}/events/*`, async route => {
   const name = path.basename(new URL(route.request().url()).pathname);
   await route.fulfill({body:await readFile(path.join(repo,'public/events',name)),contentType:name.endsWith('.webp')?'image/webp':'image/jpeg'});
@@ -51,6 +73,7 @@ const pages=[];
 const parity=[];
 const appSnapshots=new Map();
 async function capture(title,kind='App screen',single=false) {
+  checkWebsiteServer();
   await page.evaluate(async()=>{
     await document.fonts.ready;
     // Home artwork below the fold is lazy-loaded. Request it before decoding;
@@ -62,7 +85,10 @@ async function capture(title,kind='App screen',single=false) {
       new Promise((_,reject)=>setTimeout(()=>reject(new Error('Image loading timed out')),15000)),
     ]);
   });
+  const brokenImages=await page.evaluate(()=>[...document.images].filter(image=>image.currentSrc&&(!image.complete||image.naturalWidth===0)).map(image=>image.currentSrc));
+  if(brokenImages.length)throw new Error(`Broken public images on ${title}: ${brokenImages.join(', ')}`);
   await page.waitForTimeout(250);
+  checkWebsiteServer();
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
   if(overflow) throw new Error(`Horizontal clipping: ${title}`);
   const max=await page.evaluate(()=>Math.max(0,document.documentElement.scrollHeight-innerHeight));
@@ -79,10 +105,11 @@ async function capture(title,kind='App screen',single=false) {
   const route = new URL(page.url()).pathname;
   if (['/', '/events', ...catalogue.events.map(event => '/event/' + event.slug)].includes(route)) {
     const snapshot = await page.evaluate(() => {
-      const selector = 'main h1, .drop-card h3, .drop-card__schedule, .event-detail-facts, .event-story-content, .compact-ticket-panel, .event-detail-toolbar, .customer-dock';
+      const selector = '.compact-hero, .compact-hero__image--active, main h1, .drop-card h3, .drop-card__schedule, .event-detail-facts, .event-story-content, .compact-ticket-panel, .event-detail-toolbar, .customer-dock';
       return [...document.querySelectorAll(selector)].map(element => {
         const style = getComputedStyle(element);
-        return { tag: element.tagName, text: element.textContent.replace(/\s+/g, ' ').trim(), font: style.fontFamily, size: style.fontSize, color: style.color };
+        const hero = element.matches('.compact-hero, .compact-hero__image--active');
+        return { tag: element.tagName, text: element.textContent.replace(/\s+/g, ' ').trim(), font: style.fontFamily, size: style.fontSize, color: style.color, ...(hero?{width:style.width,height:style.height,objectFit:style.objectFit,objectPosition:style.objectPosition,portraitCrop:element.getAttribute('data-portrait-crop')}: {}) };
       });
     });
     if (kind === 'App screen') appSnapshots.set(route, snapshot);
@@ -93,7 +120,7 @@ async function capture(title,kind='App screen',single=false) {
       if (!match) throw new Error(`App/browser screen mismatch: ${route}`);
     }
   }
-  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),websiteEnvironment:candidate?'candidate':'production',parity,catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.LAYOUT_SOURCE_SHA||process.env.GITHUB_SHA||null,websiteCommit:webVersion.revision,viewport:page.viewportSize(),engine:'Playwright WebKit on macOS, iPhone 13 viewport',pages},null,2));
+  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),websiteEnvironment:candidate?'candidate':'production',websiteHarness:candidate?'compiled browser-worker public mode':'production',parity,catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.LAYOUT_SOURCE_SHA||process.env.GITHUB_SHA||null,websiteCommit:webVersion.revision,viewport:page.viewportSize(),engine:'Playwright WebKit on macOS, iPhone 13 viewport',pages},null,2));
   console.log(`${title}: ${files.length} screenshots`);
   await page.evaluate(()=>scrollTo(0,0));
 }
@@ -123,4 +150,4 @@ try {
     await page.waitForTimeout(1500);
     await capture(title,'Mobile website');
   }
-} finally {await browser.close();server.kill();websiteServer?.kill();}
+} finally {await browser.close();server.kill();stopWebsiteServer();}

@@ -9,12 +9,18 @@ event staff.
 
 ## Runtime
 
-- Cloudflare Workers
-- D1 for transactional records and short-lived, size-capped media
-- Durable Objects with hibernating WebSockets for one isolated Room per event
-- Cloudflare Images transformations and Workers AI within their free allowances
-- Paystack Ghana for Mobile Money checkout
-- Vinext, React, TypeScript and Drizzle ORM
+The production application runs on the existing Tickets VPS service, behind the
+Cloudflare TLS/security edge. It uses Node.js, local transactional SQLite,
+persistent delivery jobs and WebSocket Rooms. Cloudflare Workers, D1 and Durable
+Objects remain the preserved fallback deployment; that copy is write-frozen while
+the VPS owns production. A return must transfer current data through the reviewed
+handover procedure, never just switch DNS to stale data.
+
+The shared application uses Vinext, React, TypeScript and Drizzle ORM. SeevPlus
+Mobile Money and separately gated USDC checkout are available alongside the
+Paystack integration. Provider availability and commercial acceptance are distinct
+from mocked tests. See [dual-hosting operations](docs/operations/dual-hosting.md)
+and [SeevPlus](docs/runbooks/seevplus.md).
 
 ## Local setup
 
@@ -33,32 +39,36 @@ Cloudflare credentials.
 - `npm run lint`
 - `npm run typecheck`
 - `npm test`
+- `npm run test:vps`
+- `python3 -m unittest discover -s ops/vps -p 'test_*.py'`
+- `npm run build:vps && node scripts/verify-vps-runtime.mjs`
 - `npx wrangler deploy --dry-run`
 - `npm run test:e2e:production` after deployment
 - `D1_EXPORT_FILE=/path/to/export.sql npm run recovery:rehearse`
 
 ## Deployment
 
-The Worker is built from `main`. CI generates binding types, audits production
-dependencies, lints, type-checks, runs the complete test suite, performs a
-Wrangler dry-run, captures the current D1 time-travel bookmark, applies pending
-versioned D1 migrations, and only then deploys the Worker. This order keeps the
-currently deployed code compatible while the additive schema update is applied
-and gives operators a precise pre-migration recovery point.
+Production release is an explicit main-only **Release verified Tickets VPS code**
+workflow. It requires the exact merged source, successful VPS-runtime artifact,
+equivalent-tree three-browser candidate verification and the expected active
+revision. Reviewed additive migrations get a private integrity-checked pre-change
+backup; the updater preserves the prior code release and verifies local and public
+health before reporting success. Normal Cloudflare deployment is intentionally
+blocked while the VPS is the active writer.
 
-Every successful deployment triggers a real-browser production audit in desktop
-Chromium, mobile Chromium and mobile WebKit. A weekly recovery workflow exports
-D1, restores it into an isolated temporary SQLite database, verifies integrity
-and required tables, uploads only a non-sensitive proof report, and deletes the
-customer-data export. The production restore procedure is documented in
-`docs/runbooks/d1-recovery.md`; destructive restoration is intentionally never
-automated.
+Successful releases trigger source-bound production browser audits. The scheduled
+**Tickets encrypted backup** workflow verifies a complete isolated restore and
+stores encrypted off-host evidence with 35-day retention. Restore and fallback
+procedures, single-writer constraints and dated runtime receipts are documented in
+[dual-hosting operations](docs/operations/dual-hosting.md). Historical D1 recovery
+is described separately in [the D1 runbook](docs/runbooks/d1-recovery.md); it is not
+proof that the live VPS was restored.
 
-Production requires the following encrypted Worker secrets:
-
-- `ADMIN_ACCESS_KEY` (one-time owner bootstrap only)
-- `PAYSTACK_SECRET_KEY`
-- `RESEND_API_KEY`
+Production credentials remain in private service-managed configuration and the
+existing secret stores. Required credentials depend on enabled payment/email
+features. Never place secret values in source, artifacts or logs. Existing owner
+bootstrap, account recovery and credential changes must use their documented
+flows; a release must not recreate the owner or replace authentication secrets.
 
 Public and staff mutations are protected without customer-facing challenges:
 same-origin enforcement, hashed per-identity/IP rate limits, account lockouts,
@@ -91,13 +101,13 @@ the default; no SeevPlus credentials are included in the repository.
 ## Operational security
 
 Staff sessions are random opaque credentials; only their SHA-256 hashes are
-stored in D1. Passwords use PBKDF2-HMAC-SHA-256 with 600,000 iterations and
+stored in the active transactional database. Passwords use PBKDF2-HMAC-SHA-256 with 600,000 iterations and
 per-account salts. Five consecutive failures lock an account for 15 minutes.
 State-changing operations enforce same-origin requests, named permissions and
 event assignments, and sensitive activity is written to the operational audit
-log. Public writes and sign-in are protected by Cloudflare rate-limit bindings.
-Worker logs are enabled at 100%, traces are sampled at 5%, and scheduled
-operational failures create durable alerts in D1.
+log. Public writes and sign-in use the runtime rate-limit adapter. Scheduled operation
+health and durable alerts are retained in the active database; monitoring and
+provider limits must be checked independently of a successful build.
 
 ## The Room access model
 
@@ -105,12 +115,12 @@ Room access is never granted by an event URL. Checkout creates a one-time,
 hashed order claim. After the signed Paystack webhook marks the order paid, the
 return flow exchanges that claim for an HttpOnly attendee session and assigns
 the issued tickets. Every WebSocket connection then re-checks the session,
-ticket assignment and ticket status in D1 before reaching the event's Durable
-Object. Full processed refunds, voided tickets and suspended profiles lose
+ticket assignment and ticket status in the active database before reaching the
+event's isolated Room runtime. Full processed refunds, voided tickets and suspended profiles lose
 access automatically.
 
 The Room supports text, replies, reactions, pinned organiser announcements,
 presence, reporting, blocking, moderation removal, rate limiting, automatic
 reconnection and temporary Flashes. Flash image bytes are privately served from
-D1 and permanently erased when the Room closes; only moderation metadata remains.
+the active database and permanently erased when the Room closes; only moderation metadata remains.
 The text conversation becomes a 72-hour post-event read-only archive.

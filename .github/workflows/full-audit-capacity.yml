@@ -1,0 +1,50 @@
+name: Full audit isolated VPS capacity
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/full-audit-capacity.yml', 'runtime/**', 'lib/**', 'app/api/**', 'drizzle/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: audit-capacity-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci --no-audit
+      - name: Build the exact isolated VPS candidate
+        run: npm run build:vps
+      - name: Verify compiled generic request and private runtime boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p capacity-results
+          node scripts/verify-vps-runtime.mjs 2>&1 | tee capacity-results/vps-runtime.log
+      - name: Verify 600 isolated guests, duplicate scans, Room delivery and restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p capacity-results
+          node -e 'const fs=require("node:fs"),os=require("node:os"); const release=JSON.parse(fs.readFileSync("dist-vps/release.json")); if(release.revision!==process.env.BECORE_RELEASE_SHA||release.dirty)throw Error("Unexpected capacity source"); console.log(JSON.stringify({revision:release.revision,node:process.version,cpus:os.cpus().length,memoryBytes:os.totalmem(),environment:"isolated hosted runner",productionDataTouched:false}));' > capacity-results/environment.json
+          node scripts/verify-vps-capacity.mjs 2>&1 | tee capacity-results/vps-capacity.log
+      - name: Preserve first-attempt capacity evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-vps-capacity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: capacity-results
+          if-no-files-found: warn
+          retention-days: 30

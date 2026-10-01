@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { recoverSeevPayment, validSeevCheckoutUrl, verifyOrderPayment } from "../../../../lib/seevplus";
 import {
   attendeeCookieHeader,
@@ -50,6 +51,10 @@ async function claimedPayment(db: D1Database, request: Request, reference?: stri
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) {
     return Response.json({ error: "This ticket request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
   }
@@ -198,6 +203,10 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) {
     return Response.json({ error: "This sign-out request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });
   }

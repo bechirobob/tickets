@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
 import { mutationHasValidOrigin } from "../../../../../lib/admin-session";
 import { resolveRoomPolicy } from '../../../../../lib/room-policy';
@@ -57,6 +58,10 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 }
 
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug } = await context.params;
   const { env, access } = await contextFor(request, slug);
   if (!access || access.roomBadge !== "VIP") return Response.json({ error: "VIP ticket access is required." }, { status: 403 });

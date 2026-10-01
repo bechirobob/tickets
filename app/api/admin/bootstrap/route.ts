@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import {
   adminCookieHeader,
   createPasswordRecord,
@@ -20,6 +21,10 @@ async function equalSecret(left: string, right: string): Promise<boolean> {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This setup request was not accepted." }, { status: 403 });
   const existing = await env.DB.prepare("SELECT COUNT(*) AS count FROM staff_accounts").first<{ count: number }>();

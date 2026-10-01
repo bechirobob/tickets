@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
 import { mutationHasValidOrigin, recordSecurityEvent, requestMetadata } from "../../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../../lib/security-controls";
@@ -5,6 +6,10 @@ import { enforceRateLimit } from "../../../../../lib/security-controls";
 const REASONS = new Set(["harassment", "spam", "impersonation", "unsafe", "other"]);
 
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug } = await context.params;
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This report was not accepted." }, { status: 403 });
   const body = await request.json() as { messageId?: string; reason?: string; details?: string };

@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
 import { mutationHasValidOrigin } from "../../../../../lib/admin-session";
 import { loadTicketedEventExperience } from "../../../../../lib/event-experience";
@@ -17,6 +18,10 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ slug: string }> }) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
   const { slug } = await context.params;
   const { env, attendee } = await access(request, slug);

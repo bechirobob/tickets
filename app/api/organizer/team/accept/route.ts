@@ -1,8 +1,13 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { hashToken,mutationHasValidOrigin,requestMetadata } from '../../../../../lib/admin-session';
 import { inspectTeamInvite,acceptTeamInvite } from '../../../../../lib/organizer-team';
 import { OrganizerError,privateHeaders } from '../../../../../lib/organizer-access';
 import { enforceRateLimit } from '../../../../../lib/security-controls';
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request, 4096);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if(!mutationHasValidOrigin(request))return Response.json({error:'Request not accepted.'},{status:403,headers:privateHeaders});
   const {env}=await import('cloudflare:workers');
   try{

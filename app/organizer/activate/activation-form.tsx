@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { prepareStaffPassword } from "../../../lib/staff-password-client";
+import { RequestError, requestJson, requestErrorMessage } from "../../../lib/client-request";
 import { RECOVERY_ERROR, isRecoveryToken } from "../../../lib/staff-password-recovery-client";
 
 export default function ActivationForm() {
@@ -10,6 +11,8 @@ export default function ActivationForm() {
   const [state, setState] = useState<"checking" | "ready" | "invalid" | "done">("checking");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [inspection, setInspection] = useState(0);
+  const [retryable, setRetryable] = useState(false);
 
   useEffect(() => {
     // Strip the bearer token from browser history before any request. It is kept
@@ -21,20 +24,19 @@ export default function ActivationForm() {
     window.history.replaceState(null, "", window.location.pathname);
     if (!isRecoveryToken(token.current)) { setState("invalid"); setError(RECOVERY_ERROR); return; }
     const controller = new AbortController();
-    void fetch("/api/organizer/activate", {
-      method: "POST", headers: { "content-type": "application/json" }, cache: "no-store",
-      body: JSON.stringify({ action: "inspect", token: token.current }),
-      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
-    }).then(async (response) => {
-      const result = await response.json() as { valid?: boolean; error?: string };
-      if (!response.ok || !result.valid) throw new Error(result.error ?? RECOVERY_ERROR);
+    void requestJson<{ valid?: boolean }>("/api/organizer/activate", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "inspect", token: token.current }), signal: controller.signal,
+    }).then((result) => {
+      if (!result.valid) throw new Error(RECOVERY_ERROR);
       if (!controller.signal.aborted) { setState("ready"); }
     }).catch((cause: unknown) => {
       if (controller.signal.aborted) return;
-      setState("invalid"); setError(cause instanceof Error && cause.name !== "TimeoutError" ? cause.message : "The connection timed out. Open your setup link again to retry.");
+      setRetryable(cause instanceof RequestError && (cause.status === null || cause.status === 429 || cause.status >= 500));
+      setState("invalid"); setError(requestErrorMessage(cause));
     });
     return () => controller.abort();
-  }, []);
+  }, [inspection]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -59,7 +61,7 @@ export default function ActivationForm() {
   }
 
   if (state === "checking") return <p role="status">Checking your private link…</p>;
-  if (state === "invalid") return <><p role="alert">{error}</p><Link href="/admin/login?returnTo=/organizer/workspace">Go to sign in</Link></>;
+  if (state === "invalid") return <><p role="alert">{error}</p>{retryable ? <div className="admin-login__form"><button type="button" onClick={() => { setError(""); setState("checking"); setInspection(value => value + 1); }}>Try checking again</button></div> : null}<Link href="/admin/login?returnTo=/organizer/workspace">Go to sign in</Link></>;
   if (state === "done") return <><p role="status">You’re set. Sign in with the email that received your invite and your new password.</p><Link href="/admin/login?returnTo=/organizer/workspace">Open my dashboard</Link></>;
   return <form className="admin-login__form" onSubmit={submit} aria-busy={busy}>
     <label htmlFor="recovery-password">Choose a password</label>

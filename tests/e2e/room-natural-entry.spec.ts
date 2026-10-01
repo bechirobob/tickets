@@ -65,7 +65,13 @@ for (const short of [false, true]) {
       for (let gesture = 0; gesture < 32; gesture++) {
         const current = await geometry(page);
         samples.push(current);
-        if (current.anchorVisible && current.running === "true") { entered = true; break; }
+        if (current.anchorVisible) {
+          // Scroll geometry settles before IntersectionObserver/React state.
+          // Keep the visible conversation in place while playback eligibility updates.
+          await expect(phone).toHaveAttribute("data-demo-running", "true");
+          entered = true;
+          break;
+        }
         const viewport = page.viewportSize()!;
         const x = Math.round(viewport.width * .55);
         const y = Math.min(viewport.height - 100, Math.round(viewport.height * .72));

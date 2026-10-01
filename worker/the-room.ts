@@ -58,6 +58,13 @@ type RoomPolicyInput = {
 
 const REACTIONS = new Set(["🔥", "❤️", "😂", "👏", "👀"]);
 const MAX_MESSAGE_LENGTH = 500;
+// Four tabs/devices per guest, with headroom above the verified 600-guest
+// workload. These are safety ceilings, not a throughput/SLA promise.
+export const ROOM_MAX_CONNECTIONS_PER_ATTENDEE = 4;
+export const ROOM_MAX_CONNECTIONS = 2048;
+const RATE_WINDOW_MS = 10_000;
+const RATE_ACTIONS = 5;
+type IdentityBudget = { windowStartedAt: number; count: number; lastMessageAt: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -71,6 +78,8 @@ function requiredHeader(request: Request, name: string): string {
 
 export class TheRoom extends DurableObject<Cloudflare.Env> {
   private presencePending = false;
+  private identityBudgets = new Map<string, IdentityBudget>();
+  private lastBudgetPrune = 0;
   private writerFrozen = false;
   private alarmRunning = false;
   private handoverDeferred = new Set<Promise<void>>();
@@ -277,6 +286,16 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     this.configure(policy);
     await this.scheduleFlashExpiry(policy);
 
+    // Check immediately before accepting, without an await between the count
+    // and insertion, so concurrent upgrades cannot all claim the last slot.
+    const sockets = this.ctx.getWebSockets().filter(socket => socket.readyState === WebSocket.OPEN);
+    const peers = sockets.filter(socket => (socket.deserializeAttachment() as ConnectionState | null)?.attendeeId === attendeeId);
+    if (sockets.length >= ROOM_MAX_CONNECTIONS || peers.length >= ROOM_MAX_CONNECTIONS_PER_ATTENDEE) {
+      this.ctx.acceptWebSocket(server);
+      server.close(1013, peers.length >= ROOM_MAX_CONNECTIONS_PER_ATTENDEE ? 'Close another Room tab before reconnecting' : 'Room is busy; try again shortly');
+      return;
+    }
+    const budget = this.identityBudget(attendeeId, peers);
     const attachment: ConnectionState = {
       attendeeId,
       sessionId: requiredHeader(request,"x-bct-session-id"),
@@ -288,9 +307,9 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       readOnlyAt: policy.readOnlyAt,
       emergencyReadOnly: Boolean(policy.emergencyReadOnly),
       slowModeSeconds: policy.slowModeSeconds ?? 0,
-      lastMessageAt: 0,
-      rateWindowStartedAt: Date.now(),
-      rateCount: 0,
+      lastMessageAt: budget.lastMessageAt,
+      rateWindowStartedAt: budget.windowStartedAt,
+      rateCount: budget.count,
     };
     server.serializeAttachment(attachment);
     this.ctx.acceptWebSocket(server);
@@ -326,14 +345,15 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }
 
     if (input.type === "message" || input.type === "reaction") {
-      const now=Date.now();
-      if (now - state.rateWindowStartedAt >= 10_000) {
-        state.rateWindowStartedAt = now;
-        state.rateCount = 0;
-      }
-      state.rateCount += 1;
-      socket.serializeAttachment(state);
-      if (state.rateCount > 5) {
+      const peers = this.ctx.getWebSockets().filter(peer => peer.readyState === WebSocket.OPEN
+        && (peer.deserializeAttachment() as ConnectionState | null)?.attendeeId === state.attendeeId);
+      const budget = this.identityBudget(state.attendeeId, peers);
+      budget.count = Math.min(RATE_ACTIONS + 1, budget.count + 1);
+      this.syncIdentityBudget(peers, budget);
+      state.rateWindowStartedAt = budget.windowStartedAt;
+      state.rateCount = budget.count;
+      state.lastMessageAt = budget.lastMessageAt;
+      if (budget.count > RATE_ACTIONS) {
         socket.send(JSON.stringify({ type: "error", error: "Slow down for a moment before posting again." }));
         return;
       }
@@ -346,11 +366,6 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         return;
       }
       const now = Date.now();
-      if (state.slowModeSeconds > 0 && now - state.lastMessageAt < state.slowModeSeconds * 1000) {
-        const wait = Math.ceil((state.slowModeSeconds * 1000 - (now - state.lastMessageAt)) / 1000);
-        socket.send(JSON.stringify({ type: "error", error: `Slow mode is on. Give it ${wait}s.` }));
-        return;
-      }
       const content = typeof input.content === "string" ? input.content.trim() : "";
       const parentId = typeof input.parentId === "string" ? input.parentId : null;
       if (!content || content.length > MAX_MESSAGE_LENGTH) {
@@ -366,6 +381,12 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         socket.close(4003, "Ticket access changed");
         return;
       }
+      const previousMessage = this.identityBudgets.get(state.attendeeId)?.lastMessageAt ?? state.lastMessageAt;
+      if (state.slowModeSeconds > 0 && now - previousMessage < state.slowModeSeconds * 1000) {
+        const wait = Math.ceil((state.slowModeSeconds * 1000 - (now - previousMessage)) / 1000);
+        socket.send(JSON.stringify({ type: "error", error: `Slow mode is on. Give it ${wait}s.` }));
+        return;
+      }
       state.roomBadge = currentBadge;
       const message = this.insertMessage({
         attendeeId: state.attendeeId,
@@ -379,6 +400,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       });
       state.lastMessageAt = now;
       socket.serializeAttachment(state);
+      const budget = this.identityBudgets.get(state.attendeeId)!;
+      budget.lastMessageAt = now;
+      this.syncIdentityBudget(this.ctx.getWebSockets().filter(peer => peer.readyState === WebSocket.OPEN
+        && (peer.deserializeAttachment() as ConnectionState | null)?.attendeeId === state.attendeeId), budget);
       this.broadcast({ type: "message", message });
       this.defer(notifyRoomMessage(this.env, {
         eventSlug: this.eventSlug(),
@@ -426,6 +451,39 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         emoji,
       ).one().count;
       this.broadcast({ type: "reaction", messageId, emoji, count, attendeeId: state.attendeeId, active: !existing });
+    }
+  }
+
+  private identityBudget(attendeeId: string, peers: WebSocket[]): IdentityBudget {
+    const now = Date.now();
+    if (now - this.lastBudgetPrune >= 60_000) {
+      for (const [id, budget] of this.identityBudgets) {
+        if (now - Math.max(budget.windowStartedAt, budget.lastMessageAt) >= 60_000) this.identityBudgets.delete(id);
+      }
+      this.lastBudgetPrune = now;
+    }
+    let budget = this.identityBudgets.get(attendeeId);
+    if (!budget) {
+      // Hibernated Durable Objects reconstruct the shared counter from socket
+      // attachments. All live sockets carry the same current identity budget.
+      const states = peers.map(peer => peer.deserializeAttachment() as ConnectionState | null).filter((state): state is ConnectionState => Boolean(state));
+      const current = states.filter(state => now - state.rateWindowStartedAt < RATE_WINDOW_MS);
+      budget = {
+        windowStartedAt: current.length ? Math.min(...current.map(state => state.rateWindowStartedAt)) : now,
+        count: current.length ? Math.max(...current.map(state => state.rateCount)) : 0,
+        lastMessageAt: states.length ? Math.max(...states.map(state => state.lastMessageAt)) : 0,
+      };
+      this.identityBudgets.set(attendeeId, budget);
+    }
+    if (now - budget.windowStartedAt >= RATE_WINDOW_MS) { budget.windowStartedAt = now; budget.count = 0; }
+    return budget;
+  }
+
+  private syncIdentityBudget(peers: WebSocket[], budget: IdentityBudget): void {
+    for (const peer of peers) {
+      const state = peer.deserializeAttachment() as ConnectionState | null;
+      if (!state) continue;
+      peer.serializeAttachment({ ...state, rateWindowStartedAt: budget.windowStartedAt, rateCount: budget.count, lastMessageAt: budget.lastMessageAt });
     }
   }
 

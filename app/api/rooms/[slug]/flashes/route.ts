@@ -1,3 +1,4 @@
+import { boundedFormData, RequestBodyTooLarge } from "../../../../../lib/request-body";
 import { env } from "cloudflare:workers";
 import { mutationHasValidOrigin, recordSecurityEvent, requestMetadata } from "../../../../../lib/admin-session";
 import { readAttendeeRoomAccess } from "../../../../../lib/attendee-auth";
@@ -108,7 +109,11 @@ export async function POST(request: Request, context: Context) {
     return Response.json({ error: "Flashes are at their temporary storage limit. Try again after older moments clear." }, { status: 507 });
   }
 
-  const form = await request.formData();
+  let form: FormData;
+  try { form = await boundedFormData(request, FLASH_MAX_UPLOAD_BYTES + 512_000); }
+  catch (error) {
+    return Response.json({ error: error instanceof RequestBodyTooLarge ? "Choose a photo under 6 MB." : "That photo upload could not be read." }, { status: error instanceof RequestBodyTooLarge ? 413 : 400 });
+  }
   const photo = form.get("photo");
   const consent = String(form.get("consent") ?? "") === "yes";
   if (!(photo instanceof File) || photo.size === 0 || !consent) {

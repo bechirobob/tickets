@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from '../../../../lib/admin-session';
 import { cancelRegistration, promoteRegistrations, readRegistration, registrationSettings, registrationShareState, registrationStartConfirmed, registrationScheduleReady } from '../../../../lib/registrations';
 async function access(request: Request, eventSlug: string) {
@@ -33,6 +34,10 @@ export async function GET(request: Request) {
   return Response.json({ settings, pricing, registrations: rows.results, counts: counts.results, total: total?.count ?? 0, offset }, { headers: { 'cache-control': 'no-store, private' } });
 }
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This event action was not accepted.' }, { status: 403 });
   const body = await request.json().catch(() => null) as { eventSlug?: string; action?: string; id?: string; mode?: string; capacity?: number; priceMinor?: number; maxPartySize?: number; approvalRequired?: boolean; roomAccess?: boolean; accepting?: boolean; closesAt?: string | null; notifyHost?: boolean } | null;
   if (typeof body?.eventSlug !== 'string') return Response.json({ error: 'Choose an event.' }, { status: 400 });

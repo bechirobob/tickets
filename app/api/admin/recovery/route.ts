@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { expiredAdminCookieHeader, hashToken, mutationHasValidOrigin, requestMetadata } from "../../../../lib/admin-session";
 import { enforceRateLimit } from "../../../../lib/security-controls";
 import { claimPasswordRecovery, inspectPasswordRecovery, isRecoveryToken, RECOVERY_ERROR } from "../../../../lib/staff-password-recovery";
@@ -7,6 +8,10 @@ const privateHeaders = { "cache-control": "no-store", "referrer-policy": "no-ref
 
 // Tokens arrive only in a POST body, never a request URL or access log.
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request, 4096);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const respond = (body: object, status: number) => Response.json(body, { status, headers: privateHeaders });
   if (!mutationHasValidOrigin(request)) return respond({ error: "This request was not accepted." }, 403);
   const { env } = await import("cloudflare:workers");

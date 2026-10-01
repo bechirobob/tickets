@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from '../../../../../lib/attendee-auth';
 import { createGateToken, hashGateToken } from '../../../../../lib/gate-pass';
 import { mutationHasValidOrigin } from '../../../../../lib/admin-session';
@@ -8,6 +9,9 @@ type Transfer = { id: string; ticketId: string; senderAttendeeId: string; recipi
 export function GET(request: Request) { return accessLanding(request, 'transfer'); }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request, 512);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
   const headers = customerAccessHeaders();
   const invalid = () => Response.json({ error: 'That ticket is no longer waiting here. Check My Nights or ask the sender for a fresh link.' }, { status: 409, headers });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This ticket request was not accepted.' }, { status: 403, headers });

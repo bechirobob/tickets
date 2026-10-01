@@ -991,3 +991,55 @@ test('organizer segmented views preserve drafts, guest loading guards and histor
   await expectSegmentedSelection(promotion);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
 });
+
+
+test('organizer deep links preserve validated task context through sign-in', async ({ page, context }, info) => {
+  await context.clearCookies();
+  for (const [path, expected] of [
+    ['/organizer/workspace?area=events&event=rsvp-browser&view=rsvp&tab=roster&status=requested', '/organizer/workspace?area=events&event=rsvp-browser&view=rsvp&tab=roster&status=requested'],
+    ['/organizer/assistant?event=rsvp-browser', '/organizer/workspace?area=desk&event=rsvp-browser'],
+    ['/organizer/workspace?area=unknown&event=https%3A%2F%2Fexample.com&view=unknown&tab=unknown&status=unknown&returnTo=https%3A%2F%2Fexample.com', '/organizer/workspace'],
+  ]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/admin\/login\?/);
+    expect(new URL(page.url()).searchParams.get('returnTo')).toBe(expected);
+    await expect(page.getByRole('heading', { name: 'Welcome back.', exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`organizer-login-${path.includes('assistant') ? 'assistant' : path.includes('unknown') ? 'invalid' : 'task'}.png`), fullPage: true });
+  }
+});
+
+test('existing owner closes bootstrap and the organizer alias preserves its workspace destination', async ({ page, context }, info) => {
+  await context.clearCookies();
+  await page.goto('/admin/bootstrap');
+  await expect(page).toHaveURL(/\/admin\/login$/);
+  await expect(page.getByRole('heading', { name: 'Welcome back.', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create owner account', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('bootstrap-closed.png'), fullPage: true });
+  await page.goto('/organizer');
+  await expect(page).toHaveURL(/\/admin\/login\?/);
+  expect(new URL(page.url()).searchParams.get('returnTo')).toBe('/organizer/workspace');
+  await page.screenshot({ path: info.outputPath('organizer-alias-login.png'), fullPage: true });
+});
+
+
+test('challenging a dispute points to the provider workflow without claiming evidence was submitted', async ({ page }, info) => {
+  let writes = 0;
+  await page.route('**/api/admin/orders**', route => {
+    if (route.request().method() !== 'GET') { writes++; return route.abort(); }
+    return route.fulfill({ json: { orders: [], events: [], total: 0, reconciliationRuns: [], settlements: [], disputes: [{ id: 'isolated-dispute', reference: 'BCT-DISPUTE-FIXTURE', status: 'awaiting-merchant-feedback', category: 'chargeback', amount_minor: 10000, due_at: null }] } });
+  });
+  await page.goto('/admin/orders');
+  await page.getByRole('button', { name: 'Disputes', exact: true }).click();
+  const dispute = page.locator('.finance-panels article').filter({ hasText: 'BCT-DISPUTE-FIXTURE' });
+  await expect(dispute).toBeVisible();
+  await expect(dispute.getByRole('button', { name: 'Challenge', exact: true })).toHaveCount(0);
+  const challenge = dispute.getByRole('link', { name: 'Challenge in Paystack', exact: true });
+  await expect(challenge).toHaveAttribute('href', 'https://dashboard.paystack.com/#/disputes');
+  await expect(challenge).toHaveAttribute('target', '_blank');
+  await expect(challenge).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(dispute).toContainText('Downloaded ticket evidence has not been submitted to the provider.');
+  expect(writes).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath('dispute-provider-handoff.png'), fullPage: true });
+});
