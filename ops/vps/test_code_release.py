@@ -1667,10 +1667,10 @@ class FailedReleaseDiagnosticTests(unittest.TestCase):
         self.assertEqual(str(self.diagnostic["SNAPSHOT"]),
                          "/var/lib/becore-tickets-handover/code-release-36804472437-1")
 
-    def test_inspection_has_no_deployment_database_or_write_commands(self):
+    def test_inspection_has_no_deployment_live_database_or_write_commands(self):
         job = self.job("inspect_failure")
         for forbidden in ("actions/checkout", " apply ", " restart", "daemon-reload", "rm --", "rmdir",
-                          "sqlite3", "runtime.json", "live-transfer.json", ".write(", "write_text",
+                          "runtime.json", "live-transfer.json", ".write(", "write_text",
                           "os.O_CREAT", "os.O_WRONLY", "os.O_RDWR", "unlink(", "rename(", "mkdir("):
             self.assertNotIn(forbidden, job)
         self.assertEqual(job.count("tailscale ssh root@hermes"), 1)
@@ -1679,6 +1679,9 @@ class FailedReleaseDiagnosticTests(unittest.TestCase):
         self.assertIn('fcntl.LOCK_SH | fcntl.LOCK_NB', self.source)
         self.assertIn('["systemctl", "show", "becore-tickets.service"', self.source)
         self.assertNotIn('os.environ', self.source)
+        self.assertEqual(self.source.count('sqlite3.connect('), 1)
+        self.assertIn('sqlite3.connect(backup.as_uri() + "?mode=ro&immutable=1", uri=True, timeout=3)', self.source)
+        self.assertIn('backup = SNAPSHOT / "database/before.sqlite"', self.source)
 
     def test_only_known_safe_error_fields_and_digests_can_be_printed(self):
         safe = self.diagnostic["safe_fields"]
@@ -1719,6 +1722,90 @@ class FailedReleaseDiagnosticTests(unittest.TestCase):
             path.write_text('[]')
             with self.assertRaises(RuntimeError):
                 read(path, os.geteuid())
+
+    def schema_fixture(self, status="reviewed", frozen=0):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        snapshot = Path(temporary.name)
+        (snapshot / "database").mkdir(mode=0o700)
+        backup = snapshot / "database/before.sqlite"
+        with release.sqlite3.connect(backup) as database:
+            database.execute("CREATE TABLE hosts (id TEXT PRIMARY KEY, slug TEXT, verification_status TEXT, private_text TEXT)")
+            database.execute("INSERT INTO hosts VALUES ('host:kofi-bills','kofi-bills',?,'never-print-personal-data')", (status,))
+            database.execute("CREATE TABLE IF NOT EXISTS _bct_handover_state(id INTEGER PRIMARY KEY CHECK(id=1), frozen INTEGER NOT NULL CHECK(frozen IN (0,1)), transfer_id TEXT NOT NULL)")
+            database.execute("INSERT INTO _bct_handover_state VALUES(1,?,'never-print-transfer-id')", (frozen,))
+            for operation in ("INSERT", "UPDATE", "DELETE"):
+                database.execute('CREATE TRIGGER IF NOT EXISTS "_bct_guard_hosts_' + operation.lower()
+                    + '" BEFORE ' + operation + ' ON "hosts" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 '
+                    + "BEGIN SELECT RAISE(ABORT,'Source writer is paused for verified handover'); END")
+        backup.chmod(0o600)
+        return snapshot, backup
+
+    def read_schema_fixture(self, snapshot, backup):
+        with patch.dict(self.diagnostic, {"SNAPSHOT": snapshot, "BACKUP_SCHEMA_DIGEST": release.digest_file(backup)}):
+            return self.diagnostic["backup_schema_evidence"](os.geteuid())
+
+    def test_backup_schema_only_read_matches_known_guards_and_exposes_no_rows(self):
+        snapshot, backup = self.schema_fixture()
+        before = backup.read_bytes()
+        connect = release.sqlite3.connect
+        with patch.object(release.sqlite3, "connect", wraps=connect) as opened:
+            evidence = self.read_schema_fixture(snapshot, backup)
+        opened.assert_called_once_with(backup.as_uri() + "?mode=ro&immutable=1", uri=True, timeout=3)
+        self.assertTrue(evidence["allHostsTriggersMatchKnownGuards"])
+        self.assertTrue(evidence["controlSchemaMatches"])
+        self.assertTrue(evidence["canonicalHostReady"])
+        self.assertEqual(evidence["hostsTriggerCount"], 3)
+        self.assertEqual(evidence["frozen"], 0)
+        self.assertEqual(evidence["reviewedBaselineCount"], 1)
+        self.assertEqual(backup.read_bytes(), before)
+        self.assertEqual({item.name for item in backup.parent.iterdir()}, {"before.sqlite"})
+        output = json.dumps(evidence)
+        for private in ("never-print", "host:kofi-bills", "CREATE TRIGGER", "SELECT RAISE", "kofi-bills"):
+            self.assertNotIn(private, output)
+
+    def test_backup_schema_reports_unknown_guards_without_sql_or_unrecognized_names(self):
+        snapshot, backup = self.schema_fixture()
+        with release.sqlite3.connect(backup) as database:
+            database.execute("CREATE TRIGGER private_trigger_name BEFORE UPDATE ON hosts BEGIN SELECT RAISE(ABORT,'private_sql_literal'); END")
+        evidence = self.read_schema_fixture(snapshot, backup)
+        self.assertFalse(evidence["allHostsTriggersMatchKnownGuards"])
+        self.assertEqual(evidence["hostsTriggerCount"], 4)
+        self.assertIn("unrecognized-redacted", json.dumps(evidence))
+        self.assertNotIn("private_trigger_name", json.dumps(evidence))
+        self.assertNotIn("private_sql_literal", json.dumps(evidence))
+
+    def test_backup_readiness_and_frozen_scalar_never_change_the_backup(self):
+        for status in ("reviewed", "verified", "unverified"):
+            with self.subTest(status=status):
+                snapshot, backup = self.schema_fixture(status=status, frozen=1)
+                before = backup.read_bytes()
+                evidence = self.read_schema_fixture(snapshot, backup)
+                self.assertEqual(evidence["frozen"], 1)
+                self.assertEqual(evidence["canonicalHostReady"], status in ("reviewed", "verified"))
+                self.assertEqual(evidence["reviewedBaselineCount"], int(status == "reviewed"))
+                self.assertEqual(evidence["verifiedBaselineCount"], int(status == "verified"))
+                self.assertEqual(backup.read_bytes(), before)
+        snapshot, backup = self.schema_fixture()
+        with release.sqlite3.connect(backup) as database:
+            database.execute("UPDATE _bct_handover_state SET frozen=0")
+            database.execute("UPDATE hosts SET slug='different'")
+        evidence = self.read_schema_fixture(snapshot, backup)
+        self.assertFalse(evidence["canonicalHostReady"])
+        self.assertEqual(evidence["canonicalIdentityMatchCount"], 0)
+
+    def test_backup_digest_or_sidecar_drift_prevents_any_database_open(self):
+        snapshot, backup = self.schema_fixture()
+        for sidecar in (False, True):
+            with self.subTest(sidecar=sidecar):
+                if sidecar:
+                    Path(str(backup) + "-wal").write_bytes(b"")
+                with patch.dict(self.diagnostic, {"SNAPSHOT": snapshot,
+                        "BACKUP_SCHEMA_DIGEST": release.digest_file(backup) if sidecar else "f" * 64}), \
+                        patch.object(release.sqlite3, "connect") as opened:
+                    with self.assertRaises(RuntimeError):
+                        self.diagnostic["backup_schema_evidence"](os.geteuid())
+                    opened.assert_not_called()
 
 
 if __name__ == "__main__":

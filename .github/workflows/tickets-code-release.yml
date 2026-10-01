@@ -193,6 +193,8 @@ jobs:
           from pathlib import Path
           import pwd
           import re
+          import sqlite3
+          import time
           import stat
           import subprocess
 
@@ -201,6 +203,14 @@ jobs:
           STATE = Path("/var/lib/becore-tickets")
           SNAPSHOT = Path("/var/lib/becore-tickets-handover") / ("code-release-" + RUN)
           SOURCE = "ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe"
+          BACKUP_SCHEMA_DIGEST = "9a6151e7e2ec13eded37237d0083002c4a0f0f09570ac74e5e0e92d9e484dc9f"
+          # Exact sqlite_schema fingerprints generated locally from writerGuardStatements(['hosts']).
+          KNOWN_HOST_GUARDS = {
+              "_bct_guard_hosts_delete": "444b3676092af1ff98b1385bf801469f846cd7453f8b8fb4cda2b45bdc3c9a11",
+              "_bct_guard_hosts_insert": "d1735171feb3d6a70de76224d2ad2c8417ce5a64e03e271a406fefba695c4571",
+              "_bct_guard_hosts_update": "993741626e1e5f828e1dd1c681fed62e180645e837e0bcf95fa709bdbd7285ce",
+          }
+          CONTROL_SCHEMA_DIGEST = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
           SHA = re.compile(r"[a-f0-9]{40}\Z")
           DIGEST = re.compile(r"[a-f0-9]{64}\Z")
           SAFE_REASONS = {
@@ -302,6 +312,59 @@ jobs:
               return result
 
 
+          def backup_schema_evidence(uid):
+              backup = SNAPSHOT / "database/before.sqlite"
+              if read_private(backup, uid, 512 * 1024 * 1024, digest=True) != BACKUP_SCHEMA_DIGEST:
+                  raise RuntimeError("Exact failed-run backup fingerprint changed")
+              if any(os.path.lexists(str(backup) + suffix) for suffix in ("-wal", "-shm", "-journal")):
+                  raise RuntimeError("Immutable backup unexpectedly has sidecars")
+              connection = sqlite3.connect(backup.as_uri() + "?mode=ro&immutable=1", uri=True, timeout=3)
+              try:
+                  def authorize(action, table, column, database, origin):
+                      allowed = action == sqlite3.SQLITE_SELECT or (
+                          action == sqlite3.SQLITE_READ and database == "main"
+                          and table in ("sqlite_master", "hosts", "_bct_handover_state")) or (
+                          action == sqlite3.SQLITE_FUNCTION and column == "count")
+                      return sqlite3.SQLITE_OK if allowed else sqlite3.SQLITE_DENY
+                  connection.set_authorizer(authorize)
+                  deadline = time.monotonic() + 5
+                  connection.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
+                  rows = connection.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name='hosts' ORDER BY name").fetchmany(17)
+                  if len(rows) > 16 or any(not isinstance(sql, str) or len(sql.encode()) > 8192 for _, sql in rows):
+                      raise RuntimeError("Host trigger schema exceeded its evidence bound")
+                  triggers = []
+                  for name, sql in rows:
+                      digest = hashlib.sha256(sql.encode()).hexdigest()
+                      expected = KNOWN_HOST_GUARDS.get(name)
+                      triggers.append({"name": name if expected else "unrecognized-redacted", "sha256": digest,
+                                       "expectedSha256": expected, "matchesKnownGuard": expected == digest})
+                  matches = (len(rows) == len(KNOWN_HOST_GUARDS) and {name for name, _ in rows} == set(KNOWN_HOST_GUARDS)
+                             and all(value["matchesKnownGuard"] for value in triggers))
+                  control = connection.execute("SELECT sql FROM sqlite_schema WHERE type='table' AND name='_bct_handover_state'").fetchmany(2)
+                  control_matches = (len(control) == 1 and isinstance(control[0][0], str)
+                                     and hashlib.sha256(control[0][0].encode()).hexdigest() == CONTROL_SCHEMA_DIGEST)
+                  frozen, control_count = None, None
+                  if control_matches:
+                      states = connection.execute("SELECT frozen FROM _bct_handover_state WHERE id=1 LIMIT 2").fetchall()
+                      control_count = len(states)
+                      if len(states) == 1 and states[0][0] in (0, 1):
+                          frozen = states[0][0]
+                  # Counts only: do not emit host row contents, identity values or personal data.
+                  identity = ("host:kofi-bills", "kofi-bills")
+                  candidates = connection.execute("SELECT COUNT(*) FROM hosts WHERE id=? OR slug=?", identity).fetchone()[0]
+                  exact = connection.execute("SELECT COUNT(*) FROM hosts WHERE id=? AND slug=?", identity).fetchone()[0]
+                  reviewed = connection.execute("SELECT COUNT(*) FROM hosts WHERE id=? AND slug=? AND verification_status='reviewed'", identity).fetchone()[0]
+                  verified = connection.execute("SELECT COUNT(*) FROM hosts WHERE id=? AND slug=? AND verification_status='verified'", identity).fetchone()[0]
+                  return {"backupSha256": BACKUP_SCHEMA_DIGEST, "hostsTriggerCount": len(rows), "triggers": triggers,
+                          "allHostsTriggersMatchKnownGuards": matches, "controlSchemaMatches": control_matches,
+                          "controlRowCount": control_count, "frozen": frozen,
+                          "canonicalIdentityMatchCount": exact, "identityCandidateCount": candidates,
+                          "reviewedBaselineCount": reviewed, "verifiedBaselineCount": verified,
+                          "canonicalHostReady": candidates == exact == 1 and reviewed + verified == 1}
+              finally:
+                  connection.close()
+
+
           def inspect():
               uid = pwd.getpwnam("becore-tickets").pw_uid
               # Open the existing deployment lock read-only: no file creation or writes.
@@ -356,6 +419,10 @@ jobs:
                   output["service"] = {key: value for key, value in values.items()
                       if (key in {"ActiveState", "SubState", "NeedDaemonReload"} and re.fullmatch(r"[a-z-]{1,30}", value))
                       or (key == "WorkingDirectory" and re.fullmatch(r"/srv/becore-tickets/releases/[a-f0-9]{40}", value))}
+                  try:
+                      output["backupSchema"] = backup_schema_evidence(uid)
+                  except Exception as error:
+                      output["backupSchema"] = {"readErrorType": type(error).__name__}
                   print(json.dumps(output, sort_keys=True))
 
 
