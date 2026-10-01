@@ -1,4 +1,4 @@
-name: Verify approved Tickets storage cleanup
+name: Inspect VPS storage metadata read-only
 on:
   push:
     branches: [main]
@@ -22,252 +22,225 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Remove exact owner-approved failed-release upload batch once
-        if: github.event_name == 'push' && github.run_attempt == 1 && contains(github.event.head_commit.message, 'Approved cleanup 20260930 two failed Tickets uploads')
+      - name: Inventory VPS storage metadata without changes
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect VPS storage 20261001 metadata only')
         run: |
-          tailscale ssh root@hermes 'python3 -' <<'PY'
-          """Delete only the six owner-approved failed-release staging files, with drift guards."""
-          import datetime
+          tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1' <<'PY'
+          #!/usr/bin/env python3
+          """Read-only, bounded metadata inventory. No file contents or deletion operations."""
+          import argparse
           import fcntl
-          import errno
-          import hashlib
           import json
           import os
-          import pathlib
+          from pathlib import Path
+          import re
+          import shutil
           import stat
           import subprocess
-          import urllib.request
+          import sys
           
-          HOME = pathlib.Path('/srv/becore-tickets')
-          ACTIVE = '51f414132da8c41e6d6583fdfa76e709ae7516e8'
-          PREVIOUS = '8a25812f1a0fc81e4ff4f956542097b4465e050f'
-          ARCHIVE_DIGEST = '00addc9b1daa764bd64b582beb54617e7ba2d93f52d24afe53b4a2b44aceaf9f'
-          APPROVED = {
-              '/var/tmp/tickets-code-release-36730822498-1': {'inode': 254719, 'operatorBlob': '9de9be40366b1c3660dc9622d8ba3119ad06f2eb', 'files': {'code-release.py': (270231, 35685), 'provenance.json': (270225, 1622), 'runtime.tar.gz': (270198, 228439754)}},
-              '/var/tmp/tickets-code-release-36734407816-1': {'inode': 270232, 'operatorBlob': '8b57c088157bdd808f4b4556f04cd4144bde72f8', 'files': {'code-release.py': (270237, 36635), 'provenance.json': (270236, 1622), 'runtime.tar.gz': (270234, 228439754)}},
-          }
+          # Public job logs must never include discovered paths from exception tracebacks.
+          def redacted_failure(kind, value, traceback):
+              print("Inventory failed safely; detailed paths suppressed", file=sys.stderr)
+          sys.excepthook = redacted_failure
+          import time
           
+          p = argparse.ArgumentParser()
+          p.add_argument('--active', required=True)
+          p.add_argument('--previous', required=True)
+          p.add_argument('--stage-run', action='append', required=True)
+          a = p.parse_args()
+          if not all(re.fullmatch(r'[a-f0-9]{40}', s) for s in (a.active, a.previous)):
+              raise SystemExit('Exact release hashes are required')
+          if not all(re.fullmatch(r'[1-9][0-9]*-[1-9][0-9]*', s) for s in a.stage_run):
+              raise SystemExit('Exact reviewed run-attempt identifiers are required')
+          HOME = Path('/srv/becore-tickets')
+          RELEASES = HOME / 'releases'
+          DEADLINE = time.monotonic() + 180
+          seen = 0
           
-          def require(condition, message):
-              if not condition:
-                  raise RuntimeError(message)
+          def guard():
+              global seen
+              seen += 1
+              if seen > 750000 or time.monotonic() >= DEADLINE:
+                  raise RuntimeError('Inventory exceeded its safe bound')
           
+          def identity():
+              pointers = {}
+              for name, sha in [('current', a.active), ('previous', a.previous)]:
+                  link = HOME / name
+                  if not link.is_symlink() or link.resolve(strict=True) != RELEASES / sha:
+                      raise RuntimeError('Protected release pointer changed')
+                  pointers[name] = sha
+              raw = subprocess.check_output(['systemctl', 'show', 'becore-tickets.service', '--no-pager',
+                                             '--property=ActiveState,WorkingDirectory'], text=True, stderr=subprocess.DEVNULL, timeout=10)
+              props = dict(line.split('=', 1) for line in raw.splitlines() if '=' in line)
+              if props.get('ActiveState') != 'active' or props.get('WorkingDirectory') != str(RELEASES / a.active):
+                  raise RuntimeError('Active service identity changed')
+              return pointers
           
-          def health():
-              request = urllib.request.Request('https://tickets.becoreops.com/healthz', headers={'User-Agent': 'Mozilla/5.0 BeCoreApprovedStorageCleanup'})
-              with urllib.request.urlopen(request, timeout=20) as response:
-                  value = json.loads(response.read(65536))
-                  require(response.status == 200 and value.get('active') is True and value.get('revision') == ACTIVE, 'Live health or revision changed')
-              return {'status': 200, 'revision': ACTIVE, 'active': True}
+          def directory_info(path):
+              root_stat = path.lstat()
+              if not stat.S_ISDIR(root_stat.st_mode):
+                  raise RuntimeError('Inventory directory is not a plain directory')
+              stack = [path]
+              total = allocated = count = links = 0
+              while stack:
+                  directory = stack.pop()
+                  with os.scandir(directory) as entries:
+                      for item in entries:
+                          guard()
+                          s = item.stat(follow_symlinks=False)
+                          if s.st_dev != root_stat.st_dev:
+                              raise RuntimeError('Inventory encountered another filesystem')
+                          if stat.S_ISLNK(s.st_mode):
+                              links += 1
+                          elif stat.S_ISDIR(s.st_mode):
+                              stack.append(Path(item.path))
+                          elif stat.S_ISREG(s.st_mode):
+                              total += s.st_size
+                              allocated += s.st_blocks * 512
+                              count += 1
+                          else:
+                              raise RuntimeError('Inventory encountered a special file')
+              return {'regular_files': count, 'logical_bytes': total, 'regular_file_allocated_bytes': allocated,
+                      'symlinks_not_followed': links, 'inode': root_stat.st_ino, 'owner_uid': root_stat.st_uid}
           
-          
-          def verify_runtime():
-              for pointer, revision in [('current', ACTIVE), ('previous', PREVIOUS)]:
-                  link = HOME / pointer
-                  require(link.is_symlink() and str(link.resolve(strict=True)) == str(HOME / 'releases' / revision), 'Protected release pointer changed')
-              props = subprocess.check_output(['systemctl', 'show', 'becore-tickets.service', '--property=ActiveState,WorkingDirectory', '--no-pager'], text=True)
-              values = dict(line.split('=', 1) for line in props.splitlines() if '=' in line)
-              require(values.get('ActiveState') == 'active' and values.get('WorkingDirectory') == str(HOME / 'releases' / ACTIVE), 'Active service identity changed')
-              return health()
-          
-          
-          def references():
-              found = []
-              errors = []
-              approved_inodes = {(2049, item['inode']) for item in APPROVED.values()}
-              approved_inodes.update((2049, inode) for item in APPROVED.values() for inode, size in item['files'].values())
-              for proc in pathlib.Path('/proc').iterdir():
-                  if not proc.name.isdigit():
-                      continue
-                  targets = []
-                  try:
-                      pointers = [proc / name for name in ['cwd', 'root', 'exe']] + list((proc / 'fd').iterdir())
-                      for pointer in pointers:
-                          try:
-                              targets.append(os.readlink(pointer))
-                              info = os.stat(pointer)
-                              if (info.st_dev, info.st_ino) in approved_inodes:
-                                  found.append({'pid': int(proc.name), 'kind': 'inode-reference'})
-                          except FileNotFoundError:
-                              pass
-                      for line in (proc / 'maps').read_text().splitlines():
-                          fields = line.split(None, 5)
-                          if len(fields) >= 5:
-                              major, minor = fields[3].split(':')
-                              device = os.makedev(int(major, 16), int(minor, 16))
-                              if (device, int(fields[4])) in approved_inodes:
-                                  found.append({'pid': int(proc.name), 'kind': 'mapped-inode-reference'})
-                          if len(fields) == 6:
-                              targets.append(fields[5])
-                      try:
-                          mount_lines = (proc / 'mountinfo').read_text().splitlines()
-                      except OSError as error:
-                          if error.errno != errno.EINVAL:
-                              raise
-                          # A disappearing/zombie task has no live mount namespace. Prove
-                          # that state; never skip an unreadable live task on a guess.
-                          state_line = next((line for line in (proc / 'status').read_text().splitlines() if line.startswith('State:')), '')
-                          task_state = state_line.split()[1] if len(state_line.split()) > 1 else ''
-                          require(task_state in {'Z', 'X'}, 'Live process mount namespace could not be inspected')
-                          require(not list((proc / 'fd').iterdir()), 'Exited task still has file descriptors')
-                          mount_lines = []
-                      for line in mount_lines:
-                          fields = line.split()
-                          # Both filesystem root and mount target expose bind references.
-                          mount_root = fields[3].replace('\\040', ' ')
-                          targets.extend([mount_root, fields[4].replace('\\040', ' ')])
-                          if mount_root != '/' and any(path.startswith(mount_root.rstrip('/') + '/') for path in APPROVED):
-                              found.append({'pid': int(proc.name), 'kind': 'ancestor-bind-mount'})
-                  except FileNotFoundError:
-                      continue
-                  except PermissionError:
-                      errors.append(int(proc.name))
-                  for path in APPROVED:
-                      if any(value == path or value.startswith(path + '/') for value in targets):
-                          found.append({'path': path, 'pid': int(proc.name)})
-              require(not errors, 'Could not inspect every process namespace')
-              require(not found, 'Approved staging acquired a process or mount reference')
-          
-          
-          def validate(path, expected):
-              p = pathlib.Path(path)
-              info = p.lstat()
-              require(stat.S_ISDIR(info.st_mode) and not p.is_symlink() and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o700 and info.st_dev == 2049 and info.st_ino == expected['inode'], 'Staging directory metadata changed')
-              require({child.name for child in p.iterdir()} == set(expected['files']), 'Staging directory contents changed')
-              allocated = info.st_blocks * 512
-              for name, (inode, size) in expected['files'].items():
-                  child = p / name
-                  cs = child.lstat()
-                  require(stat.S_ISREG(cs.st_mode) and cs.st_uid == 0 and stat.S_IMODE(cs.st_mode) == 0o600 and cs.st_nlink == 1 and cs.st_dev == info.st_dev and cs.st_ino == inode and cs.st_size == size, 'Approved file metadata changed')
-                  allocated += cs.st_blocks * 512
-              with (p / 'runtime.tar.gz').open('rb') as stream:
-                  require(hashlib.file_digest(stream, 'sha256').hexdigest() == ARCHIVE_DIGEST, 'Approved archive content changed')
-              operator = (p / 'code-release.py').read_bytes()
-              require(hashlib.sha1(b'blob ' + str(len(operator)).encode() + b'\0' + operator).hexdigest() == expected['operatorBlob'], 'Approved operator content changed')
-              proof = json.loads((p / 'provenance.json').read_text())
-              require(proof.get('source') == PREVIOUS and proof.get('archiveSha256') == ARCHIVE_DIGEST and str(proof.get('runtimeRun')) == '36729977021' and str(proof.get('candidateRun')) == '36727098470', 'Approved provenance changed')
-              return allocated
-          
-          
-          require(os.geteuid() == 0, 'Existing Tickets root operator required')
-          require(datetime.datetime.now(datetime.timezone.utc) < datetime.datetime(2026, 9, 30, 22, 0, tzinfo=datetime.timezone.utc), 'One-time cleanup window expired')
-          lock_fd = os.open('/run/lock/becore-tickets-deploy.lock', os.O_RDWR | os.O_NOFOLLOW)
-          with os.fdopen(lock_fd, 'a') as lock:
-              require(stat.S_ISREG(os.fstat(lock.fileno()).st_mode), 'Deployment lock must be regular')
-              fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-              before_health = verify_runtime()
-              before = os.statvfs('/')
-              allocated = sum(validate(path, expected) for path, expected in APPROVED.items())
-              references()
-              # Validate the complete approved batch before removing the first file.
-              for path, expected in APPROVED.items():
-                  validate(path, expected)
-              removed = []
-              for path, expected in APPROVED.items():
-                  fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-                  try:
-                      opened = os.fstat(fd)
-                      require(stat.S_ISDIR(opened.st_mode) and opened.st_ino == expected['inode'] and opened.st_dev == 2049 and opened.st_uid == 0 and stat.S_IMODE(opened.st_mode) == 0o700, 'Directory changed at removal')
-                      for name, (inode, size) in expected['files'].items():
-                          current = os.stat(name, dir_fd=fd, follow_symlinks=False)
-                          require(stat.S_ISREG(current.st_mode) and current.st_ino == inode and current.st_size == size and current.st_nlink == 1 and current.st_dev == opened.st_dev and current.st_uid == 0 and stat.S_IMODE(current.st_mode) == 0o600, 'File changed at removal')
-                          os.unlink(name, dir_fd=fd)
-                          removed.append(path + '/' + name)
-                          print(json.dumps({'removedApprovedFile': path + '/' + name}), flush=True)
-                      os.fsync(fd)
-                  finally:
-                      os.close(fd)
-                  require(os.lstat(path).st_ino == expected['inode'], 'Directory replaced after file removal')
-                  os.rmdir(path)
-              require(all(not os.path.lexists(path) for path in APPROVED), 'Approved stage remains')
-              after = os.statvfs('/')
-              after_health = verify_runtime()
-              print(json.dumps({'approvedFoldersRemoved': list(APPROVED), 'removedFileCount': len(removed), 'allocatedBytesRemoved': allocated,
-                                'beforeAvailableBytes': before.f_bavail * before.f_frsize, 'afterAvailableBytes': after.f_bavail * after.f_frsize,
-                                'freeSpaceDeltaBytes': after.f_bavail * after.f_frsize - before.f_bavail * before.f_frsize,
-                                'beforeHealth': before_health, 'afterHealth': after_health, 'protectedPrevious': PREVIOUS}, sort_keys=True))
-          PY
-      - name: Classify home and Docker storage without changes
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          tailscale ssh root@hermes 'python3 -' <<'PY'
-          """Read-only storage classification. No user-file contents or Docker environments."""
-          import datetime
-          import json
-          import os
-          import pathlib
-          import subprocess
-          
-          
-          def run(args, timeout=45):
-              try:
-                  p = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
-                  return {"returncode": p.returncode, "stdout": p.stdout.strip(), "stderr": p.stderr.strip()[:300]}
-              except (OSError, subprocess.TimeoutExpired) as error:
-                  return {"error": type(error).__name__}
-          
-          
-          def emit(section, data):
-              print(json.dumps({"readOnly": True, "section": section, "data": data}, sort_keys=True), flush=True)
-          
-          
-          emit("capacity", {"capturedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                            "disk": run(["df", "-B1", "/"]), "inodes": run(["df", "-i", "/"])})
-          for name in ["/home/ubuntu", "/home/ubuntu/.cache", "/home/ubuntu/.npm", "/home/ubuntu/.pnpm-store",
-                       "/home/ubuntu/.local/share/pnpm", "/home/ubuntu/.local/share/Trash", "/root/.cache", "/root/.npm"]:
-              path = pathlib.Path(name)
-              if path.is_dir() and not path.is_symlink():
-                  emit("directory_usage", {"path": name, "usage": run(["du", "-x", "-B1", "--max-depth=1", name])})
-          
-          # Docker-provided accounting is classification only: reclaimable does not mean
-          # authorized to remove. Preserve all volumes and stopped containers by default.
-          for section, args in [
-              ("docker_summary", ["docker", "system", "df"]),
-              ("docker_containers", ["docker", "ps", "-a", "--no-trunc", "--format", "{{json .ID}} {{json .Image}} {{json .Names}} {{json .State}} {{json .Status}}"]),
-              ("docker_images", ["docker", "image", "ls", "--no-trunc", "--digests", "--format", "{{json .ID}} {{json .Repository}} {{json .Tag}} {{json .Size}} {{json .CreatedAt}}"]),
-              ("docker_dangling_images", ["docker", "image", "ls", "--filter", "dangling=true", "--no-trunc", "--format", "{{json .ID}} {{json .Size}} {{json .CreatedAt}}"]),
-              ("docker_volumes_metadata", ["docker", "volume", "ls", "--format", "{{json .Name}} {{json .Driver}} {{json .Scope}}"]),
-          ]:
-              emit(section, run(args))
-          
-          # Count current file-descriptor/cwd/executable/mapping references to known cache
-          # roots without reading any private file contents or process arguments.
-          roots = ["/home/ubuntu/.cache", "/home/ubuntu/.npm", "/home/ubuntu/.pnpm-store", "/home/ubuntu/.local/share/pnpm", "/home/ubuntu/.local/share/Trash", "/root/.cache", "/root/.npm"]
-          refs = {root: set() for root in roots}
-          errors = 0
-          for proc in pathlib.Path("/proc").iterdir():
-              if not proc.name.isdigit():
+          # Use the established transaction lock, without creating or modifying it.
+          lock_fd = os.open('/run/lock/becore-tickets-deploy.lock', os.O_RDONLY | os.O_NOFOLLOW)
+          if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
+              raise RuntimeError('Existing deployment lock is not a regular file')
+          fcntl.flock(lock_fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+          before = identity()
+          disk = shutil.disk_usage(HOME)
+          stages = []
+          for run in sorted(set(a.stage_run)):
+              path = Path('/var/tmp') / ('tickets-code-release-' + run)
+              if not path.exists() and not path.is_symlink():
+                  stages.append({'run_attempt': run, 'exists': False})
                   continue
-              pointers = [proc / name for name in ["cwd", "root", "exe"]]
+              info = directory_info(path)
+              files = []
+              unexpected = 0
+              with os.scandir(path) as entries:
+                  for item in entries:
+                      guard()
+                      if item.name not in {'runtime.tar.gz', 'provenance.json', 'code-release.py'}:
+                          unexpected += 1
+                          continue
+                      s = item.stat(follow_symlinks=False)
+                      files.append({'name': item.name, 'regular': stat.S_ISREG(s.st_mode), 'bytes': s.st_size,
+                                    'file_allocated_bytes': s.st_blocks * 512, 'inode': s.st_ino,
+                                    'owner_uid': s.st_uid, 'mode': oct(stat.S_IMODE(s.st_mode))})
+              stages.append({'run_attempt': run, 'exists': True, **info, 'files': files,
+                             'unexpected_entry_count': unexpected, 'deletion_authorized': False})
+          release_sizes = []
+          with os.scandir(RELEASES) as entries:
+              for item in entries:
+                  guard()
+                  if re.fullmatch(r'[a-f0-9]{40}', item.name) and item.is_dir(follow_symlinks=False):
+                      info = directory_info(Path(item.path))
+                      release_sizes.append({'revision': item.name if item.name in {a.active, a.previous} else None,
+                                            'protected': True, **info})
+          if identity() != before:
+              raise RuntimeError('Protected runtime changed during inventory')
+          # Broad triage emits only these reviewed generic root labels and aggregates.
+          # No discovered directory/file names, unit names, arguments, environments or
+          # file contents are included in logs. Every active project remains protected.
+          ROOTS = ['/srv', '/opt', '/home', '/root', '/var/lib', '/var/cache',
+                   '/var/log', '/var/tmp', '/tmp', '/usr/local']
+          
+          def aggregate(root):
+              result = {'root': root, 'logical_bytes': 0, 'regular_file_allocated_bytes': 0,
+                        'regular_files': 0, 'symlinks_skipped': 0, 'special_files_skipped': 0,
+                        'mounts_skipped': 0, 'unreadable_or_changed_entries': 0,
+                        'complete': True, 'deletion_authorized': False}
+              path = Path(root)
               try:
-                  pointers.extend((proc / "fd").iterdir())
-              except FileNotFoundError:
-                  continue
-              except PermissionError:
-                  errors += 1
-              targets = []
-              for pointer in pointers:
+                  r = path.lstat()
+                  if not stat.S_ISDIR(r.st_mode):
+                      result['complete'] = False
+                      return result
+              except OSError:
+                  result['complete'] = False
+                  return result
+              stack, inodes = [path], set()
+              while stack:
+                  if seen >= 750000 or time.monotonic() >= DEADLINE:
+                      result['complete'] = False
+                      break
+                  directory = stack.pop()
                   try:
-                      targets.append(os.readlink(pointer))
-                  except FileNotFoundError:
-                      pass
-                  except PermissionError:
-                      errors += 1
-              try:
-                  for line in (proc / "maps").read_text().splitlines():
-                      parts = line.split(None, 5)
-                      if len(parts) == 6 and parts[5].startswith("/"):
-                          targets.append(parts[5])
-              except FileNotFoundError:
-                  pass
-              except PermissionError:
-                  errors += 1
-              for root in roots:
-                  if any(target == root or target.startswith(root + "/") for target in targets):
-                      refs[root].add(int(proc.name))
-          emit("known_cache_process_references", {"pidsByPath": {key: sorted(value) for key, value in refs.items()},
-                                                "permissionErrors": errors,
-                                                "coverage": "Current processes only. An empty result does not prove data is disposable or outside future service dependencies."})
-          emit("service_metadata", run(["systemctl", "show", "becore-tickets.service", "caddy.service", "--no-pager", "--property=Id,ActiveState,SubState,WorkingDirectory,MainPID,NRestarts"]))
-          emit("complete", {"readOnlyClassificationCompleted": True})
+                      with os.scandir(directory) as entries:
+                          for item in entries:
+                              try:
+                                  guard()
+                              except RuntimeError:
+                                  result['complete'] = False
+                                  return result
+                              try:
+                                  info = item.stat(follow_symlinks=False)
+                                  if info.st_dev != r.st_dev:
+                                      result['mounts_skipped'] += 1
+                                  elif stat.S_ISLNK(info.st_mode):
+                                      result['symlinks_skipped'] += 1
+                                  elif stat.S_ISDIR(info.st_mode):
+                                      stack.append(Path(item.path))
+                                  elif stat.S_ISREG(info.st_mode):
+                                      key = (info.st_dev, info.st_ino)
+                                      if key not in inodes:
+                                          inodes.add(key)
+                                          result['regular_files'] += 1
+                                          result['logical_bytes'] += info.st_size
+                                          result['regular_file_allocated_bytes'] += info.st_blocks * 512
+                                  else:
+                                      result['special_files_skipped'] += 1
+                              except OSError:
+                                  result['unreadable_or_changed_entries'] += 1
+                                  result['complete'] = False
+                  except OSError:
+                      result['unreadable_or_changed_entries'] += 1
+                      result['complete'] = False
+              return result
+          
+          broad = [aggregate(root) for root in ROOTS]
+          service_summary = {'active_projects_protected': True, 'contents_or_environments_read': False}
+          try:
+              raw = subprocess.check_output(['systemctl', 'list-units', '--type=service',
+                  '--state=running', '--no-legend', '--plain', '--no-pager'], text=True, stderr=subprocess.DEVNULL, timeout=10)
+              service_summary['running_service_count'] = len([line for line in raw.splitlines() if line.strip()])
+          except (OSError, subprocess.SubprocessError):
+              service_summary['running_service_count_unavailable'] = True
+          # Docker's aggregate summary contains category totals, not container/image names.
+          docker_summary = []
+          try:
+              raw = subprocess.check_output(['docker', 'system', 'df', '--format', '{{json .}}'],
+                  text=True, stderr=subprocess.DEVNULL, timeout=15)
+              allowed = {'Images', 'Containers', 'Local Volumes', 'Build Cache'}
+              for line in raw.splitlines():
+                  row = json.loads(line)
+                  if row.get('Type') not in allowed: continue
+                  safe = {'type': row['Type']}
+                  for field in ['TotalCount', 'Active', 'Size', 'Reclaimable']:
+                      value = str(row.get(field, ''))
+                      # Aggregate numeric quantities only, with units and percentage suffixes.
+                      if re.fullmatch(r'[0-9., %()kKMGTPEiBb\-]+', value): safe[field] = value
+                  docker_summary.append(safe)
+          except (OSError, subprocess.SubprocessError, ValueError):
+              pass
+          if identity() != before:
+              raise RuntimeError('Protected runtime changed during inventory')
+          known_releases = [row for row in release_sizes if row['revision'] is not None]
+          other_releases = [row for row in release_sizes if row['revision'] is None]
+          retained_summary = {'protected': True, 'count': len(other_releases),
+              'logical_bytes': sum(row['logical_bytes'] for row in other_releases),
+              'regular_file_allocated_bytes': sum(row['regular_file_allocated_bytes'] for row in other_releases)}
+          print(json.dumps({'read_only': True, 'active': before['current'], 'previous': before['previous'],
+                            'disk': {'total_bytes': disk.total, 'used_bytes': disk.used, 'free_bytes': disk.free},
+                            'reviewed_stage_inventory': stages, 'protected_known_releases': known_releases, 'other_retained_release_totals': retained_summary,
+                            'broad_fixed_root_totals': broad, 'service_summary': service_summary,
+                            'docker_aggregate_summary': docker_summary,
+                            'backup_contents_accessed': False, 'credential_contents_accessed': False,
+                            'deleted_bytes': 0, 'all_active_projects_protected': True,
+                            'allocation_note': 'Metadata totals only; no ownership/use/recovery or reclaimable-space approval inferred. Root categories may omit other mounts and system roots.'}, indent=2))
           PY
