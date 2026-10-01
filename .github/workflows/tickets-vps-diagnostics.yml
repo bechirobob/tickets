@@ -1,9 +1,8 @@
-name: Inspect VPS storage metadata read-only
+name: Remove three explicitly approved Tickets folders
 on:
   push:
     branches: [main]
     paths: ['.github/workflows/tickets-vps-diagnostics.yml']
-  workflow_dispatch:
 permissions:
   contents: read
   id-token: write
@@ -22,389 +21,153 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Inventory VPS storage metadata without changes
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect superseded Tickets release dependencies 20261001')
+      - name: Remove exactly three approved obsolete folders
+        if: github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Remove three approved Tickets folders 20261001'
         run: |
-          tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1 --stage-run 36804472437-1' <<'PY'
-          #!/usr/bin/env python3
-          """Read-only, bounded metadata inventory. No file contents or deletion operations."""
-          import argparse
-          import fcntl
-          import json
-          import os
+          tailscale ssh root@hermes 'python3 -' <<'PY'
+          """One-shot exact three-folder cleanup approved 2026-10-01 19:16 UTC."""
+          import os, sys, stat, re, json, time, fcntl, shutil, subprocess, hashlib, urllib.request
           from pathlib import Path
-          import re
-          import shutil
-          import stat
-          import subprocess
-          import sys
-          
-          # Public job logs must never include discovered paths from exception tracebacks.
-          def redacted_failure(kind, value, traceback):
-              print("Inventory failed safely; detailed paths suppressed", file=sys.stderr)
-          sys.excepthook = redacted_failure
-          import time
-          
-          p = argparse.ArgumentParser()
-          p.add_argument('--active', required=True)
-          p.add_argument('--previous', required=True)
-          p.add_argument('--stage-run', action='append', required=True)
-          a = p.parse_args()
-          if not all(re.fullmatch(r'[a-f0-9]{40}', s) for s in (a.active, a.previous)):
-              raise SystemExit('Exact release hashes are required')
-          if not all(re.fullmatch(r'[1-9][0-9]*-[1-9][0-9]*', s) for s in a.stage_run):
-              raise SystemExit('Exact reviewed run-attempt identifiers are required')
-          PUBLIC_RELEASES = set(["7b9db84ddff94a8b54324241dc855d3ab9ac8a8f","2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004","2266b65a282772375da97ccc5ed9942e489a2b7d","7a090331436541a964752f3d5cfdfffbbc1de823","a34bd37d8fad68e200239f497c3ae4a2074d45b6","4cd96fb13e99b4eddd22466e03142d934b4bba49","de2830b851370ad98899d86e9b0b7a1360d4658b","dc8ab0bec317d2143f4e05f43dbb630e03bc6e57","ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe","45ec44e35f8b0e5099a328ce219df2529374f9ee","51f414132da8c41e6d6583fdfa76e709ae7516e8","8a25812f1a0fc81e4ff4f956542097b4465e050f"])
-          HOME = Path('/srv/becore-tickets')
-          RELEASES = HOME / 'releases'
-          DEADLINE = time.monotonic() + 180
-          seen = 0
+          sys.excepthook = lambda *args: print('Cleanup stopped; detailed private paths suppressed', file=sys.stderr)
+          HOME=Path('/srv/becore-tickets'); RELEASES=HOME/'releases'
+          ACTIVE='7b9db84ddff94a8b54324241dc855d3ab9ac8a8f'
+          PREVIOUS='2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004'
+          THIRD='2266b65a282772375da97ccc5ed9942e489a2b7d'
+          APPROVED=['a34bd37d8fad68e200239f497c3ae4a2074d45b6','7a090331436541a964752f3d5cfdfffbbc1de823']
+          TARGETS=[RELEASES/x for x in APPROVED]+[Path('/var/tmp/tickets-code-release-36804472437-1')]
+          EXPECTED=[(2268946,24997,769717088,838791168,20),(2508802,24997,769730893,838881280,20),(259251,3,228622988,228634624,0)]
+          END=time.monotonic()+180
           
           def guard():
-              global seen
-              seen += 1
-              if seen > 3000000 or time.monotonic() >= DEADLINE:
-                  raise RuntimeError('Inventory exceeded its safe bound')
+              if time.monotonic()>END: raise RuntimeError('Time bound exceeded')
+          def output(argv):
+              guard(); return subprocess.check_output(argv,text=True,stderr=subprocess.DEVNULL,timeout=15)
+          def small_json(path):
+              fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+              try:
+                  if not stat.S_ISREG(os.fstat(fd).st_mode): raise RuntimeError('Metadata shape')
+                  data=os.read(fd,1048577)
+                  if len(data)>1048576: raise RuntimeError('Metadata size')
+                  return json.loads(data)
+              finally: os.close(fd)
+          def plain(path):
+              s=path.lstat()
+              if not stat.S_ISDIR(s.st_mode) or s.st_uid!=0: raise RuntimeError('Directory identity')
+              return s
           
           def identity():
-              pointers = {}
-              for name, sha in [('current', a.active), ('previous', a.previous)]:
-                  link = HOME / name
-                  if not link.is_symlink() or link.resolve(strict=True) != RELEASES / sha:
-                      raise RuntimeError('Protected release pointer changed')
-                  pointers[name] = sha
-              raw = subprocess.check_output(['systemctl', 'show', 'becore-tickets.service', '--no-pager',
-                                             '--property=ActiveState,WorkingDirectory'], text=True, stderr=subprocess.DEVNULL, timeout=10)
-              props = dict(line.split('=', 1) for line in raw.splitlines() if '=' in line)
-              if props.get('ActiveState') != 'active' or props.get('WorkingDirectory') != str(RELEASES / a.active):
-                  raise RuntimeError('Active service identity changed')
-              return pointers
-          
-          def directory_info(path):
-              root_stat = path.lstat()
-              if not stat.S_ISDIR(root_stat.st_mode):
-                  raise RuntimeError('Inventory directory is not a plain directory')
-              stack = [path]
-              total = allocated = count = links = multiple_links = 0
+              for p in [HOME,RELEASES,Path('/var/tmp')]: plain(p)
+              for name,sha in [('current',ACTIVE),('previous',PREVIOUS)]:
+                  p=HOME/name
+                  if not p.is_symlink() or p.resolve(strict=True)!=RELEASES/sha: raise RuntimeError('Protected pointer drift')
+              recent=sorted([p for p in RELEASES.iterdir() if re.fullmatch('[a-f0-9]{40}',p.name) and p.is_dir() and not p.is_symlink()],key=lambda p:p.stat().st_mtime,reverse=True)[:3]
+              if [p.name for p in recent]!=[ACTIVE,PREVIOUS,THIRD]: raise RuntimeError('Newest three drift')
+              props=dict(x.split('=',1) for x in output(['systemctl','show','becore-tickets.service','--property=ActiveState,WorkingDirectory']).splitlines() if '=' in x)
+              if props!={'ActiveState':'active','WorkingDirectory':str(RELEASES/ACTIVE)}: raise RuntimeError('Service drift')
+              return {'active':ACTIVE,'previous':PREVIOUS,'third':THIRD}
+          def health():
+              result={}
+              for endpoint in ['health','version']:
+                  with urllib.request.urlopen('https://tickets.becoreops.com/api/'+endpoint,timeout=15) as r:
+                      if r.status!=200: raise RuntimeError('Health failed')
+                      data=json.loads(r.read(1048576)); result[endpoint]=data
+              if result['version'].get('revision')!=ACTIVE or result['version'].get('service')!='becore-tickets': raise RuntimeError('Live revision drift')
+              return {'health_status':200,'version_status':200,'revision':ACTIVE}
+          def tree(path):
+              root=plain(path); count=logical=allocated=links=0; rows=[]; stack=[path]
+              with open('/proc/self/mountinfo') as mounts:
+                  for line in mounts:
+                      mount=line.split()[4]
+                      mount=re.sub(r'\\([0-7]{3})',lambda m:chr(int(m.group(1),8)),mount)
+                      if mount==str(path) or mount.startswith(str(path)+'/'): raise RuntimeError('Mounted target subtree')
               while stack:
-                  directory = stack.pop()
-                  with os.scandir(directory) as entries:
-                      for item in entries:
-                          guard()
-                          s = item.stat(follow_symlinks=False)
-                          if s.st_dev != root_stat.st_dev:
-                              raise RuntimeError('Inventory encountered another filesystem')
-                          if stat.S_ISLNK(s.st_mode):
-                              links += 1
-                          elif stat.S_ISDIR(s.st_mode):
-                              stack.append(Path(item.path))
-                          elif stat.S_ISREG(s.st_mode):
-                              total += s.st_size
-                              if s.st_nlink > 1: multiple_links += 1
-                              allocated += s.st_blocks * 512
-                              count += 1
-                          else:
-                              raise RuntimeError('Inventory encountered a special file')
-              return {'regular_files': count, 'logical_bytes': total, 'regular_file_allocated_bytes': allocated,
-                      'symlinks_not_followed': links, 'multiply_linked_files': multiple_links, 'inode': root_stat.st_ino, 'owner_uid': root_stat.st_uid}
+                  guard(); current=stack.pop()
+                  with os.scandir(current) as entries:
+                      for entry in entries:
+                          s=entry.stat(follow_symlinks=False)
+                          if s.st_dev!=root.st_dev or s.st_uid!=0: raise RuntimeError('Ownership or mount drift')
+                          rel=os.path.relpath(entry.path,path)
+                          row=[rel,s.st_ino,s.st_mode,s.st_size,s.st_mtime_ns,s.st_ctime_ns,s.st_nlink]
+                          if stat.S_ISDIR(s.st_mode): stack.append(Path(entry.path))
+                          elif stat.S_ISREG(s.st_mode): count+=1; logical+=s.st_size; allocated+=s.st_blocks*512
+                          elif stat.S_ISLNK(s.st_mode): links+=1; row.append(os.readlink(entry.path))
+                          else: raise RuntimeError('Unexpected special file')
+                          rows.append(row)
+                          if len(rows)>100000: raise RuntimeError('Entry bound')
+              digest=hashlib.sha256(json.dumps(sorted(rows),separators=(',',':')).encode()).hexdigest()
+              return (root.st_ino,count,logical,allocated,links),digest
           
-          # Use the established transaction lock, without creating or modifying it.
-          lock_fd = os.open('/run/lock/becore-tickets-deploy.lock', os.O_RDONLY | os.O_NOFOLLOW)
-          if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
-              raise RuntimeError('Existing deployment lock is not a regular file')
-          fcntl.flock(lock_fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-          before = identity()
-          disk = shutil.disk_usage(HOME)
-          stages = []
-          for run in sorted(set(a.stage_run)):
-              path = Path('/var/tmp') / ('tickets-code-release-' + run)
-              if not path.exists() and not path.is_symlink():
-                  stages.append({'run_attempt': run, 'exists': False})
-                  continue
-              info = directory_info(path)
-              files = []
-              unexpected = 0
-              with os.scandir(path) as entries:
-                  for item in entries:
-                      guard()
-                      if item.name not in {'runtime.tar.gz', 'provenance.json', 'code-release.py'}:
-                          unexpected += 1
-                          continue
-                      s = item.stat(follow_symlinks=False)
-                      files.append({'name': item.name, 'regular': stat.S_ISREG(s.st_mode), 'bytes': s.st_size,
-                                    'file_allocated_bytes': s.st_blocks * 512, 'inode': s.st_ino,
-                                    'owner_uid': s.st_uid, 'mode': oct(stat.S_IMODE(s.st_mode))})
-              stages.append({'run_attempt': run, 'exists': True, **info, 'files': files,
-                             'unexpected_entry_count': unexpected, 'deletion_authorized': False})
-          release_sizes = []
-          with os.scandir(RELEASES) as entries:
-              for item in entries:
+          def dependencies():
+              journal=small_json(Path('/var/lib/becore-tickets-handover/live-transfer.json'))
+              last=journal.get('lastCodeRelease',{})
+              fields=[journal.get('revision'),journal.get('activeRevision'),last.get('revision'),last.get('previous')]
+              if any(x in APPROVED for x in fields): raise RuntimeError('Journal reference')
+              snapshots={}
+              for p in Path('/var/lib/becore-tickets-handover').iterdir():
+                  if not re.fullmatch('code-release-[1-9][0-9]*-[1-9][0-9]*',p.name): continue
+                  plain(p); result=small_json(p/'result.json'); pointers=small_json(p/'pointers.before.json')
+                  if not isinstance(result,dict) or not isinstance(pointers,dict): raise RuntimeError('Snapshot shape')
+                  if result.get('dataMigration') and (any(x in APPROVED for x in [result.get('source'),result.get('previous')]) or any(str(v) in [str(t) for t in TARGETS] for v in pointers.values())): raise RuntimeError('Migration dependency')
+                  snapshots[p.name]=hashlib.sha256(json.dumps([result,pointers],sort_keys=True).encode()).hexdigest()
+              units=[x.split()[0] for x in output(['systemctl','list-units','--type=service','--all','--no-legend','--plain','--no-pager']).splitlines() if x.strip()]
+              values=output(['systemctl','show','--property=WorkingDirectory','--value','--',*units]).splitlines()
+              def match(value): return any(value==str(t) or value.startswith(str(t)+'/') for t in TARGETS)
+              if any(match(v) for v in values): raise RuntimeError('Service dependency')
+              races=0
+              for p in Path('/proc').iterdir():
+                  if not p.name.isdigit(): continue
                   guard()
-                  if re.fullmatch(r'[a-f0-9]{40}', item.name) and item.is_dir(follow_symlinks=False):
-                      info = directory_info(Path(item.path))
-                      release_sizes.append({'revision': item.name if item.name in PUBLIC_RELEASES else None,
-                                            'directory_birth_epoch': int(subprocess.check_output(['stat', '--format=%W', '--', item.path], text=True, stderr=subprocess.DEVNULL, timeout=5).strip()),
-                                            'directory_mtime_ns': item.stat(follow_symlinks=False).st_mtime_ns,
-                                            'directory_ctime_ns': item.stat(follow_symlinks=False).st_ctime_ns,
-                                            'protected': True, **info})
-          if identity() != before:
-              raise RuntimeError('Protected runtime changed during inventory')
-          # Broad triage emits only these reviewed generic root labels and aggregates.
-          # No discovered directory/file names, unit names, arguments, environments or
-          # file contents are included in logs. Every active project remains protected.
-          ROOTS = ['/var/lib/becore-tickets-handover', '/var/lib/becore-tickets']
-          
-          def aggregate(root):
-              result = {'root': root, 'logical_bytes': 0, 'regular_file_allocated_bytes': 0,
-                        'regular_files': 0, 'symlinks_skipped': 0, 'special_files_skipped': 0,
-                        'mounts_skipped': 0, 'unreadable_or_changed_entries': 0,
-                        'complete': True, 'deletion_authorized': False}
-              path = Path(root)
-              try:
-                  r = path.lstat()
-                  if not stat.S_ISDIR(r.st_mode):
-                      result['complete'] = False
-                      return result
-              except OSError:
-                  result['complete'] = False
-                  return result
-              stack, inodes = [path], set()
-              while stack:
-                  if seen >= 3000000 or time.monotonic() >= DEADLINE:
-                      result['complete'] = False
-                      break
-                  directory = stack.pop()
-                  try:
-                      with os.scandir(directory) as entries:
-                          for item in entries:
-                              try:
-                                  guard()
-                              except RuntimeError:
-                                  result['complete'] = False
-                                  return result
-                              try:
-                                  info = item.stat(follow_symlinks=False)
-                                  if info.st_dev != r.st_dev:
-                                      result['mounts_skipped'] += 1
-                                  elif stat.S_ISLNK(info.st_mode):
-                                      result['symlinks_skipped'] += 1
-                                  elif stat.S_ISDIR(info.st_mode):
-                                      stack.append(Path(item.path))
-                                  elif stat.S_ISREG(info.st_mode):
-                                      key = (info.st_dev, info.st_ino)
-                                      if key not in inodes:
-                                          inodes.add(key)
-                                          result['regular_files'] += 1
-                                          result['logical_bytes'] += info.st_size
-                                          result['regular_file_allocated_bytes'] += info.st_blocks * 512
-                                  else:
-                                      result['special_files_skipped'] += 1
-                              except OSError:
-                                  result['unreadable_or_changed_entries'] += 1
-                                  result['complete'] = False
-                  except OSError:
-                      result['unreadable_or_changed_entries'] += 1
-                      result['complete'] = False
-              return result
-          
-          broad = [aggregate(root) for root in ROOTS]
-          # Only the established public Tickets run-directory naming scheme is emitted.
-          other_ticket_stages = []
-          with os.scandir('/var/tmp') as entries:
-              for item in entries:
-                  guard()
-                  if re.fullmatch(r'tickets-code-release-[1-9][0-9]*-[1-9][0-9]*', item.name) and item.is_dir(follow_symlinks=False):
-                      other_ticket_stages.append({'path': '/var/tmp/' + item.name, 'deletion_authorized': False,
-                                                 **directory_info(Path(item.path))})
-          # Read only process symlink metadata, never command lines, environments or maps.
-          # No process IDs or discovered target paths are printed.
-          reference_counts = {root: 0 for root in ROOTS}
-          reference_errors = 0
-          with os.scandir('/proc') as processes:
-              for process in processes:
-                  if not process.name.isdigit(): continue
-                  guard()
-                  targets = [Path(process.path) / 'cwd', Path(process.path) / 'exe']
-                  try:
-                      with os.scandir(Path(process.path) / 'fd') as descriptors:
-                          targets.extend(Path(entry.path) for entry in descriptors)
-                  except OSError:
-                      reference_errors += 1
-                  for target in targets:
-                      guard()
+                  try: descriptors=list((p/'fd').iterdir())
+                  except FileNotFoundError: races+=1; continue
+                  for ref in [p/'cwd',p/'exe',*descriptors]:
                       try:
-                          resolved = os.readlink(target)
-                          for root in ROOTS:
-                              if resolved == root or resolved.startswith(root + '/'):
-                                  reference_counts[root] += 1
-                      except OSError:
-                          reference_errors += 1
-          # Same du accounting as the prior public metadata baseline, fixed roots only.
-          comparable_usage = {}
-          for root in ['/srv', '/home', '/var/lib', '/var/log']:
+                          if match(os.readlink(ref)): raise RuntimeError('Open process reference')
+                      except FileNotFoundError: races+=1
+                  try:
+                      with open(p/'maps') as stream: data=stream.read(4194305)
+                      if len(data)>4194304: raise RuntimeError('Process bound')
+                      if any(str(t)+'/' in data for t in TARGETS): raise RuntimeError('Process mapping')
+                  except FileNotFoundError: races+=1
+              return snapshots,races
+          
+          if os.geteuid()!=0 or not shutil.rmtree.avoids_symlink_attacks: raise RuntimeError('Execution contract')
+          fd=os.open('/run/lock/becore-tickets-deploy.lock',os.O_RDONLY|os.O_NOFOLLOW)
+          if not stat.S_ISREG(os.fstat(fd).st_mode): raise RuntimeError('Lock shape')
+          fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          protected=identity(); health_before=health()
+          initial=[tree(p) for p in TARGETS]
+          if [x[0] for x in initial]!=EXPECTED: raise RuntimeError('Approved content metadata changed')
+          for sha in APPROVED:
+              manifest=small_json(RELEASES/sha/'release.json')
+              if manifest.get('revision')!=sha or manifest.get('dirty') is not False: raise RuntimeError('Manifest mismatch')
+          expected_stage={'runtime.tar.gz':(270198,228551403),'code-release.py':(270231,69829),'provenance.json':(270225,1756)}
+          if set(os.listdir(TARGETS[2]))!=set(expected_stage): raise RuntimeError('Stage contents changed')
+          for name,pair in expected_stage.items():
+              s=(TARGETS[2]/name).lstat()
+              if (s.st_ino,s.st_size)!=pair or stat.S_IMODE(s.st_mode)!=0o600 or s.st_nlink!=1: raise RuntimeError('Stage file changed')
+          snapshots,races=dependencies()
+          if identity()!=protected or [tree(p) for p in TARGETS]!=initial: raise RuntimeError('Pre-delete drift')
+          before=shutil.disk_usage(HOME).free
+          print(json.dumps({'phase':'validated','exact_targets':[str(p) for p in TARGETS],'free_bytes_before':before,'protected':protected,'process_transient_missing_entries':races}),flush=True)
+          for index,p in enumerate(TARGETS):
+              guard()
+              if identity()!=protected or tree(p)!=initial[index]: raise RuntimeError('Immediate pre-delete drift')
+              parent_fd=os.open(p.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
               try:
-                  raw = subprocess.check_output(['du', '--summarize', '--one-file-system', '--block-size=1', '--', root],
-                      text=True, stderr=subprocess.DEVNULL, timeout=20)
-                  comparable_usage[root] = int(raw.split()[0])
-              except (OSError, subprocess.SubprocessError, ValueError, IndexError):
-                  comparable_usage[root] = None
-          service_summary = {'active_projects_protected': True, 'contents_or_environments_read': False}
-          try:
-              raw = subprocess.check_output(['systemctl', 'list-units', '--type=service',
-                  '--state=running', '--no-legend', '--plain', '--no-pager'], text=True, stderr=subprocess.DEVNULL, timeout=10)
-              service_summary['running_service_count'] = len([line for line in raw.splitlines() if line.strip()])
-          except (OSError, subprocess.SubprocessError):
-              service_summary['running_service_count_unavailable'] = True
-          # Docker's aggregate summary contains category totals, not container/image names.
-          docker_summary = []
-          try:
-              raw = subprocess.check_output(['docker', 'system', 'df', '--format', '{{json .}}'],
-                  text=True, stderr=subprocess.DEVNULL, timeout=15)
-              allowed = {'Images', 'Containers', 'Local Volumes', 'Build Cache'}
-              for line in raw.splitlines():
-                  row = json.loads(line)
-                  if row.get('Type') not in allowed: continue
-                  safe = {'type': row['Type']}
-                  for field in ['TotalCount', 'Active', 'Size', 'Reclaimable']:
-                      value = str(row.get(field, ''))
-                      # Aggregate numeric quantities only, with units and percentage suffixes.
-                      if re.fullmatch(r'[0-9., %()kKMGTPEiBb\-]+', value): safe[field] = value
-                  docker_summary.append(safe)
-          except (OSError, subprocess.SubprocessError, ValueError):
-              pass
-          # Inspect only public release manifests and non-secret rollback metadata.
-          CANDIDATES = ['45ec44e35f8b0e5099a328ce219df2529374f9ee', 'ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe',
-                        '4cd96fb13e99b4eddd22466e03142d934b4bba49', 'a34bd37d8fad68e200239f497c3ae4a2074d45b6',
-                        '7a090331436541a964752f3d5cfdfffbbc1de823']
-          refs = {sha: {'snapshot_source': 0, 'snapshot_previous': 0, 'snapshot_pointer': 0,
-                        'migration_snapshot': 0, 'current_journal_reference': 0, 'service_working_directory': 0,
-                        'process_symlink': 0, 'process_mapping': 0} for sha in CANDIDATES}
-          reference_permission_errors = 0
-          reference_races = 0
-          
-          def small_json(path):
-              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-              try:
-                  info = os.fstat(fd)
-                  if not stat.S_ISREG(info.st_mode) or info.st_size > 1024 * 1024:
-                      raise RuntimeError('Metadata file exceeds reviewed contract')
-                  with os.fdopen(fd, 'r', closefd=False) as stream:
-                      return json.load(stream)
-              finally:
-                  os.close(fd)
-          
-          journal = small_json(Path('/var/lib/becore-tickets-handover/live-transfer.json'))
-          # Restrict interpretation/output to documented public revision fields.
-          for sha in CANDIDATES:
-              fields = [journal.get('revision'), journal.get('activeRevision')]
-              last = journal.get('lastCodeRelease', {})
-              if isinstance(last, dict): fields.extend([last.get('revision'), last.get('previous')])
-              refs[sha]['current_journal_reference'] = sum(value == sha for value in fields)
-          
-          manifests = {}
-          for sha in CANDIDATES:
-              value = small_json(RELEASES / sha / 'release.json')
-              manifests[sha] = {'revision_matches': value.get('revision') == sha, 'clean': value.get('dirty') is False}
-              raw = subprocess.check_output(['du', '--summarize', '--one-file-system', '--block-size=1', '--', str(RELEASES / sha)],
-                  text=True, stderr=subprocess.DEVNULL, timeout=10)
-              manifests[sha]['du_allocated_bytes'] = int(raw.split()[0])
-          
-          snapshot_count = 0
-          migration_snapshot_count = 0
-          unknown_snapshot_metadata_count = 0
-          with os.scandir('/var/lib/becore-tickets-handover') as entries:
-              for entry in entries:
-                  guard()
-                  if not re.fullmatch(r'code-release-[1-9][0-9]*-[1-9][0-9]*', entry.name) or not entry.is_dir(follow_symlinks=False): continue
-                  path = Path(entry.path)
-                  try:
-                      result = small_json(path / 'result.json')
-                      pointers = small_json(path / 'pointers.before.json')
-                      if not isinstance(result, dict) or not isinstance(pointers, dict): raise ValueError('Unexpected metadata shape')
-                  except (OSError, ValueError):
-                      unknown_snapshot_metadata_count += 1
-                      continue
-                  snapshot_count += 1
-                  if result.get('dataMigration'): migration_snapshot_count += 1
-                  for sha in CANDIDATES:
-                      if result.get('source') == sha: refs[sha]['snapshot_source'] += 1
-                      if result.get('previous') == sha: refs[sha]['snapshot_previous'] += 1
-                      if any(str(value) == str(RELEASES / sha) for value in pointers.values()): refs[sha]['snapshot_pointer'] += 1
-                      if result.get('dataMigration') and sha in (result.get('source'), result.get('previous')): refs[sha]['migration_snapshot'] += 1
-          
-          raw = subprocess.check_output(['systemctl', 'list-units', '--type=service', '--all', '--no-legend', '--plain', '--no-pager'],
-              text=True, stderr=subprocess.DEVNULL, timeout=10)
-          units = [line.split()[0] for line in raw.splitlines() if line.strip()]
-          if units:
-              raw = subprocess.check_output(['systemctl', 'show', '--property=WorkingDirectory', '--value', '--', *units],
-                  text=True, stderr=subprocess.DEVNULL, timeout=10)
-              for value in raw.splitlines():
-                  for sha in CANDIDATES:
-                      if value == str(RELEASES / sha) or value.startswith(str(RELEASES / sha) + '/'):
-                          refs[sha]['service_working_directory'] += 1
-          
-          with os.scandir('/proc') as processes:
-              for process in processes:
-                  if not process.name.isdigit(): continue
-                  guard()
-                  targets = [Path(process.path) / 'cwd', Path(process.path) / 'exe']
-                  try:
-                      with os.scandir(Path(process.path) / 'fd') as descriptors:
-                          for entry in descriptors:
-                              guard()
-                              targets.append(Path(entry.path))
-                  except FileNotFoundError: reference_races += 1
-                  except PermissionError: reference_permission_errors += 1
-                  for target in targets:
-                      guard()
-                      try:
-                          value = os.readlink(target)
-                          for sha in CANDIDATES:
-                              if value == str(RELEASES / sha) or value.startswith(str(RELEASES / sha) + '/'):
-                                  refs[sha]['process_symlink'] += 1
-                      except FileNotFoundError: reference_races += 1
-                      except PermissionError: reference_permission_errors += 1
-                  try:
-                      with open(Path(process.path) / 'maps', 'r') as stream:
-                          mapped = stream.read(4 * 1024 * 1024 + 1)
-                      if len(mapped) > 4 * 1024 * 1024: raise RuntimeError('Process metadata exceeded bound')
-                      for sha in CANDIDATES:
-                          if str(RELEASES / sha) + '/' in mapped: refs[sha]['process_mapping'] += 1
-                  except FileNotFoundError: reference_races += 1
-                  except PermissionError: reference_permission_errors += 1
-          
-          retention_status = {}
-          for unit, fields in [('becore-tickets-retention.timer', ['ActiveState', 'LastTriggerUSec', 'NextElapseUSecRealtime']),
-                               ('becore-tickets-retention.service', ['ActiveState', 'Result', 'ExecMainStatus'])]:
-              raw = subprocess.check_output(['systemctl', 'show', unit, '--no-pager', '--property=' + ','.join(fields)],
-                  text=True, stderr=subprocess.DEVNULL, timeout=10)
-              retention_status[unit] = dict(line.split('=', 1) for line in raw.splitlines() if '=' in line)
-          with open(HOME / 'current' / 'operations' / 'retention.py', 'rb') as stream:
-              import hashlib
-              retention_source_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
-          dependency_evidence = {'manifests': manifests, 'references': refs,
-              'reference_permission_errors': reference_permission_errors, 'reference_races_or_missing_metadata': reference_races,
-              'snapshot_metadata_count': snapshot_count, 'unknown_snapshot_metadata_count': unknown_snapshot_metadata_count,
-              'migration_snapshot_count': migration_snapshot_count,
-              'retention_status': retention_status, 'public_retention_source_sha256': retention_source_sha256,
-              'snapshot_metadata_read': True, 'backup_database_and_credential_contents_read': False,
-              'deletion_authorized': False, 'normal_recovery_established': False}
-          
-          if identity() != before:
-              raise RuntimeError('Protected runtime changed during inventory')
-          known_releases = [row for row in release_sizes if row['revision'] is not None]
-          other_releases = [row for row in release_sizes if row['revision'] is None]
-          retained_summary = {'protected': True, 'count': len(other_releases),
-              'logical_bytes': sum(row['logical_bytes'] for row in other_releases),
-              'regular_file_allocated_bytes': sum(row['regular_file_allocated_bytes'] for row in other_releases)}
-          print(json.dumps({'read_only': True, 'active': before['current'], 'previous': before['previous'],
-                            'disk': {'total_bytes': disk.total, 'used_bytes': disk.used, 'free_bytes': disk.free},
-                            'reviewed_stage_inventory': stages, 'protected_known_releases': known_releases, 'other_retained_release_totals': retained_summary,
-                            'broad_fixed_root_totals': broad, 'service_summary': service_summary,
-                            'other_ticket_stages': other_ticket_stages,
-                            'cache_open_reference_counts': reference_counts, 'reference_scan_errors': reference_errors,
-                            'release_dependency_evidence': dependency_evidence, 'docker_aggregate_summary': docker_summary, 'comparable_du_allocated_bytes': comparable_usage,
-                            'backup_contents_accessed': False, 'credential_contents_accessed': False,
-                            'deleted_bytes': 0, 'all_active_projects_protected': True,
-                            'allocation_note': 'Metadata totals only; no ownership/use/recovery or reclaimable-space approval inferred. Root categories may omit other mounts and system roots.'}, indent=2))
+                  target_stat=os.stat(p.name,dir_fd=parent_fd,follow_symlinks=False)
+                  if not stat.S_ISDIR(target_stat.st_mode) or target_stat.st_ino!=EXPECTED[index][0] or target_stat.st_uid!=0: raise RuntimeError('Anchored target identity drift')
+                  shutil.rmtree(p.name,dir_fd=parent_fd)
+              finally: os.close(parent_fd)
+              if p.exists() or p.is_symlink(): raise RuntimeError('Target remains')
+              print(json.dumps({'phase':'removed','path':str(p)}),flush=True)
+          os.sync()
+          if identity()!=protected: raise RuntimeError('Post-delete identity drift')
+          after=shutil.disk_usage(HOME).free
+          health_after=health()
+          # Historical metadata is preserved byte-for-byte semantically; never rewritten.
+          for name,digest in snapshots.items():
+              p=Path('/var/lib/becore-tickets-handover')/name
+              actual=hashlib.sha256(json.dumps([small_json(p/'result.json'),small_json(p/'pointers.before.json')],sort_keys=True).encode()).hexdigest()
+              if actual!=digest: raise RuntimeError('Snapshot metadata drift')
+          print(json.dumps({'phase':'complete','removed_paths':[str(p) for p in TARGETS],'free_bytes_before':before,'free_bytes_after':after,'observed_free_bytes_increase':after-before,'protected':protected,'health_before':health_before,'health_after':health_after,'historical_snapshot_metadata_preserved':True,'snapshot_prunes':0}),flush=True)
           PY
