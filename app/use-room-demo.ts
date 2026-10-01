@@ -69,5 +69,5 @@ export function useRoomDemo(paused: boolean, reducedMotion: boolean, offset = 0)
     });
   }, [running, reducedMotion]);
 
-  return { phoneRef, streamRef, step: shownStep, running, typing: shownStep === 1 || shownStep === 3 || shownStep === 5 };
+  return { phoneRef, streamRef, step: shownStep, ready, running, typing: shownStep === 1 || shownStep === 3 || shownStep === 5 };
 }
