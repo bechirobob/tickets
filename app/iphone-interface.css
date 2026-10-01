@@ -56,16 +56,6 @@ body :is(a, button).ticket-action[data-variant]:active:not(:disabled) { transfor
 body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
 
 @media (max-width: 700px) {
-  .customer-dock {
-    min-height: calc(56px + env(safe-area-inset-bottom)); padding: 4px 12px max(4px, env(safe-area-inset-bottom));
-    background: rgba(40,27,43,.94); border-top: 1px solid rgba(219,197,211,.18);
-    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-  }
-  .customer-dock a { min-height: 48px; gap: 3px; font-size: 12px; line-height: 1.35; font-weight: 500; padding: 3px 2px; }
-  .customer-dock a[aria-current=page] { font-weight: 600; }
-  .customer-dock svg { width: 23px; height: 23px; stroke-width: 1.7; transition: transform var(--ui-press); }
-  .customer-dock a:active svg { transform: scale(.9); }
-  body:has(.poster-event-page) .customer-dock { background: color-mix(in srgb, var(--event-shell-paper) 94%, transparent); border-color: color-mix(in srgb, var(--event-shell-ink) 17%, transparent); }
   .night-header { height: 60px; }
   .night-header__actions, .my-nights-header-actions { gap: 6px; }
   .night-header .brand-logo__type > b { font-size: 20px; letter-spacing: -.035em; }
@@ -102,8 +92,6 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
 }
 @media (prefers-reduced-transparency: reduce) {
   .night-mobile-menu__panel, .notification-panel--dropdown { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .customer-dock { background: #281b2b; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  body:has(.poster-event-page) .customer-dock { background: var(--event-shell-paper); }
 }
 
 /* Older supported WebViews retain complete cards without subgrid. */
@@ -136,19 +124,162 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .workspace-return { font-size:12px; gap:10px; }
   .workspace-return span { max-width:160px; }
 }
-@media (max-width: 700px) {
-  .customer-dock { background:#281b2b; box-shadow:inset 0 1px 0 rgb(255 255 255 / .08); transition:transform var(--ui-panel) var(--ui-ease); }
-  .customer-dock a { border-radius:12px; }
-  .customer-dock a:active { background:rgb(255 255 255 / .07); }
-  html[data-keyboard=open] .customer-dock { display:none; }
-  .customer-dock a:focus-visible { outline:2px solid currentColor; outline-offset:-2px; }
-  @supports ((backdrop-filter:blur(16px)) or (-webkit-backdrop-filter:blur(16px))) {
-    .customer-dock { background:rgb(40 27 43 / .82); backdrop-filter:blur(24px) saturate(115%); -webkit-backdrop-filter:blur(24px) saturate(115%); }
-    body:has(.poster-event-page) .customer-dock { background:color-mix(in srgb,var(--event-shell-paper) 84%,transparent); }
+/* The guest shell has one obvious, reachable mobile navigation system. */
+.night-mobile-menu__trigger-label { display: none; }
+@media (max-width: 760px) {
+  body {
+    --mobile-dock-bottom: max(12px, env(safe-area-inset-bottom));
+    --mobile-menu-bottom: var(--mobile-dock-bottom);
+    --mobile-chrome-solid: #281b2b;
+    --mobile-chrome-fill: rgb(40 27 43 / .86);
+  }
+  body :is(.discovery-home, .discovery-directory, .my-nights-page, .buzz-page, .hosts-page, .host-page, .about-page, .account-privacy) > :is(.night-header, .directory-header),
+  body :is(.event-page, .help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) {
+    position: sticky; top: 0; z-index: 60;
+    height: calc(60px + env(safe-area-inset-top)); min-height: calc(60px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+    padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right));
+    background: var(--mobile-chrome-solid); color: #f8eee7;
+    border-bottom: 1px solid rgb(255 255 255 / .14);
+    box-shadow: none;
+  }
+  body .poster-event-page > .sub-header {
+    --mobile-chrome-solid: var(--event-paper);
+    --mobile-chrome-fill: color-mix(in srgb, var(--event-paper) 86%, transparent);
+    color: var(--event-ink); border-color: color-mix(in srgb, var(--event-ink) 16%, transparent);
+  }
+  body :is(.help-page, .policy-page, .legal-page) > header {
+    --mobile-chrome-solid: #f4f1e9;
+    --mobile-chrome-fill: rgb(244 241 233 / .9);
+    color: #281b2b; border-color: rgb(0 0 0 / .14);
+  }
+  body :is(.night-header, .directory-header, .sub-header) .brand-logo__type > b { font-size: 20px; }
+  body :is(.night-header, .directory-header, .sub-header) .brand-logo__type > small { font-size: 10px; }
+  .night-mobile-menu .night-mobile-menu__trigger {
+    width: auto; min-width: 44px; gap: 6px; padding: 0 9px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; background: rgb(128 128 128 / .13);
+    font-size: 13px; font-weight: 550; line-height: 1; letter-spacing: 0;
+    box-shadow: none;
+  }
+  .night-mobile-menu__trigger-label { display: inline; }
+  .night-mobile-menu .night-mobile-menu__trigger svg { width: 18px; height: 18px; }
+  body:has(.night-mobile-menu--sheet.is-open) { overflow: hidden; }
+  .night-mobile-menu.night-mobile-menu--sheet {
+    position: fixed; inset: 0 0 auto; height: var(--app-viewport-height); z-index: 70; pointer-events: none;
+    color: #f8eee7; --focus-ring: #eee;
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__scrim {
+    position: absolute; inset: 0; background: rgb(0 0 0 / .3);
+    opacity: 0; visibility: hidden; pointer-events: none; touch-action: none;
+    transition: opacity 180ms var(--ui-ease), visibility 0s linear 180ms;
+  }
+  .night-mobile-menu--sheet.is-open .night-mobile-menu__scrim {
+    opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s;
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__panel {
+    position: absolute; inset: auto max(12px, env(safe-area-inset-right)) var(--mobile-menu-bottom) max(12px, env(safe-area-inset-left));
+    width: auto; max-width: 480px; height: auto; margin-inline: auto; padding: 8px 14px 12px;
+    max-height: calc(var(--app-viewport-height) - var(--mobile-menu-bottom) - max(20px, env(safe-area-inset-top)));
+    align-content: start; border-radius: 24px; border: 1px solid rgb(255 255 255 / .2);
+    background: #30212c; color: #f8eee7; box-shadow: none;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    transform: translateY(24px); transform-origin: bottom center;
+    transition: opacity 180ms var(--ui-ease), transform 180ms var(--ui-ease), visibility 0s linear 180ms;
+  }
+  .night-mobile-menu--sheet.is-open .night-mobile-menu__panel {
+    transform: translateY(var(--menu-drag-y, 0px)); transition-delay: 0s;
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__panel[data-dragging] { transition: none; }
+  .night-mobile-menu--sheet .night-mobile-menu__panel::before { content: none; }
+  .night-mobile-menu--sheet .night-mobile-menu__panel-header {
+    position: relative; min-height: 66px; padding: 16px 2px 5px 8px;
+    border-bottom: 1px solid rgb(255 255 255 / .13); touch-action: none; user-select: none;
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__panel-header > span:not(.night-mobile-menu__handle) {
+    font-size: 19px; line-height: 1.3; font-weight: 600; color: #f8eee7; letter-spacing: -.02em;
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__handle {
+    position: absolute; top: 3px; left: calc(50% - 18px); width: 36px; height: 4px;
+    border-radius: 2px; background: rgb(255 255 255 / .36);
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__close {
+    width: 44px; height: 44px; border: 0; border-radius: 12px;
+    background: #493b45; color: #f8eee7; transform: none; box-shadow: none;
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__links {
+    padding-top: 6px; gap: 2px 10px; transform: none; transition: none;
+  }
+  .night-mobile-menu--sheet .night-mobile-menu__panel a {
+    min-height: 56px; padding: 8px; gap: 10px; grid-template-columns: 20px minmax(0, 1fr);
+    font-size: 16px; font-weight: 500; line-height: 1.35; letter-spacing: -.01em;
+    color: #f1e7ec; transform: none; transition: color var(--ui-control), background-color var(--ui-control);
+    transition-delay: 0s; border-radius: 10px; box-shadow: none;
+  }
+  .night-mobile-menu--sheet.is-open .night-mobile-menu__panel a:nth-child(n) { transform: none; transition-delay: 0s; }
+  .night-mobile-menu--sheet .night-mobile-menu__panel a svg { width: 20px; height: 20px; color: #d5c5cf; }
+  .night-mobile-menu--sheet .night-mobile-menu__panel a[aria-current=page] { background: #493b45; color: #e4f18b; }
+  .night-mobile-menu--sheet .night-mobile-menu__panel a:active { background: #493b45; }
+  .night-mobile-menu--sheet .night-mobile-menu__panel a:focus-visible { outline: 2px solid #eee; outline-offset: -2px; }
+  @supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
+    body :is(.discovery-home, .discovery-directory, .my-nights-page, .buzz-page, .hosts-page, .host-page, .about-page, .account-privacy) > :is(.night-header, .directory-header),
+    body :is(.event-page, .help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) {
+      background: var(--mobile-chrome-fill); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    }
+    .night-mobile-menu--sheet .night-mobile-menu__panel { background: rgb(48 33 44 / .92); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
   }
 }
-@media (prefers-reduced-transparency:reduce) {
-  .customer-dock { background:#281b2b; backdrop-filter:none; -webkit-backdrop-filter:none; }
-  body:has(.poster-event-page) .customer-dock { background:var(--event-shell-paper); }
+@media (max-width: 700px) {
+  body:has(.customer-dock) { padding-bottom: calc(88px + var(--mobile-dock-bottom)); --mobile-menu-bottom: calc(78px + var(--mobile-dock-bottom)); }
+  body nav.customer-dock {
+    inset: auto max(12px, env(safe-area-inset-right)) var(--mobile-dock-bottom) max(12px, env(safe-area-inset-left));
+    min-height: 68px; max-width: 480px; margin-inline: auto; padding: 6px; gap: 4px;
+    z-index: 80; border: 1px solid rgb(255 255 255 / .2); border-radius: 22px;
+    background: #281b2b; color: #f8eee7; box-shadow: none;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  body .customer-dock a {
+    min-width: 0; min-height: 54px; margin: 0; padding: 5px 2px; gap: 3px;
+    border-radius: 16px; color: #e4d6df; font-size: 12px; line-height: 1.3; font-weight: 500;
+    transition: background-color var(--ui-control), color var(--ui-control), transform var(--ui-press); box-shadow: none;
+  }
+  body .customer-dock a[aria-current=page] { background: #e4f18b; color: #281b2b; font-weight: 650; }
+  body .customer-dock svg { width: 23px; height: 23px; stroke-width: 1.8; }
+  body .customer-dock a:active { transform: scale(.96); }
+  body .customer-dock a:focus-visible { outline: 2px solid currentColor; outline-offset: -4px; }
+  body:has(.poster-event-page) nav.customer-dock { background: var(--event-shell-paper); border-color: color-mix(in srgb, var(--event-shell-ink) 20%, transparent); }
+  body:has(.poster-event-page) nav.customer-dock a[aria-current=page] { background: var(--event-shell-ink); color: var(--event-shell-paper); }
+  html[data-keyboard=open] body .customer-dock { display: none; }
+  html[data-keyboard=open] body { --mobile-menu-bottom: max(12px, env(safe-area-inset-bottom)); }
+  @supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
+    body nav.customer-dock { background: rgb(40 27 43 / .84); backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px); }
+    body:has(.poster-event-page) nav.customer-dock { background: color-mix(in srgb, var(--event-shell-paper) 86%, transparent); }
+  }
 }
-@media (prefers-reduced-motion:reduce) { .customer-dock { transition:none; } }
+@media (max-width: 360px) {
+  .night-mobile-menu .night-mobile-menu__trigger { width: 44px; padding: 0; }
+  .night-mobile-menu__trigger-label { display: none; }
+}
+@media (max-width: 760px) and (prefers-reduced-transparency: reduce) {
+  body :is(.discovery-home, .discovery-directory, .my-nights-page, .buzz-page, .hosts-page, .host-page, .about-page, .account-privacy) > :is(.night-header, .directory-header),
+  body :is(.event-page, .help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) { background: var(--mobile-chrome-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .night-mobile-menu--sheet .night-mobile-menu__panel { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  body nav.customer-dock { background: #281b2b; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  body:has(.poster-event-page) nav.customer-dock { background: var(--event-shell-paper); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .night-mobile-menu--sheet .night-mobile-menu__panel,
+  .night-mobile-menu--sheet .night-mobile-menu__scrim,
+  .night-mobile-menu--sheet .night-mobile-menu__panel a,
+  body .customer-dock a { transition: none; }
+  .night-mobile-menu--sheet.is-open .night-mobile-menu__panel, body .customer-dock a:active { transform: none; }
+}
+@media (forced-colors: active) {
+  body nav.customer-dock, .night-mobile-menu--sheet .night-mobile-menu__panel { background: Canvas; color: CanvasText; border-color: CanvasText; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  body .customer-dock a[aria-current=page], body:has(.poster-event-page) nav.customer-dock a[aria-current=page] { background: Highlight; color: HighlightText; }
+  .night-mobile-menu--sheet .night-mobile-menu__close { background: ButtonFace; color: ButtonText; }
+  .night-mobile-menu--sheet .night-mobile-menu__panel a, .night-mobile-menu--sheet .night-mobile-menu__panel a svg { color: LinkText; }
+  .night-mobile-menu--sheet .night-mobile-menu__handle { background: CanvasText; }
+}

@@ -24,7 +24,7 @@ export default function PaymentFooter() {
         <ul className="payment-footer__methods" aria-label="Accepted payment methods">
           {methods.map(method => <li key={method.file} title={method.label}><Image className={method.file === 'visa' ? 'payment-footer__visa' : undefined} src={`/payment-providers/${method.file}.svg`} alt={method.label} width={method.width} height={38} unoptimized /></li>)}
         </ul>
-        <p className="payment-footer__crypto"><Coins size={27} strokeWidth={1.5} aria-hidden="true" /><span>Crypto<small>Coming soon</small></span></p>
+        <p className="payment-footer__crypto"><Coins size={27} strokeWidth={1.5} aria-hidden="true" /><span>Crypto<small>USDC through SeevPlus</small></span></p>
       </div>
     </div>
   </section>;

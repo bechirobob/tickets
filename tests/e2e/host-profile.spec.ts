@@ -3,9 +3,13 @@ import AxeBuilder from '@axe-core/playwright';
 
 test('Kofi Bills profile shows the portrait, public socials and linked event',async({page})=>{
   await page.goto('/hosts');
+  const kofi = page.locator('.hosts-list article').filter({ has: page.getByRole('heading', { name: 'Kofi Bills', exact: true }) });
+  await expect(kofi).toContainText('Verified host');
+  await expect(kofi).not.toContainText('Reviewed Host');
   await page.getByRole('link',{name:'View Host',exact:true}).click();
   await expect(page).toHaveURL(/\/hosts\/kofi-bills$/);
   await expect(page.getByRole('heading',{name:'Kofi Bills',exact:true})).toBeVisible();
+  await expect(page.locator('.host-profile__identity')).toContainText('Verified host');
   await expect(page.getByText('Henry Yorke',{exact:true})).toBeVisible();
   await expect(page.locator('.host-profile__portrait img')).toBeVisible();
   await expect.poll(() => page.locator('.host-profile__portrait img').evaluate((img:HTMLImageElement)=>img.complete && img.naturalWidth>0)).toBe(true);
@@ -21,6 +25,9 @@ test('October RSVP is available without a fabricated date or paid checkout',asyn
   // Registration fixture suites deliberately change this event to interest-only.
   test.skip(Boolean(test.info().config.configFile?.match(/registration|seev|operations/)),'Public migration state only.');
   await page.goto('/event/sun-chasers-labadi');
+  await expect(page.locator('.event-host')).toContainText('Kofi Bills');
+  await expect(page.locator('.event-host')).toContainText('Verified host');
+  await expect(page.locator('.event-host')).not.toContainText('Reviewed Host');
   await expect(page.getByRole('heading',{name:'October · Coming soon',exact:true})).toBeVisible();
   await expect(page.getByText('Limited RSVP spots. Get your name in early.')).toBeVisible();
   await page.getByRole('button',{name:/^(Request an )?RSVP$/}).click();

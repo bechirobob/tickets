@@ -58,9 +58,9 @@ const guides: Guide[] = [
     id: "payment-methods",
     audience: "Going out",
     category: "Payments",
-    title: "Pay with Mobile Money or card",
+    title: "Pay with Mobile Money, cards or USDC",
     summary: "Pick how you’re paying. We’ll take you from there.",
-    steps: ["Choose Mobile Money to reveal MTN MoMo, Telecel Cash or AT Money, or choose Card to continue with Visa or Mastercard.", "Finish with the payment provider. Your card details and MoMo PIN stay with them.", "Come back here when you’re done. Keep the payment reference until your ticket lands in My Nights."],
+    steps: ["Choose from the payment methods shown at checkout. Mobile Money covers MTN MoMo, Telecel Cash or AT Money; Cards continues with Visa or Mastercard.", "Choose Crypto for USDC through SeevPlus. Review the USDC amount there and use only the asset and network shown in the payment instructions.", "Finish with the payment provider. Your card details and MoMo PIN stay with them.", "Come back here when you’re done. Your tickets appear once payment is confirmed. Keep the payment reference until your ticket lands in My Nights."],
     popular: true,
   },
   {

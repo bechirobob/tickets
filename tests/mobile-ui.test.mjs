@@ -2,6 +2,23 @@ import assert from "node:assert/strict";
 import { readFile as readSource } from "node:fs/promises";
 import test from "node:test";
 
+test("crypto labels name the integrated USDC method while checkout and event availability stay conditional", async () => {
+  const [footer, home, help, checkout, event, native] = await Promise.all([
+    "../app/payment-footer.tsx", "../app/home-screen.tsx", "../app/help/help-centre.tsx",
+    "../app/checkout/[slug]/checkout-form.tsx", "../app/event/[slug]/event-screen.tsx", "../mobile/src/main.tsx",
+  ].map(path => readFile(new URL(path, import.meta.url), "utf8")));
+  assert.match(footer, /Crypto<small>USDC through SeevPlus<\/small>/u);
+  assert.doesNotMatch(footer, /coming soon/iu);
+  assert.match(home, /MoMo, cards, USDC and ticket tiers/u);
+  assert.match(help, /Pay with Mobile Money, cards or USDC/u);
+  assert.match(help, /Choose from the payment methods shown at checkout/u);
+  assert.match(help, /only the asset and network shown/u);
+  assert.match(checkout, /seevEnabled && seevCryptoEnabled/u);
+  assert.match(checkout, /Crypto<small>USDC through SeevPlus/u);
+  assert.match(event, /The exact date is still under wraps/u);
+  assert.match(native, /import HomeScreen from ['"]\.\.\/\.\.\/app\/home-screen['"]/u);
+});
+
 // Keep the existing source contracts over the server entrypoint and shared view.
 async function readFile(url, encoding) {
   const source = await readSource(url, encoding);
@@ -587,7 +604,7 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.match(about, /Made for how Accra moves/u);
   assert.match(home, /className="organizer-intelligence backstage-bridge(?: [^"]+)?"/u);
   assert.match(home, /We’ll mind the details/u);
-  assert.match(home, /MoMo, cards and ticket tiers/u);
+  assert.match(home, /MoMo, cards, USDC and ticket tiers/u);
   assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);
   assert.match(css, /\.about-reasons article\s*\{[^}]*border-bottom:\s*1px solid #cbc7bd/su);
   assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);

@@ -33,7 +33,13 @@ test("public navigation is usable without horizontal overflow", async ({ page })
   await page.keyboard.press("Escape");
   await expect(menu).toBeFocused();
   await page.evaluate(() => window.scrollTo(0, 700));
-  await expect(menu).not.toBeInViewport();
+  if ((page.viewportSize()?.width ?? 1000) <= 760) {
+    await expect(menu).toBeInViewport();
+    await expect(page.locator(".discovery-home > .night-header")).toHaveCSS("position", "sticky");
+    await expect.poll(() => page.locator(".discovery-home > .night-header").evaluate(header => Math.round(header.getBoundingClientRect().top))).toBe(0);
+  } else {
+    await expect(menu).not.toBeInViewport();
+  }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
