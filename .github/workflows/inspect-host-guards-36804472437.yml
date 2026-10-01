@@ -1,0 +1,215 @@
+name: Inspect the pinned Tickets host guards once
+
+# Pinned to merged PR 213 and its exact reviewed operator tree.
+# Publishing this dedicated branch is the one-time inspection trigger.
+# Never rerun or repeat an uncertain POST; inspect the emitted run/workflow URL.
+on:
+  push:
+    branches: [ops/inspect-host-guards-36804472437]
+    paths: [.github/workflows/inspect-host-guards-36804472437.yml]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: tickets-inspect-host-guards-36804472437
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/inspect-host-guards-36804472437'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MAIN_SHA: de2830b851370ad98899d86e9b0b7a1360d4658b
+    steps:
+      - name: Verify the reviewed operator and dispatch only inspection once
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPO = 'bechirobob/tickets'
+          BRANCH = 'refs/heads/ops/inspect-host-guards-36804472437'
+          MAIN = os.environ['MAIN_SHA']
+          REVIEWED = '6fb50569d14cb0cb3ab1c484b1571c6d08fd89ee'
+          TREE = '84db84aa400319a05e1d1a2ac3134ed4058f1755'
+          WORKFLOW = 'tickets-code-release.yml'
+          WORKFLOW_ID = 371254565
+          WORKFLOW_BLOB = '68f34ede33f783da17d3cd9c2ba05e6e6dfb12e6'
+          GATE_RUN = 36807684098
+          GATE_WORKFLOW = 'tickets-release-operator-checks.yml'
+          GATE_WORKFLOW_ID = 371280183
+          RUNS_URL = 'https://github.com/' + REPO + '/actions/workflows/' + WORKFLOW
+          # GitHub preserves this literal name when dependencies skip the matrix.
+          # Split the dollar sign to avoid evaluating its expression in this workflow.
+          SKIPPED_PREVIEW = 'Verify retired checkout preview (' + '$' + '{{ matrix.browser }})'
+          GATE_STEPS = ('Verify release guards and rollback without host access',
+                        'Verify the exact staged operator layout used for release')
+          INSPECT_STEPS = ('Require exact read-only diagnostic context and failed release pins',
+                           'Connect existing dedicated Tickets identity for read-only inspection',
+                           'Read failed release metadata without customer rows or secret values')
+          PAYLOAD = {'ref': 'main', 'inputs': {
+              'inspect_failed_release': True,
+              'source_sha': 'ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe',
+              'runtime_run': '36804016094', 'candidate_run': '36801064451',
+              'expected_active': '45ec44e35f8b0e5099a328ce219df2529374f9ee',
+              'recover_prepared': '', 'enable_crypto': False,
+          }}
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          def api(path, payload=None):
+              request = urllib.request.Request('https://api.github.com/repos/' + REPO + '/' + path,
+                  data=None if payload is None else json.dumps(payload).encode(), headers={
+                      'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                      'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28'})
+              try:
+                  with urllib.request.build_opener(NoRedirect()).open(request, timeout=30) as response:
+                      require(response.status == (200 if payload is None else 204), 'Unexpected GitHub status')
+                      raw = response.read(2 * 1024 * 1024 + 1)
+                      require(len(raw) <= 2 * 1024 * 1024, 'GitHub response exceeded its bound')
+                      return json.loads(raw) if raw else None
+              except urllib.error.HTTPError as error:
+                  raise RuntimeError('GitHub request failed with HTTP ' + str(error.code)) from None
+              except (urllib.error.URLError, TimeoutError):
+                  raise RuntimeError('GitHub request failed or timed out') from None
+
+          def note(message):
+              print(message, flush=True)
+              if os.environ.get('GITHUB_STEP_SUMMARY'):
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                      summary.write(message + '\n\n')
+
+          def exact_main():
+              require(api('git/ref/heads/main')['object']['sha'] == MAIN,
+                      'Main moved or differs from the reviewed operator; do not dispatch')
+
+          def run_identity(run, run_id, filename, workflow_id, sha, event):
+              require(run.get('id') == run_id and run.get('workflow_id') == workflow_id
+                      and run.get('path') == '.github/workflows/' + filename
+                      and run.get('head_sha') == sha and run.get('event') == event
+                      and run.get('run_attempt') == 1
+                      and run.get('repository', {}).get('full_name') == REPO
+                      and run.get('head_repository', {}).get('full_name') == REPO,
+                      'Run identity, source or attempt does not match the reviewed request')
+
+          def jobs_for(run_id):
+              result = api('actions/runs/' + str(run_id) + '/jobs?per_page=100')
+              require(result['total_count'] == len(result['jobs']), 'Incomplete job listing')
+              return result['jobs']
+
+          def steps_succeeded(job, names):
+              for name in names:
+                  matches = [step for step in job.get('steps', []) if step.get('name') == name]
+                  require(len(matches) == 1 and matches[0].get('conclusion') == 'success',
+                          'Required step was skipped, failed or duplicated: ' + name)
+
+          def existing_dispatches():
+              query = urllib.parse.urlencode({'head_sha': MAIN, 'event': 'workflow_dispatch', 'per_page': 100})
+              result = api('actions/workflows/' + WORKFLOW + '/runs?' + query)
+              runs = result['workflow_runs']
+              require(result['total_count'] == len(runs), 'Incomplete existing-dispatch listing')
+              require(all(run.get('head_sha') == MAIN and run.get('event') == 'workflow_dispatch'
+                          and run.get('path') == '.github/workflows/' + WORKFLOW for run in runs),
+                      'Unexpected dispatch listing identity')
+              return runs
+
+          def main():
+              require(os.environ.get('GITHUB_REPOSITORY') == REPO
+                      and os.environ.get('GITHUB_REF') == BRANCH
+                      and os.environ.get('GITHUB_EVENT_NAME') == 'push'
+                      and os.environ.get('GITHUB_RUN_ATTEMPT') == '1',
+                      'Only the first push run on the dedicated inspection branch is allowed')
+              require(re.fullmatch(r'[a-f0-9]{40}', MAIN) is not None,
+                      'Replace CURRENT_MAIN_SHA with the exact reviewed merged operator SHA')
+              exact_main()
+              for sha in (MAIN, REVIEWED):
+                  commit = api('git/commits/' + sha)
+                  require(commit.get('sha') == sha and commit.get('tree', {}).get('sha') == TREE,
+                          'Main and reviewed operator must have the identical full tree')
+              ancestry = api('compare/' + PAYLOAD['inputs']['source_sha'] + '...' + MAIN)
+              require(ancestry.get('status') in ('ahead', 'identical')
+                      and ancestry.get('merge_base_commit', {}).get('sha') == PAYLOAD['inputs']['source_sha'],
+                      'Reviewed application is not an ancestor of the main operator')
+              workflow = api('actions/workflows/' + WORKFLOW)
+              require(workflow.get('id') == WORKFLOW_ID and workflow.get('path') == '.github/workflows/' + WORKFLOW
+                      and workflow.get('state') == 'active', 'Unexpected release workflow identity')
+              require(api('contents/.github/workflows/' + WORKFLOW + '?ref=' + MAIN).get('sha') == WORKFLOW_BLOB,
+                      'Inspection workflow differs from the exact reviewed blob')
+              gate = api('actions/runs/' + str(GATE_RUN))
+              run_identity(gate, GATE_RUN, GATE_WORKFLOW, GATE_WORKFLOW_ID, REVIEWED, 'pull_request')
+              require(gate.get('status') == 'completed' and gate.get('conclusion') == 'success',
+                      'Exact operator gate has not succeeded')
+              gate_jobs = jobs_for(GATE_RUN)
+              require(len(gate_jobs) == 1 and gate_jobs[0].get('name') == 'verify'
+                      and gate_jobs[0].get('conclusion') == 'success', 'Unexpected operator gate jobs')
+              steps_succeeded(gate_jobs[0], GATE_STEPS)
+              require(not existing_dispatches(), 'A dispatch already exists at this main SHA; inspect ' + RUNS_URL)
+              exact_main()
+              try:
+                  api('actions/workflows/' + WORKFLOW + '/dispatches', PAYLOAD)
+              except Exception:
+                  raise RuntimeError('Inspection dispatch outcome is uncertain; never retry. Inspect ' + RUNS_URL) from None
+              note('Inspection dispatch accepted once. Never redispatch: ' + RUNS_URL)
+              deadline = time.monotonic() + 300
+              run = None
+              while time.monotonic() < deadline:
+                  matches = existing_dispatches()
+                  require(len(matches) <= 1, 'Multiple matching dispatches; inspect ' + RUNS_URL)
+                  if matches:
+                      run = matches[0]
+                      break
+                  time.sleep(5)
+              require(run is not None, 'Accepted inspection not yet identified; do not retry. Inspect ' + RUNS_URL)
+              run_id = run['id']
+              require(isinstance(run_id, int) and run_id > 0, 'Invalid admitted run ID')
+              run_url = 'https://github.com/' + REPO + '/actions/runs/' + str(run_id)
+              note('Tracking exact inspection run: ' + run_url)
+              deadline = time.monotonic() + 720
+              while time.monotonic() < deadline:
+                  run_identity(run, run_id, WORKFLOW, WORKFLOW_ID, MAIN, 'workflow_dispatch')
+                  require(run.get('head_branch') == 'main' and run.get('html_url') == run_url
+                          and run.get('actor', {}).get('login') == 'github-actions[bot]',
+                          'Inspection run is not the intended main GITHUB_TOKEN dispatch')
+                  if run.get('status') == 'completed':
+                      require(run.get('conclusion') == 'success', 'Inspection did not succeed: ' + run_url)
+                      matches = existing_dispatches()
+                      require(len(matches) == 1 and matches[0].get('id') == run_id,
+                              'Dispatch listing changed before terminal acceptance')
+                      jobs = jobs_for(run_id)
+                      expected = {'inspect_failure': 'success', 'release': 'skipped', SKIPPED_PREVIEW: 'skipped'}
+                      require(len(jobs) == len(expected) and {job.get('name') for job in jobs} == set(expected)
+                              and all(job.get('conclusion') == expected[job['name']] for job in jobs),
+                              'Inspection must succeed while deployment and preview jobs stay skipped')
+                      steps_succeeded(next(job for job in jobs if job['name'] == 'inspect_failure'), INSPECT_STEPS)
+                      note('Read-only inspection succeeded; deployment and previews were skipped: ' + run_url)
+                      return
+                  time.sleep(10)
+                  run = api('actions/runs/' + str(run_id))
+              raise RuntimeError('Inspection remains nonterminal; continue monitoring ' + run_url + '. Do not redispatch.')
+
+          if __name__ == '__main__':
+              try:
+                  main()
+              except Exception as error:
+                  note('Inspection coordinator stopped: ' + (str(error) if isinstance(error, RuntimeError) else type(error).__name__))
+                  sys.exit(1)
+          PY
