@@ -80,8 +80,9 @@ for (const short of [false, true]) {
           await page.waitForTimeout(80);
           await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
         } else {
-          // WebKit viewport/wheel evidence is not claimed as physical iPhone touch.
-          await page.mouse.wheel(0, distance);
+          // Mobile WebKit has no wheel or drag input API. Incremental viewport
+          // scrolling is explicitly not physical iPhone touch evidence.
+          await page.evaluate(amount => window.scrollBy(0, amount), distance);
         }
         await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(current.scrollY);
       }
@@ -105,7 +106,7 @@ for (const short of [false, true]) {
     } finally {
       // Preserve geometry evidence even when an entry assertion fails.
       await writeFile(testInfo.outputPath("room-natural-entry.json"), JSON.stringify({
-        project: testInfo.project.name, input: session ? "Chromium touch input in an emulated mobile viewport" : "WebKit mobile viewport with wheel input",
+        project: testInfo.project.name, input: session ? "Chromium touch input in an emulated mobile viewport" : "WebKit mobile viewport with incremental programmatic scrolling",
         shortViewport: short, samples, insertions,
       }, null, 2));
       await session?.detach();
@@ -113,16 +114,16 @@ for (const short of [false, true]) {
   });
 }
 
-test("Room stays complete and readable without JavaScript", async ({ browser, baseURL }, testInfo) => {
-  const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 664 } });
-  try {
-    const page = await context.newPage();
-    await page.goto(baseURL!);
-    const phone = page.locator(".room-product-phone--arrival");
-    await phone.scrollIntoViewIfNeeded();
-    await expect(phone).toHaveAttribute("data-demo-ready", "false");
-    await expect(phone.locator(".scene-message:visible")).toHaveCount(5);
-    await expect(phone.locator(".room-demo-typing")).toHaveCount(0);
-    await phone.screenshot({ path: testInfo.outputPath("room-no-javascript.png") });
-  } finally { await context.close(); }
+// The application shell requires JavaScript; hook-level tests cover the
+// unhydrated component fallback. Verify the supported browser accessibility path.
+test("Room stays complete and readable with reduced motion", async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const phone = page.locator(".room-product-phone--arrival");
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toHaveAttribute("data-demo-running", "false");
+  await expect(phone.locator(".scene-message:visible")).toHaveCount(5);
+  await expect(phone.locator(".room-demo-typing")).toHaveCount(0);
+  await expect.poll(() => phone.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === "running").length)).toBe(0);
+  await phone.screenshot({ path: testInfo.outputPath("room-reduced-motion.png") });
 });
