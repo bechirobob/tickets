@@ -54,6 +54,8 @@ async function ownerCookie(suffix: string) {
 
 describe("secure gate passes", () => {
   it("rechecks gate assignment, event state and staff restrictions on every scan", async () => {
+    // Keep an active owner while the scanned session's account becomes gate staff.
+    await ownerCookie("access-retained-owner");
     const cookie = await ownerCookie("access");
     const slug = "capacity-gate-access", now = new Date().toISOString();
     await env.DB.prepare(`INSERT INTO curated_event_records(id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,event_state,image_url,curation_note,status,published_at,created_at,updated_at) VALUES (?,?,?,'Access test','Test','Accra',?,?,'Late night',10000,400,'on_sale','https://example.com/test.jpg','Gate access fixture.','published',?,?,?)`).bind(slug,slug,slug,now,now,now,now,now).run();
