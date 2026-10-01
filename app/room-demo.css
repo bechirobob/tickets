@@ -46,7 +46,7 @@
 .room-demo-typing > span:nth-child(3) { animation-delay: 280ms; }
 @keyframes room-demo-dot { 0%, 60%, 100% { opacity: .4; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
 .room-product-phone[data-demo-running='false'] *, .room-product-phone[data-demo-running='false'] *::before { animation-play-state: paused; }
-.room-demo-caption { display: flex; justify-content: space-between; align-items: center; min-height: 44px; color: #e1d6e3; font-size: 11px; letter-spacing: .02em; }
+.room-demo-caption { display: flex; justify-content: space-between; align-items: center; min-height: 44px; color: #e1d6e3; font-size: 12px; letter-spacing: .02em; }
 .room-demo-pause { width: 44px; min-height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #e1d6e3; cursor: pointer; }
 .room-demo-pause:hover { background: #ffffff12; }
 .room-demo-pause:focus-visible { outline: 2px solid #eee; outline-offset: 2px; }

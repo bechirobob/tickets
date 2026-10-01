@@ -61,7 +61,7 @@ APPLICATION_FILES = {
 REVIEWED_APPLICATION_BLOBS = {
     "app/use-room-demo.ts": "f19a90a7824446e2993a1c4f24a9ea0fac4f07b7",
     "app/room-preview-carousel.tsx": "0b7c497837eee59ed178fcd22a45d10b9038af95",
-    "app/room-demo.css": "22a301fd946f78b2e991b3cb1b34c1289a6f631f",
+    "app/room-demo.css": "a9db2ee6410ba2627af7807045ba570a5a822b75",
     "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
     "app/segmented-control.tsx": "d68e0038b37928467b25f62780a91ffd61b82eac",
     "app/segmented-control.css": "b4b85d7656046b56447728a292b2f70e30127c14",
@@ -71,7 +71,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/discovery.css": "1a7f0dd172987dcc84c156dac0685237cbcb1e94",
     ".github/workflows/browser-audit.yml": "255462dfbd7807dfc7d276da3d60e7ebc919bad9",
     ".github/workflows/candidate-checks.yml": "6befb6651e354eb242b4ee0ba99874a245d38beb",
-    "app/active-night-experience.tsx": "67b256dff6d1f944d575d0c64ae50bc583231dcc",
+    "app/active-night-experience.tsx": "7aa0ba30ca9e5b9924660c0adcdff2b8aa0279ce",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/admin/login/login-form.tsx": "ee7957582f7e959106766fb4b418f6524766d386",
     "app/admin/operations/event-operations-hub.tsx": "5f76745b78170bcaa8b4b59a8a41d4acd3ab4c83",
