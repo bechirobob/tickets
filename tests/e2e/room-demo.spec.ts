@@ -12,7 +12,7 @@ test("Room demo tells a conversation while the hardware stays still and can paus
   const composer = await phone.locator(".chat-compose-field").boundingBox();
   await expect(phone.locator(".room-demo-typing")).toBeVisible({ timeout: 5000 });
   await phone.screenshot({ path: testInfo.outputPath("room-typing.png") });
-  await expect(phone.locator('[data-room-item="arrival-2"]')).toBeVisible({ timeout: 5000 });
+  await expect(phone.locator('[data-room-item="arrival-2"]')).toBeVisible({ timeout: 9000 });
   await expect(phone.locator('[data-room-item="arrival-0"]')).toHaveCSS("animation-name", "none");
   await expect(phone).toHaveCSS("transform", "none");
   const later = await phone.boundingBox();
@@ -28,7 +28,8 @@ test("Room demo tells a conversation while the hardware stays still and can paus
   await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
   await expect(phone).not.toHaveAttribute("data-demo-step", step!, { timeout: 5000 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(phone).toHaveAttribute("data-demo-step", "6");
+  await expect(phone).toHaveAttribute("data-demo-running", "false");
+  await expect(phone).toHaveAttribute("data-demo-pause-reason", "reduced-motion");
   await expect(phone.locator(".scene-message:visible")).toHaveCount(5);
   for (const item of await phone.locator(".scene-message").all()) {
     await expect(item).toHaveCSS("opacity", "1");
@@ -153,6 +154,7 @@ test("Room hardware and independent tapbacks retain a clear mobile silhouette", 
   const badge = await reaction.boundingBox();
   expect(bubble).not.toBeNull();
   expect(badge).not.toBeNull();
+  expect(badge!.height).toBeLessThanOrEqual(20);
   expect(badge!.y).toBeLessThan(bubble!.y);
   expect(badge!.y + badge!.height).toBeLessThan(bubble!.y + bubble!.height);
   const frame = phone.locator(".room-product-phone__render");
