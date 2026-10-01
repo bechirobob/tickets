@@ -1,0 +1,49 @@
+name: Inspect public Tickets artwork policy read-only
+on:
+  push:
+    branches: [ops/public-artwork-policy-probe-20261001]
+    paths: [.github/workflows/public-artwork-policy-probe-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/public-artwork-policy-probe-20261001' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TICKETS_SOURCE: ${{ github.workspace }}/tickets
+      PROBE_OUT: ${{ runner.temp }}/public-artwork-policy
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: ops
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 473bbf40afe1a77a722c8399f91c4dd95f3e40ce
+          path: tickets
+          persist-credentials: false
+      - name: Verify frozen read-only probe
+        run: |
+          test "$(sha256sum ops/ops/audit/public-artwork-probe.mjs | cut -d ' ' -f1)" = 3bac42d3ca48d0d441dc0269e3631565a55531891d0cde60b8cc4e897010ffa4
+          test "$(git -C tickets rev-parse HEAD^{tree})" = 51004be28aeae024e286f50b8ddb8c76690db246
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tickets/package-lock.json
+      - run: npm ci --no-audit
+        working-directory: tickets
+      - run: npx playwright install --with-deps chromium
+        working-directory: tickets
+      - name: Observe two public images without credentials or security overrides
+        run: node ops/ops/audit/public-artwork-probe.mjs
+      - name: Preserve sanitized public policy observations only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-artwork-policy-${{ github.run_id }}
+          path: ${{ runner.temp }}/public-artwork-policy
+          if-no-files-found: error
+          retention-days: 14
