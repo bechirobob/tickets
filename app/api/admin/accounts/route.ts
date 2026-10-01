@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import {
   createPasswordRecord,
   hasPermission,
@@ -46,6 +47,10 @@ function accountInput(body: Record<string, unknown>) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await owner(request);
   if (!session) return Response.json({ error: "Owner access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
@@ -77,6 +82,10 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await owner(request);
   if (!session) return Response.json({ error: "Owner access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
@@ -125,6 +134,10 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await owner(request);
   if (!session) return Response.json({ error: "Owner access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });

@@ -1,5 +1,6 @@
-import { mutationHasValidOrigin,readAdminSession } from '../../../../lib/admin-session';
-async function access(request:Request){const {env}=await import('cloudflare:workers');const session=await readAdminSession(request.headers.get('cookie'),env.DB);return {env,session:session?.role==='owner'?session:null};}
+import { limitRequestBody } from '../../../../lib/request-body';
+import { hasPermission,mutationHasValidOrigin,readAdminSession } from '../../../../lib/admin-session';
+async function access(request:Request){const {env}=await import('cloudflare:workers');const session=await readAdminSession(request.headers.get('cookie'),env.DB);return {env,session:session&&hasPermission(session,'accounts.manage')?session:null};}
 export async function GET(request:Request){
   const {env,session}=await access(request);if(!session)return Response.json({error:'Owner access is required.'},{status:403});
   const asOf=new Date().toISOString();
@@ -13,6 +14,10 @@ export async function GET(request:Request){
   return Response.json({activity:events.results,unread:unread?.count ?? 0,asOf},{headers:{'cache-control':'no-store'}});
 }
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const {env,session}=await access(request);if(!session||!mutationHasValidOrigin(request))return Response.json({error:'Owner access is required.'},{status:403});
   const body=await request.json().catch(()=>null) as {asOf?:string}|null;
   if(typeof body?.asOf!=='string'||!Number.isFinite(Date.parse(body.asOf))||Date.parse(body.asOf)>Date.now())return Response.json({error:'Refresh the activity feed.'},{status:400});

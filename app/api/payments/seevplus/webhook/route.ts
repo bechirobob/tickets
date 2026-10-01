@@ -1,6 +1,11 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { recoverSeevPayment, seevEnvironment, validSeevSignature } from "../../../../../lib/seevplus";
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request, 65536);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!env.SEEV_WEBHOOK_SECRET || !seevEnvironment(env)) return new Response("Unavailable", { status: 503 });
   const raw = await request.text();

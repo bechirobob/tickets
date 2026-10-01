@@ -14,6 +14,11 @@ export class DeliveryQueue {
     const delay = Math.max(0, Math.min(43200, Number(options.delaySeconds) || 0));
     this.connection.prepare('INSERT INTO delivery_queue(id,body,available,created) VALUES(?,?,?,?)').run(id, JSON.stringify({ deliveryId: body.deliveryId }), now + delay * 1000, now);
   }
+  async sendBatch(messages, options = {}) {
+    // Match the Queue producer contract used by confirmation recovery. Each
+    // durable delivery id is independently replay-safe if publishing is retried.
+    for (const message of messages) await this.send(message.body, { ...options, ...message });
+  }
   async process(handler) {
     const now = Date.now();
     const job = this.connection.prepare('UPDATE delivery_queue SET lease=?,attempts=attempts+1 WHERE id=(SELECT id FROM delivery_queue WHERE available<=? AND (lease IS NULL OR lease<=?) ORDER BY available LIMIT 1) RETURNING *').get(now + 300000, now, now);
@@ -21,9 +26,10 @@ export class DeliveryQueue {
     let acknowledged = false, delay = 60;
     const message = { body: JSON.parse(job.body), ack() { acknowledged = true; }, retry(options) { delay = options?.delaySeconds ?? 60; } };
     try { await handler({ messages: [message] }); } catch { delay = 60; }
-    if (acknowledged) this.connection.prepare('DELETE FROM delivery_queue WHERE id=?').run(job.id);
-    else this.connection.prepare('UPDATE delivery_queue SET lease=NULL,available=? WHERE id=?').run(Date.now() + Math.min(3600, delay * Math.max(1, job.attempts)) * 1000, job.id);
+    // A slow consumer may finish after another process reclaimed its lease.
+    // Its acknowledgement or retry must not erase the newer consumer's work.
+    if (acknowledged) this.connection.prepare('DELETE FROM delivery_queue WHERE id=? AND attempts=?').run(job.id, job.attempts);
+    else this.connection.prepare('UPDATE delivery_queue SET lease=NULL,available=? WHERE id=? AND attempts=?').run(Date.now() + Math.min(3600, delay * Math.max(1, job.attempts)) * 1000, job.id, job.attempts);
     return true;
   }
 }
-

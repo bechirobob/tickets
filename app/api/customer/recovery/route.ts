@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { readRegistration, registrationSettings, sendRegistrationAccess } from '../../../../lib/registrations';
 import { hashToken } from "../../../../lib/attendee-auth";
 import { issueRecoveryGrant } from "../../../../lib/email-delivery";
@@ -9,6 +10,10 @@ import { recoverableTickets } from '../../../../lib/ticket-recovery';
 const GENERIC_MESSAGE = "If that email has tickets or registrations, a secure access link is on the way.";
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
   const body: unknown = await request.json().catch(() => null);
   const normalizedEmail = body && typeof body === "object" && "email" in body && typeof body.email === "string" ? body.email.trim().toLowerCase() : "";

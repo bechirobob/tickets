@@ -1,6 +1,6 @@
 # BeCore Tickets app launch
 
-Status: preparation started, 9 September 2026. No App Store or Google Play build has been submitted. Target both iPhone and Android; keep one BeCore Tickets product identity and the current Cloudflare backend.
+Status: preparation started, 9 September 2026. No App Store or Google Play build has been submitted. Target both iPhone and Android; keep one BeCore Tickets product identity and the existing Tickets backend (VPS primary, preserved Cloudflare fallback).
 
 ## First release
 
@@ -10,7 +10,7 @@ Keep the existing event palettes, compact type and navigation. Device-specific w
 
 ## Architecture decision
 
-Use a packaged customer client with the existing APIs, with Capacitor as the first implementation candidate. The current Vinext/Cloudflare application renders pages on the server, so its build output cannot simply become a static native bundle. Extract the customer screen layer and package it locally; retain protected APIs and staff screens on Cloudflare. Do not ship a configuration that just points `server.url` at the live website: Capacitor documents that option for live reload, not production. [Capacitor configuration](https://capacitorjs.com/docs/config).
+Use a packaged customer client with the existing APIs, with Capacitor as the first implementation candidate. The current Vinext/Cloudflare application renders pages on the server, so its build output cannot simply become a static native bundle. Extract the customer screen layer and package it locally; retain protected APIs and staff screens in the existing server application. Do not ship a configuration that just points `server.url` at the live website: Capacitor documents that option for live reload, not production. [Capacitor configuration](https://capacitorjs.com/docs/config).
 
 Before adopting the runtime, prove one vertical journey: event discovery → email recovery → My Nights → entry pass → background/resume. Reuse current validation and presentation code where compatible. Test cross-origin authentication explicitly; do not put existing web sessions into localStorage or broadly relax CORS. Native credentials need platform secure storage, revocation and an authenticated one-use handoff for browser recovery and payment returns.
 

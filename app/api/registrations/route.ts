@@ -1,9 +1,14 @@
+import { limitRequestBody } from '../../../lib/request-body';
 import { resolveRsvpSource } from '../../../lib/rsvp-analytics';
 import { mutationHasValidOrigin, requestMetadata } from '../../../lib/admin-session';
 import { hashToken, readAttendeeIdentity } from '../../../lib/attendee-auth';
 import { enforceRateLimit } from '../../../lib/security-controls';
 import { requestRegistration } from '../../../lib/registrations';
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This registration was not accepted.' }, { status: 403 });
   const body = await request.json().catch(() => null) as { source?: unknown; ref?: unknown; acceptedTerms?: boolean; announcementsOptIn?: boolean; eventSlug?: string; email?: string; guestName?: string; phone?: string; partySize?: number } | null;
   if (!body || typeof body !== 'object' || body.acceptedTerms !== true) return Response.json({ error: 'Accept the event terms and privacy notice.' }, { status: 400 });

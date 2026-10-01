@@ -1,8 +1,13 @@
+import { limitRequestBody } from '../../../lib/request-body';
 import { mutationHasValidOrigin, requestMetadata } from "../../../lib/admin-session";
 import { enforceRateLimit } from "../../../lib/security-controls";
 import { hashToken } from "../../../lib/attendee-auth";
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This waitlist request was not accepted." }, { status: 403 });
   const { env } = await import("cloudflare:workers");
   const body = await request.json().catch(()=>null) as { eventSlug?: string; ticketTierId?: string; email?: string; phone?: string } | null;

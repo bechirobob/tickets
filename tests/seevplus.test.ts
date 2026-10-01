@@ -438,3 +438,30 @@ describe("Seev signed notifications", () => {
     for (const url of ["http://pay.seevplus.com/PAY-123", "https://pay.seevplus.com.evil.example/PAY-123", "https://user@pay.seevplus.com/PAY-123", "javascript:alert(1)", "https://pay.seevplus.com/"]) expect(validSeevCheckoutUrl(url)).toBe(false);
   });
 });
+
+async function waitlistOffer() {
+  const {hashToken}=await import('../lib/attendee-auth');
+  const id=crypto.randomUUID(),token=crypto.randomUUID(),now=new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO event_waitlist_entries(id,event_slug,ticket_tier_id,normalized_email,status,offer_token_hash,offered_at,offer_expires_at,created_at,updated_at)
+    VALUES(?,?,?,'seev@example.com','offered',?,?,?,?,?)`)
+    .bind(id,slug,slug,await hashToken(token),now,new Date(Date.now()+600000).toISOString(),now,now).run();
+  return {id,token};
+}
+
+it('claims a waitlist offer once across concurrent checkout attempts', async () => {
+  const offer=await waitlistOffer();
+  const outcomes=await Promise.all([initialize(request({offer:offer.token})),initialize(request({offer:offer.token}))]);
+  expect(outcomes.filter(response=>response.status===200)).toHaveLength(1);
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE waitlist_entry_id=?').bind(offer.id).first()).toEqual({n:1});
+  expect(await env.DB.prepare('SELECT status FROM event_waitlist_entries WHERE id=?').bind(offer.id).first()).toEqual({status:'claimed'});
+  expect(fetchMock.mock.calls.filter(([url])=>String(url)===api)).toHaveLength(1);
+});
+
+it.each(['cancelled','postponed'])('never lets an existing waitlist offer bypass a %s event', async (state) => {
+  const offer=await waitlistOffer();
+  await env.DB.prepare('UPDATE curated_event_records SET event_state=? WHERE slug=?').bind(state,slug).run();
+  const response=await initialize(request({offer:offer.token}));
+  expect(response.ok).toBe(false);
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE waitlist_entry_id=?').bind(offer.id).first()).toEqual({n:0});
+  expect(fetchMock).not.toHaveBeenCalled();
+});

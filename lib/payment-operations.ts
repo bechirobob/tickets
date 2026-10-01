@@ -335,9 +335,17 @@ export async function recordDisputeWebhook(db: D1Database, input: { eventType: s
   const now = new Date().toISOString();
   const data = input.payload.data as Record<string, unknown> | undefined;
   const providerId = data?.id ? String(data.id) : null;
-  const status = String(data?.status ?? (input.eventType.endsWith("resolve") ? "resolved" : "awaiting-merchant-feedback"));
   const resolution = String(data?.resolution ?? "").toLowerCase();
-  const order = await db.prepare("SELECT id FROM orders WHERE reference = ? AND payment_provider = 'paystack' LIMIT 1").bind(input.reference).first<{ id: string }>();
+  const order = await db.prepare("SELECT id,total_amount_minor AS totalAmountMinor,refunded_amount_minor AS refundedAmountMinor FROM orders WHERE reference = ? AND payment_provider = 'paystack' LIMIT 1").bind(input.reference).first<{ id: string; totalAmountMinor: number; refundedAmountMinor: number }>();
+  const resolved = input.eventType === 'charge.dispute.resolve';
+  const accepted = ['merchant-accepted', 'accepted'].includes(resolution);
+  // A partial (or missing) refund amount cannot establish that every admission
+  // was refunded. Retain suspended access and the provider evidence for finance.
+  const fullRefund = accepted && order && Number.isSafeInteger(data?.refund_amount)
+    && data?.refund_amount === order.totalAmountMinor - order.refundedAmountMinor;
+  const needsReview = resolved && resolution !== 'declined' && !fullRefund;
+  const status = needsReview ? 'review_required' : String(data?.status ?? (resolved ? 'resolved' : 'awaiting-merchant-feedback'));
+  if (!providerId) throw new Error('Paystack dispute is missing its provider identifier.');
   const statements: D1PreparedStatement[] = [
     db.prepare(`
       INSERT INTO payment_disputes (
@@ -346,27 +354,30 @@ export async function recordDisputeWebhook(db: D1Database, input: { eventType: s
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(paystack_dispute_id) DO UPDATE SET event_type = excluded.event_type,
         status = excluded.status, payload_json = excluded.payload_json, updated_at = excluded.updated_at
+      WHERE payment_disputes.reference = excluded.reference
+        AND (payment_disputes.event_type <> 'charge.dispute.resolve'
+          OR (excluded.event_type = 'charge.dispute.resolve' AND payment_disputes.status = 'review_required'))
     `).bind(
       crypto.randomUUID(), order?.id ?? null, providerId, input.reference, input.eventType, status,
       data?.category ? String(data.category) : null, Number(data?.amount ?? 0) || null,
       data?.due_at ? String(data.due_at) : null, JSON.stringify(input.payload), now, now,
     ),
   ];
-  if (order && input.eventType !== "charge.dispute.resolve") {
+  if (order && (!resolved || needsReview)) {
     statements.push(
-      db.prepare("UPDATE orders SET status = 'disputed', dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status <> 'refunded'").bind(status, now, order.id),
-      db.prepare("UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued'").bind(order.id),
+      db.prepare("UPDATE orders SET status = 'disputed', dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status <> 'refunded' AND changes()=1").bind(status, now, order.id),
+      db.prepare("UPDATE tickets SET status = 'voided' WHERE order_id = ? AND status = 'issued' AND changes()=1").bind(order.id),
     );
-  } else if (order && input.eventType === "charge.dispute.resolve" && ["merchant-accepted", "accepted"].includes(resolution)) {
+  } else if (order && fullRefund) {
     statements.push(
-      db.prepare("UPDATE orders SET status = 'refunded', dispute_status = ?, refunded_amount_minor = total_amount_minor, payment_updated_at = ? WHERE id = ?").bind(status, now, order.id),
-      db.prepare("UPDATE tickets SET status = 'refunded' WHERE order_id = ? AND status <> 'checked_in'").bind(order.id),
-      db.prepare("UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ?").bind(now, order.id),
+      db.prepare("UPDATE orders SET status = 'refunded', dispute_status = ?, refunded_amount_minor = total_amount_minor, payment_updated_at = ? WHERE id = ? AND changes()=1").bind(status, now, order.id),
+      db.prepare("UPDATE tickets SET status = 'refunded' WHERE order_id = ? AND status <> 'checked_in' AND EXISTS (SELECT 1 FROM orders WHERE id=? AND status='refunded')").bind(order.id, order.id),
+      db.prepare("UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ? AND EXISTS (SELECT 1 FROM orders WHERE id=? AND status='refunded')").bind(now, order.id, order.id),
     );
-  } else if (order) {
+  } else if (order && resolved && resolution === 'declined') {
     statements.push(
-      db.prepare("UPDATE orders SET status = CASE WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug=orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state='cancelled')) THEN 'requires_refund' WHEN EXISTS (SELECT 1 FROM payment_refunds r WHERE r.order_id=orders.id AND r.status IN ('pending','processing') AND r.amount_minor>=orders.total_amount_minor-orders.refunded_amount_minor) THEN 'refund_pending' ELSE 'paid' END, dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status='disputed'").bind(status, now, order.id),
-      db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided' AND EXISTS (SELECT 1 FROM orders o JOIN curated_event_records e ON e.slug=o.event_slug WHERE o.id=tickets.order_id AND o.status='paid' AND e.removed_at IS NULL AND e.event_state NOT IN ('cancelled','postponed')) AND NOT EXISTS (SELECT 1 FROM payment_refunds r,json_each(r.ticket_ids_json) j WHERE r.order_id=tickets.order_id AND r.status IN ('pending','processing','processed') AND j.value=tickets.id)").bind(order.id),
+      db.prepare("UPDATE orders SET status = CASE WHEN EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug=orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state='cancelled')) THEN 'requires_refund' WHEN EXISTS (SELECT 1 FROM payment_refunds r WHERE r.order_id=orders.id AND r.status IN ('pending','processing') AND r.amount_minor>=orders.total_amount_minor-orders.refunded_amount_minor) THEN 'refund_pending' ELSE 'paid' END, dispute_status = ?, payment_updated_at = ? WHERE id = ? AND status='disputed' AND changes()=1 AND NOT EXISTS (SELECT 1 FROM payment_disputes d WHERE d.order_id=orders.id AND (d.event_type<>'charge.dispute.resolve' OR d.status='review_required'))").bind(status, now, order.id),
+      db.prepare("UPDATE tickets SET status = 'issued' WHERE order_id = ? AND status = 'voided' AND changes()=1 AND EXISTS (SELECT 1 FROM orders o JOIN curated_event_records e ON e.slug=o.event_slug WHERE o.id=tickets.order_id AND o.status='paid' AND e.removed_at IS NULL AND e.event_state NOT IN ('cancelled','postponed')) AND NOT EXISTS (SELECT 1 FROM payment_refunds r,json_each(r.ticket_ids_json) j WHERE r.order_id=tickets.order_id AND r.status IN ('pending','processing','processed') AND j.value=tickets.id)").bind(order.id),
     );
   }
   await db.batch(statements);
@@ -387,6 +398,7 @@ async function listPaystackTransactions(secret: string, from: string, to: string
     if (!response.ok || !payload.status || !Array.isArray(payload.data)) throw new Error(payload.message ?? "Paystack transaction list failed.");
     transactions.push(...payload.data);
     if (!payload.meta?.pageCount || page >= payload.meta.pageCount) break;
+    if (page === 10) throw new Error('Paystack reconciliation exceeded its page limit. Reconcile a shorter period before using settlement totals.');
   }
   return transactions;
 }
@@ -414,7 +426,13 @@ export async function runDailyReconciliation(db: D1Database, input: { secret: st
       if (!transaction) entries.push({ orderId: order.id, reference: order.reference, localStatus: order.status, providerStatus: null, localAmount: order.totalAmountMinor, providerAmount: null, result: "missing_provider", detail: "No provider transaction returned for the local order." });
       else {
         const expectedPaid = ["paid", "refund_pending", "refunded", "disputed"].includes(order.status);
-        const matched = transaction.amount === order.totalAmountMinor && transaction.currency === order.currency && (expectedPaid ? transaction.status === "success" || transaction.status === "reversed" : true);
+        const providerPaid = transaction.status === "success" || transaction.status === "reversed";
+        // Missing or newly introduced provider states are not proof of an
+        // unpaid transaction. Fail closed until their meaning is established.
+        const providerUnpaid = ["abandoned", "failed", "ongoing", "pending", "processing", "queued"].includes(transaction.status ?? "");
+        const matched = transaction.amount === order.totalAmountMinor && transaction.currency === order.currency
+          && (expectedPaid ? providerPaid : providerUnpaid) && order.status !== 'requires_refund'
+          && (transaction.status !== 'reversed' || order.status === 'refunded');
         entries.push({ orderId: order.id, reference: order.reference, localStatus: order.status, providerStatus: transaction.status ?? null, localAmount: order.totalAmountMinor, providerAmount: transaction.amount ?? null, result: matched ? "matched" : "mismatch", detail: matched ? null : "Amount, currency or status differs from the local order." });
       }
     }

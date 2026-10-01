@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { organizerScope } from "../../../../lib/organizer-access";
 import {
   hasPermission,
@@ -158,6 +159,10 @@ function safeContext(event: EventContext, tiers: TierContext[], settlements: Set
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await organiser(request);
   if (!session) return Response.json({ error: "Organiser access is required." }, { status: 403, headers: { "cache-control": "no-store" } });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403, headers: { "cache-control": "no-store" } });

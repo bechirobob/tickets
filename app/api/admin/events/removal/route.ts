@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
 import { hasPermission, mutationHasValidOrigin, readAdminSession } from '../../../../../lib/admin-session';
 import { removalImpact, removeEvent } from '../../../../../lib/event-removal';
 import { createApprovalRequest } from '../../../../../lib/operational-finance';
@@ -14,6 +15,10 @@ export async function GET(request: Request) {
   return Response.json({ ...impact, needsApproval: Boolean(impact.eventState !== "cancelled" && impact.upcoming && impact.paidBookings && !impact.removedAt) }, { headers: { 'cache-control': 'no-store' } });
 }
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await access(request);
   if (!session || !mutationHasValidOrigin(request)) return Response.json({ error: 'Event management access is required.' }, { status: 403 });
   const body = await request.json().catch(() => null) as { slug?: string; reason?: string } | null;

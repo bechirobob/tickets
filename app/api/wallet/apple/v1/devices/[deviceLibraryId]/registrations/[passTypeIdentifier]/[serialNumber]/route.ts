@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../../../../../../lib/request-body';
 import {
   appleWalletRequestAuthorized,
   appleWalletUpdatesConfigured,
@@ -24,6 +25,10 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ deviceLibraryId: string; passTypeIdentifier: string; serialNumber: string }> },
 ) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!appleWalletUpdatesConfigured(env)) return new Response(null, { status: 404 });
   const { deviceLibraryId, passTypeIdentifier, serialNumber } = await context.params;
@@ -45,6 +50,10 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ deviceLibraryId: string; passTypeIdentifier: string; serialNumber: string }> },
 ) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   if (!appleWalletUpdatesConfigured(env)) return new Response(null, { status: 404 });
   const { deviceLibraryId, passTypeIdentifier, serialNumber } = await context.params;

@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasPermission, mutationHasValidOrigin, readAdminSession } from '../../../../lib/admin-session';
 import { canReadHostEvent, readHostSummary } from '../../../../lib/host-summary';
 const headers={'cache-control':'no-store'};
@@ -12,6 +13,10 @@ export async function GET(request:Request) {
   return Response.json({summary:await readHostSummary(env.DB,slug),reports:{enabled:preference?.enabled!==0,canManage:session.role==='organizer',latest}},{headers});
 }
 export async function PATCH(request:Request) {
+  const bounded = await limitRequestBody(request, 256);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const {env}=await import('cloudflare:workers');
   const session=await readAdminSession(request.headers.get('cookie'),env.DB);
   if(!mutationHasValidOrigin(request)||!session||session.role!=='organizer'||!hasPermission(session,'organizer.workspace'))return Response.json({error:'Sign in to your host workspace.'},{status:403,headers});

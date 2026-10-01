@@ -1,7 +1,12 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import {hashToken,mutationHasValidOrigin,requestMetadata} from '../../../../lib/admin-session';
 import {enforceRateLimit} from '../../../../lib/security-controls';
 import {confirmHostApplication,inspectHostApplication} from '../../../../lib/host-applications';
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request, 512);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
  if(!mutationHasValidOrigin(request))return Response.json({error:'This request was not accepted.'},{status:403});
  const raw=await request.text();if(raw.length>512)return Response.json({error:'This request is too large.'},{status:413});
  let data:{action?:string;token?:string};try{data=JSON.parse(raw);if(!data||typeof data.token!=='string'||!['inspect','confirm'].includes(data.action??''))throw new Error();}catch{return Response.json({error:'This link is invalid, expired or already used.'},{status:400});}

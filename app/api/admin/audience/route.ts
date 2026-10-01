@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit } from '../../../../lib/admin-session';
 const subscriber = "a.consented_at IS NOT NULL AND a.consented_at > COALESCE(a.unsubscribed_at,'') AND NOT EXISTS (SELECT 1 FROM marketing_contacts mc WHERE mc.email=a.email AND mc.unsubscribed=1)";
 async function access(request: Request, slug: string) {
@@ -33,6 +34,10 @@ export async function GET(request: Request) {
   return Response.json({contacts:rows.results,...total,subscribers:subscribers?.count ?? 0,campaigns:campaigns.results,emailConfigured:Boolean(env.RESEND_API_KEY&&env.EMAIL_FROM)},{headers:{'cache-control':'no-store'}});
 }
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if(!mutationHasValidOrigin(request))return Response.json({error:'This announcement was not accepted.'},{status:403});
   const body=await request.json().catch(()=>null) as {eventSlug?:string;id?:string;subject?:string;body?:string}|null;
   if(typeof body?.eventSlug!=='string'||typeof body.id!=='string'||!/^[a-f0-9-]{36}$/u.test(body.id)||typeof body.subject!=='string'||body.subject.trim().length<3||body.subject.length>120||typeof body.body!=='string'||body.body.trim().length<10||body.body.length>5000)return Response.json({error:'Add a subject and announcement text.'},{status:400});

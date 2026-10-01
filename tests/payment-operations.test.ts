@@ -218,3 +218,91 @@ it('retries an outbox confirmation without sending a second receipt after repeat
   expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_events WHERE order_id=? AND kind='payment_confirmation'").bind(order.orderId).first()).toEqual({n:1});
   expect(await env.DB.prepare('SELECT status FROM confirmation_deliveries WHERE order_id=?').bind(order.orderId).first()).toEqual({status:'email'});
 });
+
+it('ignores stale dispute reminders after resolution and does not unblock another open dispute', async () => {
+  const o = await paid(`dispute-replay-${crypto.randomUUID()}`);
+  const first = crypto.randomUUID(), second = crypto.randomUUID();
+  const created = (id: string) => ({ eventType: 'charge.dispute.create', reference: o.reference, payload: { data: { id, status: 'awaiting-merchant-feedback' } } });
+  const resolved = (id: string) => ({ eventType: 'charge.dispute.resolve', reference: o.reference, payload: { data: { id, status: 'resolved', resolution: 'declined' } } });
+  await recordDisputeWebhook(env.DB, created(first));
+  await recordDisputeWebhook(env.DB, created(second));
+  await recordDisputeWebhook(env.DB, resolved(first));
+  expect(await env.DB.prepare('SELECT status FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({status:'disputed'});
+  await recordDisputeWebhook(env.DB, resolved(second));
+  await recordDisputeWebhook(env.DB, { ...created(first), eventType: 'charge.dispute.remind' });
+  expect(await env.DB.prepare('SELECT status FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({status:'paid'});
+  expect(await env.DB.prepare('SELECT status FROM payment_disputes WHERE paystack_dispute_id=?').bind(first).first()).toEqual({status:'resolved'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM tickets WHERE order_id=? AND status='issued'").bind(o.orderId).first()).toEqual({n:2});
+});
+
+it.each([
+  { resolution: 'unexpected', refund_amount: undefined },
+  { resolution: 'merchant-accepted', refund_amount: undefined },
+  { resolution: 'merchant-accepted', refund_amount: 5000 },
+])('keeps an ambiguous or partial dispute resolution in review: %j', async (data) => {
+  const o = await paid(`dispute-review-${crypto.randomUUID()}`);
+  const providerId = crypto.randomUUID();
+  await recordDisputeWebhook(env.DB, { eventType: 'charge.dispute.resolve', reference: o.reference, payload: { data: { id: providerId, status: 'resolved', ...data } } });
+  expect(await env.DB.prepare('SELECT status,refunded_amount_minor AS amount FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({status:'disputed',amount:0});
+  expect(await env.DB.prepare('SELECT status FROM payment_disputes WHERE paystack_dispute_id=?').bind(providerId).first()).toEqual({status:'review_required'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM tickets WHERE order_id=? AND status='issued'").bind(o.orderId).first()).toEqual({n:0});
+});
+
+it('applies a full dispute refund once, preserving finality through concurrent replays', async () => {
+  const o = await paid(`dispute-full-${crypto.randomUUID()}`);
+  const payload = { eventType:'charge.dispute.resolve', reference:o.reference, payload:{data:{id:crypto.randomUUID(),status:'resolved',resolution:'merchant-accepted',refund_amount:o.amount}} };
+  await Promise.all([recordDisputeWebhook(env.DB,payload),recordDisputeWebhook(env.DB,payload)]);
+  await recordDisputeWebhook(env.DB,payload);
+  expect(await env.DB.prepare('SELECT status,refunded_amount_minor AS amount FROM orders WHERE id=?').bind(o.orderId).first()).toEqual({status:'refunded',amount:o.amount});
+  expect(await env.DB.prepare('SELECT status FROM inventory_reservations WHERE order_id=?').bind(o.orderId).first()).toEqual({status:'released'});
+  expect(await env.DB.prepare('SELECT status FROM payment_disputes WHERE paystack_dispute_id=?').bind(payload.payload.data.id).first()).toEqual({status:'resolved'});
+});
+
+it.each(['payment_pending','expired','failed','requires_refund','paid'])('flags missing fulfilment or reversal when reconciling %s orders', async (status) => {
+  const {runDailyReconciliation} = await import('../lib/payment-operations');
+  const o = await seedPendingOrder(`reconcile-${crypto.randomUUID()}`,1);
+  await env.DB.prepare('UPDATE orders SET status=? WHERE id=?').bind(status,o.orderId).run();
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:true,data:[{reference:o.reference,amount:o.amount,currency:'GHS',status:status==='paid'?'reversed':'success'}]})));
+  const result = await runDailyReconciliation(env.DB,{secret:'sk_test_fixture',periodStart:new Date(Date.now()-60_000).toISOString(),periodEnd:new Date(Date.now()+60_000).toISOString(),actor:'fixture'});
+  expect(await env.DB.prepare('SELECT result FROM reconciliation_entries WHERE run_id=? AND order_id=?').bind(result.runId,o.orderId).first()).toEqual({result:'mismatch'});
+});
+
+it('fails reconciliation instead of treating a truncated provider list as complete', async () => {
+  const {runDailyReconciliation} = await import('../lib/payment-operations');
+  const provider=vi.fn(async()=>Response.json({status:true,data:[],meta:{pageCount:11}}));
+  vi.stubGlobal('fetch',provider);
+  const actor=`pagination-${crypto.randomUUID()}`;
+  await expect(runDailyReconciliation(env.DB,{secret:'sk_test_fixture',periodStart:'2020-01-01T00:00:00Z',periodEnd:'2020-01-02T00:00:00Z',actor})).rejects.toThrow('page limit');
+  expect(provider).toHaveBeenCalledTimes(10);
+  expect(await env.DB.prepare('SELECT status FROM reconciliation_runs WHERE initiated_by=?').bind(actor).first()).toEqual({status:'failed'});
+});
+
+it('uses Paystack documented dispute fields and blocks a challenge without provider evidence', async () => {
+  const {resolvePaystackDispute}=await import('../lib/operational-finance');
+  const provider=vi.fn<typeof fetch>().mockResolvedValue(Response.json({status:true,data:{status:'resolved'}}));
+  vi.stubGlobal('fetch',provider);
+  await resolvePaystackDispute('sk_test_fixture',{providerDisputeId:'fixture',resolution:'merchant-accepted',amountMinor:5000,reason:'Customer dispute reviewed by finance.'});
+  expect(JSON.parse(String(provider.mock.calls[0]?.[1]?.body))).toEqual({resolution:'merchant-accepted',refund_amount:5000,message:'Customer dispute reviewed by finance.'});
+  await expect(resolvePaystackDispute('sk_test_fixture',{providerDisputeId:'fixture',resolution:'declined'})).rejects.toThrow('uploaded evidence filename');
+  await expect(resolvePaystackDispute('sk_test_fixture',{providerDisputeId:'fixture',resolution:'merchant-accepted',amountMinor:0})).rejects.toThrow('verified dispute refund amount');
+  expect(provider).toHaveBeenCalledTimes(1);
+});
+
+for (const localStatus of ['payment_pending','expired','failed']) {
+  it.each([undefined, null, '', 'provider-state-not-recognized'])('never reconciles '+localStatus+' as matched with provider status %j', async (providerStatus) => {
+    const {runDailyReconciliation}=await import('../lib/payment-operations');
+    const o=await seedPendingOrder(`unknown-status-${crypto.randomUUID()}`,1);
+    await env.DB.prepare('UPDATE orders SET status=? WHERE id=?').bind(localStatus,o.orderId).run();
+    vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:true,data:[{reference:o.reference,amount:o.amount,currency:'GHS',status:providerStatus}]})));
+    const result=await runDailyReconciliation(env.DB,{secret:'sk_test_fixture',periodStart:new Date(Date.now()-60_000).toISOString(),periodEnd:new Date(Date.now()+60_000).toISOString(),actor:'fixture'});
+    expect(await env.DB.prepare('SELECT result FROM reconciliation_entries WHERE run_id=? AND order_id=?').bind(result.runId,o.orderId).first()).toEqual({result:'mismatch'});
+  });
+}
+
+it.each(['abandoned','failed','ongoing','pending','processing','queued'])('recognizes documented unpaid provider status %s in reconciliation', async (providerStatus) => {
+  const {runDailyReconciliation}=await import('../lib/payment-operations');
+  const o=await seedPendingOrder(`known-status-${crypto.randomUUID()}`,1);
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:true,data:[{reference:o.reference,amount:o.amount,currency:'GHS',status:providerStatus}]})));
+  const result=await runDailyReconciliation(env.DB,{secret:'sk_test_fixture',periodStart:new Date(Date.now()-60_000).toISOString(),periodEnd:new Date(Date.now()+60_000).toISOString(),actor:'fixture'});
+  expect(await env.DB.prepare('SELECT result FROM reconciliation_entries WHERE run_id=? AND order_id=?').bind(result.runId,o.orderId).first()).toEqual({result:'matched'});
+});

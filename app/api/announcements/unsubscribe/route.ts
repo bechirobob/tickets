@@ -1,5 +1,10 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { mutationHasValidOrigin } from '../../../../lib/admin-session';
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request, 4096);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if(!mutationHasValidOrigin(request))return Response.json({error:'This request was not accepted.'},{status:403});
   const form=await request.formData().catch(()=>null),token=form?.get('token');
   if(typeof token!=='string'||token.length<32||token.length>200)return Response.json({error:'Use the unsubscribe link in your email.'},{status:400});

@@ -18,19 +18,25 @@ export default function PrivacySettings() {
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const busy = useRef(false);
-  const load = useCallback(() => requestJson<{ defaultAttendeeVisible: boolean; allowHostUpdates: boolean }>("/api/customer/privacy").then((data) => {
+  const loadingChoices = useRef(false);
+  const load = useCallback(() => {
+    if (loadingChoices.current) return Promise.resolve();
+    loadingChoices.current = true; setLoading(true); setError("");
+    return requestJson<{ defaultAttendeeVisible: boolean; allowHostUpdates: boolean }>("/api/customer/privacy").then((data) => {
       if (typeof data.defaultAttendeeVisible !== "boolean" || typeof data.allowHostUpdates !== "boolean") throw new Error("Your settings didn’t load. Give that another go.");
       setVisible(data.defaultAttendeeVisible); setUpdates(data.allowHostUpdates); setReady(true); setLocked(false); setError("");
     }).catch((cause) => {
       if (cause instanceof RequestError && cause.status === 401) setLocked(true);
       else setError(requestErrorMessage(cause));
-    }).finally(() => setLoading(false)), []);
+    }).finally(() => { loadingChoices.current = false; setLoading(false); });
+  }, []);
   useEffect(() => { void load(); }, [load]);
   async function save() {
     if (busy.current || !ready) return;
     busy.current = true; setSaving(true); setSaved(false); setError("");
     try {
-      await requestJson("/api/customer/privacy", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ defaultAttendeeVisible: visible, allowHostUpdates: updates }) });
+      const result = await requestJson<{ saved?: boolean }>("/api/customer/privacy", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ defaultAttendeeVisible: visible, allowHostUpdates: updates }) });
+      if (result.saved !== true) throw new Error("We couldn’t confirm your saved choices. Check them before trying again.");
       setSaved(true);
     } catch (cause) {
       if (cause instanceof RequestError && cause.status === 401) setLocked(true);

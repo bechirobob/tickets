@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { POST as joinWaitlist } from "../app/api/waitlist/route";
 import { GET as getSupport, POST as updateSupport } from "../app/api/customer/support/[slug]/route";
 import { hashToken } from "../lib/attendee-auth";
@@ -72,4 +72,27 @@ describe("compact roadmap operations", () => {
     await expireReservations(env.DB);
     expect(await env.DB.prepare("SELECT status, paystack_status AS paystackStatus FROM orders WHERE id = ?").bind(seeded.orderId).first()).toMatchObject({ status: "expired", paystackStatus: "initialized" });
   });
+});
+
+it('keeps concurrent refund requests in one support conversation',async()=>{
+  const f=await seed(`concurrent-${crypto.randomUUID()}`,'cancelled');
+  const req=()=>request(`/api/customer/support/${f.eventSlug}`,{method:'POST',headers:{origin,cookie:`bct_attendee=${f.token}`,'content-type':'application/json'},body:JSON.stringify({action:'request_refund',orderId:f.orderId})});
+  const context={params:Promise.resolve({slug:f.eventSlug})};
+  const responses=await Promise.all([updateSupport(req(),context),updateSupport(req(),context)]);
+  expect(responses.map(r=>r.status).sort()).toEqual([200,201]);
+  const data=await Promise.all(responses.map(r=>r.json())) as Array<{caseId:string}>;
+  expect(data[0].caseId).toBe(data[1].caseId);
+  expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM support_cases WHERE order_id=?').bind(f.orderId).first()).toEqual({count:1});
+});
+it('limits support writes per attendee and rejects malformed fields without creating cases',async()=>{
+  const f=await seed(`rate-${crypto.randomUUID()}`);
+  const req=()=>request(`/api/customer/support/${f.eventSlug}`,{method:'POST',headers:{origin,cookie:`bct_attendee=${f.token}`,'content-type':'application/json'},body:JSON.stringify({action:'open_case',subject:7,message:'Hello'})});
+  const context={params:Promise.resolve({slug:f.eventSlug})};
+  expect((await updateSupport(req(),context)).status).toBe(400);
+  const limiter=vi.spyOn(env.PUBLIC_WRITE_RATE_LIMITER,'limit').mockResolvedValue({success:false});
+  try {
+    expect((await updateSupport(req(),context)).status).toBe(429);
+    expect(limiter).toHaveBeenCalledWith({key:`support:${f.attendeeId}`});
+  } finally { limiter.mockRestore(); }
+  expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM support_cases WHERE attendee_id=?').bind(f.attendeeId).first()).toEqual({count:0});
 });

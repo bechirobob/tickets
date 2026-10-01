@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { saveOrganizerTier } from '../../../../lib/organizer-inventory';
 import { mutationHasValidOrigin, recordAudit, requestMetadata } from '../../../../lib/admin-session';
 import { csvResponse, OrganizerError, organizerScope, organizerSession, privateHeaders, requireOrganizerEvent, textInput } from '../../../../lib/organizer-access';
@@ -53,6 +54,10 @@ export async function GET(request:Request){
   }catch(error){return failure(error);}
 }
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request, 16000);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if(!mutationHasValidOrigin(request))return Response.json({error:'Request not accepted.'},{status:403,headers:privateHeaders});
   try{
     const {env}=await import('cloudflare:workers'),session=await organizerSession(request,env.DB),db=env.DB;

@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import {hasPermission,mutationHasValidOrigin,readAdminSession} from '../../../../lib/admin-session';
 import {applicationColumns,processPendingHostAccess,reviewHostApplication} from '../../../../lib/host-applications';
 import {retryFailedDeliveries} from '../../../../lib/email-delivery';
@@ -11,6 +12,10 @@ export async function GET(request:Request){
  return Response.json({items:items.results,counts:counts.results,hosts:hosts.results},{headers:{'cache-control':'no-store'}});
 }
 export async function PATCH(request:Request){
+  const bounded = await limitRequestBody(request, 2000);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
  const {env,session}=await owner(request);if(!session)return Response.json({error:'Owner access is required.'},{status:403});
  if(!mutationHasValidOrigin(request))return Response.json({error:'This request was not accepted.'},{status:403});
  const raw=await request.text();if(raw.length>2000)return Response.json({error:'This request is too large.'},{status:413});

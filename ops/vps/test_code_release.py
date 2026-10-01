@@ -965,6 +965,38 @@ END;
         with self.assertRaisesRegex(release.ReleaseError, "refund rollback guard"):
             release.additive_statements(raw, dict(specification, triggers={"provider_refund_reservation_guard": "orders"}))
 
+    def test_exact_owner_guard_preserves_rows_and_survives_code_rollback(self):
+        raw = b"-- Keep an active master account even when separate owner requests race.\n-- This additive guard applies to the existing account update path as well as\n-- future writers; the application's DELETE path already checks atomically.\nCREATE TRIGGER staff_last_active_owner_update_guard\nBEFORE UPDATE OF role, status ON staff_accounts\nWHEN OLD.role = 'owner' AND OLD.status = 'active'\n  AND (NEW.role <> 'owner' OR NEW.status <> 'active')\n  AND (SELECT COUNT(*) FROM staff_accounts WHERE role = 'owner' AND status = 'active') <= 1\nBEGIN\n  SELECT RAISE(ABORT, 'Keep at least one active master account.');\nEND;\n"
+        specification = release.migration_plan([release.STAFF_OWNER_GUARD_PATH])[0]
+        with release.sqlite3.connect(self.database) as database:
+            database.execute("CREATE TABLE staff_accounts (id TEXT PRIMARY KEY, role TEXT, status TEXT)")
+            database.execute("INSERT INTO staff_accounts VALUES ('owner', 'owner', 'active')")
+            before = release.schema_rows(database)
+        result = release.migrate_database(self.database, self.staging, [(specification, raw)])
+        self.assertTrue(result["created"])
+        self.assertTrue(result["tablesPreservedOnRollback"])
+        with release.sqlite3.connect(self.database) as database:
+            self.assertTrue(all(row in release.schema_rows(database) for row in before))
+            self.assertEqual(database.execute("SELECT * FROM staff_accounts").fetchall(), [("owner", "owner", "active")])
+            for update in ("role='finance'", "status='disabled'"):
+                with self.assertRaises(release.sqlite3.IntegrityError):
+                    database.execute("UPDATE staff_accounts SET " + update + " WHERE id='owner'")
+            database.execute("INSERT INTO staff_accounts VALUES ('second', 'owner', 'active')")
+            database.execute("UPDATE staff_accounts SET role='finance' WHERE id='owner'")
+            with self.assertRaises(release.sqlite3.IntegrityError):
+                database.execute("UPDATE staff_accounts SET status='disabled' WHERE id='second'")
+        second = release.migrate_database(self.database, self.root / "repeat", [(specification, raw)])
+        self.assertFalse(second["created"])
+        for altered in (raw.replace(b"RAISE(ABORT", b"RAISE(FAIL"), raw + b"DELETE FROM staff_accounts;\n"):
+            with self.assertRaisesRegex(release.ReleaseError, "exact reviewed source"):
+                release.reviewed_migration(altered, specification)
+        for changed in (dict(specification, tables=["staff_accounts"]),
+                        dict(specification, triggers={"staff_last_active_owner_update_guard": "orders"})):
+            with self.assertRaisesRegex(release.ReleaseError, "exact reviewed source"):
+                release.reviewed_migration(raw, changed)
+        with self.assertRaises(release.ReleaseError):
+            release.reviewed_migration(raw, dict(specification, path="drizzle/unreviewed.sql"))
+
     def test_create_only_validator_rejects_all_other_statement_classes(self):
         statements = ("DROP TABLE orders;", "DELETE FROM orders;", "UPDATE orders SET status='bad';",
                       "ALTER TABLE orders ADD COLUMN unsafe TEXT;", "PRAGMA user_version=9;",

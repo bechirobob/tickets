@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { resolveRoomPolicy } from "../../../../lib/room-policy";
 
@@ -59,6 +60,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await admin(request);
   if (!session) return Response.json({ error: "Administrator access required." }, { status: 401 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
@@ -138,6 +143,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await admin(request);
   if (!session) return Response.json({ error: "Administrator access required." }, { status: 401 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });

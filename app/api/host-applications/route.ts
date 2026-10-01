@@ -1,8 +1,13 @@
+import { limitRequestBody } from '../../../lib/request-body';
 import {hashToken,mutationHasValidOrigin,requestMetadata} from '../../../lib/admin-session';
 import {enforceRateLimit} from '../../../lib/security-controls';
 import {submitHostApplication,validateHostInput} from '../../../lib/host-applications';
 import {retryFailedDeliveries} from '../../../lib/email-delivery';
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request, 6000);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
  if(!mutationHasValidOrigin(request))return Response.json({error:'This request was not accepted.'},{status:403});
  const raw=await request.text();if(raw.length>6000)return Response.json({error:'This application is too large.'},{status:413});
  let input;

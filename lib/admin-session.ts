@@ -205,11 +205,17 @@ export async function authenticateStaff(db: D1Database, email: string, passwordP
   const valid = await verifyStaffPassword(passwordProof, account);
   const now = new Date().toISOString();
   if (!valid) {
-    const failures = account.failedLoginCount + 1;
-    const lockedUntil = failures >= 5 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
-    await db.prepare("UPDATE staff_accounts SET failed_login_count = ?, locked_until = ?, updated_at = ? WHERE id = ?")
-      .bind(failures >= 5 ? 0 : failures, lockedUntil, now, account.id).run();
-    return { account: null, reason: lockedUntil ? "locked" : "invalid" };
+    // Concurrent attempts must increment the stored count, not overwrite it
+    // with the same stale count read before password verification. Once one
+    // attempt locks the account, later in-flight failures cannot clear the lock.
+    const lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const result = await db.prepare(`UPDATE staff_accounts
+      SET failed_login_count = CASE WHEN failed_login_count + 1 >= 5 THEN 0 ELSE failed_login_count + 1 END,
+          locked_until = CASE WHEN failed_login_count + 1 >= 5 THEN ? ELSE NULL END, updated_at = ?
+      WHERE id = ? AND (locked_until IS NULL OR locked_until <= ?)
+      RETURNING locked_until AS lockedUntil`)
+      .bind(lockedUntil, now, account.id, now).run<{lockedUntil: string | null}>();
+    return { account: null, reason: !result.results.length || result.results[0].lockedUntil ? "locked" : "invalid" };
   }
   await db.prepare("UPDATE staff_accounts SET failed_login_count = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE id = ?")
     .bind(now, now, account.id).run();

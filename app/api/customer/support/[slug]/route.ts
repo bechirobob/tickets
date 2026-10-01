@@ -1,3 +1,5 @@
+import { limitRequestBody } from '../../../../../lib/request-body';
+import { enforceRateLimit } from "../../../../../lib/security-controls";
 import { readAttendeeNightAccess } from "../../../../../lib/attendee-auth";
 import { mutationHasValidOrigin } from "../../../../../lib/admin-session";
 
@@ -43,11 +45,20 @@ export async function GET(request: Request, route: { params: Promise<{ slug: str
 }
 
 export async function POST(request: Request, route: { params: Promise<{ slug: string }> }) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This support request was not accepted." }, { status: 403 });
   const { slug } = await route.params;
   const { env, attendee } = await context(request, slug);
   if (!attendee) return Response.json({ error: "This Night is not attached to your verified tickets." }, { status: 401 });
-  const body = await request.json() as { action?: string; orderId?: string; caseId?: string; kind?: string; subject?: string; message?: string };
+  if (!(await enforceRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, `support:${attendee.attendeeId}`))) return Response.json({ error: "Give support a moment before sending another message." }, { status: 429 });
+  const body = await request.json().catch(() => null) as { action?: string; orderId?: string; caseId?: string; kind?: string; subject?: string; message?: string } | null;
+  if (!body || typeof body !== 'object' || ['action','orderId','caseId','kind','subject','message'].some(key => {
+    const value = body[key as keyof typeof body];
+    return value !== undefined && typeof value !== 'string';
+  })) return Response.json({ error: "Check your support request." }, { status: 400 });
   const now = new Date().toISOString();
   if (body.action === "accept_reschedule") {
     const event = await env.DB.prepare("SELECT event_state AS eventState FROM curated_event_records WHERE slug = ? LIMIT 1").bind(slug).first<{ eventState: string }>();
@@ -70,14 +81,22 @@ export async function POST(request: Request, route: { params: Promise<{ slug: st
       .bind(attendee.attendeeId, order.id).first<{ id: string }>();
     if (existing) return Response.json({ saved: true, caseId: existing.id, duplicate: true });
     const caseId = crypto.randomUUID();
-    await env.DB.batch([
+    const results = await env.DB.batch([
       env.DB.prepare(`INSERT INTO attendee_event_decisions (attendee_id, event_slug, decision, decided_at) VALUES (?, ?, 'refund_requested', ?)
         ON CONFLICT(attendee_id, event_slug) DO UPDATE SET decision = 'refund_requested', decided_at = excluded.decided_at`).bind(attendee.attendeeId, slug, now),
       env.DB.prepare(`INSERT INTO support_cases (id, attendee_id, event_slug, order_id, kind, subject, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'refund', 'Refund request', 'waiting_support', ?, ?)`).bind(caseId, attendee.attendeeId, slug, order.id, now, now),
-      env.DB.prepare(`INSERT INTO support_messages (id, case_id, author_type, author_id, body, created_at) VALUES (?, ?, 'system', ?, ?, ?)`)
-        .bind(crypto.randomUUID(), caseId, attendee.attendeeId, "Refund requested from the purchased Night. Finance will review eligibility before any money moves.", now),
+        SELECT ?, ?, ?, ?, 'refund', 'Refund request', 'waiting_support', ?, ?
+        WHERE NOT EXISTS (SELECT 1 FROM support_cases WHERE attendee_id=? AND order_id=? AND kind='refund' AND status NOT IN ('resolved','closed'))`)
+        .bind(caseId, attendee.attendeeId, slug, order.id, now, now, attendee.attendeeId, order.id),
+      env.DB.prepare(`INSERT INTO support_messages (id, case_id, author_type, author_id, body, created_at)
+        SELECT ?, ?, 'system', ?, ?, ? WHERE EXISTS (SELECT 1 FROM support_cases WHERE id=?)`)
+        .bind(crypto.randomUUID(), caseId, attendee.attendeeId, "Refund requested from the purchased Night. Finance will review eligibility before any money moves.", now, caseId),
     ]);
+    if (!results[1].meta.changes) {
+      const winner = await env.DB.prepare("SELECT id FROM support_cases WHERE attendee_id=? AND order_id=? AND kind='refund' AND status NOT IN ('resolved','closed') LIMIT 1")
+        .bind(attendee.attendeeId,order.id).first<{id:string}>();
+      return Response.json({ saved: true, caseId: winner?.id, duplicate: true });
+    }
     return Response.json({ saved: true, caseId }, { status: 201 });
   }
   if (body.action === "open_case") {

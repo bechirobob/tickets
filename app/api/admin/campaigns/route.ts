@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import {hasEventAssignment,hasPermission,mutationHasValidOrigin,readAdminSession,recordAudit} from '../../../../lib/admin-session';
 import {marketingAudiences,marketingAudienceSql,marketingSummary,type MarketingAudience} from '../../../../lib/marketing-audience';
 import {announcementTemplates,renderAnnouncement,type AnnouncementTemplate,type AnnouncementEvent} from '../../../../lib/announcement-template';
@@ -17,6 +18,10 @@ export async function GET(request:Request){
  return json({...summary,event,campaigns:campaigns.results.map(c=>({...c,metrics:JSON.parse(String(c.metricsJson))})),configured:Boolean(env.RESEND_API_KEY)});
 }
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
  if(!mutationHasValidOrigin(request))return json({error:'This announcement was not accepted.'},403);
  const input=await request.json().catch(()=>null) as {eventSlug?:string;action?:string;id?:string;subject?:string;body?:string;template?:string;audience?:string;scheduledAt?:string;recipients?:number}|null;
  if(!input||typeof input.eventSlug!=='string')return json({error:'Choose an event.'},400);

@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { requireOrganizerEvent, organizerScope } from '../../../../lib/organizer-access';
 import {
   hasPermission,
@@ -91,6 +92,10 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await organizer(request);
   if (!session) return Response.json({ error: "Organiser access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });
@@ -113,6 +118,10 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env, session } = await organizer(request);
   if (!session) return Response.json({ error: "Organiser access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });

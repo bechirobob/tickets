@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 import { mutationHasValidOrigin } from "../../../../lib/admin-session";
 
@@ -24,6 +25,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const identity = await readAttendeeIdentity(
     env.DB,
@@ -116,6 +121,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const identity = await readAttendeeIdentity(
     env.DB,

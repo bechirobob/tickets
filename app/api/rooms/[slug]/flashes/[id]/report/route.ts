@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../../../../lib/request-body';
 import { env } from "cloudflare:workers";
 import { mutationHasValidOrigin } from "../../../../../../../lib/admin-session";
 import { readAttendeeRoomAccess } from "../../../../../../../lib/attendee-auth";
@@ -7,6 +8,10 @@ type Context = { params: Promise<{ slug: string; id: string }> };
 const reasons = new Set(["nonconsensual", "explicit", "unsafe", "spam", "other"]);
 
 export async function POST(request: Request, context: Context) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { slug, id } = await context.params;
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This report was not accepted." }, { status: 403 });
   const access = await readAttendeeRoomAccess(env.DB, request.headers.get("cookie"), slug);

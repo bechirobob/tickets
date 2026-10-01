@@ -62,8 +62,8 @@ export async function sendEmail(input: {
 
   if (!inserted.meta.changes) return {sent:false,reason:'already_queued' as const};
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
-    await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, attempt_count = 1, updated_at = ? WHERE id = ?")
-      .bind("Transactional email is not configured.", now, deliveryId).run();
+    await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, attempt_count = 0, next_attempt_at = ?, updated_at = ? WHERE id = ?")
+      .bind("Transactional email is not configured.", new Date(Date.now() + 5 * 60_000).toISOString(), now, deliveryId).run();
     return { sent: false, reason: "not_configured" as const };
   }
 
@@ -252,6 +252,7 @@ export async function issueRecoveryGrant(input: {
   order?: OrderForEmail;
   requestedIp?: string | null;
   ttlMinutes?: number;
+  deliveryId?: string;
 }) {
   const token = createSecureToken();
   const grantId = crypto.randomUUID();
@@ -286,7 +287,7 @@ export async function issueRecoveryGrant(input: {
   const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}</h1><p>Hi ${escapeHtml(name)},</p>${eventBlock}${receipt}<p>This private link opens My Nights on this device and brings together every confirmed purchase on this email. Tickets, perks, Rooms and receipts—no password archaeology. It expires at ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt)))}.</p><p style="margin:28px 0"><a href="${escapeHtml(recoveryUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open My Nights</a></p><p style="color:#666;font-size:13px">The link is one-time and private. Fresh rotating QR passes appear only after you open it. Forwarding it would be a very generous mistake.</p></div>`;
   const plain = `${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}\n\n${event ? `${event.title}\n${event.venue}, ${event.area}\n\n` : ""}${input.order ? `Reference: ${input.order.reference}\nTotal paid: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}Secure one-time My Nights link: ${recoveryUrl}\n\nThis link expires at ${expiresAt}. It does not contain a QR pass.`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;
-  return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId });
+  return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId, deliveryId: input.deliveryId });
 }
 
 export async function sendTicketTransferEmail(input: {

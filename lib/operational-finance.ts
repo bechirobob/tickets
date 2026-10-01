@@ -247,9 +247,15 @@ export async function buildDisputeEvidence(db: D1Database, disputeId: string) {
   return { generatedAt: new Date().toISOString(), dispute, order, tickets: tickets.results, checkins: checkins.results, deliveries: deliveries.results, consents: consents.results, support: support.results };
 }
 
-export async function resolvePaystackDispute(secret: string, input: { providerDisputeId: string; resolution: "merchant-accepted" | "declined"; amountMinor?: number; uploadedFilename?: string; evidenceId?: string }) {
-  const body: Record<string, string | number> = { resolution: input.resolution };
-  if (input.amountMinor) body.amount = input.amountMinor;
+export async function resolvePaystackDispute(secret: string, input: { providerDisputeId: string; resolution: "merchant-accepted" | "declined"; reason?: string; amountMinor?: number; uploadedFilename?: string; evidenceId?: string }) {
+  if (!['merchant-accepted', 'declined'].includes(input.resolution)) throw new Error('Choose a valid dispute resolution.');
+  if (input.resolution === 'merchant-accepted' && (!Number.isSafeInteger(input.amountMinor) || input.amountMinor! <= 0)) throw new Error('Provide the verified dispute refund amount.');
+  if (input.resolution === 'declined' && !input.uploadedFilename?.trim()) throw new Error('Add the Paystack uploaded evidence filename before challenging this dispute, or resolve it in Paystack.');
+  const body: Record<string, string | number> = {
+    resolution: input.resolution,
+    message: input.reason?.trim().slice(0, 500) || (input.resolution === 'merchant-accepted' ? 'Merchant accepted the dispute and requested the stated refund amount.' : 'Merchant challenged the dispute with the attached evidence.'),
+  };
+  if (input.amountMinor !== undefined) body.refund_amount = input.amountMinor;
   if (input.uploadedFilename) body.uploaded_filename = input.uploadedFilename;
   if (input.evidenceId) body.evidence = input.evidenceId;
   return paystack<Record<string, unknown>>(secret, `/dispute/${encodeURIComponent(input.providerDisputeId)}/resolve`, { method: "PUT", body: JSON.stringify(body) });

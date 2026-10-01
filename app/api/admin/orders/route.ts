@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { ProviderCaseError, readProviderCases, recordProviderCase } from "../../../../lib/provider-operation-tracking";
 import { verifyOrderPayment } from "../../../../lib/seevplus";
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
@@ -82,6 +83,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const { env } = await import("cloudflare:workers");
   const session = await readAdminSession(request.headers.get("cookie"), env.DB);
   if (!session || !hasPermission(session, "orders.manage")) return Response.json({ error: "Finance access is required." }, { status: 403 });
@@ -123,16 +128,30 @@ export async function POST(request: Request) {
       return Response.json({ evidence });
     }
     if (body.action === "dispute_resolve") {
-      const dispute = await env.DB.prepare("SELECT paystack_dispute_id AS providerId FROM payment_disputes WHERE id = ? LIMIT 1").bind(body.disputeId ?? "").first<{ providerId: string | null }>();
+      if (!['merchant-accepted','declined'].includes(body.resolution ?? '')) throw new Error('Choose a valid dispute resolution.');
+      const dispute = await env.DB.prepare(`SELECT d.paystack_dispute_id AS providerId,
+        o.total_amount_minor-o.refunded_amount_minor AS remainingAmount
+        FROM payment_disputes d LEFT JOIN orders o ON o.id=d.order_id AND o.payment_provider='paystack'
+        WHERE d.id=? AND d.status NOT IN ('resolved','accepted') LIMIT 1`)
+        .bind(body.disputeId ?? "").first<{ providerId: string | null; remainingAmount: number | null }>();
       if (!dispute?.providerId) throw new Error("The provider dispute reference is missing.");
-      const result = await resolvePaystackDispute(env.PAYSTACK_SECRET_KEY, { providerDisputeId: dispute.providerId, resolution: body.resolution === "merchant-accepted" ? "merchant-accepted" : "declined" });
+      const amountMinor=body.amountMinor ?? dispute.remainingAmount ?? undefined;
+      if (body.resolution==='merchant-accepted' && (!Number.isSafeInteger(amountMinor) || amountMinor! < 1 || dispute.remainingAmount===null || amountMinor! > dispute.remainingAmount)) throw new Error('Choose a dispute refund amount within the verified remaining balance.');
+      const result = await resolvePaystackDispute(env.PAYSTACK_SECRET_KEY, {
+        providerDisputeId: dispute.providerId, resolution: body.resolution!,
+        amountMinor: body.resolution==='merchant-accepted' ? amountMinor : undefined,
+        reason: typeof body.reason==='string' ? body.reason : undefined,
+        uploadedFilename: typeof body.uploadedFilename==='string' ? body.uploadedFilename : undefined,
+        evidenceId: typeof body.evidenceId==='string' ? body.evidenceId : undefined,
+      });
       await recordAudit(env.DB, { session, action: "payments.dispute_resolved", targetType: "dispute", targetId: body.disputeId, outcome: "success", detail: body.resolution, requestId: requestMetadata(request).requestId });
       return Response.json({ result });
     }
     if (body.action === "resend") {
       const order = await orderForDelivery(env.DB, body.orderId ?? "");
       if (!order) return Response.json({ error: "Order not found." }, { status: 404 });
-      const result = await issueRecoveryGrant({ db: env.DB, normalizedEmail: order.customerEmail, origin: new URL(request.url).origin, kind: "payment_confirmation", order, ttlMinutes: 7 * 24 * 60 });
+      const result = await issueRecoveryGrant({ db: env.DB, normalizedEmail: order.customerEmail, origin: new URL(request.url).origin, kind: "payment_confirmation", order, ttlMinutes: 7 * 24 * 60,
+        deliveryId: `payment-confirmation-resend/${order.id}/${crypto.randomUUID()}` });
       await recordAudit(env.DB, { session, action: "tickets.delivery_requested", targetType: "order", targetId: order.id, outcome: "success", requestId: requestMetadata(request).requestId });
       return Response.json(result);
     }

@@ -1,6 +1,11 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { mutationHasValidOrigin } from '../../../../lib/admin-session';
 import { claimRegistration } from '../../../../lib/registrations';
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This link could not be accepted.' }, { status: 403 });
   const body = await request.json().catch(() => null) as { token?: string } | null;
   if (typeof body?.token !== 'string' || body.token.length < 40 || body.token.length > 128) return Response.json({ error: 'Open the complete link from your email.' }, { status: 400 });

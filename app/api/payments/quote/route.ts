@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { couponQuote } from '../../../../lib/organizer-promotions';
 import { OrganizerError, privateHeaders } from '../../../../lib/organizer-access';
 import { mutationHasValidOrigin, hashToken, requestMetadata } from '../../../../lib/admin-session';
@@ -5,6 +6,10 @@ import { enforceRateLimit } from '../../../../lib/security-controls';
 import { findCuratedEvent } from '../../../events';
 import { resolveTicketSelection } from '../../../../lib/ticket-selection';
 export async function POST(request:Request){
+  const bounded = await limitRequestBody(request, 2048);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   if(!mutationHasValidOrigin(request))return Response.json({error:'Request not accepted.'},{status:403,headers:privateHeaders});
   const {env}=await import('cloudflare:workers');
   if(!await enforceRateLimit(env.PAYMENT_NETWORK_RATE_LIMITER,`coupon:${await hashToken(requestMetadata(request).ip??'unknown')}`))return Response.json({error:'Give it a minute before trying another code.'},{status:429,headers:privateHeaders});

@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { hasPermission, mutationHasValidOrigin, readAdminSession, recordAudit, requestMetadata } from "../../../../lib/admin-session";
 import { notifyEventAttendees } from "../../../../lib/notifications";
 import { isEventColourScheme } from "../../../../lib/event-presentation";
@@ -81,6 +82,10 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const session = await readAdminSession(request.headers.get("cookie"));
   if (!session || !hasPermission(session, "events.manage")) return Response.json({ error: "Curation access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });

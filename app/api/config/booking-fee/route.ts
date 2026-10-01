@@ -1,3 +1,4 @@
+import { limitRequestBody } from '../../../../lib/request-body';
 import { and, desc, eq, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { bookingFeeRules } from "../../../../db/schema";
@@ -25,6 +26,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const bounded = await limitRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
+
   const session = await readAdminSession(request.headers.get("cookie"));
   if (!session || !hasPermission(session, "fees.manage")) return Response.json({ error: "Finance access is required." }, { status: 403 });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This request was not accepted." }, { status: 403 });

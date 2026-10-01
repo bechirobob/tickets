@@ -3,7 +3,7 @@ name: Dependency security
 on:
   push:
     branches: [main]
-    paths: [package.json, package-lock.json, .github/dependabot.yml, .github/workflows/dependency-security.yml]
+    paths: [package.json, package-lock.json, mobile/package.json, mobile/package-lock.json, .github/dependabot.yml, .github/workflows/dependency-security.yml]
   schedule:
     - cron: "30 5 * * 1"
   workflow_dispatch:
@@ -26,3 +26,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=moderate
       - name: Include build and development dependencies in the security gate
         run: npm audit --audit-level=moderate
+      - name: Audit the independently locked packaged client
+        working-directory: mobile
+        run: |
+          npm ci --ignore-scripts --no-audit
+          npm audit --audit-level=moderate
