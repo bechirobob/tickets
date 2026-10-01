@@ -1,0 +1,61 @@
+/* Homepage-only device treatment. The real Room keeps its shared chat system. */
+.discovery-home .room-product-preview { perspective: none; }
+.discovery-home .room-product-scene__phones { transform-style: flat; align-items: center; padding-top: 8px; padding-bottom: 10px; }
+.discovery-home .room-product-preview .room-product-phone:nth-child(n) {
+  transform: none; transition: none; opacity: 1; overflow: visible;
+  isolation: isolate; border-radius: 17% / 8.1%; background: #090909;
+}
+.discovery-home .room-product-phone__render { border-radius: 0; clip-path: inset(3.77% 17.2% 3.77% 17.3% round 10%); }
+.discovery-home .room-product-phone__display {
+  inset: 1.8% 3.6%; grid-template-rows: 40px minmax(0, 1fr) 17px;
+  border: 1px solid #111; border-radius: 15% / 7.2%;
+}
+.discovery-home .room-product-phone__hardware { position: relative; padding: 5px 15px 0; background: #30202d; font-size: 10px; letter-spacing: -.02em; }
+.discovery-home .room-product-phone__hardware > i { width: 73px; height: 21px; border-radius: 14px; align-self: start; margin-top: 4px; border: 1px solid #070707; }
+.discovery-home .room-product-phone__hardware > i::after { width: 6px; height: 6px; right: 7px; top: 6px; background: #10161a; border-color: #202629; }
+.discovery-home .room-product-phone__hardware > b { gap: 3px; }
+.discovery-home .room-product-phone__header { padding: 0 10px 5px; border-color: #604655; gap: 7px; }
+.discovery-home .room-product-phone__header > svg { flex: 0 0 auto; color: #efd4bf; }
+.discovery-home .room-product-phone__header > div { min-width: 0; }
+.discovery-home .room-product-phone__header b { max-width: 120px; font-size: 11px; }
+.discovery-home .room-product-phone__header small { font-size: 9px; letter-spacing: .03em; }
+.discovery-home .room-product-phone__header > span { font-size: 8px; align-self: center; }
+.discovery-home .room-product-phone__buttons { position: absolute; inset: 0; pointer-events: none; z-index: -1; }
+.room-product-phone__buttons > i { position: absolute; width: 3px; border: 1px solid #66666a; background: #343437; border-radius: 2px; left: -2px; top: 18%; height: 4%; }
+.room-product-phone__buttons > i:nth-child(2) { top: 27%; height: 7%; }
+.room-product-phone__buttons > i:nth-child(3) { top: 36%; height: 7%; }
+.room-product-phone__buttons > i:nth-child(4) { left: auto; right: -2px; top: 29%; height: 11%; }
+.discovery-home .room-product-phone__stream { position: relative; gap: 8px; padding: 10px 10px 12px; transition: opacity 220ms ease; }
+.discovery-home .room-product-phone__stream[data-resetting='true'] { opacity: 0; }
+.discovery-home .room-product-phone__stream [hidden] { display: none !important; }
+/* Supersede the old scroll-reveal stagger: messages animate only when inserted. */
+.discovery-home .room-product-preview .room-product-phone__stream > article { animation: none; transform: none; }
+.discovery-home .room-product-phone .scene-message { max-width: 91%; }
+.discovery-home .room-product-phone .scene-message > span { width: 18px; height: 18px; font-size: 8px; }
+.discovery-home .room-product-phone .scene-message__body { padding: 0; }
+.discovery-home .room-product-phone .scene-message__meta { margin-bottom: 3px; font-size: 8px; line-height: 1.25; }
+.discovery-home .room-product-phone .scene-message__bubble { padding: 7px 9px; border-radius: 13px 13px 13px 4px; }
+.discovery-home .room-product-phone .scene-message--own .scene-message__bubble { border-radius: 13px 13px 4px 13px; }
+.discovery-home .room-product-phone .scene-message p { margin: 0; font-size: 11px; line-height: 1.35; letter-spacing: -.01em; }
+.discovery-home .room-product-phone .scene-message .room-demo-reaction { transform-origin: 80% 0; transition: opacity 200ms ease, transform 240ms cubic-bezier(.22,1,.36,1); }
+.discovery-home .room-product-phone .room-demo-reaction[data-reaction-visible='false'] { opacity: 0; visibility: hidden; transform: scale(.8); }
+.discovery-home .room-product-phone .scene-host__content > p { white-space: normal; overflow: visible; }
+.room-demo-typing { width: 43px; height: 25px; margin-left: 24px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 4px; background: var(--chat-incoming); border-radius: 13px 13px 13px 4px; }
+.room-demo-typing > span { width: 4px; height: 4px; border-radius: 50%; background: #cbb8c3; animation: room-demo-dot 1100ms ease-in-out infinite; }
+.room-demo-typing > span:nth-child(2) { animation-delay: 140ms; }
+.room-demo-typing > span:nth-child(3) { animation-delay: 280ms; }
+@keyframes room-demo-dot { 0%, 60%, 100% { opacity: .4; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
+.room-product-phone[data-demo-running='false'] *, .room-product-phone[data-demo-running='false'] *::before { animation-play-state: paused; }
+.room-demo-caption { display: flex; justify-content: space-between; align-items: center; min-height: 44px; color: #e1d6e3; font-size: 11px; letter-spacing: .02em; }
+.room-demo-pause { width: 44px; min-height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #e1d6e3; cursor: pointer; }
+.room-demo-pause:hover { background: #ffffff12; }
+.room-demo-pause:focus-visible { outline: 2px solid #eee; outline-offset: 2px; }
+.room-demo-pause:disabled { opacity: .45; cursor: default; }
+@media (min-width: 701px) { .room-demo-caption > span::after { content: " / Inside the night"; } }
+@media (max-width: 700px) { .room-demo-caption { padding-inline: 20px; } }
+@media (prefers-reduced-motion: reduce) {
+  .discovery-home .room-product-phone__stream, .discovery-home .room-product-phone .scene-message .room-demo-reaction { transition: none; }
+  .room-demo-typing > span { animation: none; }
+}
+/* A pause during the replay crossfade must always leave readable content. */
+.discovery-home .room-product-phone[data-demo-running='false'] .room-product-phone__stream { opacity: 1; transition: none; }
