@@ -133,6 +133,14 @@ REVIEWED_APPLICATION_BLOBS = {
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b"
 }
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
+# Confirmed in the immutable pre-failure backup and generated from the original
+# handover writerGuardStatements(['hosts']). Never remove or disable these guards.
+HOST_WRITER_GUARDS = {
+    "_bct_guard_hosts_delete": "444b3676092af1ff98b1385bf801469f846cd7453f8b8fb4cda2b45bdc3c9a11",
+    "_bct_guard_hosts_insert": "d1735171feb3d6a70de76224d2ad2c8417ce5a64e03e271a406fefba695c4571",
+    "_bct_guard_hosts_update": "993741626e1e5f828e1dd1c681fed62e180645e837e0bcf95fa709bdbd7285ce",
+}
+HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
     "drizzle/0057_background_job_health.sql": {
         "blob": "d364b92ad1ab40981729f7fcd5cce862adc8138e",
@@ -524,6 +532,26 @@ def reviewed_migration(raw, specification):
     return additive_statements(raw, specification)
 
 
+def host_writer_state(connection):
+    """Recognize the exact preserved handover guards; reject drift or a freeze."""
+    require(connection.in_transaction, "Host writer checks require the migration transaction.")
+    guards = connection.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name='hosts'").fetchall()
+    require(len(guards) == len(HOST_WRITER_GUARDS)
+            and {name for name, _ in guards} == set(HOST_WRITER_GUARDS)
+            and all(isinstance(sql, str) and hashlib.sha256(sql.encode()).hexdigest() == HOST_WRITER_GUARDS[name]
+                    for name, sql in guards)
+            and not connection.execute("SELECT 1 FROM sqlite_temp_schema WHERE type='trigger' AND tbl_name='hosts'").fetchall(),
+            "Host correction refuses unknown, missing or altered hosts triggers.")
+    control = connection.execute("SELECT sql FROM sqlite_schema WHERE type='table' AND name='_bct_handover_state'").fetchall()
+    require(len(control) == 1 and isinstance(control[0][0], str)
+            and hashlib.sha256(control[0][0].encode()).hexdigest() == HOST_WRITER_CONTROL_SCHEMA,
+            "Host correction requires the exact handover control schema.")
+    state = connection.execute("SELECT id,frozen,transfer_id FROM _bct_handover_state ORDER BY id").fetchall()
+    require(len(state) == 1 and state[0][0] == 1 and state[0][1] == 0 and isinstance(state[0][2], str),
+            "Host correction requires one existing unfrozen handover control row.")
+    return state
+
+
 def correct_host_verification(connection, raw):
     """One display-only correction under BEGIN IMMEDIATE, never a general DML runner."""
     require(connection.in_transaction, "Host correction requires the migration transaction.")
@@ -531,9 +559,7 @@ def correct_host_verification(connection, raw):
     require(len(definition) == 1 and definition[0][0] == "table"
             and re.match(r"CREATE TABLE\s", definition[0][1], re.I),
             "Host correction requires the existing ordinary hosts table.")
-    require(not connection.execute("SELECT 1 FROM sqlite_schema WHERE type='trigger' AND tbl_name='hosts'").fetchall()
-            and not connection.execute("SELECT 1 FROM sqlite_temp_schema WHERE type='trigger' AND tbl_name='hosts'").fetchall(),
-            "Host correction refuses hosts triggers.")
+    writer_before = host_writer_state(connection)
     columns = connection.execute("PRAGMA table_xinfo(hosts)").fetchall()
     require(all(column[6] == 0 for column in columns), "Host correction refuses hidden or generated columns.")
     columns = [column[1] for column in columns]
@@ -562,7 +588,9 @@ def correct_host_verification(connection, raw):
                            and column in ("verification_status", "updated_at") and origin is None)
             else:
                 allowed = action in (sqlite3.SQLITE_READ, sqlite3.SQLITE_SELECT) or (
-                    action == sqlite3.SQLITE_FUNCTION and column == "current_timestamp")
+                    action == sqlite3.SQLITE_FUNCTION and (
+                        (column == "current_timestamp" and origin is None)
+                        or (column == "raise" and origin == "_bct_guard_hosts_update")))
             return sqlite3.SQLITE_OK if allowed else sqlite3.SQLITE_DENY
         connection.set_authorizer(authorize)
         try:
@@ -583,6 +611,8 @@ def correct_host_verification(connection, raw):
         expected[target] = tuple(row)
     require(after == expected and schema_rows(connection) == before_schema,
             "Host correction changed unrelated host values or database schema.")
+    require(host_writer_state(connection) == writer_before,
+            "Host correction changed preserved handover control values.")
     return {"hostId": "host:kofi-bills", "changed": changed,
             "beforeStatus": previous, "afterStatus": "verified", "preservedOnCodeRollback": True}
 
