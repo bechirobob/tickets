@@ -23,7 +23,7 @@ jobs:
           tags: tag:tickets-ci
           ping: hermes
       - name: Inventory VPS storage metadata without changes
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect VPS storage 20261001 metadata only')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect remaining VPS storage 20261001 metadata only')
         run: |
           tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1' <<'PY'
           #!/usr/bin/env python3
@@ -62,7 +62,7 @@ jobs:
           def guard():
               global seen
               seen += 1
-              if seen > 750000 or time.monotonic() >= DEADLINE:
+              if seen > 3000000 or time.monotonic() >= DEADLINE:
                   raise RuntimeError('Inventory exceeded its safe bound')
           
           def identity():
@@ -147,7 +147,7 @@ jobs:
           # Broad triage emits only these reviewed generic root labels and aggregates.
           # No discovered directory/file names, unit names, arguments, environments or
           # file contents are included in logs. Every active project remains protected.
-          ROOTS = ['/srv', '/opt', '/home', '/root', '/var/lib', '/var/cache',
+          ROOTS = ['/home', '/root', '/var/lib', '/var/cache',
                    '/var/log', '/var/tmp', '/tmp', '/usr/local']
           
           def aggregate(root):
@@ -166,7 +166,7 @@ jobs:
                   return result
               stack, inodes = [path], set()
               while stack:
-                  if seen >= 750000 or time.monotonic() >= DEADLINE:
+                  if seen >= 3000000 or time.monotonic() >= DEADLINE:
                       result['complete'] = False
                       break
                   directory = stack.pop()
