@@ -59,6 +59,10 @@ APPLICATION_FILES = {
 # Exact reviewed application outputs for the app-experience increment. This is
 # deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
 REVIEWED_APPLICATION_BLOBS = {
+    "app/use-room-demo.ts": "f19a90a7824446e2993a1c4f24a9ea0fac4f07b7",
+    "app/room-preview-carousel.tsx": "0b7c497837eee59ed178fcd22a45d10b9038af95",
+    "app/room-demo.css": "a9db2ee6410ba2627af7807045ba570a5a822b75",
+    "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
     "app/segmented-control.tsx": "d68e0038b37928467b25f62780a91ffd61b82eac",
     "app/segmented-control.css": "b4b85d7656046b56447728a292b2f70e30127c14",
     "app/organizer/analytics/organizer-analytics.tsx": "c89f3ca78804491b5fec4048d7aa049b9146b011",
@@ -67,7 +71,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/discovery.css": "1a7f0dd172987dcc84c156dac0685237cbcb1e94",
     ".github/workflows/browser-audit.yml": "255462dfbd7807dfc7d276da3d60e7ebc919bad9",
     ".github/workflows/candidate-checks.yml": "6befb6651e354eb242b4ee0ba99874a245d38beb",
-    "app/active-night-experience.tsx": "331774c8e5554721f69835234a3229350613f943",
+    "app/active-night-experience.tsx": "7aa0ba30ca9e5b9924660c0adcdff2b8aa0279ce",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/admin/login/login-form.tsx": "ee7957582f7e959106766fb4b418f6524766d386",
     "app/admin/operations/event-operations-hub.tsx": "5f76745b78170bcaa8b4b59a8a41d4acd3ab4c83",
@@ -134,7 +138,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
     "scripts/capture-iphone-layouts.mjs": "ab21b98960ebbeaeaa43b45d7f88d641ac69daf0",
     "scripts/iphone-layout-evidence.mjs": "32cafa40c84ab7e0610cb24537227f571317de37",
-    "styles/customer.css": "fb5a0ec6b31d3723ddc9dd602555cad795bc6748",
+    "styles/customer.css": "c6d3cc402fcb37287444c9ac75777424ceeac891",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b"
 }

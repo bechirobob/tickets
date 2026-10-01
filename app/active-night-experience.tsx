@@ -9,6 +9,7 @@ import {
   BatteryFull,
   Camera,
   ConciergeBell,
+  ChevronLeft,
   Gem,
   LockKeyhole,
   Signal,
@@ -20,7 +21,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import EventExplorer from "./event-explorer";
 import { eventImageUrl } from "./event-images";
 import type { CustomerEvent } from "../lib/customer-screen";
-import RoomPreviewCarousel from "./room-preview-carousel";
+import RoomPreviewCarousel, { useRoomPlayback } from "./room-preview-carousel";
+import { useRoomDemo } from "./use-room-demo";
 import { FlashMarker, RoomComposeContent, RoomReaction } from "./room-chat-parts";
 import { ActionLink } from "./action";
 import { discoveryOffer } from "../lib/event-pricing";
@@ -48,26 +50,31 @@ function HostUpdate({ label, time, dateTime, title, detail, compact = false }: {
 function RoomPhone({ event, heroImage, conversation }: { event: CustomerEvent | null; heroImage: string; conversation: "arrival" | "inside" }) {
   const eventTitle = event?.title ?? "After Dark";
   const venue = event?.venue ?? "the venue";
+  const { paused, reducedMotion } = useRoomPlayback();
+  const { phoneRef, streamRef, step, running, typing } = useRoomDemo(paused, reducedMotion, conversation === "inside" ? 2000 : 0);
+  const visibleCount = step >= 6 ? 5 : step >= 4 ? 4 : step >= 2 ? 3 : 2;
 
-  return <article className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
+  return <article ref={phoneRef} data-demo-step={step} data-demo-running={running} className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
+    <span className="room-product-phone__buttons" aria-hidden="true"><i /><i /><i /><i /></span>
     <Image className="room-product-phone__render" src="/devices/iphone-black-titanium.png" width={1024} height={1536} alt="" aria-hidden="true" unoptimized />
     <div className="room-product-phone__display">
     <div className="room-product-phone__hardware" aria-hidden="true"><span>{conversation === "arrival" ? "9:24" : "10:48"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
     <div className="room-product-phone__screen">
-      <header className="room-product-phone__header"><Image src={eventImageUrl(heroImage, 120)} width={24} height={30} alt="" aria-hidden="true" unoptimized /><div><small>The Room</small><b>{eventTitle}</b></div><span>Preview</span></header>
-      <div key={event?.slug ?? "waiting"} className="room-product-phone__stream">
+      <header className="room-product-phone__header"><ChevronLeft size={17} aria-hidden="true" /><Image src={eventImageUrl(heroImage, 120)} width={24} height={30} alt="" aria-hidden="true" unoptimized /><div><small>The Room</small><b>{eventTitle}</b></div><span>Preview</span></header>
+      <div ref={streamRef} className="room-product-phone__stream" data-resetting={step === 7} aria-live="off">
         {conversation === "arrival" ? <>
-          <article className="scene-message"><span>K</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Anyone at {venue} yet?</p></div><div className="chat-tapbacks" aria-label="4 laughing reactions"><RoomReaction emoji="😂" count={4} /></div></div></div></article>
-          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:19 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>“Five minutes away” in the spiritual sense.</p></div><div className="chat-tapbacks" aria-label="2 laughing reactions"><RoomReaction emoji="😂" count={2} /></div></div></div></article>
-          <article className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama · 9:20 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Send the pin. Abena’s coming too.</p></div></div></div></article>
-          <article className="scene-message"><span>Y</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>By the entrance. Look for the loud shirt.</p></div><div className="chat-tapbacks" aria-label="3 fire reactions"><RoomReaction emoji="🔥" count={3} /></div></div></div></article>
-          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:24 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Found the car. Nobody move.</p></div></div></div></article>
+          <article data-room-item="arrival-0" hidden={visibleCount < 1} className="scene-message"><span>K</span><div className="scene-message__body"><small className="scene-message__meta">Kofi · 9:18 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Anyone at {venue} yet?</p></div><div className="chat-tapbacks room-demo-reaction" data-reaction-visible={step >= 2} aria-label="4 laughing reactions"><RoomReaction emoji="😂" count={4} /></div></div></div></article>
+          <article data-room-item="arrival-1" hidden={visibleCount < 2} className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:19 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>“Five minutes away” in the spiritual sense.</p></div><div className="chat-tapbacks room-demo-reaction" data-reaction-visible={step >= 2} aria-label="2 laughing reactions"><RoomReaction emoji="😂" count={2} /></div></div></div></article>
+          <article data-room-item="arrival-2" hidden={visibleCount < 3} className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama · 9:20 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Send the pin. Abena’s coming too.</p></div></div></div></article>
+          <article data-room-item="arrival-3" hidden={visibleCount < 4} className="scene-message"><span>Y</span><div className="scene-message__body"><small className="scene-message__meta">Yaw · 9:22 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>By the entrance. Look for the loud shirt.</p></div><div className="chat-tapbacks room-demo-reaction" data-reaction-visible={step >= 2} aria-label="3 fire reactions"><RoomReaction emoji="🔥" count={3} /></div></div></div></article>
+          <article data-room-item="arrival-4" hidden={visibleCount < 5} className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 9:24 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Found the car. Nobody move.</p></div></div></div></article>
         </> : <>
-          <article className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>{event?.vibe ?? "Front left"} is the move tonight.</p></div><div className="chat-tapbacks" aria-label="6 watching reactions"><RoomReaction emoji="👀" count={6} /></div></div></div></article>
-          <article className="scene-flash-message"><small>Ama · 10:43 PM</small><FlashMarker /></article>
-          <article className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 10:44 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Found you. This set is ridiculous.</p></div><div className="chat-tapbacks" aria-label="5 fire reactions"><RoomReaction emoji="🔥" count={5} /></div></div></div></article>
-          <HostUpdate label="HOST UPDATE" time="10:47 PM" dateTime="22:47" title="Gate change." detail="Use Gate 2 for last entry." compact />
+          <article data-room-item="inside-0" hidden={step < 0} className="scene-message"><span>A</span><div className="scene-message__body"><small className="scene-message__meta">Ama <b className="scene-vip-badge" title="VIP ticket holder"><Gem size={10} aria-hidden="true" /><span className="sr-only">VIP ticket holder</span></b> · 10:42 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>{event?.vibe ?? "Front left"} is the move tonight.</p></div><div className="chat-tapbacks room-demo-reaction" data-reaction-visible={step >= 4} aria-label="6 watching reactions"><RoomReaction emoji="👀" count={6} /></div></div></div></article>
+          <article data-room-item="inside-1" hidden={step < 2} className="scene-flash-message"><small>Ama · 10:43 PM</small><FlashMarker /></article>
+          <article data-room-item="inside-2" hidden={step < 4} className="scene-message scene-message--own"><div className="scene-message__body"><small className="scene-message__meta">You · 10:44 PM</small><div className="chat-message-anchor"><div className="scene-message__bubble"><p>Found you. This set is ridiculous.</p></div><div className="chat-tapbacks room-demo-reaction" data-reaction-visible={step >= 4} aria-label="5 fire reactions"><RoomReaction emoji="🔥" count={5} /></div></div></div></article>
+          <div data-room-item="host" hidden={step < 6}><HostUpdate label="HOST UPDATE" time="10:47 PM" dateTime="22:47" title="Gate change." detail="Use Gate 2 for last entry." compact /></div>
         </>}
+        {typing && <div className="room-demo-typing" data-room-item="typing" aria-label="Someone is typing"><span /><span /><span /></div>}
       </div>
       <div className="room-product-phone__composer chat-compose-bar" aria-hidden="true"><RoomComposeContent accessory={<>{conversation === "inside" && <span className="scene-concierge" aria-label="VIP concierge"><ConciergeBell size={15} /></span>}<Camera size={17} /></>} field={<span className="chat-compose-placeholder">Message The Room</span>} send={<span className="chat-send"><ArrowUp size={16} /></span>} /></div>
     </div>
@@ -198,7 +205,7 @@ export default function ActiveNightExperience({ events }: { events: CustomerEven
       <EventExplorer events={events} featuredSlug={active?.slug} />
     </section>
 
-    <section ref={roomRef} className="room-product-scene active-night-room" id="the-room" data-scroll-reveal onFocusCapture={() => setInteractionPause(true)} onBlurCapture={leaveFocus}>
+    <section ref={roomRef} className="room-product-scene active-night-room" id="the-room" onFocusCapture={() => setInteractionPause(true)} onBlurCapture={leaveFocus}>
       <Image className="room-product-scene__atmosphere" src={eventImageUrl(heroImage, 1200, 75)} width={1200} height={800} sizes="100vw" alt="" aria-hidden="true" unoptimized />
       <div className="room-product-scene__copy"><p className="night-kicker"><span /> You’re already on the inside</p><h2>The night has a Room.</h2><p>Find your people before you find the dance floor. Host updates, a little banter and Flashes you get one look at. <Link href="/help#room-private">Check which passes include access.</Link></p><span><LockKeyhole size={13} /> Private to guests with Room access</span></div>
       <RoomPreviewCarousel>

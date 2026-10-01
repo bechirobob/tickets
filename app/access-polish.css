@@ -1785,58 +1785,6 @@
 .night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(5) { transition-delay: 125ms; }
 .night-mobile-menu.is-open .night-mobile-menu__panel a:nth-child(6) { transition-delay: 155ms; }
 
-/* The Room queue starts only after the preview is visible. Content stays static without JS. */
-.scroll-reveal-ready .room-product-scene.is-revealed .room-product-scene__phones {
-  animation: room-stage-arrive 560ms var(--ease-arrive) both;
-}
-
-.scroll-reveal-ready .room-product-scene.is-revealed .room-product-phone__stream > article {
-  animation: room-phone-message-in 360ms var(--ease-arrive) both;
-  animation-delay: calc(var(--queue-order) * 320ms);
-}
-
-.room-product-phone {
-  isolation: isolate;
-  transition: opacity var(--motion-panel) ease, transform 320ms var(--ease-productive), border-color var(--motion-control) ease;
-}
-
-.room-product-phone::before {
-  content: "";
-  position: absolute;
-  z-index: 4;
-  inset: 1px 18% auto;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
-  opacity: .5;
-  transition: opacity var(--motion-panel) ease, left var(--motion-panel) var(--ease-productive), right var(--motion-panel) var(--ease-productive);
-}
-
-.room-product-preview[data-active="0"] .room-product-phone:nth-child(2) {
-  opacity: 1;
-  transform: translate3d(-5px, 15px, -18px) rotateY(-3.5deg) scale(.97);
-}
-
-.room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
-  opacity: 1;
-  transform: translate3d(5px, 15px, -18px) rotateY(3.5deg) scale(.97);
-}
-
-.room-product-preview[data-active="0"] .room-product-phone:nth-child(1) {
-  opacity: 1;
-  border-color: #777870;
-  transform: translate3d(0, -4px, 12px) rotateY(2deg) scale(1);
-}
-
-.room-product-preview[data-active="1"] .room-product-phone:nth-child(2) {
-  opacity: 1;
-  border-color: #777870;
-  transform: translate3d(0, -4px, 12px) rotateY(-2deg) scale(1);
-}
-
-.room-product-preview[data-active="0"] .room-product-phone:nth-child(1)::before,
-.room-product-preview[data-active="1"] .room-product-phone:nth-child(2)::before { left: 12%; right: 12%; opacity: 1; }
-
 /* Payment choice motion explains progressive disclosure without decorating the transaction. */
 .payment-method-detail {
   animation: room-item-arrive var(--motion-panel) var(--ease-arrive) both;
@@ -1960,19 +1908,12 @@
   .compact-hero__copy > .compact-hero__single,
   .compact-hero__price { animation-duration: 460ms; }
 
-  .room-product-preview[data-active="0"] .room-product-phone:nth-child(2),
-  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) {
-    opacity: 1;
-    transform: translateY(8px) scale(.985);
-  }
 
-  .room-product-preview[data-active="0"] .room-product-phone:nth-child(1) { transform: translateY(-2px) rotateY(1.5deg); }
-  .room-product-preview[data-active="1"] .room-product-phone:nth-child(2) { transform: translateY(-2px) rotateY(-1.5deg); }
 
-  .room-product-preview[data-active="0"] .room-product-phone:nth-child(2) .room-product-phone__stream > article,
-  .room-product-preview[data-active="1"] .room-product-phone:nth-child(1) .room-product-phone__stream > article {
-    animation-play-state: paused;
-  }
+
+
+
+
 }
 
 /* Mobile tap-target contract: the control stays visually compact while its hit area
