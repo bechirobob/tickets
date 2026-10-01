@@ -1,0 +1,246 @@
+name: Extract exact final iPhone audit subset read-only
+on:
+  push:
+    branches: [ops/extract-audit-iphone53-20261001]
+    paths: [.github/workflows/extract-audit-iphone53-20261001.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  split:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/extract-audit-iphone53-20261001' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify and split immutable original image evidence
+        id: split
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYCODE'
+          import hashlib,io,json,os,pathlib,re,stat,urllib.request,urllib.error,urllib.parse,zipfile,sys
+          sys.excepthook=lambda kind,*args: print('Artifact split stopped: '+kind.__name__,file=sys.stderr)
+          REPO='bechirobob/tickets'; ID=11195107868; RUN=36929202607
+          SHA='53f5a0615b80f59d1e84a0098061fed4330fb107'; DIGEST='d0ea69e4166c40d337209105b594873397628b0bdf80428b45e0eda440309b62'
+          MAX=64*1024*1024; PART=15*1024*1024
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl): return None
+          opener=urllib.request.build_opener(NoRedirect())
+          def get(path):
+              req=urllib.request.Request('https://api.github.com/repos/'+REPO+'/'+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with opener.open(req,timeout=30) as r:
+                  data=r.read(MAX+1);assert len(data)<=MAX;return json.loads(data)
+          a=get('actions/artifacts/'+str(ID));w=a['workflow_run']
+          assert a['id']==ID and not a['expired'] and a['digest']=='sha256:'+DIGEST and 0<a['size_in_bytes']<=MAX
+          assert w['id']==RUN and w['head_sha']==SHA
+          run=get('actions/runs/'+str(RUN));assert run['repository']['full_name']==REPO and run['head_sha']==SHA and run['conclusion']=='success'
+          req=urllib.request.Request('https://api.github.com/repos/'+REPO+'/actions/artifacts/'+str(ID)+'/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+          try:
+              opener.open(req,timeout=30);raise RuntimeError('Expected signed artifact redirect')
+          except urllib.error.HTTPError as e:
+              assert e.code==302;url=e.headers['Location']
+          parsed=urllib.parse.urlsplit(url);assert parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password and parsed.port in (None,443)
+          with opener.open(url,timeout=30) as r:
+              raw=r.read(MAX+1);assert len(raw)<=MAX
+          assert hashlib.sha256(raw).hexdigest()==DIGEST
+          root=pathlib.Path('split-output');root.mkdir()
+          parts=[];entries=[];part=None;size=0;total=0
+          with zipfile.ZipFile(io.BytesIO(raw)) as z:
+              assert len(z.infolist())<1000
+              for info in sorted(z.infolist(),key=lambda x:x.filename):
+                  p=pathlib.PurePosixPath(info.filename)
+                  assert not p.is_absolute() and '..' not in p.parts and not stat.S_ISLNK(info.external_attr>>16)
+                  if info.is_dir() or not (p.name in ('screens.json','parity.json','01-home-1.png','01-home-9.png','04-on-the-guest-list-5.png','12-privacy-1.png','12-privacy-2.png','13-my-nights-access-1.png','14-the-buzz-access-1.png') or info.filename.endswith('website-comparison/comparison.json')):continue
+                  assert 0<=info.file_size<PART
+                  total+=info.file_size;assert total<=256*1024*1024
+                  if part is None or size+info.file_size>PART:
+                      part=root/('part-'+str(len(parts)+1));part.mkdir();parts.append(part);size=0
+                  data=z.read(info);assert len(data)==info.file_size
+                  target=part.joinpath(*p.parts);target.parent.mkdir(parents=True,exist_ok=True);assert not target.exists();target.write_bytes(data);size+=len(data)
+                  entries.append({'part':part.name,'path':info.filename,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
+          assert entries and len(parts)<=20
+          manifest={'originalRepository':REPO,'originalArtifact':ID,'originalRun':RUN,'originalSource':SHA,'originalArchiveSha256':DIGEST,'entries':entries,'renderingRerun':False,'applicationChanged':False}
+          for p in parts:(p/'split-provenance.json').write_text(json.dumps(manifest,indent=2))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('parts='+json.dumps([p.name for p in parts])+'\n')
+          print(json.dumps({'verifiedArtifact':ID,'parts':[p.name for p in parts],'files':len(entries),'uncompressedBytes':total,'source':SHA}))
+          PYCODE
+      - name: Preserve image part 1
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-1')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-1
+          path: split-output/part-1
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 2
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-2')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-2
+          path: split-output/part-2
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 3
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-3')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-3
+          path: split-output/part-3
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 4
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-4')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-4
+          path: split-output/part-4
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 5
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-5')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-5
+          path: split-output/part-5
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 6
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-6')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-6
+          path: split-output/part-6
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 7
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-7')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-7
+          path: split-output/part-7
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 8
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-8')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-8
+          path: split-output/part-8
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 9
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-9')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-9
+          path: split-output/part-9
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 10
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-10')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-10
+          path: split-output/part-10
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 11
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-11')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-11
+          path: split-output/part-11
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 12
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-12')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-12
+          path: split-output/part-12
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 13
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-13')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-13
+          path: split-output/part-13
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 14
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-14')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-14
+          path: split-output/part-14
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 15
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-15')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-15
+          path: split-output/part-15
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 16
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-16')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-16
+          path: split-output/part-16
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 17
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-17')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-17
+          path: split-output/part-17
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 18
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-18')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-18
+          path: split-output/part-18
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 19
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-19')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-19
+          path: split-output/part-19
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve image part 20
+        if: contains(fromJSON(steps.split.outputs.parts), 'part-20')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-iphone53-selected-11195107868-part-20
+          path: split-output/part-20
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
