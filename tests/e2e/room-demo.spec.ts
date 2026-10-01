@@ -96,8 +96,7 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await track.dispatchEvent("pointercancel", { pointerType: "touch", pointerId: 1 });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   await track.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 2 });
-  // React synthesizes onPointerLeave from the browser's pointerout event.
-  await track.dispatchEvent("pointerout", { pointerType: "touch", pointerId: 2, relatedTarget: null });
+  await track.dispatchEvent("pointerout", { pointerType: "touch", pointerId: 2 });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
 
   // Touch interaction must never erase an explicit pause.
@@ -107,6 +106,11 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await expect(phone).toHaveAttribute("data-demo-running", "false");
   await expect(page.getByRole("button", { name: "Play Room preview", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause Room preview", exact: true })).toBeVisible();
+  // Clicking the caption may scroll the phone offscreen on WebKit. Offscreen
+  // playback must stay paused; restore its visibility before asserting resume.
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toBeInViewport({ ratio: .55 });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
 
   const inside = page.locator(".room-product-phone--inside");
@@ -120,4 +124,43 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await expect(track).toBeFocused();
   await expect(page.getByRole("button", { name: "Play Room preview", exact: true })).toBeVisible();
   await expect(inside).toHaveAttribute("data-demo-running", "false");
+});
+
+test("Room hardware and independent tapbacks retain a clear mobile silhouette", async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const phone = page.locator(".room-product-phone--arrival");
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
+  const message = phone.locator('[data-room-item="arrival-3"]');
+  const reaction = message.locator(".room-demo-reaction");
+  await expect(message).toBeVisible({ timeout: 12000 });
+  // The new message appears first. Its reaction has a separate delayed arrival.
+  await expect(reaction).toHaveAttribute("data-reaction-visible", "true");
+  expect(Number(await reaction.evaluate(node => getComputedStyle(node).opacity))).toBeLessThan(.1);
+  await phone.screenshot({ path: testInfo.outputPath("room-before-reaction.png") });
+  await expect(reaction).toHaveCSS("opacity", "1", { timeout: 2000 });
+  await phone.screenshot({ path: testInfo.outputPath("room-after-reaction.png") });
+  await page.getByRole("button", { name: "Pause Room preview", exact: true }).click();
+  await expect(reaction).toHaveCSS("animation-play-state", "paused");
+  await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
+  await expect(reaction).toHaveCSS("animation-play-state", "running");
+  // A settled tapback must not rewind its finished arrival when playback resumes.
+  expect(Number(await reaction.evaluate(node => getComputedStyle(node).opacity))).toBe(1);
+  await page.waitForTimeout(200);
+  await expect(reaction).toHaveCSS("opacity", "1");
+  const bubble = await message.locator(".scene-message__bubble").boundingBox();
+  const badge = await reaction.boundingBox();
+  expect(bubble).not.toBeNull();
+  expect(badge).not.toBeNull();
+  expect(badge!.y).toBeLessThan(bubble!.y);
+  expect(badge!.y + badge!.height).toBeLessThan(bubble!.y + bubble!.height);
+  const frame = phone.locator(".room-product-phone__render");
+  await expect(frame).toHaveAttribute("src", /iphone-titanium-front\.svg/);
+  expect(await frame.boundingBox()).toEqual(await phone.boundingBox());
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(reaction).toHaveCSS("animation-name", "none");
+  await expect(reaction).toHaveCSS("opacity", "1");
+  await phone.screenshot({ path: testInfo.outputPath("room-hardware-tapbacks-static.png") });
+  await page.locator("#the-room").screenshot({ path: testInfo.outputPath("room-hardware-tapbacks-section.png") });
 });

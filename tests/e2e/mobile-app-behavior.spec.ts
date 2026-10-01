@@ -128,8 +128,20 @@ test('mobile header and visual-viewport keyboard geometry integration preserve u
   await page.goto('/events');
   const header = page.locator('.discovery-directory > .directory-header');
   const dock = page.getByRole('navigation', { name: 'Customer navigation' });
-  const initialHeader = await header.boundingBox();
-  const dockBox = await dock.boundingBox();
+  // Streamed navigation can finish before the guest shell has mounted/hydrated.
+  // Measure real, ready elements rather than treating a missing box as geometry.
+  await expect(header).toBeVisible();
+  await expect(dock).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeEnabled();
+  let initialHeader = await header.boundingBox();
+  let dockBox = await dock.boundingBox();
+  await expect.poll(async () => {
+    initialHeader = await header.boundingBox();
+    dockBox = await dock.boundingBox();
+    return initialHeader !== null && dockBox !== null
+      && initialHeader.width > 0 && initialHeader.height > 0
+      && dockBox.width > 0 && dockBox.height > 0;
+  }, { message: 'The hydrated mobile header and dock must have usable geometry' }).toBe(true);
   expect(dockBox!.x).toBeGreaterThanOrEqual(12);
   expect(dockBox!.width).toBeLessThan(page.viewportSize()!.width - 20);
   expect(dockBox!.y + dockBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 12);
