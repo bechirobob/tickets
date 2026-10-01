@@ -57,3 +57,66 @@ test("Room preview pauses offscreen, preserves swipe position, and replays insid
   await page.waitForTimeout(2000);
   await expect(phone).toHaveAttribute("data-demo-step", step!);
 });
+
+test("Room preview resumes after touch, scroll cancellation and pointer release", async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const phone = page.locator(".room-product-phone--arrival");
+  const track = page.locator(".room-product-scene__phones");
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
+  const bounds = await phone.boundingBox();
+  expect(bounds).not.toBeNull();
+  const x = bounds!.x + bounds!.width / 2;
+  const y = bounds!.y + bounds!.height / 2;
+  if (testInfo.project.use.hasTouch) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+  await expect(page.getByRole("button", { name: "Pause Room preview", exact: true })).toBeVisible();
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
+  const step = await phone.getAttribute("data-demo-step");
+  await expect(phone).not.toHaveAttribute("data-demo-step", step!, { timeout: 5000 });
+
+  if (testInfo.project.name === "mobile-chromium") {
+    // A real browser touch gesture, not just a synthetic DOM cancellation.
+    const session = await page.context().newCDPSession(page);
+    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    for (let delta = 12; delta <= 72; delta += 12) {
+      await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - delta }] });
+    }
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await session.detach();
+    await phone.scrollIntoViewIfNeeded();
+    await expect(phone).toHaveAttribute("data-demo-running", "true");
+  }
+
+  // Browsers cancel the pointer when native touch scrolling takes ownership.
+  // Exercise that transition, including release outside the phone, on all engines.
+  await track.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 1 });
+  await expect(phone).toHaveAttribute("data-demo-running", "false");
+  await track.dispatchEvent("pointercancel", { pointerType: "touch", pointerId: 1 });
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
+  await track.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 2 });
+  await track.dispatchEvent("pointerleave", { pointerType: "touch", pointerId: 2 });
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
+
+  // Touch interaction must never erase an explicit pause.
+  await page.getByRole("button", { name: "Pause Room preview", exact: true }).click();
+  await track.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 3 });
+  await track.dispatchEvent("pointerup", { pointerType: "touch", pointerId: 3 });
+  await expect(phone).toHaveAttribute("data-demo-running", "false");
+  await expect(page.getByRole("button", { name: "Play Room preview", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
+
+  const inside = page.locator(".room-product-phone--inside");
+  await inside.scrollIntoViewIfNeeded();
+  await expect(inside).toHaveAttribute("data-demo-running", "true");
+  const secondStep = await inside.getAttribute("data-demo-step");
+  await expect(inside).not.toHaveAttribute("data-demo-step", secondStep!, { timeout: 5000 });
+  const pause = page.getByRole("button", { name: "Pause Room preview", exact: true });
+  await pause.focus();
+  await pause.press("Shift+Tab");
+  await expect(track).toBeFocused();
+  await expect(page.getByRole("button", { name: "Play Room preview", exact: true })).toBeVisible();
+  await expect(inside).toHaveAttribute("data-demo-running", "false");
+});

@@ -60,7 +60,7 @@ APPLICATION_FILES = {
 # deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
 REVIEWED_APPLICATION_BLOBS = {
     "app/use-room-demo.ts": "f19a90a7824446e2993a1c4f24a9ea0fac4f07b7",
-    "app/room-preview-carousel.tsx": "0b7c497837eee59ed178fcd22a45d10b9038af95",
+    "app/room-preview-carousel.tsx": "dfe945d41d18bab7d04a02fe008432671d8a08c3",
     "app/room-demo.css": "a9db2ee6410ba2627af7807045ba570a5a822b75",
     "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
     "app/segmented-control.tsx": "d68e0038b37928467b25f62780a91ffd61b82eac",
