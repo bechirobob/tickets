@@ -23,9 +23,9 @@ jobs:
           tags: tag:tickets-ci
           ping: hermes
       - name: Inventory VPS storage metadata without changes
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect VPS cache and staging metadata 20261001')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect failed Tickets stage 36804472437 metadata only')
         run: |
-          tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1' <<'PY'
+          tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1 --stage-run 36804472437-1' <<'PY'
           #!/usr/bin/env python3
           """Read-only, bounded metadata inventory. No file contents or deletion operations."""
           import argparse
@@ -147,9 +147,7 @@ jobs:
           # Broad triage emits only these reviewed generic root labels and aggregates.
           # No discovered directory/file names, unit names, arguments, environments or
           # file contents are included in logs. Every active project remains protected.
-          ROOTS = ['/home/ubuntu/.cache', '/home/ubuntu/.npm', '/home/ubuntu/.pnpm-store',
-                   '/home/ubuntu/.local/share/pnpm', '/home/ubuntu/.local/share/Trash',
-                   '/root/.cache', '/root/.npm', '/var/cache/apt/archives']
+          ROOTS = ['/var/tmp/tickets-code-release-36804472437-1']
           
           def aggregate(root):
               result = {'root': root, 'logical_bytes': 0, 'regular_file_allocated_bytes': 0,
