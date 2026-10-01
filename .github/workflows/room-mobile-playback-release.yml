@@ -1,0 +1,443 @@
+name: Release verified Tickets Room mobile playback
+
+# Exact source pins: independently reviewed main merge and candidate; runtime must pass before activation.
+# One-time Tickets Room mobile playback release through the established main-only workflow.
+# This coordinator is restricted to ops/room-mobile-playback-release and the pinned SHAs.
+# Publishing that workflow is the explicit one-time deployment trigger.
+# Dispatch release and live audit separately; GITHUB_TOKEN does not propagate workflow_run.
+# Never rerun after either uncertain POST; inspect that exact target workflow first.
+on:
+  push:
+    branches: [ops/room-mobile-playback-release]
+    paths: [.github/workflows/room-mobile-playback-release.yml]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: tickets-room-mobile-playback-release-coordinator
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/room-mobile-playback-release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 2266b65a282772375da97ccc5ed9942e489a2b7d
+      SOURCE_TREE: 2fb49933d81bc4367c4406c1cf617e31799cd1c8
+      RUNTIME_RUN: '36871117570'
+      CANDIDATE_SHA: ca6f95a4060d26fe771fcaf99ea5b00d185a5162
+      CANDIDATE_RUN: '36866953214'
+      EXPECTED_ACTIVE: 7a090331436541a964752f3d5cfdfffbbc1de823
+    steps:
+      - name: Verify exact CI, release once and audit the live source once
+        id: coordinate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import io
+          import json
+          import zipfile
+          import os
+          import re
+          import sys
+          import subprocess
+          import tempfile
+          from pathlib import Path
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPO = 'bechirobob/tickets'
+          RELEASE_FILE = 'tickets-code-release.yml'
+          AUDIT_FILE = 'browser-audit.yml'
+          AUDIT_BLOB = '255462dfbd7807dfc7d276da3d60e7ebc919bad9'
+          BROWSERS = {'desktop-chromium', 'mobile-chromium', 'mobile-webkit'}
+          MAX_ARCHIVE = 128 * 1024 * 1024
+          AUDIT_STEPS = ('Resolve and verify the active production revision',
+              'Verify deployed source belongs to this repository main history',
+              'Install real-browser engines', 'Confirm production still matches the audited source',
+              'Audit production in desktop Chrome, mobile Chrome and mobile WebKit',
+              'Confirm production stayed on the audited source',
+              'Preserve browser results and isolated Room renders')
+          SOURCE = os.environ['SOURCE_SHA']
+          SOURCE_TREE = os.environ['SOURCE_TREE']
+          CANDIDATE = os.environ['CANDIDATE_SHA']
+          RUNTIME_RUN = os.environ['RUNTIME_RUN']
+          CANDIDATE_RUN = os.environ['CANDIDATE_RUN']
+          EXPECTED = os.environ['EXPECTED_ACTIVE']
+          # Fill these from the final reviewed code-release.py verify_jobs contract.
+          # Do not guess names or replace required steps with an aggregate green job.
+          CORE_JOB = 'core'
+          CORE_STEPS = ('Audit dependencies', 'Check application types', 'Check database schema', 'Lint application', 'Package verified browser build', 'Preserve verified browser build', 'Validate the deployable Worker without publishing', 'Verify exact candidate source', 'Verify unit tests and rendered production build')
+          BROWSER_STEPS = ('Download the verified browser build', 'Prepare isolated event fixtures', 'Verify RSVP and interest registration on desktop and mobile', 'Verify and restore the exact candidate build', 'Verify every browser journey before release', 'Verify host report fixture recovery without retries', 'Verify keyboard navigation focus without retries', 'Verify opt-in USDC checkout without provider traffic', 'Verify optional SeevPlus checkout on desktop and mobile', 'Verify owner Operations workflows on desktop and mobile')
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          def api(path, payload=None):
+              # No retry for any request; each distinct workflow has at most one POST.
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + REPO + '/' + path,
+                  data=None if payload is None else json.dumps(payload).encode(),
+                  headers={
+                      'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                      'Accept': 'application/vnd.github+json',
+                      'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              try:
+                  with urllib.request.build_opener(NoRedirect()).open(request, timeout=30) as response:
+                      body = response.read()
+                      require(response.status == (200 if payload is None else 204),
+                              'Unexpected GitHub response status')
+                      return json.loads(body) if body else None
+              except urllib.error.HTTPError as error:
+                  # Never log response bodies, headers, credentials, or private artifacts.
+                  raise RuntimeError('GitHub request failed with HTTP ' + str(error.code)) from None
+              except (urllib.error.URLError, TimeoutError):
+                  raise RuntimeError('GitHub request failed or timed out') from None
+
+          def note(message):
+              print(message, flush=True)
+              if os.environ.get('GITHUB_STEP_SUMMARY'):
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                      summary.write(message + '\n\n')
+
+          def verify_main():
+              require(api('git/ref/heads/main')['object']['sha'] == SOURCE,
+                      'main has moved or differs from the exact intended source; do not dispatch')
+
+          def workflow_identity(filename):
+              workflow = api('actions/workflows/' + filename)
+              require(workflow.get('path') == '.github/workflows/' + filename
+                      and workflow.get('state') == 'active', 'Unexpected or inactive workflow identity')
+              return workflow['id']
+
+          def verify_run(run, run_id, workflow_id, filename, source, *, runtime=False, completed=True):
+              require(str(run.get('id')) == str(run_id)
+                      and run.get('workflow_id') == workflow_id
+                      and run.get('path') == '.github/workflows/' + filename,
+                      'Workflow run identity does not match the requested run')
+              require(run.get('repository', {}).get('full_name') == REPO
+                      and run.get('head_repository', {}).get('full_name') == REPO,
+                      'Workflow run repository identity mismatch')
+              require(run.get('head_sha') == source, 'Workflow run source SHA mismatch')
+              if runtime:
+                  require(run.get('event') == 'push' and run.get('head_branch') == 'main',
+                          'VPS runtime must be an exact main push')
+              if completed:
+                  require(run.get('status') == 'completed' and run.get('conclusion') == 'success',
+                          'Required workflow has not completed successfully')
+
+          def jobs_for(run_id, attempt=None):
+              jobs = []
+              suffix = '' if attempt is None else '/attempts/' + str(attempt)
+              for page in range(1, 11):
+                  result = api('actions/runs/' + str(run_id) + suffix + '/jobs?per_page=100&page=' + str(page))
+                  jobs.extend(result['jobs'])
+                  if len(jobs) == result['total_count']:
+                      return jobs
+                  require(len(result['jobs']) == 100, 'Incomplete workflow-job listing')
+              raise RuntimeError('Workflow-job listing exceeded its safe bound')
+
+          def source_dispatches(filename):
+              # Keep each workflow/event namespace separate. An automatic workflow_run audit
+              # cannot be mistaken for this explicitly requested workflow_dispatch audit.
+              query = urllib.parse.urlencode({'head_sha': SOURCE, 'event': 'workflow_dispatch', 'per_page': 100})
+              result = api('actions/workflows/' + filename + '/runs?' + query)
+              runs = result['workflow_runs']
+              require(result['total_count'] == len(runs), 'Incomplete existing-dispatch listing for ' + filename)
+              require(all(run.get('head_sha') == SOURCE and run.get('event') == 'workflow_dispatch'
+                          and run.get('path') == '.github/workflows/' + filename
+                          for run in runs), 'Unexpected dispatch listing identity for ' + filename)
+              return runs
+
+          def dispatch_and_wait(filename, workflow_id, payload, label):
+              runs_url = 'https://github.com/' + REPO + '/actions/workflows/' + filename
+              require(not source_dispatches(filename), 'A dispatch already exists for ' + filename + '; inspect ' + runs_url)
+              verify_main()
+              try:
+                  api('actions/workflows/' + filename + '/dispatches', payload)
+              except Exception:
+                  raise RuntimeError('Dispatch outcome is uncertain for ' + filename + '; do not retry. Inspect ' + runs_url) from None
+              note('Dispatch accepted once for ' + filename + '. Never redispatch while waiting: ' + runs_url)
+              discovery_deadline = time.monotonic() + 300
+              run = None
+              while time.monotonic() < discovery_deadline:
+                  matches = source_dispatches(filename)
+                  require(len(matches) <= 1, 'Multiple matching dispatches for ' + filename + '; inspect ' + runs_url)
+                  if matches:
+                      run = matches[0]
+                      break
+                  time.sleep(5)
+              require(run is not None, 'Accepted dispatch not identified for ' + filename + '; do not retry. Inspect ' + runs_url)
+              run_id = run['id']
+              run_url = 'https://github.com/' + REPO + '/actions/runs/' + str(run_id)
+              note('Tracking exact ' + label + ' run: ' + run_url)
+              if os.environ.get('GITHUB_OUTPUT'):
+                  with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                      output.write(label + '_run_id=' + str(run_id) + '\n' + label + '_run_url=' + run_url + '\n')
+              deadline = time.monotonic() + 1800
+              while time.monotonic() < deadline:
+                  verify_run(run, run_id, workflow_id, filename, SOURCE, completed=False)
+                  require(run.get('event') == 'workflow_dispatch' and run.get('head_branch') == 'main'
+                          and run.get('html_url') == run_url and run.get('run_attempt') == 1,
+                          'Dispatched run identity/attempt changed for ' + filename)
+                  if run.get('status') == 'completed':
+                      final_matches = source_dispatches(filename)
+                      require(len(final_matches) == 1 and final_matches[0].get('id') == run_id,
+                              'Dispatch listing changed before terminal acceptance for ' + filename)
+                      require(run.get('conclusion') == 'success', 'Workflow finished without success: ' + run_url)
+                      note('Verified ' + label + ' workflow succeeded: ' + run_url)
+                      return run_id
+                  time.sleep(15)
+                  run = api('actions/runs/' + str(run_id))
+              raise RuntimeError('Workflow remains nonterminal: ' + run_url + '. Continue monitoring; do not redispatch.')
+
+          def verify_release_jobs(run_id):
+              jobs = jobs_for(run_id, attempt=1)
+              require(all(job.get('run_id') == int(run_id) and job.get('run_attempt') == 1
+                      and job.get('head_sha') == SOURCE and job.get('status') == 'completed'
+                      for job in jobs), 'Job source, attempt or run identity mismatch')
+              expected = {'release': 'success', 'inspect_failure': 'skipped'}
+              expected.update({'Verify retired checkout preview (' + browser + ')': 'success' for browser in BROWSERS})
+              require(len(jobs) == len(expected) and {job.get('name') for job in jobs} == set(expected)
+                      and all(job.get('conclusion') == expected[job['name']] for job in jobs),
+                      'Release and all three retired previews must succeed while inspection stays skipped')
+              required = ('Require main and exact bounded release inputs',
+                  'Reject unmerged source before executing checkout code',
+                  'Stage reviewed main operator without changing the verified application tree',
+                  'Verify updater regression suite',
+                  'Verify exact CI runs, source tree, ancestry and artifact provenance',
+                  'Connect existing dedicated Tickets identity',
+                  'Inspect loaded credential binding metadata without reading secret values',
+                  'Apply reversible Tickets-only code transaction')
+              for job in jobs:
+                  steps = required if job['name'] == 'release' else (
+                      ('Verify only the removed preview page and API',) if job['name'].startswith('Verify retired checkout preview (') else ())
+                  for name in steps:
+                      matches = [step for step in job.get('steps', []) if step.get('name') == name]
+                      require(len(matches) == 1 and matches[0].get('conclusion') == 'success',
+                              'Required release or retired-preview step was skipped, failed or duplicated: ' + name)
+
+          def probe_identity(endpoint):
+              require(endpoint in ('healthz', 'api/version'), 'Unexpected public identity endpoint')
+              # Preserve browser-audit.yml's strict curl contract, with no credentials,
+              # redirects, retries, custom user agent, security bypass or response logging.
+              with tempfile.TemporaryDirectory(prefix='tickets-identity-') as directory:
+                  output = Path(directory) / 'identity.json'
+                  command = ['curl', '--disable', '--fail', '--silent', '--show-error',
+                      '--proto', '=https', '--tlsv1.2', '--connect-timeout', '5', '--max-time', '20',
+                      '--max-filesize', '65536', '--max-redirs', '0',
+                      '-H', 'Cache-Control: no-cache', '-H', 'Accept: application/json',
+                      '--write-out', '%{http_code}', '--output', str(output),
+                      'https://tickets.becoreops.com/' + endpoint]
+                  try:
+                      result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          timeout=25, check=False, env={'PATH': os.environ.get('PATH', '/usr/bin:/bin')})
+                  except (subprocess.TimeoutExpired, OSError) as error:
+                      raise RuntimeError('Public identity endpoint=/' + endpoint
+                          + ' status=unavailable error=' + type(error).__name__) from None
+                  status = result.stdout.decode('ascii', errors='replace').strip()
+                  safe_status = status if re.fullmatch(r'[0-9]{3}', status) else 'unavailable'
+                  if result.returncode != 0 or status != '200':
+                      raise RuntimeError('Public identity endpoint=/' + endpoint + ' status=' + safe_status
+                          + ' error=' + ('CurlExit' + str(result.returncode) if result.returncode else 'UnexpectedStatus'))
+                  try:
+                      with output.open('rb') as response:
+                          body = response.read(65537)
+                      if len(body) > 65536:
+                          raise ValueError('oversized')
+                      value = json.loads(body)
+                      if (not isinstance(value, dict) or value.get('service') != 'becore-tickets'
+                              or value.get('revision') != SOURCE
+                              or (endpoint == 'healthz' and (value.get('runtime') != 'vps'
+                                  or value.get('active') is not True))):
+                          raise ValueError('identity mismatch')
+                  except (OSError, ValueError, UnicodeError) as error:
+                      raise RuntimeError('Public identity endpoint=/' + endpoint + ' status=200 error='
+                          + type(error).__name__) from None
+                  note('Public identity endpoint=/' + endpoint + ' status=200 error=none')
+                  return value
+
+          def verify_live_source():
+              for endpoint in ('healthz', 'api/version'):
+                  probe_identity(endpoint)
+
+          def artifact_bytes(artifact):
+              # Ask only GitHub for the signed location. Never forward GH_TOKEN to storage,
+              # follow further redirects, log the signed URL, or extract the downloaded ZIP.
+              request = urllib.request.Request('https://api.github.com/repos/' + REPO
+                  + '/actions/artifacts/' + str(artifact['id']) + '/zip', headers={
+                      'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                      'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'})
+              location = None
+              try:
+                  with urllib.request.build_opener(NoRedirect()).open(request, timeout=30):
+                      raise RuntimeError('Artifact endpoint did not provide a signed redirect')
+              except urllib.error.HTTPError as error:
+                  require(error.code == 302, 'Artifact download endpoint failed')
+                  location = error.headers.get('Location')
+              require(isinstance(location, str), 'Artifact download location is missing')
+              parsed = urllib.parse.urlsplit(location)
+              require(parsed.scheme == 'https' and parsed.hostname and parsed.port in (None, 443)
+                      and not parsed.username and not parsed.password and not parsed.fragment,
+                      'Artifact download location is not plain HTTPS')
+              deadline = time.monotonic() + 120
+              with urllib.request.build_opener(NoRedirect()).open(location, timeout=30) as response:
+                  require(response.status == 200, 'Artifact storage did not return HTTP 200')
+                  chunks, total = [], 0
+                  while True:
+                      require(time.monotonic() < deadline, 'Artifact download exceeded its time bound')
+                      chunk = response.read(min(1024 * 1024, MAX_ARCHIVE + 1 - total))
+                      if not chunk:
+                          break
+                      total += len(chunk)
+                      require(total <= MAX_ARCHIVE, 'Artifact download exceeded its size bound')
+                      chunks.append(chunk)
+              data = b''.join(chunks)
+              require(hashlib.sha256(data).hexdigest() == artifact['digest'][7:], 'Artifact archive digest mismatch')
+              return data
+
+          def verify_audit_evidence(run_id, source_tree):
+              jobs = jobs_for(run_id, attempt=1)
+              require(all(job.get('run_id') == int(run_id) and job.get('run_attempt') == 1
+                      and job.get('head_sha') == SOURCE and job.get('status') == 'completed'
+                      for job in jobs), 'Job source, attempt or run identity mismatch')
+              require(len(jobs) == 3 and {job.get('name') for job in jobs}
+                      == {'browser-audit (' + browser + ')' for browser in BROWSERS}
+                      and all(job.get('conclusion') == 'success' for job in jobs),
+                      'All three live browser audit jobs must succeed exactly once')
+              for job in jobs:
+                  for name in AUDIT_STEPS:
+                      matches = [step for step in job.get('steps', []) if step.get('name') == name]
+                      require(len(matches) == 1 and matches[0].get('conclusion') == 'success',
+                              'Required live audit step was skipped, failed or duplicated: ' + name)
+              result = api('actions/runs/' + str(run_id) + '/artifacts?per_page=100')
+              artifacts = result['artifacts']
+              require(result['total_count'] == len(artifacts) == 3, 'Expected three complete live audit artifacts')
+              names = {'production-browser-audit-' + str(run_id) + '-' + browser for browser in BROWSERS}
+              require({value.get('name') for value in artifacts} == names, 'Unexpected audit artifact names')
+              for artifact in artifacts:
+                  run = artifact.get('workflow_run', {})
+                  require(isinstance(artifact.get('id'), int) and artifact['id'] > 0
+                          and artifact.get('expired') is False
+                          and isinstance(artifact.get('size_in_bytes'), int) and 0 < artifact['size_in_bytes'] <= MAX_ARCHIVE
+                          and isinstance(artifact.get('digest'), str)
+                          and re.fullmatch(r'sha256:[a-f0-9]{64}', artifact['digest'])
+                          and run.get('id') == run_id and run.get('head_sha') == SOURCE
+                          and run.get('head_branch') == 'main', 'Audit artifact identity, digest or size mismatch')
+                  with zipfile.ZipFile(io.BytesIO(artifact_bytes(artifact))) as archive:
+                      def metadata(name):
+                          entries = [entry for entry in archive.infolist()
+                              if entry.filename.endswith('/production-browser-audit/' + name)
+                              or entry.filename == 'production-browser-audit/' + name]
+                          require(len(entries) == 1 and 0 < entries[0].file_size <= 65536,
+                                  'Missing, duplicated or oversized audit metadata: ' + name)
+                          return archive.read(entries[0]).decode('utf-8')
+                      require(metadata('checked-out-revision.txt').strip() == SOURCE
+                              and metadata('checked-out-tree.txt').strip() == source_tree,
+                              'Live audit checked out a different source or tree')
+                      for phase in ('resolved', 'before', 'after'):
+                          baseline = json.loads(metadata('baseline-' + phase + '.json'))
+                          require(isinstance(baseline, dict) and baseline.get('service') == 'becore-tickets'
+                                  and baseline.get('runtime') == 'vps' and baseline.get('active') is True
+                                  and baseline.get('revision') == SOURCE and baseline.get('phase') == phase,
+                                  'Live audit production baseline differs from intended source: ' + phase)
+              note('All three browser projects and immutable audit evidence match exact source/tree: ' + SOURCE)
+
+          def main():
+              require(os.environ.get('GITHUB_REPOSITORY') == REPO
+                      and os.environ.get('GITHUB_REF') == 'refs/heads/ops/room-mobile-playback-release'
+                      and os.environ.get('GITHUB_EVENT_NAME') == 'push', 'Unexpected coordinator context')
+              require(os.environ.get('GITHUB_RUN_ATTEMPT') == '1',
+                      'Coordinator reruns are forbidden; inspect the original release run')
+              require(all(re.fullmatch(r'[a-f0-9]{40}', value) for value in (SOURCE, SOURCE_TREE, CANDIDATE, EXPECTED)),
+                      'Replace CURRENT_MERGED_SOURCE_SHA and CURRENT_CANDIDATE_SHA with exact reviewed SHAs before publishing')
+              require(all(re.fullmatch(r'[1-9][0-9]*', value) for value in (RUNTIME_RUN, CANDIDATE_RUN)),
+                      'Replace CURRENT_RUNTIME_RUN and CURRENT_CANDIDATE_RUN with successful exact-source runs before publishing')
+              require(not CORE_JOB.startswith('CURRENT_') and CORE_STEPS
+                      and all(isinstance(name, str) and name and not name.startswith('CURRENT_') for name in CORE_STEPS),
+                      'Fill the exact required core job and step names from the final reviewed operator before publishing')
+              verify_main()
+              runtime_id = workflow_identity('vps-runtime.yml')
+              candidate_id = workflow_identity('candidate-checks.yml')
+              release_id = workflow_identity(RELEASE_FILE)
+              audit_id = workflow_identity(AUDIT_FILE)
+              require(api('contents/.github/workflows/' + AUDIT_FILE + '?ref=' + SOURCE).get('sha') == AUDIT_BLOB,
+                      'Live audit workflow differs from the reviewed source/evidence contract')
+              runtime = api('actions/runs/' + RUNTIME_RUN)
+              candidate = api('actions/runs/' + CANDIDATE_RUN)
+              verify_run(runtime, RUNTIME_RUN, runtime_id, 'vps-runtime.yml', SOURCE, runtime=True)
+              verify_run(candidate, CANDIDATE_RUN, candidate_id, 'candidate-checks.yml', CANDIDATE)
+              require(candidate.get('event') in ('pull_request', 'workflow_dispatch'),
+                      'Unexpected candidate workflow event')
+              source_commit = api('git/commits/' + SOURCE)
+              candidate_commit = api('git/commits/' + CANDIDATE)
+              require(source_commit.get('sha') == SOURCE and candidate_commit.get('sha') == CANDIDATE
+                      and re.fullmatch(r'[a-f0-9]{40}', source_commit.get('tree', {}).get('sha', ''))
+                      and source_commit['tree']['sha'] == SOURCE_TREE == candidate_commit.get('tree', {}).get('sha'),
+                      'Merged source and verified candidate must have identical full Git trees')
+              ancestry = api('compare/' + EXPECTED + '...' + SOURCE)
+              require(ancestry.get('status') in ('ahead', 'identical')
+                      and ancestry.get('merge_base_commit', {}).get('sha') == EXPECTED,
+                      'Expected active source is not an ancestor of the intended release')
+              require(isinstance(ancestry.get('files'), list) and len(ancestry['files']) < 300,
+                      'Changed-file list is missing or truncated; require complete release review')
+              require(not any(item.get('filename', '').startswith(('drizzle/', 'db/'))
+                      or item.get('previous_filename', '').startswith(('drizzle/', 'db/'))
+                      for item in ancestry['files']), 'This Room demo release must have an empty migration/schema plan')
+              runtime_jobs = jobs_for(RUNTIME_RUN)
+              require(len(runtime_jobs) == 2 and {job.get('name') for job in runtime_jobs} == {'verify', 'handoff'}
+                      and all(job.get('conclusion') == 'success' for job in runtime_jobs),
+                      'Both runtime jobs must have succeeded')
+              candidate_jobs = jobs_for(CANDIDATE_RUN)
+              browsers = {'desktop-chromium', 'mobile-chromium', 'mobile-webkit'}
+              browser_names = {'verify (' + browser + ')' for browser in browsers}
+              require(CORE_JOB not in browser_names and len(candidate_jobs) == 4
+                      and {job.get('name') for job in candidate_jobs} == browser_names | {CORE_JOB}
+                      and all(job.get('conclusion') == 'success' for job in candidate_jobs),
+                      'The required core job and all three browser matrix jobs must have succeeded')
+              for job in candidate_jobs:
+                  required = CORE_STEPS if job.get('name') == CORE_JOB else BROWSER_STEPS
+                  for name in required:
+                      matches = [step for step in job.get('steps', []) if step.get('name') == name]
+                      require(len(matches) == 1 and matches[0].get('conclusion') == 'success',
+                              'Required candidate step was skipped, failed or duplicated: ' + name)
+              # Release and audit use independent dispatch namespaces and uncertainty guards.
+              # A stale existing audit is detected before releasing, then checked again at dispatch.
+              require(not source_dispatches(AUDIT_FILE), 'An audit dispatch already exists for this source; inspect it')
+              release_run = dispatch_and_wait(RELEASE_FILE, release_id, {
+                  'ref': 'main',
+                  'inputs': {'source_sha': SOURCE, 'runtime_run': RUNTIME_RUN,
+                             'candidate_run': CANDIDATE_RUN, 'expected_active': EXPECTED,
+                             'enable_crypto': 'false', 'inspect_failed_release': False},
+              }, 'release')
+              verify_release_jobs(release_run)
+              verify_main()
+              verify_live_source()
+              audit_run = dispatch_and_wait(AUDIT_FILE, audit_id, {'ref': 'main'}, 'audit')
+              verify_audit_evidence(audit_run, source_commit['tree']['sha'])
+              verify_live_source()
+              note('Release and post-release three-browser audit verified for: ' + SOURCE)
+
+          if __name__ == '__main__':
+              try:
+                  main()
+              except Exception as error:
+                  note('Coordinator stopped: ' + (str(error) if isinstance(error, RuntimeError) else type(error).__name__))
+                  sys.exit(1)
+          PY
