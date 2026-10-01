@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import "./header-panel-focus.test.mjs";
 
 const source = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
 async function clickNotification(data, windows = [], action = "") {

@@ -104,7 +104,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/scan/scanner.tsx": "69d9bf7cf154bc7b7aaeca6a7bf26ab5d083a085",
     "app/support-email.tsx": "98bc769b8cb2b34ae363a488b1e6c343c6399921",
     "app/terms/page.tsx": "419f0978b0e03084cc99738a6404c3f132f93bef",
-    "app/use-header-panel.ts": "f2ab8ce01887ba400a927f15f921f80f87eaf2f8",
+    "app/use-header-panel.ts": "24a3e6e3fb54ed67b28c348d77f1b92e60310448",
     "app/use-layer-history.ts": "8f6421c896a29e90ff1f2bd5742f677c6543a2d2",
     "app/workspace-chrome.tsx": "f6b90f36cec6914e9b36570c52dd9c53870a5e70",
     "app/workspace.css": "8c3881d31c50a13246219e74262c27b542e36880",
