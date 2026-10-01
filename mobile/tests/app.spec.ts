@@ -148,9 +148,17 @@ test('absolute native artwork keeps the same portrait hero geometry as the websi
   await expect(artwork).toHaveAttribute('data-portrait-crop', 'true');
   await expect(hero).toHaveCSS('height', '560px');
   await expect(artwork).toHaveCSS('height', '300px');
-  const copy = await hero.locator('.compact-hero__copy').boundingBox();
-  const image = await artwork.boundingBox();
-  expect(copy!.y).toBeGreaterThan(image!.y + image!.height);
+  // The kicker intentionally overlaps the faded artwork edge. The actual
+  // title and actions must remain below it and inside the shared hero frame.
+  const geometry = await hero.evaluate(element => {
+    const title = element.querySelector('h1')!.getBoundingClientRect();
+    const image = element.querySelector('.compact-hero__image--active')!.getBoundingClientRect();
+    const frame = element.getBoundingClientRect();
+    const actions = element.querySelector('.hero-actions')!.getBoundingClientRect();
+    return { titleTop: title.top, imageBottom: image.bottom, actionsBottom: actions.bottom, heroBottom: frame.bottom };
+  });
+  expect(geometry.titleTop).toBeGreaterThan(geometry.imageBottom);
+  expect(geometry.actionsBottom).toBeLessThanOrEqual(geometry.heroBottom);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
   await page.screenshot({ path: info.outputPath('shared-portrait-hero.png') });
 });

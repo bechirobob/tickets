@@ -11,12 +11,23 @@ const out = process.env.LAYOUT_OUTPUT || path.join(tmpdir(), 'becore-iphone-layo
 await mkdir(out, {recursive:true});
 const candidate = process.env.LAYOUT_CANDIDATE === '1';
 const websiteOrigin = candidate ? 'http://127.0.0.1:8788' : 'https://tickets.becoreops.com';
-const websiteServer = candidate ? spawn(process.execPath, [path.join(repo, 'node_modules/wrangler/bin/wrangler.js'), 'dev', '--config', 'dist/server/wrangler.json', '--port', '8788', '--local', '--persist-to', '.wrangler/state'], {cwd: repo, stdio: 'inherit'}) : null;
+const websiteServer = candidate ? spawn(process.execPath, [path.join(repo, 'scripts/browser-worker.mjs'), 'public'], {cwd: repo, stdio: 'inherit'}) : null;
+let websiteServerFailure = null, stoppingWebsite = false;
+function checkWebsiteServer() { if (websiteServerFailure) throw websiteServerFailure; }
+function stopWebsiteServer() { stoppingWebsite = true; websiteServer?.kill(); }
 if (websiteServer) {
-  process.on('exit', () => websiteServer.kill());
+  process.on('exit', stopWebsiteServer);
+  websiteServer.once('error', error => { websiteServerFailure = new Error(`Candidate browser Worker failed to start: ${error.message}`); console.error(websiteServerFailure.message); });
+  websiteServer.once('exit', (code, signal) => { if (!stoppingWebsite) { websiteServerFailure = new Error(`Candidate browser Worker exited unexpectedly (code=${code}, signal=${signal ?? 'none'}). Capture is incomplete; no restart attempted.`); console.error(websiteServerFailure.message); } });
   let ready = false;
-  for (let i = 0; i < 120; i++) { try { if ((await fetch(websiteOrigin + '/api/version')).ok) { ready = true; break; } } catch {} await new Promise(resolve => setTimeout(resolve, 500)); }
-  if (!ready) throw new Error('Candidate website did not start');
+  const startupDeadline = Date.now() + 60_000;
+  while (Date.now() < startupDeadline) {
+    checkWebsiteServer();
+    try { if ((await fetch(websiteOrigin + '/api/version', {signal:AbortSignal.timeout(1000)})).ok) { ready = true; break; } } catch {}
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  checkWebsiteServer();
+  if (!ready) { stopWebsiteServer(); throw new Error('Candidate website did not start within 60 seconds.'); }
 }
 const webVersionResponse = await fetch(websiteOrigin + '/api/version' , {signal:AbortSignal.timeout(30000)});
 if(!webVersionResponse.ok) throw new Error('Website release identity unavailable');
@@ -37,7 +48,7 @@ if (candidate) {
     await captureWebsiteComparison({browser, device, outputDir:out, repo, candidateOrigin:websiteOrigin,
       sourceRevision:process.env.LAYOUT_SOURCE_SHA || process.env.GITHUB_SHA,
       expectedBaselineRevision:process.env.LAYOUT_BASELINE_SHA});
-  } catch (error) {await browser.close();server.kill();websiteServer?.kill();throw error;}
+  } catch (error) {await browser.close();server.kill();stopWebsiteServer();throw error;}
 }
 const context = await browser.newContext(device);
 const page = await context.newPage();
@@ -62,6 +73,7 @@ const pages=[];
 const parity=[];
 const appSnapshots=new Map();
 async function capture(title,kind='App screen',single=false) {
+  checkWebsiteServer();
   await page.evaluate(async()=>{
     await document.fonts.ready;
     // Home artwork below the fold is lazy-loaded. Request it before decoding;
@@ -76,6 +88,7 @@ async function capture(title,kind='App screen',single=false) {
   const brokenImages=await page.evaluate(()=>[...document.images].filter(image=>image.currentSrc&&(!image.complete||image.naturalWidth===0)).map(image=>image.currentSrc));
   if(brokenImages.length)throw new Error(`Broken public images on ${title}: ${brokenImages.join(', ')}`);
   await page.waitForTimeout(250);
+  checkWebsiteServer();
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
   if(overflow) throw new Error(`Horizontal clipping: ${title}`);
   const max=await page.evaluate(()=>Math.max(0,document.documentElement.scrollHeight-innerHeight));
@@ -107,7 +120,7 @@ async function capture(title,kind='App screen',single=false) {
       if (!match) throw new Error(`App/browser screen mismatch: ${route}`);
     }
   }
-  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),websiteEnvironment:candidate?'candidate':'production',parity,catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.LAYOUT_SOURCE_SHA||process.env.GITHUB_SHA||null,websiteCommit:webVersion.revision,viewport:page.viewportSize(),engine:'Playwright WebKit on macOS, iPhone 13 viewport',pages},null,2));
+  await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),websiteEnvironment:candidate?'candidate':'production',websiteHarness:candidate?'compiled browser-worker public mode':'production',parity,catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.LAYOUT_SOURCE_SHA||process.env.GITHUB_SHA||null,websiteCommit:webVersion.revision,viewport:page.viewportSize(),engine:'Playwright WebKit on macOS, iPhone 13 viewport',pages},null,2));
   console.log(`${title}: ${files.length} screenshots`);
   await page.evaluate(()=>scrollTo(0,0));
 }
@@ -137,4 +150,4 @@ try {
     await page.waitForTimeout(1500);
     await capture(title,'Mobile website');
   }
-} finally {await browser.close();server.kill();websiteServer?.kill();}
+} finally {await browser.close();server.kill();stopWebsiteServer();}

@@ -76,10 +76,14 @@ verified release. A pending check is not a pass.
   pinned by exact source blob, SHA-256 and schema fingerprint; no general
   existing-table trigger permission was broadened.
 - Limited secret review: current tracked-source scan found no live-key pattern; a separate nonprinting scan of added lines across 517 locally reachable main-history commits found no matches for the selected high-confidence provider/GitHub/AWS/private-key patterns. This is not a forensic assurance of every secret or remote branch.
-- Main application builds terminated with SIGKILL (137) in this cloud executor,
-  including one memory-bounded attempt. Local full lint was also killed. These
-  are incomplete checks, not passes or proven product defects. The required full
-  gates are delegated to the repository's hosted exact-candidate workflows.
+- Earlier local full application builds and full lint terminated with SIGKILL
+  (137), which were incomplete checks. The later VPS build with a 768 MiB Node
+  heap succeeded, enabling a real local compiled HTTP/WebSocket verifier. Full
+  build/lint/unit/browser release gates still run against the exact hosted source.
+- A later local complete VPS test attempt passed 23 Node tests and 592 Vitest
+  cases across 67 files, but three Vitest child processes exited unexpectedly.
+  That aggregate is incomplete, not a release pass; exact-source hosted VPS
+  verification remains required before activation.
 - Local Chromium could not start because the runtime denies a required socket;
   the cloud interactive browser also timed out before navigation. No fresh
   responsive-quality claim is based on those failed attempts. Hosted browser
@@ -152,6 +156,27 @@ replacement. No earlier cleanup, handover or failed deployment is replayed.
   geometry. Only flat known public artwork and explicitly publication-verified
   public poster responses may embed cross-origin. Private/draft/denied media and
   API responses remain protected; no credentialed CORS access was added.
+- Candidate `b9ba236` exposed a second bounded-body integration defect in the
+  new compiled VPS check: declared-length rejection returned 413 but left its
+  unread incoming stream blocking a reused connection. Local compiled tracing
+  reproduced the next request resetting. Cancelling the rejected body preserves
+  the cap and lets Vinext drain it without buffering the payload. A deterministic
+  single-socket regression fails before repair and passes afterwards, including
+  unchanged saved privacy, QR wallet, Room WebSocket, restart and revocation.
+  Worker and VPS parser tests each pass 13/13; failed hosted evidence is retained.
+- The corrected native screenshots show the restored portrait crop, host image
+  and seven payment logos. Its new geometry test incorrectly treated the
+  deliberately faded kicker overlap as a defect; the corrected assertion retains
+  exact portrait dimensions and checks the title/actions instead. The iPhone
+  capture runner also lost its Wrangler development proxy mid-capture; it now
+  uses the existing direct compiled-Worker harness with explicit exit diagnostics.
+- The desktop browser matrix on `b9ba236` passed 167 public cases, all 53 Operations
+  cases, three repeated host cases and provider/RSVP/keyboard phases. Its one
+  public failure was a synthetic document blocked by Chromium local-network
+  protection before loading the candidate images. The exact trace proves both
+  images returned 200 through the API but browser requests never reached them.
+  The fixture now serves an actual document from a separate loopback port,
+  retaining real image requests, CORP assertions and browser security defaults.
 - The first failures, dates and original artifacts remain attached to the runs.
   These corrections require fresh exact-candidate complete gates and changed-view
   pixel review; earlier partial passes do not establish the corrected release.

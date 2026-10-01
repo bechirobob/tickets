@@ -28,7 +28,11 @@ jobs:
       - name: Build the exact isolated VPS candidate
         run: npm run build:vps
       - name: Verify compiled generic request and private runtime boundaries
-        run: node scripts/verify-vps-runtime.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p capacity-results
+          node scripts/verify-vps-runtime.mjs 2>&1 | tee capacity-results/vps-runtime.log
       - name: Verify 600 isolated guests, duplicate scans, Room delivery and restart
         shell: bash
         run: |

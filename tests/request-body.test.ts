@@ -59,6 +59,14 @@ it('still cancels and rejects an oversized foreign Request stream', async () => 
   expect(input.cancelled()).toBe(true);
 });
 
+it('cancels the unread body when its declared length already exceeds the limit', async () => {
+  const input = streamed([new Uint8Array(8), new Uint8Array(8)], { 'content-length': '16' });
+  const result = await limitRequestBody(foreignRequest(input.request), 10);
+  expect(result).toBeInstanceOf(Response);
+  expect((result as Response).status).toBe(413);
+  expect(input.cancelled()).toBe(true);
+});
+
 it('preserves an absent body when reconstructing a foreign Request', async () => {
   const source = new Request('https://tickets.becoreops.com/api/customer/privacy');
   const result = await limitRequestBody(foreignRequest(source));

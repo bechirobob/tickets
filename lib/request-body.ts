@@ -5,7 +5,12 @@ export class RequestBodyTooLarge extends Error {
 
 export async function boundedRequestBytes(request: Request, maximumBytes: number): Promise<Uint8Array<ArrayBuffer>> {
   const declaredLength = Number(request.headers.get('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) throw new RequestBodyTooLarge();
+  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
+    // Release the unread stream too: Vinext resumes/drains IncomingMessage on
+    // cancellation, so the oversized request cannot strand a keep-alive socket.
+    await request.body?.cancel().catch(() => undefined);
+    throw new RequestBodyTooLarge();
+  }
   const reader = request.body?.getReader();
   if (!reader) return new Uint8Array(0);
   const chunks: Uint8Array[] = [];
