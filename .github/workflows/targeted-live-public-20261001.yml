@@ -1,0 +1,73 @@
+name: Verify corrected live public test instrumentation
+on:
+  push:
+    branches: [ops/public-artwork-policy-probe-20261001]
+    paths: [.github/workflows/targeted-live-public-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/ops/public-artwork-policy-probe-20261001' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
+    env:
+      TICKETS_SOURCE: ${{ github.workspace }}/tickets
+      TARGETED_OVERLAY: ${{ github.workspace }}/targeted-overlay
+      PROBE_OUT: ${{ github.workspace }}/public-check-evidence
+      E2E_BASE_URL: https://tickets.becoreops.com
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: ops
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 473bbf40afe1a77a722c8399f91c4dd95f3e40ce
+          path: tickets
+          persist-credentials: false
+      - name: Verify exact reviewed test helpers
+        run: |
+          test "$(sha256sum ops/ops/audit/prepare-targeted-overlay.mjs | cut -d ' ' -f1)" = 1d0cbaf4d5f9b2ef9d5c067602fb0a92b366dbc9e16072fd39dc34fdd0c4d44e
+          test "$(sha256sum ops/ops/audit/verify-live-identity.mjs | cut -d ' ' -f1)" = a4364432c47fc046a831513f853e2e8362e5dac380eaf4587ae45d855fd80d4a
+          test "$(sha256sum ops/ops/audit/sanitize-targeted.mjs | cut -d ' ' -f1)" = 4dbf2c6a397567ad8ccc410da5a91a06d7cfc71bd2696ed9f9725c238f350392
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tickets/package-lock.json
+      - run: npm ci --no-audit
+        working-directory: tickets
+      - name: Install the selected browser
+        run: npx playwright install --with-deps ${{ matrix.browser == 'mobile-webkit' && 'webkit' || 'chromium' }}
+        working-directory: tickets
+      - name: Pin the actual live revision before testing
+        run: node ops/ops/audit/verify-live-identity.mjs before
+      - name: Prepare separate test overlay without changing application assertions
+        run: node ops/ops/audit/prepare-targeted-overlay.mjs
+      - name: Verify exactly four selected tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tickets/node_modules/@playwright/test/cli.js test --config "$TARGETED_OVERLAY/playwright.config.ts" --project ${{ matrix.browser }} --list --reporter=line | tee selected-tests.txt
+          grep -Eq 'Total: 4 tests in 2 files' selected-tests.txt
+      - name: Verify canonical artwork and public runtime with endpoint-scoped analytics exclusion
+        run: node tickets/node_modules/@playwright/test/cli.js test --config "$TARGETED_OVERLAY/playwright.config.ts" --project ${{ matrix.browser }} --workers=1 --retries=0
+      - name: Pin actual live revision after testing
+        if: always()
+        run: node ops/ops/audit/verify-live-identity.mjs after
+      - name: Produce only sanitized public verification summary
+        if: always()
+        run: node ops/ops/audit/sanitize-targeted.mjs
+      - name: Preserve source identity and sanitized outcomes only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: targeted-public-${{ github.run_id }}-${{ matrix.browser }}
+          path: ${{ github.workspace }}/public-check-evidence
+          if-no-files-found: error
+          retention-days: 14

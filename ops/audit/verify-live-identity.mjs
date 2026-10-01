@@ -1,0 +1,25 @@
+import { writeFile, mkdir } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+const phase=process.argv[2];
+if(!['before','after'].includes(phase))throw new Error('Expected before/after phase');
+const source=resolve(process.env.TICKETS_SOURCE);
+const out=resolve(process.env.PROBE_OUT);
+const expected='473bbf40afe1a77a722c8399f91c4dd95f3e40ce';
+const expectedTree='51004be28aeae024e286f50b8ddb8c76690db246';
+const git=(...args)=>execFileSync('git',['-C',source,...args],{encoding:'utf8'}).trim();
+const snapshot={phase,checkedAt:new Date().toISOString(),head:git('rev-parse','HEAD'),tree:git('rev-parse','HEAD^{tree}'),sourceClean:git('status','--porcelain','--untracked-files=no')===''};
+if(snapshot.head!==expected||snapshot.tree!==expectedTree||!snapshot.sourceClean)throw new Error('Source identity mismatch');
+const read=async path=>{
+ const response=await fetch('https://tickets.becoreops.com'+path,{headers:{Accept:'application/json','Cache-Control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(15000)});
+ if(response.status!==200)throw new Error('Live identity endpoint failed');
+ const text=await response.text();
+ if(text.length>65536)throw new Error('Unexpected identity response size');
+ return JSON.parse(text);
+};
+const health=await read('/healthz'),version=await read('/api/version');
+snapshot.live={service:version.service,runtime:health.runtime,active:health.active,versionRevision:version.revision,healthRevision:health.revision};
+await mkdir(out,{recursive:true});
+await writeFile(resolve(out,`identity-${phase}.json`),JSON.stringify(snapshot,null,2)+'\n');
+if(health.service!=='becore-tickets'||version.service!=='becore-tickets'||health.runtime!=='vps'||health.active!==true||health.revision!==expected||version.revision!==expected)throw new Error('Production identity changed or mismatched');
+console.log(JSON.stringify({phase,sourceClean:true,revision:expected,liveVerified:true}));
