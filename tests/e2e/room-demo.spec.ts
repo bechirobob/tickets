@@ -106,6 +106,11 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await expect(phone).toHaveAttribute("data-demo-running", "false");
   await expect(page.getByRole("button", { name: "Play Room preview", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause Room preview", exact: true })).toBeVisible();
+  // Clicking the caption may scroll the phone offscreen on WebKit. Offscreen
+  // playback must stay paused; restore its visibility before asserting resume.
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toBeInViewport({ ratio: .55 });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
 
   const inside = page.locator(".room-product-phone--inside");
