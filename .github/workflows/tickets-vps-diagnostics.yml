@@ -23,7 +23,7 @@ jobs:
           tags: tag:tickets-ci
           ping: hermes
       - name: Inventory VPS storage metadata without changes
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect remaining VPS storage 20261001 metadata only')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect VPS cache and staging metadata 20261001')
         run: |
           tailscale ssh root@hermes 'python3 - --active 7b9db84ddff94a8b54324241dc855d3ab9ac8a8f --previous 2c3ce7a9456fbff2ce2054a8a40960f5d9e5e004 --stage-run 36860982434-1 --stage-run 36871957263-1 --stage-run 36884401146-1 --stage-run 36897272606-1' <<'PY'
           #!/usr/bin/env python3
@@ -147,8 +147,9 @@ jobs:
           # Broad triage emits only these reviewed generic root labels and aggregates.
           # No discovered directory/file names, unit names, arguments, environments or
           # file contents are included in logs. Every active project remains protected.
-          ROOTS = ['/home', '/root', '/var/lib', '/var/cache',
-                   '/var/log', '/var/tmp', '/tmp', '/usr/local']
+          ROOTS = ['/home/ubuntu/.cache', '/home/ubuntu/.npm', '/home/ubuntu/.pnpm-store',
+                   '/home/ubuntu/.local/share/pnpm', '/home/ubuntu/.local/share/Trash',
+                   '/root/.cache', '/root/.npm', '/var/cache/apt/archives']
           
           def aggregate(root):
               result = {'root': root, 'logical_bytes': 0, 'regular_file_allocated_bytes': 0,
@@ -204,6 +205,37 @@ jobs:
               return result
           
           broad = [aggregate(root) for root in ROOTS]
+          # Only the established public Tickets run-directory naming scheme is emitted.
+          other_ticket_stages = []
+          with os.scandir('/var/tmp') as entries:
+              for item in entries:
+                  guard()
+                  if re.fullmatch(r'tickets-code-release-[1-9][0-9]*-[1-9][0-9]*', item.name) and item.is_dir(follow_symlinks=False):
+                      other_ticket_stages.append({'path': '/var/tmp/' + item.name, 'deletion_authorized': False,
+                                                 **directory_info(Path(item.path))})
+          # Read only process symlink metadata, never command lines, environments or maps.
+          # No process IDs or discovered target paths are printed.
+          reference_counts = {root: 0 for root in ROOTS}
+          reference_errors = 0
+          with os.scandir('/proc') as processes:
+              for process in processes:
+                  if not process.name.isdigit(): continue
+                  guard()
+                  targets = [Path(process.path) / 'cwd', Path(process.path) / 'exe']
+                  try:
+                      with os.scandir(Path(process.path) / 'fd') as descriptors:
+                          targets.extend(Path(entry.path) for entry in descriptors)
+                  except OSError:
+                      reference_errors += 1
+                  for target in targets:
+                      guard()
+                      try:
+                          resolved = os.readlink(target)
+                          for root in ROOTS:
+                              if resolved == root or resolved.startswith(root + '/'):
+                                  reference_counts[root] += 1
+                      except OSError:
+                          reference_errors += 1
           service_summary = {'active_projects_protected': True, 'contents_or_environments_read': False}
           try:
               raw = subprocess.check_output(['systemctl', 'list-units', '--type=service',
@@ -239,6 +271,8 @@ jobs:
                             'disk': {'total_bytes': disk.total, 'used_bytes': disk.used, 'free_bytes': disk.free},
                             'reviewed_stage_inventory': stages, 'protected_known_releases': known_releases, 'other_retained_release_totals': retained_summary,
                             'broad_fixed_root_totals': broad, 'service_summary': service_summary,
+                            'other_ticket_stages': other_ticket_stages,
+                            'cache_open_reference_counts': reference_counts, 'reference_scan_errors': reference_errors,
                             'docker_aggregate_summary': docker_summary,
                             'backup_contents_accessed': False, 'credential_contents_accessed': False,
                             'deleted_bytes': 0, 'all_active_projects_protected': True,
