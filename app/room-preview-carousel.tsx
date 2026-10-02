@@ -39,10 +39,7 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
     </div>
     </Playback>
     <div className="room-demo-caption"><span>{active === 0 ? "Before arrival" : "Inside the night"}</span>
-      <details className="room-demo-motion">
-        <summary aria-label="Motion settings for Room preview">Motion</summary>
-        <label><input type="checkbox" checked={!paused && !reducedMotion} disabled={reducedMotion} onChange={(event) => setPaused(!event.currentTarget.checked)} />Animate preview</label>
-      </details>
+      <label className="room-demo-motion"><input type="checkbox" aria-label="Motion for Room preview" checked={!paused && !reducedMotion} disabled={reducedMotion} onChange={(event) => setPaused(!event.currentTarget.checked)} />Motion</label>
     </div>
     <p className="sr-only" aria-live="polite">Room preview {active + 1} of 2. Swipe or use the arrow keys to see both views.</p>
   </div>;

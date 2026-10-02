@@ -147,8 +147,8 @@ the available cloud browser is signed out. No recovery access was created.
 
 The owner clarified that the homepage Room showcase should autoplay and loop
 without prominent Play/Pause presentation. The change replaces the icon control
-with a small, collapsed Motion disclosure and an accessible Animate preview
-checkbox. Explicit stopping remains available to touch and keyboard users.
+with a small native Motion checkbox beside the existing caption. Explicit
+stopping remains available to touch and keyboard users without a popup.
 Keyboard inspection pauses only while focused; subsequent touch or leaving the
 carousel resumes automatically unless the user explicitly stopped animation.
 The actual Room chat, animation rhythm, visibility/background resource guards,
@@ -170,3 +170,22 @@ bounded, lossless synthetic closed/open Motion screenshots in logs. That workflo
 variant is verification-only and must never merge. Hosted behavior, pixel review,
 full exact-candidate gates, private runtime publication and deployed-SHA checks
 remain required before claiming delivery.
+
+
+### Direct Motion control verification
+
+The initial disclosure trial passed autoplay and natural-entry checks, but one
+mobile WebKit repeat kept its checkbox visible after a closing click. Rather than
+add a popup interaction to a simple showcase, the final design uses a direct
+native checkbox with a 44-pixel label target and explicit checked state. It keeps
+the same accepted caption styling and leaves the animation hook untouched.
+
+The browser regressions exercise real touch activation, native keyboard traversal
+and Space, explicit-stop persistence, focus/touch recovery, and unobscured control
+placement between the fixed header and dock. Screenshots use the actual viewport
+without auto-scrolling an oversized ancestor. Stable transport filenames
+`room-static-section.png` and `room-motion-settings.png` now represent the enabled
+Motion-on and Motion-off states respectively. Reduced-motion static readability
+remains separately required by the unchanged natural-entry suite. Since product
+markup and the shared setting helper changed, all four Room cases must pass twice
+on each engine without retries before the complete candidate suite is started.

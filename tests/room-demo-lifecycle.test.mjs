@@ -430,7 +430,7 @@ test("reenabling Room animation offscreen waits for visibility instead of advanc
 });
 
 // Exercise the actual carousel event handlers without needing a browser socket.
-// The browser suite separately verifies the native disclosure and input controls.
+// The browser suite separately verifies the native input control.
 const carouselSource = await readFile(new URL("../app/room-preview-carousel.tsx", import.meta.url), "utf8");
 const carouselCompiled = transformSync(carouselSource, { loader: "tsx", format: "cjs", jsx: "automatic" }).code;
 function mountCarousel(reducedMotion = false) {
@@ -491,7 +491,6 @@ function mountCarousel(reducedMotion = false) {
     get playback() { return find(node => node.type?.name === "Playback").props.value; },
     get track() { return find(node => node.props?.className === "room-product-scene__phones").props; },
     get input() { return find(node => node.type === "input").props; },
-    get details() { return find(node => node.type === "details").props; },
     get label() { return find(node => node.type === "label").props; },
     act(callback) { callback(); commit(); },
     motion(reduce) { media.matches = reduce; media.dispatchEvent(new Event("change")); commit(); },
@@ -499,14 +498,14 @@ function mountCarousel(reducedMotion = false) {
   };
 }
 
-test("Room showcase autoplays with motion controls folded away by default", () => {
+test("Room showcase autoplays with a discreet native motion control", () => {
   const carousel = mountCarousel();
   assert.equal(carousel.playback.paused, false);
   assert.equal(carousel.playback.reducedMotion, false);
   assert.equal(carousel.input.checked, true);
   assert.equal(carousel.input.disabled, false);
-  assert.equal(carousel.details.open, undefined);
-  assert.equal(carousel.label.children[1], "Animate preview");
+  assert.equal(carousel.label.children[1], "Motion");
+  assert.equal(carousel.input["aria-label"], "Motion for Room preview");
   carousel.unmount();
 });
 

@@ -3,18 +3,29 @@ import { expect, test } from "./catalogue";
 
 test.use({ video: "on" });
 
-async function setRoomAnimation(page: Page, enabled: boolean) {
-  const settings = page.locator(".room-demo-motion");
-  const animate = page.getByRole("checkbox", { name: "Animate preview", exact: true });
-  await expect(animate).not.toBeVisible();
-  await settings.locator("summary").click();
-  await animate.setChecked(enabled);
+async function setRoomAnimation(page: Page, enabled: boolean, touch = false) {
+  const animate = page.getByRole("checkbox", { name: "Motion for Room preview", exact: true });
+  await positionRoomMotionInViewport(page);
+  await expectRoomMotionReachable(page);
+  if (touch) {
+    await expect(animate).toBeChecked({ checked: !enabled });
+    const target = await page.locator(".room-demo-motion").boundingBox();
+    await page.touchscreen.tap(target!.x + target!.width / 2, target!.y + target!.height / 2);
+  } else await animate.setChecked(enabled);
   await expect(animate).toBeChecked({ checked: enabled });
-  await settings.locator("summary").click();
-  await expect(animate).not.toBeVisible();
 }
 
-async function positionRoomMotionForCapture(page: Page) {
+async function expectRoomMotionReachable(page: Page) {
+  await expect.poll(async () => {
+    const layout = await roomMotionGeometry(page);
+    return { label: layout.label.inside && layout.label.unobscured && layout.label.rect.width >= 44 && layout.label.rect.height >= 44, input: layout.input.inside && layout.input.unobscured };
+  }).toEqual({ label: true, input: true }).catch(async error => {
+    console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ phase: "control-placement", layout: await roomMotionGeometry(page) }));
+    throw error;
+  });
+}
+
+async function positionRoomMotionInViewport(page: Page) {
   await page.locator(".room-demo-caption").evaluate(element => {
     const caption = element.getBoundingClientRect();
     const header = document.querySelector(".discovery-home > .night-header")?.getBoundingClientRect();
@@ -43,33 +54,32 @@ async function roomMotionGeometry(page: Page) {
     return {
       scrollY, viewport: { width: innerWidth, height: innerHeight }, usableTop: top, usableBottom: bottom,
       preview: preview.toJSON(),
-      summary: inspect(".room-demo-motion > summary"),
-      setting: document.querySelector(".room-demo-motion")!.hasAttribute("open") ? inspect(".room-demo-motion > label") : null,
+      label: inspect(".room-demo-motion"),
+      input: { ...inspect(".room-demo-motion > input"), checked: document.querySelector<HTMLInputElement>(".room-demo-motion > input")!.checked, disabled: document.querySelector<HTMLInputElement>(".room-demo-motion > input")!.disabled },
     };
   });
 }
 
-async function focusRoomTrackWithKeyboard(page: Page, settings: Locator, track: Locator) {
+async function focusRoomTrackWithKeyboard(page: Page, motion: Locator, track: Locator) {
   // Begin a real keyboard interaction after touch, as in the public focus gate.
   // Programmatic focus alone does not establish the browser's input modality.
   await page.keyboard.press("Tab");
-  await settings.focus();
-  let phase = "summary-focus";
+  await motion.focus();
+  let phase = "motion-focus";
   try {
-    await expect(settings).toBeFocused();
+    await expect(motion).toBeFocused();
     phase = "reverse-tab-to-track";
-    await settings.press("Shift+Tab");
+    await motion.press("Shift+Tab");
     await expect(track).toBeFocused();
   } catch (error) {
     const focus = await page.evaluate(() => {
       const active = document.activeElement as HTMLElement | null;
-      const summary = document.querySelector<HTMLElement>(".room-demo-motion > summary");
+      const motion = document.querySelector<HTMLInputElement>(".room-demo-motion > input");
       const track = document.querySelector<HTMLElement>(".room-product-scene__phones");
       return {
         active: active && { tag: active.tagName, className: active.className, label: active.getAttribute("aria-label"), text: active.textContent?.trim().slice(0, 80), focusVisible: active.matches(":focus-visible") },
-        summary: { focused: active === summary, tabIndex: summary?.tabIndex },
+        motion: { focused: active === motion, tabIndex: motion?.tabIndex, checked: motion?.checked },
         track: { focused: active === track, tabIndex: track?.tabIndex },
-        motionSettingsOpen: document.querySelector(".room-demo-motion")?.hasAttribute("open"),
       };
     });
     console.info("ROOM_KEYBOARD_FOCUS", JSON.stringify({ phase, ...focus }));
@@ -84,7 +94,7 @@ test("Room demo autoplays with still hardware and a discreet motion setting", as
   await phone.scrollIntoViewIfNeeded();
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   await expect(page.getByRole("button", { name: /(?:Play|Pause) Room preview/ })).toHaveCount(0);
-  await expect(page.locator(".room-demo-motion")).not.toHaveAttribute("open", "");
+  await expect(page.getByRole("checkbox", { name: "Motion for Room preview", exact: true })).toBeChecked();
   const initial = await phone.boundingBox();
   const composer = await phone.locator(".chat-compose-field").boundingBox();
   await expect(phone.locator(".room-demo-typing")).toBeVisible({ timeout: 5000 });
@@ -110,6 +120,23 @@ test("Room demo autoplays with still hardware and a discreet motion setting", as
   await expect(phone).toBeInViewport({ ratio: .55 });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   await expect(phone).not.toHaveAttribute("data-demo-step", step!, { timeout: 5000 });
+  // Keep the transport filenames stable; these now show the direct control on
+  // and off, both enabled, with its actual viewport position verified.
+  await positionRoomMotionInViewport(page);
+  await expectRoomMotionReachable(page);
+  const onLayout = await roomMotionGeometry(page);
+  expect(onLayout.input.checked).toBe(true);
+  expect(onLayout.input.disabled).toBe(false);
+  await page.screenshot({ path: testInfo.outputPath("room-static-section.png"), scale: "css" });
+  expect(await roomMotionGeometry(page)).toEqual(onLayout);
+  await setRoomAnimation(page, false);
+  const offLayout = await roomMotionGeometry(page);
+  expect(offLayout.input.checked).toBe(false);
+  expect(offLayout.input.disabled).toBe(false);
+  await page.screenshot({ path: testInfo.outputPath("room-motion-settings.png"), scale: "css" });
+  expect(await roomMotionGeometry(page)).toEqual(offLayout);
+  console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ capture: "Direct Motion checkbox enabled: on and off", on: onLayout, off: offLayout }));
+  await setRoomAnimation(page, true);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(phone).toHaveAttribute("data-demo-running", "false");
   await expect(phone).toHaveAttribute("data-demo-pause-reason", "reduced-motion");
@@ -118,33 +145,9 @@ test("Room demo autoplays with still hardware and a discreet motion setting", as
     await expect(item).toHaveCSS("opacity", "1");
     await expect(item).toHaveCSS("transform", "none");
   }
-  await positionRoomMotionForCapture(page);
-  await expect.poll(async () => {
-    const layout = await roomMotionGeometry(page);
-    return { summary: layout.summary.inside && layout.summary.unobscured };
-  }).toEqual({ summary: true }).catch(async error => {
-    console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ phase: "closed-placement", layout: await roomMotionGeometry(page) }));
-    throw error;
-  });
-  const closedLayout = await roomMotionGeometry(page);
-  await page.screenshot({ path: testInfo.outputPath("room-static-section.png"), scale: "css" });
-  expect(await roomMotionGeometry(page)).toEqual(closedLayout);
-  const settings = page.locator(".room-demo-motion");
-  await settings.locator("summary").click();
-  await expect(page.getByRole("checkbox", { name: "Animate preview", exact: true })).toBeDisabled();
-  await expect(page.getByRole("checkbox", { name: "Animate preview", exact: true })).not.toBeChecked();
-  await expect.poll(async () => {
-    const layout = await roomMotionGeometry(page);
-    return { summary: layout.summary.inside && layout.summary.unobscured, setting: layout.setting?.inside && layout.setting.unobscured };
-  }).toEqual({ summary: true, setting: true }).catch(async error => {
-    console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ phase: "expanded-placement", layout: await roomMotionGeometry(page) }));
-    throw error;
-  });
-  const openLayout = await roomMotionGeometry(page);
-  console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ capture: "Room motion controls in viewport, closed and expanded", closed: closedLayout, open: openLayout }));
-  await page.screenshot({ path: testInfo.outputPath("room-motion-settings.png"), scale: "css" });
-  expect(await roomMotionGeometry(page)).toEqual(openLayout);
-  await settings.locator("summary").click();
+  const motion = page.getByRole("checkbox", { name: "Motion for Room preview", exact: true });
+  await expect(motion).toBeDisabled();
+  await expect(motion).not.toBeChecked();
 });
 
 test("Room preview pauses offscreen, preserves swipe position, and replays inside the screen", async ({ page }, testInfo) => {
@@ -212,12 +215,12 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await expect(phone).toHaveAttribute("data-demo-running", "true");
 
   // Touch interaction must never erase an explicit pause.
-  await setRoomAnimation(page, false);
+  await setRoomAnimation(page, false, Boolean(testInfo.project.use.hasTouch));
   await track.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 3 });
   await track.dispatchEvent("pointerup", { pointerType: "touch", pointerId: 3 });
   await expect(phone).toHaveAttribute("data-demo-running", "false");
   await expect(phone).toHaveAttribute("data-demo-pause-reason", "paused");
-  await setRoomAnimation(page, true);
+  await setRoomAnimation(page, true, Boolean(testInfo.project.use.hasTouch));
   // Settings can scroll the phone offscreen. Restore visibility before resume.
   await phone.scrollIntoViewIfNeeded();
   await expect(phone).toBeInViewport({ ratio: .55 });
@@ -228,8 +231,8 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await expect(inside).toHaveAttribute("data-demo-running", "true");
   const secondStep = await inside.getAttribute("data-demo-step");
   await expect(inside).not.toHaveAttribute("data-demo-step", secondStep!, { timeout: 5000 });
-  const settings = page.locator(".room-demo-motion > summary");
-  await focusRoomTrackWithKeyboard(page, settings, track);
+  const motion = page.getByRole("checkbox", { name: "Motion for Room preview", exact: true });
+  await focusRoomTrackWithKeyboard(page, motion, track);
   await expect(inside).toHaveAttribute("data-demo-running", "false");
   await expect(inside).toHaveAttribute("data-demo-pause-reason", "paused");
   // Touching a keyboard-focused track must clear its temporary focus pause,
@@ -241,27 +244,23 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   if (testInfo.project.use.hasTouch) await page.touchscreen.tap(insideX, insideY);
   else await page.mouse.click(insideX, insideY);
   await expect(inside).toHaveAttribute("data-demo-running", "true");
-  await focusRoomTrackWithKeyboard(page, settings, track);
+  await focusRoomTrackWithKeyboard(page, motion, track);
   await expect(inside).toHaveAttribute("data-demo-running", "false");
   await expect(inside).toHaveAttribute("data-demo-pause-reason", "paused");
   // Keyboard inspection is temporary; only the explicit motion setting persists.
   await track.press("Tab");
-  await expect(settings).toBeFocused();
+  await expect(motion).toBeFocused();
   await inside.scrollIntoViewIfNeeded();
   await expect(inside).toHaveAttribute("data-demo-running", "true");
 
-  // The discreet setting is usable without a pointer and its stop survives blur.
-  await settings.press("Enter");
-  await settings.press("Tab");
-  const animate = page.getByRole("checkbox", { name: "Animate preview", exact: true });
-  await expect(animate).toBeFocused();
-  await animate.press("Space");
-  await expect(animate).not.toBeChecked();
-  await animate.press("Shift+Tab");
-  await settings.press("Enter");
+  // The direct checkbox works with Space and its explicit stop survives blur.
+  await motion.press("Space");
+  await expect(motion).not.toBeChecked();
+  await motion.press("Tab");
+  await expect(motion).not.toBeFocused();
   await inside.scrollIntoViewIfNeeded();
   await expect(inside).toHaveAttribute("data-demo-pause-reason", "paused");
-  await setRoomAnimation(page, true);
+  await setRoomAnimation(page, true, Boolean(testInfo.project.use.hasTouch));
   await inside.scrollIntoViewIfNeeded();
   await expect(inside).toHaveAttribute("data-demo-running", "true");
 });
