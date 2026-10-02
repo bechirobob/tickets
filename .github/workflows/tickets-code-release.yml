@@ -89,13 +89,13 @@ jobs:
           git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
           python3 - <<'PYOP'
           import os,subprocess
-          allowed={'.github/workflows/tickets-code-release.yml','.github/workflows/tickets-release-operator-checks.yml','ops/vps/code-release.py','ops/vps/test_code_release.py'}
+          allowed={'.github/workflows/tickets-code-release.yml','.github/workflows/tickets-release-operator-checks.yml','ops/vps/code-release.py','ops/vps/test_code_release.py','ops/vps/runtime_release.py','ops/vps/test_runtime_release.py'}
           changed=subprocess.check_output(['git','diff','--name-only',os.environ['SOURCE_SHA'],os.environ['OPERATOR_SHA']],text=True).splitlines()
           if not set(changed)<=allowed: raise SystemExit('Operator revision includes application changes; require fresh application CI/artifact.')
           PYOP
           operator="$RUNNER_TEMP/tickets-operator"
           mkdir -m 700 "$operator"
-          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml | tar -x -C "$operator"
+          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml | tar -x -C "$operator"
           printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
       - name: Verify updater regression suite
         run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
@@ -109,12 +109,16 @@ jobs:
           mkdir -m 700 "$metadata"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/runtime-jobs.json"
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/candidate-jobs.json"
+          runtime_attempt=$(jq -er '.run_attempt | select(type == "number" and . > 0 and floor == .)' "$metadata/runtime.json")
+          candidate_attempt=$(jq -er '.run_attempt | select(type == "number" and . > 0 and floor == .)' "$metadata/candidate.json")
+          [[ "$runtime_attempt" =~ ^[1-9][0-9]*$ && "$candidate_attempt" =~ ^[1-9][0-9]*$ ]]
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN/attempts/$runtime_attempt/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/runtime-jobs.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/attempts/$candidate_attempt/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/candidate-jobs.json"
           candidate_sha=$(jq -r '.head_sha' "$metadata/candidate.json")
           [[ "$candidate_sha" =~ ^[a-f0-9]{40}$ ]]
           git fetch --no-tags origin "$candidate_sha"
-          gh run download "$RUNTIME_RUN" --repo "$GITHUB_REPOSITORY" --name "tickets-vps-$SOURCE_SHA" --dir "$metadata/artifact"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/runtime_release.py" download \
+            --source "$SOURCE_SHA" --run-id "$RUNTIME_RUN" --attempt "$runtime_attempt" --directory "$metadata/artifact"
           python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
             --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
             --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
@@ -129,6 +133,22 @@ jobs:
       - name: Inspect loaded credential binding metadata without reading secret values
         run: |
           tailscale ssh root@hermes "systemctl show becore-tickets.service --no-pager --property=NeedDaemonReload --property=WorkingDirectory --property=ActiveState && busctl --system --timeout=10 --no-pager --json=short get-property org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/becore_2dtickets_2eservice org.freedesktop.systemd1.Service LoadCredential"
+      - name: Reconfirm exact CI attempts immediately before the host transaction
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          # Keep the previously fetched exact-attempt jobs and transport receipt.
+          # Replacing only the run snapshots makes any newer attempt or changed
+          # source/status fail the verifier; never switch to a newer artifact.
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
+            --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
       - name: Apply reversible Tickets-only code transaction
         shell: bash
         run: |
@@ -461,13 +481,8 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Verify only the removed preview page and API
         run: npx playwright test tests/e2e/checkout-preview-retired.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0
-      - name: Preserve preview retirement evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: checkout-preview-retired-${{ github.run_id }}-${{ matrix.browser }}
-          path: |
-            test-results
-            playwright-report
-          if-no-files-found: ignore
-          retention-days: 7
+      # This endpoint-only smoke gate has no distributable build output. Its
+      # assertions and exact-source identity remain in the job logs; it must not
+      # fail after deployment merely because unrelated Actions storage is full.
+      - name: Record preview retirement source
+        run: test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"

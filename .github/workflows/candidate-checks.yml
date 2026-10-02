@@ -16,16 +16,14 @@ env:
   BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  core:
+  verify:
+    name: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    outputs:
-      source_sha: ${{ steps.source.outputs.sha }}
-      source_tree: ${{ steps.source.outputs.tree }}
-      archive_sha256: ${{ steps.build.outputs.sha256 }}
-      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+    # Core gates plus all three full browser suites now run sequentially.
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
@@ -38,11 +36,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
           echo "sha=$BECORE_RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci --no-audit
+      - name: Install locked dependencies
+        run: npm ci --no-audit
       - name: Audit dependencies
         run: npm audit --audit-level=moderate
       - name: Lint application
@@ -50,7 +49,7 @@ jobs:
       - name: Check application types
         run: npm run typecheck
       # npm test includes the production build, deployment preparation, rendered
-      # assertions and Worker unit suite. Browser jobs consume that same build.
+      # assertions and Worker unit suite. Every browser consumes those same bytes.
       - name: Verify unit tests and rendered production build
         run: npm test
       - name: Check database schema
@@ -67,120 +66,220 @@ jobs:
           archive="$RUNNER_TEMP/candidate-build/browser-build.tar.gz"
           # A tarball preserves hidden Vite manifests as well as the exact bytes.
           tar -czf "$archive" dist/client dist/server
+          chmod a-w "$archive"
           echo "sha256=$(sha256sum "$archive" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-      - name: Preserve verified browser build
-        id: artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: candidate-build-${{ env.BECORE_RELEASE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/candidate-build/browser-build.tar.gz
-          if-no-files-found: error
-          retention-days: 7
-
-  verify:
-    needs: core
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --no-audit
-      - name: Download the verified browser build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          artifact-ids: ${{ needs.core.outputs.artifact_id }}
-          # v4 ID-based downloads otherwise add an artifact-name subdirectory,
-          # even when exactly one ID is selected. Keep the verified archive flat.
-          merge-multiple: true
-          path: ${{ runner.temp }}/candidate-build
-      - name: Verify and restore the exact candidate build
+      - name: Verify candidate evidence transport
+        run: python3 -m unittest discover -s ops/vps -p 'test_candidate_evidence.py' -v
+      - name: Install browsers for event-page verification
+        id: browsers
+        run: npx playwright install --with-deps chromium webkit
+      # This job never transfers a build through Actions artifacts or caches.
+      # Logs retain bounded synthetic-fixture PNG/JSON evidence for review only;
+      # they are not a runtime package and never replace any failing test gate.
+      - name: Verify and restore the exact candidate build (desktop-chromium)
+        id: restore_desktop_chromium
+        if: ${{ !cancelled() && steps.source.outcome == 'success' && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' }}
         shell: bash
         env:
-          BUILD_SHA: ${{ needs.core.outputs.source_sha }}
-          BUILD_TREE: ${{ needs.core.outputs.source_tree }}
-          BUILD_DIGEST: ${{ needs.core.outputs.archive_sha256 }}
+          BUILD_SHA: ${{ steps.source.outputs.sha }}
+          BUILD_TREE: ${{ steps.source.outputs.tree }}
+          BUILD_DIGEST: ${{ steps.build.outputs.sha256 }}
         run: |
           set -euo pipefail
           [[ "$BUILD_SHA" =~ ^[a-f0-9]{40}$ && "$BUILD_TREE" =~ ^[a-f0-9]{40}$ && "$BUILD_DIGEST" =~ ^[a-f0-9]{64}$ ]]
           test "$BUILD_SHA" = "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BUILD_SHA"
           test "$(git rev-parse HEAD^{tree})" = "$BUILD_TREE"
+          git diff --exit-code
+          git diff --cached --exit-code
           archive="$RUNNER_TEMP/candidate-build/browser-build.tar.gz"
           test "$(sha256sum "$archive" | cut -d ' ' -f 1)" = "$BUILD_DIGEST"
+          # Only disposable checkout state on GitHub-hosted runners is cleared.
+          # Earlier selected evidence is already in the job log before this runs.
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$PWD" = "$GITHUB_WORKSPACE"
+          test -z "${E2E_BASE_URL:-}"
+          rm -rf -- dist .wrangler test-results playwright-report
           tar -xzf "$archive"
           node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; const config = JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")); assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
-      - name: Install browsers for event-page verification
-        run: npx playwright install --with-deps ${{ matrix.browser == 'mobile-webkit' && 'webkit' || 'chromium' }}
-      - name: Prepare isolated event fixtures
-        id: browser_fixtures
+      - name: Prepare isolated event fixtures (desktop-chromium)
+        id: fixtures_desktop_chromium
+        if: ${{ !cancelled() && steps.restore_desktop_chromium.outcome == 'success' }}
         run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
-      - name: Capture natural Room entry before the full browser suite
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
-        run: npx playwright test tests/e2e/room-natural-entry.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0 --output test-results/room-entry
-      - name: Preserve natural Room entry evidence immediately
-        if: ${{ always() && steps.browser_fixtures.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: room-entry-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.browser }}
-          path: test-results/room-entry
-          if-no-files-found: error
-          retention-days: 7
-      - name: Verify every browser journey before release
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
-        run: npx playwright test --project ${{ matrix.browser }}
-      - name: Verify keyboard navigation focus without retries
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
-        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
-      - name: Verify optional SeevPlus checkout on desktop and mobile
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
+      - name: Capture natural Room entry before the full browser suite (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/room-natural-entry.spec.ts --project desktop-chromium --workers=1 --retries=0 --output test-results/room-entry
+      - name: Preserve natural Room entry evidence immediately (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/room-entry --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser desktop-chromium
+      - name: Verify every browser journey before release (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test --project desktop-chromium
+      - name: Verify keyboard navigation focus without retries (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project desktop-chromium --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
+      - name: Verify optional SeevPlus checkout on desktop and mobile (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
         run: |
           node scripts/prepare-seev-browser-fixture.mjs
-          npx playwright test --config playwright.seev.config.ts --project ${{ matrix.browser }} --output test-results/seevplus
-      - name: Verify opt-in USDC checkout without provider traffic
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
+          npx playwright test --config playwright.seev.config.ts --project desktop-chromium --output test-results/seevplus
+      - name: Verify opt-in USDC checkout without provider traffic (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
         run: |
           node scripts/prepare-seev-browser-fixture.mjs crypto
-          npx playwright test --config playwright.seev-crypto.config.ts --project ${{ matrix.browser }} --output test-results/seevplus-crypto
-      - name: Verify RSVP and interest registration on desktop and mobile
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
+          npx playwright test --config playwright.seev-crypto.config.ts --project desktop-chromium --output test-results/seevplus-crypto
+      - name: Verify RSVP and interest registration on desktop and mobile (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
         run: |
           node scripts/prepare-registration-browser-fixture.mjs
-          npx playwright test --config playwright.registration.config.ts --project ${{ matrix.browser }} --output test-results/registration
-      - name: Verify owner Operations workflows on desktop and mobile
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
+          npx playwright test --config playwright.registration.config.ts --project desktop-chromium --output test-results/registration
+      - name: Verify owner Operations workflows on desktop and mobile (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
         run: |
           node scripts/prepare-operations-browser-fixture.mjs
-          npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --workers=1 --retries=0 --output test-results/operations
-      - name: Verify host report fixture recovery without retries
-        if: ${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}
-        run: npx playwright test --config playwright.operations.config.ts --project ${{ matrix.browser }} --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
-      - name: Preserve focused checkout evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: checkout-previews-${{ github.run_id }}-${{ matrix.browser }}
-          path: |
-            test-results/seevplus-*.png
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Preserve event-page renders and browser results
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: candidate-event-page-${{ github.run_id }}-${{ matrix.browser }}
-          path: |
-            playwright-report
-            test-results
-            /home/runner/.config/.wrangler/logs
-          if-no-files-found: ignore
-          retention-days: 14
+          npx playwright test --config playwright.operations.config.ts --project desktop-chromium --workers=1 --retries=0 --output test-results/operations
+      - name: Preserve required Operations visual evidence immediately (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/operations --stage operations --source-sha "$BECORE_RELEASE_SHA" --browser desktop-chromium
+      - name: Verify host report fixture recovery without retries (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test --config playwright.operations.config.ts --project desktop-chromium --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
+      - name: Verify and restore the exact candidate build (mobile-chromium)
+        id: restore_mobile_chromium
+        if: ${{ !cancelled() && steps.source.outcome == 'success' && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' }}
+        shell: bash
+        env:
+          BUILD_SHA: ${{ steps.source.outputs.sha }}
+          BUILD_TREE: ${{ steps.source.outputs.tree }}
+          BUILD_DIGEST: ${{ steps.build.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_SHA" =~ ^[a-f0-9]{40}$ && "$BUILD_TREE" =~ ^[a-f0-9]{40}$ && "$BUILD_DIGEST" =~ ^[a-f0-9]{64}$ ]]
+          test "$BUILD_SHA" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BUILD_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$BUILD_TREE"
+          git diff --exit-code
+          git diff --cached --exit-code
+          archive="$RUNNER_TEMP/candidate-build/browser-build.tar.gz"
+          test "$(sha256sum "$archive" | cut -d ' ' -f 1)" = "$BUILD_DIGEST"
+          # Only disposable checkout state on GitHub-hosted runners is cleared.
+          # Earlier selected evidence is already in the job log before this runs.
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$PWD" = "$GITHUB_WORKSPACE"
+          test -z "${E2E_BASE_URL:-}"
+          rm -rf -- dist .wrangler test-results playwright-report
+          tar -xzf "$archive"
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; const config = JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")); assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
+      - name: Prepare isolated event fixtures (mobile-chromium)
+        id: fixtures_mobile_chromium
+        if: ${{ !cancelled() && steps.restore_mobile_chromium.outcome == 'success' }}
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Capture natural Room entry before the full browser suite (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/room-natural-entry.spec.ts --project mobile-chromium --workers=1 --retries=0 --output test-results/room-entry
+      - name: Preserve natural Room entry evidence immediately (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/room-entry --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser mobile-chromium
+      - name: Verify every browser journey before release (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test --project mobile-chromium
+      - name: Verify keyboard navigation focus without retries (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project mobile-chromium --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
+      - name: Verify optional SeevPlus checkout on desktop and mobile (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs
+          npx playwright test --config playwright.seev.config.ts --project mobile-chromium --output test-results/seevplus
+      - name: Verify opt-in USDC checkout without provider traffic (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs crypto
+          npx playwright test --config playwright.seev-crypto.config.ts --project mobile-chromium --output test-results/seevplus-crypto
+      - name: Verify RSVP and interest registration on desktop and mobile (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-registration-browser-fixture.mjs
+          npx playwright test --config playwright.registration.config.ts --project mobile-chromium --output test-results/registration
+      - name: Verify owner Operations workflows on desktop and mobile (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project mobile-chromium --workers=1 --retries=0 --output test-results/operations
+      - name: Preserve required Operations visual evidence immediately (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/operations --stage operations --source-sha "$BECORE_RELEASE_SHA" --browser mobile-chromium
+      - name: Verify host report fixture recovery without retries (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test --config playwright.operations.config.ts --project mobile-chromium --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
+      - name: Verify and restore the exact candidate build (mobile-webkit)
+        id: restore_mobile_webkit
+        if: ${{ !cancelled() && steps.source.outcome == 'success' && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' }}
+        shell: bash
+        env:
+          BUILD_SHA: ${{ steps.source.outputs.sha }}
+          BUILD_TREE: ${{ steps.source.outputs.tree }}
+          BUILD_DIGEST: ${{ steps.build.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_SHA" =~ ^[a-f0-9]{40}$ && "$BUILD_TREE" =~ ^[a-f0-9]{40}$ && "$BUILD_DIGEST" =~ ^[a-f0-9]{64}$ ]]
+          test "$BUILD_SHA" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BUILD_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$BUILD_TREE"
+          git diff --exit-code
+          git diff --cached --exit-code
+          archive="$RUNNER_TEMP/candidate-build/browser-build.tar.gz"
+          test "$(sha256sum "$archive" | cut -d ' ' -f 1)" = "$BUILD_DIGEST"
+          # Only disposable checkout state on GitHub-hosted runners is cleared.
+          # Earlier selected evidence is already in the job log before this runs.
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$PWD" = "$GITHUB_WORKSPACE"
+          test -z "${E2E_BASE_URL:-}"
+          rm -rf -- dist .wrangler test-results playwright-report
+          tar -xzf "$archive"
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; const config = JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")); assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
+      - name: Prepare isolated event fixtures (mobile-webkit)
+        id: fixtures_mobile_webkit
+        if: ${{ !cancelled() && steps.restore_mobile_webkit.outcome == 'success' }}
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Capture natural Room entry before the full browser suite (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test tests/e2e/room-natural-entry.spec.ts --project mobile-webkit --workers=1 --retries=0 --output test-results/room-entry
+      - name: Preserve natural Room entry evidence immediately (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/room-entry --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser mobile-webkit
+      - name: Verify every browser journey before release (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test --project mobile-webkit
+      - name: Verify keyboard navigation focus without retries (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project mobile-webkit --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
+      - name: Verify optional SeevPlus checkout on desktop and mobile (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs
+          npx playwright test --config playwright.seev.config.ts --project mobile-webkit --output test-results/seevplus
+      - name: Verify opt-in USDC checkout without provider traffic (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs crypto
+          npx playwright test --config playwright.seev-crypto.config.ts --project mobile-webkit --output test-results/seevplus-crypto
+      - name: Verify RSVP and interest registration on desktop and mobile (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-registration-browser-fixture.mjs
+          npx playwright test --config playwright.registration.config.ts --project mobile-webkit --output test-results/registration
+      - name: Verify owner Operations workflows on desktop and mobile (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project mobile-webkit --workers=1 --retries=0 --output test-results/operations
+      - name: Preserve required Operations visual evidence immediately (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/operations --stage operations --source-sha "$BECORE_RELEASE_SHA" --browser mobile-webkit
+      - name: Verify host report fixture recovery without retries (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test --config playwright.operations.config.ts --project mobile-webkit --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview

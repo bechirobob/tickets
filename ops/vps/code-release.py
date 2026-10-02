@@ -59,8 +59,17 @@ APPLICATION_FILES = {
 # Exact reviewed application outputs for the app-experience increment. This is
 # deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
 REVIEWED_APPLICATION_BLOBS = {
+    ".github/workflows/tickets-code-release.yml": "1e8816df3a56ecbe44bfb1d8a6facb5d04847b0d",
+    "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
+    "playwright.config.ts": "458baa39707043948474dae29bd5341c7ea5a883",
+    "ops/vps/test_candidate_evidence.py": "7fd1baecfab2f8500926b510e7e6b5ea695e5bc1",
+    "ops/vps/test_runtime_release.py": "282964b87490b3630f2704117dbc9241b3444fea",
+    "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
+    "ops/vps/runtime_release.py": "cd4758640b1f6e128ec68a0f3c540cec68e8ff56",
+    ".github/workflows/tickets-release-operator-checks.yml": "a497e42eb3b2c9e3901e6fb2580bba1c62b9130d",
+    ".github/workflows/vps-runtime.yml": "f8e12ad5862deea2e40238cedd0d02ca946377e2",
     ".github/workflows/browser-audit.yml": "266d11a65a580809689c806cc93ca06ebaa25858",
-    ".github/workflows/candidate-checks.yml": "9f88c33d06ba1666221482f9817d8c770be06893",
+    ".github/workflows/candidate-checks.yml": "59bf59bee523b9e21dbb20da64973d11620fa8d3",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
     ".github/workflows/full-audit-capacity.yml": "67ea27fb202cf216596bd27d73e51515f656b19c",
     ".github/workflows/tickets-readiness-audit.yml": "f47378c33914b0005ec15598fb0f9110d6882c6d",
@@ -149,7 +158,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/event-explorer.tsx": "27c001bd0ba7742b251a7f03252c3dbaf5b2a3fe",
     "app/event/[slug]/event-screen.tsx": "3700cc0de1f68a63912d9caf428d48908ee266e4",
     "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
-    "app/globals.css": "47ac30d9300a709feeca94ede7c950ea2fc5255f",
+    "app/globals.css": "40f080f5629b811b1a877bebdeadb97e02af0b07",
     "app/help/help-centre.tsx": "f0b4617a6a6b704aefc81bfa1e2744377c18b026",
     "app/home-screen.tsx": "b629019108100f15889edaccd6ac1ee21d4e436d",
     "app/hosts/page.tsx": "f5d2b1129968ba51dc95a6208a408e60f200b05b",
@@ -218,8 +227,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "public/devices/iphone-titanium-front.svg": "9b3995ea6e27f358d03816d603f96466fa8e9acd",
     "runtime/vps/queue.mjs": "67018da3a3683aca80661e29e64f0fd3e5a37e9c",
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
-    "scripts/capture-iphone-layouts.mjs": "862635516cbda29023eef741e59d75fb360ec46a",
-    "scripts/iphone-layout-evidence.mjs": "32cafa40c84ab7e0610cb24537227f571317de37",
+    "scripts/capture-iphone-layouts.mjs": "4abbb15794097eed900e009c2af956e06b96c340",
+    "scripts/iphone-layout-evidence.mjs": "42daec5963ef6da3f1394fe499c79ba53c647a4d",
     "scripts/verify-vps-runtime.mjs": "cce13d6b123abb4a7da7341a854de54f049fadef",
     "styles/customer.css": "c6d3cc402fcb37287444c9ac75777424ceeac891",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
@@ -277,11 +286,14 @@ CANDIDATE_CORE_STEPS = {
     "Verify exact candidate source", "Audit dependencies", "Lint application",
     "Check application types", "Verify unit tests and rendered production build",
     "Check database schema", "Validate the deployable Worker without publishing",
-    "Package verified browser build", "Preserve verified browser build",
+    "Package verified browser build", "Verify candidate evidence transport",
 }
 CANDIDATE_BROWSER_STEPS = {
-    "Download the verified browser build", "Verify and restore the exact candidate build",
+    "Verify and restore the exact candidate build",
     "Prepare isolated event fixtures", "Verify every browser journey before release",
+    "Capture natural Room entry before the full browser suite",
+    "Preserve natural Room entry evidence immediately",
+    "Preserve required Operations visual evidence immediately",
     "Verify keyboard navigation focus without retries",
     "Verify optional SeevPlus checkout on desktop and mobile",
     "Verify opt-in USDC checkout without provider traffic",
@@ -446,11 +458,6 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
-    if ".github/workflows/tickets-release-operator-checks.yml" in changed:
-        # Already-reviewed operator-only CI from the current main baseline.
-        require(git("rev-parse", source + ":.github/workflows/tickets-release-operator-checks.yml")
-                == "2dcca50f2a8403e2f06c8aa871fcaa15ecf6c0ea",
-                "Only the reviewed release-operator checks workflow is permitted.")
     if "mobile/package-lock.json" in changed:
         before = strict_json(git("show", expected + ":mobile/package-lock.json"))
         after = strict_json(git("show", source + ":mobile/package-lock.json"))
@@ -491,6 +498,9 @@ def verify_run(run, *, workflow, source=None, repository):
             and run.get("head_repository", {}).get("full_name") == repository,
             "Workflow repository identity mismatch.")
     require(SHA.fullmatch(run.get("head_sha", "")), "Workflow SHA missing.")
+    require(type(run.get("id")) is int and run["id"] > 0
+            and type(run.get("run_attempt")) is int and run["run_attempt"] > 0,
+            "Exact workflow run and attempt identities required.")
     if source:
         require(run["head_sha"] == source and run.get("head_branch") == "main"
                 and run.get("event") == "push", "Runtime must verify exact main source.")
@@ -499,26 +509,59 @@ def verify_run(run, *, workflow, source=None, repository):
                 "Unexpected browser workflow event.")
 
 
+def require_steps(job, required):
+    for name in required:
+        matching = [step for step in job.get("steps", []) if step.get("name") == name]
+        require(len(matching) == 1 and matching[0].get("conclusion") == "success"
+                and matching[0].get("status") == "completed",
+                "Required checks were skipped, failed or duplicated: " + name)
+
+
 def verify_jobs(runtime_jobs, candidate_jobs):
     require(len(runtime_jobs) == 2
             and all(job.get("conclusion") == "success" for job in runtime_jobs),
             "Runtime contains a failed, skipped or unexpected job.")
     require({job.get("name") for job in runtime_jobs} == {"verify", "handoff"},
             "Runtime verification jobs missing.")
-    # The shared build is a required gate, not an optional cache. Keep the
-    # existing browser check identities while requiring every producer/consumer.
-    expected = {"core"} | {"verify (" + browser + ")" for browser in BROWSERS}
-    require(len(candidate_jobs) == len(expected)
-            and {job.get("name") for job in candidate_jobs} == expected,
-            "Candidate core or browser matrix incomplete.")
-    require(all(job.get("conclusion") == "success" for job in candidate_jobs),
-            "All candidate core and browser jobs must succeed.")
-    for job in candidate_jobs:
-        required_steps = CANDIDATE_CORE_STEPS if job["name"] == "core" else CANDIDATE_BROWSER_STEPS
-        for name in required_steps:
-            matching = [step for step in job.get("steps", []) if step.get("name") == name]
-            require(len(matching) == 1 and matching[0].get("conclusion") == "success",
-                    "Required candidate checks were skipped, failed or duplicated: " + name)
+    require_steps(next(job for job in runtime_jobs if job["name"] == "verify"), {
+        "Prepare verified runtime without development dependencies",
+        "Publish verified private runtime release",
+    })
+    # Build once, then restore those exact bytes before each isolated browser.
+    # No inter-job artifact/cache is a substitute for this same-build contract.
+    require(len(candidate_jobs) == 1 and candidate_jobs[0].get("name") == "verify"
+            and candidate_jobs[0].get("conclusion") == "success",
+            "Single-job candidate verification missing or incomplete.")
+    required = CANDIDATE_CORE_STEPS | {
+        name + " (" + browser + ")"
+        for browser in BROWSERS for name in CANDIDATE_BROWSER_STEPS
+    }
+    require_steps(candidate_jobs[0], required)
+
+
+def verify_job_identity(jobs, run):
+    require(isinstance(jobs, list) and bool(jobs), "Workflow jobs are missing.")
+    identifiers = []
+    for job in jobs:
+        require(type(job.get("id")) is int and job["id"] > 0
+                and job.get("run_id") == run["id"]
+                and type(job.get("run_attempt")) is int
+                and job["run_attempt"] == run["run_attempt"]
+                and job.get("head_sha") == run["head_sha"]
+                and job.get("status") == "completed",
+                "Job does not belong to the exact completed workflow attempt.")
+        identifiers.append(job["id"])
+    require(len(identifiers) == len(set(identifiers)), "Duplicate workflow job identity.")
+
+
+def verify_runtime_transport(archive, source, source_tree, runtime):
+    # Runner-only import: host apply remains a standalone reviewed transaction.
+    from runtime_release import verify_local_receipt
+    try:
+        return verify_local_receipt(archive.parent, source=source, source_tree=source_tree,
+                                    run_id=str(runtime["id"]), attempt=str(runtime["run_attempt"]))
+    except Exception as exc:
+        raise ReleaseError("Private release transport evidence mismatch.") from exc
 
 
 def verify_ci(args):
@@ -534,8 +577,11 @@ def verify_ci(args):
     verify_run(candidate, workflow="candidate-checks.yml", repository=args.repository)
     require(str(runtime.get("id")) == args.runtime_run and str(candidate.get("id")) == args.candidate_run,
             "Workflow run IDs do not match inputs.")
-    verify_jobs(strict_json((metadata / "runtime-jobs.json").read_bytes()),
-                strict_json((metadata / "candidate-jobs.json").read_bytes()))
+    runtime_jobs = strict_json((metadata / "runtime-jobs.json").read_bytes())
+    candidate_jobs = strict_json((metadata / "candidate-jobs.json").read_bytes())
+    verify_job_identity(runtime_jobs, runtime)
+    verify_job_identity(candidate_jobs, candidate)
+    verify_jobs(runtime_jobs, candidate_jobs)
     source_tree = git("rev-parse", args.source + "^{tree}")
     require(source_tree == git("rev-parse", candidate["head_sha"] + "^{tree}"),
             "Candidate browser source tree differs from runtime source tree.")
@@ -546,10 +592,13 @@ def verify_ci(args):
             "Unexpected artifact checksum format.")
     digest = digest_file(archive)
     require(checksum.split()[0] == digest, "Runtime artifact checksum mismatch.")
+    transport = verify_runtime_transport(archive, args.source, source_tree, runtime)
     provenance = {"version": 1, "source": args.source, "expectedActive": args.expected,
                   "sourceTree": source_tree, "candidateTree": source_tree,
                   "candidateSha": candidate["head_sha"], "runtimeRun": args.runtime_run,
                   "candidateRun": args.candidate_run, "archiveSha256": digest,
+                  "runtimeAttempt": runtime["run_attempt"], "candidateAttempt": candidate["run_attempt"],
+                  "releaseTransport": transport,
                   "repository": args.repository, "ancestryVerified": True,
                   "changedFiles": changes, "migrations": migration_plan(changes)}
     write_json(args.output, provenance)
