@@ -114,3 +114,31 @@ Pending, not yet claimed:
 
 A source patch and passing local tests remain separate evidence from hosted
 browser execution, actual screenshot inspection and a verified production release.
+
+## Runtime publication integration correction — 2 October 2026
+
+PR #221 merged the tested tree as `7bb6f515f19f3ef6b1f3a01144a4ca04339d3244`.
+Candidate run `37031564336` passed all required stages; targeted Fees/Orders pixels
+were independently reviewed for all three engines. One pre-existing mobile
+Chromium Room geometry assertion passed its configured automatic retry; the
+separately required no-retry regression stages passed. The corrected mobile
+Room exports fit the unchanged 2 MiB bound (799,716 and 727,307 raw bytes).
+
+The first main runtime run `37036845270` passed builds, tests and runtime probes,
+then its new publisher rejected tracked source drift before creating any Release.
+An isolated reproduction using the real lockfile showed that default npm pruning
+normalizes 27 dev-classification flags in `package-lock.json`. The corrected
+packaging command adds `--no-save`, retaining lockfile input while preventing
+metadata writes. Read-only HEAD-relative checks before and after pruning reject
+staged or unstaged source drift; the publisher's clean-source guard is unchanged.
+
+Five offline regressions use fresh local tarballs, real npm ci/prune, and the exact
+workflow packaging shell. They reproduce the old lock rewrite, preserve locked
+runtime/transitive bytes and versions, remove dev/extraneous modules, prevent
+lifecycle scripts, inspect archived production files, and fail before publication
+when source drifts. They pass on npm 11.9.0 and CI's npm 11.19.0 (local Node24.19).
+
+This correction changes packaging verification only. Production remains on the
+prior live runtime until the new exact-source pipeline and private-release
+provenance checks succeed. Authenticated live-admin pixels require a staff login;
+the available cloud browser is signed out. No recovery access was created.

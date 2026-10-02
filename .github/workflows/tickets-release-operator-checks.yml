@@ -7,6 +7,7 @@ on:
       - ops/vps/test_code_release.py
       - ops/vps/runtime_release.py
       - ops/vps/test_runtime_release.py
+      - ops/vps/test_runtime_packaging.py
       - ops/vps/candidate_evidence.py
       - ops/vps/test_candidate_evidence.py
       - .github/workflows/candidate-checks.yml
