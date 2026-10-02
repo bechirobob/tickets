@@ -1,12 +1,7 @@
-name: Focused production browser regressions
+name: Focused Room showcase verification
 
+# Temporary verification-only branch. This workflow variant must never merge.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - tests/e2e/navigation-audit.spec.ts
-      - tests/e2e/discovery-pass-access.spec.ts
-      - .github/workflows/browser-followup.yml
   workflow_dispatch:
 
 permissions:
@@ -14,32 +9,92 @@ permissions:
 
 jobs:
   verify:
+    if: github.ref == 'refs/heads/verify/room-autoplay-2026-10-02'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     env:
-      E2E_BASE_URL: https://tickets.becoreops.com
+      BECORE_RELEASE_SHA: ${{ github.sha }}
+      PRODUCT_SHA: 1aeeb053f01ebb7e5d8d204734a55f0ef16f3fd8
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check out exact focused verification revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Bind the exact product and test sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PRODUCT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD^)" = "$PRODUCT_SHA"
+          test "$(git diff --name-only "$PRODUCT_SHA" HEAD)" = .github/workflows/browser-followup.yml
+          git diff --exit-code HEAD --
+          printf 'Focused revision: %s\nProduct revision: %s\n' "$BECORE_RELEASE_SHA" "$PRODUCT_SHA"
+          git ls-tree -r HEAD -- app/room-preview-carousel.tsx app/room-demo.css app/use-room-demo.ts tests/e2e/room-demo.spec.ts tests/e2e/room-natural-entry.spec.ts tests/room-demo-lifecycle.test.mjs package.json package-lock.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      # These existing journeys use anonymous reads or intercepted fixture APIs.
-      # No checkout, email, registration or customer-data writes reach production.
-      - name: Repeat the three affected mobile journeys with retries disabled
-        run: npx playwright test navigation-audit.spec.ts member-navigation.spec.ts public-journey.spec.ts --project mobile-chromium --grep 'navigation waits for its handlers|My Nights recovers from a service failure|My Nights exposes secure recovery' --workers=1 --retries=0 --repeat-each=5 --trace=on
-      - name: Verify active-pass loading on desktop without retries
-        run: npx playwright test discovery-pass-access.spec.ts --project desktop-chromium --grep 'an active night leads' --workers=1 --retries=0 --repeat-each=5 --trace=on --output=test-results-pass-access
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
-        with:
-          name: focused-production-browser-${{ github.run_id }}
-          path: |
-            playwright-report
-            test-results
-            test-results-pass-access
-          retention-days: 14
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Verify deterministic Room lifecycle and UI contracts
+        run: npm run test:repo && npm run test:ui
+      - name: Build the local candidate once
+        run: npm run build && node scripts/prepare-deploy.mjs
+      - name: Prepare isolated fixture database
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Install Chromium and WebKit
+        run: npx playwright install --with-deps chromium webkit
+      - name: Repeat each Room behavior twice without retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          for browser in mobile-webkit mobile-chromium desktop-chromium; do
+            if ! npx playwright test tests/e2e/room-demo.spec.ts --project "$browser" --workers=1 --retries=0 --repeat-each=2 --output "test-results/focused-$browser"; then status=1; fi
+          done
+          exit "$status"
+      - name: Preserve bounded synthetic Motion control pixels
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          python3 - <<'PYPIXELS'
+          import base64, hashlib, json, os
+          from pathlib import Path
+          from collections import Counter
+          prefix = "BECORE_ROOM_FOCUSED_PIXELS_V1 "
+          files = sorted(p for p in Path("test-results").glob("focused-*/*/*.png") if p.name in {"room-static-section.png", "room-motion-settings.png"})
+          expected = Counter({(f"focused-{browser}", name): 2 for browser in ("mobile-webkit", "mobile-chromium", "desktop-chromium") for name in ("room-static-section.png", "room-motion-settings.png")})
+          assert Counter((path.parts[1], path.name) for path in files) == expected, "Both stable screenshots are required for each of two repeats on every browser"
+          total = 0
+          for path in files:
+              assert path.is_file() and not path.is_symlink() and all(not parent.is_symlink() for parent in path.parents)
+              raw = path.read_bytes()
+              assert raw.startswith(b"\x89PNG\r\n\x1a\n") and 0 < len(raw) <= 1024 * 1024
+              total += len(raw)
+              assert total <= 8 * 1024 * 1024
+              digest = hashlib.sha256(raw).hexdigest()
+              chunks = [raw[start:start + 3072] for start in range(0, len(raw), 3072)]
+              record = {"source_sha": os.environ["BECORE_RELEASE_SHA"], "product_sha": os.environ["PRODUCT_SHA"], "path": path.as_posix(), "sha256": digest, "bytes": len(raw), "chunks": len(chunks)}
+              print(prefix + json.dumps({"type": "begin", **record}, sort_keys=True))
+              for index, chunk in enumerate(chunks):
+                  print(prefix + json.dumps({"type": "chunk", "path": path.as_posix(), "index": index, "data": base64.b64encode(chunk).decode()}, sort_keys=True))
+              print(prefix + json.dumps({"type": "end", **record}, sort_keys=True))
+          print("Verified Motion screenshot bytes:", total)
+          PYPIXELS
+      - name: Capture unchanged natural-entry evidence contracts without retries
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          for browser in mobile-webkit mobile-chromium desktop-chromium; do
+            output="test-results/natural-$browser"
+            if ! npx playwright test tests/e2e/room-natural-entry.spec.ts --project "$browser" --workers=1 --retries=0 --output "$output"; then status=1; fi
+            if ! python3 ops/vps/candidate_evidence.py encode --root "$output" --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser "$browser"; then status=1; fi
+          done
+          exit "$status"
+      - name: Reject tracked source drift
+        if: ${{ !cancelled() }}
+        run: git diff --exit-code HEAD --
