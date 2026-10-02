@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './analytics-fixture';
 import AxeBuilder from '@axe-core/playwright';
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
 test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./analytics-fixture";
 
 // These cases simulate provider timing through intercepted responses. WebKit
 // service workers otherwise take over after the first poll and bypass routing.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +8,7 @@ import test from "node:test";
 import { hasRequiredTicketsSpendLimits } from "../scripts/ai-gateway-policy.mjs";
 import './iphone-layout-evidence.test.mjs';
 import './support-email-rendering.test.mjs';
+import './browser-audit-harness.test.mjs';
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 
@@ -107,17 +108,29 @@ const candidateStep = (job, name) => {
   return matches[0];
 };
 
-test("candidate CI runs the core gates once and fans the same build out to all browsers", async () => {
+const candidateBrowsers = ["desktop-chromium", "mobile-chromium", "mobile-webkit"];
+const candidateBrowserStep = (job, name, browser) => candidateStep(job, `${name} (${browser})`);
+
+test("candidate CI runs core gates once and restores the same local build for every browser", async () => {
   const workflow = await candidateWorkflow();
-  assert.deepEqual(Object.keys(workflow.jobs), ["core", "verify"]);
-  const { core, verify } = workflow.jobs;
-  assert.equal(verify.needs, "core");
-  assert.equal(core.if, undefined);
+  assert.deepEqual(Object.keys(workflow.jobs), ["verify"]);
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  const { verify } = workflow.jobs;
+  assert.equal(verify.name, "verify");
+  assert.equal(verify["runs-on"], "ubuntu-latest");
+  assert.equal(verify["timeout-minutes"], 120);
+  assert.equal(verify.needs, undefined);
   assert.equal(verify.if, undefined);
-  assert.equal(core["continue-on-error"], undefined);
   assert.equal(verify["continue-on-error"], undefined);
-  assert.equal(verify.strategy["fail-fast"], false);
-  assert.deepEqual(verify.strategy.matrix.browser, ["desktop-chromium", "mobile-chromium", "mobile-webkit"]);
+  assert.equal(verify.strategy, undefined);
+  assert.equal(verify.outputs, undefined);
+  assert.equal(new Set(verify.steps.map((step) => step.name)).size, verify.steps.length);
+  for (const step of verify.steps) {
+    assert.equal(typeof step.name, "string", "Every gate has an explicit, unique name");
+    assert.equal(step["continue-on-error"], undefined, "A failed gate must fail the job");
+    assert.doesNotMatch(step.uses ?? "", /actions\/(?:upload-artifact|download-artifact|cache)@/u);
+    assert.equal(step.with?.cache, undefined, "Candidate builds never depend on Actions cache storage");
+  }
   const required = {
     "Audit dependencies": "npm audit --audit-level=moderate",
     "Lint application": "npm run lint",
@@ -127,144 +140,197 @@ test("candidate CI runs the core gates once and fans the same build out to all b
     "Validate the deployable Worker without publishing": "npx wrangler deploy --config dist/server/wrangler.json --dry-run --outdir dist/worker-dry-run",
   };
   for (const [name, command] of Object.entries(required)) {
-    const step = candidateStep(core, name);
+    const step = candidateStep(verify, name);
     assert.equal(step.run, command);
     assert.equal(step.if, undefined);
-    assert.equal(core.steps.filter((step) => step.run === command).length, 1);
-    assert.equal(verify.steps.filter((step) => step.run === command).length, 0);
+    assert.equal(verify.steps.filter((step) => step.run === command).length, 1);
   }
   const { scripts } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   for (const suite of ["test:repo", "test:ui", "test:password-client", "test:rendered", "test:worker"]) {
     assert.ok(scripts.test.includes(`npm run ${suite}`));
   }
   assert.match(scripts["test:rendered"], /^npm run build && node scripts\/prepare-deploy\.mjs && node --test tests\/rendered-html\.test\.mjs$/u);
-  for (const job of [core, verify]) {
-    const checkout = job.steps.find((step) => step.uses?.startsWith("actions/checkout@"));
-    assert.equal(checkout.with.ref, workflow.env.BECORE_RELEASE_SHA);
-    assert.equal(checkout.with["persist-credentials"], false);
-    assert.equal(job.steps.filter((step) => step.run === "npm ci --no-audit").length, 1);
+  const checkouts = verify.steps.filter((step) => step.uses?.startsWith("actions/checkout@"));
+  assert.equal(checkouts.length, 1);
+  assert.equal(checkouts[0].with.ref, workflow.env.BECORE_RELEASE_SHA);
+  assert.equal(checkouts[0].with["persist-credentials"], false);
+  assert.equal(verify.steps.filter((step) => step.run === "npm ci --no-audit").length, 1);
+  const source = candidateStep(verify, "Verify exact candidate source");
+  const pack = candidateStep(verify, "Package verified browser build");
+  const evidence = candidateStep(verify, "Verify candidate evidence transport");
+  const install = candidateStep(verify, "Install browsers for event-page verification");
+  for (const step of [source, pack, evidence, install]) assert.equal(step.if, undefined);
+  assert.equal(source.id, "source");
+  assert.equal(pack.id, "build");
+  assert.equal(install.id, "browsers");
+  assert.equal(install.run, "npx playwright install --with-deps chromium webkit");
+  assert.equal(evidence.run, "python3 -m unittest discover -s ops/vps -p 'test_candidate_evidence.py' -v");
+  assert.equal(verify.steps.filter((step) => step.run?.includes('tar -czf "$archive"')).length, 1);
+  assert.ok(verify.steps.indexOf(source) < verify.steps.indexOf(pack));
+  assert.ok(verify.steps.indexOf(pack) < verify.steps.indexOf(install));
+  let previousBrowserEnd = verify.steps.indexOf(install);
+  for (const browser of candidateBrowsers) {
+    const id = browser.replaceAll("-", "_");
+    const restore = candidateBrowserStep(verify, "Verify and restore the exact candidate build", browser);
+    const fixtures = candidateBrowserStep(verify, "Prepare isolated event fixtures", browser);
+    assert.equal(restore.id, `restore_${id}`);
+    assert.equal(restore.if, "${{ !cancelled() && steps.source.outcome == 'success' && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' }}");
+    assert.deepEqual(restore.env, {
+      BUILD_SHA: "${{ steps.source.outputs.sha }}", BUILD_TREE: "${{ steps.source.outputs.tree }}",
+      BUILD_DIGEST: "${{ steps.build.outputs.sha256 }}",
+    });
+    assert.equal(fixtures.id, `fixtures_${id}`);
+    assert.equal(fixtures.if, `\${{ !cancelled() && steps.restore_${id}.outcome == 'success' }}`);
+    assert.equal(fixtures.run, "npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state");
+    assert.ok(verify.steps.indexOf(restore) > previousBrowserEnd);
+    assert.ok(verify.steps.indexOf(fixtures) > verify.steps.indexOf(restore));
+    previousBrowserEnd = verify.steps.indexOf(candidateBrowserStep(verify, "Verify host report fixture recovery without retries", browser));
   }
-  const upload = candidateStep(core, "Preserve verified browser build");
-  assert.equal(upload.with["if-no-files-found"], "error");
-  assert.equal(upload.if, undefined);
-  assert.equal(core.outputs.artifact_id, "${{ steps.artifact.outputs.artifact-id }}");
-  const download = candidateStep(verify, "Download the verified browser build");
-  assert.deepEqual(download.with, {
-    "artifact-ids": "${{ needs.core.outputs.artifact_id }}",
-    "merge-multiple": true,
-    path: "${{ runner.temp }}/candidate-build",
-  });
-  candidateStep(verify, "Verify and restore the exact candidate build");
 });
 
 test("candidate browser coverage retains full journeys and deliberate no-retry regressions", async () => {
   const { verify } = (await candidateWorkflow()).jobs;
-  const project = "--project ${{ matrix.browser }}";
-  assert.equal(candidateStep(verify, "Verify every browser journey before release").run, `npx playwright test ${project}`);
   const suites = {
-    "Verify optional SeevPlus checkout on desktop and mobile": ["seev", "node scripts/prepare-seev-browser-fixture.mjs"],
-    "Verify opt-in USDC checkout without provider traffic": ["seev-crypto", "node scripts/prepare-seev-browser-fixture.mjs crypto"],
-    "Verify RSVP and interest registration on desktop and mobile": ["registration", "node scripts/prepare-registration-browser-fixture.mjs"],
-    "Verify owner Operations workflows on desktop and mobile": ["operations", "node scripts/prepare-operations-browser-fixture.mjs"],
+    "Verify optional SeevPlus checkout on desktop and mobile": ["seev", "node scripts/prepare-seev-browser-fixture.mjs", "seevplus"],
+    "Verify opt-in USDC checkout without provider traffic": ["seev-crypto", "node scripts/prepare-seev-browser-fixture.mjs crypto", "seevplus-crypto"],
+    "Verify RSVP and interest registration on desktop and mobile": ["registration", "node scripts/prepare-registration-browser-fixture.mjs", "registration"],
+    "Verify owner Operations workflows on desktop and mobile": ["operations", "node scripts/prepare-operations-browser-fixture.mjs", "operations"],
   };
-  for (const [name, [config, fixture]] of Object.entries(suites)) {
-    const step = candidateStep(verify, name);
-    assert.ok(step.run.startsWith(`${fixture}\n`));
-    assert.ok(step.run.includes(`npx playwright test --config playwright.${config}.config.ts ${project}`));
-    assert.doesNotMatch(step.run, /--grep/u, "The full suite must not silently narrow coverage");
-    assert.equal(step.if, "${{ !cancelled() && steps.browser_fixtures.outcome == 'success' }}");
+  for (const browser of candidateBrowsers) {
+    const project = `--project ${browser}`;
+    const condition = `\${{ !cancelled() && steps.fixtures_${browser.replaceAll("-", "_")}.outcome == 'success' }}`;
+    const step = (name) => {
+      const result = candidateBrowserStep(verify, name, browser);
+      assert.equal(result.if, condition, "Each browser stage must run after earlier failures when its own fixtures succeeded");
+      return result;
+    };
+    const room = step("Capture natural Room entry before the full browser suite");
+    assert.equal(room.run, `npx playwright test tests/e2e/room-natural-entry.spec.ts ${project} --workers=1 --retries=0 --output test-results/room-entry`);
+    const roomEvidence = step("Preserve natural Room entry evidence immediately");
+    assert.equal(roomEvidence.run, `python3 ops/vps/candidate_evidence.py encode --root test-results/room-entry --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser ${browser}`);
+    const full = step("Verify every browser journey before release");
+    assert.equal(full.run, `npx playwright test ${project}`);
+    assert.equal(step("Verify keyboard navigation focus without retries").run,
+      `npx playwright test tests/e2e/navigation-audit.spec.ts ${project} --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus`);
+    for (const [name, [config, fixture, output]] of Object.entries(suites)) {
+      const suite = step(name);
+      const noRetry = config === "operations" ? " --workers=1 --retries=0" : "";
+      assert.equal(suite.run.trimEnd(), `${fixture}\nnpx playwright test --config playwright.${config}.config.ts ${project}${noRetry} --output test-results/${output}`);
+      assert.doesNotMatch(suite.run, /--grep/u, "The full suite must not silently narrow coverage");
+    }
+    const operations = step("Verify owner Operations workflows on desktop and mobile");
+    const operationsEvidence = step("Preserve required Operations visual evidence immediately");
+    assert.equal(operationsEvidence.run, `python3 ops/vps/candidate_evidence.py encode --root test-results/operations --stage operations --source-sha "$BECORE_RELEASE_SHA" --browser ${browser}`);
+    const recovery = step("Verify host report fixture recovery without retries");
+    assert.equal(recovery.run, `npx playwright test --config playwright.operations.config.ts ${project} --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview`);
+    assert.equal(verify.steps.indexOf(roomEvidence), verify.steps.indexOf(room) + 1);
+    assert.ok(verify.steps.indexOf(roomEvidence) < verify.steps.indexOf(full));
+    assert.equal(verify.steps.indexOf(operationsEvidence), verify.steps.indexOf(operations) + 1);
+    assert.ok(verify.steps.indexOf(operationsEvidence) < verify.steps.indexOf(recovery));
   }
-  assert.match(candidateStep(verify, "Verify owner Operations workflows on desktop and mobile").run, /--workers=1 --retries=0/u);
-  assert.equal(verify.steps.some((step) => step.name === "Verify organizer suite on desktop and mobile"), false);
-  for (const name of ["Verify keyboard navigation focus without retries", "Verify host report fixture recovery without retries"]) {
-    assert.match(candidateStep(verify, name).run, /--workers=1 --retries=0 --repeat-each=3/u);
-  }
-  assert.equal(candidateStep(verify, "Preserve event-page renders and browser results").if, "always()");
-  assert.equal(candidateStep(verify, "Preserve focused checkout evidence").if, "always()");
+  assert.equal(verify.steps.some((step) => step.name.startsWith("Verify organizer suite on desktop and mobile")), false);
 });
 
-test("candidate artifact download layout preserves hidden build files and fails closed on source or byte mismatches", async (t) => {
-  const { core, verify } = (await candidateWorkflow()).jobs;
+test("candidate local archive preserves hidden files, isolates browsers, and fails closed on source or byte mismatches", async (t) => {
+  const { verify } = (await candidateWorkflow()).jobs;
   const temporary = await mkdtemp(join(tmpdir(), "tickets-candidate-ci-"));
   t.after(() => rm(temporary, { recursive: true, force: true }));
-  const producer = join(temporary, "producer");
-  const consumer = join(temporary, "consumer");
-  const runnerTemp = join(temporary, "producer-runner");
-  const browserRunner = join(temporary, "browser-runner");
+  const checkout = join(temporary, "checkout");
+  const runnerTemp = join(temporary, "runner");
   const output = join(temporary, "outputs");
-  await mkdir(producer);
+  await mkdir(checkout);
   await mkdir(runnerTemp);
-  const git = (...args) => execFileSync("git", args, { cwd: producer, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const git = (...args) => execFileSync("git", args, { cwd: checkout, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init", "--initial-branch=main");
-  await writeFile(join(producer, "source.txt"), "exact source\n");
+  await writeFile(join(checkout, "source.txt"), "exact source\n");
   git("add", "source.txt");
   git("-c", "user.name=CI Test", "-c", "user.email=ci-test@example.invalid", "commit", "-m", "Fixture");
   const sha = git("rev-parse", "HEAD");
   const tree = git("rev-parse", "HEAD^{tree}");
-  await cp(producer, consumer, { recursive: true });
-  await mkdir(join(producer, "dist/client/.vite"), { recursive: true });
-  await mkdir(join(producer, "dist/server"), { recursive: true });
-  await writeFile(join(producer, "dist/client/.vite/manifest.json"), '{"asset":"unchanged"}\n');
-  await writeFile(join(producer, "dist/server/wrangler.json"), JSON.stringify({ vars: { RELEASE_SHA: sha } }));
-  const environment = { ...process.env, BECORE_RELEASE_SHA: sha, RUNNER_TEMP: runnerTemp, GITHUB_OUTPUT: output };
-  const run = (step, cwd, overrides = {}) => spawnSync("bash", ["-c", step.run], {
-    cwd, env: { ...environment, ...overrides }, encoding: "utf8",
+  await mkdir(join(checkout, "dist/client/.vite"), { recursive: true });
+  await mkdir(join(checkout, "dist/server"), { recursive: true });
+  const manifest = '{"asset":"unchanged"}\n';
+  const compiled = Buffer.from([0, 1, 2, 128, 255]);
+  await writeFile(join(checkout, "dist/client/.vite/manifest.json"), manifest);
+  await writeFile(join(checkout, "dist/client/app.bin"), compiled);
+  await writeFile(join(checkout, "dist/server/wrangler.json"), JSON.stringify({ vars: { RELEASE_SHA: sha } }));
+  // All destructive shell commands operate only inside this fresh temporary repo.
+  const environment = {
+    ...process.env, BECORE_RELEASE_SHA: sha, RUNNER_TEMP: runnerTemp, GITHUB_OUTPUT: output,
+    GITHUB_ACTIONS: "true", RUNNER_ENVIRONMENT: "github-hosted", GITHUB_WORKSPACE: checkout, E2E_BASE_URL: "",
+  };
+  const run = (step, overrides = {}) => spawnSync("bash", ["-c", step.run], {
+    cwd: checkout, env: { ...environment, ...overrides }, encoding: "utf8",
   });
-  const source = candidateStep(core, "Verify exact candidate source");
-  const pack = candidateStep(core, "Package verified browser build");
-  const restore = candidateStep(verify, "Verify and restore the exact candidate build");
+  const source = candidateStep(verify, "Verify exact candidate source");
+  const pack = candidateStep(verify, "Package verified browser build");
+  const restores = candidateBrowsers.map((browser) => candidateBrowserStep(verify, "Verify and restore the exact candidate build", browser));
   for (const step of [source, pack]) {
-    const result = run(step, producer);
+    const result = run(step);
     assert.equal(result.status, 0, result.stderr);
   }
   const outputs = Object.fromEntries((await readFile(output, "utf8")).trim().split("\n").map((line) => line.split("=")));
   assert.equal(outputs.sha, sha);
   assert.equal(outputs.tree, tree);
   assert.match(outputs.sha256, /^[a-f0-9]{64}$/u);
-  const download = candidateStep(verify, "Download the verified browser build");
-  const artifact = { id: "123456", name: `candidate-build-${sha}-100-1` };
-  const packedArchive = join(runnerTemp, "candidate-build/browser-build.tar.gz");
-  // Match the pinned v4.3.0 action's path selection, not newer README behavior:
-  // src/download-artifact.ts treats only a name input as a single download.
-  // artifact-ids selects the multi-artifact path even for exactly one ID.
-  const downloadById = async (destination, inputs) => {
-    assert.equal(inputs["artifact-ids"], artifact.id);
-    const resolvedPath = join(destination, "candidate-build");
-    const extracted = inputs.name || inputs["merge-multiple"] === true
-      ? resolvedPath : join(resolvedPath, artifact.name);
-    await mkdir(extracted, { recursive: true });
-    await cp(packedArchive, join(extracted, "browser-build.tar.gz"));
-    return extracted;
-  };
-  const inputs = { ...download.with, "artifact-ids": artifact.id };
-  const extracted = await downloadById(browserRunner, inputs);
-  assert.equal(extracted, join(browserRunner, "candidate-build"));
-  const build = { BUILD_SHA: outputs.sha, BUILD_TREE: outputs.tree, BUILD_DIGEST: outputs.sha256, RUNNER_TEMP: browserRunner };
-  const nestedRunner = join(temporary, "unmerged-browser-runner");
-  assert.equal(await downloadById(nestedRunner, { ...inputs, "merge-multiple": false }),
-    join(nestedRunner, "candidate-build", artifact.name));
-  assert.notEqual(run(restore, consumer, { ...build, RUNNER_TEMP: nestedRunner }).status, 0,
-    "The old ID-based default nests the archive and must reproduce the missing-file failure");
-  const restored = run(restore, consumer, build);
-  assert.equal(restored.status, 0, restored.stderr);
-  assert.equal(await readFile(join(consumer, "dist/client/.vite/manifest.json"), "utf8"), '{"asset":"unchanged"}\n');
-  for (const overrides of [
-    { BUILD_SHA: "a".repeat(40) }, { BUILD_TREE: "b".repeat(40) },
-    { BUILD_DIGEST: "c".repeat(64) }, { BUILD_DIGEST: "" },
-    { BECORE_RELEASE_SHA: "d".repeat(40) },
-  ]) {
-    assert.notEqual(run(restore, consumer, { ...build, ...overrides }).status, 0, `Rejected ${JSON.stringify(overrides)}`);
+  const archive = join(runnerTemp, "candidate-build/browser-build.tar.gz");
+  const archiveBytes = await readFile(archive);
+  const build = { BUILD_SHA: outputs.sha, BUILD_TREE: outputs.tree, BUILD_DIGEST: outputs.sha256 };
+  const preservedEvidence = join(runnerTemp, "already-logged-evidence.txt");
+  const unrelatedFile = join(checkout, "outside-cleanup.txt");
+  await writeFile(preservedEvidence, "previous browser evidence\n");
+  await writeFile(unrelatedFile, "keep unrelated checkout files\n");
+  for (const restore of restores) {
+    for (const directory of [".wrangler/state", "test-results", "playwright-report", "dist/previous-browser"]) {
+      await mkdir(join(checkout, directory), { recursive: true });
+      await writeFile(join(checkout, directory, "previous-browser.txt"), "stale fixture state\n");
+    }
+    await writeFile(join(checkout, "dist/client/.vite/manifest.json"), "stale manifest\n");
+    await writeFile(join(checkout, "dist/client/app.bin"), "mutated compiled bytes");
+    const restored = run(restore, build);
+    assert.equal(restored.status, 0, `${restore.name}: ${restored.stderr}`);
+    assert.equal(await readFile(join(checkout, "dist/client/.vite/manifest.json"), "utf8"), manifest);
+    assert.deepEqual(await readFile(join(checkout, "dist/client/app.bin")), compiled);
+    for (const directory of [".wrangler", "test-results", "playwright-report", "dist/previous-browser"]) {
+      await assert.rejects(readdir(join(checkout, directory)), { code: "ENOENT" });
+    }
+    assert.deepEqual(await readFile(archive), archiveBytes, "Every browser consumes the same immutable archive bytes");
+    assert.equal(await readFile(preservedEvidence, "utf8"), "previous browser evidence\n");
+    assert.equal(await readFile(unrelatedFile, "utf8"), "keep unrelated checkout files\n");
+    await mkdir(join(checkout, ".wrangler"));
+    const protectedMarker = join(checkout, ".wrangler/rejected-before-cleanup.txt");
+    await writeFile(protectedMarker, "reject before deleting anything\n");
+    for (const overrides of [
+      { BUILD_SHA: "a".repeat(40) }, { BUILD_TREE: "b".repeat(40) },
+      { BUILD_DIGEST: "c".repeat(64) }, { BUILD_DIGEST: "" },
+      { BECORE_RELEASE_SHA: "d".repeat(40) }, { RUNNER_TEMP: join(temporary, "missing-archive") },
+      { GITHUB_ACTIONS: "false" }, { RUNNER_ENVIRONMENT: "self-hosted" },
+      { GITHUB_WORKSPACE: temporary }, { E2E_BASE_URL: "https://example.invalid" },
+    ]) {
+      assert.notEqual(run(restore, { ...build, ...overrides }).status, 0, `${restore.name} rejected ${JSON.stringify(overrides)}`);
+      assert.equal(await readFile(protectedMarker, "utf8"), "reject before deleting anything\n");
+    }
   }
-  assert.notEqual(run(source, producer, { BECORE_RELEASE_SHA: "a".repeat(40) }).status, 0);
-  await appendFile(join(browserRunner, "candidate-build/browser-build.tar.gz"), "tampered");
-  assert.notEqual(run(restore, consumer, build).status, 0, "Corrupt archive must not be restored");
-  await writeFile(join(producer, "dist/server/wrangler.json"), JSON.stringify({ vars: { RELEASE_SHA: "e".repeat(40) } }));
-  assert.notEqual(run(pack, producer).status, 0, "Build with a stale revision must not be published");
-  // Even a digest-consistent artifact must identify the exact checked-out SHA.
-  const archive = join(browserRunner, "candidate-build/browser-build.tar.gz");
-  execFileSync("tar", ["-czf", archive, "dist/client", "dist/server"], { cwd: producer });
+  assert.notEqual(run(source, { BECORE_RELEASE_SHA: "a".repeat(40) }).status, 0);
+  await writeFile(join(checkout, "source.txt"), "dirty source\n");
+  for (const restore of restores) assert.notEqual(run(restore, build).status, 0, "Dirty source cannot share the original build identity");
+  git("add", "source.txt");
+  for (const restore of restores) assert.notEqual(run(restore, build).status, 0, "Staged source changes cannot share the original build identity");
+  git("reset", "--hard", sha);
+  git("-c", "user.name=CI Test", "-c", "user.email=ci-test@example.invalid", "commit", "--allow-empty", "-m", "Different HEAD");
+  for (const restore of restores) assert.notEqual(run(restore, build).status, 0, "A different checked-out HEAD is rejected even if its tree matches");
+  git("reset", "--hard", sha);
+  // The production archive is intentionally read-only; mutate only this temp fixture.
+  await chmod(archive, 0o600);
+  await appendFile(archive, "tampered");
+  for (const restore of restores) assert.notEqual(run(restore, build).status, 0, "Corrupt archive must not be restored");
+  await writeFile(join(checkout, "dist/server/wrangler.json"), JSON.stringify({ vars: { RELEASE_SHA: "e".repeat(40) } }));
+  assert.notEqual(run(pack).status, 0, "Build with a stale revision must not be packaged");
+  // A digest-consistent local archive must still embed the exact checked-out SHA.
+  execFileSync("tar", ["-czf", archive, "dist/client", "dist/server"], { cwd: checkout });
   const digest = execFileSync("sha256sum", [archive], { encoding: "utf8" }).split(" ")[0];
-  assert.notEqual(run(restore, consumer, { ...build, BUILD_DIGEST: digest }).status, 0);
+  for (const restore of restores) assert.notEqual(run(restore, { ...build, BUILD_DIGEST: digest }).status, 0,
+    "A digest-consistent archive with a stale embedded release SHA is rejected");
 });
 
 test("production audit covers the deployed main revision while candidate CI covers the entire PR", async () => {
@@ -305,7 +371,10 @@ test("production audit covers the deployed main revision while candidate CI cove
   assert.ok(evidence.with.path.includes("${{ runner.temp }}/production-browser-audit/checked-out-*.txt"));
   const candidate = await candidateWorkflow();
   assert.equal(candidate.env.BECORE_RELEASE_SHA, "${{ github.event.pull_request.head.sha || github.sha }}");
-  assert.equal(candidateStep(candidate.jobs.verify, "Verify every browser journey before release").run, "npx playwright test --project ${{ matrix.browser }}");
+  for (const browser of candidateBrowsers) {
+    assert.equal(candidateBrowserStep(candidate.jobs.verify, "Verify every browser journey before release", browser).run,
+      `npx playwright test --project ${browser}`);
+  }
   const config = await readFile(new URL("../playwright.config.ts", import.meta.url), "utf8");
   assert.match(config, /testDir: "\.\/tests\/e2e"/u);
   assert.doesNotMatch(config, /testIgnore|testMatch|grepInvert|grep:/u);

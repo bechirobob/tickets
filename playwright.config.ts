@@ -13,7 +13,6 @@ export default defineConfig({
   timeout: 30_000,
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "list",
   use: {
-    extraHTTPHeaders: { "x-becore-analytics": "exclude" },
     baseURL: externalBaseUrl ?? "http://127.0.0.1:8788",
     // Production deliberately disables retries; retain its first failure too.
     trace: "retain-on-failure",

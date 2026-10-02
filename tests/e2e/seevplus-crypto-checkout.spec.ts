@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./analytics-fixture";
 import AxeBuilder from "@axe-core/playwright";
 
 test("USDC stays explicit, preserves details and safely retries without changing the payment attempt", async ({ page }) => {

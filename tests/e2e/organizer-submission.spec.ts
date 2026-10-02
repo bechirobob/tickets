@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import {expect,test} from '@playwright/test';
+import {expect,test} from './analytics-fixture';
 
 // Keep the simulated upload responses visible to Playwright on every engine.
 test.use({serviceWorkers:'block'});

@@ -1550,7 +1550,7 @@ class VerifierTests(unittest.TestCase):
                 release.enable_crypto_bytes(value)
 
     def test_runtime_workflow_identity_and_exact_main_sha(self):
-        run = {"status": "completed", "conclusion": "success", "head_sha": NEW,
+        run = {"id": 123, "run_attempt": 1, "status": "completed", "conclusion": "success", "head_sha": NEW,
                "path": ".github/workflows/vps-runtime.yml", "head_branch": "main", "event": "push",
                "repository": {"full_name": "owner/tickets"}, "head_repository": {"full_name": "owner/tickets"}}
         release.verify_run(run, workflow="vps-runtime.yml", source=NEW, repository="owner/tickets")
@@ -1562,48 +1562,61 @@ class VerifierTests(unittest.TestCase):
 
     @staticmethod
     def candidate_jobs():
-        return [{"name": "core", "conclusion": "success", "steps": [
-            {"name": name, "conclusion": "success"} for name in release.CANDIDATE_CORE_STEPS
-        ]}] + [{"name": "verify (" + browser + ")", "conclusion": "success", "steps": [
-            {"name": name, "conclusion": "success"} for name in release.CANDIDATE_BROWSER_STEPS
-        ]} for browser in sorted(release.BROWSERS)]
+        required = release.CANDIDATE_CORE_STEPS | {
+            name + " (" + browser + ")"
+            for browser in release.BROWSERS for name in release.CANDIDATE_BROWSER_STEPS}
+        return [{"name": "verify", "conclusion": "success", "steps": [
+            {"name": name, "conclusion": "success", "status": "completed"} for name in sorted(required)]}]
 
-    def test_core_and_all_browser_jobs_required(self):
-        runtime = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
-        candidate = self.candidate_jobs()
+    @staticmethod
+    def runtime_jobs():
+        return [{"name": "verify", "conclusion": "success", "steps": [
+            {"name": name, "conclusion": "success", "status": "completed"} for name in (
+                "Prepare verified runtime without development dependencies", "Publish verified private runtime release")]},
+            {"name": "handoff", "conclusion": "success"}]
+
+    def test_single_candidate_and_exact_runtime_jobs_required(self):
+        runtime, candidate = self.runtime_jobs(), self.candidate_jobs()
         release.verify_jobs(runtime, candidate)
-        for index in range(len(candidate)):
-            with self.subTest(missing_job=candidate[index]["name"]), self.assertRaises(release.ReleaseError):
-                release.verify_jobs(runtime, candidate[:index] + candidate[index + 1:])
-            for result in ("failure", "skipped", "cancelled", None):
-                failed = copy.deepcopy(candidate)
-                failed[index]["conclusion"] = result
-                with self.subTest(job=index, result=result), self.assertRaises(release.ReleaseError):
-                    release.verify_jobs(runtime, failed)
-        for invalid in (candidate + [candidate[0]], candidate[:-1] + [candidate[0]]):
+        for invalid in ([], candidate + candidate, [dict(candidate[0], name="unrelated")],
+                        [dict(candidate[0], conclusion="skipped")]):
             with self.assertRaises(release.ReleaseError):
                 release.verify_jobs(runtime, invalid)
-        for invalid_runtime in (runtime[:1], runtime + [runtime[0]]):
+        for invalid in (runtime[:1], runtime + [runtime[0]],
+                        [dict(runtime[0], conclusion="failure"), runtime[1]]):
             with self.assertRaises(release.ReleaseError):
-                release.verify_jobs(invalid_runtime, candidate)
+                release.verify_jobs(invalid, candidate)
 
     def test_every_core_and_browser_gate_must_run_once_and_succeed(self):
-        runtime = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
-        candidate = self.candidate_jobs()
-        for job_index, job in enumerate(candidate):
-            for step_index, step in enumerate(job["steps"]):
-                for result in ("failure", "skipped", "cancelled", None, "missing", "duplicate"):
-                    altered = copy.deepcopy(candidate)
-                    steps = altered[job_index]["steps"]
+        runtime, candidate = self.runtime_jobs(), self.candidate_jobs()
+        for group, jobs in (("candidate", candidate), ("runtime", runtime[:1])):
+            for step_index, step in enumerate(jobs[0]["steps"]):
+                for result in ("failure", "skipped", "cancelled", None, "missing", "duplicate", "in_progress"):
+                    altered = copy.deepcopy(jobs)
+                    steps = altered[0]["steps"]
                     if result == "missing":
                         steps.pop(step_index)
                     elif result == "duplicate":
                         steps.append(copy.deepcopy(step))
+                    elif result == "in_progress":
+                        steps[step_index]["status"] = result
                     else:
                         steps[step_index]["conclusion"] = result
-                    with self.subTest(job=job["name"], step=step["name"], result=result):
+                    with self.subTest(group=group, step=step["name"], result=result):
                         with self.assertRaises(release.ReleaseError):
-                            release.verify_jobs(runtime, altered)
+                            release.verify_jobs(runtime, altered) if group == "candidate" else release.verify_jobs(altered + runtime[1:], candidate)
+
+    def test_jobs_are_bound_to_run_attempt_and_source_not_only_names(self):
+        run = {"id": 123, "run_attempt": 2, "head_sha": NEW}
+        job = {"id": 55, "run_id": 123, "run_attempt": 2, "head_sha": NEW, "status": "completed"}
+        release.verify_job_identity([job], run)
+        for key, value in (("id", True), ("id", 0), ("run_id", 456), ("run_attempt", 1),
+                           ("run_attempt", True), ("head_sha", OLD), ("status", "in_progress")):
+            with self.subTest(key=key, value=value), self.assertRaises(release.ReleaseError):
+                release.verify_job_identity([dict(job, **{key: value})], run)
+        for jobs in ([], [job, job]):
+            with self.assertRaises(release.ReleaseError):
+                release.verify_job_identity(jobs, run)
 
     def test_reviewed_application_and_migration_blobs_are_exact_and_no_other_paths_expand(self):
         name = "runtime/vps/server.mjs"
@@ -1657,12 +1670,12 @@ class VerifierTests(unittest.TestCase):
 
     def test_reviewed_operator_workflow_is_bound_to_its_exact_blob(self):
         workflow = ".github/workflows/tickets-release-operator-checks.yml"
-        for blob in ("2dcca50f2a8403e2f06c8aa871fcaa15ecf6c0ea", "f" * 40):
+        for blob in (release.REVIEWED_APPLICATION_BLOBS[workflow], "f" * 40):
             with patch.object(release, "git", side_effect=[workflow, blob]), patch.object(release.subprocess, "run"):
-                if blob.startswith("2dcca50"):
+                if blob == release.REVIEWED_APPLICATION_BLOBS[workflow]:
                     self.assertEqual(release.vetted_changes(OLD, NEW), [workflow])
                 else:
-                    with self.assertRaisesRegex(release.ReleaseError, "reviewed release-operator"):
+                    with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
                         release.vetted_changes(OLD, NEW)
 
     def test_mobile_lock_allows_only_reviewed_three_field_security_patch(self):
@@ -1758,12 +1771,16 @@ class VerifierTests(unittest.TestCase):
     def test_full_ci_tree_equivalence_and_artifact_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            runtime = {"id": 123, "status": "completed", "conclusion": "success", "head_sha": NEW,
+            runtime = {"id": 123, "run_attempt": 1, "status": "completed", "conclusion": "success", "head_sha": NEW,
                        "path": ".github/workflows/vps-runtime.yml", "head_branch": "main", "event": "push",
                        "repository": {"full_name": "owner/tickets"}, "head_repository": {"full_name": "owner/tickets"}}
             candidate = dict(runtime, id=456, path=".github/workflows/candidate-checks.yml", event="pull_request", head_sha=OLD)
-            runtime_jobs = [{"name": name, "conclusion": "success"} for name in ("verify", "handoff")]
+            runtime_jobs = self.runtime_jobs()
             candidate_jobs = self.candidate_jobs()
+            for run, jobs in ((runtime, runtime_jobs), (candidate, candidate_jobs)):
+                for index, job in enumerate(jobs):
+                    job.update(id=index+100, run_id=run["id"], run_attempt=run["run_attempt"],
+                               head_sha=run["head_sha"], status="completed")
             for name, value in (("runtime", runtime), ("candidate", candidate),
                                 ("runtime-jobs", runtime_jobs), ("candidate-jobs", candidate_jobs)):
                 release.write_json(root / (name + ".json"), value)
@@ -1773,10 +1790,14 @@ class VerifierTests(unittest.TestCase):
             checksum.write_text(release.digest_file(archive) + "  tickets-vps-runtime.tar.gz\n")
             args = argparse.Namespace(source=NEW, expected=ORIGINAL, repository="owner/tickets", metadata=str(root),
                                       runtime_run="123", candidate_run="456", archive=str(archive), output=str(root / "proof.json"))
-            with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), patch.object(release.subprocess, "run"), patch("builtins.print"):
+            with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), patch.object(release.subprocess, "run"), patch("builtins.print"), patch.object(release, "verify_runtime_transport", return_value={"verified": True}) as transport:
                 with patch.object(release, "git", side_effect=[NEW, "", TREE, TREE, "tests/new-test.ts"]):
                     release.verify_ci(args)
                 self.assertEqual(json.loads((root / "proof.json").read_text())["archiveSha256"], release.digest_file(archive))
+                transport.assert_called_once_with(archive, NEW, TREE, runtime)
+                with patch.object(release, "verify_runtime_transport", side_effect=release.ReleaseError("transport mismatch")), patch.object(release, "git", side_effect=[NEW, "", TREE, TREE, "tests/new-test.ts"]):
+                    with self.assertRaisesRegex(release.ReleaseError, "transport mismatch"):
+                        release.verify_ci(args)
                 with patch.object(release, "git", side_effect=[NEW, "", TREE, OLD]):
                     with self.assertRaisesRegex(release.ReleaseError, "tree differs"):
                         release.verify_ci(args)
@@ -1804,6 +1825,66 @@ class VerifierTests(unittest.TestCase):
         self.assertNotIn("tests/e2e/checkout-preview.spec.ts", text)
         self.assertNotIn("/scan", text)
         self.assertNotIn("/my-nights", text)
+
+
+class RuntimeTransportWorkflowTests(unittest.TestCase):
+    root = Path(__file__).resolve().parents[2]
+
+    def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
+        for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
+                     ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
+                     "ops/vps/runtime_release.py", "ops/vps/candidate_evidence.py",
+                     "ops/vps/test_runtime_release.py", "ops/vps/test_candidate_evidence.py"):
+            content = (self.root / name).read_bytes()
+            digest = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
+            self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest, name)
+
+    def test_candidate_is_one_read_only_job_with_every_browser_gate(self):
+        text = (self.root / ".github/workflows/candidate-checks.yml").read_text()
+        self.assertIn("permissions:\n  contents: read", text)
+        self.assertNotIn("contents: write", text)
+        self.assertNotIn("actions/upload-artifact", text)
+        self.assertNotIn("actions/download-artifact", text)
+        self.assertNotIn("matrix:", text)
+        self.assertIn("jobs:\n  verify:", text)
+        self.assertNotIn("\n  core:", text)
+        expected = release.CANDIDATE_CORE_STEPS | {
+            name + " (" + browser + ")"
+            for browser in release.BROWSERS for name in release.CANDIDATE_BROWSER_STEPS}
+        for name in expected:
+            self.assertEqual(text.count("      - name: " + name + "\n"), 1, name)
+        for browser in release.BROWSERS:
+            self.assertIn("--project " + browser + " --workers=1 --retries=0 --repeat-each=3", text)
+        self.assertEqual(text.count('test "$(sha256sum "$archive" | cut -d \' \' -f 1)" = "$BUILD_DIGEST"'), 3)
+        self.assertNotIn("continue-on-error", text)
+
+    def test_private_publisher_is_main_only_and_only_privileged_job(self):
+        text = (self.root / ".github/workflows/vps-runtime.yml").read_text()
+        self.assertIn("branches: [main]", text)
+        self.assertNotIn("pull_request:", text)
+        self.assertEqual(text.count("contents: write"), 1)
+        verify, handoff = text.split("  verify:\n", 1)[1].split("  handoff:\n", 1)
+        self.assertIn("github.repository == 'bechirobob/tickets'", verify)
+        self.assertIn("github.ref == 'refs/heads/main'", verify)
+        self.assertIn("github.event_name == 'push'", verify)
+        self.assertIn("permissions:\n      contents: write", verify)
+        self.assertNotIn("contents: write", handoff)
+        self.assertNotIn("actions/upload-artifact", text)
+        self.assertEqual(text.count("GH_TOKEN:"), 1)
+        self.assertIn("persist-credentials: false", verify)
+        self.assertIn("python3 ops/vps/runtime_release.py publish --directory .", verify)
+
+    def test_consumer_uses_attempt_bound_private_release_without_write_permission(self):
+        text = (self.root / ".github/workflows/tickets-code-release.yml").read_text()
+        self.assertNotIn("contents: write", text)
+        self.assertIn("actions: read", text)
+        self.assertIn("/attempts/$runtime_attempt/jobs?per_page=100", text)
+        self.assertIn("/attempts/$candidate_attempt/jobs?per_page=100", text)
+        self.assertNotIn("gh run download", text)
+        self.assertIn('runtime_release.py" download', text)
+        self.assertIn('--attempt "$runtime_attempt"', text)
+        self.assertNotIn("actions/upload-artifact", text)
+        self.assertIn("tests/e2e/checkout-preview-retired.spec.ts", text)
 
 
 class FailedReleaseDiagnosticTests(unittest.TestCase):

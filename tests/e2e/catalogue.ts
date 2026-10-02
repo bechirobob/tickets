@@ -1,4 +1,4 @@
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect } from "./analytics-fixture";
 import type { PublicCatalogue } from "../../lib/public-event";
 
 /** Resolve server-rendered routes before installing private API mocks. */

@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from './analytics-fixture';
 import AxeBuilder from '@axe-core/playwright';
 
 test('Kofi Bills profile shows the portrait, public socials and linked event',async({page})=>{

@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import {expect,test} from '@playwright/test';
+import {expect,test} from './analytics-fixture';
 test.use({serviceWorkers:'block'});
 // PR production audits target the previous release. Candidate CI exercises these
 // routes locally; the post-deploy production audit exercises the live routes.

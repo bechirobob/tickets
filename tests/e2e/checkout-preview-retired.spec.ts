@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./analytics-fixture";
 
 // Block service workers so the retirement checks control all page requests.
 test.use({ serviceWorkers: "block" });

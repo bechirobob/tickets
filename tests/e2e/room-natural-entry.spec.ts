@@ -93,7 +93,7 @@ for (const short of [false, true]) {
         await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(current.scrollY);
       }
       expect(entered, "Natural scrolling should expose an active message area above the dock").toBe(true);
-      await page.screenshot({ path: testInfo.outputPath("room-natural-entry.png") });
+      await page.screenshot({ path: testInfo.outputPath("room-natural-entry.png"), scale: "css" });
       await expect(phone.locator(".scene-message:visible")).toHaveCount(5, { timeout: 18000 });
       insertions = await page.evaluate(() => (window as typeof window & { roomEntryTrace: Array<{ time: number; count: number; step: string | undefined; running: string | undefined; newMessageAnimating: boolean; newMessageOnscreen: boolean }> }).roomEntryTrace);
       for (const count of [1, 2, 3, 4, 5]) {
@@ -108,7 +108,7 @@ for (const short of [false, true]) {
       }));
       expect(sizes.emoji).toBeLessThanOrEqual(sizes.message);
       samples.push(await geometry(page));
-      await page.screenshot({ path: testInfo.outputPath("room-natural-complete.png") });
+      await page.screenshot({ path: testInfo.outputPath("room-natural-complete.png"), scale: "css" });
     } finally {
       // Preserve geometry evidence even when an entry assertion fails.
       await writeFile(testInfo.outputPath("room-natural-entry.json"), JSON.stringify({
@@ -131,5 +131,5 @@ test("Room stays complete and readable with reduced motion", async ({ page }, te
   await expect(phone.locator(".scene-message:visible")).toHaveCount(5);
   await expect(phone.locator(".room-demo-typing")).toHaveCount(0);
   await expect.poll(() => phone.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === "running").length)).toBe(0);
-  await phone.screenshot({ path: testInfo.outputPath("room-reduced-motion.png") });
+  await phone.screenshot({ path: testInfo.outputPath("room-reduced-motion.png"), scale: "css" });
 });

@@ -106,7 +106,7 @@ async function measureMenuGeometry(page) {
 async function readJson(origin, pathname) {
   const response = await fetch(new URL(pathname, origin), {
     redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(30000),
-    headers: { 'accept': 'application/json', 'cache-control': 'no-cache', 'x-becore-analytics': 'exclude' },
+    headers: { 'accept': 'application/json', 'cache-control': 'no-cache' },
   });
   if (response.status !== 200) {
     await response.body?.cancel();
@@ -209,6 +209,8 @@ export async function captureWebsiteComparison({ browser, device, outputDir, rep
       try {
         await context.route('**/*', async route => {
           if (isReadOnlyRequest(route.request().method())) return route.continue();
+          // This also blocks analytics POSTs. Do not install a later analytics
+          // route that would override the comparison's read-only contract.
           // Public paths only are recorded, never bodies, cookies or tokens.
           manifest.blockedRequests.push({ side, method: route.request().method(), path: new URL(route.request().url()).pathname });
           return route.abort('blockedbyclient');

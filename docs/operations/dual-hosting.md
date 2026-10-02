@@ -187,6 +187,36 @@ the VPS is active; no automatic stale-data failback is enabled.
 The evidence below is the historical work log. Earlier pending, failed and
 prepared states are superseded by this operating-state block.
 
+## Private runtime storage — 2 October 2026 candidate
+
+Runtime packages use private Releases named
+`tickets-vps-<source-sha>-<run-id>-<attempt>` rather than Actions artifacts.
+The main-push producer is the only job with repository-content write permission.
+Packages contain only the verified runtime, its checksum and canonical manifest;
+production data and credentials are never included. Draft collisions, incomplete
+uploads and mismatched content fail closed without overwrite or deletion.
+
+The consumer must verify the exact successful producer attempt and job, the
+single producer-log receipt, source/tree/tag, all asset IDs and digests, and local
+archive bytes before the existing reversible host transaction. Release metadata
+can be changed by repository writers, so it is never the only provenance anchor.
+Logs must still be available for a new deployment: if a selected run's logs have
+expired, rebuild and reverify the exact source rather than bypassing provenance.
+This does not remove the separately protected current/previous host rollback
+releases or authorize deletion of existing GitHub packages.
+
+Candidate browser checks share one locally preserved production build on a
+hosted runner. All three browser projects retain their gates and fresh fixture
+state. Selected synthetic screenshot evidence can be reconstructed from that
+specific completed job log with `ops/vps/candidate_evidence.py decode`; its strict
+manifest, chunk sequence, size bounds and hashes are checked before writing PNGs.
+Actual screenshot review is still required for visual acceptance. No production
+customer screenshots or credential files enter this log transport.
+
+Encrypted production backups keep their existing Actions destination and
+35-day retention. Moving runtime packages does not itself prove quota or backup
+recovery. GitHub's free private-runner minutes also remain a separate limit.
+
 ## Authority and switching
 
 Exactly one deployment may accept writes, run scheduled jobs, consume delivery
