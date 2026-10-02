@@ -142,3 +142,31 @@ This correction changes packaging verification only. Production remains on the
 prior live runtime until the new exact-source pipeline and private-release
 provenance checks succeed. Authenticated live-admin pixels require a staff login;
 the available cloud browser is signed out. No recovery access was created.
+
+## Room showcase direction and targeted verification — 2 October 2026
+
+The owner clarified that the homepage Room showcase should autoplay and loop
+without prominent Play/Pause presentation. The change replaces the icon control
+with a small, collapsed Motion disclosure and an accessible Animate preview
+checkbox. Explicit stopping remains available to touch and keyboard users.
+Keyboard inspection pauses only while focused; subsequent touch or leaving the
+carousel resumes automatically unless the user explicitly stopped animation.
+The actual Room chat, animation rhythm, visibility/background resource guards,
+and reduced-motion static transcript are unchanged.
+
+Candidate run `37039647382` exposed two old mobile WebKit test assumptions:
+clicking caption controls could scroll the phone offscreen, where playback
+correctly pauses. Both attempts failed. The updated assertions restore visible
+conversation geometry before requiring playback, retain all pause/resume checks,
+and read hardware rectangles synchronously to avoid a separate scroll-frame race.
+All other stages passed. Its nine Operations PNGs are byte-identical to the
+independently reviewed screenshots from candidate `37031564336`.
+
+The four-file Room change passes 29 deterministic lifecycle cases (included in
+93 repository tests), 45 UI tests, TypeScript and scoped lint. Independent source
+review passed. A temporary, read-only, manually dispatched verification branch
+will repeat every Room browser case twice per engine without retries and retain
+bounded, lossless synthetic closed/open Motion screenshots in logs. That workflow
+variant is verification-only and must never merge. Hosted behavior, pixel review,
+full exact-candidate gates, private runtime publication and deployed-SHA checks
+remain required before claiming delivery.

@@ -1,13 +1,27 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./catalogue";
 
 test.use({ video: "on" });
 
-test("Room demo tells a conversation while the hardware stays still and can pause", async ({ page }, testInfo) => {
+async function setRoomAnimation(page: Page, enabled: boolean) {
+  const settings = page.locator(".room-demo-motion");
+  const animate = page.getByRole("checkbox", { name: "Animate preview", exact: true });
+  await expect(animate).not.toBeVisible();
+  await settings.locator("summary").click();
+  await animate.setChecked(enabled);
+  await expect(animate).toBeChecked({ checked: enabled });
+  await settings.locator("summary").click();
+  await expect(animate).not.toBeVisible();
+}
+
+test("Room demo autoplays with still hardware and a discreet motion setting", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   const phone = page.locator(".room-product-phone--arrival");
   await phone.scrollIntoViewIfNeeded();
   await expect(phone).toHaveAttribute("data-demo-running", "true");
+  await expect(page.getByRole("button", { name: /(?:Play|Pause) Room preview/ })).toHaveCount(0);
+  await expect(page.locator(".room-demo-motion")).not.toHaveAttribute("open", "");
   const initial = await phone.boundingBox();
   const composer = await phone.locator(".chat-compose-field").boundingBox();
   await expect(phone.locator(".room-demo-typing")).toBeVisible({ timeout: 5000 });
@@ -18,14 +32,20 @@ test("Room demo tells a conversation while the hardware stays still and can paus
   const later = await phone.boundingBox();
   expect(later).toEqual(initial);
   expect(await phone.locator(".chat-compose-field").boundingBox()).toEqual(composer);
-  const pause = page.getByRole("button", { name: "Pause Room preview", exact: true });
-  await pause.click();
+  await setRoomAnimation(page, false);
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toHaveAttribute("data-demo-pause-reason", "paused");
   const step = await phone.getAttribute("data-demo-step");
   await page.waitForTimeout(3300);
   await expect(phone).toHaveAttribute("data-demo-step", step!);
   await expect(phone.locator(".room-product-phone__stream")).toHaveCSS("opacity", "1");
   await phone.screenshot({ path: testInfo.outputPath("room-paused.png") });
-  await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
+  await setRoomAnimation(page, true);
+  // Settings live below the phones. Return to the conversation before checking
+  // playback; an offscreen preview must stay paused even with animation enabled.
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toBeInViewport({ ratio: .55 });
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
   await expect(phone).not.toHaveAttribute("data-demo-step", step!, { timeout: 5000 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(phone).toHaveAttribute("data-demo-running", "false");
@@ -35,7 +55,13 @@ test("Room demo tells a conversation while the hardware stays still and can paus
     await expect(item).toHaveCSS("opacity", "1");
     await expect(item).toHaveCSS("transform", "none");
   }
-  await page.locator("#the-room").screenshot({ path: testInfo.outputPath("room-static-section.png") });
+  await page.locator("#the-room").screenshot({ path: testInfo.outputPath("room-static-section.png"), scale: "css" });
+  const settings = page.locator(".room-demo-motion");
+  await settings.locator("summary").click();
+  await expect(page.getByRole("checkbox", { name: "Animate preview", exact: true })).toBeDisabled();
+  await expect(page.getByRole("checkbox", { name: "Animate preview", exact: true })).not.toBeChecked();
+  await page.locator(".room-product-preview").screenshot({ path: testInfo.outputPath("room-motion-settings.png"), scale: "css" });
+  await settings.locator("summary").click();
 });
 
 test("Room preview pauses offscreen, preserves swipe position, and replays inside the screen", async ({ page }, testInfo) => {
@@ -57,6 +83,9 @@ test("Room preview pauses offscreen, preserves swipe position, and replays insid
   const step = await phone.getAttribute("data-demo-step");
   await page.waitForTimeout(2000);
   await expect(phone).toHaveAttribute("data-demo-step", step!);
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
+  await expect(phone).not.toHaveAttribute("data-demo-step", step!, { timeout: 5000 });
 });
 
 test("Room preview resumes after touch, scroll cancellation and pointer release", async ({ page }, testInfo) => {
@@ -72,7 +101,6 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   const y = bounds!.y + bounds!.height / 2;
   if (testInfo.project.use.hasTouch) await page.touchscreen.tap(x, y);
   else await page.mouse.click(x, y);
-  await expect(page.getByRole("button", { name: "Pause Room preview", exact: true })).toBeVisible();
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   const step = await phone.getAttribute("data-demo-step");
   await expect(phone).not.toHaveAttribute("data-demo-step", step!, { timeout: 5000 });
@@ -101,15 +129,13 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await expect(phone).toHaveAttribute("data-demo-running", "true");
 
   // Touch interaction must never erase an explicit pause.
-  await page.getByRole("button", { name: "Pause Room preview", exact: true }).click();
+  await setRoomAnimation(page, false);
   await track.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 3 });
   await track.dispatchEvent("pointerup", { pointerType: "touch", pointerId: 3 });
   await expect(phone).toHaveAttribute("data-demo-running", "false");
-  await expect(page.getByRole("button", { name: "Play Room preview", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Pause Room preview", exact: true })).toBeVisible();
-  // Clicking the caption may scroll the phone offscreen on WebKit. Offscreen
-  // playback must stay paused; restore its visibility before asserting resume.
+  await expect(phone).toHaveAttribute("data-demo-pause-reason", "paused");
+  await setRoomAnimation(page, true);
+  // Settings can scroll the phone offscreen. Restore visibility before resume.
   await phone.scrollIntoViewIfNeeded();
   await expect(phone).toBeInViewport({ ratio: .55 });
   await expect(phone).toHaveAttribute("data-demo-running", "true");
@@ -119,12 +145,44 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   await expect(inside).toHaveAttribute("data-demo-running", "true");
   const secondStep = await inside.getAttribute("data-demo-step");
   await expect(inside).not.toHaveAttribute("data-demo-step", secondStep!, { timeout: 5000 });
-  const pause = page.getByRole("button", { name: "Pause Room preview", exact: true });
-  await pause.focus();
-  await pause.press("Shift+Tab");
+  const settings = page.locator(".room-demo-motion > summary");
+  await settings.focus();
+  await settings.press("Shift+Tab");
   await expect(track).toBeFocused();
-  await expect(page.getByRole("button", { name: "Play Room preview", exact: true })).toBeVisible();
   await expect(inside).toHaveAttribute("data-demo-running", "false");
+  // Touching a keyboard-focused track must clear its temporary focus pause,
+  // including when the browser does not dispatch a second focus event.
+  await inside.scrollIntoViewIfNeeded();
+  const insideBounds = await inside.boundingBox();
+  const insideX = insideBounds!.x + insideBounds!.width / 2;
+  const insideY = insideBounds!.y + insideBounds!.height / 2;
+  if (testInfo.project.use.hasTouch) await page.touchscreen.tap(insideX, insideY);
+  else await page.mouse.click(insideX, insideY);
+  await expect(inside).toHaveAttribute("data-demo-running", "true");
+  await settings.focus();
+  await settings.press("Shift+Tab");
+  await expect(track).toBeFocused();
+  await expect(inside).toHaveAttribute("data-demo-running", "false");
+  // Keyboard inspection is temporary; only the explicit motion setting persists.
+  await track.press("Tab");
+  await expect(settings).toBeFocused();
+  await inside.scrollIntoViewIfNeeded();
+  await expect(inside).toHaveAttribute("data-demo-running", "true");
+
+  // The discreet setting is usable without a pointer and its stop survives blur.
+  await settings.press("Enter");
+  await settings.press("Tab");
+  const animate = page.getByRole("checkbox", { name: "Animate preview", exact: true });
+  await expect(animate).toBeFocused();
+  await animate.press("Space");
+  await expect(animate).not.toBeChecked();
+  await animate.press("Shift+Tab");
+  await settings.press("Enter");
+  await inside.scrollIntoViewIfNeeded();
+  await expect(inside).toHaveAttribute("data-demo-pause-reason", "paused");
+  await setRoomAnimation(page, true);
+  await inside.scrollIntoViewIfNeeded();
+  await expect(inside).toHaveAttribute("data-demo-running", "true");
 });
 
 test("Room hardware and independent tapbacks retain a clear mobile silhouette", async ({ page }, testInfo) => {
@@ -142,9 +200,12 @@ test("Room hardware and independent tapbacks retain a clear mobile silhouette", 
   await phone.screenshot({ path: testInfo.outputPath("room-before-reaction.png") });
   await expect(reaction).toHaveCSS("opacity", "1", { timeout: 2000 });
   await phone.screenshot({ path: testInfo.outputPath("room-after-reaction.png") });
-  await page.getByRole("button", { name: "Pause Room preview", exact: true }).click();
+  await setRoomAnimation(page, false);
   await expect(reaction).toHaveCSS("animation-play-state", "paused");
-  await page.getByRole("button", { name: "Play Room preview", exact: true }).click();
+  await setRoomAnimation(page, true);
+  await phone.scrollIntoViewIfNeeded();
+  await expect(phone).toBeInViewport({ ratio: .55 });
+  await expect(phone).toHaveAttribute("data-demo-running", "true");
   await expect(reaction).toHaveCSS("animation-play-state", "running");
   // A settled tapback must not rewind its finished arrival when playback resumes.
   expect(Number(await reaction.evaluate(node => getComputedStyle(node).opacity))).toBe(1);
@@ -159,7 +220,13 @@ test("Room hardware and independent tapbacks retain a clear mobile silhouette", 
   expect(badge!.y + badge!.height).toBeLessThan(bubble!.y + bubble!.height);
   const frame = phone.locator(".room-product-phone__render");
   await expect(frame).toHaveAttribute("src", /iphone-titanium-front\.svg/);
-  expect(await frame.boundingBox()).toEqual(await phone.boundingBox());
+  // Read both rectangles in one frame so an in-flight viewport scroll cannot
+  // create a false hardware offset between separate browser round trips.
+  const hardware = await phone.evaluate(element => ({
+    phone: element.getBoundingClientRect().toJSON(),
+    frame: element.querySelector(".room-product-phone__render")!.getBoundingClientRect().toJSON(),
+  }));
+  expect(hardware.frame).toEqual(hardware.phone);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(reaction).toHaveCSS("animation-name", "none");
   await expect(reaction).toHaveCSS("opacity", "1");

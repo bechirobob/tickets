@@ -409,3 +409,158 @@ test("missing observer root bounds uses the real viewport height without admitti
   assert.equal(demo.api.visibleCount, 1);
   demo.unmount();
 });
+
+test("reenabling Room animation offscreen waits for visibility instead of advancing unseen messages", () => {
+  const demo = mountDemo({ offset: 0 });
+  demo.intersect(1);
+  demo.advance(6800);
+  assert.equal(demo.api.step, 5);
+  demo.set({ paused: true });
+  demo.intersect(.2);
+  demo.set({ paused: false });
+  assert.equal(demo.api.pauseReason, "offscreen");
+  demo.advance(10000);
+  assert.equal(demo.api.step, 5);
+  assert.equal(demo.timers, 0);
+  demo.intersect(1);
+  assert.equal(demo.api.running, true);
+  demo.advance(2200);
+  assert.equal(demo.api.step, 6);
+  demo.unmount();
+});
+
+// Exercise the actual carousel event handlers without needing a browser socket.
+// The browser suite separately verifies the native disclosure and input controls.
+const carouselSource = await readFile(new URL("../app/room-preview-carousel.tsx", import.meta.url), "utf8");
+const carouselCompiled = transformSync(carouselSource, { loader: "tsx", format: "cjs", jsx: "automatic" }).code;
+function mountCarousel(reducedMotion = false) {
+  const slots = [];
+  const effects = [];
+  let cursor = 0;
+  let dirty = false;
+  let tree;
+  const media = new EventTarget();
+  media.matches = reducedMotion;
+  const component = { exports: {} };
+  const react = {
+    createContext: () => ({ name: "Playback" }),
+    useContext: value => value,
+    useRef: initial => slots[cursor++] ??= { current: initial },
+    useState(initial) {
+      const state = slots[cursor++] ??= { value: initial };
+      return [state.value, next => {
+        const value = typeof next === "function" ? next(state.value) : next;
+        if (!Object.is(value, state.value)) { state.value = value; dirty = true; }
+      }];
+    },
+    useEffect(setup) {
+      const index = cursor++;
+      if (!slots[index]) { slots[index] = {}; effects.push(() => { slots[index].cleanup = setup(); }); }
+    },
+  };
+  const jsx = (type, props) => ({ type, props });
+  runInNewContext(carouselCompiled, {
+    module: component, exports: component.exports,
+    require(specifier) {
+      if (specifier === "react") return react;
+      if (specifier === "react/jsx-runtime") return { jsx, jsxs: jsx };
+      throw new Error(`Unexpected carousel dependency: ${specifier}`);
+    },
+    window: { matchMedia: () => media },
+  });
+  function commit() {
+    let renders = 0;
+    do {
+      assert.ok(++renders < 20, "carousel effects should converge");
+      cursor = 0;
+      dirty = false;
+      tree = component.exports.default({ children: null });
+      effects.splice(0).forEach(effect => effect());
+    } while (dirty);
+  }
+  function find(predicate, node = tree) {
+    if (!node || typeof node !== "object") return;
+    if (predicate(node)) return node;
+    for (const child of [node.props?.children].flat()) {
+      const result = find(predicate, child);
+      if (result) return result;
+    }
+  }
+  commit();
+  return {
+    get playback() { return find(node => node.type?.name === "Playback").props.value; },
+    get track() { return find(node => node.props?.className === "room-product-scene__phones").props; },
+    get input() { return find(node => node.type === "input").props; },
+    get details() { return find(node => node.type === "details").props; },
+    get label() { return find(node => node.type === "label").props; },
+    act(callback) { callback(); commit(); },
+    motion(reduce) { media.matches = reduce; media.dispatchEvent(new Event("change")); commit(); },
+    unmount() { for (const slot of slots) slot?.cleanup?.(); },
+  };
+}
+
+test("Room showcase autoplays with motion controls folded away by default", () => {
+  const carousel = mountCarousel();
+  assert.equal(carousel.playback.paused, false);
+  assert.equal(carousel.playback.reducedMotion, false);
+  assert.equal(carousel.input.checked, true);
+  assert.equal(carousel.input.disabled, false);
+  assert.equal(carousel.details.open, undefined);
+  assert.equal(carousel.label.children[1], "Animate preview");
+  carousel.unmount();
+});
+
+test("Room touch and keyboard inspection resume automatically without creating a lasting stop", () => {
+  const carousel = mountCarousel();
+  for (const release of ["onPointerUp", "onPointerCancel", "onPointerLeave"]) {
+    carousel.act(() => carousel.track.onFocus({ currentTarget: { matches: () => true } }));
+    carousel.act(() => carousel.track.onPointerDown());
+    assert.equal(carousel.playback.paused, true);
+    // A pointer can reuse the already focused track without another focus event.
+    carousel.act(() => carousel.track[release]());
+    assert.equal(carousel.playback.paused, false);
+    assert.equal(carousel.input.checked, true);
+  }
+  carousel.act(() => carousel.track.onFocus({ currentTarget: { matches: () => true } }));
+  assert.equal(carousel.playback.paused, true);
+  assert.equal(carousel.input.checked, true, "keyboard focus must not change the user's motion setting");
+  carousel.act(() => carousel.track.onBlur());
+  assert.equal(carousel.playback.paused, false);
+  carousel.unmount();
+});
+
+test("Room explicit motion stop survives touch, focus changes and reduced-motion changes", () => {
+  const carousel = mountCarousel();
+  carousel.act(() => carousel.input.onChange({ currentTarget: { checked: false } }));
+  for (const release of ["onPointerUp", "onPointerCancel", "onPointerLeave"]) {
+    carousel.act(() => carousel.track.onPointerDown());
+    carousel.act(() => carousel.track[release]());
+    assert.equal(carousel.playback.paused, true);
+  }
+  carousel.act(() => carousel.track.onFocus({ currentTarget: { matches: () => true } }));
+  carousel.act(() => carousel.track.onBlur());
+  assert.equal(carousel.playback.paused, true);
+  carousel.motion(true);
+  assert.equal(carousel.input.checked, false);
+  assert.equal(carousel.input.disabled, true);
+  carousel.motion(false);
+  assert.equal(carousel.playback.paused, true);
+  assert.equal(carousel.input.checked, false);
+  carousel.act(() => carousel.input.onChange({ currentTarget: { checked: true } }));
+  assert.equal(carousel.playback.paused, false);
+  assert.equal(carousel.input.checked, true);
+  carousel.unmount();
+});
+
+test("Room system reduced motion disables autoplay without changing the explicit motion preference", () => {
+  const carousel = mountCarousel(true);
+  assert.equal(carousel.playback.reducedMotion, true);
+  assert.equal(carousel.input.checked, false);
+  assert.equal(carousel.input.disabled, true);
+  carousel.motion(false);
+  assert.equal(carousel.playback.reducedMotion, false);
+  assert.equal(carousel.playback.paused, false);
+  assert.equal(carousel.input.checked, true);
+  assert.equal(carousel.input.disabled, false);
+  carousel.unmount();
+});
