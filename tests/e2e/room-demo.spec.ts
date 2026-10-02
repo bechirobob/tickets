@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./catalogue";
 
 test.use({ video: "on" });
@@ -12,6 +12,69 @@ async function setRoomAnimation(page: Page, enabled: boolean) {
   await expect(animate).toBeChecked({ checked: enabled });
   await settings.locator("summary").click();
   await expect(animate).not.toBeVisible();
+}
+
+async function positionRoomMotionForCapture(page: Page) {
+  await page.locator(".room-demo-caption").evaluate(element => {
+    const caption = element.getBoundingClientRect();
+    const header = document.querySelector(".discovery-home > .night-header")?.getBoundingClientRect();
+    const dock = document.querySelector(".customer-dock")?.getBoundingClientRect();
+    const top = Math.max(0, header?.bottom ?? 0);
+    const bottom = dock && dock.height > 0 ? Math.min(innerHeight, dock.top) : innerHeight;
+    // Capture the motion controls with surrounding Room context. The complete
+    // phone is taller than some usable viewports; natural-entry tests cover it.
+    window.scrollBy({ top: caption.top - (top + (bottom - top - caption.height) / 2), behavior: "instant" });
+  });
+}
+
+async function roomMotionGeometry(page: Page) {
+  return page.evaluate(() => {
+    const header = document.querySelector(".discovery-home > .night-header")?.getBoundingClientRect();
+    const dock = document.querySelector(".customer-dock")?.getBoundingClientRect();
+    const top = Math.max(0, header?.bottom ?? 0);
+    const bottom = dock && dock.height > 0 ? Math.min(innerHeight, dock.top) : innerHeight;
+    const preview = document.querySelector(".room-product-preview")!.getBoundingClientRect();
+    const inspect = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector)!;
+      const box = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return { rect: box.toJSON(), inside: box.width > 0 && box.height > 0 && box.left >= 0 && box.right <= innerWidth && box.top >= top && box.bottom <= bottom, unobscured: Boolean(hit && element.contains(hit)) };
+    };
+    return {
+      scrollY, viewport: { width: innerWidth, height: innerHeight }, usableTop: top, usableBottom: bottom,
+      preview: preview.toJSON(),
+      summary: inspect(".room-demo-motion > summary"),
+      setting: document.querySelector(".room-demo-motion")!.hasAttribute("open") ? inspect(".room-demo-motion > label") : null,
+    };
+  });
+}
+
+async function focusRoomTrackWithKeyboard(page: Page, settings: Locator, track: Locator) {
+  // Begin a real keyboard interaction after touch, as in the public focus gate.
+  // Programmatic focus alone does not establish the browser's input modality.
+  await page.keyboard.press("Tab");
+  await settings.focus();
+  let phase = "summary-focus";
+  try {
+    await expect(settings).toBeFocused();
+    phase = "reverse-tab-to-track";
+    await settings.press("Shift+Tab");
+    await expect(track).toBeFocused();
+  } catch (error) {
+    const focus = await page.evaluate(() => {
+      const active = document.activeElement as HTMLElement | null;
+      const summary = document.querySelector<HTMLElement>(".room-demo-motion > summary");
+      const track = document.querySelector<HTMLElement>(".room-product-scene__phones");
+      return {
+        active: active && { tag: active.tagName, className: active.className, label: active.getAttribute("aria-label"), text: active.textContent?.trim().slice(0, 80), focusVisible: active.matches(":focus-visible") },
+        summary: { focused: active === summary, tabIndex: summary?.tabIndex },
+        track: { focused: active === track, tabIndex: track?.tabIndex },
+        motionSettingsOpen: document.querySelector(".room-demo-motion")?.hasAttribute("open"),
+      };
+    });
+    console.info("ROOM_KEYBOARD_FOCUS", JSON.stringify({ phase, ...focus }));
+    throw error;
+  }
 }
 
 test("Room demo autoplays with still hardware and a discreet motion setting", async ({ page }, testInfo) => {
@@ -55,12 +118,32 @@ test("Room demo autoplays with still hardware and a discreet motion setting", as
     await expect(item).toHaveCSS("opacity", "1");
     await expect(item).toHaveCSS("transform", "none");
   }
-  await page.locator("#the-room").screenshot({ path: testInfo.outputPath("room-static-section.png"), scale: "css" });
+  await positionRoomMotionForCapture(page);
+  await expect.poll(async () => {
+    const layout = await roomMotionGeometry(page);
+    return { summary: layout.summary.inside && layout.summary.unobscured };
+  }).toEqual({ summary: true }).catch(async error => {
+    console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ phase: "closed-placement", layout: await roomMotionGeometry(page) }));
+    throw error;
+  });
+  const closedLayout = await roomMotionGeometry(page);
+  await page.screenshot({ path: testInfo.outputPath("room-static-section.png"), scale: "css" });
+  expect(await roomMotionGeometry(page)).toEqual(closedLayout);
   const settings = page.locator(".room-demo-motion");
   await settings.locator("summary").click();
   await expect(page.getByRole("checkbox", { name: "Animate preview", exact: true })).toBeDisabled();
   await expect(page.getByRole("checkbox", { name: "Animate preview", exact: true })).not.toBeChecked();
-  await page.locator(".room-product-preview").screenshot({ path: testInfo.outputPath("room-motion-settings.png"), scale: "css" });
+  await expect.poll(async () => {
+    const layout = await roomMotionGeometry(page);
+    return { summary: layout.summary.inside && layout.summary.unobscured, setting: layout.setting?.inside && layout.setting.unobscured };
+  }).toEqual({ summary: true, setting: true }).catch(async error => {
+    console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ phase: "expanded-placement", layout: await roomMotionGeometry(page) }));
+    throw error;
+  });
+  const openLayout = await roomMotionGeometry(page);
+  console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ capture: "Room motion controls in viewport, closed and expanded", closed: closedLayout, open: openLayout }));
+  await page.screenshot({ path: testInfo.outputPath("room-motion-settings.png"), scale: "css" });
+  expect(await roomMotionGeometry(page)).toEqual(openLayout);
   await settings.locator("summary").click();
 });
 
@@ -146,10 +229,9 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   const secondStep = await inside.getAttribute("data-demo-step");
   await expect(inside).not.toHaveAttribute("data-demo-step", secondStep!, { timeout: 5000 });
   const settings = page.locator(".room-demo-motion > summary");
-  await settings.focus();
-  await settings.press("Shift+Tab");
-  await expect(track).toBeFocused();
+  await focusRoomTrackWithKeyboard(page, settings, track);
   await expect(inside).toHaveAttribute("data-demo-running", "false");
+  await expect(inside).toHaveAttribute("data-demo-pause-reason", "paused");
   // Touching a keyboard-focused track must clear its temporary focus pause,
   // including when the browser does not dispatch a second focus event.
   await inside.scrollIntoViewIfNeeded();
@@ -159,10 +241,9 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   if (testInfo.project.use.hasTouch) await page.touchscreen.tap(insideX, insideY);
   else await page.mouse.click(insideX, insideY);
   await expect(inside).toHaveAttribute("data-demo-running", "true");
-  await settings.focus();
-  await settings.press("Shift+Tab");
-  await expect(track).toBeFocused();
+  await focusRoomTrackWithKeyboard(page, settings, track);
   await expect(inside).toHaveAttribute("data-demo-running", "false");
+  await expect(inside).toHaveAttribute("data-demo-pause-reason", "paused");
   // Keyboard inspection is temporary; only the explicit motion setting persists.
   await track.press("Tab");
   await expect(settings).toBeFocused();
