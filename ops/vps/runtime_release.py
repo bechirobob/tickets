@@ -39,7 +39,8 @@ NUMBER = re.compile(r"[1-9][0-9]{0,19}\Z")
 NAMES = (ARCHIVE, CHECKSUM, MANIFEST)
 LIMITS = {ARCHIVE: 2 * 1024 ** 3 - 1, CHECKSUM: 1024, MANIFEST: 65536}
 CONTENT_TYPES = {
-    ARCHIVE: {"application/gzip", "application/x-gzip", "application/octet-stream"},
+    # gh release upload explicitly labels .tar.gz as application/x-gtar.
+    ARCHIVE: {"application/gzip", "application/x-gzip", "application/x-gtar", "application/octet-stream"},
     CHECKSUM: {"text/plain", "application/octet-stream"},
     MANIFEST: {"application/json", "text/plain", "application/octet-stream"},
 }

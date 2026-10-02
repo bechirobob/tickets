@@ -114,7 +114,7 @@ class FakeGitHub:
             self.blobs[index] = data
             self.release["assets"].append({"id": index, "name": path.name, "size": len(data),
                 "state": "uploaded", "digest": "sha256:" + hashlib.sha256(data).hexdigest(),
-                "content_type": {release.ARCHIVE: "application/gzip", release.CHECKSUM: "text/plain; charset=utf-8",
+                "content_type": {release.ARCHIVE: "application/x-gtar", release.CHECKSUM: "text/plain; charset=utf-8",
                                  release.MANIFEST: "application/json"}[path.name], "uploader": BOT.copy(),
                 "browser_download_url": "https://untrusted.invalid/danger", "url": "--evil"})
 
@@ -352,6 +352,31 @@ class RuntimeReleaseTests(unittest.TestCase):
         self.client.api = api
         self.download()
         self.assertFalse(self.client.mutations())
+
+    def test_download_accepts_github_cli_tar_gzip_content_type(self):
+        self.client.seed(self.package)
+        archive = next(asset for asset in self.client.release["assets"] if asset["name"] == release.ARCHIVE)
+        self.assertEqual(archive["content_type"], "application/x-gtar")
+        self.download()
+        self.assertEqual((self.destination / release.ARCHIVE).read_bytes(),
+                         (self.package / release.ARCHIVE).read_bytes())
+        self.assertFalse(self.client.mutations())
+
+    def test_gtar_content_type_does_not_bypass_archive_integrity(self):
+        self.client.seed(self.package)
+        self.client.corrupt_download = release.ARCHIVE
+        with self.assertRaises(release.TransportError):
+            self.download()
+        self.assertFalse(self.client.mutations())
+        self.assertEqual(list(self.destination.iterdir()), [])
+
+    def test_gtar_content_type_is_archive_only(self):
+        manifest = self.client.seed(self.package)
+        for name in (release.CHECKSUM, release.MANIFEST):
+            metadata = copy.deepcopy(self.client.release)
+            next(asset for asset in metadata["assets"] if asset["name"] == name)["content_type"] = "application/x-gtar"
+            with self.subTest(name=name), self.assertRaises(release.TransportError):
+                release.validate_release(metadata, manifest)
 
     def test_download_rejects_invalid_asset_metadata(self):
         self.client.seed(self.package)
