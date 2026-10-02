@@ -63,9 +63,11 @@
 .room-demo-typing > span:nth-child(3) { animation-delay: 280ms; }
 @keyframes room-demo-dot { 0%, 60%, 100% { opacity: .4; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
 .room-product-phone[data-demo-running='false'] *, .room-product-phone[data-demo-running='false'] *::before { animation-play-state: paused; }
-.room-demo-caption { display: flex; justify-content: space-between; align-items: center; min-height: 44px; color: #e1d6e3; font-size: 12px; letter-spacing: .02em; }
+.room-demo-caption { display: flex; justify-content: space-between; align-items: center; min-height: 44px; color: var(--white); font-size: 12px; letter-spacing: .02em; }
+/* Event artwork can be bright; keep only the caption labels on the Room matte. */
+.room-demo-caption > span, .room-demo-motion { background: #281b2b; }
 .room-demo-motion { flex: 0 0 auto; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.room-demo-motion input { width: 18px; height: 18px; margin: 0; accent-color: #efd4bf; }
+.room-demo-motion input { width: 18px; height: 18px; margin: 0; accent-color: #efd4bf; color-scheme: light; }
 .room-demo-motion input:focus-visible { outline: 2px solid #eee; outline-offset: 3px; }
 .room-demo-motion:has(input:disabled) { cursor: default; }
 @media (min-width: 701px) { .room-demo-caption > span::after { content: " / Inside the night"; } }

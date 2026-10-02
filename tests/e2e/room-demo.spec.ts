@@ -18,8 +18,8 @@ async function setRoomAnimation(page: Page, enabled: boolean, touch = false) {
 async function expectRoomMotionReachable(page: Page) {
   await expect.poll(async () => {
     const layout = await roomMotionGeometry(page);
-    return { label: layout.label.inside && layout.label.unobscured && layout.label.rect.width >= 44 && layout.label.rect.height >= 44, input: layout.input.inside && layout.input.unobscured };
-  }).toEqual({ label: true, input: true }).catch(async error => {
+    return { caption: layout.caption.inside && layout.caption.unobscured, label: layout.label.inside && layout.label.unobscured && layout.label.rect.width >= 44 && layout.label.rect.height >= 44, input: layout.input.inside && layout.input.unobscured };
+  }).toEqual({ caption: true, label: true, input: true }).catch(async error => {
     console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ phase: "control-placement", layout: await roomMotionGeometry(page) }));
     throw error;
   });
@@ -54,8 +54,9 @@ async function roomMotionGeometry(page: Page) {
     return {
       scrollY, viewport: { width: innerWidth, height: innerHeight }, usableTop: top, usableBottom: bottom,
       preview: preview.toJSON(),
+      caption: inspect(".room-demo-caption > span"),
       label: inspect(".room-demo-motion"),
-      input: { ...inspect(".room-demo-motion > input"), checked: document.querySelector<HTMLInputElement>(".room-demo-motion > input")!.checked, disabled: document.querySelector<HTMLInputElement>(".room-demo-motion > input")!.disabled },
+      input: { ...inspect(".room-demo-motion > input"), checked: document.querySelector<HTMLInputElement>(".room-demo-motion > input")!.checked, disabled: document.querySelector<HTMLInputElement>(".room-demo-motion > input")!.disabled, colorScheme: getComputedStyle(document.querySelector(".room-demo-motion > input")!).colorScheme },
     };
   });
 }
@@ -96,6 +97,28 @@ test("Room demo autoplays with still hardware and a discreet motion setting", as
   await expect(page.getByRole("button", { name: /(?:Play|Pause) Room preview/ })).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Motion for Room preview", exact: true })).toBeChecked();
   expect(await page.locator(".room-demo-motion").evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(12);
+  const captionContrast = await page.locator(".room-demo-caption > span, .room-demo-motion").evaluateAll(elements => {
+    const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => {
+      const channel = value / 255;
+      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+    return elements.map(element => {
+      const style = getComputedStyle(element);
+      const foreground = style.color.match(/[\d.]+/g)!.map(Number);
+      const background = style.backgroundColor.match(/[\d.]+/g)!.map(Number);
+      const alpha = foreground[3] ?? 1;
+      const paintedText = foreground.slice(0, 3).map((channel, index) => channel * alpha + background[index] * (1 - alpha));
+      const levels = [luminance(paintedText), luminance(background)].sort((a, b) => a - b);
+      return { text: element.textContent, opaque: (background[3] ?? 1) === 1 && style.opacity === "1" && style.backgroundImage === "none",
+        ratio: (levels[1] + .05) / (levels[0] + .05) };
+    });
+  });
+  expect(captionContrast).toHaveLength(2);
+  for (const label of captionContrast) {
+    expect(label.opaque, `${label.text} must not depend on the event artwork`).toBe(true);
+    expect(label.ratio, `${label.text} text contrast`).toBeGreaterThanOrEqual(4.5);
+  }
+  await expect(page.getByRole("checkbox", { name: "Motion for Room preview", exact: true })).toHaveCSS("color-scheme", "light");
   const initial = await phone.boundingBox();
   const composer = await phone.locator(".chat-compose-field").boundingBox();
   await expect(phone.locator(".room-demo-typing")).toBeVisible({ timeout: 5000 });
