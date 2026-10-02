@@ -67,7 +67,7 @@
 /* Event artwork can be bright; keep only the caption labels on the Room matte. */
 .room-demo-caption > span, .room-demo-motion { background: #281b2b; }
 .room-demo-motion { flex: 0 0 auto; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.room-demo-motion input { width: 18px; height: 18px; margin: 0; accent-color: #efd4bf; color-scheme: light; }
+.room-demo-motion input { width: 18px; height: 18px; margin: 0; accent-color: #efd4bf; color-scheme: light; outline: 1px solid #eee; outline-offset: 0; }
 .room-demo-motion input:focus-visible { outline: 2px solid #eee; outline-offset: 3px; }
 .room-demo-motion:has(input:disabled) { cursor: default; }
 @media (min-width: 701px) { .room-demo-caption > span::after { content: " / Inside the night"; } }

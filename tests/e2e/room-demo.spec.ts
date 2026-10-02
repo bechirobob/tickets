@@ -157,6 +157,24 @@ test("Room demo autoplays with still hardware and a discreet motion setting", as
   const offLayout = await roomMotionGeometry(page);
   expect(offLayout.input.checked).toBe(false);
   expect(offLayout.input.disabled).toBe(false);
+  const boundary = await page.locator(".room-demo-motion > input").evaluate(element => {
+    const style = getComputedStyle(element);
+    const outline = style.outlineColor.match(/[\d.]+/g)!.map(Number);
+    const background = getComputedStyle(element.parentElement!).backgroundColor.match(/[\d.]+/g)!.map(Number);
+    const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => {
+      const channel = value / 255;
+      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+    const alpha = outline[3] ?? 1;
+    const paintedOutline = outline.slice(0, 3).map((channel, index) => channel * alpha + background[index] * (1 - alpha));
+    const levels = [luminance(paintedOutline), luminance(background)].sort((a, b) => a - b);
+    return { focusVisible: element.matches(":focus-visible"), width: style.outlineWidth,
+      style: style.outlineStyle, offset: style.outlineOffset,
+      neutral: Math.max(...outline.slice(0, 3)) - Math.min(...outline.slice(0, 3)) <= 3,
+      ratio: (levels[1] + .05) / (levels[0] + .05) };
+  });
+  expect(boundary).toMatchObject({ focusVisible: false, width: "1px", style: "solid", offset: "0px", neutral: true });
+  expect(boundary.ratio, "Unchecked Room motion control keeps a visible ordinary boundary").toBeGreaterThanOrEqual(3);
   await page.screenshot({ path: testInfo.outputPath("room-motion-settings.png"), scale: "css" });
   expect(await roomMotionGeometry(page)).toEqual(offLayout);
   console.info("ROOM_MOTION_LAYOUT", JSON.stringify({ capture: "Direct Motion checkbox enabled: on and off", on: onLayout, off: offLayout }));
