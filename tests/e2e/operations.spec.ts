@@ -900,7 +900,7 @@ test('provider records keep event scope and survive an uncertain save without cl
   });
   expect(labelFits, 'Provider record text must fit inside its clickable button').toBe(true);
   await providerRecord.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('provider-record-action.png'), fullPage: true });
+  await page.screenshot({ path: info.outputPath('provider-record-action.png'), fullPage: true, scale: 'css' });
   await providerRecord.click();
   const form = page.getByRole('region', { name: 'Record provider case' });
   await expect(form).toBeVisible();
@@ -1067,7 +1067,7 @@ test('challenging a dispute points to the provider workflow without claiming evi
   expect(writes).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
-  await page.screenshot({ path: info.outputPath('dispute-provider-handoff.png'), fullPage: true });
+  await page.screenshot({ path: info.outputPath('dispute-provider-handoff.png'), fullPage: true, scale: 'css' });
 });
 
 test('fee effective time retains the locale date and day-period without clipping', async ({ page }, info) => {
@@ -1086,5 +1086,5 @@ test('fee effective time retains the locale date and day-period without clipping
   if ((page.viewportSize()?.width ?? 1280) > 760) expect(geometry.width).toBeGreaterThanOrEqual(260);
   expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
-  await page.screenshot({ path: info.outputPath('fee-effective-time.png'), fullPage: true });
+  await page.screenshot({ path: info.outputPath('fee-effective-time.png'), fullPage: true, scale: 'css' });
 });

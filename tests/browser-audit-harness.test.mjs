@@ -106,3 +106,33 @@ test('maintained browser harnesses never restore the global header or shifting d
     assert.doesNotMatch(source, /x-becore-analytics/u, `${name} must not set exclusion on unrelated requests`);
   }
 });
+
+test('bounded synthetic Candidate screenshots capture one pixel per CSS pixel without changing their extent', async () => {
+  const selected = {
+    'room-natural-entry.spec.ts': {
+      'room-natural-entry.png': { target: 'page', fullPage: false },
+      'room-natural-complete.png': { target: 'page', fullPage: false },
+      'room-reduced-motion.png': { target: 'phone', fullPage: false },
+    },
+    'operations.spec.ts': {
+      'fee-effective-time.png': { target: 'page', fullPage: true },
+      'provider-record-action.png': { target: 'page', fullPage: true },
+      'dispute-provider-handoff.png': { target: 'page', fullPage: true },
+    },
+  };
+  for (const [file, images] of Object.entries(selected)) {
+    const source = await readFile(new URL(`./e2e/${file}`, import.meta.url), 'utf8');
+    const captures = [...source.matchAll(/await\s+(page|phone)\.screenshot\(\{([^{}]*)\}\)/gu)];
+    for (const [filename, expected] of Object.entries(images)) {
+      const matching = captures.filter(([, , options]) =>
+        options.includes(`outputPath('${filename}')`) || options.includes(`outputPath("${filename}")`));
+      assert.equal(matching.length, 1, `${filename} needs exactly one explicit capture`);
+      const [, target, options] = matching[0];
+      assert.equal(target, expected.target, `${filename} must preserve its page or element capture`);
+      assert.match(options, /\bscale:\s*(['"])css\1/u, `${filename} must avoid device-pixel inflation on high-DPR mobile projects`);
+      if (expected.fullPage) assert.match(options, /\bfullPage:\s*true\b/u, `${filename} must retain full-page evidence`);
+      else assert.doesNotMatch(options, /\bfullPage:/u, `${filename} must retain its viewport or element extent`);
+      assert.doesNotMatch(options, /\b(?:clip|quality|mask|animations):/u, `${filename} must not crop, obscure, recompress, or change the captured animation state`);
+    }
+  }
+});
