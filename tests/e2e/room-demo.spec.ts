@@ -95,6 +95,7 @@ test("Room demo autoplays with still hardware and a discreet motion setting", as
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   await expect(page.getByRole("button", { name: /(?:Play|Pause) Room preview/ })).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Motion for Room preview", exact: true })).toBeChecked();
+  expect(await page.locator(".room-demo-motion").evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(12);
   const initial = await phone.boundingBox();
   const composer = await phone.locator(".chat-compose-field").boundingBox();
   await expect(phone.locator(".room-demo-typing")).toBeVisible({ timeout: 5000 });
@@ -250,6 +251,15 @@ test("Room preview resumes after touch, scroll cancellation and pointer release"
   // Keyboard inspection is temporary; only the explicit motion setting persists.
   await track.press("Tab");
   await expect(motion).toBeFocused();
+  await expect.poll(() => motion.evaluate(element => {
+    const style = getComputedStyle(element);
+    const channels = style.outlineColor.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+    return { visible: element.matches(":focus-visible"), wideEnough: Number.parseFloat(style.outlineWidth) >= 2,
+      neutral: channels.length === 3 && Math.max(...channels) - Math.min(...channels) <= 3,
+      shadow: style.boxShadow, text: style.textShadow, dropShadow: style.filter.includes("drop-shadow") };
+  }), { message: "Room motion control keeps a neutral, visible keyboard outline" }).toEqual({
+    visible: true, wideEnough: true, neutral: true, shadow: "none", text: "none", dropShadow: false,
+  });
   await inside.scrollIntoViewIfNeeded();
   await expect(inside).toHaveAttribute("data-demo-running", "true");
 
