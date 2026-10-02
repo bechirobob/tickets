@@ -8,6 +8,7 @@ import test from "node:test";
 import { hasRequiredTicketsSpendLimits } from "../scripts/ai-gateway-policy.mjs";
 import './iphone-layout-evidence.test.mjs';
 import './support-email-rendering.test.mjs';
+import './browser-audit-harness.test.mjs';
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 

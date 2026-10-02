@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./analytics-fixture";
 import { expectVisibleLettering } from "./text-visibility";
 
 test.use({ serviceWorkers: "block" });

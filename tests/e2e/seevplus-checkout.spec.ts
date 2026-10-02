@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./analytics-fixture";
 import AxeBuilder from "@axe-core/playwright";
 
 test("SeevPlus stays compact and sends the selected provider without exposing credentials", async ({ page }) => {

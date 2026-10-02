@@ -1,8 +1,9 @@
+import { expandEveryVisibleDisclosure } from './disclosures.mjs';
 import { expectSegmentedSelection } from "./segmented-control";
 import { readFileSync, existsSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { expectVisibleLettering } from './text-visibility';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './analytics-fixture';
 async function openWorkspaceMenu(page: Page) {
  const toggle=page.getByRole('button',{name:'Toggle workspace navigation',exact:true});
  if(await toggle.isVisible() && await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
@@ -49,6 +50,20 @@ for (const [path, heading] of [
     if (path !== '/admin/account') await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     // Wait for server-backed screen data before examining layout and accessibility.
     await expect(page.getByText(/Loading (real inventory|accounts|operations|events|submissions)/i)).toHaveCount(0);
+    // These disclosures arrive after the common shell. Require fixture data
+    // before an expanded-state scan can claim coverage.
+    if (path === '/admin/registrations') {
+      await expect(page.locator('.registration-live__counts')).toBeVisible();
+      await expect(page.locator('.registration-live summary')).toHaveText('Recent signups & changes');
+      await expect(page.locator('.registration-live summary')).toBeVisible();
+      await expect(page.getByText('Loading registration settings…', { exact: true })).toHaveCount(0);
+    }
+    if (path === '/admin/hosts') {
+      await expect(page.getByText('Loading applications…', { exact: true })).toHaveCount(0);
+      await expect(page.locator('.host-applications > details > summary')).toHaveCount(1);
+      await expect(page.locator('.host-applications > details > summary')).toContainText('Host onboarding fixture');
+      await expect(page.locator('.host-applications > details > summary')).toBeVisible();
+    }
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
     expect(axe.violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })), heading).toEqual([]);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
@@ -58,10 +73,11 @@ for (const [path, heading] of [
 
     // Expand content before opening the mobile navigation overlay; do not click
     // through an open menu. Both expanded content and navigation retain coverage.
-    for(const summary of await page.locator('details:not([open]):not(.workspace-tools) > summary').all()){if(await summary.isVisible())await summary.click();}
+    await expandEveryVisibleDisclosure(page, 'details:not([open]):not(.workspace-tools) > summary');
+    if (path === '/admin/help') await expect(page.locator('.help-guide[open]')).toHaveCount(16);
     const expandedContentAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedContentAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     await openWorkspaceMenu(page);
-    for(const summary of await page.locator('.workspace-sidebar details:not([open]) > summary').all()){if(await summary.isVisible())await summary.click();}
+    await expandEveryVisibleDisclosure(page, '.workspace-sidebar details:not([open]) > summary');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     // Inspect the final cascade: generic Operations controls previously restored
@@ -446,7 +462,7 @@ test('every organizer task and expanded panel remains compact and readable',asyn
  const tabs=page.getByRole('navigation',{name:'Event tools'});
  for(const name of ['Overview','Tickets','Room & VIP','Requests','Guests','Insights']){
   await tabs.getByRole('button',{name,exact:true}).click();
-  for(const summary of await page.locator('.suite-content details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
+  await expandEveryVisibleDisclosure(page, '.suite-content details:not([open]) > summary');
   await expectVisibleLettering(page,'.suite-content');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
   const axe=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect.soft(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),name).toEqual([]);
@@ -693,7 +709,7 @@ test('workspace settings and Event desk retain their frame and unfinished questi
  const question=page.locator('#event-desk-question');await question.fill('Keep my unfinished event question');
  const visit=async(name:string)=>{await openWorkspaceMenu(page);const tools=page.locator('.workspace-tools');if(!await tools.evaluate(e=>(e as HTMLDetailsElement).open))await tools.locator('summary').click();await tools.getByRole('link',{name,exact:true}).click();};
  await visit('Account settings');await expect(page.locator('.account-security-stack')).toBeVisible();
- for(const summary of await page.locator('.account-security-stack details:not([open])>summary').all())if(await summary.isVisible())await summary.click();
+ await expandEveryVisibleDisclosure(page, '.account-security-stack details:not([open])>summary');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  const account=await new AxeBuilder({page}).include('.organizer-suite').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(account.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
  await page.screenshot({path:info.outputPath('workspace-account.png'),fullPage:true,scale:'css'});
@@ -875,7 +891,17 @@ test('provider records keep event scope and survive an uncertain save without cl
   await expect(page.getByText('Confirmation email: sent', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('paid');
   await expect(page.getByLabel('Payment method', { exact: true })).toHaveValue('paystack');
-  await page.getByRole('button', { name: 'Provider record', exact: true }).click();
+  const providerRecord = page.getByRole('button', { name: 'Provider record', exact: true });
+  await expect(providerRecord).toBeVisible();
+  const labelFits = await providerRecord.evaluate(button => {
+    const range = document.createRange(); range.selectNodeContents(button);
+    const text = range.getBoundingClientRect(); const bounds = button.getBoundingClientRect();
+    return text.left >= bounds.left && text.right <= bounds.right && text.top >= bounds.top && text.bottom <= bounds.bottom;
+  });
+  expect(labelFits, 'Provider record text must fit inside its clickable button').toBe(true);
+  await providerRecord.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('provider-record-action.png'), fullPage: true });
+  await providerRecord.click();
   const form = page.getByRole('region', { name: 'Record provider case' });
   await expect(form).toBeVisible();
   await expect(form.getByText(/ticket access stays unchanged/)).toBeVisible();
@@ -1042,4 +1068,23 @@ test('challenging a dispute points to the provider workflow without claiming evi
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   await page.screenshot({ path: info.outputPath('dispute-provider-handoff.png'), fullPage: true });
+});
+
+test('fee effective time retains the locale date and day-period without clipping', async ({ page }, info) => {
+  await page.goto('/admin/fees');
+  const input = page.getByLabel('Effective from');
+  await expect(input).toBeVisible();
+  await input.fill('2026-10-02T13:45');
+  await expect(input).toHaveValue('2026-10-02T13:45');
+  const geometry = await input.evaluate(element => ({
+    width: element.getBoundingClientRect().width,
+    scroll: element.scrollWidth,
+    client: element.clientWidth,
+  }));
+  // Native datetime fields do not expose their internal AM/PM segments to DOM
+  // ranges. Keep the desktop space contract alongside all-engine pixel evidence.
+  if ((page.viewportSize()?.width ?? 1280) > 760) expect(geometry.width).toBeGreaterThanOrEqual(260);
+  expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  await page.screenshot({ path: info.outputPath('fee-effective-time.png'), fullPage: true });
 });

@@ -58,7 +58,7 @@ for (const path of ['/', '/events', '/event/$published']) {
     const headers = response?.headers() ?? {};
     const evidence = {
       project: info.project.name, capturedAt: new Date().toISOString(), route, status: response?.status(), version,
-      observation: { afterReadinessMs: observationMs, scope: 'Initial viewport, fresh browser context, automated hosted lab; not field data, final Core Web Vitals, physical-device or throughput acceptance', transferLimit: 'Zero transfer sizes may represent caching or missing cross-origin timing visibility; resource bytes exclude the navigation document, which is reported separately', unsupported: 'Unsupported LCP/CLS entries remain null rather than being reported as zero' },
+      observation: { afterReadinessMs: observationMs, scope: 'Initial viewport, fresh browser context, automated hosted lab; not field data, final Core Web Vitals, physical-device or throughput acceptance', cachePolicy: 'Endpoint-scoped analytics routing disables browser HTTP caching; this is not warm-cache evidence', transferLimit: 'Zero transfer sizes may represent caching or missing cross-origin timing visibility; resource bytes exclude the navigation document, which is reported separately', unsupported: 'Unsupported LCP/CLS entries remain null rather than being reported as zero' },
       headers: Object.fromEntries(['content-security-policy', 'strict-transport-security', 'x-content-type-options', 'x-frame-options', 'referrer-policy', 'cache-control'].map(name => [name, headers[name] ?? null])),
       ...metrics, pageErrors, consoleErrors, failedAssets,
     };

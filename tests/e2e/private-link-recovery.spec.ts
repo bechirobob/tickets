@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './analytics-fixture';
 
 test.use({ serviceWorkers: 'block' });
 // A PR's live audit still targets the previous release; candidate CI runs these

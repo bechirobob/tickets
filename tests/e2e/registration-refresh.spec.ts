@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './analytics-fixture';
 test.use({ serviceWorkers: 'block' });
 
 for (const state of ['confirmed', 'requested', 'signed-out']) {

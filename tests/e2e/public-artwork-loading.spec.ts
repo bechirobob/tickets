@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './analytics-fixture';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 

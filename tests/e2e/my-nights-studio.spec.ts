@@ -1,6 +1,6 @@
 import { expectSegmentedSelection } from "./segmented-control";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./analytics-fixture";
 
 test.use({ serviceWorkers: "block" });
 test.beforeEach(async ({ page }) => {

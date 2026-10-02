@@ -1041,3 +1041,14 @@ test("organiser analytics has a dedicated compact responsive workspace", async (
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.analytics-layout \{[^}]*grid-template-columns: 1fr/su);
   assert.match(css, /\.analytics-table \{[^}]*overflow-x: auto/su);
 });
+
+test("fee timestamps and labelled order actions retain room for their full contents", async () => {
+  const css = await readFile(cssUrl, "utf8");
+  assert.match(css, /\.settings-card > label\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 280px\)/u);
+  const actions = css.match(/\.order-actions button\s*\{([^}]+)\}/u)?.[1] ?? "";
+  assert.match(actions, /width:\s*auto/u);
+  assert.match(actions, /height:\s*auto/u);
+  assert.match(actions, /flex-shrink:\s*0/u);
+  assert.match(actions, /white-space:\s*nowrap/u);
+  assert.doesNotMatch(actions, /(?:^|;)\s*(?:width|height):\s*32px/u);
+});

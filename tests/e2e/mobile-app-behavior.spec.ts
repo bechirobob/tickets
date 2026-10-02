@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from '@playwright/test';
+import { expect, test } from './analytics-fixture';
 test.use({ serviceWorkers: 'block' });
 
 test('mobile Back closes navigation before leaving and outside destinations keep the new route', async ({ page }) => {

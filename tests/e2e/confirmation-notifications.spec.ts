@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './analytics-fixture';
 
 test.use({ serviceWorkers: 'block' });
 async function member(page: Page) {

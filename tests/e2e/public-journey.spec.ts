@@ -1,3 +1,4 @@
+import { expandEveryVisibleDisclosure } from './disclosures.mjs';
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./catalogue";
 
@@ -211,7 +212,8 @@ for (const path of publicPages) {
     await page.goto(path.replace("$published", eventSlug));
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
-    for(const summary of await page.locator('details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
+    await expandEveryVisibleDisclosure(page, 'details:not([open]) > summary');
+    if (path === '/help') await expect(page.locator('.help-guide[open]')).toHaveCount(28);
     await page.screenshot({path:info.outputPath(`${path.replaceAll('/','-')||'home'}-expanded.png`),fullPage:true,scale:'css'});
     const scan = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     const serious = scan.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
@@ -222,7 +224,8 @@ for (const path of publicPages) {
     await page.goto(path.replace("$published", eventSlug));
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
-    for(const summary of await page.locator('details:not([open]) > summary').all())if(await summary.isVisible())await summary.click();
+    await expandEveryVisibleDisclosure(page, 'details:not([open]) > summary');
+    if (path === '/help') await expect(page.locator('.help-guide[open]')).toHaveCount(28);
     const findings = await page.evaluate(() => {
       const visible = (element: Element) => {
         const style = getComputedStyle(element);
