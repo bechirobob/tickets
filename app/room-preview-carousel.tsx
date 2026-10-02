@@ -2,7 +2,6 @@
 
 import type { ReactNode, UIEvent } from "react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
 
 const Playback = createContext({ paused: false, reducedMotion: true });
 export const useRoomPlayback = () => useContext(Playback);
@@ -12,6 +11,7 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [interacting, setInteracting] = useState(false);
+  const [keyboardFocused, setKeyboardFocused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(true);
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -33,12 +33,14 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
   };
 
   return <div className="room-product-preview" data-active={active} role="region" aria-roledescription="carousel" aria-label="The Room preview">
-    <Playback value={{ paused: paused || interacting, reducedMotion }}>
-    <div ref={trackRef} className="room-product-scene__phones" tabIndex={0} onScroll={trackPosition} onPointerDown={() => setInteracting(true)} onPointerUp={() => setInteracting(false)} onPointerCancel={() => setInteracting(false)} onPointerLeave={() => setInteracting(false)} onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setPaused(true); }} aria-live="off">
+    <Playback value={{ paused: paused || interacting || keyboardFocused, reducedMotion }}>
+    <div ref={trackRef} className="room-product-scene__phones" tabIndex={0} onScroll={trackPosition} onPointerDown={() => { setInteracting(true); setKeyboardFocused(false); }} onPointerUp={() => setInteracting(false)} onPointerCancel={() => setInteracting(false)} onPointerLeave={() => setInteracting(false)} onFocus={(event) => setKeyboardFocused(event.currentTarget.matches(":focus-visible"))} onBlur={() => setKeyboardFocused(false)} aria-live="off">
       {children}
     </div>
     </Playback>
-    <div className="room-demo-caption"><span>{active === 0 ? "Before arrival" : "Inside the night"}</span><button type="button" className="room-demo-pause" aria-label={paused ? "Play Room preview" : "Pause Room preview"} aria-pressed={paused} disabled={reducedMotion} onClick={() => setPaused((value) => !value)}>{paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}</button></div>
+    <div className="room-demo-caption"><span>{active === 0 ? "Before arrival" : "Inside the night"}</span>
+      <label className="room-demo-motion"><input type="checkbox" aria-label="Motion for Room preview" checked={!paused && !reducedMotion} disabled={reducedMotion} onChange={(event) => setPaused(!event.currentTarget.checked)} />Motion</label>
+    </div>
     <p className="sr-only" aria-live="polite">Room preview {active + 1} of 2. Swipe or use the arrow keys to see both views.</p>
   </div>;
 }

@@ -1834,7 +1834,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                      ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
                      "ops/vps/runtime_release.py", "ops/vps/candidate_evidence.py",
-                     "ops/vps/test_runtime_release.py", "ops/vps/test_candidate_evidence.py"):
+                     "ops/vps/test_runtime_release.py", "ops/vps/test_candidate_evidence.py",
+                     "ops/vps/test_runtime_packaging.py"):
             content = (self.root / name).read_bytes()
             digest = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
             self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest, name)

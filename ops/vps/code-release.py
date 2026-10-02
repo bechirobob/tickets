@@ -59,6 +59,7 @@ APPLICATION_FILES = {
 # Exact reviewed application outputs for the app-experience increment. This is
 # deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
 REVIEWED_APPLICATION_BLOBS = {
+    "ops/vps/test_runtime_packaging.py": "d1688797c54b796eb18754a8d0ea16d54a56272e",
     ".github/workflows/tickets-code-release.yml": "1e8816df3a56ecbe44bfb1d8a6facb5d04847b0d",
     "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
     "playwright.config.ts": "458baa39707043948474dae29bd5341c7ea5a883",
@@ -66,8 +67,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/test_runtime_release.py": "282964b87490b3630f2704117dbc9241b3444fea",
     "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
     "ops/vps/runtime_release.py": "cd4758640b1f6e128ec68a0f3c540cec68e8ff56",
-    ".github/workflows/tickets-release-operator-checks.yml": "a497e42eb3b2c9e3901e6fb2580bba1c62b9130d",
-    ".github/workflows/vps-runtime.yml": "f8e12ad5862deea2e40238cedd0d02ca946377e2",
+    ".github/workflows/tickets-release-operator-checks.yml": "62262a27776c526924ffcbdd4f245278f2542e97",
+    ".github/workflows/vps-runtime.yml": "3136ac455e6178e5eeae581453014ecc5575669b",
     ".github/workflows/browser-audit.yml": "266d11a65a580809689c806cc93ca06ebaa25858",
     ".github/workflows/candidate-checks.yml": "59bf59bee523b9e21dbb20da64973d11620fa8d3",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
