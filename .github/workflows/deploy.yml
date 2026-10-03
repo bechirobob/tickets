@@ -7,6 +7,9 @@ on:
     # Operator diagnostics do not change the application. Workflow-only release
     # configuration edits remain deployable through explicit workflow_dispatch.
     paths-ignore:
+      - '.github/workflows/tickets-backup.yml'
+      - '.github/workflows/backup-transport-checks.yml'
+      - '.github/backup/**'
       - '.github/workflows/tickets-vps-diagnostics.yml'
       - '.github/workflows/deploy.yml'
       - '.github/workflows/tickets-handover.yml'
@@ -211,3 +214,4 @@ jobs:
 
       - name: Issue the approved single-use owner recovery grant
         run: node scripts/issue-owner-recovery.mjs
+
