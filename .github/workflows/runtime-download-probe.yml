@@ -1,0 +1,36 @@
+name: Diagnose private runtime downloads read-only
+on:
+  push:
+    branches: [verify/runtime-download-2026-10-03]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect fixed producer log and small release asset downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_HOST: github.com
+          GH_PROMPT_DISABLED: '1'
+          GH_DEBUG: ''
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import subprocess, tempfile, pathlib, json, re, hashlib
+          endpoints = [
+            ('producer-job-log', 'actions/jobs/111077519167/logs', 'application/vnd.github+json'),
+            ('manifest-asset', 'releases/assets/606751395', 'application/octet-stream'),
+            ('checksum-asset', 'releases/assets/606751394', 'application/octet-stream'),
+          ]
+          for label, suffix, accept in endpoints:
+            with tempfile.TemporaryFile() as target:
+              result = subprocess.run(['gh','api','--hostname','github.com','--method','GET','-H','Accept: '+accept,'-H','X-GitHub-Api-Version: 2022-11-28','repos/bechirobob/tickets/'+suffix], stdout=target, stderr=subprocess.PIPE, timeout=120)
+              target.seek(0); data=target.read(32*1024*1024)
+              err=result.stderr[:65536]
+              status=re.search(rb'HTTP ([0-9]{3})',err)
+              categories=[name for name,needle in [('expired',b'expir'),('permission',b'Resource not accessible'),('not-found',b'Not Found'),('redirect',b'redirect'),('accept-header',b'Accept'),('not-json',b'JSON'),('network',b'connect'),('bad-request',b'Bad Request')] if needle.lower() in err.lower()]
+              print(json.dumps(dict(endpoint=label,exit=result.returncode,bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),http=status[1].decode() if status else None,classifications=categories)))
+          PY
