@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Private, attempt-pinned Tickets runtime transport using the existing GH_TOKEN.
+"""Public, attempt-pinned Tickets runtime transport using the existing GH_TOKEN.
 
 No cleanup, deletion, overwrite, extraction, or deployment is performed here.
 A failed upload leaves an unpublished draft for inspection. A later invocation
@@ -20,6 +20,8 @@ import sys
 import tempfile
 import time
 
+from public_runtime_guard import validate_public_archive, PublicRuntimeError
+
 REPOSITORY = "bechirobob/tickets"
 WORKFLOW = ".github/workflows/vps-runtime.yml"
 AUTHOR = "github-actions[bot]"
@@ -31,7 +33,7 @@ SCHEMA = "tickets-vps-runtime-release/v1"
 RECEIPT_SCHEMA = "tickets-vps-runtime-transport/v1"
 PRODUCER_SCHEMA = "tickets-vps-runtime-producer/v1"
 PRODUCER_MARKER = "TICKETS_RUNTIME_RELEASE_RECEIPT "
-PUBLISH_STEP = "Publish verified private runtime release"
+PUBLISH_STEP = "Publish verified public runtime release"
 LOG_LIMIT = 32 * 1024 ** 2
 SHA = re.compile(r"[a-f0-9]{40}\Z")
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
@@ -251,9 +253,9 @@ class GitHub:
 def verify_repository(client):
     repository = client.repository()
     require(isinstance(repository, dict) and repository.get("full_name") == REPOSITORY
-            and repository.get("private") is True and repository.get("visibility") == "private"
+            and repository.get("private") is False and repository.get("visibility") == "public"
             and repository.get("fork") is False,
-            "Runtime transport requires the exact private, non-fork Tickets repository.")
+            "Runtime transport requires the exact public, non-fork Tickets repository.")
     return repository
 
 
@@ -479,6 +481,8 @@ def publish(directory, client=None):
     client = client or GitHub()
     verify_repository(client)
     require(verify_source(client, source) == tree, "Producer Git tree differs from remote commit.")
+    # Validate every byte before any draft, tag or asset can become public.
+    validate_public_archive(Path(directory) / ARCHIVE)
     manifest = generate_manifest(directory, source=source, source_tree=tree, run_id=run_id, attempt=attempt)
     tag = manifest["release_tag"]
     existing = find_release(client, tag)
@@ -592,9 +596,9 @@ def main(argv=None):
         else:
             result = download(directory, **values)
         manifest = result.get("manifest", result)
-        print("Verified private runtime package: " + manifest["release_tag"])
+        print("Verified public runtime package: " + manifest["release_tag"])
         return 0
-    except (TransportError, OSError, subprocess.SubprocessError) as error:
+    except (TransportError, PublicRuntimeError, OSError, subprocess.SubprocessError) as error:
         print("Runtime transport failed: " + str(error), file=sys.stderr)
         return 1
 

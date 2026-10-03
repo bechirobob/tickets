@@ -149,7 +149,7 @@ class RuntimePackagingTests(unittest.TestCase):
                         "npm test", "npm run test:vps", "python -m unittest discover -s ops/vps -p 'test_*.py'",
                         "npm run build:vps", "node scripts/verify-vps-runtime.mjs"):
             self.assertLess(workflow.index("run: " + command), workflow.index("- name: " + STEP))
-        self.assertLess(workflow.index("- name: " + STEP), workflow.index("- name: Publish verified private runtime release"))
+        self.assertLess(workflow.index("- name: " + STEP), workflow.index("- name: Publish verified public runtime release"))
         self.assertNotRegex(self.script, r"git\s+(?:reset|checkout|restore)\b")
 
     def test_original_prune_rewrites_lock_classification(self):

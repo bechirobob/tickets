@@ -25,6 +25,11 @@ jobs:
       REVISION: ${{ inputs.revision }}
       MODE: ${{ inputs.mode }}
     steps:
+      - name: Require reviewed private handover backup transport
+        if: inputs.mode == 'capture' || inputs.mode == 'activate'
+        run: |
+          echo 'Capture and activation are paused until the handover backup and receipt use verified private storage.' >&2
+          exit 1
       - name: Validate operator inputs
         run: |
           [[ "$REVISION" =~ ^[a-f0-9]{40}$ ]]
