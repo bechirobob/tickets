@@ -204,7 +204,7 @@ test("Room hardware and independent tapbacks retain a clear mobile silhouette", 
   expect(badge!.y).toBeLessThan(bubble!.y);
   expect(badge!.y + badge!.height).toBeLessThan(bubble!.y + bubble!.height);
   const frame = phone.locator(".room-product-phone__render");
-  await expect(frame).toHaveAttribute("src", /iphone-titanium-front\.svg/);
+  await expect(frame).toHaveAttribute("src", /iphone-15-pro-frame\.png/);
   // Read both rectangles in one frame so an in-flight viewport scroll cannot
   // create a false hardware offset between separate browser round trips.
   const hardware = await phone.evaluate(element => ({

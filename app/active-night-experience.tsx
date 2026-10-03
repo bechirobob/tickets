@@ -52,7 +52,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CustomerEvent | 
   const { phoneRef, streamRef, step, ready, running, visible, visibleCount, typing, resetting, completeStep, pauseReason } = useRoomDemo(paused, reducedMotion, conversation === "inside" ? 2000 : 0, conversation === "inside" ? 4 : 5);
 
   return <article ref={phoneRef} data-demo-step={step} data-demo-ready={ready} data-demo-running={running} data-demo-visible={visible} data-demo-complete-step={completeStep} data-demo-pause-reason={pauseReason ?? undefined} className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
-    <Image className="room-product-phone__render" src="/devices/iphone-titanium-front.svg" width={320} height={668} alt="" aria-hidden="true" unoptimized />
+    <Image className="room-product-phone__render" src="/devices/iphone-15-pro-frame.png" width={391} height={800} alt="" aria-hidden="true" unoptimized />
     <div className="room-product-phone__display">
     <div className="room-product-phone__hardware" aria-hidden="true">
       <span>{conversation === "arrival" ? "9:24" : "10:48"}</span>

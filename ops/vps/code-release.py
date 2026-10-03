@@ -63,6 +63,7 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '2b2115bc569674a9b0fdf79d0350ffeddb4c80a7', 'ops/vps/test_runtime_release.py': '1cd95b6d669092eb5ca4496a165d85ccb619d966'}
 
 REVIEWED_APPLICATION_BLOBS = {
+    "public/devices/iphone-15-pro-frame.png": "40b176b6e2843509b72b04538b5694ce788a57b4",
     "ops/vps/test_runtime_packaging.py": "d1688797c54b796eb18754a8d0ea16d54a56272e",
     ".github/workflows/tickets-code-release.yml": "1e8816df3a56ecbe44bfb1d8a6facb5d04847b0d",
     "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
@@ -81,7 +82,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "README.md": "d104e3598aadc56d2d410dedf7c25b95570bc90c",
     "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
     "app/account/privacy/privacy-settings.tsx": "b04b3a832f8e0acdc33e95952875801191a579ef",
-    "app/active-night-experience.tsx": "a39f9b9f952dd117c568f4cab0054b35075af909",
+    "app/active-night-experience.tsx": "618977704b220cb2c5c61db3d734b5e3125d3071",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/admin/login/login-form.tsx": "ee7957582f7e959106766fb4b418f6524766d386",
     "app/admin/operations/event-operations-hub.tsx": "5f76745b78170bcaa8b4b59a8a41d4acd3ab4c83",
@@ -188,7 +189,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
     "app/registration-form.tsx": "892574dd3198a410d5fea00232e607783d2e77df",
     "app/registration-manager.tsx": "cd0b22d16d2ff9bd45adbd917744a3248e2cb04e",
-    "app/room-demo.css": "622625b05724d6350bfa4cd6c0320301a77baf4d",
+    "app/room-demo.css": "8e59fcb56246d2bda0c6b79b81c6d463bc7467f2",
     "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
     "app/room-preview-carousel.tsx": "2064f9d57eacab56fa6cdd9ddb8871063de6d9e4",
     "app/room/[slug]/room-client.tsx": "043000a1a4d51ea07acd170046f4898894a3945e",

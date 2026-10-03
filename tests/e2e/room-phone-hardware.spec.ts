@@ -6,6 +6,9 @@ test("Room iPhone safe area keeps native status glyphs clear of the island", asy
   const phone = page.locator(".room-product-phone--arrival");
   await phone.scrollIntoViewIfNeeded();
   await expect(phone.locator(".scene-message:visible")).toHaveCount(5);
+  const frame = phone.locator(".room-product-phone__render");
+  await expect(frame).toHaveAttribute("src", "/devices/iphone-15-pro-frame.png");
+  await expect.poll(() => frame.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(391);
   const geometry = await phone.evaluate(element => {
     const rect = (selector: string) => {
       const { x, y, width, height, right, bottom } = element.querySelector(selector)!.getBoundingClientRect();
@@ -15,8 +18,8 @@ test("Room iPhone safe area keeps native status glyphs clear of the island", asy
   });
   const { display, island, clock, icons, header } = geometry;
   expect(Math.abs(island.x + island.width / 2 - display.x - display.width / 2)).toBeLessThan(1);
-  expect(island.width / display.width).toBeCloseTo(.32, 2);
-  expect(island.height / display.width).toBeCloseTo(.094, 2);
+  expect(island.width / display.width).toBeCloseTo(.3268, 2);
+  expect(island.height / display.width).toBeCloseTo(.1014, 2);
   expect(island.y - display.y).toBeGreaterThan(5);
   expect(clock.right + 5).toBeLessThan(island.x);
   expect(icons.x - 5).toBeGreaterThan(island.right);

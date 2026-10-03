@@ -3,29 +3,30 @@
 .discovery-home .room-product-scene__phones { transform-style: flat; align-items: center; padding-top: 8px; padding-bottom: 10px; }
 .discovery-home .room-product-preview .room-product-phone:nth-child(n) {
   transform: none; transition: none; opacity: 1; overflow: visible;
-  isolation: isolate; aspect-ratio: 320 / 668; border-radius: 17% / 8.1%; background: transparent;
+  isolation: isolate; aspect-ratio: 391 / 800; border-radius: 17% / 8.1%; background: transparent;
 }
-.discovery-home .room-product-phone__render { inset: 0; width: 100%; height: 100%; border-radius: 0; clip-path: none; }
+.discovery-home .room-product-phone__render { inset: 0; width: 100%; height: 100%; z-index: 2; border-radius: 0; clip-path: none; }
 .discovery-home .room-product-phone__display {
-  inset: 1.65% 4.1%; container-type: inline-size; grid-template-rows: 6.6% minmax(0, 1fr) 17px;
-  border: 0; border-radius: 15.3% / 6.97%;
+  inset: 1.75% 4.35% 1.625% 4.6%; container-type: inline-size; grid-template-rows: 6.9% minmax(0, 1fr) 17px;
+  border: 0; border-radius: 14.08% / 6.47%;
 }
-/* Scale the status safe area with the display, as one piece of device chrome.
+/* Licensed photographic-detail frame overlays the live screen, including its real
+   sensor and camera cutouts. Aperture: x18..374 / y14..787 in the 391×800 asset.
+   Scale the status safe area with the display, as one piece of device chrome.
    Equal side columns keep the island centred even when the clock is wider. */
 .discovery-home .room-product-phone__hardware {
-  position: relative; padding: 0 5.7cqw; grid-template-columns: 1fr 32cqw 1fr;
+  position: relative; padding: 0 5.7cqw; grid-template-columns: 1fr 32.68cqw 1fr;
   background: #30202d; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 4.3cqw; font-weight: 600; line-height: 1; letter-spacing: -.025em;
 }
 .discovery-home .room-product-phone__hardware > span { justify-self: center; padding-top: 1cqw; font-variant-numeric: tabular-nums; }
 .discovery-home .room-product-phone__hardware > i {
-  width: 32cqw; height: 9.4cqw; margin-top: 2.7cqw; align-self: start;
+  width: 32.68cqw; height: 10.14cqw; margin-top: 2.82cqw; align-self: start;
   border: 0; border-radius: 999px; background: #000;
 }
-.discovery-home .room-product-phone__hardware > i::after {
-  width: 2.2cqw; height: 2.2cqw; right: 3.2cqw; top: 3.6cqw;
-  border: 0; background: #0c1117;
-}
+/* The software island only joins the physical cutouts in the licensed image.
+   Do not draw a second lens or highlight over the actual camera in that frame. */
+.discovery-home .room-product-phone__hardware > i::after { display: none; }
 .discovery-home .room-product-phone__hardware > b { justify-self: center; padding-top: 1cqw; line-height: 0; }
 .discovery-home .room-product-phone__hardware .room-product-phone__status { width: 18.8cqw; height: auto; stroke-width: 0; }
 .discovery-home .room-product-phone__screen { grid-template-rows: 44px minmax(0, 1fr) auto; }

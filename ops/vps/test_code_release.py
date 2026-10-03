@@ -1852,7 +1852,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
 
     def test_final_room_motion_source_is_pinned_without_widening_scope(self):
         expected = {
-            "app/room-demo.css": "622625b05724d6350bfa4cd6c0320301a77baf4d",
+            "app/room-demo.css": "8e59fcb56246d2bda0c6b79b81c6d463bc7467f2",
             "app/room-preview-carousel.tsx": "2064f9d57eacab56fa6cdd9ddb8871063de6d9e4",
         }
         for name, digest in expected.items():
