@@ -1,32 +1,70 @@
-// Read-only production inventory. Logs contain counts and listing identifiers only.
+// Read-only inventory safe for public CI logs/artifacts. Never serialize provider rows.
 import { writeFile } from 'node:fs/promises';
-const account = process.env.CLOUDFLARE_ACCOUNT_ID;
-const headers = { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, 'content-type': 'application/json' };
-const root = `https://api.cloudflare.com/client/v4/accounts/${account}/d1/database`;
-const listing = await (await fetch(`${root}?name=becore-tickets-db`, { headers })).json();
-const database = listing.result?.find(row => row.name === 'becore-tickets-db');
-if (!database?.uuid) throw new Error('Production database not found.');
-async function query(sql) {
-  const response = await fetch(`${root}/${database.uuid}/query`, { method: 'POST', headers, body: JSON.stringify({ sql }) });
-  const result = await response.json();
-  if (!response.ok || !result.success) throw new Error('Inventory query failed.');
-  return result.result[0].results;
+import { pathToFileURL } from 'node:url';
+
+const checks = Object.freeze({
+  cleanupRecorded: "SELECT EXISTS(SELECT 1 FROM operational_audit_events WHERE id='operator:preview-cleanup-2026-09-10') AS value",
+  cleanupSucceeded: "SELECT EXISTS(SELECT 1 FROM operational_audit_events WHERE id='operator:preview-cleanup-2026-09-10' AND outcome='success') AS value",
+  cleanupAlertsPresent: "SELECT EXISTS(SELECT 1 FROM system_alerts WHERE source='preview-cleanup') AS value",
+  currentRegistrationConfigured: "SELECT EXISTS(SELECT 1 FROM event_registration_settings WHERE event_slug='the-weekend-braai') AS value",
+});
+const counts = Object.freeze({
+  events: 'SELECT COUNT(*) AS value FROM curated_event_records',
+  testEvents: 'SELECT COUNT(*) AS value FROM curated_event_records WHERE is_test_event=1',
+  removedEvents: 'SELECT COUNT(*) AS value FROM curated_event_records WHERE removed_at IS NOT NULL',
+  submissions: 'SELECT COUNT(*) AS value FROM party_submissions',
+  hosts: 'SELECT COUNT(*) AS value FROM hosts',
+  tables: "SELECT COUNT(*) AS value FROM sqlite_master WHERE type='table'",
+});
+const reportPath = 'preview-data-inventory.json';
+
+export async function runInventory({
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+  writeReport = writeFile,
+  log = console.log,
+  error = console.error,
+} = {}) {
+  try {
+    if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) throw new Error();
+    const headers = { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`, 'content-type': 'application/json' };
+    const root = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/d1/database`;
+    const response = await fetchImpl(`${root}?name=becore-tickets-db`, { headers });
+    const listing = await response.json();
+    if (!response.ok || listing.success !== true || !Array.isArray(listing.result)) throw new Error();
+    const database = listing.result.find(row => row?.name === 'becore-tickets-db');
+    if (typeof database?.uuid !== 'string' || !database.uuid) throw new Error();
+    async function scalar(sql, boolean = false) {
+      const response = await fetchImpl(`${root}/${encodeURIComponent(database.uuid)}/query`, {
+        method: 'POST', headers, body: JSON.stringify({ sql }),
+      });
+      const payload = await response.json();
+      const result = payload?.result?.[0];
+      if (!response.ok || payload.success !== true || payload.result.length !== 1 ||
+          result?.success !== true || !Array.isArray(result.results) || result.results.length !== 1) throw new Error();
+      const value = result.results[0]?.value;
+      if (!Number.isSafeInteger(value) || value < 0 || (boolean && value > 1)) throw new Error();
+      return boolean ? value === 1 : value;
+    }
+    // Build only fixed keys and validated scalars; ignore all other response fields.
+    const health = { inventoryReadSucceeded: true };
+    const inventory = {};
+    for (const [name, sql] of Object.entries(checks)) health[name] = await scalar(sql, true);
+    for (const [name, sql] of Object.entries(counts)) inventory[name] = await scalar(sql);
+    const report = JSON.stringify({ health, counts: inventory });
+    await writeReport(reportPath, report + '\n');
+    log(report);
+    return true;
+  } catch {
+    // Provider/network/filesystem exceptions can contain private rows, URLs, or credentials.
+    // Replace any stale artifact with a fixed failure status. Never log the exception.
+    const report = JSON.stringify({ health: { inventoryReadSucceeded: false } });
+    try { await writeReport(reportPath, report + '\n'); } catch { /* Fixed stderr below only. */ }
+    error('Preview inventory failed; private diagnostics were not exported.');
+    return false;
+  }
 }
-const report = {
-  revision: process.env.GITHUB_SHA,
-  cleanup: await query("SELECT outcome,created_at FROM operational_audit_events WHERE id='operator:preview-cleanup-2026-09-10'"),
-  cleanupAlerts: await query("SELECT source,message,detail,created_at FROM system_alerts WHERE source='preview-cleanup' ORDER BY created_at DESC LIMIT 3"),
-  currentRegistration: await query("SELECT event_slug,mode,capacity,approval_required,closes_at FROM event_registration_settings WHERE event_slug='the-weekend-braai'"),
-  events: await query(`SELECT id,submission_id,slug,title,status,is_test_event,removed_at,
-    (SELECT COUNT(*) FROM orders o WHERE o.event_slug=e.slug) AS orders,
-    (SELECT COUNT(*) FROM orders o WHERE o.event_slug=e.slug AND payment_environment='live' AND payment_provider<>'rsvp' AND status IN ('paid','refund_pending','refunded','requires_refund','disputed')) AS live_paid_orders,
-    (SELECT COUNT(*) FROM event_registrations r WHERE r.event_slug=e.slug) AS registrations
-    FROM curated_event_records e ORDER BY slug`),
-  payments: await query(`SELECT event_slug,payment_environment,payment_provider,status,paystack_status,provider_status,COUNT(*) AS count,MIN(created_at) AS first_created,MAX(created_at) AS last_created FROM orders GROUP BY event_slug,payment_environment,payment_provider,status,paystack_status,provider_status`),
-  legacyOrderEvidence: await query(`SELECT id,reference,created_at,payment_environment,payment_provider,status,paystack_transaction_id,paystack_status,provider_reference,provider_status,total_amount_minor,payment_channel FROM orders WHERE event_slug='sun-chasers-labadi'`),
-  submissions: await query(`SELECT id,event_slug,title,status FROM party_submissions ORDER BY created_at`),
-  hosts: await query('SELECT id,slug,name FROM hosts'),
-  tables: await query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"),
-};
-await writeFile('preview-data-inventory.json', JSON.stringify(report, null, 2));
-console.log(JSON.stringify(report));
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (!await runInventory()) process.exitCode = 1;
+}

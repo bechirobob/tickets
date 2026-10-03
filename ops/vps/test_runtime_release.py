@@ -32,7 +32,7 @@ def fake_git(*args):
 
 class FakeGitHub:
     def __init__(self):
-        self.repo = {"full_name": release.REPOSITORY, "private": True, "visibility": "private", "fork": False}
+        self.repo = {"full_name": release.REPOSITORY, "private": False, "visibility": "public", "fork": False}
         self.run = {"id": RUN, "run_attempt": ATTEMPT, "head_sha": SOURCE, "path": release.WORKFLOW,
                     "head_branch": "main", "event": "push", "status": "completed", "conclusion": "success",
                     "repository": {"full_name": release.REPOSITORY},
@@ -159,6 +159,10 @@ class RuntimeReleaseTests(unittest.TestCase):
         (self.package / release.ARCHIVE).write_bytes(b"\x1f\x8btest-runtime-archive")
         self.destination = self.root / "download"
         self.client = FakeGitHub()
+        # Transport fixtures are opaque bytes; package boundary has its own real-tar suite.
+        guard = patch.object(release, "validate_public_archive")
+        self.guard = guard.start()
+        self.addCleanup(guard.stop)
 
     def publish(self):
         self.client.run.update(status="in_progress", conclusion=None)
@@ -199,6 +203,13 @@ class RuntimeReleaseTests(unittest.TestCase):
                 with self.subTest(field=field, value=value), self.assertRaises(release.TransportError):
                     release.generate_manifest(self.package, **dict(IDENTITY, **{field: value}))
 
+    def test_public_boundary_failure_precedes_any_remote_mutation(self):
+        self.guard.side_effect = release.PublicRuntimeError('Rejected locally')
+        with self.assertRaises(release.PublicRuntimeError):
+            self.publish()
+        self.assertEqual(self.client.mutations(), [])
+        self.assertFalse((self.package / release.MANIFEST).exists())
+
     def test_publish_draft_upload_publish_sequence(self):
         manifest = self.publish()
         actions = self.client.mutations()
@@ -228,8 +239,8 @@ class RuntimeReleaseTests(unittest.TestCase):
             release.publish(self.package, self.client)
         self.assertFalse(self.client.calls)
 
-    def test_publish_rejects_public_or_fork_repository(self):
-        for delta in ({"private": False}, {"visibility": "public"}, {"fork": True}, {"full_name": "other/tickets"}):
+    def test_publish_rejects_private_or_fork_repository(self):
+        for delta in ({"private": True}, {"visibility": "private"}, {"fork": True}, {"full_name": "other/tickets"}):
             self.client.repo.update(delta)
             with self.subTest(delta=delta), self.assertRaises(release.TransportError):
                 self.publish()
@@ -433,10 +444,10 @@ class RuntimeReleaseTests(unittest.TestCase):
         self.assertFalse(self.client.calls)
         self.assertEqual((self.destination / "keep").read_text(), "keep")
 
-    def test_download_refuses_public_repository(self):
+    def test_download_refuses_private_repository(self):
         self.client.seed(self.package)
-        self.client.repo["private"] = False
-        with self.assertRaisesRegex(release.TransportError, "private"):
+        self.client.repo["private"] = True
+        with self.assertRaisesRegex(release.TransportError, "public"):
             self.download()
         self.assertEqual(self.client.downloaded, 0)
 

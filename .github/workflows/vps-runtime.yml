@@ -77,10 +77,16 @@ jobs:
           node scripts/verify-vps-runtime.mjs
           cp -a node_modules dist-vps/node_modules
           cp -a drizzle dist-vps/migrations
-          cp -a ops/vps dist-vps/operations
+          # Copy reviewed tracked operator source only; test caches never ship.
+          mkdir -p dist-vps/operations
+          git ls-files -z ops/vps | while IFS= read -r -d '' source; do
+            target="dist-vps/operations/${source#ops/vps/}"
+            mkdir -p "$(dirname "$target")"
+            cp -- "$source" "$target"
+          done
           tar -C dist-vps -czf tickets-vps-runtime.tar.gz .
           sha256sum tickets-vps-runtime.tar.gz > tickets-vps-runtime.tar.gz.sha256
-      - name: Publish verified private runtime release
+      - name: Publish verified public runtime release
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 ops/vps/runtime_release.py publish --directory .

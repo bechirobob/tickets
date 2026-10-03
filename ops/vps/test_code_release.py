@@ -1877,7 +1877,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
     def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                      ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
-                     "ops/vps/runtime_release.py", "ops/vps/candidate_evidence.py",
+                     "ops/vps/runtime_release.py", "ops/vps/public_runtime_guard.py",
+                     "ops/vps/test_public_runtime_guard.py", "ops/vps/candidate_evidence.py",
                      "ops/vps/test_runtime_release.py", "ops/vps/test_candidate_evidence.py",
                      "ops/vps/test_runtime_packaging.py"):
             content = (self.root / name).read_bytes()
@@ -1886,8 +1887,10 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
 
     def test_reviewed_application_includes_the_merged_operator_transport(self):
         expected = {
-            "ops/vps/runtime_release.py": "2b2115bc569674a9b0fdf79d0350ffeddb4c80a7",
-            "ops/vps/test_runtime_release.py": "1cd95b6d669092eb5ca4496a165d85ccb619d966",
+            "ops/vps/runtime_release.py": "043e310a41ff28d23adc20383c88566b181232a6",
+            "ops/vps/test_runtime_release.py": "210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14",
+            "ops/vps/public_runtime_guard.py": "9a9739f1bd88cbd02dc420001efa3de5b85e3538",
+            "ops/vps/test_public_runtime_guard.py": "eb1fd8a6909c7c0634326da1d35c7a4606fbebe7",
         }
         self.assertEqual(set(release.REVIEWED_OPERATOR_BLOBS), set(expected))
         for name, digest in expected.items():
@@ -1918,6 +1921,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                 ".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                 ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
                 "ops/vps/runtime_release.py", "ops/vps/test_runtime_release.py",
+                "ops/vps/public_runtime_guard.py", "ops/vps/test_public_runtime_guard.py",
                 "ops/vps/candidate_evidence.py", "ops/vps/test_candidate_evidence.py",
                 "ops/vps/test_runtime_packaging.py",
                 "ops/vps/audit-readiness.py", "ops/vps/test_audit_readiness.py",
@@ -1954,7 +1958,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         self.assertEqual(text.count('test "$(sha256sum "$archive" | cut -d \' \' -f 1)" = "$BUILD_DIGEST"'), 3)
         self.assertNotIn("continue-on-error", text)
 
-    def test_private_publisher_is_main_only_and_only_privileged_job(self):
+    def test_public_publisher_is_main_only_and_only_privileged_job(self):
         text = (self.root / ".github/workflows/vps-runtime.yml").read_text()
         self.assertIn("branches: [main]", text)
         self.assertNotIn("pull_request:", text)
@@ -1970,7 +1974,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         self.assertIn("persist-credentials: false", verify)
         self.assertIn("python3 ops/vps/runtime_release.py publish --directory .", verify)
 
-    def test_consumer_uses_attempt_bound_private_release_without_write_permission(self):
+    def test_consumer_uses_attempt_bound_public_release_without_write_permission(self):
         text = (self.root / ".github/workflows/tickets-code-release.yml").read_text()
         self.assertNotIn("contents: write", text)
         self.assertIn("actions: read", text)
