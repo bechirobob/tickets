@@ -1637,26 +1637,49 @@ class VerifierTests(unittest.TestCase):
                         with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
                             release.vetted_changes(OLD, NEW)
 
-    def test_checkbox_policy_requires_its_exact_full_source_seal(self):
-        name = release.CHECKBOX_AUDIT_POLICY
-        record = b"100644 blob " + b"a" * 40 + b"\tapp/room-preview-carousel.tsx\0"
-        raw = record + b"100644 blob " + b"b" * 40 + b"\t" + name.encode() + b"\0"
-        digest = release.hashlib.sha256(b"tickets-checkbox-source-v1\0" + record).hexdigest()
-        policy = {"schema": 1, "projectionDigest": digest}
-        for candidate in (policy, dict(policy, projectionDigest="0" * 64), dict(policy, expires="later"),
-                          dict(policy, schema=True)):
-            with patch.object(release, "git", return_value=json.dumps(candidate)), \
-                 patch.object(release.subprocess, "check_output", return_value=raw):
-                if candidate is policy:
-                    release.verify_checkbox_audit_policy(NEW)
-                else:
-                    with self.assertRaises(release.ReleaseError):
-                        release.verify_checkbox_audit_policy(NEW)
-        for invalid in (raw[:-1], record, raw.replace(b"100644 blob", b"160000 commit", 1)):
-            with patch.object(release, "git", return_value=json.dumps(policy)), \
-                 patch.object(release.subprocess, "check_output", return_value=invalid):
-                with self.assertRaises(release.ReleaseError):
-                    release.verify_checkbox_audit_policy(NEW)
+    def test_every_activation_checks_trusted_source_before_ci_metadata(self):
+        args = argparse.Namespace(source=NEW, expected=OLD, metadata="/not/read")
+        with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), \
+             patch.object(release, "git", side_effect=[NEW, ""]), \
+             patch.object(release, "verify_trusted_caption_source", side_effect=release.ReleaseError("unapproved source")) as guard:
+            with self.assertRaisesRegex(release.ReleaseError, "unapproved source"):
+                release.verify_ci(args)
+            guard.assert_called_once_with(NEW)
+
+    def test_trusted_source_requires_independent_baseline_and_operator_bytes(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(release.ReleaseError, "immutable trusted"):
+                release.verify_trusted_caption_source(NEW)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=OLD), \
+             patch.object(release.subprocess, "check_output", return_value=b"substituted operator"):
+            with self.assertRaisesRegex(release.ReleaseError, "Operator bytes"):
+                release.verify_trusted_caption_source(NEW)
+
+    def test_substituted_staged_gate_is_rejected_before_execution(self):
+        operator = Path(release.__file__).resolve()
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=OLD), \
+             patch.object(release.subprocess, "check_output", side_effect=[operator.read_bytes(), b"trusted gate"]), \
+             patch.object(release.Path, "read_bytes", side_effect=[operator.read_bytes(), b"substituted gate"]), \
+             patch.object(release.Path, "is_file", return_value=True), \
+             patch.object(release.Path, "is_symlink", return_value=False), \
+             patch.object(release.subprocess, "run") as run:
+            with self.assertRaisesRegex(release.ReleaseError, "Source gate bytes"):
+                release.verify_trusted_caption_source(NEW)
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0][0], "git")
+
+    def test_trusted_source_always_calls_independent_gate(self):
+        operator = Path(release.__file__).resolve()
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=OLD), \
+             patch.object(release.subprocess, "check_output", side_effect=[operator.read_bytes(), b"trusted gate"]), \
+             patch.object(release.Path, "read_bytes", side_effect=[operator.read_bytes(), b"trusted gate"]), \
+             patch.object(release.Path, "is_file", return_value=True), \
+             patch.object(release.Path, "is_symlink", return_value=False), \
+             patch.object(release.subprocess, "run") as run:
+            release.verify_trusted_caption_source(NEW)
+        self.assertEqual(run.call_args_list[-1], call([
+            release.sys.executable, "-I", str(operator.parents[2] / "scripts/verify-caption-source.py"),
+            "--repo", str(Path.cwd()), "--trusted-baseline", OLD, "--candidate", NEW], check=True))
 
     def test_security_policy_changes_require_an_explicit_exact_reviewed_blob(self):
         name = "worker/security-response.ts"
@@ -1811,7 +1834,7 @@ class VerifierTests(unittest.TestCase):
             checksum.write_text(release.digest_file(archive) + "  tickets-vps-runtime.tar.gz\n")
             args = argparse.Namespace(source=NEW, expected=ORIGINAL, repository="owner/tickets", metadata=str(root),
                                       runtime_run="123", candidate_run="456", archive=str(archive), output=str(root / "proof.json"))
-            with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), patch.object(release.subprocess, "run"), patch("builtins.print"), patch.object(release, "verify_runtime_transport", return_value={"verified": True}) as transport:
+            with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), patch.object(release, "verify_trusted_caption_source"), patch.object(release.subprocess, "run"), patch("builtins.print"), patch.object(release, "verify_runtime_transport", return_value={"verified": True}) as transport:
                 with patch.object(release, "git", side_effect=[NEW, "", TREE, TREE, "tests/new-test.ts"]):
                     release.verify_ci(args)
                 self.assertEqual(json.loads((root / "proof.json").read_text())["archiveSha256"], release.digest_file(archive))
@@ -1873,8 +1896,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
 
     def test_final_room_motion_source_is_pinned_without_widening_scope(self):
         expected = {
-            "app/room-demo.css": "1628b6ebe3062da1b212bd10214ff3f878d33b75",
-            "app/room-preview-carousel.tsx": "2064f9d57eacab56fa6cdd9ddb8871063de6d9e4",
+            "app/room-demo.css": "c3d871ed75945a72df7fb32f7c13c962ee4876de",
+            "app/room-preview-carousel.tsx": "c77a4021be9ea6c29b6a8215e49326f2522e9491",
         }
         for name, digest in expected.items():
             self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)
@@ -1888,9 +1911,9 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         pins = release.REVIEWED_APPLICATION_BLOBS
         if not (self.root / "package.json").exists() and not (self.root / "app").exists():
             # The release operator deliberately archives only ops/vps and these
-            # four workflows. Never treat a missing file in a full checkout as
+            # approved control files. Never treat a missing file in a full checkout as
             # optional; recognize only this exact reduced layout.
-            self.assertEqual({path.name for path in self.root.iterdir()}, {"ops", ".github"})
+            self.assertEqual({path.name for path in self.root.iterdir()}, {"ops", ".github", "scripts", "tests"})
             staged = {
                 ".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                 ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
@@ -1898,6 +1921,9 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                 "ops/vps/candidate_evidence.py", "ops/vps/test_candidate_evidence.py",
                 "ops/vps/test_runtime_packaging.py",
                 "ops/vps/audit-readiness.py", "ops/vps/test_audit_readiness.py",
+                ".github/workflows/deploy.yml", ".github/scripts/verify-caption-control.py",
+                "scripts/verify-caption-source.py", "scripts/caption-source-manifest.json",
+                "tests/test_caption_source.py",
             }
             self.assertEqual({name for name in pins if (self.root / name).exists()}, staged)
             pins = {name: pins[name] for name in staged}

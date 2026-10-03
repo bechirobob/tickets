@@ -11,6 +11,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+from test_caption_source import CaptionSourceFixture
+
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/audit-checkbox-hotfix.py"
 spec = importlib.util.spec_from_file_location("checkbox_audit", SCRIPT)
 audit = importlib.util.module_from_spec(spec)
@@ -190,157 +192,82 @@ class ReportTests(unittest.TestCase):
         self.rejects(value)
 
 
-class GitScopeTests(unittest.TestCase):
+class GitScopeTests(CaptionSourceFixture):
+    """Audit plumbing uses the same real-Git trusted snapshot fixture as the gate."""
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
-        self.run_git("init", "-q")
-        self.run_git("config", "user.name", "Audit Test")
-        self.run_git("config", "user.email", "audit-test@example.invalid")
-        for path in audit.DEPENDENCY_FILES:
-            self.write(path, "{}\n")
-        self.write("app/example.ts", "baseline\n")
-        self.commit("baseline")
-        self.base = self.rev()
-        self.base_patch = mock.patch.object(audit, "BASE_SHA", self.base)
-        self.base_patch.start()
-        self.addCleanup(self.base_patch.stop)
-        self.env_patch = mock.patch.dict(os.environ, {}, clear=True)
-        self.env_patch.start()
-        self.addCleanup(self.env_patch.stop)
-        self.write("app/example.ts", "checkbox removal\n")
-        self.seal()
-        self.commit("checkbox-only candidate")
-        self.candidate = self.rev()
-        self.now = audit.APPROVED_AT + dt.timedelta(minutes=1)
+        super().setUp()
+        environment = mock.patch.dict(os.environ, {"BECORE_TRUSTED_BASE": self.trusted,
+                                                   "BECORE_RELEASE_SHA": self.candidate}, clear=True)
+        environment.start()
+        self.addCleanup(environment.stop)
 
-    def write(self, path, text):
-        target = self.root / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text)
+    def assert_rejected(self, now=None, reason=None):
+        with self.assertRaisesRegex(audit.AuditRejected, reason or ".+"):
+            audit.verify_source_scope(self.root, now if now is not None else self.now)
 
-    def run_git(self, *args):
-        return subprocess.check_output(["git", "-C", str(self.root), *args], stderr=subprocess.PIPE).decode().strip()
-
-    def rev(self):
-        return self.run_git("rev-parse", "HEAD")
-
-    def commit(self, message):
-        self.run_git("add", ".")
-        self.run_git("commit", "-qm", message)
-
-    def seal(self, extra=None):
-        self.write(audit.POLICY_PATH, '{}\n')
-        self.run_git("add", ".")
-        tree = self.run_git("write-tree")
-        policy = {"schema": 1, "projectionDigest": audit.projection_digest(self.root, tree)}
-        policy.update(extra or {})
-        self.write(audit.POLICY_PATH, json.dumps(policy))
-
-    def assert_rejected(self, now=None):
-        with self.assertRaises(audit.AuditRejected):
-            audit.verify_source_scope(self.root, now or self.now)
-
-    def test_direct_child_candidate_allowed(self):
+    def test_trusted_direct_child_source_allowed(self):
         self.assertEqual(audit.verify_source_scope(self.root, self.now), self.candidate)
 
-    def test_initial_main_or_synthetic_merge_allowed(self):
-        tree = self.run_git("rev-parse", "HEAD^{tree}")
-        for message in ("Merge pull request", "Synthetic PR test merge"):
-            merge = self.run_git("commit-tree", tree, "-p", self.base, "-p", self.candidate, "-m", message)
-            self.run_git("checkout", "--detach", "-q", merge)
-            self.assertEqual(audit.verify_source_scope(self.root, self.now), merge)
+    def test_original_frozen_policy_is_not_a_self_seal(self):
+        # The fixture has deliberately invalid projection metadata. Only its
+        # byte-for-byte identity in the trusted snapshot matters now.
+        self.assertEqual(audit.verify_source_scope(self.root, self.now), self.candidate)
 
-    def test_later_same_tree_commit_rejected(self):
-        self.run_git("commit", "--allow-empty", "-qm", "later release")
-        self.assert_rejected()
-
-    def test_later_merge_after_candidate_rejected(self):
-        tree = self.run_git("rev-parse", "HEAD^{tree}")
-        later = self.run_git("commit-tree", tree, "-p", self.candidate, "-m", "later candidate")
-        merge = self.run_git("commit-tree", tree, "-p", self.base, "-p", later, "-m", "later merge")
-        self.run_git("checkout", "--detach", "-q", merge)
-        self.assert_rejected()
-
-    def test_merge_changed_tree_and_reversed_parents_rejected(self):
-        self.write("app/example.ts", "unexpected merge resolution\n")
-        self.run_git("add", ".")
-        changed = self.run_git("write-tree")
-        for tree, parents in ((changed, [self.base, self.candidate]),
-                              (self.run_git("rev-parse", "HEAD^{tree}"), [self.candidate, self.base])):
-            merge = self.run_git("commit-tree", tree, "-p", parents[0], "-p", parents[1], "-m", "invalid merge")
-            self.run_git("reset", "--hard", "-q", merge)
-            self.assert_rejected()
-
-    def test_wrong_or_missing_baseline_rejected(self):
-        with mock.patch.object(audit, "BASE_SHA", "a" * 40):
-            self.assert_rejected()
-
-    def test_expired_and_future_exception_rejected(self):
-        self.assert_rejected(audit.EXPIRES_AT)
-        self.assert_rejected(audit.APPROVED_AT - dt.timedelta(seconds=1))
-        self.assertLessEqual(audit.EXPIRES_AT - audit.APPROVED_AT, dt.timedelta(hours=24))
+    def test_missing_or_mutable_trust_anchor_fails(self):
+        for value in ("", "HEAD", self.trusted[:12], "a" * 40):
+            with self.subTest(value=value), mock.patch.dict(os.environ, {"BECORE_TRUSTED_BASE": value}):
+                self.assert_rejected()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assert_rejected(reason="BECORE_TRUSTED_BASE")
 
     def test_unstaged_and_staged_dirty_source_rejected(self):
-        self.write("app/example.ts", "dirty\n")
+        self.write("app/caption.ts", "dirty\n")
         self.assert_rejected()
         self.run_git("add", ".")
         self.assert_rejected()
 
-    def test_changed_tree_with_old_policy_rejected(self):
-        self.write("unreviewed.txt", "new scope\n")
-        self.run_git("add", ".")
-        self.run_git("commit", "--amend", "--no-edit", "-q")
-        self.assert_rejected()
+    def test_sibling_reseal_rejected_by_trusted_gate(self):
+        sibling = self.sibling({"app/caption.ts": "unreviewed\n",
+                                "scripts/checkbox-hotfix-audit-policy.json": '{"projectionDigest":"resealed"}'})
+        self.checkout(sibling)
+        with mock.patch.dict(os.environ, {"BECORE_RELEASE_SHA": sibling}):
+            self.assert_rejected(reason="exact reviewed snapshot")
 
-    def test_changed_file_mode_rejected(self):
-        (self.root / "app/example.ts").chmod(0o755)
-        self.run_git("add", ".")
-        self.run_git("commit", "--amend", "--no-edit", "-q")
-        self.assert_rejected()
+    def test_candidate_cannot_replace_gate(self):
+        sibling = self.sibling({audit.TRUSTED_GATE_PATH: 'raise RuntimeError("candidate gate executed")\n'})
+        self.checkout(sibling)
+        with mock.patch.dict(os.environ, {"BECORE_RELEASE_SHA": sibling}):
+            self.assert_rejected(reason="exact reviewed snapshot")
 
-    def test_changed_dependency_files_rejected_even_with_matching_projection(self):
-        for path in audit.DEPENDENCY_FILES:
-            with self.subTest(path=path):
-                self.run_git("reset", "--hard", "-q", self.candidate)
-                self.write(path, '{"changed":true}\n')
-                self.seal()
-                self.run_git("add", ".")
-                self.run_git("commit", "--amend", "--no-edit", "-q")
-                self.assert_rejected()
+    def test_candidate_cannot_replace_manifest(self):
+        sibling = self.sibling({"scripts/caption-source-manifest.json": '{}\n'})
+        self.checkout(sibling)
+        with mock.patch.dict(os.environ, {"BECORE_RELEASE_SHA": sibling}):
+            self.assert_rejected(reason="exact reviewed snapshot")
 
-    def test_policy_cannot_add_authorization_scope(self):
-        for extra in ({"expiresAt": "2099-01-01"}, {"schema": True}, {"projectionDigest": "x" * 64}):
-            self.run_git("reset", "--hard", "-q", self.candidate)
-            self.seal(extra)
-            self.run_git("add", ".")
-            self.run_git("commit", "--amend", "--no-edit", "-q")
-            self.assert_rejected()
+    def test_expired_or_future_exception_rejected(self):
+        self.assert_rejected(audit.EXPIRES_AT)
+        self.assert_rejected(audit.APPROVED_AT - dt.timedelta(seconds=1))
 
-    def test_duplicate_policy_keys_rejected(self):
-        content = (self.root / audit.POLICY_PATH).read_text().replace('"schema": 1', '"schema": 1, "schema": 1')
-        self.write(audit.POLICY_PATH, content)
-        self.run_git("add", ".")
-        self.run_git("commit", "--amend", "--no-edit", "-q")
-        self.assert_rejected()
-
-    def test_release_sha_must_match_checkout(self):
+    def test_exact_ci_release_sha_is_required(self):
         with mock.patch.dict(os.environ, {"BECORE_RELEASE_SHA": self.base}):
-            self.assert_rejected()
+            self.assert_rejected(reason="differs from BECORE_RELEASE_SHA")
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "BECORE_TRUSTED_BASE": self.trusted}, clear=True):
+            self.assert_rejected(reason="Missing exact CI release SHA")
         with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}):
-            self.assert_rejected()
-        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "BECORE_RELEASE_SHA": self.candidate}):
             self.assertEqual(audit.verify_source_scope(self.root, self.now), self.candidate)
 
-    def test_projection_excludes_only_policy_blob(self):
-        before = audit.projection_digest(self.root, "HEAD")
-        self.write(audit.POLICY_PATH, '{"changed":true}\n')
-        self.run_git("add", ".")
-        self.assertEqual(before, audit.projection_digest(self.root, self.run_git("write-tree")))
-        self.write("ops/vps/code-release.py", "operator change\n")
-        self.run_git("add", ".")
-        self.assertNotEqual(before, audit.projection_digest(self.root, self.run_git("write-tree")))
+    def test_trusted_gate_is_materialized_outside_candidate(self):
+        old_compile = compile
+        paths = []
+        def capture(source_bytes, filename, mode, *args, **kwargs):
+            paths.append(Path(filename))
+            return old_compile(source_bytes, filename, mode, *args, **kwargs)
+        with mock.patch("builtins.compile", side_effect=capture):
+            self.assertEqual(audit.verify_source_scope(self.root, self.now), self.candidate)
+        self.assertTrue(paths)
+        self.assertTrue(all(self.root not in path.parents for path in paths))
+        self.assertTrue(all(not path.exists() for path in paths))
 
 
 class DependencyTests(unittest.TestCase):

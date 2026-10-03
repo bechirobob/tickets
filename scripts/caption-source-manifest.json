@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "snapshotCommit": "335b8f52c16b5a53414669de6c0b6e648afc1761",
+  "approvedAt": "2026-10-03T08:42:19Z",
+  "expiresAt": "2026-10-04T08:42:19Z",
+  "controlFiles": [
+    ".github/scripts/verify-caption-control.py",
+    ".github/workflows/candidate-checks.yml",
+    ".github/workflows/deploy.yml",
+    ".github/workflows/tickets-code-release.yml",
+    ".github/workflows/tickets-release-operator-checks.yml",
+    ".github/workflows/vps-runtime.yml",
+    "ops/vps/code-release.py",
+    "ops/vps/test_code_release.py",
+    "scripts/audit-checkbox-hotfix.py",
+    "scripts/caption-source-manifest.json",
+    "scripts/verify-caption-source.py",
+    "tests/test_caption_source.py",
+    "tests/test_checkbox_hotfix_audit.py"
+  ]
+}
