@@ -1850,6 +1850,19 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)
             self.assertNotEqual(release.REVIEWED_OPERATOR_BLOBS[name], digest)
 
+    def test_final_room_motion_source_is_pinned_without_widening_scope(self):
+        expected = {
+            "app/room-demo.css": "bd11d7d53c77c5db3aaceca448cf392a8acc4673",
+            "app/room-preview-carousel.tsx": "0f9924047b07b8635b46e8738b367763c7d7bd7e",
+        }
+        for name, digest in expected.items():
+            self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)
+            path = self.root / name
+            if path.exists():
+                content = path.read_bytes()
+                self.assertEqual(release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest(), digest)
+        self.assertNotIn("app/", release.APPLICATION_FILES)
+
     def test_candidate_is_one_read_only_job_with_every_browser_gate(self):
         text = (self.root / ".github/workflows/candidate-checks.yml").read_text()
         self.assertIn("permissions:\n  contents: read", text)
