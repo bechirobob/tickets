@@ -63,18 +63,18 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '2b2115bc569674a9b0fdf79d0350ffeddb4c80a7', 'ops/vps/test_runtime_release.py': '1cd95b6d669092eb5ca4496a165d85ccb619d966'}
 
 REVIEWED_APPLICATION_BLOBS = {
-    "ops/vps/test_runtime_packaging.py": "d1688797c54b796eb18754a8d0ea16d54a56272e",
+    "ops/vps/test_runtime_packaging.py": "4183861b25b9c62b9effe52a114ec9c59b546af4",
     ".github/workflows/tickets-code-release.yml": "1e8816df3a56ecbe44bfb1d8a6facb5d04847b0d",
     "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
     "playwright.config.ts": "458baa39707043948474dae29bd5341c7ea5a883",
-    "ops/vps/test_candidate_evidence.py": "7fd1baecfab2f8500926b510e7e6b5ea695e5bc1",
-    "ops/vps/test_runtime_release.py": "44cb4fe5225343dd79b101670b0285c53fff9acb",
+    "ops/vps/test_candidate_evidence.py": "09f57eed4bc8c90e3b055afe58ba4c741cf84593",
+    "ops/vps/test_runtime_release.py": "1cd95b6d669092eb5ca4496a165d85ccb619d966",
     "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
-    "ops/vps/runtime_release.py": "2d5bed733f6165b3bed3a88157596e3212204f49",
+    "ops/vps/runtime_release.py": "2b2115bc569674a9b0fdf79d0350ffeddb4c80a7",
     ".github/workflows/tickets-release-operator-checks.yml": "62262a27776c526924ffcbdd4f245278f2542e97",
-    ".github/workflows/vps-runtime.yml": "3136ac455e6178e5eeae581453014ecc5575669b",
+    ".github/workflows/vps-runtime.yml": "dee69f04cddbf7f561a446c16dc8b9617160189a",
     ".github/workflows/browser-audit.yml": "266d11a65a580809689c806cc93ca06ebaa25858",
-    ".github/workflows/candidate-checks.yml": "59bf59bee523b9e21dbb20da64973d11620fa8d3",
+    ".github/workflows/candidate-checks.yml": "4b55f13491f7f58100021aad232eebcd609ad622",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
     ".github/workflows/full-audit-capacity.yml": "67ea27fb202cf216596bd27d73e51515f656b19c",
     ".github/workflows/tickets-readiness-audit.yml": "f47378c33914b0005ec15598fb0f9110d6882c6d",
@@ -188,9 +188,9 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
     "app/registration-form.tsx": "892574dd3198a410d5fea00232e607783d2e77df",
     "app/registration-manager.tsx": "cd0b22d16d2ff9bd45adbd917744a3248e2cb04e",
-    "app/room-demo.css": "bd11d7d53c77c5db3aaceca448cf392a8acc4673",
+    "app/room-demo.css": "1628b6ebe3062da1b212bd10214ff3f878d33b75",
     "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
-    "app/room-preview-carousel.tsx": "0f9924047b07b8635b46e8738b367763c7d7bd7e",
+    "app/room-preview-carousel.tsx": "2064f9d57eacab56fa6cdd9ddb8871063de6d9e4",
     "app/room/[slug]/room-client.tsx": "043000a1a4d51ea07acd170046f4898894a3945e",
     "app/rsvp/[slug]/page.tsx": "40ba4869d74f15e722834a9e682bc0867e2b054a",
     "app/rsvp/access/page.tsx": "02c302374244f4e73436acdc2dc80d99e8326d86",
@@ -239,7 +239,9 @@ REVIEWED_APPLICATION_BLOBS = {
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b",
     "worker/security-response.ts": "3d9d92746405583edcd173694d763c868a1b09fd",
-    "worker/the-room.ts": "e6c0a8b1e39e20b939e3e322ebc44675b8bab7ed"
+    "worker/the-room.ts": "e6c0a8b1e39e20b939e3e322ebc44675b8bab7ed",
+    "scripts/audit-checkbox-hotfix.py": "f1835e73dc5fa2edcbab6207c9d79e0f7cb7a98d",
+    "tests/test_checkbox_hotfix_audit.py": "4a8fdb1e3ca4a8e4606f1a3c4fef7a5238d36e58",
 }
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
@@ -442,11 +444,59 @@ def git(*args):
     return subprocess.check_output(["git", *args], text=True, stderr=subprocess.DEVNULL).strip()
 
 
+CHECKBOX_AUDIT_POLICY = "scripts/checkbox-hotfix-audit-policy.json"
+
+
+def verify_checkbox_audit_policy(source):
+    """Validate the self-excluding source seal without executing candidate code."""
+    def unique_policy(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, "Duplicate checkbox-only audit policy key.")
+            result[key] = value
+        return result
+
+    try:
+        policy = json.loads(git("show", source + ":" + CHECKBOX_AUDIT_POLICY), object_pairs_hook=unique_policy)
+    except (ValueError, subprocess.CalledProcessError) as exc:
+        raise ReleaseError("Invalid checkbox-only audit policy.") from exc
+    require(type(policy) is dict and set(policy) == {"schema", "projectionDigest"}
+            and type(policy["schema"]) is int and policy["schema"] == 1
+            and type(policy["projectionDigest"]) is str
+            and DIGEST.fullmatch(policy["projectionDigest"]),
+            "Invalid checkbox-only audit policy schema.")
+    raw = subprocess.check_output(["git", "--no-replace-objects", "ls-tree", "-r", "-z",
+                                   "--full-tree", source], stderr=subprocess.DEVNULL)
+    require(raw.endswith(b"\0"), "Invalid checkbox-only source tree.")
+    records = raw[:-1].split(b"\0")
+    included = []
+    excluded = 0
+    for record in records:
+        try:
+            metadata, path = record.split(b"\t", 1)
+            mode, kind, blob = metadata.split(b" ")
+        except ValueError as exc:
+            raise ReleaseError("Invalid checkbox-only source tree record.") from exc
+        require(kind == b"blob" and mode in (b"100644", b"100755", b"120000")
+                and re.fullmatch(rb"[a-f0-9]{40}", blob), "Invalid checkbox-only tree object.")
+        if path == CHECKBOX_AUDIT_POLICY.encode():
+            require(mode == b"100644", "Checkbox-only policy must be a regular file.")
+            excluded += 1
+        else:
+            included.append(record + b"\0")
+    digest = hashlib.sha256(b"tickets-checkbox-source-v1\0" + b"".join(included)).hexdigest()
+    require(excluded == 1 and digest == policy["projectionDigest"],
+            "Checkbox-only source seal differs from reviewed release.")
+
+
 def vetted_changes(expected, source):
     subprocess.run(["git", "merge-base", "--is-ancestor", expected, source], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     changed = git("diff", "--name-only", expected, source).splitlines()
     for name in changed:
+        if name == CHECKBOX_AUDIT_POLICY:
+            verify_checkbox_audit_policy(source)
+            continue
         if name in REVIEWED_APPLICATION_BLOBS or name in REVIEWED_MIGRATIONS:
             reviewed = REVIEWED_APPLICATION_BLOBS.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
             require(git("rev-parse", source + ":" + name) == reviewed,

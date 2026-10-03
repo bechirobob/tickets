@@ -9,7 +9,6 @@ export const useRoomPlayback = () => useContext(Playback);
 export default function RoomPreviewCarousel({ children }: { children: ReactNode }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [interacting, setInteracting] = useState(false);
   const [keyboardFocused, setKeyboardFocused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(true);
@@ -33,14 +32,12 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
   };
 
   return <div className="room-product-preview" data-active={active} role="region" aria-roledescription="carousel" aria-label="The Room preview">
-    <Playback value={{ paused: paused || interacting || keyboardFocused, reducedMotion }}>
+    <Playback value={{ paused: interacting || keyboardFocused, reducedMotion }}>
     <div ref={trackRef} className="room-product-scene__phones" tabIndex={0} onScroll={trackPosition} onPointerDown={() => { setInteracting(true); setKeyboardFocused(false); }} onPointerUp={() => setInteracting(false)} onPointerCancel={() => setInteracting(false)} onPointerLeave={() => setInteracting(false)} onFocus={(event) => setKeyboardFocused(event.currentTarget.matches(":focus-visible"))} onBlur={() => setKeyboardFocused(false)} aria-live="off">
       {children}
     </div>
     </Playback>
-    <div className="room-demo-caption"><span>{active === 0 ? "Before arrival" : "Inside the night"}</span>
-      <label className="room-demo-motion"><input type="checkbox" aria-label="Motion for Room preview" checked={!paused && !reducedMotion} disabled={reducedMotion} onChange={(event) => setPaused(!event.currentTarget.checked)} />Motion</label>
-    </div>
+    <div className="room-demo-caption"><span>{active === 0 ? "Before arrival" : "Inside the night"}</span></div>
     <p className="sr-only" aria-live="polite">Room preview {active + 1} of 2. Swipe or use the arrow keys to see both views.</p>
   </div>;
 }

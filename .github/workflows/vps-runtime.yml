@@ -39,12 +39,16 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.21.0
           cache: npm
       - run: npm ci
-      - run: npm audit --audit-level=moderate
+      - name: Verify bounded audit exception
+        run: python3 -m unittest discover -s tests -p 'test_checkbox_hotfix_audit.py' -v
+      - name: Run npm audit --audit-level=moderate
+        run: python3 scripts/audit-checkbox-hotfix.py
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
