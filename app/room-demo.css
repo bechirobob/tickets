@@ -7,13 +7,27 @@
 }
 .discovery-home .room-product-phone__render { inset: 0; width: 100%; height: 100%; border-radius: 0; clip-path: none; }
 .discovery-home .room-product-phone__display {
-  inset: 1.65% 4.1%; grid-template-rows: 34px minmax(0, 1fr) 17px;
+  inset: 1.65% 4.1%; container-type: inline-size; grid-template-rows: 6.6% minmax(0, 1fr) 17px;
   border: 0; border-radius: 15.3% / 6.97%;
 }
-.discovery-home .room-product-phone__hardware { position: relative; padding: 3px 15px 0; background: #30202d; font-size: 10px; letter-spacing: -.02em; }
-.discovery-home .room-product-phone__hardware > i { width: 70px; height: 20px; border-radius: 14px; align-self: start; margin-top: 3px; border: 1px solid #070707; }
-.discovery-home .room-product-phone__hardware > i::after { width: 5px; height: 5px; right: 7px; top: 6px; background: #10161a; border-color: #202629; }
-.discovery-home .room-product-phone__hardware > b { gap: 3px; }
+/* Scale the status safe area with the display, as one piece of device chrome.
+   Equal side columns keep the island centred even when the clock is wider. */
+.discovery-home .room-product-phone__hardware {
+  position: relative; padding: 0 5.7cqw; grid-template-columns: 1fr 32cqw 1fr;
+  background: #30202d; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 4.3cqw; font-weight: 600; line-height: 1; letter-spacing: -.025em;
+}
+.discovery-home .room-product-phone__hardware > span { justify-self: center; padding-top: 1cqw; font-variant-numeric: tabular-nums; }
+.discovery-home .room-product-phone__hardware > i {
+  width: 32cqw; height: 9.4cqw; margin-top: 2.7cqw; align-self: start;
+  border: 0; border-radius: 999px; background: #000;
+}
+.discovery-home .room-product-phone__hardware > i::after {
+  width: 2.2cqw; height: 2.2cqw; right: 3.2cqw; top: 3.6cqw;
+  border: 0; background: #0c1117;
+}
+.discovery-home .room-product-phone__hardware > b { justify-self: center; padding-top: 1cqw; line-height: 0; }
+.discovery-home .room-product-phone__hardware .room-product-phone__status { width: 18.8cqw; height: auto; stroke-width: 0; }
 .discovery-home .room-product-phone__screen { grid-template-rows: 44px minmax(0, 1fr) auto; }
 .discovery-home .room-product-phone__header { padding: 0 9px 5px; border-color: #604655; gap: 6px; }
 .discovery-home .room-product-phone__header > svg { flex: 0 0 auto; color: #efd4bf; }
