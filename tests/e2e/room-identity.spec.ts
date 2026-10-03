@@ -57,7 +57,7 @@ for (const route of ["/", "/events", "/hosts", "/organizer/submit", "/checkout/$
   });
 }
 
-for (const route of ['/help', '/terms']) {
+for (const route of ['/help', '/terms', '/privacy']) {
   test(`support email stays intact through hydration on ${route}`, async ({ page }) => {
     const hydrationErrors: string[] = [];
     page.on('pageerror', error => {
@@ -69,7 +69,8 @@ for (const route of ['/help', '/terms']) {
     const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
     expect(response?.status()).toBe(200);
     const html = await response!.text();
-    expect(html).toContain('<a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a>');
+    const address = route === '/privacy' ? 'contact@becoreops.com' : 'tickets@becoreops.com';
+    expect(html).toContain(`<a href="mailto:${address}">${address}</a>`);
     if (route === '/help') expect(html).toMatch(/<span>(?:<!--email_off-->)?tickets@becoreops\.com(?:<!--\/email_off-->)?<\/span>/u);
     expect(html).not.toMatch(/__cf_email__|data-cfemail|\/cdn-cgi\/l\/email-protection/u);
     await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeEnabled();
@@ -84,7 +85,7 @@ for (const route of ['/help', '/terms']) {
       await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeFocused();
     }
     await expect(page.locator('.__cf_email__, [data-cfemail], a[href*="/cdn-cgi/l/email-protection"]')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'tickets@becoreops.com', exact: true })).toHaveAttribute('href', 'mailto:tickets@becoreops.com');
+    await expect(page.getByRole('link', { name: address, exact: true })).toHaveAttribute('href', `mailto:${address}`);
     expect(hydrationErrors).toEqual([]);
   });
 }
