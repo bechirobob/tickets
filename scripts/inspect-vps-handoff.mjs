@@ -11,9 +11,9 @@ async function read(path) {
 const settings = await read('/workers/scripts/becore-tickets/settings');
 const secrets = settings.bindings.filter(binding => binding.type === 'secret_text').map(binding => binding.name).sort();
 const missing = secrets.filter(name => !process.env[name]);
-const databases = settings.bindings.filter(binding => binding.type === 'd1').map(binding => ({ name: binding.name, id: binding.id }));
-const rooms = settings.bindings.filter(binding => binding.type === 'durable_object_namespace').map(binding => ({ name: binding.name, namespaceId: binding.namespace_id }));
+const hasDatabase = settings.bindings.some(binding => binding.type === 'd1');
+const hasRoomNamespace = settings.bindings.some(binding => binding.type === 'durable_object_namespace');
 const probe = await fetch('https://tickets.becoreops.com/api/version', { redirect: 'manual', signal: AbortSignal.timeout(20000) });
 const body = await probe.text();
-console.log(JSON.stringify({ readOnly: true, workerStatus: probe.status, quotaExhausted: /1027|plan limits|exceeded.*limit/i.test(body), privateBindingNames: secrets, missingRunnerCredentialNames: missing, databases, rooms }, null, 2));
+console.log(JSON.stringify({ readOnly: true, workerStatus: probe.status, quotaExhausted: /1027|plan limits|exceeded.*limit/i.test(body), runnerCredentialsReady: missing.length === 0, hasDatabase, hasRoomNamespace }, null, 2));
 

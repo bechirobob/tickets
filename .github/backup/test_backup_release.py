@@ -25,7 +25,7 @@ class FakeGitHub:
     def api(self, suffix='', method='GET', payload=None):
         self.calls.append((suffix, method))
         if not suffix:
-            return {'private': self.private, 'visibility': 'private' if self.private else 'public', 'full_name': self.ctx['repository']}
+            return {'private': self.private, 'visibility': 'private' if self.private else 'public', 'full_name': self.ctx['storageRepository'], 'id': self.ctx['storageId']}
         if method == 'POST':
             self.release = dict(payload, id=10, assets=[])
         elif method == 'PATCH':
@@ -58,7 +58,7 @@ class BackupTests(unittest.TestCase):
         self.path.write_bytes(b'BCTBACKUP1' + b'\x00encrypted\x1b[not-plaintext\xff' * 3)
         self.env = {'BACKUP_PROJECT': 'tickets', 'BACKUP_PATH': str(self.path), 'GITHUB_REPOSITORY': 'bechirobob/tickets',
                     'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'schedule', 'GITHUB_SHA': 'a' * 40,
-                    'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}
+                    'BACKUP_STORE_SHA': 'b' * 40, 'BACKUP_STORE_ID': '123456789', 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}
         self.ctx = m.context(self.env)
         self.api = FakeGitHub(self.ctx)
         self.work = self.root / 'work'
@@ -67,6 +67,10 @@ class BackupTests(unittest.TestCase):
     def test_verified_receipt(self):
         receipt = m.publish(self.ctx, self.api, self.work)
         self.assertEqual(receipt['sha256'], m.digest(self.path))
+        self.assertEqual(receipt['repository'], 'bechirobob/tickets')
+        self.assertEqual(receipt['storageRepository'], 'bechirobob/becore-backups')
+        self.assertEqual(self.api.release['target_commitish'], 'b' * 40)
+        self.assertIn('/becore-backups/',receipt['releaseUrl'])
         self.assertTrue(receipt['downloadVerified'])
         self.assertIsNone(receipt['retentionDays'])
         self.assertFalse(receipt['automaticExpiry'])
@@ -80,6 +84,28 @@ class BackupTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'private'):
             m.publish(self.ctx, self.api, self.work)
         self.assertIsNone(self.api.release)
+
+    def test_wrong_destination_id_no_upload(self):
+        original = self.api.api
+        def wrong_identity(suffix='', method='GET', payload=None):
+            result = original(suffix, method, payload)
+            if not suffix:
+                result['id'] += 1
+            return result
+        self.api.api = wrong_identity
+        with self.assertRaises(RuntimeError):
+            m.publish(self.ctx, self.api, self.work)
+        self.assertIsNone(self.api.release)
+
+    def test_public_destination_after_download_no_publish(self):
+        original = self.api.download
+        def become_public(asset_id, target, expected_size):
+            original(asset_id, target, expected_size)
+            self.api.private = False
+        self.api.download = become_public
+        with self.assertRaises(RuntimeError):
+            m.publish(self.ctx, self.api, self.work)
+        self.assertTrue(self.api.release['draft'])
 
     def test_corrupted_download_no_publish(self):
         self.api.corrupt_download = True
@@ -105,7 +131,7 @@ class BackupTests(unittest.TestCase):
 
     def test_invalid_contexts(self):
         for key, value in [('GITHUB_REF', 'refs/heads/feature'), ('GITHUB_REPOSITORY', 'other/tickets'),
-                           ('GITHUB_EVENT_NAME', 'pull_request'), ('GITHUB_SHA', 'main'),
+                           ('GITHUB_EVENT_NAME', 'pull_request'), ('GITHUB_EVENT_NAME', 'push'), ('BACKUP_STORE_SHA', 'main'), ('BACKUP_STORE_ID', ''), ('GITHUB_SHA', 'main'),
                            ('GITHUB_RUN_ID', '-1'), ('GITHUB_RUN_ATTEMPT', '1;cat')]:
             with self.subTest(key=key), self.assertRaises(RuntimeError):
                 m.context(dict(self.env, **{key: value}))
@@ -157,10 +183,15 @@ class WorkflowContractTests(unittest.TestCase):
     def test_backup_guards_and_receipt_order(self):
         self.assertIn("github.ref == 'refs/heads/main'", self.backup)
         self.assertIn('permissions:\n  contents: read', self.backup)
-        self.assertIn('    permissions:\n      contents: write', self.backup)
+        self.assertIn('    permissions:\n      contents: read', self.backup)
         self.assertNotIn('actions/upload-artifact', self.backup)
         self.assertNotIn('retention-days: 35', self.backup)
         self.assertIn('          BACKUP_PROJECT:', self.backup)
+        self.assertIn('    environment: backup-storage',self.backup)
+        self.assertIn('GH_TOKEN: ${{ secrets.BACKUP_STORE_TOKEN }}',self.backup)
+        self.assertNotIn('  push:',self.backup)
+        self.assertNotIn('pull_request',self.backup)
+        self.assertLess(self.backup.index('Require private backup destination'), self.backup.index('uses: tailscale/github-action'))
         self.assertLess(self.backup.index('Verify encrypted backup transport before host access'), self.backup.index('uses: tailscale/github-action'))
         self.assertLess(self.backup.index('Publish and download-verify'), self.backup.index('Record durable verified off-host receipt'))
         if self.tickets:
