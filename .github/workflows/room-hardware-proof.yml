@@ -1,0 +1,90 @@
+name: Verify control-free iPhone showcase pixels
+
+# Temporary verification-only branch. This workflow variant must never merge.
+on:
+  push:
+    branches: [verify/room-hardware-2026-10-03]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/verify/room-hardware-2026-10-03'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BECORE_RELEASE_SHA: ${{ github.sha }}
+      PRODUCT_SHA: 826f82039f4d107c4a4a7114c08b7ca1690daa09
+    steps:
+      - name: Check out exact focused verification revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Bind the exact product and test sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PRODUCT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD^)" = "$PRODUCT_SHA"
+          test "$(git diff --name-only "$PRODUCT_SHA" HEAD)" = .github/workflows/room-hardware-proof.yml
+          git diff --exit-code HEAD --
+          printf 'Focused revision: %s\nProduct revision: %s\n' "$BECORE_RELEASE_SHA" "$PRODUCT_SHA"
+          git ls-tree -r HEAD -- app/room-preview-carousel.tsx app/room-demo.css app/use-room-demo.ts tests/e2e/room-demo.spec.ts tests/e2e/room-natural-entry.spec.ts tests/room-demo-lifecycle.test.mjs package.json package-lock.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Verify deterministic Room lifecycle and UI contracts
+        run: npm run test:repo && npm run test:ui
+      - name: Build the local candidate once
+        run: npm run build && node scripts/prepare-deploy.mjs
+      - name: Prepare isolated fixture database
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Install Chromium and WebKit
+        run: npx playwright install --with-deps chromium webkit
+      - name: Verify corrected Room readability and focus without retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          for browser in mobile-webkit mobile-chromium desktop-chromium; do
+            if ! npx playwright test tests/e2e/room-demo.spec.ts tests/e2e/room-phone-hardware.spec.ts --project "$browser" --workers=1 --retries=0 --repeat-each=1 --output "test-results/focused-$browser"; then status=1; fi
+            if ! npx playwright test tests/e2e/public-journey.spec.ts --grep '/ follows the flat, readable public design contract' --project "$browser" --workers=1 --retries=0 --output "test-results/readability-$browser"; then status=1; fi
+          done
+          exit "$status"
+      - name: Preserve bounded synthetic iPhone hardware pixels
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          python3 - <<'PYPIXELS'
+          import base64, hashlib, json, os
+          from pathlib import Path
+          from collections import Counter
+          prefix = "BECORE_ROOM_FOCUSED_PIXELS_V1 "
+          files = sorted(p for p in Path("test-results").glob("focused-*/*/*.png") if p.name in {"room-phone-hardware.png", "room-phone-context.png"})
+          expected = Counter({(f"focused-{browser}", name): 1 for browser in ("mobile-webkit", "mobile-chromium", "desktop-chromium") for name in ("room-phone-hardware.png", "room-phone-context.png")})
+          assert Counter((path.parts[1], path.name) for path in files) == expected, "Both stable screenshots are required once on every browser"
+          total = 0
+          for path in files:
+              assert path.is_file() and not path.is_symlink() and all(not parent.is_symlink() for parent in path.parents)
+              raw = path.read_bytes()
+              assert raw.startswith(b"\x89PNG\r\n\x1a\n") and 0 < len(raw) <= 1024 * 1024
+              total += len(raw)
+              assert total <= 8 * 1024 * 1024
+              digest = hashlib.sha256(raw).hexdigest()
+              chunks = [raw[start:start + 3072] for start in range(0, len(raw), 3072)]
+              record = {"source_sha": os.environ["BECORE_RELEASE_SHA"], "product_sha": os.environ["PRODUCT_SHA"], "path": path.as_posix(), "sha256": digest, "bytes": len(raw), "chunks": len(chunks)}
+              print(prefix + json.dumps({"type": "begin", **record}, sort_keys=True))
+              for index, chunk in enumerate(chunks):
+                  print(prefix + json.dumps({"type": "chunk", "path": path.as_posix(), "index": index, "data": base64.b64encode(chunk).decode()}, sort_keys=True))
+              print(prefix + json.dumps({"type": "end", **record}, sort_keys=True))
+          print("Verified iPhone screenshot bytes:", total)
+          PYPIXELS
+      - name: Reject tracked source drift
+        if: ${{ !cancelled() }}
+        run: git diff --exit-code HEAD --
