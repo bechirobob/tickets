@@ -214,7 +214,10 @@ class GitHub:
         """Stream with a hard byte limit and deadline; never pass API URLs to gh."""
         require(re.fullmatch(r"(?:releases/assets/[1-9][0-9]*|actions/jobs/[1-9][0-9]*/logs)", suffix),
                 "Unsafe download endpoint.")
-        args = ["gh", "api", "--hostname", "github.com", "--method", "GET",
+        # gh 2.97+ refuses ANSI-bearing job logs even when piped. These exact
+        # bytes go only to a bounded private file, never a terminal or pager.
+        # Preserve binary/log bytes for digest and strict producer-receipt checks.
+        args = ["gh", "api", "--allow-escape-sequences", "--hostname", "github.com", "--method", "GET",
                 "-H", "Accept: " + accept, "-H", "X-GitHub-Api-Version: 2022-11-28",
                 f"repos/{REPOSITORY}/{suffix}"]
         started = time.monotonic()

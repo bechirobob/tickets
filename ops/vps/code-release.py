@@ -58,6 +58,10 @@ APPLICATION_FILES = {
 }
 # Exact reviewed application outputs for the app-experience increment. This is
 # deliberately a blob manifest, never an app/**, runtime/** or db/** wildcard.
+# Operator transport may advance while the already-verified application stays pinned.
+# These pins validate staged operator bytes; they do not expand application approval.
+REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '2b2115bc569674a9b0fdf79d0350ffeddb4c80a7', 'ops/vps/test_runtime_release.py': '1cd95b6d669092eb5ca4496a165d85ccb619d966'}
+
 REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/test_runtime_packaging.py": "d1688797c54b796eb18754a8d0ea16d54a56272e",
     ".github/workflows/tickets-code-release.yml": "1e8816df3a56ecbe44bfb1d8a6facb5d04847b0d",
