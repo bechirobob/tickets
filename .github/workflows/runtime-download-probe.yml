@@ -12,13 +12,44 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: d51fecd2f29755210143120bc21814a59639a33d
+          ref: 9b3083b346367ec57f6d959c0e98461d333eac90
+          fetch-depth: 0
           persist-credentials: false
-      - name: Download and validate exact published runtime without host access
+      - name: Complete read-only release provenance and archive preflight
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: 9b3083b346367ec57f6d959c0e98461d333eac90
+          OPERATOR_SHA: 56228918631593451fb6c33f8b0aec94ddc296e9
+          EXPECTED_ACTIVE: 473bbf40afe1a77a722c8399f91c4dd95f3e40ce
+          RUNTIME_RUN: '37079781147'
+          CANDIDATE_RUN: '37075749120'
+        shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = d51fecd2f29755210143120bc21814a59639a33d
-          python3 ops/vps/runtime_release.py download --source 9b3083b346367ec57f6d959c0e98461d333eac90 --run-id 37079781147 --attempt 1 --directory "$RUNNER_TEMP/verified-runtime"
-          sha256sum "$RUNNER_TEMP/verified-runtime/tickets-vps-runtime.tar.gz"
-          echo "Exact pinned producer receipt, private release, source, asset IDs and all downloaded hashes verified."
+          set -euo pipefail
+          git fetch --no-tags origin "$OPERATOR_SHA"
+          operator="$RUNNER_TEMP/operator"
+          metadata="$RUNNER_TEMP/evidence"
+          mkdir -m 700 "$operator" "$metadata"
+          git archive "$OPERATOR_SHA" ops/vps .github/workflows | tar -x -C "$operator"
+          python3 -m unittest discover -s "$operator/ops/vps" -p 'test_*.py'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN/attempts/1/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/runtime-jobs.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/attempts/1/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/candidate-jobs.json"
+          git fetch --no-tags origin f3aa734d65a1c802234d8f8da7f33773c9c3f8b3
+          python3 "$operator/ops/vps/runtime_release.py" download --source "$SOURCE_SHA" --run-id "$RUNTIME_RUN" --attempt 1 --directory "$metadata/artifact"
+          # Simulate the main-dispatch identity only for this read-only verifier.
+          # This job has no host identity, connection or deployment command.
+          GITHUB_REF=refs/heads/main python3 "$operator/ops/vps/code-release.py" verify-ci --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
+          python3 - "$operator" "$metadata" <<'PY'
+          import importlib.util,sys,json,tarfile
+          from pathlib import Path
+          operator,metadata=map(Path,sys.argv[1:])
+          spec=importlib.util.spec_from_file_location('reviewed_release',operator/'ops/vps/code-release.py')
+          module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+          proof=json.loads((metadata/'provenance.json').read_text())
+          deployment=object.__new__(module.Deployment)
+          with tarfile.open(metadata/'artifact/tickets-vps-runtime.tar.gz','r:gz') as archive:
+              members=deployment.archive_members(archive)
+          print(json.dumps({'completePreflight':True,'source':proof['source'],'candidateTree':proof['candidateTree'],'changedFiles':len(proof['changedFiles']),'migrations':proof['migrations'],'archiveMembers':len(members)}))
+          PY
