@@ -10,28 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Inspect fixed producer log and small release asset downloads
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d51fecd2f29755210143120bc21814a59639a33d
+          persist-credentials: false
+      - name: Download and validate exact published runtime without host access
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_HOST: github.com
-          GH_PROMPT_DISABLED: '1'
-          GH_DEBUG: ''
-        shell: bash
         run: |
-          python3 - <<'PY'
-          import subprocess, tempfile, pathlib, json, re, hashlib
-          endpoints = [
-            ('producer-job-log', 'actions/jobs/111077519167/logs', 'application/vnd.github+json'),
-            ('producer-job-log-file', 'actions/jobs/111077519167/logs', 'application/vnd.github+json'),
-            ('manifest-asset', 'releases/assets/606751395', 'application/octet-stream'),
-            ('checksum-asset', 'releases/assets/606751394', 'application/octet-stream'),
-          ]
-          for label, suffix, accept in endpoints:
-            with tempfile.TemporaryFile() as target:
-              result = subprocess.run(['gh','api',*(['--allow-escape-sequences'] if label.endswith('-file') else []),'--hostname','github.com','--method','GET','-H','Accept: '+accept,'-H','X-GitHub-Api-Version: 2022-11-28','repos/bechirobob/tickets/'+suffix], stdout=target, stderr=subprocess.PIPE, timeout=120)
-              target.seek(0); data=target.read(32*1024*1024)
-              err=result.stderr[:65536]
-              status=re.search(rb'HTTP ([0-9]{3})',err)
-              categories=[name for name,needle in [('escape-sequences',b'terminal escape sequences'),('expired',b'expir'),('permission',b'Resource not accessible'),('not-found',b'Not Found'),('redirect',b'redirect'),('accept-header',b'Accept'),('not-json',b'JSON'),('network',b'connect'),('bad-request',b'Bad Request')] if needle.lower() in err.lower()]
-              print(json.dumps(dict(endpoint=label,exit=result.returncode,bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),http=status[1].decode() if status else None,classifications=categories)))
-          PY
+          test "$(git rev-parse HEAD)" = d51fecd2f29755210143120bc21814a59639a33d
+          python3 ops/vps/runtime_release.py download --source 9b3083b346367ec57f6d959c0e98461d333eac90 --run-id 37079781147 --attempt 1 --directory "$RUNNER_TEMP/verified-runtime"
+          sha256sum "$RUNNER_TEMP/verified-runtime/tickets-vps-runtime.tar.gz"
+          echo "Exact pinned producer receipt, private release, source, asset IDs and all downloaded hashes verified."
