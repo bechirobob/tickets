@@ -1570,10 +1570,9 @@ class VerifierTests(unittest.TestCase):
 
     @staticmethod
     def runtime_jobs():
-        return [{"name": "verify", "conclusion": "success", "steps": [
-            {"name": name, "conclusion": "success", "status": "completed"} for name in (
-                "Prepare verified runtime without development dependencies", "Publish verified private runtime release")]},
-            {"name": "handoff", "conclusion": "success"}]
+        return [{"name": job, "conclusion": "success", "steps": [
+            {"name": name, "conclusion": "success", "status": "completed"} for name in sorted(required)]}
+            for job, required in (("verify", release.RUNTIME_VERIFY_STEPS), ("handoff", release.RUNTIME_HANDOFF_STEPS))]
 
     def test_single_candidate_and_exact_runtime_jobs_required(self):
         runtime, candidate = self.runtime_jobs(), self.candidate_jobs()
