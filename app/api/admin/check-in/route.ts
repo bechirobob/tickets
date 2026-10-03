@@ -78,7 +78,7 @@ export async function GET(request: Request) {
       LEFT JOIN attendee_profiles profile ON profile.id = assignment.attendee_id
       WHERE t.event_slug = ? AND o.status = 'paid' AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = t.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')) LIMIT 10000
     `).bind(eventSlug).all();
-    return Response.json({ issued: stats?.issued ?? 0, checkedIn: stats?.checkedIn ?? 0, tiers: tiers.results, canUndo: hasPermission(session, "gate.undo"), manifest: manifest.results, generatedAt: new Date().toISOString() }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ issued: stats?.issued ?? 0, checkedIn: stats?.checkedIn ?? 0, tiers: tiers.results, canUndo: hasPermission(session, "gate.undo"), manifest: manifest.results, generatedAt: new Date().toISOString(), access: { accountId: session.accountId, sessionId: session.sessionId, expiresAt: session.expiresAt } }, { headers: { "cache-control": "no-store" } });
   }
   return Response.json({ issued: stats?.issued ?? 0, checkedIn: stats?.checkedIn ?? 0, tiers: tiers.results, canUndo: hasPermission(session, "gate.undo") }, { headers: { "cache-control": "no-store" } });
 }

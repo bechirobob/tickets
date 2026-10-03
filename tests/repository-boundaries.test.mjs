@@ -10,6 +10,7 @@ import './iphone-layout-evidence.test.mjs';
 import './support-email-rendering.test.mjs';
 import './browser-audit-harness.test.mjs';
 import './preview-data-inventory.test.mjs';
+import './scanner-session-client.test.mjs';
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 

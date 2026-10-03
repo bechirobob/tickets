@@ -1,5 +1,7 @@
 "use client";
 
+import { clearGateManifests } from "../lib/scanner-manifest";
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
@@ -59,6 +61,7 @@ export default function WorkspaceChrome({ actor, role, active, host = false, eve
     const response = await operationsFetch("/api/admin/session", { method: "DELETE" });
     if (response.ok) {
       try { sessionStorage.removeItem("bct-workspace-return"); } catch {}
+      try { clearGateManifests(window.localStorage); } catch { /* Server logout still wins. */ }
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign("/");
     } else { setBusy(false); setError("Sign out could not be confirmed. Try again."); }
