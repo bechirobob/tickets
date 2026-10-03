@@ -430,7 +430,7 @@ test("reenabling Room animation offscreen waits for visibility instead of advanc
 });
 
 // Exercise the actual carousel event handlers without needing a browser socket.
-// The browser suite separately verifies the native input control.
+// The browser suite separately verifies keyboard and touch interaction.
 const carouselSource = await readFile(new URL("../app/room-preview-carousel.tsx", import.meta.url), "utf8");
 const carouselCompiled = transformSync(carouselSource, { loader: "tsx", format: "cjs", jsx: "automatic" }).code;
 function mountCarousel(reducedMotion = false) {
@@ -490,22 +490,19 @@ function mountCarousel(reducedMotion = false) {
   return {
     get playback() { return find(node => node.type?.name === "Playback").props.value; },
     get track() { return find(node => node.props?.className === "room-product-scene__phones").props; },
-    get input() { return find(node => node.type === "input").props; },
-    get label() { return find(node => node.type === "label").props; },
+    get control() { return find(node => ["input", "button", "label"].includes(node.type)); },
     act(callback) { callback(); commit(); },
     motion(reduce) { media.matches = reduce; media.dispatchEvent(new Event("change")); commit(); },
     unmount() { for (const slot of slots) slot?.cleanup?.(); },
   };
 }
 
-test("Room showcase autoplays with a discreet native motion control", () => {
+test("Room showcase autoplays without playback or motion controls", () => {
   const carousel = mountCarousel();
   assert.equal(carousel.playback.paused, false);
   assert.equal(carousel.playback.reducedMotion, false);
-  assert.equal(carousel.input.checked, true);
-  assert.equal(carousel.input.disabled, false);
-  assert.equal(carousel.label.children[1], "Motion");
-  assert.equal(carousel.input["aria-label"], "Motion for Room preview");
+  assert.equal(carousel.control, undefined);
+  assert.equal(carousel.track.tabIndex, 0);
   carousel.unmount();
 });
 
@@ -518,48 +515,23 @@ test("Room touch and keyboard inspection resume automatically without creating a
     // A pointer can reuse the already focused track without another focus event.
     carousel.act(() => carousel.track[release]());
     assert.equal(carousel.playback.paused, false);
-    assert.equal(carousel.input.checked, true);
   }
   carousel.act(() => carousel.track.onFocus({ currentTarget: { matches: () => true } }));
   assert.equal(carousel.playback.paused, true);
-  assert.equal(carousel.input.checked, true, "keyboard focus must not change the user's motion setting");
   carousel.act(() => carousel.track.onBlur());
   assert.equal(carousel.playback.paused, false);
   carousel.unmount();
 });
 
-test("Room explicit motion stop survives touch, focus changes and reduced-motion changes", () => {
-  const carousel = mountCarousel();
-  carousel.act(() => carousel.input.onChange({ currentTarget: { checked: false } }));
-  for (const release of ["onPointerUp", "onPointerCancel", "onPointerLeave"]) {
-    carousel.act(() => carousel.track.onPointerDown());
-    carousel.act(() => carousel.track[release]());
-    assert.equal(carousel.playback.paused, true);
-  }
-  carousel.act(() => carousel.track.onFocus({ currentTarget: { matches: () => true } }));
-  carousel.act(() => carousel.track.onBlur());
-  assert.equal(carousel.playback.paused, true);
-  carousel.motion(true);
-  assert.equal(carousel.input.checked, false);
-  assert.equal(carousel.input.disabled, true);
-  carousel.motion(false);
-  assert.equal(carousel.playback.paused, true);
-  assert.equal(carousel.input.checked, false);
-  carousel.act(() => carousel.input.onChange({ currentTarget: { checked: true } }));
-  assert.equal(carousel.playback.paused, false);
-  assert.equal(carousel.input.checked, true);
-  carousel.unmount();
-});
-
-test("Room system reduced motion disables autoplay without changing the explicit motion preference", () => {
+test("Room system reduced motion silently disables autoplay and restores it when cleared", () => {
   const carousel = mountCarousel(true);
   assert.equal(carousel.playback.reducedMotion, true);
-  assert.equal(carousel.input.checked, false);
-  assert.equal(carousel.input.disabled, true);
+  assert.equal(carousel.control, undefined);
   carousel.motion(false);
   assert.equal(carousel.playback.reducedMotion, false);
   assert.equal(carousel.playback.paused, false);
-  assert.equal(carousel.input.checked, true);
-  assert.equal(carousel.input.disabled, false);
+  carousel.motion(true);
+  assert.equal(carousel.playback.reducedMotion, true);
+  assert.equal(carousel.control, undefined);
   carousel.unmount();
 });

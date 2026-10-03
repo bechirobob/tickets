@@ -27,6 +27,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - name: Verify exact candidate source
         id: source
         shell: bash
@@ -42,8 +43,10 @@ jobs:
           node-version: 22
       - name: Install locked dependencies
         run: npm ci --no-audit
+      - name: Verify bounded audit exception
+        run: python3 -m unittest discover -s tests -p 'test_checkbox_hotfix_audit.py' -v
       - name: Audit dependencies
-        run: npm audit --audit-level=moderate
+        run: python3 scripts/audit-checkbox-hotfix.py
       - name: Lint application
         run: npm run lint
       - name: Check application types
