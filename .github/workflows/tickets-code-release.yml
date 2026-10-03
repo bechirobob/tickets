@@ -82,6 +82,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          test "$BECORE_TRUSTED_BASE" != "$SOURCE_SHA"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           git merge-base --is-ancestor "$SOURCE_SHA" origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
@@ -91,6 +94,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$OPERATOR_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$OPERATOR_SHA" = "$BECORE_TRUSTED_BASE"
           git merge-base --is-ancestor "$OPERATOR_SHA" "$SOURCE_SHA"
@@ -99,12 +104,11 @@ jobs:
           mkdir -m 700 "$operator"
           git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py | tar -x -C "$operator"
           printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
-      - name: Verify independently trusted caption source before any host access
+      - name: Verify independently trusted operator before any host access
         shell: bash
         run: |
           set -euo pipefail
-          python3 -I "$RUNNER_TEMP/tickets-operator/scripts/verify-caption-source.py" \
-            --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$SOURCE_SHA"
+          python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator --source "$SOURCE_SHA"
       - name: Verify updater regression suite
         run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
       - name: Verify exact CI runs, source tree, ancestry and artifact provenance

@@ -1537,6 +1537,13 @@ class HostVerificationDeploymentTests(DeploymentFixture):
 
 
 class VerifierTests(unittest.TestCase):
+    def setUp(self):
+        # These tests isolate the existing path/blob and CI contracts. Real-Git
+        # mode/deletion enforcement is exercised in test_release_source.py.
+        modes = patch.object(release, "verify_changed_modes")
+        modes.start()
+        self.addCleanup(modes.stop)
+
     def test_crypto_json_edit_preserves_unrelated_bytes_and_escaped_keys(self):
         self.assertEqual(release.enable_crypto_bytes(b'{ "key":"value" }\n'),
                          b'{ "key":"value" ,"SEEV_CRYPTO_ENABLED":"true"}\n')
@@ -1640,7 +1647,7 @@ class VerifierTests(unittest.TestCase):
         args = argparse.Namespace(source=NEW, expected=OLD, metadata="/not/read")
         with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), \
              patch.object(release, "git", side_effect=[NEW, ""]), \
-             patch.object(release, "verify_trusted_caption_source", side_effect=release.ReleaseError("unapproved source")) as guard:
+             patch.object(release, "verify_trusted_operator", side_effect=release.ReleaseError("unapproved source")) as guard:
             with self.assertRaisesRegex(release.ReleaseError, "unapproved source"):
                 release.verify_ci(args)
             guard.assert_called_once_with(NEW)
@@ -1648,37 +1655,24 @@ class VerifierTests(unittest.TestCase):
     def test_trusted_source_requires_independent_baseline_and_operator_bytes(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(release.ReleaseError, "immutable trusted"):
-                release.verify_trusted_caption_source(NEW)
+                release.verify_trusted_operator(NEW)
         with patch.dict(os.environ, BECORE_TRUSTED_BASE=OLD), \
              patch.object(release.subprocess, "check_output", return_value=b"substituted operator"):
             with self.assertRaisesRegex(release.ReleaseError, "Operator bytes"):
-                release.verify_trusted_caption_source(NEW)
+                release.verify_trusted_operator(NEW)
 
-    def test_substituted_staged_gate_is_rejected_before_execution(self):
+    def test_trusted_operator_checks_both_main_and_source_ancestry(self):
         operator = Path(release.__file__).resolve()
         with patch.dict(os.environ, BECORE_TRUSTED_BASE=OLD), \
-             patch.object(release.subprocess, "check_output", side_effect=[operator.read_bytes(), b"trusted gate"]), \
-             patch.object(release.Path, "read_bytes", side_effect=[operator.read_bytes(), b"substituted gate"]), \
-             patch.object(release.Path, "is_file", return_value=True), \
-             patch.object(release.Path, "is_symlink", return_value=False), \
+             patch.object(release.subprocess, "check_output", return_value=operator.read_bytes()), \
              patch.object(release.subprocess, "run") as run:
-            with self.assertRaisesRegex(release.ReleaseError, "Source gate bytes"):
-                release.verify_trusted_caption_source(NEW)
-            self.assertEqual(run.call_count, 1)
-            self.assertEqual(run.call_args.args[0][0], "git")
-
-    def test_trusted_source_always_calls_independent_gate(self):
-        operator = Path(release.__file__).resolve()
-        with patch.dict(os.environ, BECORE_TRUSTED_BASE=OLD), \
-             patch.object(release.subprocess, "check_output", side_effect=[operator.read_bytes(), b"trusted gate"]), \
-             patch.object(release.Path, "read_bytes", side_effect=[operator.read_bytes(), b"trusted gate"]), \
-             patch.object(release.Path, "is_file", return_value=True), \
-             patch.object(release.Path, "is_symlink", return_value=False), \
-             patch.object(release.subprocess, "run") as run:
-            release.verify_trusted_caption_source(NEW)
-        self.assertEqual(run.call_args_list[-1], call([
-            release.sys.executable, "-I", str(operator.parents[2] / "scripts/verify-caption-source.py"),
-            "--repo", str(Path.cwd()), "--trusted-baseline", OLD, "--candidate", NEW], check=True))
+            release.verify_trusted_operator(NEW)
+        self.assertEqual([entry.args[0] for entry in run.call_args_list], [
+            ["git", "--no-replace-objects", "merge-base", "--is-ancestor", OLD, descendant]
+            for descendant in ("origin/main", NEW)])
+        for entry in run.call_args_list:
+            self.assertEqual(entry.kwargs["env"]["GIT_NO_REPLACE_OBJECTS"], "1")
+            self.assertTrue(entry.kwargs["check"])
 
     def test_security_policy_changes_require_an_explicit_exact_reviewed_blob(self):
         name = "worker/security-response.ts"
@@ -1833,7 +1827,7 @@ class VerifierTests(unittest.TestCase):
             checksum.write_text(release.digest_file(archive) + "  tickets-vps-runtime.tar.gz\n")
             args = argparse.Namespace(source=NEW, expected=ORIGINAL, repository="owner/tickets", metadata=str(root),
                                       runtime_run="123", candidate_run="456", archive=str(archive), output=str(root / "proof.json"))
-            with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), patch.object(release, "verify_trusted_caption_source"), patch.object(release.subprocess, "run"), patch("builtins.print"), patch.object(release, "verify_runtime_transport", return_value={"verified": True}) as transport:
+            with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), patch.object(release, "verify_trusted_operator"), patch.object(release.subprocess, "run"), patch("builtins.print"), patch.object(release, "verify_runtime_transport", return_value={"verified": True}) as transport:
                 with patch.object(release, "git", side_effect=[NEW, "", TREE, TREE, "tests/new-test.ts"]):
                     release.verify_ci(args)
                 self.assertEqual(json.loads((root / "proof.json").read_text())["archiveSha256"], release.digest_file(archive))
@@ -1924,6 +1918,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                 "ops/vps/candidate_evidence.py", "ops/vps/test_candidate_evidence.py",
                 "ops/vps/test_runtime_packaging.py",
                 "ops/vps/audit-readiness.py", "ops/vps/test_audit_readiness.py",
+                "ops/vps/test_release_source.py", "ops/vps/test_runtime_workflow_contract.py",
                 ".github/workflows/deploy.yml", ".github/scripts/verify-caption-control.py",
                 "scripts/verify-caption-source.py", "scripts/caption-source-manifest.json",
                 "tests/test_caption_source.py",

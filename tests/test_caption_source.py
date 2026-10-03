@@ -269,47 +269,80 @@ class CaptionSourceTests(CaptionSourceFixture):
 
 
 class WorkflowTrustBoundaryTests(unittest.TestCase):
-    """Keep trust-anchor checks before extraction/execution in every release path."""
+    """Ordinary releases retain trust checks without a caption-only exception."""
     ROOT = Path(__file__).resolve().parents[1]
 
     def workflow(self, name):
         return (self.ROOT / ".github/workflows" / name).read_text()
 
-    def test_automatic_and_manual_preflights_validate_main_ancestry_first(self):
+    def test_preflights_bind_clean_exact_source_and_independent_ancestry(self):
         for filename, count in (("candidate-checks.yml", 1), ("deploy.yml", 1), ("vps-runtime.yml", 2)):
             with self.subTest(workflow=filename):
                 text = self.workflow(filename)
-                blocks = text.split("- name: Verify independently trusted caption source before executing checkout code")[1:]
+                blocks = text.split("- name: Verify exact source ancestry before executing checkout code")[1:]
                 self.assertEqual(len(blocks), count)
                 for block in blocks:
                     block = block.split("\n      - ", 1)[0]
-                    require_main = 'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main'
-                    extract = 'git show "$BECORE_TRUSTED_BASE:scripts/verify-caption-source.py" > "$gate"'
-                    execute = 'python3 -I "$gate" --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$BECORE_RELEASE_SHA"'
-                    self.assertIn('[[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$', block)
-                    self.assertIn('test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"', block)
-                    self.assertLess(block.index(require_main), block.index(extract))
-                    self.assertLess(block.index(extract), block.index(execute))
-                    self.assertNotIn("npm ", block[:block.index(execute)])
+                    for command in ('unset "${!GIT_@}"', 'GIT_NO_REPLACE_OBJECTS=1',
+                                    'GIT_CONFIG_GLOBAL=/dev/null', 'GIT_NO_LAZY_FETCH=1',
+                                    '[[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$',
+                                    'test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"',
+                                    'test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"',
+                                    'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main',
+                                    'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"',
+                                    'git diff --exit-code HEAD --',
+                                    'git diff --cached --exit-code HEAD --',
+                                    'test -z "$(git ls-files --others --exclude-standard)"'):
+                        self.assertIn(command, block)
+                    self.assertNotIn("verify-caption-source.py", block)
+                    self.assertNotIn("npm ", block)
+                    if filename != "candidate-checks.yml":
+                        self.assertIn('test "$GITHUB_REF" = refs/heads/main', block)
+                        self.assertIn('git merge-base --is-ancestor "$BECORE_RELEASE_SHA" origin/main', block)
 
-    def test_trust_anchors_do_not_come_from_candidate_parents_or_manifest(self):
+    def test_trust_anchors_remain_independent_of_candidate_parents_and_manifests(self):
         self.assertIn('BECORE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || inputs.trusted_base }}',
                       self.workflow("candidate-checks.yml"))
-        self.assertIn('BECORE_TRUSTED_BASE: ${{ github.event.before || inputs.trusted_base }}',
-                      self.workflow("deploy.yml"))
+        self.assertIn('BECORE_TRUSTED_BASE: ${{ github.event.before || inputs.trusted_base }}', self.workflow("deploy.yml"))
         self.assertEqual(self.workflow("vps-runtime.yml").count('BECORE_TRUSTED_BASE: ${{ github.event.before }}'), 2)
 
-    def test_manual_activation_stages_trusted_operator_and_gates_before_host_access(self):
+    def test_ordinary_audits_have_no_exception_or_error_suppression(self):
+        for filename in ("candidate-checks.yml", "vps-runtime.yml", "deploy.yml"):
+            text = self.workflow(filename)
+            self.assertIn('run: npm audit --audit-level=moderate\n', text)
+            self.assertNotIn('audit-checkbox-hotfix.py', text)
+            self.assertNotIn('Verify bounded audit exception', text)
+            self.assertNotIn('continue-on-error', text)
+            self.assertNotIn('npm audit --audit-level=moderate ||', text)
+
+    def test_manual_activation_binds_trusted_operator_before_host_access(self):
         text = self.workflow("tickets-code-release.yml")
         self.assertIn('OPERATOR_SHA: ${{ inputs.trusted_base }}', text)
         self.assertIn('BECORE_TRUSTED_BASE: ${{ inputs.trusted_base }}', text)
         ancestry = text.index('git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main')
         stage = text.index('git archive "$OPERATOR_SHA"')
-        gate = text.index('python3 -I "$RUNNER_TEMP/tickets-operator/scripts/verify-caption-source.py"')
+        guard = text.index('python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator')
         regression = text.index('- name: Verify updater regression suite')
+        verify_ci = text.index('code-release.py" verify-ci')
+        host = text.index('- name: Connect existing dedicated Tickets identity')
+        self.assertIn('test "$BECORE_TRUSTED_BASE" != "$SOURCE_SHA"', text[:stage])
         self.assertLess(ancestry, stage)
-        self.assertLess(stage, gate)
-        self.assertLess(gate, regression)
+        self.assertLess(stage, guard)
+        self.assertLess(guard, regression)
+        self.assertLess(regression, verify_ci)
+        self.assertLess(verify_ci, host)
+        for name in ("Reject unmerged source before executing checkout code", "Stage reviewed trusted operator without changing the verified application tree"):
+            block = text.split("- name: " + name, 1)[1].split("\n      - ", 1)[0]
+            self.assertLess(block.index('unset "${!GIT_@}"'), block.index('git '))
+            self.assertLess(block.index('GIT_NO_REPLACE_OBJECTS=1'), block.index('git '))
+            self.assertIn('GIT_CONFIG_GLOBAL=/dev/null', block)
+            self.assertIn('GIT_NO_LAZY_FETCH=1', block)
+
+    def test_operator_checks_use_real_checkout_not_time_limited_synthetic_tree(self):
+        text = self.workflow("tickets-release-operator-checks.yml")
+        self.assertNotIn('caption-expected-source', text)
+        self.assertNotIn('python3 -I .github/scripts/verify-caption-control.py', text)
+        self.assertIn("python3 -m unittest discover -s ops/vps -p 'test_*.py'", text)
 
 
 if __name__ == "__main__":
