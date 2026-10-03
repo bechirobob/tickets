@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Run npm audit, with one immutable, expiring checkbox-release exception.
+"""Run npm audit, with one immutable, expiring caption-removal release exception.
 
 This does not patch dependencies or suppress audit output. It tolerates only the
 reviewed GHSA below, with its exact existing transitive graph, for one source tree
-whose candidate is a direct child of the approved main commit. Every subsequent
+whose candidate is a direct child of an independently trusted control baseline. Every subsequent
 release fails the exception, even if it has the same tree. A genuinely clean npm
 audit remains a normal success after this temporary exception has expired.
 """
@@ -17,17 +17,15 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
-BASE_SHA = "da465626ec52476ec0421fde1bce17f377b8b072"
-APPROVED_AT = dt.datetime(2026, 10, 3, 6, 56, 58, tzinfo=dt.timezone.utc)
-EXPIRES_AT = dt.datetime(2026, 10, 4, 6, 56, 58, tzinfo=dt.timezone.utc)
-POLICY_PATH = "scripts/checkbox-hotfix-audit-policy.json"
+TRUSTED_GATE_PATH = "scripts/verify-caption-source.py"
+APPROVED_AT = dt.datetime(2026, 10, 3, 8, 42, 19, tzinfo=dt.timezone.utc)
+EXPIRES_AT = dt.datetime(2026, 10, 4, 8, 42, 19, tzinfo=dt.timezone.utc)
 LOCK_SHA256 = "b0735c8c3b9879aa1d6089365719d7f56281d3dd1ae1244fe5ecbc5140d01caf"
 BRACES_INVENTORY_SHA256 = "85807dcacfb57c287dfdb760e17f9686966d6f94505c0f10f19ea0ed9ba4bf23"
 BRACES_INTEGRITY = "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA=="
 ADVISORY_URL = "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm"
-PROJECTION_PREFIX = b"tickets-checkbox-source-v1\0"
-DEPENDENCY_FILES = ("package.json", "package-lock.json", "mobile/package.json", "mobile/package-lock.json")
 SEVERITIES = ("info", "low", "moderate", "high", "critical")
 KNOWN_ADVISORY = {
     "source": 1240992,
@@ -153,71 +151,50 @@ def validate_report(raw: bytes, returncode: int) -> bool:
 
 
 def git(root: Path, *args: str) -> bytes:
-    result = subprocess.run(["git", "--no-replace-objects", "-C", str(root), *args], capture_output=True, timeout=30)
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+               GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1", GIT_TERMINAL_PROMPT="0")
+    result = subprocess.run(["git", "--no-replace-objects", "-C", str(root), *args],
+                            capture_output=True, timeout=30, env=env)
     require(result.returncode == 0, "Git source verification failed: " + " ".join(args))
     return result.stdout
 
 
-def tree_records(root: Path, revision: str) -> dict[bytes, bytes]:
-    data = git(root, "ls-tree", "-r", "-z", "--full-tree", revision)
-    require(data.endswith(b"\0"), "Empty or incomplete source tree")
-    records = {}
-    for record in data[:-1].split(b"\0"):
-        header, path = record.split(b"\t", 1)
-        require(re.fullmatch(rb"(?:100644|100755|120000) blob [a-f0-9]{40}", header) is not None, "Unsupported tracked source type")
-        require(path not in records and path and not path.startswith(b"/"), "Invalid tracked path")
-        records[path] = record + b"\0"
-    return records
-
-
-def projection_digest(root: Path, revision: str) -> str:
-    records = tree_records(root, revision)
-    return hashlib.sha256(PROJECTION_PREFIX + b"".join(record for path, record in records.items()
-                                                       if path != POLICY_PATH.encode())).hexdigest()
-
-
-def commit_info(root: Path, revision: str) -> tuple[str, list[str]]:
-    require(git(root, "cat-file", "-t", revision).strip() == b"commit", "Missing required commit")
-    headers = git(root, "cat-file", "-p", revision).split(b"\n\n", 1)[0].splitlines()
-    trees = [line[5:].decode("ascii") for line in headers if line.startswith(b"tree ")]
-    parents = [line[7:].decode("ascii") for line in headers if line.startswith(b"parent ")]
-    require(len(trees) == 1 and all(re.fullmatch(r"[a-f0-9]{40}", sha) for sha in trees + parents), "Malformed commit topology")
-    return trees[0], parents
-
-
-def verify_topology(root: Path, head: str) -> None:
-    commit_info(root, BASE_SHA)  # A shallow or missing baseline fails closed.
-    tree, parents = commit_info(root, head)
-    if parents == [BASE_SHA]:
-        return
-    require(len(parents) == 2 and parents[0] == BASE_SHA, "Exception is only for the direct-child candidate or its first merge")
-    candidate_tree, candidate_parents = commit_info(root, parents[1])
-    require(candidate_parents == [BASE_SHA] and candidate_tree == tree,
-            "Merge must preserve the exact direct-child candidate tree")
-
-
 def verify_source_scope(root: Path, now: dt.datetime | None = None) -> str:
-    now = now or dt.datetime.now(dt.timezone.utc)
-    require(now.tzinfo is not None and APPROVED_AT <= now < EXPIRES_AT,
-            "Checkbox-only audit exception has expired or is not yet valid")
+    """Bind the audit exception to the independently selected trusted source gate.
+
+    Workflows must execute T's preflight before any candidate code. This wrapper
+    also loads its verifier from T, never imports a candidate verifier or policy.
+    The original policy JSON is now an inert, fully compared snapshot file.
+    """
+    trusted = os.environ.get("BECORE_TRUSTED_BASE")
+    require(type(trusted) is str and re.fullmatch(r"[a-f0-9]{40}", trusted) is not None,
+            "Missing immutable BECORE_TRUSTED_BASE")
     head = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
     expected = os.environ.get("BECORE_RELEASE_SHA")
     require(not os.environ.get("GITHUB_ACTIONS") or expected is not None, "Missing exact CI release SHA")
     require(expected is None or expected == head, "Checked out source differs from BECORE_RELEASE_SHA")
     git(root, "diff", "--quiet", "--no-ext-diff", "--")
     git(root, "diff", "--cached", "--quiet", "--no-ext-diff", "--")
-    verify_topology(root, head)
-    records = tree_records(root, head)
-    require(POLICY_PATH.encode() in records and records[POLICY_PATH.encode()].startswith(b"100644 blob "), "Missing tracked regular policy file")
-    policy = parse_json((root / POLICY_PATH).read_bytes())
-    exact_keys(policy, {"schema", "projectionDigest"}, "Unexpected policy scope or schema")
-    require(type(policy["schema"]) is int and policy["schema"] == 1
-            and type(policy["projectionDigest"]) is str
-            and re.fullmatch(r"[a-f0-9]{64}", policy["projectionDigest"]) is not None, "Invalid source projection policy")
-    require(projection_digest(root, head) == policy["projectionDigest"], "Source differs from the reviewed checkbox-only tree")
-    baseline = tree_records(root, BASE_SHA)
-    for path in DEPENDENCY_FILES:
-        require(path.encode() in records and records[path.encode()] == baseline.get(path.encode()), "Dependency files changed: " + path)
+    # The trust anchor comes from the workflow/operator, not a candidate file.
+    gate = git(root, "show", trusted + ":" + TRUSTED_GATE_PATH)
+    require(0 < len(gate) <= 128 * 1024, "Missing or oversized trusted caption verifier")
+    entry = git(root, "ls-tree", "-z", trusted, "--", TRUSTED_GATE_PATH)
+    blob = hashlib.sha1(b"blob " + str(len(gate)).encode() + b"\0" + gate).hexdigest().encode()
+    require(entry in (mode + b" blob " + blob + b"\t" + TRUSTED_GATE_PATH.encode() + b"\0"
+                     for mode in (b"100644", b"100755")), "Trusted verifier is not the exact regular Git blob")
+    with tempfile.TemporaryDirectory(prefix="tickets-trusted-caption-") as temporary:
+        path = Path(temporary) / "verify-caption-source.py"
+        path.write_bytes(gate)
+        require(path.read_bytes() == gate, "Materialized trusted verifier bytes changed")
+        namespace = {"__name__": "trusted_caption_source", "__file__": str(path)}
+        try:
+            exec(compile(gate, str(path), "exec"), namespace)
+            receipt = namespace["verify_source"](root, trusted, head, now=now)
+        except (ValueError, KeyError, SyntaxError, RecursionError) as exc:
+            raise AuditRejected("Trusted caption source gate rejected: " + str(exc)) from exc
+        require(type(receipt) is dict and receipt.get("candidate") == head
+                and receipt.get("trustedBaseline") == trusted, "Invalid trusted source receipt")
     return head
 
 

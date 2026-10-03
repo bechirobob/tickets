@@ -35,11 +35,23 @@ jobs:
     timeout-minutes: 25
     env:
       BECORE_RELEASE_SHA: ${{ github.sha }}
+      BECORE_TRUSTED_BASE: ${{ github.event.before }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Verify independently trusted caption source before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          gate=$(mktemp "$RUNNER_TEMP/tickets-caption-source.XXXXXX.py")
+          git show "$BECORE_TRUSTED_BASE:scripts/verify-caption-source.py" > "$gate"
+          python3 -I "$gate" --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$BECORE_RELEASE_SHA"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.21.0
@@ -75,10 +87,25 @@ jobs:
   handoff:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      BECORE_RELEASE_SHA: ${{ github.sha }}
+      BECORE_TRUSTED_BASE: ${{ github.event.before }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Verify independently trusted caption source before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          gate=$(mktemp "$RUNNER_TEMP/tickets-caption-source.XXXXXX.py")
+          git show "$BECORE_TRUSTED_BASE:scripts/verify-caption-source.py" > "$gate"
+          python3 -I "$gate" --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$BECORE_RELEASE_SHA"
       - name: Inspect current data and private connection readiness
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

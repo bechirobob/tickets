@@ -4,6 +4,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      trusted_base:
+        description: Independently selected reviewed control-plane commit on main
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,6 +19,7 @@ concurrency:
 
 env:
   BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  BECORE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || inputs.trusted_base }}
 
 jobs:
   verify:
@@ -28,6 +34,17 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
+      - name: Verify independently trusted caption source before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          gate=$(mktemp "$RUNNER_TEMP/tickets-caption-source.XXXXXX.py")
+          git show "$BECORE_TRUSTED_BASE:scripts/verify-caption-source.py" > "$gate"
+          python3 -I "$gate" --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$BECORE_RELEASE_SHA"
       - name: Verify exact candidate source
         id: source
         shell: bash

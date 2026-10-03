@@ -4,6 +4,10 @@ name: Release verified Tickets VPS code
 on:
   workflow_dispatch:
     inputs:
+      trusted_base:
+        description: Independently selected reviewed control-plane commit on main, preceding the candidate
+        required: true
+        type: string
       source_sha:
         description: Verified application SHA on main with successful VPS and equivalent-tree browser CI
         required: true
@@ -52,7 +56,8 @@ jobs:
     timeout-minutes: 15
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
-      OPERATOR_SHA: ${{ github.sha }}
+      OPERATOR_SHA: ${{ inputs.trusted_base }}
+      BECORE_TRUSTED_BASE: ${{ inputs.trusted_base }}
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
       RUNTIME_RUN: ${{ inputs.runtime_run }}
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
@@ -64,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
-          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ && "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
           [[ -z "$RECOVER_PREPARED" || "$RECOVER_PREPARED" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
@@ -79,24 +84,27 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$SOURCE_SHA"
           git merge-base --is-ancestor "$EXPECTED_ACTIVE" "$SOURCE_SHA"
-      - name: Stage reviewed main operator without changing the verified application tree
+      - name: Stage reviewed trusted operator without changing the verified application tree
         shell: bash
         run: |
           set -euo pipefail
           [[ "$OPERATOR_SHA" =~ ^[a-f0-9]{40}$ ]]
-          git merge-base --is-ancestor "$SOURCE_SHA" "$OPERATOR_SHA"
+          test "$OPERATOR_SHA" = "$BECORE_TRUSTED_BASE"
+          git merge-base --is-ancestor "$OPERATOR_SHA" "$SOURCE_SHA"
           git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
-          python3 - <<'PYOP'
-          import os,subprocess
-          allowed={'.github/workflows/tickets-code-release.yml','.github/workflows/tickets-release-operator-checks.yml','ops/vps/code-release.py','ops/vps/test_code_release.py','ops/vps/runtime_release.py','ops/vps/test_runtime_release.py'}
-          changed=subprocess.check_output(['git','diff','--name-only',os.environ['SOURCE_SHA'],os.environ['OPERATOR_SHA']],text=True).splitlines()
-          if not set(changed)<=allowed: raise SystemExit('Operator revision includes application changes; require fresh application CI/artifact.')
-          PYOP
           operator="$RUNNER_TEMP/tickets-operator"
           mkdir -m 700 "$operator"
-          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml | tar -x -C "$operator"
+          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py | tar -x -C "$operator"
           printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
+      - name: Verify independently trusted caption source before any host access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I "$RUNNER_TEMP/tickets-operator/scripts/verify-caption-source.py" \
+            --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$SOURCE_SHA"
       - name: Verify updater regression suite
         run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
       - name: Verify exact CI runs, source tree, ancestry and artifact provenance

@@ -14,6 +14,13 @@ on:
       - .github/workflows/vps-runtime.yml
       - .github/workflows/tickets-code-release.yml
       - .github/workflows/tickets-release-operator-checks.yml
+      - .github/workflows/deploy.yml
+      - .github/scripts/verify-caption-control.py
+      - scripts/verify-caption-source.py
+      - scripts/caption-source-manifest.json
+      - scripts/audit-checkbox-hotfix.py
+      - tests/test_caption_source.py
+      - tests/test_checkbox_hotfix_audit.py
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,10 +33,28 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Verify release guards and rollback without host access
+          fetch-depth: 0
+      - name: Verify trusted source rejection and materialize only the exact expected test tree
+        shell: bash
+        env:
+          CONTROL_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          python3 -m unittest discover -s ops/vps -p 'test_*.py'
-          python3 -m py_compile ops/vps/code-release.py ops/vps/test_code_release.py ops/vps/runtime_release.py ops/vps/candidate_evidence.py
+          set -euo pipefail
+          python3 -I .github/scripts/verify-caption-control.py \
+            --repo "$PWD" --control "$CONTROL_SHA" --output "$RUNNER_TEMP/caption-expected-source"
+      - name: Verify complete trusted caption source regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -m unittest discover -s tests -p 'test_caption_source.py' -v
+          python3 -I -m unittest discover -s "$RUNNER_TEMP/caption-expected-source/tests" -p 'test_checkbox_hotfix_audit.py' -v
+      - name: Verify release guards and rollback without host access
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$RUNNER_TEMP/caption-expected-source"
+          python3 -m unittest discover -s "$expected/ops/vps" -p 'test_*.py'
+          python3 -m py_compile "$expected/ops/vps/code-release.py" "$expected/ops/vps/test_code_release.py" "$expected/ops/vps/runtime_release.py" "$expected/ops/vps/candidate_evidence.py"
           git diff --check
       - name: Verify the exact staged operator layout used for release
         shell: bash
@@ -37,5 +62,5 @@ jobs:
           set -euo pipefail
           staged="$RUNNER_TEMP/staged-operator"
           mkdir -m 700 "$staged"
-          git archive HEAD ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml | tar -x -C "$staged"
+          git archive HEAD ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py | tar -x -C "$staged"
           python3 -m unittest discover -s "$staged/ops/vps" -p 'test_*.py'
