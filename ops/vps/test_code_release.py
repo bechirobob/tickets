@@ -1840,20 +1840,20 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             digest = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
             self.assertEqual(release.REVIEWED_OPERATOR_BLOBS.get(name, release.REVIEWED_APPLICATION_BLOBS[name]), digest, name)
 
-    def test_operator_transport_pins_do_not_replace_verified_application_pins(self):
+    def test_reviewed_application_includes_the_merged_operator_transport(self):
         expected = {
-            "ops/vps/runtime_release.py": "2d5bed733f6165b3bed3a88157596e3212204f49",
-            "ops/vps/test_runtime_release.py": "44cb4fe5225343dd79b101670b0285c53fff9acb",
+            "ops/vps/runtime_release.py": "2b2115bc569674a9b0fdf79d0350ffeddb4c80a7",
+            "ops/vps/test_runtime_release.py": "1cd95b6d669092eb5ca4496a165d85ccb619d966",
         }
         self.assertEqual(set(release.REVIEWED_OPERATOR_BLOBS), set(expected))
         for name, digest in expected.items():
             self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)
-            self.assertNotEqual(release.REVIEWED_OPERATOR_BLOBS[name], digest)
+            self.assertEqual(release.REVIEWED_OPERATOR_BLOBS[name], digest)
 
     def test_final_room_motion_source_is_pinned_without_widening_scope(self):
         expected = {
-            "app/room-demo.css": "bd11d7d53c77c5db3aaceca448cf392a8acc4673",
-            "app/room-preview-carousel.tsx": "0f9924047b07b8635b46e8738b367763c7d7bd7e",
+            "app/room-demo.css": "1628b6ebe3062da1b212bd10214ff3f878d33b75",
+            "app/room-preview-carousel.tsx": "2064f9d57eacab56fa6cdd9ddb8871063de6d9e4",
         }
         for name, digest in expected.items():
             self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)
@@ -1862,6 +1862,31 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                 content = path.read_bytes()
                 self.assertEqual(release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest(), digest)
         self.assertNotIn("app/", release.APPLICATION_FILES)
+
+    def test_complete_reviewed_application_manifest_matches_candidate_source(self):
+        pins = release.REVIEWED_APPLICATION_BLOBS
+        if not (self.root / "package.json").exists() and not (self.root / "app").exists():
+            # The release operator deliberately archives only ops/vps and these
+            # four workflows. Never treat a missing file in a full checkout as
+            # optional; recognize only this exact reduced layout.
+            self.assertEqual({path.name for path in self.root.iterdir()}, {"ops", ".github"})
+            staged = {
+                ".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
+                ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
+                "ops/vps/runtime_release.py", "ops/vps/test_runtime_release.py",
+                "ops/vps/candidate_evidence.py", "ops/vps/test_candidate_evidence.py",
+                "ops/vps/test_runtime_packaging.py",
+                "ops/vps/audit-readiness.py", "ops/vps/test_audit_readiness.py",
+            }
+            self.assertEqual({name for name in pins if (self.root / name).exists()}, staged)
+            pins = {name: pins[name] for name in staged}
+        else:
+            self.assertTrue((self.root / "package.json").is_file())
+            self.assertTrue((self.root / "app").is_dir())
+        for name, digest in pins.items():
+            content = (self.root / name).read_bytes()
+            actual = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
+            self.assertEqual(actual, digest, name)
 
     def test_candidate_is_one_read_only_job_with_every_browser_gate(self):
         text = (self.root / ".github/workflows/candidate-checks.yml").read_text()
