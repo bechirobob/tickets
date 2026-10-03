@@ -63,6 +63,7 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '043e310a41ff28d23adc20383c88566b181232a6', 'ops/vps/test_runtime_release.py': '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14', 'ops/vps/public_runtime_guard.py': '9a9739f1bd88cbd02dc420001efa3de5b85e3538', 'ops/vps/test_public_runtime_guard.py': 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'}
 
 REVIEWED_APPLICATION_BLOBS = {
+    "ops/vps/test_runtime_workflow_contract.py": "eef0b25e667f6be123c0ed6c5bca774158d390d8",
     "tests/repository-boundaries.test.mjs": "4db7122810a97ba3120ce632c2a45bbb34ed59ed",
     "tests/preview-data-inventory.test.mjs": "35f897420e6afe6b50c4bfa8aedd6eeeb370283d",
     "scripts/inspect-preview-data.mjs": "e6c8e9f07262a8088d6daca199e69a6f24c46af5",
@@ -305,7 +306,20 @@ REVIEWED_MIGRATIONS = {
     },
 }
 BROWSERS = {"desktop-chromium", "mobile-chromium", "mobile-webkit"}
+RUNTIME_VERIFY_STEPS = {
+    "Verify independently trusted caption source before executing checkout code",
+    "Verify bounded audit exception", "Run npm audit --audit-level=moderate",
+    "Prepare verified runtime without development dependencies",
+    "Publish verified public runtime release",
+}
+RUNTIME_HANDOFF_STEPS = {
+    "Verify independently trusted caption source before executing checkout code",
+    "Inspect current data and private connection readiness",
+}
 CANDIDATE_CORE_STEPS = {
+    "Check out exact candidate", "Set up Node.js", "Install locked dependencies",
+    "Verify independently trusted caption source before executing checkout code",
+    "Verify bounded audit exception", "Install browsers for event-page verification",
     "Verify exact candidate source", "Audit dependencies", "Lint application",
     "Check application types", "Verify unit tests and rendered production build",
     "Check database schema", "Validate the deployable Worker without publishing",
@@ -573,10 +587,8 @@ def verify_jobs(runtime_jobs, candidate_jobs):
             "Runtime contains a failed, skipped or unexpected job.")
     require({job.get("name") for job in runtime_jobs} == {"verify", "handoff"},
             "Runtime verification jobs missing.")
-    require_steps(next(job for job in runtime_jobs if job["name"] == "verify"), {
-        "Prepare verified runtime without development dependencies",
-        "Publish verified private runtime release",
-    })
+    require_steps(next(job for job in runtime_jobs if job["name"] == "verify"), RUNTIME_VERIFY_STEPS)
+    require_steps(next(job for job in runtime_jobs if job["name"] == "handoff"), RUNTIME_HANDOFF_STEPS)
     # Build once, then restore those exact bytes before each isolated browser.
     # No inter-job artifact/cache is a substitute for this same-build contract.
     require(len(candidate_jobs) == 1 and candidate_jobs[0].get("name") == "verify"
@@ -611,7 +623,7 @@ def verify_runtime_transport(archive, source, source_tree, runtime):
         return verify_local_receipt(archive.parent, source=source, source_tree=source_tree,
                                     run_id=str(runtime["id"]), attempt=str(runtime["run_attempt"]))
     except Exception as exc:
-        raise ReleaseError("Private release transport evidence mismatch.") from exc
+        raise ReleaseError("Runtime release transport evidence mismatch.") from exc
 
 
 def verify_ci(args):
