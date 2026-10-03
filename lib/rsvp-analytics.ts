@@ -26,7 +26,8 @@ export const emptyRsvpAnalytics = (): RsvpAnalytics => ({
 export async function readRsvpAnalytics(db: D1Database, slugs: string[], start: string, baseline?: string | null): Promise<RsvpAnalytics> {
   if (!slugs.length) return emptyRsvpAnalytics();
   start = analyticsStart(start, baseline === undefined ? await readAnalyticsBaseline(db) : baseline);
-  const marks = slugs.map(() => '?').join(',');
+  const scopedSlugs = JSON.stringify(slugs);
+  const marks = 'SELECT value FROM json_each(?)';
   // One row per request. A guest-list check-in may later also have QR passes:
   // take the larger recorded count, never add the two representations together.
   const cohort = `WITH cohort AS (
@@ -39,13 +40,13 @@ export async function readRsvpAnalytics(db: D1Database, slugs: string[], start: 
   )`;
   const [statuses, sources, promoters] = await Promise.all([
     db.prepare(`${cohort} SELECT status, COUNT(*) AS requests, SUM(party_size) AS guests, SUM(arrivals) AS checkedIn FROM cohort GROUP BY status`)
-      .bind(...slugs, start).all<{ status: string; requests: number; guests: number; checkedIn: number }>(),
+      .bind(scopedSlugs, start).all<{ status: string; requests: number; guests: number; checkedIn: number }>(),
     db.prepare(`${cohort} SELECT eventSlug, MAX(eventTitle) AS eventTitle, acquisition_source AS source, COUNT(*) AS requests, SUM(party_size) AS guests,
       SUM(CASE WHEN status = 'confirmed' THEN party_size ELSE 0 END) AS confirmedGuests, SUM(arrivals) AS checkedIn
       FROM cohort GROUP BY eventSlug, acquisition_source ORDER BY requests DESC, eventSlug, acquisition_source`)
-      .bind(...slugs, start).all<{ eventSlug: string; eventTitle: string; source: string; requests: number; guests: number; confirmedGuests: number; checkedIn: number }>(),
+      .bind(scopedSlugs, start).all<{ eventSlug: string; eventTitle: string; source: string; requests: number; guests: number; confirmedGuests: number; checkedIn: number }>(),
     db.prepare(`SELECT event_slug AS eventSlug, code, label FROM event_promoter_codes WHERE event_slug IN (${marks}) AND status = 'active' ORDER BY label, code`)
-      .bind(...slugs).all<{ eventSlug: string; code: string; label: string }>(),
+      .bind(scopedSlugs).all<{ eventSlug: string; code: string; label: string }>(),
   ]);
   const totals = statuses.results.reduce((sum, row) => ({
     ...sum, requests: sum.requests + row.requests, guests: sum.guests + row.guests,
