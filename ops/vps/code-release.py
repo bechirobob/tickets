@@ -62,8 +62,17 @@ APPLICATION_FILES = {
 # These pins validate staged operator bytes; they do not expand application approval.
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '043e310a41ff28d23adc20383c88566b181232a6', 'ops/vps/test_runtime_release.py': '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14', 'ops/vps/public_runtime_guard.py': '9a9739f1bd88cbd02dc420001efa3de5b85e3538', 'ops/vps/test_public_runtime_guard.py': 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'}
 
+# The one reviewed removal binds the original regular-file mode and full blob.
+REVIEWED_DELETIONS = {
+    "mobile/src/use-disclosure.ts": ("100644", "b47d478a9f5295930c65e5eb126d7040233343d8"),
+}
+
 REVIEWED_APPLICATION_BLOBS = {
-    "ops/vps/test_release_source.py": "ec8a7a5bbbe585941583f50624823b85ec51e586",
+    "lib/openai-responses.ts": "fa2c863ca610f3f58f7d79f0e1d4d0bfdc0eb768",
+    "lib/event-experience.ts": "d948b3a0193f500f21e51079f3974fcb2b57bec1",
+    "app/your-nights.css": "207bfb5c258fb665b228a7205f9b687a3baa3433",
+    "app/event-images.ts": "1ab10648cfbe2275ad2efd51a001a5aec848090e",
+    "ops/vps/test_release_source.py": "8eab22f2bd96ba922fbccc207ccf57ab6105e584",
     "scripts/checkbox-hotfix-audit-policy.json": "7447247befa4b9ef0a274b27352afdce690e9e1e",
     "ops/vps/test_runtime_workflow_contract.py": "eef0b25e667f6be123c0ed6c5bca774158d390d8",
     "tests/repository-boundaries.test.mjs": "45c323bca8ade5518051d7a7b3e0cafff8be5b99",
@@ -182,7 +191,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/event-explorer.tsx": "27c001bd0ba7742b251a7f03252c3dbaf5b2a3fe",
     "app/event/[slug]/event-screen.tsx": "3700cc0de1f68a63912d9caf428d48908ee266e4",
     "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
-    "app/globals.css": "40f080f5629b811b1a877bebdeadb97e02af0b07",
+    "app/globals.css": "96e23199060d0ad4e91b1998b8ef7aeb50ce4c89",
     "app/help/help-centre.tsx": "f0b4617a6a6b704aefc81bfa1e2744377c18b026",
     "app/home-screen.tsx": "b629019108100f15889edaccd6ac1ee21d4e436d",
     "app/hosts/page.tsx": "f5d2b1129968ba51dc95a6208a408e60f200b05b",
@@ -226,7 +235,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/workspace-chrome.tsx": "f6b90f36cec6914e9b36570c52dd9c53870a5e70",
     "app/workspace.css": "8c3881d31c50a13246219e74262c27b542e36880",
     "db/schema.ts": "ee50c0c9821c0d4f47e5b0bfb86df6b902e11afb",
-    "lib/admin-session.ts": "2e587fc729a69c667fb851d69d0053f0ac58527b",
+    "lib/admin-session.ts": "f93df9de2574c4def987763670792766c8c3788b",
     "lib/background-health.ts": "4793c1cd2a5204371e75495d9d1b218f24a0a092",
     "lib/customer-screen.ts": "9546a787d811e4a8351e16e30693639c26743b26",
     "lib/email-delivery.ts": "6046a9696d8f3002c23d0af54e08fa93179e0ee5",
@@ -506,28 +515,38 @@ def verify_trusted_operator(source):
 def verify_changed_modes(expected, source):
     """No implicit deletion, symlink, submodule or executable-mode permission."""
     raw = git("diff", "--raw", "--no-abbrev", "--no-renames", "-z", expected, source)
+    deleted = set()
     if not raw:
-        return
+        return deleted
     parts = raw.split("\0")
     require(parts[-1] == "" and len(parts) % 2 == 1, "Malformed source change records.")
     for header, name in zip(parts[:-1:2], parts[1::2]):
-        record = re.fullmatch(r":([0-7]{6}) ([0-7]{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([AM])", header)
+        record = re.fullmatch(r":([0-7]{6}) ([0-7]{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([AMD])", header)
         require(record is not None and bool(name), "Unreviewed source deletion or type change.")
-        before_mode, after_mode, before_blob, _, status = record.groups()
+        before_mode, after_mode, before_blob, after_blob, status = record.groups()
+        if status == "D":
+            require(REVIEWED_DELETIONS.get(name) == (before_mode, before_blob)
+                    and after_mode == "000000" and after_blob == "0" * 40,
+                    "Unreviewed source deletion or type change: " + name)
+            deleted.add(name)
+            continue
         require(after_mode in {"100644", "100755"}, "Source must remain regular files.")
         if status == "A":
             require(before_mode == "000000" and before_blob == "0" * 40 and after_mode == "100644",
                     "New executable or nonregular source needs explicit review.")
         else:
             require(before_mode == after_mode, "Source file mode changed without review.")
+    return deleted
 
 
 def vetted_changes(expected, source):
     subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, source], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
-    verify_changed_modes(expected, source)
+    deleted = verify_changed_modes(expected, source)
     changed = git("diff", "--name-only", expected, source).splitlines()
     for name in changed:
+        if name in deleted:
+            continue
         if name in REVIEWED_APPLICATION_BLOBS or name in REVIEWED_MIGRATIONS:
             reviewed = REVIEWED_APPLICATION_BLOBS.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
             require(git("rev-parse", source + ":" + name) == reviewed,

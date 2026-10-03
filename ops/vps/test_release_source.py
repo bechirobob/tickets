@@ -112,6 +112,39 @@ class ReleaseSourceTests(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseError, "deletion or type"):
             release.verify_changed_modes(linked, removed)
 
+    def test_only_exact_reviewed_regular_file_deletion_is_accepted(self):
+        name = "mobile/src/use-disclosure.ts"
+        self.write(name, "reviewed unused helper\n")
+        before = self.commit()
+        blob = self.command("rev-parse", before + ":" + name)
+        (self.root / name).unlink()
+        after = self.commit()
+        with patch.dict(release.REVIEWED_DELETIONS, {name: ("100644", blob)}, clear=True):
+            self.assertEqual(release.verify_changed_modes(before, after), {name})
+            self.assertEqual(release.vetted_changes(before, after), [name])
+        for pins in ({}, {name: ("100644", "0" * 40)},
+                     {name: ("100755", blob)}, {"other.ts": ("100644", blob)}):
+            with self.subTest(pins=pins), patch.dict(release.REVIEWED_DELETIONS, pins, clear=True):
+                with self.assertRaisesRegex(release.ReleaseError, "Unreviewed source deletion"):
+                    release.vetted_changes(before, after)
+
+    def test_reviewed_removal_does_not_authorize_modifying_or_readding_that_path(self):
+        name = "mobile/src/use-disclosure.ts"
+        self.write(name, "reviewed unused helper\n")
+        before = self.commit()
+        blob = self.command("rev-parse", before + ":" + name)
+        self.write(name, "unreviewed replacement\n")
+        modified = self.commit()
+        with patch.dict(release.REVIEWED_DELETIONS, {name: ("100644", blob)}, clear=True):
+            with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                release.vetted_changes(before, modified)
+            (self.root / name).unlink()
+            removed = self.commit()
+            self.write(name, "reviewed unused helper\n")
+            restored = self.commit()
+            with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                release.vetted_changes(removed, restored)
+
     def test_new_executable_source_is_not_implicitly_authorized(self):
         path = self.root / "new-script.sh"
         path.write_text("#!/bin/sh\nexit 0\n")

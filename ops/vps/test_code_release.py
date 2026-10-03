@@ -1928,6 +1928,9 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         else:
             self.assertTrue((self.root / "package.json").is_file())
             self.assertTrue((self.root / "app").is_dir())
+        for name in release.REVIEWED_DELETIONS:
+            self.assertNotIn(name, release.REVIEWED_APPLICATION_BLOBS)
+            self.assertFalse((self.root / name).exists() or (self.root / name).is_symlink(), name)
         for name, digest in pins.items():
             content = (self.root / name).read_bytes()
             actual = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
