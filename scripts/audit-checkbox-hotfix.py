@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run npm audit, with one immutable, expiring checkbox-release exception.
+"""Run npm audit, with one immutable, expiring caption-removal release exception.
 
 This does not patch dependencies or suppress audit output. It tolerates only the
 reviewed GHSA below, with its exact existing transitive graph, for one source tree
@@ -18,9 +18,9 @@ import re
 import subprocess
 import sys
 
-BASE_SHA = "da465626ec52476ec0421fde1bce17f377b8b072"
-APPROVED_AT = dt.datetime(2026, 10, 3, 6, 56, 58, tzinfo=dt.timezone.utc)
-EXPIRES_AT = dt.datetime(2026, 10, 4, 6, 56, 58, tzinfo=dt.timezone.utc)
+BASE_SHA = "6fd2e182bff0bab3484d5cd9a26b4728c4aaae6b"
+APPROVED_AT = dt.datetime(2026, 10, 3, 8, 42, 19, tzinfo=dt.timezone.utc)
+EXPIRES_AT = dt.datetime(2026, 10, 4, 8, 42, 19, tzinfo=dt.timezone.utc)
 POLICY_PATH = "scripts/checkbox-hotfix-audit-policy.json"
 LOCK_SHA256 = "b0735c8c3b9879aa1d6089365719d7f56281d3dd1ae1244fe5ecbc5140d01caf"
 BRACES_INVENTORY_SHA256 = "85807dcacfb57c287dfdb760e17f9686966d6f94505c0f10f19ea0ed9ba4bf23"
@@ -199,7 +199,7 @@ def verify_topology(root: Path, head: str) -> None:
 def verify_source_scope(root: Path, now: dt.datetime | None = None) -> str:
     now = now or dt.datetime.now(dt.timezone.utc)
     require(now.tzinfo is not None and APPROVED_AT <= now < EXPIRES_AT,
-            "Checkbox-only audit exception has expired or is not yet valid")
+            "Caption-removal audit exception has expired or is not yet valid")
     head = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
     expected = os.environ.get("BECORE_RELEASE_SHA")
     require(not os.environ.get("GITHUB_ACTIONS") or expected is not None, "Missing exact CI release SHA")
@@ -214,7 +214,7 @@ def verify_source_scope(root: Path, now: dt.datetime | None = None) -> str:
     require(type(policy["schema"]) is int and policy["schema"] == 1
             and type(policy["projectionDigest"]) is str
             and re.fullmatch(r"[a-f0-9]{64}", policy["projectionDigest"]) is not None, "Invalid source projection policy")
-    require(projection_digest(root, head) == policy["projectionDigest"], "Source differs from the reviewed checkbox-only tree")
+    require(projection_digest(root, head) == policy["projectionDigest"], "Source differs from the reviewed caption-removal tree")
     baseline = tree_records(root, BASE_SHA)
     for path in DEPENDENCY_FILES:
         require(path.encode() in records and records[path.encode()] == baseline.get(path.encode()), "Dependency files changed: " + path)

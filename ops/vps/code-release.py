@@ -63,6 +63,11 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '2b2115bc569674a9b0fdf79d0350ffeddb4c80a7', 'ops/vps/test_runtime_release.py': '1cd95b6d669092eb5ca4496a165d85ccb619d966'}
 
 REVIEWED_APPLICATION_BLOBS = {
+    ".github/backup/backup_release.py": "129021e722ec8a774fb74a52f97421bd4842d842",
+    ".github/backup/test_backup_release.py": "83ac2f58b29b517d9e2dee54ee8df3b0f9872ce8",
+    ".github/workflows/backup-transport-checks.yml": "7e32458428475121554f43c8a3f646e70d11161e",
+    ".github/workflows/deploy.yml": "2df978e6202e2914ed90177c7e92a28703bbf36f",
+    ".github/workflows/tickets-backup.yml": "83423876a3d3230943b0e00d7311c940959059a0",
     "ops/vps/test_runtime_packaging.py": "4183861b25b9c62b9effe52a114ec9c59b546af4",
     ".github/workflows/tickets-code-release.yml": "1e8816df3a56ecbe44bfb1d8a6facb5d04847b0d",
     "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
@@ -73,7 +78,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/runtime_release.py": "2b2115bc569674a9b0fdf79d0350ffeddb4c80a7",
     ".github/workflows/tickets-release-operator-checks.yml": "62262a27776c526924ffcbdd4f245278f2542e97",
     ".github/workflows/vps-runtime.yml": "dee69f04cddbf7f561a446c16dc8b9617160189a",
-    ".github/workflows/browser-audit.yml": "266d11a65a580809689c806cc93ca06ebaa25858",
+    ".github/workflows/browser-audit.yml": "4e0293b58478326e6c22e653f69272ce6e64f7e3",
     ".github/workflows/candidate-checks.yml": "4b55f13491f7f58100021aad232eebcd609ad622",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
     ".github/workflows/full-audit-capacity.yml": "67ea27fb202cf216596bd27d73e51515f656b19c",
@@ -188,9 +193,9 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
     "app/registration-form.tsx": "892574dd3198a410d5fea00232e607783d2e77df",
     "app/registration-manager.tsx": "cd0b22d16d2ff9bd45adbd917744a3248e2cb04e",
-    "app/room-demo.css": "1628b6ebe3062da1b212bd10214ff3f878d33b75",
+    "app/room-demo.css": "c3d871ed75945a72df7fb32f7c13c962ee4876de",
     "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
-    "app/room-preview-carousel.tsx": "2064f9d57eacab56fa6cdd9ddb8871063de6d9e4",
+    "app/room-preview-carousel.tsx": "c77a4021be9ea6c29b6a8215e49326f2522e9491",
     "app/room/[slug]/room-client.tsx": "043000a1a4d51ea07acd170046f4898894a3945e",
     "app/rsvp/[slug]/page.tsx": "40ba4869d74f15e722834a9e682bc0867e2b054a",
     "app/rsvp/access/page.tsx": "02c302374244f4e73436acdc2dc80d99e8326d86",
@@ -240,7 +245,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b",
     "worker/security-response.ts": "3d9d92746405583edcd173694d763c868a1b09fd",
     "worker/the-room.ts": "e6c0a8b1e39e20b939e3e322ebc44675b8bab7ed",
-    "scripts/audit-checkbox-hotfix.py": "f1835e73dc5fa2edcbab6207c9d79e0f7cb7a98d",
+    "scripts/audit-checkbox-hotfix.py": "a9436ed201872c2cbb55689fbcfcd16b8947f785",
     "tests/test_checkbox_hotfix_audit.py": "4a8fdb1e3ca4a8e4606f1a3c4fef7a5238d36e58",
 }
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"

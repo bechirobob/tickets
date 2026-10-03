@@ -22,27 +22,15 @@ test("Room demo autoplays with still hardware and no playback controls", async (
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   await expect(page.getByRole("button", { name: /(?:Play|Pause) Room preview/ })).toHaveCount(0);
   await expect(page.locator(".room-product-preview input, .room-product-preview button, .room-demo-motion")).toHaveCount(0);
-  const captionContrast = await page.locator(".room-demo-caption > span").evaluateAll(elements => {
-    const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => {
-      const channel = value / 255;
-      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
-    }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
-    return elements.map(element => {
-      const style = getComputedStyle(element);
-      const foreground = style.color.match(/[\d.]+/g)!.map(Number);
-      const background = style.backgroundColor.match(/[\d.]+/g)!.map(Number);
-      const alpha = foreground[3] ?? 1;
-      const paintedText = foreground.slice(0, 3).map((channel, index) => channel * alpha + background[index] * (1 - alpha));
-      const levels = [luminance(paintedText), luminance(background)].sort((a, b) => a - b);
-      return { text: element.textContent, opaque: (background[3] ?? 1) === 1 && style.opacity === "1" && style.backgroundImage === "none",
-        ratio: (levels[1] + .05) / (levels[0] + .05) };
-    });
-  });
-  expect(captionContrast).toHaveLength(1);
-  for (const label of captionContrast) {
-    expect(label.opaque, `${label.text} must not depend on the event artwork`).toBe(true);
-    expect(label.ratio, `${label.text} text contrast`).toBeGreaterThanOrEqual(4.5);
-  }
+  await expect(page.locator(".room-demo-caption")).toHaveCount(0);
+  await expect(page.getByText(/^(Before arrival|Inside the night)$/)).toHaveCount(0);
+  const preview = page.locator(".room-product-preview");
+  // The removed caption must not leave its former 44px row behind.
+  const previewBounds = await preview.boundingBox();
+  const trackBounds = await page.locator(".room-product-scene__phones").boundingBox();
+  expect(previewBounds).not.toBeNull();
+  expect(trackBounds).not.toBeNull();
+  expect(previewBounds!.height).toBeCloseTo(trackBounds!.height, 0);
   const initial = await phone.boundingBox();
   const composer = await phone.locator(".chat-compose-field").boundingBox();
   await expect(phone.locator(".room-demo-typing")).toBeVisible({ timeout: 5000 });
@@ -65,7 +53,7 @@ test("Room demo autoplays with still hardware and no playback controls", async (
   await phone.scrollIntoViewIfNeeded();
   await expect(phone).toHaveAttribute("data-demo-running", "true");
   await expect(phone).not.toHaveAttribute("data-demo-step", step!, { timeout: 5000 });
-  await page.locator(".room-demo-caption").scrollIntoViewIfNeeded();
+  await preview.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("room-automatic-section.png"), scale: "css" });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(phone).toHaveAttribute("data-demo-running", "false");

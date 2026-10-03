@@ -1873,8 +1873,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
 
     def test_final_room_motion_source_is_pinned_without_widening_scope(self):
         expected = {
-            "app/room-demo.css": "1628b6ebe3062da1b212bd10214ff3f878d33b75",
-            "app/room-preview-carousel.tsx": "2064f9d57eacab56fa6cdd9ddb8871063de6d9e4",
+            "app/room-demo.css": "c3d871ed75945a72df7fb32f7c13c962ee4876de",
+            "app/room-preview-carousel.tsx": "c77a4021be9ea6c29b6a8215e49326f2522e9491",
         }
         for name, digest in expected.items():
             self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)

@@ -37,7 +37,6 @@ export default function RoomPreviewCarousel({ children }: { children: ReactNode 
       {children}
     </div>
     </Playback>
-    <div className="room-demo-caption"><span>{active === 0 ? "Before arrival" : "Inside the night"}</span></div>
     <p className="sr-only" aria-live="polite">Room preview {active + 1} of 2. Swipe or use the arrow keys to see both views.</p>
   </div>;
 }
