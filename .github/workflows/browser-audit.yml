@@ -4,9 +4,6 @@ on:
   workflow_run:
     workflows: ["Deploy to Cloudflare", "Release verified Tickets VPS code"]
     types: [completed]
-  pull_request:
-    branches: [main]
-    paths: ["tests/e2e/**", ".github/workflows/browser-audit.yml"]
   workflow_dispatch:
 
 permissions:
