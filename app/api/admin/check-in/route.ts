@@ -1,5 +1,5 @@
 import { limitRequestBody } from '../../../../lib/request-body';
-import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, prepareAudit, recordAudit, requestMetadata } from "../../../../lib/admin-session";
+import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, prepareAudit, requestMetadata } from "../../../../lib/admin-session";
 import { hashGateToken, normalizeGateToken } from "../../../../lib/gate-pass";
 
 type TicketAtGate = {
@@ -153,22 +153,24 @@ export async function POST(request: Request) {
   }
 
   const checkedInAt = new Date().toISOString();
-  const result = await env.DB.prepare(`
-    UPDATE tickets SET status = 'checked_in', checked_in_at = ?, checked_in_by = ?, checked_in_gate = ?
-    WHERE id = ? AND status = 'issued' AND qr_token_hash = ? AND EXISTS (SELECT 1 FROM orders WHERE id = tickets.order_id AND status = 'paid') AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = tickets.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon'))
-  `).bind(checkedInAt, `${session.actor} <${session.email}>`, gate, ticket.ticketId, tokenHash).run();
-  if (result.meta.changes !== 1) {
+  // Keep admission, its replay receipt and the audit in one durable transaction.
+  // The receipt also measures the direct change, excluding wallet-refresh triggers.
+  const [, receipt] = await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE tickets SET status = 'checked_in', checked_in_at = ?, checked_in_by = ?, checked_in_gate = ?
+      WHERE id = ? AND status = 'issued' AND qr_token_hash = ? AND EXISTS (SELECT 1 FROM orders WHERE id = tickets.order_id AND status = 'paid') AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = tickets.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon'))
+    `).bind(checkedInAt, `${session.actor} <${session.email}>`, gate, ticket.ticketId, tokenHash),
+    env.DB.prepare(`
+      INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, device_id, client_scan_id, created_at)
+      SELECT ?, ?, ?, 'check_in', ?, ?, ?, ?, ?, ? WHERE changes() = 1
+    `).bind(crypto.randomUUID(), ticket.ticketId, eventSlug, gate, session.accountId, session.email, deviceId, clientScanId, checkedInAt),
+    prepareAudit(env.DB, { session, action: "gate.ticket_checked_in", targetType: "ticket", targetId: ticket.ticketId, outcome: "success", detail: `${eventSlug}:${gate}`, requestId: requestMetadata(request).requestId, onlyAfterChange: true }),
+  ]);
+  if (receipt.meta.changes !== 1) {
     const current = await findTicket(env.DB, tokenHash);
     if (!current || current.status !== "checked_in") return Response.json({ result: "invalid", error: "This ticket changed before entry was recorded. Refresh its status before admitting the guest." }, { status: 409, headers: { "cache-control": "no-store" } });
     return Response.json({ result: "duplicate", ticket: current, error: "This ticket was admitted by another gate." }, { status: 409, headers: { "cache-control": "no-store" } });
   }
-  await env.DB.batch([
-    prepareAudit(env.DB, { session, action: "gate.ticket_checked_in", targetType: "ticket", targetId: ticket.ticketId, outcome: "success", detail: `${eventSlug}:${gate}`, requestId: requestMetadata(request).requestId }),
-    env.DB.prepare(`
-    INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, device_id, client_scan_id, created_at)
-    VALUES (?, ?, ?, 'check_in', ?, ?, ?, ?, ?, ?)
-  `).bind(crypto.randomUUID(), ticket.ticketId, eventSlug, gate, session.accountId, session.email, deviceId, clientScanId, checkedInAt),
-  ]);
   return Response.json({ result: "valid", ticket: { ...ticket, status: "checked_in", checkedInAt, checkedInGate: gate } }, { headers: { "cache-control": "no-store" } });
 }
 
@@ -185,12 +187,14 @@ export async function DELETE(request: Request) {
   const ticketId = body.ticketId?.trim() ?? "";
   const eventSlug = body.eventSlug?.trim() ?? "";
   if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
-  const result = await env.DB.prepare(`UPDATE tickets SET status = 'issued', checked_in_at = NULL, checked_in_by = NULL, checked_in_gate = NULL WHERE id = ? AND event_slug = ? AND status = 'checked_in' AND EXISTS (SELECT 1 FROM orders WHERE id = tickets.order_id AND status = 'paid')`)
-    .bind(ticketId, eventSlug).run();
-  if (result.meta.changes !== 1) return Response.json({ error: "This ticket is not currently checked in with an active booking." }, { status: 409 });
   const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, created_at) VALUES (?, ?, ?, 'undo', ?, ?, ?, ?)`)
-    .bind(crypto.randomUUID(), ticketId, eventSlug, (body.gate?.trim() || "Supervisor").slice(0, 50), session.accountId, session.email, now).run();
-  await recordAudit(env.DB, { session, action: "gate.ticket_checkin_undone", targetType: "ticket", targetId: ticketId, outcome: "success", detail: `${eventSlug}:${(body.reason?.trim() || "supervisor correction").slice(0, 300)}`, requestId: requestMetadata(request).requestId });
+  const [, receipt] = await env.DB.batch([
+    env.DB.prepare(`UPDATE tickets SET status = 'issued', checked_in_at = NULL, checked_in_by = NULL, checked_in_gate = NULL WHERE id = ? AND event_slug = ? AND status = 'checked_in' AND EXISTS (SELECT 1 FROM orders WHERE id = tickets.order_id AND status = 'paid')`)
+      .bind(ticketId, eventSlug),
+    env.DB.prepare(`INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, created_at) SELECT ?, ?, ?, 'undo', ?, ?, ?, ? WHERE changes() = 1`)
+      .bind(crypto.randomUUID(), ticketId, eventSlug, (body.gate?.trim() || "Supervisor").slice(0, 50), session.accountId, session.email, now),
+    prepareAudit(env.DB, { session, action: "gate.ticket_checkin_undone", targetType: "ticket", targetId: ticketId, outcome: "success", detail: `${eventSlug}:${(body.reason?.trim() || "supervisor correction").slice(0, 300)}`, requestId: requestMetadata(request).requestId, onlyAfterChange: true }),
+  ]);
+  if (receipt.meta.changes !== 1) return Response.json({ error: "This ticket is not currently checked in with an active booking." }, { status: 409 });
   return Response.json({ undone: true }, { headers: { "cache-control": "no-store" } });
 }

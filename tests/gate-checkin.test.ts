@@ -248,11 +248,11 @@ it('fails closed when the payment changes between the ticket read and conditiona
   const original=env.DB.prepare.bind(env.DB);
   const prepare=vi.spyOn(env.DB,'prepare').mockImplementation((sql:string)=>{
     const statement=original(sql);
-    if(sql.includes("UPDATE tickets SET status = 'checked_in'")){
+    if(sql.includes("WHERE t.qr_token_hash = ?")){
       const bind=statement.bind.bind(statement);
       statement.bind=(...values:unknown[])=>{
-        const bound=bind(...values),run=bound.run.bind(bound);
-        bound.run=async()=>{await original("UPDATE orders SET status='refunded' WHERE id=?").bind(`order-${suffix}`).run();return run();};
+        const bound=bind(...values),first=bound.first.bind(bound);
+        bound.first=async <T>(column?: string)=>{const row=await (column===undefined?first<T>():first<T>(column));await original("UPDATE orders SET status='refunded' WHERE id=?").bind(`order-${suffix}`).run();return row;};
         return bound;
       };
     }
@@ -263,4 +263,36 @@ it('fails closed when the payment changes between the ticket read and conditiona
   expect(response!.status).toBe(409);expect(await response!.json()).toMatchObject({result:'invalid'});
   expect(await env.DB.prepare("SELECT status FROM tickets WHERE id=?").bind(gate.ticketId).first()).toEqual({status:'issued'});
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:0});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM operational_audit_events WHERE target_id=?").bind(gate.ticketId).first()).toEqual({count:0});
+});
+
+
+it.each([['check_in','gate_checkin_events'],['undo','gate_checkin_events'],['check_in','operational_audit_events'],['undo','operational_audit_events']])('rolls back %s if %s cannot be recorded',async(action,table)=>{
+  const suffix=`atomic-receipt-${action}-${table}`,gate=await readyGate(suffix);
+  if(action==='undo')expect((await gate.scan()).status).toBe(200);
+  const recordedAction=table==='gate_checkin_events'?action:action==='check_in'?'gate.ticket_checked_in':'gate.ticket_checkin_undone';
+  await env.DB.exec(`CREATE TRIGGER audit_gate_receipt_failure BEFORE INSERT ON ${table} WHEN NEW.action='${recordedAction}' BEGIN SELECT RAISE(ABORT, 'receipt fixture failure'); END`);
+  try {
+    const request=action==='check_in'?gate.scan():undoCheckIn(new Request("https://tickets.becoreops.com/api/admin/check-in",{
+      method:'DELETE',headers:{cookie:gate.cookie,origin:'https://tickets.becoreops.com','content-type':'application/json'},
+      body:JSON.stringify({ticketId:gate.ticketId,eventSlug:'after-dark-osu',reason:'Correction'})}));
+    await expect(request).rejects.toThrow('receipt fixture failure');
+  } finally { await env.DB.exec('DROP TRIGGER audit_gate_receipt_failure'); }
+  expect(await env.DB.prepare("SELECT status FROM tickets WHERE id=?").bind(gate.ticketId).first()).toEqual({status:action==='check_in'?'issued':'checked_in'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:action==='check_in'?0:1});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM operational_audit_events WHERE target_id=?").bind(gate.ticketId).first()).toEqual({count:action==='check_in'?0:1});
+});
+
+
+it('records an Apple Wallet-backed admission successfully while its update triggers run',async()=>{
+  const suffix='wallet-gate',gate=await readyGate(suffix),now=new Date().toISOString();
+  await env.DB.prepare("INSERT INTO apple_wallet_passes (id,ticket_id,attendee_id,event_slug,pass_type_identifier,serial_number,created_at,updated_at) VALUES (?,?,?,'after-dark-osu','pass.example.gate',?,?,?)")
+    .bind(suffix,gate.ticketId,`attendee-${suffix}`,suffix,now,now).run();
+  const response=await gate.scan();expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({result:'valid'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:1});
+  expect((await undoCheckIn(new Request("https://tickets.becoreops.com/api/admin/check-in",{
+    method:'DELETE',headers:{cookie:gate.cookie,origin:'https://tickets.becoreops.com','content-type':'application/json'},
+    body:JSON.stringify({ticketId:gate.ticketId,eventSlug:'after-dark-osu',reason:'Correction'})}))).status).toBe(200);
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:2});
 });
