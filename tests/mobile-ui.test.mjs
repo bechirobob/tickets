@@ -204,6 +204,16 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.doesNotMatch(home, />[^<]*(?:device|phone mock)[^<]*</iu);
 });
 
+test("The Room preview omits its scene caption and reserved caption spacing", async () => {
+  const [carousel, demoCss] = await Promise.all([
+    readFile(roomPreviewCarouselUrl, "utf8"),
+    readFile(new URL("../app/room-demo.css", import.meta.url), "utf8"),
+  ]);
+  assert.doesNotMatch(carousel, /room-demo-caption|Before arrival|Inside the night/u);
+  assert.doesNotMatch(demoCss, /room-demo-caption|Inside the night/u);
+  assert.match(carousel, /aria-live="polite">Room preview/u);
+});
+
 test("The Room reconnects when a ticket holder returns to the page", async () => {
   const [room, durableObject] = await Promise.all([
     readFile(roomUrl, "utf8"),
