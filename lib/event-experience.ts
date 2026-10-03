@@ -79,24 +79,6 @@ export async function listHostEventSlugs(db: D1Database, hostId: string): Promis
   return rows.results.map((row) => row.eventSlug);
 }
 
-export async function listEventHosts(db: D1Database, eventSlugs: string[]): Promise<Map<string, PublicHost>> {
-  if (!eventSlugs.length) return new Map();
-  const placeholders = eventSlugs.map(() => "?").join(",");
-  const rows = await db.prepare(`
-    SELECT link.event_slug AS eventSlug, host.id, host.slug, host.name, host.bio, host.city,
-           host.verification_status AS verificationStatus,
-           host.profile_image_url AS profileImageUrl, link.role
-    FROM event_hosts link
-    JOIN hosts host ON host.id = link.host_id
-    WHERE link.event_slug IN (${placeholders})
-    ORDER BY link.is_primary DESC, host.name
-  `).bind(...eventSlugs).all<HostRecord & { eventSlug: string }>();
-  const result = new Map<string, PublicHost>();
-  for (const row of rows.results) {
-    if (!result.has(row.eventSlug)) result.set(row.eventSlug, { ...row, role: row.role ?? "Host" });
-  }
-  return result;
-}
 
 export async function loadTicketedEventExperience(
   db: D1Database,

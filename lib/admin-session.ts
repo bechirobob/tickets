@@ -122,9 +122,6 @@ export function hasPermission(session: Pick<AdminSession, "role"> & Partial<Pick
   return !session.mustChangePassword && permissions[session.role].includes(permission);
 }
 
-export function requirePermission(session: AdminSession | null, permission: StaffPermission): AdminSession | null {
-  return session && hasPermission(session, permission) ? session : null;
-}
 
 export async function hasEventAssignment(db: D1Database, session: AdminSession, eventSlug: string): Promise<boolean> {
   if (session.mustChangePassword) return false;

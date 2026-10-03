@@ -16,12 +16,4 @@ export function eventImageLoader({ src, width, quality }: ImageLoaderProps): str
   return eventImageUrl(src, width, quality ?? 74);
 }
 
-export function eventImageSrcSet(source: string, widths = [480, 720, 960]): string | undefined {
-  try {
-    if (new URL(source).hostname !== "images.unsplash.com") return undefined;
-    return widths.map((width) => `${eventImageUrl(source, width)} ${width}w`).join(", ");
-  } catch {
-    return undefined;
-  }
-}
 import type { ImageLoaderProps } from "next/image";
