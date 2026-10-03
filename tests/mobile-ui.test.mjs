@@ -185,9 +185,8 @@ test("The Room is promoted as a ticket-locked preview without exposing a public 
   assert.match(home, /className="scene-message__meta"/u);
   assert.doesNotMatch(home, /className="scene-message__bubble"><small/u);
   assert.match(home, /<Gem size=\{10\}/u);
-  assert.match(home, /<Signal size=\{9\}/u);
-  assert.match(home, /<Wifi size=\{10\}/u);
-  assert.match(home, /<BatteryFull size=\{13\}/u);
+  assert.match(home, /className="room-product-phone__status" viewBox="0 0 58 13" fill="currentColor"/u);
+  assert.doesNotMatch(home, /<Signal|<Wifi|<BatteryFull/u);
   assert.match(home, /className="chat-tapbacks room-demo-reaction"/u);
   assert.match(home, /<RoomReaction emoji=/u);
   assert.match(polish, /\.scene-message\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*66%/su);

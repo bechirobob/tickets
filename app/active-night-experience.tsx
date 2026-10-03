@@ -6,15 +6,12 @@ import {
   ArrowRight,
   ArrowUp,
   BadgeCheck,
-  BatteryFull,
   Camera,
   ConciergeBell,
   ChevronLeft,
   Gem,
   LockKeyhole,
-  Signal,
   Ticket,
-  Wifi,
 } from "lucide-react";
 import type { CSSProperties, FocusEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -55,9 +52,17 @@ function RoomPhone({ event, heroImage, conversation }: { event: CustomerEvent | 
   const { phoneRef, streamRef, step, ready, running, visible, visibleCount, typing, resetting, completeStep, pauseReason } = useRoomDemo(paused, reducedMotion, conversation === "inside" ? 2000 : 0, conversation === "inside" ? 4 : 5);
 
   return <article ref={phoneRef} data-demo-step={step} data-demo-ready={ready} data-demo-running={running} data-demo-visible={visible} data-demo-complete-step={completeStep} data-demo-pause-reason={pauseReason ?? undefined} className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
-    <Image className="room-product-phone__render" src="/devices/iphone-titanium-front.svg" width={320} height={668} alt="" aria-hidden="true" unoptimized />
+    <Image className="room-product-phone__render" src="/devices/iphone-15-pro-frame.png" width={391} height={800} alt="" aria-hidden="true" unoptimized />
     <div className="room-product-phone__display">
-    <div className="room-product-phone__hardware" aria-hidden="true"><span>{conversation === "arrival" ? "9:24" : "10:48"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
+    <div className="room-product-phone__hardware" aria-hidden="true">
+      <span>{conversation === "arrival" ? "9:24" : "10:48"}</span>
+      <i />
+      <b><svg className="room-product-phone__status" viewBox="0 0 58 13" fill="currentColor" focusable="false">
+        <rect x="0" y="8" width="2.7" height="4.5" rx=".65" /><rect x="4" y="6" width="2.7" height="6.5" rx=".65" /><rect x="8" y="3.5" width="2.7" height="9" rx=".65" /><rect x="12" y="1" width="2.7" height="11.5" rx=".65" />
+        <path d="M19 4.2a11.1 11.1 0 0 1 15 0l-1.7 1.9a8.6 8.6 0 0 0-11.6 0Zm3 3.3a6.7 6.7 0 0 1 9 0l-1.7 1.9a4.2 4.2 0 0 0-5.6 0Zm3 3.4a2.2 2.2 0 0 1 3 0L26.5 12.6Z" />
+        <rect x="38" y="1" width="17" height="11" rx="2.8" fill="none" stroke="currentColor" strokeWidth="1" opacity=".55" /><rect x="40" y="3" width="13" height="7" rx="1.2" /><path d="M56.3 4.2v4.6a2.5 2.5 0 0 0 0-4.6Z" opacity=".55" />
+      </svg></b>
+    </div>
     <div className="room-product-phone__screen">
       <header className="room-product-phone__header"><ChevronLeft size={17} aria-hidden="true" /><Image src={eventImageUrl(heroImage, 120)} width={24} height={30} alt="" aria-hidden="true" unoptimized /><div><small>The Room</small><b>{eventTitle}</b></div><span>Preview</span></header>
       <div ref={streamRef} className="room-product-phone__stream" data-resetting={resetting} aria-live="off">

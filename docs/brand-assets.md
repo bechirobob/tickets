@@ -24,3 +24,36 @@ Homepage phone direction: the arrival phone is attendee conversation only (five 
 
 
 Brand consistency pass (September 2026): staff sign-in, recovery, bootstrap, account security, Help, Terms and page recovery now use `BrandLogo`. Offline passes use the approved mark cached with shell v6. Email headers use `lib/email-brand.ts` with a PNG rendition for mail-client compatibility; RSVP, host alerts, announcements, receipts, recovery, transfers and support share it. The social card embeds the approved render rather than the retired flat boxed B. Run `node scripts/refresh-brand-assets.mjs` to refresh the email PNG and social-card PNG/SVG from the WebP source. Existing favicon, Apple touch, PWA, Android/iOS launcher and native splash images were visually checked and already contain the same rendered identity. No native binary release is needed for this web-only correction; installed native icons were already current.
+
+## Room showcase iPhone 15 Pro frame (2026-10-03)
+
+The Room showcase uses Mobile FIRST's licensed transparent iPhone 15 Pro raster,
+not the previous hand-drawn SVG or an AI-generated device. The live conversation,
+status glyphs and reduced-motion behavior remain HTML; the frame is a stationary
+foreground overlay. Its physical camera and sensor details are preserved. A black
+software Dynamic Island backing joins the two physical cutouts; no second camera
+is drawn. The asset is not an Apple endorsement or an Apple-supplied marketing
+asset.
+
+- Source: https://www.webmobilefirst.com/en/mockups/apple-iphone-15-pro-2023/
+- Original PNG: https://www.webmobilefirst.com/img/mockups/mockup-apple-iphone-15-pro-2023-transparent.png
+- Terms: https://www.webmobilefirst.com/en/license-agreement/
+- Retrieved: 2026-10-03; free standard asset, no purchase, signup or checkbox.
+- Asset: `public/devices/iphone-15-pro-frame.png`, unchanged 391 × 800 RGBA PNG.
+- SHA-256: `5001ad92f4733a593bd7bb50b362e17542d034c29f0f972943e6aa40978862fd`.
+- Source page's asset-specific terms permit personal/commercial use and
+  modification/cropping, do not require attribution, and prohibit resale or
+  redistribution of the standalone file. Use solely as an integrated device frame
+  in the Tickets showcase, not a download, reusable template or asset offering.
+- The free source is 391 px wide. At the 268 CSS-pixel presentation it retains
+  approximately 1.46 source pixels per CSS pixel; it is not a full 2×/3× raster.
+  A higher-resolution source requires separate purchase approval. Do not upscale
+  this file and describe it as extra detail.
+- Screen mask measured from the alpha aperture: left 18, top 14, right 374,
+  bottom 787 px; approximately 50 px display corner radius. Overlay remains at
+  native aspect ratio, with no synthesized rails, glow or extra lens.
+
+Apple's own marketing bezel route was not selected: its marketing artwork
+agreement scopes use to apps available on the App Store while the licensee is in
+Apple Developer Program. This website showcase must not silently assume that
+eligibility. Reference: https://developer.apple.com/app-store/marketing/guidelines/.
