@@ -63,35 +63,37 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '043e310a41ff28d23adc20383c88566b181232a6', 'ops/vps/test_runtime_release.py': '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14', 'ops/vps/public_runtime_guard.py': '9a9739f1bd88cbd02dc420001efa3de5b85e3538', 'ops/vps/test_public_runtime_guard.py': 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'}
 
 REVIEWED_APPLICATION_BLOBS = {
+    "ops/vps/test_release_source.py": "ec8a7a5bbbe585941583f50624823b85ec51e586",
+    "scripts/checkbox-hotfix-audit-policy.json": "7447247befa4b9ef0a274b27352afdce690e9e1e",
     "ops/vps/test_runtime_workflow_contract.py": "eef0b25e667f6be123c0ed6c5bca774158d390d8",
-    "tests/repository-boundaries.test.mjs": "4db7122810a97ba3120ce632c2a45bbb34ed59ed",
+    "tests/repository-boundaries.test.mjs": "45c323bca8ade5518051d7a7b3e0cafff8be5b99",
     "tests/preview-data-inventory.test.mjs": "35f897420e6afe6b50c4bfa8aedd6eeeb370283d",
     "scripts/inspect-preview-data.mjs": "e6c8e9f07262a8088d6daca199e69a6f24c46af5",
     "scripts/inspect-vps-handoff.mjs": "88c049b7357ee319222580d0de63fd079c07ab98",
     ".github/workflows/tickets-handover.yml": "5bef3d7019966a548ef4ae515a0309d9ff6e2847",
     "ops/vps/test_public_runtime_guard.py": "eb1fd8a6909c7c0634326da1d35c7a4606fbebe7",
     "ops/vps/public_runtime_guard.py": "9a9739f1bd88cbd02dc420001efa3de5b85e3538",
-    "tests/test_caption_source.py": "a43e96c42707f96b193cf6758886bffd8198b7ed",
+    "tests/test_caption_source.py": "a11c4986e185f883ff2a296b38bb99fd7c275d59",
     "scripts/caption-source-manifest.json": "1b178a1a371ae047f8bf26498d249e272c11497d",
     "scripts/verify-caption-source.py": "fa474c5d8cfaad8df53e77004c063e1511ed0b68",
     ".github/scripts/verify-caption-control.py": "19366f37243794bba916dd6cff0b7731aaec8f1c",
     ".github/backup/backup_release.py": "64330f28dd1561fa591efd6582704285348af1ea",
     ".github/backup/test_backup_release.py": "cd805866b06b0a70ab3bf384db19990d96a0dffd",
     ".github/workflows/backup-transport-checks.yml": "7e32458428475121554f43c8a3f646e70d11161e",
-    ".github/workflows/deploy.yml": "b3c6dd82919b1e69089e0e4b6a95a97c7e741744",
+    ".github/workflows/deploy.yml": "f698c67d2015e8172f98562d840c80a96fbd8d0d",
     ".github/workflows/tickets-backup.yml": "9077f257dbcfb1a8842dcf54a2bf3dff084461d6",
-    "ops/vps/test_runtime_packaging.py": "d289b2755d3751eee5804466e18df3ae21baf166",
-    ".github/workflows/tickets-code-release.yml": "bfad5d703772a33849ed401af632db50ad791d9d",
+    "ops/vps/test_runtime_packaging.py": "b43d7208a4127cba6bc712a871c4dc11632a6746",
+    ".github/workflows/tickets-code-release.yml": "caf28c195613496857e70193b525a4f36f927c2f",
     "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
     "playwright.config.ts": "458baa39707043948474dae29bd5341c7ea5a883",
-    "ops/vps/test_candidate_evidence.py": "09f57eed4bc8c90e3b055afe58ba4c741cf84593",
+    "ops/vps/test_candidate_evidence.py": "7fd1baecfab2f8500926b510e7e6b5ea695e5bc1",
     "ops/vps/test_runtime_release.py": "210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14",
     "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
     "ops/vps/runtime_release.py": "043e310a41ff28d23adc20383c88566b181232a6",
-    ".github/workflows/tickets-release-operator-checks.yml": "32af026435e5ab51b2db31e791fd7c2d23aa292c",
-    ".github/workflows/vps-runtime.yml": "9dd54175304d35f7622390477a533de73318d807",
+    ".github/workflows/tickets-release-operator-checks.yml": "99adefeef3c6c4829ef7385d0597f66a2ebae0c4",
+    ".github/workflows/vps-runtime.yml": "e5ff3784b3d987f13cbcb2259d6c85acdc80e4e9",
     ".github/workflows/browser-audit.yml": "4e0293b58478326e6c22e653f69272ce6e64f7e3",
-    ".github/workflows/candidate-checks.yml": "c1749f4f54b936ba476c19f87e12eca72e7d503c",
+    ".github/workflows/candidate-checks.yml": "999b09f8daab5bfa44d0a88e81ceb1ec6efdfd30",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
     ".github/workflows/full-audit-capacity.yml": "67ea27fb202cf216596bd27d73e51515f656b19c",
     ".github/workflows/tickets-readiness-audit.yml": "f47378c33914b0005ec15598fb0f9110d6882c6d",
@@ -307,19 +309,19 @@ REVIEWED_MIGRATIONS = {
 }
 BROWSERS = {"desktop-chromium", "mobile-chromium", "mobile-webkit"}
 RUNTIME_VERIFY_STEPS = {
-    "Verify independently trusted caption source before executing checkout code",
-    "Verify bounded audit exception", "Run npm audit --audit-level=moderate",
+    "Verify exact source ancestry before executing checkout code",
+    "Run npm audit --audit-level=moderate",
     "Prepare verified runtime without development dependencies",
     "Publish verified public runtime release",
 }
 RUNTIME_HANDOFF_STEPS = {
-    "Verify independently trusted caption source before executing checkout code",
+    "Verify exact source ancestry before executing checkout code",
     "Inspect current data and private connection readiness",
 }
 CANDIDATE_CORE_STEPS = {
     "Check out exact candidate", "Set up Node.js", "Install locked dependencies",
-    "Verify independently trusted caption source before executing checkout code",
-    "Verify bounded audit exception", "Install browsers for event-page verification",
+    "Verify exact source ancestry before executing checkout code",
+    "Install browsers for event-page verification",
     "Verify exact candidate source", "Audit dependencies", "Lint application",
     "Check application types", "Verify unit tests and rendered production build",
     "Check database schema", "Validate the deployable Worker without publishing",
@@ -470,42 +472,62 @@ def release_override(raw, previous, candidate):
     return text.replace(old, new).encode()
 
 
+def git_environment():
+    # Candidate-controlled replacement refs, alternate repositories or config must
+    # never influence immutable source, ancestry, mode or tree verification.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+               GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1", GIT_TERMINAL_PROMPT="0")
+    return env
+
+
 def git(*args):
-    return subprocess.check_output(["git", *args], text=True, stderr=subprocess.DEVNULL).strip()
+    return subprocess.check_output(["git", "--no-replace-objects", *args], text=True,
+                                   stderr=subprocess.DEVNULL, env=git_environment(), timeout=60).strip()
 
 
-CHECKBOX_AUDIT_POLICY = "scripts/checkbox-hotfix-audit-policy.json"
-
-
-def verify_trusted_caption_source(source):
-    """Bind every activation to the independently selected, merged control plane."""
+def verify_trusted_operator(source):
+    """Keep activation bound to an independently selected, merged operator."""
     baseline = os.environ.get("BECORE_TRUSTED_BASE", "")
-    require(SHA.fullmatch(baseline), "An immutable trusted caption baseline is required.")
-    operator = Path(__file__).resolve()
+    require(SHA.fullmatch(baseline) and SHA.fullmatch(source),
+            "An immutable trusted baseline and source are required.")
+    require(baseline != source, "Source cannot be its own trusted control baseline.")
+    operator = Path(__file__).absolute()
+    require(operator.is_file() and not operator.is_symlink(), "Trusted operator must be a regular file.")
     trusted_bytes = subprocess.check_output([
         "git", "--no-replace-objects", "show", baseline + ":ops/vps/code-release.py"
-    ], stderr=subprocess.DEVNULL)
+    ], stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
     require(operator.read_bytes() == trusted_bytes, "Operator bytes differ from the trusted baseline.")
-    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", baseline, "origin/main"], check=True)
-    gate = operator.parents[2] / "scripts/verify-caption-source.py"
-    require(gate.is_file() and not gate.is_symlink(), "Trusted source gate is missing.")
-    trusted_gate = subprocess.check_output([
-        "git", "--no-replace-objects", "show", baseline + ":scripts/verify-caption-source.py"
-    ], stderr=subprocess.DEVNULL)
-    require(gate.read_bytes() == trusted_gate, "Source gate bytes differ from the trusted baseline.")
-    subprocess.run([sys.executable, "-I", str(gate), "--repo", str(Path.cwd()),
-                    "--trusted-baseline", baseline, "--candidate", source], check=True)
+    for descendant in ("origin/main", source):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", baseline, descendant],
+                       check=True, env=git_environment(), timeout=60)
+
+
+def verify_changed_modes(expected, source):
+    """No implicit deletion, symlink, submodule or executable-mode permission."""
+    raw = git("diff", "--raw", "--no-abbrev", "--no-renames", "-z", expected, source)
+    if not raw:
+        return
+    parts = raw.split("\0")
+    require(parts[-1] == "" and len(parts) % 2 == 1, "Malformed source change records.")
+    for header, name in zip(parts[:-1:2], parts[1::2]):
+        record = re.fullmatch(r":([0-7]{6}) ([0-7]{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([AM])", header)
+        require(record is not None and bool(name), "Unreviewed source deletion or type change.")
+        before_mode, after_mode, before_blob, _, status = record.groups()
+        require(after_mode in {"100644", "100755"}, "Source must remain regular files.")
+        if status == "A":
+            require(before_mode == "000000" and before_blob == "0" * 40 and after_mode == "100644",
+                    "New executable or nonregular source needs explicit review.")
+        else:
+            require(before_mode == after_mode, "Source file mode changed without review.")
 
 
 def vetted_changes(expected, source):
-    subprocess.run(["git", "merge-base", "--is-ancestor", expected, source], check=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, source], check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
+    verify_changed_modes(expected, source)
     changed = git("diff", "--name-only", expected, source).splitlines()
     for name in changed:
-        if name == CHECKBOX_AUDIT_POLICY:
-            # Frozen snapshot record; unconditional trusted-tree verification in
-            # verify_ci already binds this file, including when it did not change.
-            continue
         if name in REVIEWED_APPLICATION_BLOBS or name in REVIEWED_MIGRATIONS:
             reviewed = REVIEWED_APPLICATION_BLOBS.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
             require(git("rev-parse", source + ":" + name) == reviewed,
@@ -631,8 +653,9 @@ def verify_ci(args):
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Dispatch must target main.")
     require(git("rev-parse", "HEAD") == args.source and not git("status", "--porcelain"),
             "Release checkout must be clean and exact.")
-    verify_trusted_caption_source(args.source)
-    subprocess.run(["git", "merge-base", "--is-ancestor", args.source, "origin/main"], check=True)
+    verify_trusted_operator(args.source)
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", args.source, "origin/main"],
+                   check=True, env=git_environment(), timeout=60)
     metadata = Path(args.metadata)
     runtime = strict_json((metadata / "runtime.json").read_bytes())
     candidate = strict_json((metadata / "candidate.json").read_bytes())
@@ -1452,6 +1475,8 @@ class Deployment:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    operator = commands.add_parser("verify-operator")
+    operator.add_argument("--source", required=True)
     verify = commands.add_parser("verify-ci")
     for name in ("source", "expected", "repository", "metadata", "runtime-run", "candidate-run", "archive", "output"):
         verify.add_argument("--" + name, required=True)
@@ -1463,7 +1488,9 @@ def main():
                        help="Exact failed run-attempt identity; only a proven prepared empty release is quarantined.")
     args = parser.parse_args()
     try:
-        if args.command == "verify-ci":
+        if args.command == "verify-operator":
+            verify_trusted_operator(args.source)
+        elif args.command == "verify-ci":
             verify_ci(args)
         else:
             values = vars(args)

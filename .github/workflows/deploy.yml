@@ -46,17 +46,22 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Verify independently trusted caption source before executing checkout code
+      - name: Verify exact source ancestry before executing checkout code
         shell: bash
         run: |
           set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REF" = refs/heads/main
+          test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_RELEASE_SHA" origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
-          gate=$(mktemp "$RUNNER_TEMP/tickets-caption-source.XXXXXX.py")
-          git show "$BECORE_TRUSTED_BASE:scripts/verify-caption-source.py" > "$gate"
-          python3 -I "$gate" --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$BECORE_RELEASE_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

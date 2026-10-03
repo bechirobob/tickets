@@ -133,8 +133,7 @@ test("candidate CI runs core gates once and restores the same local build for ev
     assert.equal(step.with?.cache, undefined, "Candidate builds never depend on Actions cache storage");
   }
   const required = {
-    "Verify bounded audit exception": "python3 -m unittest discover -s tests -p 'test_checkbox_hotfix_audit.py' -v",
-    "Audit dependencies": "python3 scripts/audit-checkbox-hotfix.py",
+    "Audit dependencies": "npm audit --audit-level=moderate",
     "Lint application": "npm run lint",
     "Check application types": "npm run typecheck",
     "Verify unit tests and rendered production build": "npm test",
@@ -156,7 +155,7 @@ test("candidate CI runs core gates once and restores the same local build for ev
   assert.equal(checkouts.length, 1);
   assert.equal(checkouts[0].with.ref, workflow.env.BECORE_RELEASE_SHA);
   assert.equal(checkouts[0].with["persist-credentials"], false);
-  assert.equal(checkouts[0].with["fetch-depth"], 0, "The bounded exception verifies exact commit ancestry");
+  assert.equal(checkouts[0].with["fetch-depth"], 0, "Source verification requires exact commit ancestry");
   assert.equal(verify.steps.filter((step) => step.run === "npm ci --no-audit").length, 1);
   const source = candidateStep(verify, "Verify exact candidate source");
   const pack = candidateStep(verify, "Package verified browser build");

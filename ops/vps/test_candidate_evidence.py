@@ -336,7 +336,7 @@ class CandidateWorkflowTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)), "Every gate needs its own unambiguous job step")
 
     def test_core_gates_and_build_once(self):
-        for command in ("npm ci --no-audit", "python3 scripts/audit-checkbox-hotfix.py", "npm run lint", "npm run typecheck",
+        for command in ("npm ci --no-audit", "npm audit --audit-level=moderate", "npm run lint", "npm run typecheck",
                         "npm test", "npx drizzle-kit check", "npx wrangler deploy --config dist/server/wrangler.json --dry-run --outdir dist/worker-dry-run"):
             self.assertIn("run: " + command, self.workflow)
         self.assertEqual(self.workflow.count("run: npm test\n"), 1)

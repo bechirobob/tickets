@@ -145,7 +145,7 @@ class RuntimePackagingTests(unittest.TestCase):
         self.assertLess(self.script.index("npm prune"), self.script.rindex(INTEGRITY_CHECK))
         self.assertLess(self.script.rindex(INTEGRITY_CHECK), self.script.index("node scripts/verify-vps-runtime.mjs"))
         workflow = WORKFLOW.read_text()
-        for command in ("npm ci", "python3 scripts/audit-checkbox-hotfix.py", "npm run lint", "npm run typecheck",
+        for command in ("npm ci", "npm audit --audit-level=moderate", "npm run lint", "npm run typecheck",
                         "npm test", "npm run test:vps", "python -m unittest discover -s ops/vps -p 'test_*.py'",
                         "npm run build:vps", "node scripts/verify-vps-runtime.mjs"):
             self.assertLess(workflow.index("run: " + command), workflow.index("- name: " + STEP))
