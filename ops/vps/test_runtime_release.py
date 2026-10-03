@@ -554,6 +554,7 @@ class RuntimeReleaseTests(unittest.TestCase):
             client.repository()
             args = command.call_args.args[0]
             self.assertIn("github.com", args)
+            self.assertNotIn("--allow-escape-sequences", args)
             self.assertEqual(args[-1], "repos/" + release.REPOSITORY)
             self.assertEqual(client.env["GH_HOST"], "github.com")
             for endpoint in ("https://evil.invalid", "../evil", "releases;evil", "--help"):
@@ -587,9 +588,30 @@ class RuntimeReleaseTests(unittest.TestCase):
                 patch.object(release.os, "read", side_effect=[b"data", b""]):
             client.download_asset(201, destination, 4)
         self.assertEqual(destination.read_bytes(), b"data")
+        self.assertIn("--allow-escape-sequences", command.call_args.args[0])
+        self.assertIs(command.call_args.kwargs["stdout"], release.subprocess.PIPE)
         self.assertEqual(command.call_args.args[0][-1], f"repos/{release.REPOSITORY}/releases/assets/201")
         self.assertNotIn("test-token", str(command.call_args.args))
         process.kill.assert_not_called()
+
+    def test_ansi_job_log_is_file_only_and_preserves_strict_receipt(self):
+        manifest = self.client.seed(self.package)
+        raw = b"2026-10-03T00:01:00Z \x1b[36mrunner command\x1b[0m\n" + self.client.log
+        client = self.stream_client()
+        process, selector = self.stream_mocks([raw, b""])
+        with patch.object(release.subprocess, "Popen", return_value=process) as command, \
+                patch.object(release.selectors, "DefaultSelector", return_value=selector), \
+                patch.object(release.os, "read", side_effect=[raw, b""]):
+            received = client.job_log(301)
+        self.assertEqual(received, raw)
+        self.assertEqual(release.parse_producer_log(received),
+                         release.producer_receipt(manifest, self.client.release))
+        self.assertIn("--allow-escape-sequences", command.call_args.args[0])
+        self.assertIs(command.call_args.kwargs["stdout"], release.subprocess.PIPE)
+        self.assertEqual(client.env["GH_PAGER"], "cat")
+        self.assertEqual(client.env["GH_DEBUG"], "")
+        with self.assertRaises(release.TransportError):
+            release.parse_producer_log(received + self.client.log)
 
     def test_streamed_download_kills_overlong_response_before_writing(self):
         client = self.stream_client()

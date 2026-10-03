@@ -1838,7 +1838,17 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                      "ops/vps/test_runtime_packaging.py"):
             content = (self.root / name).read_bytes()
             digest = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
-            self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest, name)
+            self.assertEqual(release.REVIEWED_OPERATOR_BLOBS.get(name, release.REVIEWED_APPLICATION_BLOBS[name]), digest, name)
+
+    def test_operator_transport_pins_do_not_replace_verified_application_pins(self):
+        expected = {
+            "ops/vps/runtime_release.py": "2d5bed733f6165b3bed3a88157596e3212204f49",
+            "ops/vps/test_runtime_release.py": "44cb4fe5225343dd79b101670b0285c53fff9acb",
+        }
+        self.assertEqual(set(release.REVIEWED_OPERATOR_BLOBS), set(expected))
+        for name, digest in expected.items():
+            self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)
+            self.assertNotEqual(release.REVIEWED_OPERATOR_BLOBS[name], digest)
 
     def test_candidate_is_one_read_only_job_with_every_browser_gate(self):
         text = (self.root / ".github/workflows/candidate-checks.yml").read_text()
