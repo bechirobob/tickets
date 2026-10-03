@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const host = await findHostBySlug(env.DB, slug);
   if (!host) return { title: "Host not found" };
   return {
-    title: `${host.name} | BeCore Tickets`, description: host.bio,
+    title: host.name, description: host.bio,
     alternates: { canonical: `/hosts/${host.slug}` },
     openGraph: { title: `${host.name} | BeCore Tickets`, description: host.bio,
       url: `/hosts/${host.slug}`, images: host.profileImageUrl ? [{ url: host.profileImageUrl, alt: host.name }] : [] },
