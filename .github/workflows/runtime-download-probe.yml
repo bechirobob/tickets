@@ -49,6 +49,7 @@ jobs:
           module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
           proof=json.loads((metadata/'provenance.json').read_text())
           deployment=object.__new__(module.Deployment)
+          deployment.release=metadata/'uncreated-extraction-target'
           with tarfile.open(metadata/'artifact/tickets-vps-runtime.tar.gz','r:gz') as archive:
               members=deployment.archive_members(archive)
           print(json.dumps({'completePreflight':True,'source':proof['source'],'candidateTree':proof['candidateTree'],'changedFiles':len(proof['changedFiles']),'migrations':proof['migrations'],'archiveMembers':len(members)}))
