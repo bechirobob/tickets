@@ -57,36 +57,38 @@ export async function GET(request: Request) {
   if(requestedSlug && !events.results.some(event=>event.slug===requestedSlug))return Response.json({error:'This event is not assigned to your account.'},{status:403,headers:{'cache-control':'no-store'}});
   const slugs = events.results.map((event) => String(event.slug)).filter(slug=>!requestedSlug||slug===requestedSlug);
   if (!slugs.length) return Response.json({ events: [], submissions: submissions.results, tiers: [], settlements: [], requests: [], gateStaff: [], attendeeAnswers: [], vipSettings: [], vipRequests: [] }, { headers: { "cache-control": "no-store" } });
-  const placeholders = slugs.map(() => "?").join(",");
+  // A JSON set uses one binding even for years of explicitly assigned events.
+  const scopedSlugs = JSON.stringify(slugs);
+  const placeholders = "SELECT value FROM json_each(?)";
   const now = new Date().toISOString();
   const [tiers, settlements, requests, gateStaff, attendeeAnswers, vipSettings, vipRequests] = await Promise.all([
     env.DB.prepare(`SELECT tier.id, tier.event_slug AS eventSlug, tier.name, tier.price_minor AS priceMinor, tier.capacity_admissions AS capacityAdmissions,
       tier.status, COALESCE(SUM(CASE WHEN reservation.status = 'consumed' OR (reservation.status = 'held' AND reservation.expires_at > ?) THEN reservation.admission_count ELSE 0 END), 0) AS allocatedAdmissions
       FROM event_ticket_tiers tier LEFT JOIN inventory_reservations reservation ON reservation.ticket_tier_id = tier.id
-      WHERE tier.event_slug IN (${placeholders}) GROUP BY tier.id ORDER BY tier.event_slug, tier.sort_order`).bind(now, ...slugs).all<Record<string, unknown>>(),
+      WHERE tier.event_slug IN (${placeholders}) GROUP BY tier.id ORDER BY tier.event_slug, tier.sort_order`).bind(now, scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT id, event_slug AS eventSlug, period_start AS periodStart, period_end AS periodEnd, gross_minor AS grossMinor,
       booking_fees_minor AS bookingFeesMinor, refunds_minor AS refundsMinor, net_ticket_sales_minor AS netTicketSalesMinor, currency, status
-      FROM event_settlements WHERE event_slug IN (${placeholders}) ORDER BY period_end DESC`).bind(...slugs).all<Record<string, unknown>>(),
+      FROM event_settlements WHERE event_slug IN (${placeholders}) ORDER BY period_end DESC`).bind(scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT id, event_slug AS eventSlug, kind, order_id AS orderId, detail, status, review_note AS reviewNote, created_at AS createdAt
-      FROM organizer_requests WHERE event_slug IN (${placeholders}) ORDER BY created_at DESC LIMIT 100`).bind(...slugs).all<Record<string, unknown>>(),
+      FROM organizer_requests WHERE event_slug IN (${placeholders}) ORDER BY created_at DESC LIMIT 100`).bind(scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT assignment.event_slug AS eventSlug, account.id, account.display_name AS displayName, account.normalized_email AS email, account.status
       FROM staff_event_assignments assignment JOIN staff_accounts account ON account.id = assignment.account_id
-      WHERE assignment.event_slug IN (${placeholders}) AND account.role = 'gate' ORDER BY account.display_name`).bind(...slugs).all<Record<string, unknown>>(),
+      WHERE assignment.event_slug IN (${placeholders}) AND account.role = 'gate' ORDER BY account.display_name`).bind(scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT question.event_slug AS eventSlug, question.id AS questionId, question.prompt,
       answer.answer, answer.updated_at AS updatedAt, profile.display_name AS displayName
       FROM event_questions question
       JOIN attendee_question_answers answer ON answer.question_id = question.id
       JOIN attendee_profiles profile ON profile.id = answer.attendee_id
       WHERE question.event_slug IN (${placeholders}) AND answer.answer <> ''
-      ORDER BY question.event_slug, answer.updated_at DESC LIMIT 500`).bind(...slugs).all<Record<string, unknown>>(),
+      ORDER BY question.event_slug, answer.updated_at DESC LIMIT 500`).bind(scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT event_slug AS eventSlug, bottle_service_enabled AS bottleServiceEnabled, bottle_menu AS bottleMenu,
       song_suggestions_enabled AS songSuggestionsEnabled, assistance_enabled AS assistanceEnabled, updated_at AS updatedAt
-      FROM event_vip_settings WHERE event_slug IN (${placeholders})`).bind(...slugs).all<Record<string, unknown>>(),
+      FROM event_vip_settings WHERE event_slug IN (${placeholders})`).bind(scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT request.id, request.event_slug AS eventSlug, request.attendee_id AS attendeeId,
       request.kind, request.detail, request.location, request.status, request.organizer_note AS organizerNote,
       request.created_at AS createdAt, profile.display_name AS displayName
       FROM vip_concierge_requests request JOIN attendee_profiles profile ON profile.id = request.attendee_id
-      WHERE request.event_slug IN (${placeholders}) ORDER BY request.created_at DESC LIMIT 250`).bind(...slugs).all<Record<string, unknown>>(),
+      WHERE request.event_slug IN (${placeholders}) ORDER BY request.created_at DESC LIMIT 250`).bind(scopedSlugs).all<Record<string, unknown>>(),
   ]);
   return Response.json({ events: events.results, submissions: submissions.results, tiers: tiers.results, settlements: settlements.results, requests: requests.results, gateStaff: gateStaff.results, attendeeAnswers: attendeeAnswers.results, vipSettings: vipSettings.results, vipRequests: vipRequests.results }, { headers: { "cache-control": "no-store" } });
 }

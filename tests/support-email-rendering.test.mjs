@@ -11,7 +11,7 @@ const source = await readFile(new URL('../app/support-email.tsx', import.meta.ur
 const compiled = transformSync(source, { loader: 'tsx', jsx: 'automatic', format: 'cjs' });
 const componentModule = { exports: {} };
 runInNewContext(compiled.code, { module: componentModule, exports: componentModule.exports, require: createRequire(import.meta.url) });
-const { default: SupportEmail, SUPPORT_EMAIL } = componentModule.exports;
+const { default: SupportEmail, SUPPORT_EMAIL, PrivacyEmail } = componentModule.exports;
 
 test('support email SSR emits the documented comments around the fixed public address', () => {
   assert.equal(SUPPORT_EMAIL, 'tickets@becoreops.com');
@@ -21,6 +21,14 @@ test('support email SSR emits the documented comments around the fixed public ad
 test('support email SSR protects the entire fixed mailto anchor and accepts no arbitrary content', () => {
   const rendered = renderToStaticMarkup(createElement(SupportEmail, { linked: true, html: '<script>unexpected</script>' }, 'another@example.invalid'));
   assert.equal(rendered, '<span><!--email_off--><a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a><!--/email_off--></span>');
+});
+
+test('privacy email SSR protects its existing contact address with the same fixed-literal boundary', async () => {
+  const rendered = renderToStaticMarkup(createElement(PrivacyEmail, { html: '<script>unexpected</script>' }, 'another@example.invalid'));
+  assert.equal(rendered, '<span><!--email_off--><a href="mailto:contact@becoreops.com">contact@becoreops.com</a><!--/email_off--></span>');
+  const privacy = await readFile(new URL('../app/privacy/page.tsx', import.meta.url), 'utf8');
+  assert.match(privacy, /<PrivacyEmail \/>/u);
+  assert.doesNotMatch(privacy, /href="mailto:contact@becoreops\.com"/u);
 });
 
 test('Help protects its plain-text recovery address and contact link; Terms shares the same component', async () => {

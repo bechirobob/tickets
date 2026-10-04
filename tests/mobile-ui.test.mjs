@@ -880,6 +880,24 @@ test("help is searchable by role and organiser records follow the verified submi
   assert.match(css, /\.organizer-portfolio > div\s*\{[^}]*grid-template-columns:\s*repeat\(5/su);
 });
 
+test("public host metadata leaves the shared brand suffix to the root layout", async () => {
+  const [host, layout] = await Promise.all([
+    readFile(new URL("../app/hosts/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(host, /title: host\.name, description: host\.bio/u);
+  assert.match(layout, /template: "%s · BeCore Tickets"/u);
+});
+
+test("help search keeps one clear control outside the input's accessible name", async () => {
+  const [help, css] = await Promise.all([readFile(helpCentreUrl, "utf8"), readFile(cssUrl, "utf8")]);
+  assert.match(help, /<div className="help-search">/u);
+  assert.match(help, /<input aria-label="Search BeCore Help"/u);
+  assert.match(help, /aria-label="Clear help search"/u);
+  assert.doesNotMatch(help, /<label className="help-search">/u);
+  assert.match(css, /\.help-search input::-webkit-search-cancel-button\s*\{[^}]*appearance:\s*none/su);
+});
+
 test("ticket entry uses a protected real scanner and printable QR receipt", async () => {
   const [scanPage, scanner, wallet, receiptCss] = await Promise.all([
     readFile(new URL("../app/scan/page.tsx", import.meta.url), "utf8"),

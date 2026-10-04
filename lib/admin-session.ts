@@ -263,14 +263,15 @@ export function mutationHasValidOrigin(request: Request): boolean {
   return Boolean(origin && origin === new URL(request.url).origin);
 }
 
+// onlyAfterChange is for a batch immediately after the guarded domain write.
 export function prepareAudit(
   db: D1Database,
-  input: { session?: AdminSession | null; action: string; targetType: string; targetId?: string | null; outcome: "success" | "denied" | "failed"; detail?: string | null; requestId?: string | null },
+  input: { session?: AdminSession | null; action: string; targetType: string; targetId?: string | null; outcome: "success" | "denied" | "failed"; detail?: string | null; requestId?: string | null; onlyAfterChange?: boolean },
 ) {
   return db.prepare(`
     INSERT INTO operational_audit_events (
       id, actor_account_id, actor_email, actor_role, action, target_type, target_id, outcome, detail, request_id, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${input.onlyAfterChange ? "WHERE changes() = 1" : ""}
   `).bind(
     crypto.randomUUID(), input.session?.accountId ?? null, input.session?.email ?? null, input.session?.role ?? null,
     input.action, input.targetType, input.targetId ?? null, input.outcome, input.detail?.slice(0, 1000) ?? null,

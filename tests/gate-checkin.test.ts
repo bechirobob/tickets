@@ -1,8 +1,9 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { POST as preparePasses } from "../app/api/customer/tickets/route";
-import { DELETE as undoCheckIn, POST as checkIn } from "../app/api/admin/check-in/route";
+import { GET as gateManifest, DELETE as undoCheckIn, POST as checkIn } from "../app/api/admin/check-in/route";
 import { adminCookieHeader, createStaffSession } from "../lib/admin-session";
+import { recordDisputeWebhook } from "../lib/payment-operations";
 import { attendeeCookieHeader, hashToken } from "../lib/attendee-auth";
 
 async function seedIssuedTicket(suffix: string) {
@@ -152,4 +153,146 @@ describe("secure gate passes", () => {
     await expect(env.DB.prepare("SELECT status FROM tickets WHERE id = ?").bind(ticketId).first()).resolves.toMatchObject({ status: "issued" });
     await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id = ?").bind(ticketId).first()).resolves.toMatchObject({ count: 2 });
   });
+});
+
+
+it.each(['refund_pending', 'refunded', 'requires_refund', 'disputed'])('rejects a previously issued gate QR while its order is %s', async (status) => {
+  const suffix = `payment-state-${status}`;
+  const { attendeeToken, ticketId } = await seedIssuedTicket(suffix);
+  const wallet = await (await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
+    method: "POST", headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0], origin: "https://tickets.becoreops.com" },
+  }))).json() as { orders: Array<{ tickets: Array<{ gateCode: string }> }> };
+  const cookie = await ownerCookie(suffix);
+  await env.DB.prepare("UPDATE orders SET status=? WHERE id=?").bind(status, `order-${suffix}`).run();
+  const response = await checkIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
+    method: "POST", headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
+    body: JSON.stringify({ code: wallet.orders[0].tickets[0].gateCode, eventSlug: "after-dark-osu", gate: "Main gate" }),
+  }));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({result:'invalid'});
+  expect(await env.DB.prepare("SELECT status FROM tickets WHERE id=?").bind(ticketId).first()).toEqual({status:'issued'});
+});
+
+it('excludes unpaid stale tickets from a newly downloaded offline manifest', async () => {
+  const suffix = 'manifest-payment-state';
+  const { ticketId } = await seedIssuedTicket(suffix);
+  const cookie = await ownerCookie(suffix);
+  await env.DB.prepare("UPDATE orders SET status='refunded' WHERE id=?").bind(`order-${suffix}`).run();
+  const response = await gateManifest(new Request('https://tickets.becoreops.com/api/admin/check-in?eventSlug=after-dark-osu&manifest=1',{headers:{cookie}}));
+  expect(response.status).toBe(200);
+  const result = await response.json() as {manifest:Array<{ticketId:string}>};
+  expect(result.manifest.some(ticket=>ticket.ticketId===ticketId)).toBe(false);
+});
+
+it('never reissues a refunded checked-in ticket during supervisor undo', async () => {
+  const suffix = 'undo-payment-state';
+  const { ticketId } = await seedIssuedTicket(suffix);
+  const cookie = await ownerCookie(suffix);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE tickets SET status='checked_in' WHERE id=?").bind(ticketId),
+  ]);
+  await recordDisputeWebhook(env.DB, {eventType:'charge.dispute.resolve', reference:`BCT-GATE-${suffix}`,
+    payload:{data:{id:`dispute-${suffix}`,resolution:'merchant-accepted',status:'resolved',refund_amount:12900}}});
+  expect(await env.DB.prepare("SELECT status FROM orders WHERE id=?").bind(`order-${suffix}`).first()).toEqual({status:'refunded'});
+  const response = await undoCheckIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
+    method: "DELETE", headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
+    body: JSON.stringify({ ticketId, eventSlug: "after-dark-osu", reason: "Supervisor correction" }),
+  }));
+  expect(response.status).toBe(409);
+  expect(await env.DB.prepare("SELECT status FROM tickets WHERE id=?").bind(ticketId).first()).toEqual({status:'checked_in'});
+});
+
+
+async function readyGate(suffix: string) {
+  const { attendeeToken, ticketId } = await seedIssuedTicket(suffix);
+  const cookie = await ownerCookie(suffix);
+  const wallet = await (await preparePasses(new Request("https://tickets.becoreops.com/api/customer/tickets", {
+    method: "POST", headers: { cookie: attendeeCookieHeader(attendeeToken).split(";")[0], origin: "https://tickets.becoreops.com" },
+  }))).json() as { orders: Array<{ tickets: Array<{ gateCode: string }> }> };
+  const clientScanId=crypto.randomUUID();
+  const scan=()=>checkIn(new Request("https://tickets.becoreops.com/api/admin/check-in", {
+    method: "POST", headers: { "content-type": "application/json", cookie, origin: "https://tickets.becoreops.com" },
+    body: JSON.stringify({ code: wallet.orders[0].tickets[0].gateCode, eventSlug: "after-dark-osu", gate: "Main gate", clientScanId }),
+  }));
+  return {cookie,ticketId,scan};
+}
+
+it.each(['rsvp','complimentary'])('admits a valid zero-cost %s booking exactly once',async(provider)=>{
+  const suffix=`free-${provider}`, gate=await readyGate(suffix);
+  await env.DB.prepare("UPDATE orders SET payment_provider=?,face_amount_minor=0,booking_fee_minor=0,total_amount_minor=0 WHERE id=?").bind(provider,`order-${suffix}`).run();
+  expect((await gate.scan()).status).toBe(200);
+  expect(await (await gate.scan()).json()).toMatchObject({result:'valid',replayed:true});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:1});
+});
+
+it('shows a financially invalid ticket as unavailable in gate search',async()=>{
+  const suffix='search-invalid',gate=await readyGate(suffix);
+  await env.DB.prepare("UPDATE orders SET status='disputed' WHERE id=?").bind(`order-${suffix}`).run();
+  const response=await gateManifest(new Request(`https://tickets.becoreops.com/api/admin/check-in?eventSlug=after-dark-osu&q=BCT-GATE-${suffix}`,{headers:{cookie:gate.cookie}}));
+  expect(await response.json()).toMatchObject({matches:[{ticketId:gate.ticketId,status:'unavailable'}]});
+});
+
+it.each(['refunded','undo'])('does not replay a successful admission after %s',async(change)=>{
+  const suffix=`replay-invalid-${change}`,gate=await readyGate(suffix);
+  expect((await gate.scan()).status).toBe(200);
+  if(change==='refunded')await env.DB.prepare("UPDATE orders SET status='refunded' WHERE id=?").bind(`order-${suffix}`).run();
+  else expect((await undoCheckIn(new Request("https://tickets.becoreops.com/api/admin/check-in",{
+    method:'DELETE',headers:{cookie:gate.cookie,origin:'https://tickets.becoreops.com','content-type':'application/json'},
+    body:JSON.stringify({ticketId:gate.ticketId,eventSlug:'after-dark-osu',reason:'Correction'})}))).status).toBe(200);
+  const response=await gate.scan();expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({result:'invalid'});
+});
+
+it('fails closed when the payment changes between the ticket read and conditional admission',async()=>{
+  const suffix='race-payment',gate=await readyGate(suffix);
+  const original=env.DB.prepare.bind(env.DB);
+  const prepare=vi.spyOn(env.DB,'prepare').mockImplementation((sql:string)=>{
+    const statement=original(sql);
+    if(sql.includes("WHERE t.qr_token_hash = ?")){
+      const bind=statement.bind.bind(statement);
+      statement.bind=(...values:unknown[])=>{
+        const bound=bind(...values),first=bound.first.bind(bound);
+        bound.first=async <T>(column?: string)=>{const row=await (column===undefined?first<T>():first<T>(column));await original("UPDATE orders SET status='refunded' WHERE id=?").bind(`order-${suffix}`).run();return row;};
+        return bound;
+      };
+    }
+    return statement;
+  });
+  let response:Response;
+  try {response=await gate.scan();} finally {prepare.mockRestore();}
+  expect(response!.status).toBe(409);expect(await response!.json()).toMatchObject({result:'invalid'});
+  expect(await env.DB.prepare("SELECT status FROM tickets WHERE id=?").bind(gate.ticketId).first()).toEqual({status:'issued'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:0});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM operational_audit_events WHERE target_id=?").bind(gate.ticketId).first()).toEqual({count:0});
+});
+
+
+it.each([['check_in','gate_checkin_events'],['undo','gate_checkin_events'],['check_in','operational_audit_events'],['undo','operational_audit_events']])('rolls back %s if %s cannot be recorded',async(action,table)=>{
+  const suffix=`atomic-receipt-${action}-${table}`,gate=await readyGate(suffix);
+  if(action==='undo')expect((await gate.scan()).status).toBe(200);
+  const recordedAction=table==='gate_checkin_events'?action:action==='check_in'?'gate.ticket_checked_in':'gate.ticket_checkin_undone';
+  await env.DB.exec(`CREATE TRIGGER audit_gate_receipt_failure BEFORE INSERT ON ${table} WHEN NEW.action='${recordedAction}' BEGIN SELECT RAISE(ABORT, 'receipt fixture failure'); END`);
+  try {
+    const request=action==='check_in'?gate.scan():undoCheckIn(new Request("https://tickets.becoreops.com/api/admin/check-in",{
+      method:'DELETE',headers:{cookie:gate.cookie,origin:'https://tickets.becoreops.com','content-type':'application/json'},
+      body:JSON.stringify({ticketId:gate.ticketId,eventSlug:'after-dark-osu',reason:'Correction'})}));
+    await expect(request).rejects.toThrow('receipt fixture failure');
+  } finally { await env.DB.exec('DROP TRIGGER audit_gate_receipt_failure'); }
+  expect(await env.DB.prepare("SELECT status FROM tickets WHERE id=?").bind(gate.ticketId).first()).toEqual({status:action==='check_in'?'issued':'checked_in'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:action==='check_in'?0:1});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM operational_audit_events WHERE target_id=?").bind(gate.ticketId).first()).toEqual({count:action==='check_in'?0:1});
+});
+
+
+it('records an Apple Wallet-backed admission successfully while its update triggers run',async()=>{
+  const suffix='wallet-gate',gate=await readyGate(suffix),now=new Date().toISOString();
+  await env.DB.prepare("INSERT INTO apple_wallet_passes (id,ticket_id,attendee_id,event_slug,pass_type_identifier,serial_number,created_at,updated_at) VALUES (?,?,?,'after-dark-osu','pass.example.gate',?,?,?)")
+    .bind(suffix,gate.ticketId,`attendee-${suffix}`,suffix,now,now).run();
+  const response=await gate.scan();expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({result:'valid'});
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:1});
+  expect((await undoCheckIn(new Request("https://tickets.becoreops.com/api/admin/check-in",{
+    method:'DELETE',headers:{cookie:gate.cookie,origin:'https://tickets.becoreops.com','content-type':'application/json'},
+    body:JSON.stringify({ticketId:gate.ticketId,eventSlug:'after-dark-osu',reason:'Correction'})}))).status).toBe(200);
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM gate_checkin_events WHERE ticket_id=?").bind(gate.ticketId).first()).toEqual({count:2});
 });

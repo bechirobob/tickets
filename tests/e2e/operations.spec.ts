@@ -822,14 +822,19 @@ test('host attention opens pending RSVP decisions directly and survives back nav
  await page.reload();await expect(manager.getByRole('combobox',{name:'Status',exact:true})).toHaveValue('requested');
 });
 
-test('scanner preserves mixed offline conflicts and never claims network availability is synchronized',async({page})=>{
+test('scanner preserves mixed offline conflicts and never claims network availability is synchronized',async({page,context,baseURL})=>{
+ const manifestResponse=await context.request.get(`${baseURL}/api/admin/check-in?eventSlug=rsvp-browser&manifest=1`);
+ expect(manifestResponse.ok()).toBe(true);
+ const {access}=await manifestResponse.json();
+ expect(access).toMatchObject({accountId:'operations-audit',sessionId:'operations-audit-session',expiresAt:expect.any(Number)});
+ expect(access.expiresAt).toBeGreaterThan(Date.now()/1000);
  await page.addInitScript(()=>{
   if(sessionStorage.getItem('scanner-recovery-fixture'))return;sessionStorage.setItem('scanner-recovery-fixture','1');
   localStorage.setItem('bct:gate-review:v1','[]');
   localStorage.setItem('bct:gate-queue:v1',JSON.stringify(['accepted','duplicate'].map(id=>({clientScanId:id,code:'BCT-AAAA-BBBB-CCCC-DDDD',eventSlug:'rsvp-browser',gate:'Main gate',deviceId:'isolated-browser',ticket:{ticketId:id,attendeeName:`Offline ${id}`,ticketType:'general'},savedAt:new Date().toISOString()}))));
  });
  await page.route('**/api/admin/check-in**',route=>{
-  if(route.request().method()==='GET')return route.fulfill({json:{issued:2,checkedIn:1,tiers:[],canUndo:true,manifest:[],generatedAt:new Date().toISOString()}});
+  if(route.request().method()==='GET')return route.fulfill({json:{issued:2,checkedIn:1,tiers:[],canUndo:true,manifest:[],generatedAt:new Date().toISOString(),access}});
   const body=route.request().postDataJSON();
   if(body.action==='heartbeat')return route.fulfill({json:{online:true}});
   return body.clientScanId==='duplicate'?route.fulfill({status:409,json:{result:'duplicate',error:'Already admitted at another door',ticket:{ticketId:'duplicate',attendeeName:'Offline duplicate',ticketType:'general'}}}):route.fulfill({json:{result:'valid'}});
