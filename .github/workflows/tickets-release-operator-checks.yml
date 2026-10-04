@@ -46,15 +46,15 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Materialize the approved audit source for control checks
-        if: ${{ github.event.pull_request.head.ref == 'release/scanner-session-controls-20261004' && github.event.pull_request.base.sha == 'd7b1fa5ff01bfb797946dbad3dd47c96cfc9dfd1' }}
+        if: ${{ github.event.pull_request.head.ref == 'release/scanner-session-selector-controls-20261004' && github.event.pull_request.base.sha == '45c09a471c44f34a48c1aafbde58298d75843fc8' }}
         run: python3 -I .github/scripts/verify-audit-control.py --repo "$GITHUB_WORKSPACE" --control "$(git rev-parse HEAD)" --output "$RUNNER_TEMP/tickets-approved-source"
       - name: Verify source trust and retired-exception regressions
-        working-directory: ${{ github.event.pull_request.head.ref == 'release/scanner-session-controls-20261004' && github.event.pull_request.base.sha == 'd7b1fa5ff01bfb797946dbad3dd47c96cfc9dfd1' && format('{0}/tickets-approved-source', runner.temp) || github.workspace }}
+        working-directory: ${{ github.event.pull_request.head.ref == 'release/scanner-session-selector-controls-20261004' && github.event.pull_request.base.sha == '45c09a471c44f34a48c1aafbde58298d75843fc8' && format('{0}/tickets-approved-source', runner.temp) || github.workspace }}
         run: |
           python3 -I -m unittest discover -s tests -p 'test_caption_source.py' -v
           python3 -I -m unittest discover -s tests -p 'test_audit_release*.py' -v
       - name: Verify release guards and rollback without host access
-        working-directory: ${{ github.event.pull_request.head.ref == 'release/scanner-session-controls-20261004' && github.event.pull_request.base.sha == 'd7b1fa5ff01bfb797946dbad3dd47c96cfc9dfd1' && format('{0}/tickets-approved-source', runner.temp) || github.workspace }}
+        working-directory: ${{ github.event.pull_request.head.ref == 'release/scanner-session-selector-controls-20261004' && github.event.pull_request.base.sha == '45c09a471c44f34a48c1aafbde58298d75843fc8' && format('{0}/tickets-approved-source', runner.temp) || github.workspace }}
         shell: bash
         run: |
           set -euo pipefail

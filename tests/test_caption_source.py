@@ -358,7 +358,7 @@ class WorkflowTrustBoundaryTests(unittest.TestCase):
         self.assertNotIn('python3 -I .github/scripts/verify-caption-control.py', text)
         self.assertIn("python3 -m unittest discover -s ops/vps -p 'test_*.py'", text)
         self.assertIn(".github/scripts/verify-audit-control.py", text)
-        selector = "github.event.pull_request.head.ref == 'release/scanner-session-controls-20261004' && github.event.pull_request.base.sha == 'd7b1fa5ff01bfb797946dbad3dd47c96cfc9dfd1'"
+        selector = "github.event.pull_request.head.ref == 'release/scanner-session-selector-controls-20261004' && github.event.pull_request.base.sha == '45c09a471c44f34a48c1aafbde58298d75843fc8'"
         self.assertEqual(text.count(selector), 3)
         self.assertNotIn("release/audit-controls-fixture-20261004", text)
         self.assertIn("|| github.workspace", text)
