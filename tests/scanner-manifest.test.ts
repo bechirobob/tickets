@@ -49,6 +49,10 @@ describe('offline scanner access boundary',()=>{
     expect(saveGateManifest(s,access,list,now)).toBe(false);
     expect(saveGateManifest(s,next,{...list,access:next},now)).toBe(true);
     expect(readGateManifest(s,next,'night-a',now)).toMatchObject({access:next});
+    clearGateManifests(s,access);
+    expect(readGateManifest(s,next,'night-a',now)).toMatchObject({access:next});
+    clearGateManifests(s,next);
+    expect(readGateManifest(s,next,'night-a',now)).toBeNull();
     expect(s.getItem(GATE_QUEUE_KEY)).toBe('pending scan evidence');
     expect(s.getItem(GATE_REVIEW_KEY)).toBe('pending review evidence');
   });
