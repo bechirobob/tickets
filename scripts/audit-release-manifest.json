@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "snapshotCommit": "6709c78f08a52a9a23c4ed986b55572bd0f3ac2c",
+  "approvedAt": "2026-10-04T01:12:40Z",
+  "expiresAt": "2026-10-05T01:12:40Z",
+  "controlFiles": [
+    ".github/scripts/verify-audit-control.py",
+    ".github/workflows/candidate-checks.yml",
+    ".github/workflows/deploy.yml",
+    ".github/workflows/tickets-code-release.yml",
+    ".github/workflows/tickets-release-operator-checks.yml",
+    ".github/workflows/vps-runtime.yml",
+    "ops/vps/code-release.py",
+    "ops/vps/test_candidate_evidence.py",
+    "ops/vps/test_code_release.py",
+    "ops/vps/test_release_approval.py",
+    "ops/vps/test_release_source.py",
+    "ops/vps/test_runtime_packaging.py",
+    "scripts/audit-release-dependencies.py",
+    "scripts/audit-release-manifest.json",
+    "scripts/verify-audit-release-source.py",
+    "tests/repository-boundaries.test.mjs",
+    "tests/test_audit_release_dependencies.py",
+    "tests/test_audit_release_source.py",
+    "tests/test_caption_source.py"
+  ]
+}

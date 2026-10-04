@@ -63,35 +63,59 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '043e310a41ff28d23adc20383c88566b181232a6', 'ops/vps/test_runtime_release.py': '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14', 'ops/vps/public_runtime_guard.py': '9a9739f1bd88cbd02dc420001efa3de5b85e3538', 'ops/vps/test_public_runtime_guard.py': 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'}
 
 REVIEWED_APPLICATION_BLOBS = {
+    "tests/webhook-signatures.test.ts": "3645102ec5e8bc978ce9735ab34ef6e06e568bd7",
+    "tests/test_audit_release_source.py": "0acb07d7087af41d1a794db9da47b80e56894cd5",
+    "tests/test_audit_release_dependencies.py": "6983998bf40fc1cb424e6dafbb7ba35e5653336d",
+    "tests/support-email-rendering.test.mjs": "e36cd295c753c5a28d5056a9ef33794d4c3216b4",
+    "tests/scanner-session-client.test.mjs": "79d6ccefa62c59ed7ab79894f60b07ef685e3ad3",
+    "tests/scanner-manifest.test.ts": "b3bb29c94f9b13983a15b817647164cb4d31afd3",
+    "tests/public-catalogue.test.ts": "0eb2322754693cd8c62d433e6f0ccf25954e635a",
+    "tests/organizer-scale-audit.test.ts": "a4be4dcfb4d5c4a104724b95bfc4687b7a75dd80",
+    "tests/mobile-ui.test.mjs": "5cc3c4de19d6b73b294cd11feb2a4d200a914122",
+    "tests/gate-checkin.test.ts": "c0a046f6a8b5b68f380487890d614ef4c915c187",
+    "tests/e2e/room-identity.spec.ts": "abab7debc8ff8acfcbe1fea21d2b109b845cd647",
+    "scripts/verify-audit-release-source.py": "9874dc9433e81fb1c8bf1aced38fca62e8e6b093",
+    "scripts/audit-release-manifest.json": "fec204036595d6f55ca49eae5a67808e65820263",
+    "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
+    "ops/vps/test_release_approval.py": "a24751c7092fc326d9041004de96054b30c35a9d",
+    "ops/vps/test_code_release.py": "61c7b9daf28dacf7e247b06e06d526d0d4646dd1",
+    "lib/scanner-manifest.ts": "8a0065a241fd061ced526252627b2eb9c1c6e648",
+    "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
+    "app/privacy/page.tsx": "5de9886c16f5eaef51afec15d31863c482b99354",
+    "app/hosts/[slug]/page.tsx": "04228bb8dd93a831d1a608b0b42c59340ed9a86d",
+    "app/api/organizer/analytics/route.ts": "411aac48caa2686c4480ddca4eee8221586ac996",
+    ".github/scripts/verify-audit-control.py": "87cd21e095c76efc9e607484b8c0836db9bc58b5",
+    "ops/vps/test_release_source.py": "ec8a7a5bbbe585941583f50624823b85ec51e586",
+    "scripts/checkbox-hotfix-audit-policy.json": "7447247befa4b9ef0a274b27352afdce690e9e1e",
     "ops/vps/test_runtime_workflow_contract.py": "eef0b25e667f6be123c0ed6c5bca774158d390d8",
-    "tests/repository-boundaries.test.mjs": "4db7122810a97ba3120ce632c2a45bbb34ed59ed",
+    "tests/repository-boundaries.test.mjs": "7d0a749ec3d9a61a365a7c5c7046a6573526cb2a",
     "tests/preview-data-inventory.test.mjs": "35f897420e6afe6b50c4bfa8aedd6eeeb370283d",
     "scripts/inspect-preview-data.mjs": "e6c8e9f07262a8088d6daca199e69a6f24c46af5",
     "scripts/inspect-vps-handoff.mjs": "88c049b7357ee319222580d0de63fd079c07ab98",
     ".github/workflows/tickets-handover.yml": "5bef3d7019966a548ef4ae515a0309d9ff6e2847",
     "ops/vps/test_public_runtime_guard.py": "eb1fd8a6909c7c0634326da1d35c7a4606fbebe7",
     "ops/vps/public_runtime_guard.py": "9a9739f1bd88cbd02dc420001efa3de5b85e3538",
-    "tests/test_caption_source.py": "a43e96c42707f96b193cf6758886bffd8198b7ed",
+    "tests/test_caption_source.py": "74c9d887424bf46a02750e61c638fa5fb439b074",
     "scripts/caption-source-manifest.json": "1b178a1a371ae047f8bf26498d249e272c11497d",
     "scripts/verify-caption-source.py": "fa474c5d8cfaad8df53e77004c063e1511ed0b68",
     ".github/scripts/verify-caption-control.py": "19366f37243794bba916dd6cff0b7731aaec8f1c",
     ".github/backup/backup_release.py": "64330f28dd1561fa591efd6582704285348af1ea",
     ".github/backup/test_backup_release.py": "cd805866b06b0a70ab3bf384db19990d96a0dffd",
     ".github/workflows/backup-transport-checks.yml": "7e32458428475121554f43c8a3f646e70d11161e",
-    ".github/workflows/deploy.yml": "b3c6dd82919b1e69089e0e4b6a95a97c7e741744",
+    ".github/workflows/deploy.yml": "e90f3ab46d499cfe6a03f859452046ca3a026993",
     ".github/workflows/tickets-backup.yml": "9077f257dbcfb1a8842dcf54a2bf3dff084461d6",
-    "ops/vps/test_runtime_packaging.py": "d289b2755d3751eee5804466e18df3ae21baf166",
-    ".github/workflows/tickets-code-release.yml": "bfad5d703772a33849ed401af632db50ad791d9d",
+    "ops/vps/test_runtime_packaging.py": "c7bb8a5bdb6a17c547a29d1289d15bdce4a57228",
+    ".github/workflows/tickets-code-release.yml": "808e8014f7af281b3370e411be1f6a3808d2e88b",
     "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
     "playwright.config.ts": "458baa39707043948474dae29bd5341c7ea5a883",
-    "ops/vps/test_candidate_evidence.py": "09f57eed4bc8c90e3b055afe58ba4c741cf84593",
+    "ops/vps/test_candidate_evidence.py": "f63544c3ea061f75db1f544c85cddaae109a0f4e",
     "ops/vps/test_runtime_release.py": "210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14",
     "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
     "ops/vps/runtime_release.py": "043e310a41ff28d23adc20383c88566b181232a6",
-    ".github/workflows/tickets-release-operator-checks.yml": "32af026435e5ab51b2db31e791fd7c2d23aa292c",
-    ".github/workflows/vps-runtime.yml": "9dd54175304d35f7622390477a533de73318d807",
+    ".github/workflows/tickets-release-operator-checks.yml": "bb268cdd2e0fe0e960206e0f33822152f82ddc08",
+    ".github/workflows/vps-runtime.yml": "06d83690ed40675dae9f5e423cfcc73b3022fc1f",
     ".github/workflows/browser-audit.yml": "4e0293b58478326e6c22e653f69272ce6e64f7e3",
-    ".github/workflows/candidate-checks.yml": "c1749f4f54b936ba476c19f87e12eca72e7d503c",
+    ".github/workflows/candidate-checks.yml": "dc127e63338b3ac2f8498a2114fe7a465c64344b",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
     ".github/workflows/full-audit-capacity.yml": "67ea27fb202cf216596bd27d73e51515f656b19c",
     ".github/workflows/tickets-readiness-audit.yml": "f47378c33914b0005ec15598fb0f9110d6882c6d",
@@ -111,7 +135,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/api/admin/audience/route.ts": "afd964f61a4562b9645bbbe6dc80c3ca73e0721e",
     "app/api/admin/bootstrap/route.ts": "eee09caf675f70c541fc44be3d439dae252279fb",
     "app/api/admin/campaigns/route.ts": "ab71777a32bee7da2587fef31c349fd255926ada",
-    "app/api/admin/check-in/route.ts": "cc4a9a5c8385ef45b40a61f5dcd69f8e150d62e2",
+    "app/api/admin/check-in/route.ts": "30cc38853eb7025a07ceb4f8b85b0fe1b2e640a4",
     "app/api/admin/door/route.ts": "daa101c2705f7840713d999ebd28dfc59c548f49",
     "app/api/admin/events/removal/route.ts": "b96e133d328b61ab595e44a01b835b6c110d6c15",
     "app/api/admin/events/route.ts": "9ce5f1ad64d193390c43102c3de112aaae1375d4",
@@ -155,7 +179,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/api/organizer/business/route.ts": "b38ea5b0afc3e21713fb658890370e2f88f64472",
     "app/api/organizer/reports/route.ts": "9ce231e9df04ca00c6cd80c2011185e250622481",
     "app/api/organizer/team/accept/route.ts": "6726cc0bf08a38878540f4dd54c83c8e0e6c7648",
-    "app/api/organizer/workspace/route.ts": "cc4d7ed4ee18f6c8c3ef5084865cdab314e6e672",
+    "app/api/organizer/workspace/route.ts": "27e4f7dc7ce6c33b7fc19695614462f31f7a0ec4",
     "app/api/payments/initialize/route.ts": "abbb1f8040a09c7c094e3319ca360dae80c8cc29",
     "app/api/payments/quote/route.ts": "9b483e873c82a3c2dccddfba55fa455a06c1386d",
     "app/api/payments/seevplus/webhook/route.ts": "bfe1b94c32768cf5689c823195f0fd1e45064d68",
@@ -180,8 +204,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/event-explorer.tsx": "27c001bd0ba7742b251a7f03252c3dbaf5b2a3fe",
     "app/event/[slug]/event-screen.tsx": "3700cc0de1f68a63912d9caf428d48908ee266e4",
     "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
-    "app/globals.css": "40f080f5629b811b1a877bebdeadb97e02af0b07",
-    "app/help/help-centre.tsx": "f0b4617a6a6b704aefc81bfa1e2744377c18b026",
+    "app/globals.css": "91b98d255916ad6235598d7aa433a6a043c42aa0",
+    "app/help/help-centre.tsx": "ab497ef8bce6a41b168d31d9b94fc1a8dc4b4e97",
     "app/home-screen.tsx": "b629019108100f15889edaccd6ac1ee21d4e436d",
     "app/hosts/page.tsx": "f5d2b1129968ba51dc95a6208a408e60f200b05b",
     "app/iphone-interface.css": "3dd3b6b529819123cbc6fa9e71f48a95b193cb1d",
@@ -212,19 +236,19 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/rsvp/[slug]/page.tsx": "40ba4869d74f15e722834a9e682bc0867e2b054a",
     "app/rsvp/access/page.tsx": "02c302374244f4e73436acdc2dc80d99e8326d86",
     "app/scan/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
-    "app/scan/page.tsx": "14c9facaac5aadd32c63bea083b8bf5c2d034874",
-    "app/scan/scanner.tsx": "69d9bf7cf154bc7b7aaeca6a7bf26ab5d083a085",
+    "app/scan/page.tsx": "345bc4e0eea838c4ae89ad87f24e6d90e6881716",
+    "app/scan/scanner.tsx": "212067c697f8bac5651c2d0420647cc71f5a6256",
     "app/segmented-control.css": "b4b85d7656046b56447728a292b2f70e30127c14",
     "app/segmented-control.tsx": "d68e0038b37928467b25f62780a91ffd61b82eac",
-    "app/support-email.tsx": "98bc769b8cb2b34ae363a488b1e6c343c6399921",
+    "app/support-email.tsx": "8a33cb8253de5cad772974c3684bc44409f757f1",
     "app/terms/page.tsx": "419f0978b0e03084cc99738a6404c3f132f93bef",
     "app/use-header-panel.ts": "24a3e6e3fb54ed67b28c348d77f1b92e60310448",
     "app/use-layer-history.ts": "8f6421c896a29e90ff1f2bd5742f677c6543a2d2",
     "app/use-room-demo.ts": "7ea2ec4191b5f5b9dff10cdfa2925a69514a434f",
-    "app/workspace-chrome.tsx": "f6b90f36cec6914e9b36570c52dd9c53870a5e70",
+    "app/workspace-chrome.tsx": "b685c0accdb65f2dcf5ae81c389d0fa1862d9228",
     "app/workspace.css": "8c3881d31c50a13246219e74262c27b542e36880",
     "db/schema.ts": "ee50c0c9821c0d4f47e5b0bfb86df6b902e11afb",
-    "lib/admin-session.ts": "2e587fc729a69c667fb851d69d0053f0ac58527b",
+    "lib/admin-session.ts": "57fa1b554bf27a8aa3759871017b721e682488df",
     "lib/background-health.ts": "4793c1cd2a5204371e75495d9d1b218f24a0a092",
     "lib/customer-screen.ts": "9546a787d811e4a8351e16e30693639c26743b26",
     "lib/email-delivery.ts": "6046a9696d8f3002c23d0af54e08fa93179e0ee5",
@@ -307,19 +331,24 @@ REVIEWED_MIGRATIONS = {
 }
 BROWSERS = {"desktop-chromium", "mobile-chromium", "mobile-webkit"}
 RUNTIME_VERIFY_STEPS = {
-    "Verify independently trusted caption source before executing checkout code",
-    "Verify bounded audit exception", "Run npm audit --audit-level=moderate",
+    "Verify installed audited dependencies",
+    "Stage trusted audit verifier",
+    "Verify exact source ancestry before executing checkout code",
+    "Verify approved dependency audit",
     "Prepare verified runtime without development dependencies",
     "Publish verified public runtime release",
 }
 RUNTIME_HANDOFF_STEPS = {
-    "Verify independently trusted caption source before executing checkout code",
+    "Stage trusted audit verifier",
+    "Verify exact source ancestry before executing checkout code",
     "Inspect current data and private connection readiness",
 }
 CANDIDATE_CORE_STEPS = {
+    "Verify installed audited dependencies",
+    "Stage trusted audit verifier",
     "Check out exact candidate", "Set up Node.js", "Install locked dependencies",
-    "Verify independently trusted caption source before executing checkout code",
-    "Verify bounded audit exception", "Install browsers for event-page verification",
+    "Verify exact source ancestry before executing checkout code",
+    "Install browsers for event-page verification",
     "Verify exact candidate source", "Audit dependencies", "Lint application",
     "Check application types", "Verify unit tests and rendered production build",
     "Check database schema", "Validate the deployable Worker without publishing",
@@ -470,42 +499,129 @@ def release_override(raw, previous, candidate):
     return text.replace(old, new).encode()
 
 
+def git_environment():
+    # Candidate-controlled replacement refs, alternate repositories or config must
+    # never influence immutable source, ancestry, mode or tree verification.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+               GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1", GIT_TERMINAL_PROMPT="0")
+    return env
+
+
 def git(*args):
-    return subprocess.check_output(["git", *args], text=True, stderr=subprocess.DEVNULL).strip()
+    return subprocess.check_output(["git", "--no-replace-objects", *args], text=True,
+                                   stderr=subprocess.DEVNULL, env=git_environment(), timeout=60).strip()
 
 
-CHECKBOX_AUDIT_POLICY = "scripts/checkbox-hotfix-audit-policy.json"
-
-
-def verify_trusted_caption_source(source):
-    """Bind every activation to the independently selected, merged control plane."""
+def verify_trusted_operator(source):
+    """Keep activation bound to an independently selected, merged operator."""
     baseline = os.environ.get("BECORE_TRUSTED_BASE", "")
-    require(SHA.fullmatch(baseline), "An immutable trusted caption baseline is required.")
-    operator = Path(__file__).resolve()
+    require(SHA.fullmatch(baseline) and SHA.fullmatch(source),
+            "An immutable trusted baseline and source are required.")
+    require(baseline != source, "Source cannot be its own trusted control baseline.")
+    operator = Path(__file__).absolute()
+    require(operator.is_file() and not operator.is_symlink(), "Trusted operator must be a regular file.")
     trusted_bytes = subprocess.check_output([
         "git", "--no-replace-objects", "show", baseline + ":ops/vps/code-release.py"
-    ], stderr=subprocess.DEVNULL)
+    ], stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
     require(operator.read_bytes() == trusted_bytes, "Operator bytes differ from the trusted baseline.")
-    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", baseline, "origin/main"], check=True)
-    gate = operator.parents[2] / "scripts/verify-caption-source.py"
-    require(gate.is_file() and not gate.is_symlink(), "Trusted source gate is missing.")
-    trusted_gate = subprocess.check_output([
-        "git", "--no-replace-objects", "show", baseline + ":scripts/verify-caption-source.py"
-    ], stderr=subprocess.DEVNULL)
-    require(gate.read_bytes() == trusted_gate, "Source gate bytes differ from the trusted baseline.")
-    subprocess.run([sys.executable, "-I", str(gate), "--repo", str(Path.cwd()),
-                    "--trusted-baseline", baseline, "--candidate", source], check=True)
+    for descendant in ("origin/main", source):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", baseline, descendant],
+                       check=True, env=git_environment(), timeout=60)
+
+
+def verify_approved_source(source):
+    baseline = os.environ.get("BECORE_TRUSTED_BASE", "")
+    root = Path.cwd()
+    path = "scripts/verify-audit-release-source.py"
+    require(SHA.fullmatch(baseline), "Exact trusted audit baseline required.")
+    entry = git("ls-tree", baseline, "--", path)
+    require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(path), entry),
+            "Approved source verifier must be a regular trusted blob.")
+    raw = subprocess.check_output(["git", "--no-replace-objects", "show", baseline + ":" + path],
+                                  env=git_environment(), timeout=60)
+    with tempfile.TemporaryDirectory(prefix="tickets-approved-source-") as directory:
+        script = Path(directory) / "verify-audit-release-source.py"
+        script.write_bytes(raw)
+        namespace = {"__name__": "trusted_audit_source", "__file__": str(script)}
+        exec(compile(raw, str(script), "exec"), namespace)
+        return namespace["verify_source"](root, baseline, source)
+
+
+def verify_dependency_audit(directory, source):
+    """Revalidate private raw evidence immediately before its host transfer."""
+    directory = Path(directory)
+    info = directory.lstat()
+    require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+            and stat.S_IMODE(info.st_mode) == 0o700, "Unsafe private audit directory.")
+    records = {}
+    for name in ("npm-audit.json", "npm-audit.stderr", "receipt.json", "preinstall-receipt.json"):
+        path = directory / name
+        info = path.lstat()
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == os.geteuid()
+                and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= 8 * 1024 ** 2,
+                "Unsafe private audit evidence.")
+        records[name] = path.read_bytes()
+    receipt = strict_json(records["receipt.json"])
+    anchor = os.environ.get("BECORE_PREINSTALL_RECEIPT_SHA256", "")
+    require(DIGEST.fullmatch(anchor) and hashlib.sha256(records["preinstall-receipt.json"]).hexdigest() == anchor,
+            "Pre-install audit receipt differs from its independently captured digest.")
+    preinstall = strict_json(records["preinstall-receipt.json"])
+    require(type(preinstall) is dict and preinstall.get("phase") == "preinstall-complete"
+            and receipt == {**preinstall, "phase": "complete", "preinstallReceiptSha256": anchor},
+            "Final audit receipt differs from the independently captured pre-install evidence.")
+    baseline = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(set(receipt) == {"schema", "candidate", "trustedBaseline", "status", "phase", "npmExitCode",
+                             "reportSha256", "stderrSha256", "capturedAt", "packageSha256", "lockSha256", "preinstallReceiptSha256"}
+            and type(receipt["schema"]) is int and receipt["schema"] == 1 and receipt["candidate"] == source
+            and receipt["preinstallReceiptSha256"] == anchor
+            and receipt["packageSha256"] == digest_file(Path("package.json"))
+            and receipt["lockSha256"] == digest_file(Path("package-lock.json"))
+            and receipt["trustedBaseline"] == baseline and receipt["phase"] == "complete"
+            and receipt["status"] in ("clean", "known-advisory-exception")
+            and receipt["reportSha256"] == hashlib.sha256(records["npm-audit.json"]).hexdigest()
+            and receipt["stderrSha256"] == hashlib.sha256(records["npm-audit.stderr"]).hexdigest(),
+            "Audit receipt differs from its exact private raw evidence.")
+    wrapper = Path(__file__).resolve().parents[2] / "scripts/audit-release-dependencies.py"
+    raw = wrapper.read_bytes()
+    expected = subprocess.check_output(["git", "--no-replace-objects", "show",
+                                        baseline + ":scripts/audit-release-dependencies.py"],
+                                       env=git_environment(), timeout=60)
+    require(raw == expected and not wrapper.is_symlink(), "Audit validator is not the reviewed operator copy.")
+    namespace = {"__name__": "trusted_audit_dependencies", "__file__": str(wrapper)}
+    exec(compile(raw, str(wrapper), "exec"), namespace)
+    result = namespace["evaluate_report"](Path.cwd(), baseline, source, records["npm-audit.json"],
+                                          receipt["npmExitCode"], records["npm-audit.stderr"])
+    require(result == receipt["status"], "Audit result changed during final verification.")
+    return {"reportSha256": receipt["reportSha256"], "status": result,
+            "npmExitCode": receipt["npmExitCode"], "size": len(records["npm-audit.json"])}
+
+
+def verify_changed_modes(expected, source):
+    """No implicit deletion, symlink, submodule or executable-mode permission."""
+    raw = git("diff", "--raw", "--no-abbrev", "--no-renames", "-z", expected, source)
+    if not raw:
+        return
+    parts = raw.split("\0")
+    require(parts[-1] == "" and len(parts) % 2 == 1, "Malformed source change records.")
+    for header, name in zip(parts[:-1:2], parts[1::2]):
+        record = re.fullmatch(r":([0-7]{6}) ([0-7]{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([AM])", header)
+        require(record is not None and bool(name), "Unreviewed source deletion or type change.")
+        before_mode, after_mode, before_blob, _, status = record.groups()
+        require(after_mode in {"100644", "100755"}, "Source must remain regular files.")
+        if status == "A":
+            require(before_mode == "000000" and before_blob == "0" * 40 and after_mode == "100644",
+                    "New executable or nonregular source needs explicit review.")
+        else:
+            require(before_mode == after_mode, "Source file mode changed without review.")
 
 
 def vetted_changes(expected, source):
-    subprocess.run(["git", "merge-base", "--is-ancestor", expected, source], check=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, source], check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
+    verify_changed_modes(expected, source)
     changed = git("diff", "--name-only", expected, source).splitlines()
     for name in changed:
-        if name == CHECKBOX_AUDIT_POLICY:
-            # Frozen snapshot record; unconditional trusted-tree verification in
-            # verify_ci already binds this file, including when it did not change.
-            continue
         if name in REVIEWED_APPLICATION_BLOBS or name in REVIEWED_MIGRATIONS:
             reviewed = REVIEWED_APPLICATION_BLOBS.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
             require(git("rev-parse", source + ":" + name) == reviewed,
@@ -631,8 +747,9 @@ def verify_ci(args):
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Dispatch must target main.")
     require(git("rev-parse", "HEAD") == args.source and not git("status", "--porcelain"),
             "Release checkout must be clean and exact.")
-    verify_trusted_caption_source(args.source)
-    subprocess.run(["git", "merge-base", "--is-ancestor", args.source, "origin/main"], check=True)
+    verify_trusted_operator(args.source)
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", args.source, "origin/main"],
+                   check=True, env=git_environment(), timeout=60)
     metadata = Path(args.metadata)
     runtime = strict_json((metadata / "runtime.json").read_bytes())
     candidate = strict_json((metadata / "candidate.json").read_bytes())
@@ -664,6 +781,16 @@ def verify_ci(args):
                   "releaseTransport": transport,
                   "repository": args.repository, "ancestryVerified": True,
                   "changedFiles": changes, "migrations": migration_plan(changes)}
+    if getattr(args, "audit_directory", None):
+        audit = verify_dependency_audit(args.audit_directory, args.source)
+        provenance["dependencyAudit"] = audit
+        if audit["status"] == "known-advisory-exception":
+            approved = verify_approved_source(args.source)
+            require(approved["tree"] == source_tree, "Approved source tree differs from CI provenance.")
+            provenance["auditRelease"] = {
+                "id": AuditReleaseApproval.ID, "approvedAt": AuditReleaseApproval.APPROVED_AT,
+                "expiresAt": AuditReleaseApproval.EXPIRES_AT, "source": args.source,
+                "sourceTree": source_tree, "expectedActive": AuditReleaseApproval.EXPECTED_ACTIVE}
     write_json(args.output, provenance)
     print("Exact runtime/browser CI, ancestry, source scope and artifact digest verified.")
 
@@ -1030,10 +1157,107 @@ def ready(system, revision, *, candidate=False):
                 require(code == 404, "Retired checkout preview route is still available: " + route)
 
 
+class AuditReleaseApproval:
+    """One durable reservation under the deployment lock, never reusable on retry."""
+    ID = "tickets-full-audit-20261004"
+    APPROVED_AT = "2026-10-04T01:12:40Z"
+    EXPIRES_AT = "2026-10-05T01:12:40Z"
+    EXPECTED_ACTIVE = "42bbaa419f796ca9e2382a6e71c9831343363267"
+    STATE_NAME = "full-audit-release-20261004.json"
+
+    def __init__(self, directory, proof, run_id, attempt):
+        self.path = directory / self.STATE_NAME
+        approval = {"id": self.ID, "approvedAt": self.APPROVED_AT, "expiresAt": self.EXPIRES_AT,
+                    "source": proof.get("source"), "sourceTree": proof.get("sourceTree"),
+                    "expectedActive": self.EXPECTED_ACTIVE}
+        require(SHA.fullmatch(approval["source"] or "")
+                and SHA.fullmatch(approval["sourceTree"] or "")
+                and proof.get("expectedActive") == self.EXPECTED_ACTIVE
+                and proof.get("auditRelease") == approval,
+                "Release lacks the exact one-success audit approval.")
+        self.binding = {"version": 1, **approval, "runId": run_id, "attempt": attempt}
+        self.record = None
+        self.persistence_uncertain = False
+
+    @staticmethod
+    def now():
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time()))
+
+    def check_window(self):
+        now = self.now()
+        require(self.APPROVED_AT <= now < self.EXPIRES_AT,
+                "The one-success audit approval is outside its UTC window.")
+        return now
+
+    def check_directory(self):
+        info = self.path.parent.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+                and stat.S_IMODE(info.st_mode) & 0o022 == 0,
+                "Audit approval state requires an owned protected directory.")
+
+    def check_available(self):
+        self.check_window()
+        self.check_directory()
+        # Any existing state, including failed, partial or unrecognized evidence,
+        # blocks this approval. Recovery never deletes or resets this file.
+        require(not os.path.lexists(self.path),
+                "Audit approval already has state; inspect privately before any new approval.")
+
+    def read(self):
+        self.check_directory()
+        fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+                    and info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o600
+                    and info.st_size <= 8192, "Unsafe private audit approval state.")
+            return strict_json(stream.read(8193))
+
+    def reserve(self):
+        self.check_available()
+        reserved = {**self.binding, "phase": "reserved", "reservedAt": self.check_window()}
+        self.persistence_uncertain = True
+        # Exclusive creation leaves blocking evidence even if interrupted mid-write.
+        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write((json.dumps(reserved, sort_keys=True) + "\n").encode())
+            stream.flush()
+            os.fsync(stream.fileno())
+        directory = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        require(self.read() == reserved, "Audit approval reservation could not be verified.")
+        self.record = reserved
+        self.persistence_uncertain = False
+
+    def transition(self, phase):
+        require(not self.persistence_uncertain and self.record is not None
+                and self.record["phase"] == "reserved" and self.read() == self.record,
+                "Audit approval reservation drifted or persistence is uncertain.")
+        completed = self.check_window() if phase == "consumed" else self.now()
+        value = {**self.record, "phase": phase, "completedAt": completed}
+        self.persistence_uncertain = True
+        write_json(self.path, value)
+        require(self.read() == value, "Audit approval completion could not be verified.")
+        self.record = value
+        self.persistence_uncertain = False
+
+    def consume(self):
+        self.transition("consumed")
+
+    def failed(self):
+        # A failed write may already have committed consumption. Preserve it as-is.
+        if not self.persistence_uncertain and self.record is not None and self.record["phase"] == "reserved":
+            self.transition("failed")
+
+
 class Deployment:
     def __init__(self, *, source, expected, run_id, attempt, archive, provenance,
                  archive_digest, provenance_digest, enable_crypto=False, recover_prepared=None,
-                 root=Path("/"), system=None):
+                 root=Path("/"), system=None, audit_report=None):
         require(SHA.fullmatch(source) and SHA.fullmatch(expected) and source != expected,
                 "Distinct exact release SHAs required.")
         require(NUMBER.fullmatch(run_id) and NUMBER.fullmatch(attempt), "Invalid deployment identity.")
@@ -1047,6 +1271,7 @@ class Deployment:
             re.fullmatch(r"[1-9][0-9]*-[1-9][0-9]*", self.recover_prepared)
             and self.recover_prepared != self.identity), "Invalid prepared recovery identity.")
         self.archive, self.provenance = Path(archive), Path(provenance)
+        self.audit_report = Path(audit_report) if audit_report is not None else None
         self.archive_digest, self.provenance_digest = archive_digest, provenance_digest
         self.enable_crypto = enable_crypto
         self.root, self.system = Path(root), system or System()
@@ -1072,6 +1297,18 @@ class Deployment:
                 "Private file must have mode 0600: " + str(path))
         return path.read_bytes()
 
+    def verify_dependency_audit(self):
+        require(self.audit_report is not None, "The final private dependency audit is required.")
+        raw = self.file(self.audit_report, private=True)
+        receipt = self.proof.get("dependencyAudit", {})
+        require(type(receipt) is dict and set(receipt) == {"reportSha256", "status", "npmExitCode", "size"}
+                and receipt["status"] in ("clean", "known-advisory-exception")
+                and type(receipt["npmExitCode"]) is int and receipt["npmExitCode"] in (0, 1)
+                and 0 < len(raw) <= 8 * 1024 ** 2 and receipt["size"] == len(raw)
+                and receipt["reportSha256"] == hashlib.sha256(raw).hexdigest(),
+                "Final private audit differs from verified provenance.")
+        return raw
+
     def manifest(self, release, revision):
         require(release.is_dir() and not release.is_symlink(), "Expected real release directory.")
         value = strict_json(self.file(release / "release.json"))
@@ -1095,6 +1332,16 @@ class Deployment:
                 and SHA.fullmatch(self.proof.get("sourceTree", ""))
                 and self.proof.get("candidateTree") == self.proof["sourceTree"],
                 "Release provenance does not match the transaction.")
+        self.audit_raw = self.verify_dependency_audit()
+        receipt = self.proof.get("dependencyAudit")
+        require(type(receipt) is dict and receipt.get("status") in ("clean", "known-advisory-exception"),
+                "Release dependency audit status is missing or unrecognized.")
+        self.approval = None
+        if receipt["status"] == "known-advisory-exception":
+            self.approval = AuditReleaseApproval(self.journal.parent, self.proof, self.run_id, self.attempt)
+            self.approval.check_available()
+        else:
+            require("auditRelease" not in self.proof, "A clean release cannot carry an audit exception grant.")
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
@@ -1347,6 +1594,9 @@ class Deployment:
         write_json(self.snapshot / "pointers.before.json", self.links)
         write_json(self.snapshot / "modes.before.json", self.modes)
         atomic_write(self.snapshot / "provenance.json", self.provenance.read_bytes())
+        atomic_write(self.snapshot / "npm-audit.json", self.audit_raw)
+        require(self.file(self.snapshot / "npm-audit.json", private=True) == self.audit_raw,
+                "Private raw audit retention failed.")
         self.evidence("prepared")
         self.unpack()  # no service/configuration changes before archive validation
         try:
@@ -1354,6 +1604,8 @@ class Deployment:
         except BaseException:
             self.evidence("migration-failed")
             raise
+        if self.approval is not None:
+            self.approval.reserve()
         journal_after = None
         try:
             self.evidence("activating")
@@ -1365,6 +1617,8 @@ class Deployment:
                     "Release pointers drifted before activation.")
             health(self.system, self.expected)
             health(self.system, self.expected, public=True)
+            if self.approval is not None:
+                self.approval.check_window()
             if self.next_config != self.before["config"]:
                 atomic_write(self.config, self.next_config)
             atomic_write(self.override, self.next_override, self.modes["override"])
@@ -1378,6 +1632,8 @@ class Deployment:
             # Keep both old pointers pinned through health verification. Only after
             # readiness, and with one hour of retention grace left, commit pointers.
             self.retention_safe()
+            if self.approval is not None:
+                self.approval.check_window()
             replace_link(self.home / "previous", str(self.old_release))
             replace_link(self.home / "current", str(self.release))
             record = copy.deepcopy(self.record)
@@ -1395,6 +1651,8 @@ class Deployment:
             journal_after = (json.dumps(record, sort_keys=True) + "\n").encode()
             atomic_write(self.journal, journal_after)
             self.evidence("verified")
+            if self.approval is not None:
+                self.approval.consume()
             return {"released": self.source, "previous": self.expected, "active": True,
                     "runtime": "vps", "publicVerified": True, "dataMigration": bool(self.migrations),
                     "cryptoEnabledRequested": self.enable_crypto}
@@ -1432,6 +1690,8 @@ class Deployment:
                 self.system.verify_effective_config(self.before["config"])
                 self.preserved()
                 self.evidence("rolled-back")
+                if self.approval is not None:
+                    self.approval.failed()
             except BaseException as rollback_failure:
                 self.evidence("rollback-needs-attention")
                 raise ReleaseError("Rollback verification failed; inspect private release evidence.") from rollback_failure
@@ -1452,18 +1712,24 @@ class Deployment:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    operator = commands.add_parser("verify-operator")
+    operator.add_argument("--source", required=True)
     verify = commands.add_parser("verify-ci")
     for name in ("source", "expected", "repository", "metadata", "runtime-run", "candidate-run", "archive", "output"):
         verify.add_argument("--" + name, required=True)
+    verify.add_argument("--audit-directory")
     apply = commands.add_parser("apply")
     for name in ("source", "expected", "run-id", "attempt", "archive", "provenance", "archive-digest", "provenance-digest"):
         apply.add_argument("--" + name, required=True)
+    apply.add_argument("--audit-report", required=True)
     apply.add_argument("--enable-crypto", choices=("true", "false"), default="false")
     apply.add_argument("--recover-prepared", default="",
                        help="Exact failed run-attempt identity; only a proven prepared empty release is quarantined.")
     args = parser.parse_args()
     try:
-        if args.command == "verify-ci":
+        if args.command == "verify-operator":
+            verify_trusted_operator(args.source)
+        elif args.command == "verify-ci":
             verify_ci(args)
         else:
             values = vars(args)

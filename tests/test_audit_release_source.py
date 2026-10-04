@@ -1,4 +1,4 @@
-"""Real-Git adversarial tests of the independently anchored caption source gate."""
+"""Real-Git adversarial tests of the independently anchored audit_release source gate."""
 import copy
 import datetime as dt
 import hashlib
@@ -12,32 +12,37 @@ import unittest
 from unittest import mock
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts/verify-caption-source.py"
-spec = importlib.util.spec_from_file_location("caption_source", SCRIPT)
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/verify-audit-release-source.py"
+spec = importlib.util.spec_from_file_location("audit_release_source", SCRIPT)
 source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 
-class CaptionSourceFixture(unittest.TestCase):
+class AuditReleaseSourceFixture(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.run_git("init", "-q")
-        self.run_git("config", "user.name", "Caption Gate Test")
-        self.run_git("config", "user.email", "caption-test@example.invalid")
-        self.write("app/caption.ts", "original caption\n")
-        self.write("package-lock.json", "reviewed lock bytes\n")
+        self.run_git("config", "user.name", "AuditRelease Gate Test")
+        self.run_git("config", "user.email", "audit_release-test@example.invalid")
+        self.write("app/audit_release.ts", "original application\n")
+        self.write("package-lock.json", (SCRIPT.parents[1] / "package-lock.json").read_bytes())
         self.write("scripts/checkbox-hotfix-audit-policy.json", '{"schema":1,"projectionDigest":"frozen inert record"}\n')
         self.base = self.commit("base")
-        self.write("app/caption.ts", "approved caption removal\n")
+        self.write("app/audit_release.ts", "approved audit fixes\n")
         self.snapshot = self.commit("reviewed snapshot")
         self.run_git("checkout", "-q", "--detach", self.base)
         self.write(source.SCRIPT_PATH, SCRIPT.read_bytes())
         self.write("ops/trusted-release.py", "trusted release control\n")
-        self.controls = sorted([source.SCRIPT_PATH, source.MANIFEST_PATH, "ops/trusted-release.py"])
+        for path in ("scripts/audit-release-dependencies.py", "scripts/audit-checkbox-hotfix.py",
+                     ".github/scripts/verify-audit-control.py"):
+            self.write(path, (SCRIPT.parents[1] / path).read_bytes())
+        self.controls = sorted([source.SCRIPT_PATH, source.MANIFEST_PATH, "ops/trusted-release.py",
+                                "scripts/audit-release-dependencies.py", "scripts/audit-checkbox-hotfix.py",
+                                ".github/scripts/verify-audit-control.py"])
         self.manifest = {"schema": 1, "snapshotCommit": self.snapshot,
-                         "approvedAt": "2026-10-03T08:42:19Z", "expiresAt": "2026-10-04T08:42:19Z",
+                         "approvedAt": "2026-10-04T01:12:40Z", "expiresAt": "2026-10-05T01:12:40Z",
                          "controlFiles": self.controls}
         self.write(source.MANIFEST_PATH, json.dumps(self.manifest))
         self.trusted = self.commit("trusted controls")
@@ -91,7 +96,7 @@ class CaptionSourceFixture(unittest.TestCase):
             self.verify(candidate, trusted, now)
 
 
-class CaptionSourceTests(CaptionSourceFixture):
+class AuditReleaseSourceTests(AuditReleaseSourceFixture):
     def test_exact_candidate_passes_with_new_control_files(self):
         receipt = self.verify()
         self.assertEqual(receipt, {"candidate": self.candidate, "trustedBaseline": self.trusted,
@@ -104,7 +109,7 @@ class CaptionSourceTests(CaptionSourceFixture):
 
     def test_modified_sibling_cannot_reseal_itself(self):
         policy_path = "scripts/checkbox-hotfix-audit-policy.json"
-        self.write("app/caption.ts", "unreviewed application change\n")
+        self.write("app/audit_release.ts", "unreviewed application change\n")
         self.run_git("add", ".")
         tree = self.run_git("write-tree")
         records = subprocess.check_output(["git", "-C", str(self.root), "ls-tree", "-r", "-z", "--full-tree", tree])
@@ -156,7 +161,7 @@ class CaptionSourceTests(CaptionSourceFixture):
                 self.rejects(self.commit_tree(self.tree, parents), reason="direct child")
 
     def test_merge_resolution_may_not_change_the_tree(self):
-        sibling = self.sibling({"app/caption.ts": "unexpected resolution\n"})
+        sibling = self.sibling({"app/audit_release.ts": "unexpected resolution\n"})
         changed_tree = self.run_git("rev-parse", sibling + "^{tree}")
         merge = self.commit_tree(changed_tree, [self.trusted, self.candidate])
         self.rejects(merge, reason="exact direct-child candidate tree")
@@ -166,21 +171,21 @@ class CaptionSourceTests(CaptionSourceFixture):
         self.rejects(self.trusted)
 
     def test_mode_change_symlink_and_gitlink_fail(self):
-        target = self.root / "app/caption.ts"
+        target = self.root / "app/audit_release.ts"
         target.chmod(0o755)
-        self.run_git("add", "app/caption.ts")
+        self.run_git("add", "app/audit_release.ts")
         self.rejects(self.commit_tree(self.run_git("write-tree"), [self.trusted]))
         self.checkout(self.candidate)
         target.unlink()
         target.symlink_to("../package-lock.json")
-        self.run_git("add", "app/caption.ts")
+        self.run_git("add", "app/audit_release.ts")
         self.rejects(self.commit_tree(self.run_git("write-tree"), [self.trusted]))
         self.checkout(self.candidate)
         self.run_git("update-index", "--add", "--cacheinfo", "160000," + self.base + ",unknown-submodule")
         self.rejects(self.commit_tree(self.run_git("write-tree"), [self.trusted]))
 
     def test_removed_file_fails(self):
-        self.run_git("rm", "-q", "app/caption.ts")
+        self.run_git("rm", "-q", "app/audit_release.ts")
         self.rejects(self.commit_tree(self.run_git("write-tree"), [self.trusted]))
 
     def test_expiration_start_boundary_and_naive_clock(self):
@@ -196,7 +201,7 @@ class CaptionSourceTests(CaptionSourceFixture):
         self.rejects(trusted="f" * 40)
 
     def test_missing_snapshot_blob_fails(self):
-        blob = self.run_git("rev-parse", self.snapshot + ":app/caption.ts")
+        blob = self.run_git("rev-parse", self.snapshot + ":app/audit_release.ts")
         (self.root / ".git/objects" / blob[:2] / blob[2:]).unlink()
         self.rejects(reason="Incomplete source object database")
 
@@ -215,7 +220,7 @@ class CaptionSourceTests(CaptionSourceFixture):
         self.assertEqual(self.verify()["tree"], self.tree)
 
     def test_replacement_objects_cannot_forge_candidate_identity(self):
-        sibling = self.sibling({"app/caption.ts": "unreviewed\n"})
+        sibling = self.sibling({"app/audit_release.ts": "unreviewed\n"})
         self.run_git("replace", sibling, self.candidate)
         self.rejects(sibling, reason="exact reviewed snapshot")
 
@@ -268,100 +273,40 @@ class CaptionSourceTests(CaptionSourceFixture):
         self.assertEqual(source.tree_hash(source.tree_records(self.root, tree)), tree)
 
 
-class WorkflowTrustBoundaryTests(unittest.TestCase):
-    """The approved audit release retains trust checks without reusing the caption exception."""
-    ROOT = Path(__file__).resolve().parents[1]
+class AuditControlMaterializationTests(AuditReleaseSourceFixture):
+    def test_controls_only_tree_is_rejected_even_as_a_direct_child(self):
+        control_tree = self.run_git("rev-parse", self.trusted + "^{tree}")
+        self.rejects(self.commit_tree(control_tree, [self.trusted]), reason="exact reviewed snapshot")
 
-    def workflow(self, name):
-        return (self.ROOT / ".github/workflows" / name).read_text()
-
-    def test_preflights_bind_clean_exact_source_and_independent_ancestry(self):
-        for filename, count in (("candidate-checks.yml", 1), ("deploy.yml", 1), ("vps-runtime.yml", 2)):
-            with self.subTest(workflow=filename):
-                text = self.workflow(filename)
-                blocks = text.split("- name: Verify exact source ancestry before executing checkout code")[1:]
-                self.assertEqual(len(blocks), count)
-                for block in blocks:
-                    block = block.split("\n      - ", 1)[0]
-                    for command in ('unset "${!GIT_@}"', 'GIT_NO_REPLACE_OBJECTS=1',
-                                    'GIT_CONFIG_GLOBAL=/dev/null', 'GIT_NO_LAZY_FETCH=1',
-                                    '[[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$',
-                                    'test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"',
-                                    'test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"',
-                                    'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main',
-                                    'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"',
-                                    'git diff --exit-code HEAD --',
-                                    'git diff --cached --exit-code HEAD --',
-                                    'test -z "$(git ls-files --others --exclude-standard)"'):
-                        self.assertIn(command, block)
-                    self.assertNotIn("verify-caption-source.py", block)
-                    self.assertNotIn("npm ", block)
-                    if filename != "candidate-checks.yml":
-                        self.assertIn('test "$GITHUB_REF" = refs/heads/main', block)
-                        self.assertIn('git merge-base --is-ancestor "$BECORE_RELEASE_SHA" origin/main', block)
-
-    def test_trust_anchors_remain_independent_of_candidate_parents_and_manifests(self):
-        self.assertIn('BECORE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || inputs.trusted_base }}',
-                      self.workflow("candidate-checks.yml"))
-        self.assertIn('BECORE_TRUSTED_BASE: ${{ github.event.before || inputs.trusted_base }}', self.workflow("deploy.yml"))
-        self.assertEqual(self.workflow("vps-runtime.yml").count('BECORE_TRUSTED_BASE: ${{ github.event.before }}'), 2)
-
-    def test_audit_release_does_not_reuse_caption_exception_or_suppress_errors(self):
-        for filename in ("candidate-checks.yml", "vps-runtime.yml", "deploy.yml"):
-            text = self.workflow(filename)
-            self.assertIn('run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall\n', text)
-            self.assertIn('Stage trusted audit verifier', text)
-            self.assertNotIn('audit-checkbox-hotfix.py', text)
-            self.assertNotIn('Verify bounded audit exception', text)
-            self.assertNotIn('continue-on-error', text)
-            self.assertNotIn('npm audit --audit-level=moderate ||', text)
-
-    def test_audit_precedes_install_and_privileged_candidate_scripts(self):
-        for filename in ("candidate-checks.yml", "vps-runtime.yml", "deploy.yml"):
-            text = self.workflow(filename)
-            self.assertLess(text.index('--phase preinstall'), text.index('run: npm ci --no-audit'))
-            self.assertLess(text.index('run: npm ci --no-audit'), text.index('--phase postinstall'))
-            self.assertIn('BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}', text)
-        deploy = self.workflow("deploy.yml")
-        self.assertLess(deploy.index('--phase preinstall'), deploy.index('name: Ensure Workers subdomain exists'))
-        self.assertLess(deploy.index('--phase preinstall'), deploy.index('run: node scripts/resolve-active-deployment.mjs'))
-        self.assertLess(deploy.index('--phase postinstall'), deploy.index('run: node scripts/resolve-active-deployment.mjs'))
-        handoff = self.workflow("vps-runtime.yml").split('  handoff:', 1)[1]
-        self.assertIn('    needs: verify', handoff)
-
-    def test_manual_activation_binds_trusted_operator_before_host_access(self):
-        text = self.workflow("tickets-code-release.yml")
-        self.assertIn('OPERATOR_SHA: ${{ inputs.trusted_base }}', text)
-        self.assertIn('BECORE_TRUSTED_BASE: ${{ inputs.trusted_base }}', text)
-        ancestry = text.index('git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main')
-        stage = text.index('git archive "$OPERATOR_SHA"')
-        guard = text.index('python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator')
-        regression = text.index('- name: Verify updater regression suite')
-        verify_ci = text.index('code-release.py" verify-ci')
-        host = text.index('- name: Connect existing dedicated Tickets identity')
-        self.assertIn('test "$BECORE_TRUSTED_BASE" != "$SOURCE_SHA"', text[:stage])
-        self.assertLess(ancestry, stage)
-        self.assertLess(stage, guard)
-        self.assertLess(guard, regression)
-        self.assertLess(regression, verify_ci)
-        self.assertLess(verify_ci, host)
-        for name in ("Reject unmerged source before executing checkout code", "Stage reviewed trusted operator without changing the verified application tree"):
-            block = text.split("- name: " + name, 1)[1].split("\n      - ", 1)[0]
-            self.assertLess(block.index('unset "${!GIT_@}"'), block.index('git '))
-            self.assertLess(block.index('GIT_NO_REPLACE_OBJECTS=1'), block.index('git '))
-            self.assertIn('GIT_CONFIG_GLOBAL=/dev/null', block)
-            self.assertIn('GIT_NO_LAZY_FETCH=1', block)
-
-    def test_operator_checks_materialize_only_the_approved_audit_source(self):
-        text = self.workflow("tickets-release-operator-checks.yml")
-        self.assertNotIn('caption-expected-source', text)
-        self.assertNotIn('python3 -I .github/scripts/verify-caption-control.py', text)
-        self.assertIn("python3 -m unittest discover -s ops/vps -p 'test_*.py'", text)
-        self.assertIn(".github/scripts/verify-audit-control.py", text)
-        self.assertIn("release/audit-controls-20261004", text)
-        self.assertIn("42bbaa419f796ca9e2382a6e71c9831343363267", text)
-        self.assertIn("|| github.workspace", text)
-        self.assertIn('git -C "$GITHUB_WORKSPACE" diff --check', text)
+    def test_control_helper_materializes_only_test_source_without_changing_refs_or_index(self):
+        self.checkout(self.trusted)
+        helper = self.root / ".github/scripts/verify-audit-control.py"
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        output = Path(temporary.name) / "synthetic-only"
+        before_head = self.run_git("rev-parse", "HEAD")
+        before_index = self.run_git("ls-files", "--stage")
+        # Freeze only this isolated test process; production has no clock override.
+        driver = """import datetime, runpy, sys
+class TestClock(datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 10, 4, 1, 13, tzinfo=datetime.timezone.utc)
+datetime.datetime = TestClock
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+        result = subprocess.run(["python3", "-I", "-c", driver, str(helper), "--repo", str(self.root),
+                                 "--control", self.trusted, "--output", str(output)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(result.stdout)
+        self.assertTrue(receipt["controlSourceRejected"])
+        self.assertEqual(receipt["expectedTree"], self.tree)
+        self.assertEqual(self.run_git("rev-parse", "HEAD"), before_head)
+        self.assertEqual(self.run_git("ls-files", "--stage"), before_index)
+        self.assertEqual((output / "app/audit_release.ts").read_text(), "approved audit fixes\n")
+        self.assertEqual(self.verify(receipt["testOnlyCandidate"])["tree"], self.tree)
 
 
 if __name__ == "__main__":
