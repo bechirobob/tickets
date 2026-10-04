@@ -358,8 +358,8 @@ class WorkflowTrustBoundaryTests(unittest.TestCase):
         self.assertNotIn('python3 -I .github/scripts/verify-caption-control.py', text)
         self.assertIn("python3 -m unittest discover -s ops/vps -p 'test_*.py'", text)
         self.assertIn(".github/scripts/verify-audit-control.py", text)
-        self.assertIn("release/audit-controls-20261004", text)
-        self.assertIn("42bbaa419f796ca9e2382a6e71c9831343363267", text)
+        self.assertIn("release/audit-controls-fixture-20261004", text)
+        self.assertIn("6fd11314ebea5fb0b870a13d4f56e9da3db03774", text)
         self.assertIn("|| github.workspace", text)
         self.assertIn('git -C "$GITHUB_WORKSPACE" diff --check', text)
 

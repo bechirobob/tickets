@@ -63,6 +63,7 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '043e310a41ff28d23adc20383c88566b181232a6', 'ops/vps/test_runtime_release.py': '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14', 'ops/vps/public_runtime_guard.py': '9a9739f1bd88cbd02dc420001efa3de5b85e3538', 'ops/vps/test_public_runtime_guard.py': 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'}
 
 REVIEWED_APPLICATION_BLOBS = {
+    "tests/e2e/operations.spec.ts": "d831803c8758f10cacf8b1930768d8100ff37935",
     "tests/webhook-signatures.test.ts": "3645102ec5e8bc978ce9735ab34ef6e06e568bd7",
     "tests/test_audit_release_source.py": "0acb07d7087af41d1a794db9da47b80e56894cd5",
     "tests/test_audit_release_dependencies.py": "6983998bf40fc1cb424e6dafbb7ba35e5653336d",
@@ -75,7 +76,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "tests/gate-checkin.test.ts": "c0a046f6a8b5b68f380487890d614ef4c915c187",
     "tests/e2e/room-identity.spec.ts": "abab7debc8ff8acfcbe1fea21d2b109b845cd647",
     "scripts/verify-audit-release-source.py": "9874dc9433e81fb1c8bf1aced38fca62e8e6b093",
-    "scripts/audit-release-manifest.json": "fec204036595d6f55ca49eae5a67808e65820263",
+    "scripts/audit-release-manifest.json": "f3f6a7a240400f60a38bce273ad2cd77f0f72a4c",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "a24751c7092fc326d9041004de96054b30c35a9d",
     "ops/vps/test_code_release.py": "61c7b9daf28dacf7e247b06e06d526d0d4646dd1",
@@ -95,7 +96,7 @@ REVIEWED_APPLICATION_BLOBS = {
     ".github/workflows/tickets-handover.yml": "5bef3d7019966a548ef4ae515a0309d9ff6e2847",
     "ops/vps/test_public_runtime_guard.py": "eb1fd8a6909c7c0634326da1d35c7a4606fbebe7",
     "ops/vps/public_runtime_guard.py": "9a9739f1bd88cbd02dc420001efa3de5b85e3538",
-    "tests/test_caption_source.py": "74c9d887424bf46a02750e61c638fa5fb439b074",
+    "tests/test_caption_source.py": "0a8c34c9f5cfbf8f2c4c978892a1a20274679d91",
     "scripts/caption-source-manifest.json": "1b178a1a371ae047f8bf26498d249e272c11497d",
     "scripts/verify-caption-source.py": "fa474c5d8cfaad8df53e77004c063e1511ed0b68",
     ".github/scripts/verify-caption-control.py": "19366f37243794bba916dd6cff0b7731aaec8f1c",
@@ -112,7 +113,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/test_runtime_release.py": "210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14",
     "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
     "ops/vps/runtime_release.py": "043e310a41ff28d23adc20383c88566b181232a6",
-    ".github/workflows/tickets-release-operator-checks.yml": "bb268cdd2e0fe0e960206e0f33822152f82ddc08",
+    ".github/workflows/tickets-release-operator-checks.yml": "8d055a34d245775c8f0e1ef2528fb7ac7580584c",
     ".github/workflows/vps-runtime.yml": "06d83690ed40675dae9f5e423cfcc73b3022fc1f",
     ".github/workflows/browser-audit.yml": "4e0293b58478326e6c22e653f69272ce6e64f7e3",
     ".github/workflows/candidate-checks.yml": "dc127e63338b3ac2f8498a2114fe7a465c64344b",
