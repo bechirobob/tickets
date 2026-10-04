@@ -293,12 +293,11 @@ export default function HelpCentre({ workspace = false, onNavigate, event = "" }
         <p className="eyebrow">Useful before panic</p>
         <h1>{workspace ? "Help centre" : "What went sideways?"}</h1>
         <p>Lost a ticket? Payment taking its time? Find the next step here. If you’re still stuck, there’s a human at the end of this.</p>
-        <label className="help-search">
+        <div className="help-search">
           <Search aria-hidden="true" size={21} />
-          <span className="sr-only">Search BeCore Help</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try “missing ticket”, “event review” or “Gate”" type="search" />
+          <input aria-label="Search BeCore Help" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try “missing ticket”, “event review” or “Gate”" type="search" />
           {query ? <button type="button" aria-label="Clear help search" onClick={() => setQuery("")}><X size={17} /></button> : null}
-        </label>
+        </div>
       </div>
 
       <nav className="help-audiences" aria-label="Help by role">

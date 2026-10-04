@@ -1,5 +1,5 @@
 import { limitRequestBody } from '../../../../lib/request-body';
-import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, prepareAudit, recordAudit, requestMetadata } from "../../../../lib/admin-session";
+import { hasEventAssignment, hasPermission, mutationHasValidOrigin, readAdminSession, prepareAudit, requestMetadata } from "../../../../lib/admin-session";
 import { hashGateToken, normalizeGateToken } from "../../../../lib/gate-pass";
 
 type TicketAtGate = {
@@ -21,7 +21,7 @@ async function requireGateAdmin(request: Request) {
 async function findTicket(db: D1Database, tokenHash: string) {
   return db.prepare(`
     SELECT t.id AS ticketId, t.event_slug AS eventSlug, t.ticket_type AS ticketType,
-           t.status, t.checked_in_at AS checkedInAt, t.checked_in_gate AS checkedInGate,
+           CASE WHEN o.status = 'paid' THEN t.status ELSE 'unavailable' END AS status, t.checked_in_at AS checkedInAt, t.checked_in_gate AS checkedInGate,
            COALESCE(p.display_name, o.customer_name, 'Guest') AS attendeeName
     FROM tickets t
     JOIN orders o ON o.id = t.order_id
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   if (query) {
     const search = query;
     const matches = await env.DB.prepare(`
-      SELECT t.id AS ticketId, t.ticket_type AS ticketType, t.status,
+      SELECT t.id AS ticketId, t.ticket_type AS ticketType, CASE WHEN o.status = 'paid' THEN t.status ELSE 'unavailable' END AS status,
              t.checked_in_at AS checkedInAt, t.checked_in_gate AS checkedInGate,
              o.reference, o.customer_name AS customerName, o.customer_email AS customerEmail,
              o.customer_phone AS customerPhone,
@@ -60,14 +60,14 @@ export async function GET(request: Request) {
   }
   const stats = await env.DB.prepare(`
     SELECT COUNT(*) AS issued,
-           SUM(CASE WHEN status = 'checked_in' THEN 1 ELSE 0 END) AS checkedIn
-    FROM tickets WHERE event_slug = ? AND status IN ('issued', 'checked_in')
+           SUM(CASE WHEN t.status = 'checked_in' THEN 1 ELSE 0 END) AS checkedIn
+    FROM tickets t JOIN orders o ON o.id = t.order_id WHERE t.event_slug = ? AND o.status = 'paid' AND t.status IN ('issued', 'checked_in')
   `).bind(eventSlug).first<{ issued: number; checkedIn: number | null }>();
   const tiers = await env.DB.prepare(`
-    SELECT ticket_type AS ticketType, COUNT(*) AS issued,
-           SUM(CASE WHEN status = 'checked_in' THEN 1 ELSE 0 END) AS checkedIn
-    FROM tickets WHERE event_slug = ? AND status IN ('issued', 'checked_in')
-    GROUP BY ticket_type ORDER BY ticket_type
+    SELECT t.ticket_type AS ticketType, COUNT(*) AS issued,
+           SUM(CASE WHEN t.status = 'checked_in' THEN 1 ELSE 0 END) AS checkedIn
+    FROM tickets t JOIN orders o ON o.id = t.order_id WHERE t.event_slug = ? AND o.status = 'paid' AND t.status IN ('issued', 'checked_in')
+    GROUP BY t.ticket_type ORDER BY t.ticket_type
   `).bind(eventSlug).all<{ ticketType: string; issued: number; checkedIn: number | null }>();
   if (url.searchParams.get("manifest") === "1") {
     const manifest = await env.DB.prepare(`
@@ -76,9 +76,9 @@ export async function GET(request: Request) {
       FROM tickets t JOIN orders o ON o.id = t.order_id
       LEFT JOIN ticket_assignments assignment ON assignment.ticket_id = t.id AND assignment.status = 'active'
       LEFT JOIN attendee_profiles profile ON profile.id = assignment.attendee_id
-      WHERE t.event_slug = ? AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = t.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')) LIMIT 10000
+      WHERE t.event_slug = ? AND o.status = 'paid' AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = t.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon')) LIMIT 10000
     `).bind(eventSlug).all();
-    return Response.json({ issued: stats?.issued ?? 0, checkedIn: stats?.checkedIn ?? 0, tiers: tiers.results, canUndo: hasPermission(session, "gate.undo"), manifest: manifest.results, generatedAt: new Date().toISOString() }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ issued: stats?.issued ?? 0, checkedIn: stats?.checkedIn ?? 0, tiers: tiers.results, canUndo: hasPermission(session, "gate.undo"), manifest: manifest.results, generatedAt: new Date().toISOString(), access: { accountId: session.accountId, sessionId: session.sessionId, expiresAt: session.expiresAt } }, { headers: { "cache-control": "no-store" } });
   }
   return Response.json({ issued: stats?.issued ?? 0, checkedIn: stats?.checkedIn ?? 0, tiers: tiers.results, canUndo: hasPermission(session, "gate.undo") }, { headers: { "cache-control": "no-store" } });
 }
@@ -132,10 +132,11 @@ export async function POST(request: Request) {
   if (clientScanId) {
     const replay = await env.DB.prepare(`
       SELECT ticket.id AS ticketId, ticket.event_slug AS eventSlug, ticket.ticket_type AS ticketType,
-             ticket.status, ticket.checked_in_at AS checkedInAt, ticket.checked_in_gate AS checkedInGate
-      FROM gate_checkin_events event JOIN tickets ticket ON ticket.id = event.ticket_id
+             CASE WHEN o.status = 'paid' THEN ticket.status ELSE 'unavailable' END AS status, ticket.checked_in_at AS checkedInAt, ticket.checked_in_gate AS checkedInGate
+      FROM gate_checkin_events event JOIN tickets ticket ON ticket.id = event.ticket_id JOIN orders o ON o.id = ticket.order_id
       WHERE event.client_scan_id = ? AND event.event_slug = ? AND ticket.qr_token_hash = ? AND event.action = 'check_in' LIMIT 1
-    `).bind(clientScanId, eventSlug, await hashGateToken(token)).first();
+    `).bind(clientScanId, eventSlug, await hashGateToken(token)).first<TicketAtGate>();
+    if (replay && replay.status !== 'checked_in') return Response.json({ result: 'invalid', error: 'This saved entry has changed. Ask a supervisor to review it before admitting the guest.' }, { status: 409, headers: { 'cache-control': 'no-store' } });
     if (replay) return Response.json({ result: "valid", ticket: replay, replayed: true, message: "Offline entry synchronized." }, { headers: { "cache-control": "no-store" } });
   }
   const tokenHash = await hashGateToken(token);
@@ -152,21 +153,24 @@ export async function POST(request: Request) {
   }
 
   const checkedInAt = new Date().toISOString();
-  const result = await env.DB.prepare(`
-    UPDATE tickets SET status = 'checked_in', checked_in_at = ?, checked_in_by = ?, checked_in_gate = ?
-    WHERE id = ? AND status = 'issued' AND qr_token_hash = ? AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = tickets.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon'))
-  `).bind(checkedInAt, `${session.actor} <${session.email}>`, gate, ticket.ticketId, tokenHash).run();
-  if (result.meta.changes !== 1) {
+  // Keep admission, its replay receipt and the audit in one durable transaction.
+  // The receipt also measures the direct change, excluding wallet-refresh triggers.
+  const [, receipt] = await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE tickets SET status = 'checked_in', checked_in_at = ?, checked_in_by = ?, checked_in_gate = ?
+      WHERE id = ? AND status = 'issued' AND qr_token_hash = ? AND EXISTS (SELECT 1 FROM orders WHERE id = tickets.order_id AND status = 'paid') AND NOT EXISTS (SELECT 1 FROM curated_event_records WHERE slug = tickets.event_slug AND (event_state IN ('cancelled','postponed','past') OR schedule_status = 'coming_soon'))
+    `).bind(checkedInAt, `${session.actor} <${session.email}>`, gate, ticket.ticketId, tokenHash),
+    env.DB.prepare(`
+      INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, device_id, client_scan_id, created_at)
+      SELECT ?, ?, ?, 'check_in', ?, ?, ?, ?, ?, ? WHERE changes() = 1
+    `).bind(crypto.randomUUID(), ticket.ticketId, eventSlug, gate, session.accountId, session.email, deviceId, clientScanId, checkedInAt),
+    prepareAudit(env.DB, { session, action: "gate.ticket_checked_in", targetType: "ticket", targetId: ticket.ticketId, outcome: "success", detail: `${eventSlug}:${gate}`, requestId: requestMetadata(request).requestId, onlyAfterChange: true }),
+  ]);
+  if (receipt.meta.changes !== 1) {
     const current = await findTicket(env.DB, tokenHash);
+    if (!current || current.status !== "checked_in") return Response.json({ result: "invalid", error: "This ticket changed before entry was recorded. Refresh its status before admitting the guest." }, { status: 409, headers: { "cache-control": "no-store" } });
     return Response.json({ result: "duplicate", ticket: current, error: "This ticket was admitted by another gate." }, { status: 409, headers: { "cache-control": "no-store" } });
   }
-  await env.DB.batch([
-    prepareAudit(env.DB, { session, action: "gate.ticket_checked_in", targetType: "ticket", targetId: ticket.ticketId, outcome: "success", detail: `${eventSlug}:${gate}`, requestId: requestMetadata(request).requestId }),
-    env.DB.prepare(`
-    INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, device_id, client_scan_id, created_at)
-    VALUES (?, ?, ?, 'check_in', ?, ?, ?, ?, ?, ?)
-  `).bind(crypto.randomUUID(), ticket.ticketId, eventSlug, gate, session.accountId, session.email, deviceId, clientScanId, checkedInAt),
-  ]);
   return Response.json({ result: "valid", ticket: { ...ticket, status: "checked_in", checkedInAt, checkedInGate: gate } }, { headers: { "cache-control": "no-store" } });
 }
 
@@ -183,12 +187,14 @@ export async function DELETE(request: Request) {
   const ticketId = body.ticketId?.trim() ?? "";
   const eventSlug = body.eventSlug?.trim() ?? "";
   if (!(await hasEventAssignment(env.DB, session, eventSlug))) return Response.json({ error: "This event is not assigned to your account." }, { status: 403 });
-  const result = await env.DB.prepare(`UPDATE tickets SET status = 'issued', checked_in_at = NULL, checked_in_by = NULL, checked_in_gate = NULL WHERE id = ? AND event_slug = ? AND status = 'checked_in'`)
-    .bind(ticketId, eventSlug).run();
-  if (result.meta.changes !== 1) return Response.json({ error: "This ticket is not currently checked in." }, { status: 409 });
   const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, created_at) VALUES (?, ?, ?, 'undo', ?, ?, ?, ?)`)
-    .bind(crypto.randomUUID(), ticketId, eventSlug, (body.gate?.trim() || "Supervisor").slice(0, 50), session.accountId, session.email, now).run();
-  await recordAudit(env.DB, { session, action: "gate.ticket_checkin_undone", targetType: "ticket", targetId: ticketId, outcome: "success", detail: `${eventSlug}:${(body.reason?.trim() || "supervisor correction").slice(0, 300)}`, requestId: requestMetadata(request).requestId });
+  const [, receipt] = await env.DB.batch([
+    env.DB.prepare(`UPDATE tickets SET status = 'issued', checked_in_at = NULL, checked_in_by = NULL, checked_in_gate = NULL WHERE id = ? AND event_slug = ? AND status = 'checked_in' AND EXISTS (SELECT 1 FROM orders WHERE id = tickets.order_id AND status = 'paid')`)
+      .bind(ticketId, eventSlug),
+    env.DB.prepare(`INSERT INTO gate_checkin_events (id, ticket_id, event_slug, action, gate, actor_account_id, actor_email, created_at) SELECT ?, ?, ?, 'undo', ?, ?, ?, ? WHERE changes() = 1`)
+      .bind(crypto.randomUUID(), ticketId, eventSlug, (body.gate?.trim() || "Supervisor").slice(0, 50), session.accountId, session.email, now),
+    prepareAudit(env.DB, { session, action: "gate.ticket_checkin_undone", targetType: "ticket", targetId: ticketId, outcome: "success", detail: `${eventSlug}:${(body.reason?.trim() || "supervisor correction").slice(0, 300)}`, requestId: requestMetadata(request).requestId, onlyAfterChange: true }),
+  ]);
+  if (receipt.meta.changes !== 1) return Response.json({ error: "This ticket is not currently checked in with an active booking." }, { status: 409 });
   return Response.json({ undone: true }, { headers: { "cache-control": "no-store" } });
 }

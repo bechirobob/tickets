@@ -13,10 +13,6 @@ import { enforceRateLimit, type RateLimiter } from "../../../../lib/security-con
 import { analyticsPeriod, type AnalyticsRange as RangeKey } from "../../../../lib/analytics-period";
 const paidStatuses = "'paid','refund_pending','refunded','disputed'";
 
-function placeholders(values: readonly string[]) {
-  return values.map(() => "?").join(",");
-}
-
 function number(value: unknown) {
   return Number(value ?? 0);
 }
@@ -172,9 +168,11 @@ export async function GET(request: Request) {
   };
   if (!slugs.length) return Response.json(empty, { headers: { "cache-control": "no-store, private" } });
 
-  const marks = placeholders(slugs);
-  const orderBindings = [...slugs, window.start];
-  const metricBindings = [...slugs, window.start.slice(0, 10)];
+  // Keep the complete authorized scope without exceeding D1 parameter limits.
+  const scopedSlugs = JSON.stringify(slugs);
+  const marks = "SELECT value FROM json_each(?)";
+  const orderBindings = [scopedSlugs, window.start];
+  const metricBindings = [scopedSlugs, window.start.slice(0, 10)];
   const orderTrendBucket = window.range === "all"
     ? "substr(COALESCE(paid_at, created_at), 1, 7) || '-01'"
     : "substr(COALESCE(paid_at, created_at), 1, 10)";
@@ -229,7 +227,7 @@ export async function GET(request: Request) {
       FROM event_ticket_tiers tier JOIN curated_event_records event ON event.slug = tier.event_slug
       LEFT JOIN orders ON orders.ticket_tier_id = tier.id AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at, orders.created_at) >= ?
       WHERE tier.event_slug IN (${marks}) GROUP BY tier.id ORDER BY event.starts_at DESC, tier.sort_order
-    `).bind(window.start, ...slugs).all<Record<string, unknown>>(),
+    `).bind(window.start, scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT payment_channel AS channel, COUNT(*) AS orders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor
       FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
@@ -247,11 +245,11 @@ export async function GET(request: Request) {
       SELECT substr(checked_in_at, 12, 2) AS hour, COUNT(*) AS admissions
       FROM tickets WHERE event_slug IN (${marks}) AND status = 'checked_in' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = tickets.order_id AND COALESCE(o.payment_provider, '') NOT IN ('rsvp','complimentary')) AND checked_in_at >= ?
       GROUP BY hour ORDER BY hour
-    `).bind(...slugs, window.start).all<Record<string, unknown>>(),
+    `).bind(scopedSlugs, window.start).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT kind, status, COUNT(*) AS count FROM vip_concierge_requests
       WHERE event_slug IN (${marks}) AND created_at >= ? GROUP BY kind, status ORDER BY kind, status
-    `).bind(...slugs, window.start).all<Record<string, unknown>>(),
+    `).bind(scopedSlugs, window.start).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT COUNT(*) AS repeatBuyers FROM (
         SELECT lower(customer_email) FROM orders
@@ -276,10 +274,10 @@ export async function GET(request: Request) {
     const [previousOrders, previousProduct] = await Promise.all([
       env.DB.prepare(`SELECT COUNT(*) AS paidOrders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor FROM orders
         WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ? AND COALESCE(paid_at, created_at) < ?`)
-        .bind(...slugs, window.previousStart, window.previousEnd).first<Record<string, unknown>>(),
+        .bind(scopedSlugs, window.previousStart, window.previousEnd).first<Record<string, unknown>>(),
       env.DB.prepare(`SELECT COALESCE(SUM(CASE WHEN metric = 'event_view' THEN count ELSE 0 END), 0) AS eventViews FROM product_metrics_daily
         WHERE event_slug IN (${marks}) AND day >= ? AND day < ?`)
-        .bind(...slugs, window.previousStart.slice(0, 10), window.previousEnd.slice(0, 10)).first<Record<string, unknown>>(),
+        .bind(scopedSlugs, window.previousStart.slice(0, 10), window.previousEnd.slice(0, 10)).first<Record<string, unknown>>(),
     ]);
     comparison = { paidOrders: number(previousOrders?.paidOrders), revenueMinor: number(previousOrders?.revenueMinor), eventViews: number(previousProduct?.eventViews) };
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import QrScanner from "qr-scanner";
+import { beginGateAccess, clearGateManifests, readGateManifest, saveGateManifest, type GateAccess, type GateManifest as Manifest, type ManifestTicket } from "../../lib/scanner-manifest";
 import { AlertTriangle, CheckCircle2, CloudOff, Keyboard, Loader2, RefreshCw, RotateCcw, ScanLine, Search, Users, Wifi, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -12,16 +13,9 @@ import DoorDesk from "./door-desk";
 type EventOption = { slug: string; title: string; fullDate: string; venue: string };
 type GateResult = { result?: "valid" | "invalid" | "duplicate" | "wrong_event" | "unavailable"; error?: string; message?: string; ticket?: GateTicket };
 type TierStat = { ticketType: string; issued: number; checkedIn: number | null };
-type ManifestTicket = { ticketId: string; tokenHash: string; ticketType: string; status: string; attendeeName: string };
-type Manifest = { eventSlug: string; generatedAt: string; tickets: ManifestTicket[] };
 type SearchMatch = GateTicket & { reference?: string; customerName?: string; customerEmail?: string; customerPhone?: string };
 
-const MANIFEST_KEY = "bct:gate-manifests:v1";
 const DEVICE_KEY = "bct:gate-device:v1";
-
-function readJson<T>(key: string, fallback: T): T {
-  try { return JSON.parse(window.localStorage.getItem(key) ?? "") as T; } catch { return fallback; }
-}
 
 function normalizeToken(value: string): string | null {
   const upper = value.trim().toUpperCase();
@@ -35,7 +29,7 @@ async function tokenHash(token: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function Scanner({ actor, role, events, initialEvent }: { actor: string; role: StaffRole; events: EventOption[]; initialEvent?: string }) {
+export default function Scanner({ actor, role, events, initialEvent, access }: { actor: string; role: StaffRole; access: GateAccess; events: EventOption[]; initialEvent?: string }) {
   const params = useSearchParams();
   const eventSlug = selectedGateEvent(events, params.get("event") ?? initialEvent);
   const currentEvent = useRef(eventSlug);
@@ -63,7 +57,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
-  const busyRef = useRef(false);
+  const busyRef = useRef(false), gateAccessDenied = useRef(false);
   const startingRef = useRef(false);
   const cameraGeneration = useRef(0);
   const checkTicketRef = useRef<(value: string) => Promise<void>>(async () => {});
@@ -75,6 +69,11 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
       const created = crypto.randomUUID(); window.localStorage.setItem(DEVICE_KEY, created); return created;
     } catch { return crypto.randomUUID(); }
   }, []);
+  const { accountId, sessionId, expiresAt } = access;
+  useEffect(() => {
+    try { beginGateAccess(window.localStorage, { accountId, sessionId, expiresAt }); }
+    catch { gateAccessDenied.current = true; }
+  }, [accountId, sessionId, expiresAt]);
   const selectedEvent = events.find((event) => event.slug === eventSlug) ?? events[0];
 
   const pending = queued.filter(item => item.eventSlug === eventSlug).length;
@@ -93,13 +92,22 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
     setConnection(current => ({ event: slug, reachable, lastContact: reachable ? now : current.event === slug ? current.lastContact : 0, lastSync: synchronized ? now : current.event === slug ? current.lastSync : 0 }));
   }, []);
 
+  const denyGateAccess = useCallback((response: Response) => {
+    if (response.status !== 401 && response.status !== 403) return false;
+    gateAccessDenied.current = true;
+    try { clearGateManifests(window.localStorage); } catch { /* The in-memory denial still wins. */ }
+    setManifest(null); setCanUndo(false); setMatches([]); setMode("unavailable");
+    setMessage("Gate access could not be confirmed. Reload and sign in before scanning.");
+    return true;
+  }, []);
+
   const heartbeat = useCallback(async (pendingOfflineScans: number, manifestGeneratedAt?: string | null) => {
     if (!navigator.onLine || !eventSlug) return;
     try {
       const response = await fetch("/api/admin/check-in", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "heartbeat", eventSlug, gate: "Main gate", deviceId, pendingOfflineScans, manifestGeneratedAt: manifestGeneratedAt ?? null }), signal: AbortSignal.timeout(10_000) });
-      if (!response.ok) markContact(eventSlug, false);
+      if (denyGateAccess(response) || !response.ok) markContact(eventSlug, false);
     } catch { markContact(eventSlug, false); }
-  }, [deviceId, eventSlug, markContact]);
+  }, [denyGateAccess, deviceId, eventSlug, markContact]);
 
   const loadEventState = useCallback(async () => {
     if (!eventSlug || refreshBusy.current === eventSlug) return;
@@ -107,15 +115,18 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
     try {
       const response = await fetch(`/api/admin/check-in?eventSlug=${encodeURIComponent(eventSlug)}&manifest=1`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
       if (eventSlug !== currentEvent.current) return;
-      if (!response.ok) { markContact(eventSlug, false); setSyncMessage(response.status === 401 || response.status === 403 ? 'Gate access could not be confirmed. Sign in again before scanning.' : 'The live door list is unavailable. Showing the last saved list.'); return; }
-      const data = await response.json() as { checkedIn: number; issued: number; tiers?: TierStat[]; canUndo?: boolean; manifest?: ManifestTicket[]; generatedAt?: string };
+      if (!response.ok) {
+        denyGateAccess(response);
+        markContact(eventSlug, false); setSyncMessage(response.status === 401 || response.status === 403 ? 'Gate access could not be confirmed. Sign in again before scanning.' : 'The live door list is unavailable. Showing the last saved list.'); return;
+      }
+      const data = await response.json() as { checkedIn: number; issued: number; tiers?: TierStat[]; canUndo?: boolean; manifest?: ManifestTicket[]; generatedAt?: string; access?: GateAccess };
       if (eventSlug !== currentEvent.current) return;
       if (!Array.isArray(data.manifest) || !Number.isFinite(data.checkedIn) || !Number.isFinite(data.issued)) throw new Error('Unreadable door list');
       setStats({ checkedIn: data.checkedIn, issued: data.issued, tiers: data.tiers ?? [] }); setCanUndo(Boolean(data.canUndo));
-      const nextManifest = { eventSlug, generatedAt: data.generatedAt ?? new Date().toISOString(), tickets: data.manifest ?? [] };
-      setManifest(nextManifest);
+      const nextManifest = { eventSlug, generatedAt: data.generatedAt ?? new Date().toISOString(), tickets: data.manifest ?? [], access: data.access! };
       try {
-        const all = readJson<Record<string, Manifest>>(MANIFEST_KEY, {}); all[eventSlug] = nextManifest; window.localStorage.setItem(MANIFEST_KEY, JSON.stringify(all));
+        if (!saveGateManifest(window.localStorage, access, nextManifest)) { setManifest(null); markContact(eventSlug, false); setSyncMessage("Gate access changed. Reload and sign in before scanning."); return; }
+        setManifest(nextManifest);
         const waiting = readGateList<QueuedScan>(window.localStorage, QUEUE_KEY).filter(item => item.eventSlug === eventSlug).length;
         const unresolved = readGateList<GateReview>(window.localStorage, GATE_REVIEW_KEY).filter(item => item.eventSlug === eventSlug && !item.reviewedAt).length;
         setStorageError(''); markContact(eventSlug, true, waiting === 0 && unresolved === 0);
@@ -124,10 +135,10 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
     } catch {
       if (eventSlug !== currentEvent.current) return;
       markContact(eventSlug, false);
-      setManifest(readJson<Record<string, Manifest>>(MANIFEST_KEY, {})[eventSlug] ?? null);
+      setManifest(readGateManifest(window.localStorage, access, eventSlug));
       setSyncMessage('Cannot reach the door service. Your saved entries remain on this device.');
     } finally { if (refreshBusy.current === eventSlug) refreshBusy.current = ''; }
-  }, [eventSlug, heartbeat, markContact]);
+  }, [access, denyGateAccess, eventSlug, heartbeat, markContact]);
 
   const syncQueue = useCallback(async () => {
     if (!navigator.onLine || syncBusy.current || !eventSlug) return;
@@ -141,6 +152,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
         if (currentEvent.current !== eventSlug) break;
         try {
           const response = await fetch("/api/admin/check-in", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(scan), signal: AbortSignal.timeout(10_000) });
+          if (denyGateAccess(response)) { markContact(eventSlug, false); break; }
           const result = await response.json() as GateResult;
           if (response.ok && result.result === 'valid') { synchronized += 1; completed.add(scan.clientScanId); markContact(eventSlug, true); }
           else if (['duplicate', 'invalid', 'wrong_event', 'unavailable'].includes(result.result ?? '') && [404, 409].includes(response.status)) {
@@ -160,7 +172,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
       }
     } catch { setStorageError('Door records could not be saved. Keep this device open and ask a supervisor; do not clear its storage.'); }
     finally { syncBusy.current = false; setSyncing(false); }
-  }, [eventSlug, heartbeat, loadEventState, markContact]);
+  }, [denyGateAccess, eventSlug, heartbeat, loadEventState, markContact]);
 
   useEffect(() => {
     const initialConnection = window.setTimeout(() => {
@@ -174,9 +186,9 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
     return () => { window.clearTimeout(initialConnection); window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, [eventSlug, syncQueue, loadEventState, markContact]);
   useEffect(() => {
-    const reset = window.setTimeout(() => { cameraGeneration.current++; scannerRef.current?.stop(); setMode('ready'); setTicket(undefined); setMatches([]); setMessage(''); setSyncMessage(''); setManifest(readJson<Record<string, Manifest>>(MANIFEST_KEY, {})[eventSlug] ?? null); setStats({ checkedIn: 0, issued: 0, tiers: [] }); }, 0);
+    const reset = window.setTimeout(() => { cameraGeneration.current++; scannerRef.current?.stop(); setMode('ready'); setTicket(undefined); setMatches([]); setMessage(''); setSyncMessage(''); setManifest(readGateManifest(window.localStorage, access, eventSlug)); setStats({ checkedIn: 0, issued: 0, tiers: [] }); }, 0);
     return () => window.clearTimeout(reset);
-  }, [eventSlug]);
+  }, [access, eventSlug]);
   useEffect(() => {
     const refresh = () => { setClock(Date.now()); if (navigator.onLine) { void loadEventState(); void syncQueue(); } };
     const kick = window.setTimeout(refresh, 0), timer = window.setInterval(refresh, 10_000);
@@ -195,10 +207,13 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
 
   const offlineCheck = useCallback(async (value: string, clientScanId = crypto.randomUUID()) => {
     const token = normalizeToken(value);
-    const cached = manifest?.eventSlug === eventSlug ? manifest : readJson<Record<string, Manifest>>(MANIFEST_KEY, {})[eventSlug] ?? null;
+    const cached = gateAccessDenied.current ? null : readGateManifest(window.localStorage, access, eventSlug);
     if (!token || !cached) { setMode("invalid"); setMessage("No usable offline manifest. Reconnect before admitting this guest."); return; }
     const hash = await tokenHash(token);
-    const found = cached.tickets.find((item) => item.tokenHash === hash);
+    if (eventSlug !== currentEvent.current) return;
+    const current = gateAccessDenied.current ? null : readGateManifest(window.localStorage, access, eventSlug);
+    if (!current || current.generatedAt !== cached.generatedAt) { setMode("unavailable"); setMessage("Gate access or the saved list changed. Reconnect before admitting this guest."); return; }
+    const found = current.tickets.find((item) => item.tokenHash === hash);
     let currentQueue: QueuedScan[];
     try { currentQueue = readGateList<QueuedScan>(window.localStorage, QUEUE_KEY);
       const unresolved = readGateList<GateReview>(window.localStorage, GATE_REVIEW_KEY).some(item => item.eventSlug === eventSlug && item.ticket.ticketId === found?.ticketId && !item.reviewedAt);
@@ -213,7 +228,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
     catch { setMode('unavailable'); setStorageError('This device cannot save entries. Reconnect before admitting guests.'); setMessage('Entry could not be saved. Do not admit this guest until the connection is restored.'); return; }
     setTicket(found); setMode("offline_saved");
     setMessage("Saved on this gate device. It will synchronize automatically when the signal returns.");
-  }, [deviceId, eventSlug, manifest, saveQueue]);
+  }, [access, deviceId, eventSlug, saveQueue]);
 
   const checkTicket = useCallback(async (value: string) => {
     if (busyRef.current || !value.trim()) return;
@@ -224,6 +239,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: value, eventSlug, gate: "Main gate", deviceId, clientScanId }), signal: AbortSignal.timeout(10_000),
       });
+      if (denyGateAccess(response)) { markContact(eventSlug, false); return; }
       const result = await response.json().catch(() => { if (response.ok) throw new Error('Unreadable check-in result'); return { error: "Gate access or entry could not be confirmed. Refresh before trying again." }; }) as GateResult;
       if (eventSlug !== currentEvent.current) return;
       if (response.ok && result.result !== 'valid') throw new Error('Unconfirmed check-in result');
@@ -233,7 +249,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
       scannerRef.current?.pause(); if (response.ok) void loadEventState();
     } catch { markContact(eventSlug, false); if (eventSlug === currentEvent.current) await offlineCheck(value, clientScanId); }
     finally { busyRef.current = false; }
-  }, [deviceId, eventSlug, loadEventState, offlineCheck, markContact]);
+  }, [denyGateAccess, deviceId, eventSlug, loadEventState, offlineCheck, markContact]);
 
   // The decoder lives longer than a render; always use the current event and manifest.
   useEffect(() => { checkTicketRef.current = checkTicket; }, [checkTicket]);
@@ -267,6 +283,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
     setSearching(true);
     try {
       const response = await fetch(`/api/admin/check-in?eventSlug=${encodeURIComponent(eventSlug)}&q=${encodeURIComponent(searchQuery)}`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+      if (denyGateAccess(response)) { markContact(eventSlug, false); return; }
       const result = await response.json() as { matches?: SearchMatch[]; canUndo?: boolean; error?: string };
       if (eventSlug !== currentEvent.current) return;
       if (!response.ok) throw new Error(result.error ?? 'Guest search is unavailable.');
@@ -280,6 +297,7 @@ export default function Scanner({ actor, role, events, initialEvent }: { actor: 
     if (!ticket?.ticketId || !window.confirm("Undo this check-in? The ticket will become scannable again and the action will be audited.")) return;
     try {
       const response = await fetch("/api/admin/check-in", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ ticketId: ticket.ticketId, eventSlug, gate: "Supervisor", reason: "Door correction" }), signal: AbortSignal.timeout(10_000) });
+      if (denyGateAccess(response)) { markContact(eventSlug, false); return; }
       const result = await response.json() as { error?: string };
       if (eventSlug !== currentEvent.current) return;
       setMessage(response.ok ? "Check-in undone. The ticket is live again." : result.error ?? "Check-in could not be undone.");
