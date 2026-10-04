@@ -870,7 +870,7 @@ for (const newerScanner of [false, true]) test(`scanner rejects old offline acce
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.getByLabel('Ticket code', {exact:true}).fill(`BCT-${token}`);
     await page.getByRole('button', {name:'Check',exact:true}).click();
-    await expect(page.getByText('No usable offline manifest. Reconnect before admitting this guest.', {exact:true})).toBeVisible();
+    await expect(page.locator('.scan-surface--invalid > p', {hasText:/^No usable offline manifest\. Reconnect before admitting this guest\.$/})).toBeVisible();
     await expect(page.getByRole('heading', {name:'Saved offline',exact:true})).toHaveCount(0);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-queue:v1') ?? '[]'))).toHaveLength(0);
   }
