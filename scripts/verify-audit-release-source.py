@@ -26,8 +26,8 @@ import sys
 
 SCRIPT_PATH = "scripts/verify-audit-release-source.py"
 MANIFEST_PATH = "scripts/audit-release-manifest.json"
-APPROVED_AT = dt.datetime(2026, 10, 4, 1, 12, 40, tzinfo=dt.timezone.utc)
-EXPIRES_AT = dt.datetime(2026, 10, 5, 1, 12, 40, tzinfo=dt.timezone.utc)
+APPROVED_AT = dt.datetime(2026, 10, 4, 14, 50, 8, tzinfo=dt.timezone.utc)
+EXPIRES_AT = dt.datetime(2026, 10, 5, 14, 50, 8, tzinfo=dt.timezone.utc)
 LOCK_BLOB = "759d34af76287e214f03def74be98ddefb33780a"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 MODES = {b"040000": b"tree", b"100644": b"blob", b"100755": b"blob", b"120000": b"blob"}
@@ -172,8 +172,8 @@ def load_manifest(root: Path, trusted: dict[bytes, Record]) -> dict:
             {"schema", "snapshotCommit", "approvedAt", "expiresAt", "controlFiles"}, "Unexpected audit-release manifest schema")
     require(type(manifest["schema"]) is int and manifest["schema"] == 1, "Unsupported audit-release manifest version")
     full_sha(manifest["snapshotCommit"], "Snapshot")
-    require(manifest["approvedAt"] == "2026-10-04T01:12:40Z"
-            and manifest["expiresAt"] == "2026-10-05T01:12:40Z", "Changed audit release validity window")
+    require(manifest["approvedAt"] == "2026-10-04T14:50:08Z"
+            and manifest["expiresAt"] == "2026-10-05T14:50:08Z", "Changed audit release validity window")
     paths = manifest["controlFiles"]
     require(type(paths) is list and 2 <= len(paths) <= 32
             and all(type(path) is str and re.fullmatch(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+", path)

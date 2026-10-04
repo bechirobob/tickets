@@ -63,24 +63,24 @@ APPLICATION_FILES = {
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '043e310a41ff28d23adc20383c88566b181232a6', 'ops/vps/test_runtime_release.py': '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14', 'ops/vps/public_runtime_guard.py': '9a9739f1bd88cbd02dc420001efa3de5b85e3538', 'ops/vps/test_public_runtime_guard.py': 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'}
 
 REVIEWED_APPLICATION_BLOBS = {
-    "tests/e2e/operations.spec.ts": "d831803c8758f10cacf8b1930768d8100ff37935",
+    "tests/e2e/operations.spec.ts": "9bc2d78115876947f630041682b2847ba3e24479",
     "tests/webhook-signatures.test.ts": "3645102ec5e8bc978ce9735ab34ef6e06e568bd7",
-    "tests/test_audit_release_source.py": "0acb07d7087af41d1a794db9da47b80e56894cd5",
+    "tests/test_audit_release_source.py": "9d987c3d720d119d1bc3834d04af20a1e8efdc6c",
     "tests/test_audit_release_dependencies.py": "6983998bf40fc1cb424e6dafbb7ba35e5653336d",
     "tests/support-email-rendering.test.mjs": "e36cd295c753c5a28d5056a9ef33794d4c3216b4",
-    "tests/scanner-session-client.test.mjs": "79d6ccefa62c59ed7ab79894f60b07ef685e3ad3",
-    "tests/scanner-manifest.test.ts": "b3bb29c94f9b13983a15b817647164cb4d31afd3",
+    "tests/scanner-session-client.test.mjs": "3d2665434fbb95d2329dc8370c57368e153ce16b",
+    "tests/scanner-manifest.test.ts": "caa44fd148e41523f73219ffda5bf50c6efcfad7",
     "tests/public-catalogue.test.ts": "0eb2322754693cd8c62d433e6f0ccf25954e635a",
     "tests/organizer-scale-audit.test.ts": "a4be4dcfb4d5c4a104724b95bfc4687b7a75dd80",
     "tests/mobile-ui.test.mjs": "5cc3c4de19d6b73b294cd11feb2a4d200a914122",
     "tests/gate-checkin.test.ts": "c0a046f6a8b5b68f380487890d614ef4c915c187",
     "tests/e2e/room-identity.spec.ts": "abab7debc8ff8acfcbe1fea21d2b109b845cd647",
-    "scripts/verify-audit-release-source.py": "9874dc9433e81fb1c8bf1aced38fca62e8e6b093",
-    "scripts/audit-release-manifest.json": "f3f6a7a240400f60a38bce273ad2cd77f0f72a4c",
+    "scripts/verify-audit-release-source.py": "129d7bdbd2d631ad385a9edd7be4ea9895f173cf",
+    "scripts/audit-release-manifest.json": "f018feb6c1c2df1d6b7f6799ef402eb1c9c94f06",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
-    "ops/vps/test_release_approval.py": "a24751c7092fc326d9041004de96054b30c35a9d",
+    "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
     "ops/vps/test_code_release.py": "61c7b9daf28dacf7e247b06e06d526d0d4646dd1",
-    "lib/scanner-manifest.ts": "8a0065a241fd061ced526252627b2eb9c1c6e648",
+    "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "5de9886c16f5eaef51afec15d31863c482b99354",
     "app/hosts/[slug]/page.tsx": "04228bb8dd93a831d1a608b0b42c59340ed9a86d",
@@ -96,7 +96,7 @@ REVIEWED_APPLICATION_BLOBS = {
     ".github/workflows/tickets-handover.yml": "5bef3d7019966a548ef4ae515a0309d9ff6e2847",
     "ops/vps/test_public_runtime_guard.py": "eb1fd8a6909c7c0634326da1d35c7a4606fbebe7",
     "ops/vps/public_runtime_guard.py": "9a9739f1bd88cbd02dc420001efa3de5b85e3538",
-    "tests/test_caption_source.py": "0a8c34c9f5cfbf8f2c4c978892a1a20274679d91",
+    "tests/test_caption_source.py": "49dc54d0fd067b52ad83d20e0e21dceb0125bc33",
     "scripts/caption-source-manifest.json": "1b178a1a371ae047f8bf26498d249e272c11497d",
     "scripts/verify-caption-source.py": "fa474c5d8cfaad8df53e77004c063e1511ed0b68",
     ".github/scripts/verify-caption-control.py": "19366f37243794bba916dd6cff0b7731aaec8f1c",
@@ -113,7 +113,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/test_runtime_release.py": "210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14",
     "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
     "ops/vps/runtime_release.py": "043e310a41ff28d23adc20383c88566b181232a6",
-    ".github/workflows/tickets-release-operator-checks.yml": "8d055a34d245775c8f0e1ef2528fb7ac7580584c",
+    ".github/workflows/tickets-release-operator-checks.yml": "e7b2597df8eceff0bb31c8804daa7d1f90fcfe51",
     ".github/workflows/vps-runtime.yml": "06d83690ed40675dae9f5e423cfcc73b3022fc1f",
     ".github/workflows/browser-audit.yml": "4e0293b58478326e6c22e653f69272ce6e64f7e3",
     ".github/workflows/candidate-checks.yml": "dc127e63338b3ac2f8498a2114fe7a465c64344b",
@@ -238,7 +238,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/rsvp/access/page.tsx": "02c302374244f4e73436acdc2dc80d99e8326d86",
     "app/scan/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/scan/page.tsx": "345bc4e0eea838c4ae89ad87f24e6d90e6881716",
-    "app/scan/scanner.tsx": "212067c697f8bac5651c2d0420647cc71f5a6256",
+    "app/scan/scanner.tsx": "1a1605c9297f782f61a2dfcc1c955796f7f04c74",
     "app/segmented-control.css": "b4b85d7656046b56447728a292b2f70e30127c14",
     "app/segmented-control.tsx": "d68e0038b37928467b25f62780a91ffd61b82eac",
     "app/support-email.tsx": "8a33cb8253de5cad772974c3684bc44409f757f1",
@@ -1160,11 +1160,11 @@ def ready(system, revision, *, candidate=False):
 
 class AuditReleaseApproval:
     """One durable reservation under the deployment lock, never reusable on retry."""
-    ID = "tickets-full-audit-20261004"
-    APPROVED_AT = "2026-10-04T01:12:40Z"
-    EXPIRES_AT = "2026-10-05T01:12:40Z"
-    EXPECTED_ACTIVE = "42bbaa419f796ca9e2382a6e71c9831343363267"
-    STATE_NAME = "full-audit-release-20261004.json"
+    ID = "tickets-scanner-session-20261004"
+    APPROVED_AT = "2026-10-04T14:50:08Z"
+    EXPIRES_AT = "2026-10-05T14:50:08Z"
+    EXPECTED_ACTIVE = "d7b1fa5ff01bfb797946dbad3dd47c96cfc9dfd1"
+    STATE_NAME = "scanner-session-release-20261004.json"
 
     def __init__(self, directory, proof, run_id, attempt):
         self.path = directory / self.STATE_NAME
