@@ -56,6 +56,7 @@ jobs:
     timeout-minutes: 15
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
+      BECORE_RELEASE_SHA: ${{ inputs.source_sha }}
       OPERATOR_SHA: ${{ inputs.trusted_base }}
       BECORE_TRUSTED_BASE: ${{ inputs.trusted_base }}
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
@@ -82,6 +83,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          test "$BECORE_TRUSTED_BASE" != "$SOURCE_SHA"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           git merge-base --is-ancestor "$SOURCE_SHA" origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
@@ -91,20 +95,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$OPERATOR_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$OPERATOR_SHA" = "$BECORE_TRUSTED_BASE"
           git merge-base --is-ancestor "$OPERATOR_SHA" "$SOURCE_SHA"
           git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
           operator="$RUNNER_TEMP/tickets-operator"
           mkdir -m 700 "$operator"
-          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py | tar -x -C "$operator"
+          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$operator"
           printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
-      - name: Verify independently trusted caption source before any host access
+      - name: Verify independently trusted operator before any host access
         shell: bash
         run: |
           set -euo pipefail
-          python3 -I "$RUNNER_TEMP/tickets-operator/scripts/verify-caption-source.py" \
-            --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$SOURCE_SHA"
+          python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator --source "$SOURCE_SHA"
       - name: Verify updater regression suite
         run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
       - name: Verify exact CI runs, source tree, ancestry and artifact provenance
@@ -131,6 +136,22 @@ jobs:
             --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
             --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
             --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
+      - name: Set up the shipping runtime version for final audit
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - name: Capture final dependency audit privately
+        id: final_dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase preinstall
+      - name: Install the exact approved dependency lock for final audit
+        run: npm ci --no-audit
+      - name: Verify installed dependencies against the final private audit
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase postinstall
       - name: Connect existing dedicated Tickets identity
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
@@ -143,6 +164,7 @@ jobs:
           tailscale ssh root@hermes "systemctl show becore-tickets.service --no-pager --property=NeedDaemonReload --property=WorkingDirectory --property=ActiveState && busctl --system --timeout=10 --no-pager --json=short get-property org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/becore_2dtickets_2eservice org.freedesktop.systemd1.Service LoadCredential"
       - name: Reconfirm exact CI attempts immediately before the host transaction
         env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
@@ -156,7 +178,8 @@ jobs:
           python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
             --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
             --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
-            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json" \
+            --audit-directory "$RUNNER_TEMP/tickets-final-audit"
       - name: Apply reversible Tickets-only code transaction
         shell: bash
         run: |
@@ -170,11 +193,10 @@ jobs:
           tailscale ssh root@hermes "umask 077; mkdir '$stage'"
           tailscale ssh root@hermes "umask 077; cat > '$stage/runtime.tar.gz'" < "$metadata/artifact/tickets-vps-runtime.tar.gz"
           tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/npm-audit.json'" < "$RUNNER_TEMP/tickets-final-audit/npm-audit.json"
           tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py"
-          tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --recover-prepared '$RECOVER_PREPARED'"
-          # Only this successful run's three staged files are removed. Private
-          # rollback snapshots and prior releases remain untouched on the host.
-          tailscale ssh root@hermes "rm -- '$stage/runtime.tar.gz' '$stage/provenance.json' '$stage/code-release.py' && rmdir -- '$stage'"
+          tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --audit-report '$stage/npm-audit.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --recover-prepared '$RECOVER_PREPARED'"
+          # Retain private staging and the verified audit snapshot for this one release.
 
   inspect_failure:
     # This branch is mutually exclusive with release; no application checkout or apply.
@@ -183,6 +205,7 @@ jobs:
     timeout-minutes: 10
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
+      BECORE_RELEASE_SHA: ${{ inputs.source_sha }}
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
       RUNTIME_RUN: ${{ inputs.runtime_run }}
       CANDIDATE_RUN: ${{ inputs.candidate_run }}

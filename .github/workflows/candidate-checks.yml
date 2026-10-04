@@ -34,17 +34,34 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
-      - name: Verify independently trusted caption source before executing checkout code
+      - name: Verify exact source ancestry before executing checkout code
         shell: bash
         run: |
           set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
-          gate=$(mktemp "$RUNNER_TEMP/tickets-caption-source.XXXXXX.py")
-          git show "$BECORE_TRUSTED_BASE:scripts/verify-caption-source.py" > "$gate"
-          python3 -I "$gate" --repo "$PWD" --trusted-baseline "$BECORE_TRUSTED_BASE" --candidate "$BECORE_RELEASE_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Stage trusted audit verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          umask 077
+          for entry in 'verify-audit-release-source.py:tickets-audit-source.py' 'audit-release-dependencies.py:tickets-approved-audit.py'; do
+            source="scripts/${entry%%:*}"
+            target="$RUNNER_TEMP/${entry#*:}"
+            test "$(git ls-tree "$BECORE_TRUSTED_BASE" -- "$source" | cut -d ' ' -f 1)" = 100644
+            git show "$BECORE_TRUSTED_BASE:$source" > "$target"
+            test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
+          done
       - name: Verify exact candidate source
         id: source
         shell: bash
@@ -58,12 +75,19 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
+      - name: Audit dependencies
+        id: dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
       - name: Install locked dependencies
         run: npm ci --no-audit
-      - name: Verify bounded audit exception
-        run: python3 -m unittest discover -s tests -p 'test_checkbox_hotfix_audit.py' -v
-      - name: Audit dependencies
-        run: python3 scripts/audit-checkbox-hotfix.py
+      - name: Verify installed audited dependencies
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
+
       - name: Lint application
         run: npm run lint
       - name: Check application types

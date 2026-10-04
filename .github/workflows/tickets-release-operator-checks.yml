@@ -5,6 +5,8 @@ on:
     paths:
       - ops/vps/code-release.py
       - ops/vps/test_code_release.py
+      - ops/vps/test_release_source.py
+      - ops/vps/test_runtime_workflow_contract.py
       - ops/vps/runtime_release.py
       - ops/vps/public_runtime_guard.py
       - ops/vps/test_public_runtime_guard.py
@@ -20,6 +22,13 @@ on:
       - .github/scripts/verify-caption-control.py
       - scripts/verify-caption-source.py
       - scripts/caption-source-manifest.json
+      - scripts/verify-audit-release-source.py
+      - scripts/audit-release-dependencies.py
+      - scripts/audit-release-manifest.json
+      - .github/scripts/verify-audit-control.py
+      - tests/test_audit_release_source.py
+      - tests/test_audit_release_dependencies.py
+      - ops/vps/test_release_approval.py
       - scripts/audit-checkbox-hotfix.py
       - tests/test_caption_source.py
       - tests/test_checkbox_hotfix_audit.py
@@ -30,39 +39,35 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      CONTROL_CHECK_SOURCE: ${{ github.event.pull_request.head.ref == 'release/audit-controls-20261004' && github.event.pull_request.base.sha == '42bbaa419f796ca9e2382a6e71c9831343363267' && format('{0}/tickets-approved-source', runner.temp) || github.workspace }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
-      - name: Verify trusted source rejection and materialize only the exact expected test tree
-        shell: bash
-        env:
-          CONTROL_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Materialize the approved audit source for control checks
+        if: ${{ github.event.pull_request.head.ref == 'release/audit-controls-20261004' && github.event.pull_request.base.sha == '42bbaa419f796ca9e2382a6e71c9831343363267' }}
+        run: python3 -I .github/scripts/verify-audit-control.py --repo "$GITHUB_WORKSPACE" --control "$(git rev-parse HEAD)" --output "$RUNNER_TEMP/tickets-approved-source"
+      - name: Verify source trust and retired-exception regressions
+        working-directory: ${{ env.CONTROL_CHECK_SOURCE }}
         run: |
-          set -euo pipefail
-          python3 -I .github/scripts/verify-caption-control.py \
-            --repo "$PWD" --control "$CONTROL_SHA" --output "$RUNNER_TEMP/caption-expected-source"
-      - name: Verify complete trusted caption source regressions
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 -I -m unittest discover -s tests -p 'test_caption_source.py' -v
-          python3 -I -m unittest discover -s "$RUNNER_TEMP/caption-expected-source/tests" -p 'test_checkbox_hotfix_audit.py' -v
+          python3 -I -m unittest discover -s tests -p 'test_audit_release*.py' -v
       - name: Verify release guards and rollback without host access
+        working-directory: ${{ env.CONTROL_CHECK_SOURCE }}
         shell: bash
         run: |
           set -euo pipefail
-          expected="$RUNNER_TEMP/caption-expected-source"
-          python3 -m unittest discover -s "$expected/ops/vps" -p 'test_*.py'
-          python3 -m py_compile "$expected/ops/vps/code-release.py" "$expected/ops/vps/test_code_release.py" "$expected/ops/vps/runtime_release.py" "$expected/ops/vps/public_runtime_guard.py" "$expected/ops/vps/candidate_evidence.py"
-          git diff --check
+          python3 -m unittest discover -s ops/vps -p 'test_*.py'
+          python3 -m py_compile "ops/vps/code-release.py" "ops/vps/test_code_release.py" "ops/vps/runtime_release.py" "ops/vps/public_runtime_guard.py" "ops/vps/candidate_evidence.py"
+          git -C "$GITHUB_WORKSPACE" diff --check
       - name: Verify the exact staged operator layout used for release
         shell: bash
         run: |
           set -euo pipefail
           staged="$RUNNER_TEMP/staged-operator"
           mkdir -m 700 "$staged"
-          git archive HEAD ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py | tar -x -C "$staged"
+          git archive HEAD ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$staged"
           python3 -m unittest discover -s "$staged/ops/vps" -p 'test_*.py'
