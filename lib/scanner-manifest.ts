@@ -12,7 +12,9 @@ export type GateManifest = { eventSlug: string; generatedAt: string; access: Gat
 export function sameGateAccess(left: GateAccess | null | undefined, right: GateAccess): boolean {
   return Boolean(left && left.accountId === right.accountId && left.sessionId === right.sessionId && left.expiresAt === right.expiresAt);
 }
-export function clearGateManifests(storage: Storage) {
+export function clearGateManifests(storage: Storage, expectedAccess?: GateAccess) {
+  // A stale scanner must not erase a newer scanner tab's verified session.
+  if (expectedAccess && !sameGateAccess(JSON.parse(storage.getItem(ACCESS_KEY) ?? 'null'), expectedAccess)) return;
   storage.removeItem(ACCESS_KEY);
   storage.removeItem(GATE_MANIFEST_KEY);
   storage.removeItem(LEGACY_KEY);
