@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "snapshotCommit": "25b0d0640dfb07efc0e6aa382cb33e27795d8da4",
-  "approvedAt": "2026-10-04T01:12:40Z",
-  "expiresAt": "2026-10-05T01:12:40Z",
+  "snapshotCommit": "633341024f511ddf8b33ed34c93a4c69a4703205",
+  "approvedAt": "2026-10-04T14:50:08Z",
+  "expiresAt": "2026-10-05T14:50:08Z",
   "controlFiles": [
     ".github/scripts/verify-audit-control.py",
     ".github/workflows/candidate-checks.yml",

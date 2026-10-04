@@ -42,7 +42,7 @@ class AuditReleaseSourceFixture(unittest.TestCase):
                                 "scripts/audit-release-dependencies.py", "scripts/audit-checkbox-hotfix.py",
                                 ".github/scripts/verify-audit-control.py"])
         self.manifest = {"schema": 1, "snapshotCommit": self.snapshot,
-                         "approvedAt": "2026-10-04T01:12:40Z", "expiresAt": "2026-10-05T01:12:40Z",
+                         "approvedAt": "2026-10-04T14:50:08Z", "expiresAt": "2026-10-05T14:50:08Z",
                          "controlFiles": self.controls}
         self.write(source.MANIFEST_PATH, json.dumps(self.manifest))
         self.trusted = self.commit("trusted controls")
@@ -196,6 +196,15 @@ class AuditReleaseSourceTests(AuditReleaseSourceFixture):
         self.rejects(now=self.now.replace(tzinfo=None))
         self.assertEqual(source.EXPIRES_AT - source.APPROVED_AT, dt.timedelta(hours=24))
 
+    def test_full_audit_window_cannot_authorize_the_scanner_source(self):
+        self.checkout(self.trusted)
+        previous = {**self.manifest, "approvedAt": "2026-10-04T01:12:40Z",
+                    "expiresAt": "2026-10-05T01:12:40Z"}
+        self.write(source.MANIFEST_PATH, json.dumps(previous))
+        trusted = self.commit("previous grant fixture")
+        candidate = self.commit_tree(self.tree, [trusted])
+        self.rejects(candidate, trusted=trusted, reason="Changed audit release validity window")
+
     def test_missing_commit_object_fails(self):
         self.rejects(candidate="f" * 40)
         self.rejects(trusted="f" * 40)
@@ -291,7 +300,7 @@ class AuditControlMaterializationTests(AuditReleaseSourceFixture):
 class TestClock(datetime.datetime):
     @classmethod
     def now(cls, tz=None):
-        return cls(2026, 10, 4, 1, 13, tzinfo=datetime.timezone.utc)
+        return cls(2026, 10, 4, 14, 51, tzinfo=datetime.timezone.utc)
 datetime.datetime = TestClock
 sys.argv = sys.argv[1:]
 runpy.run_path(sys.argv[0], run_name="__main__")

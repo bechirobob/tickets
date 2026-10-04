@@ -14,7 +14,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 release = fixture.release
 Approval = release.AuditReleaseApproval
-NOW = "2026-10-04T02:00:00Z"
+NOW = "2026-10-04T15:00:00Z"
 
 
 def approved_proof(source="2" * 40, tree="4" * 40):
@@ -56,9 +56,9 @@ class ApprovalStateTests(unittest.TestCase):
             self.new_approval(proof)
 
     def test_utc_window_start_is_inclusive_and_expiry_exclusive(self):
-        for now, accepted in (("2026-10-04T01:12:39Z", False),
+        for now, accepted in (("2026-10-04T14:50:07Z", False),
                               (Approval.APPROVED_AT, True),
-                              ("2026-10-05T01:12:39Z", True),
+                              ("2026-10-05T14:50:07Z", True),
                               (Approval.EXPIRES_AT, False)):
             self.clock.return_value = now
             with self.subTest(now=now):
@@ -74,7 +74,7 @@ class ApprovalStateTests(unittest.TestCase):
         reserved = self.approval.read()
         self.assertEqual(reserved, {"version": 1, **self.proof["auditRelease"], "runId": "123",
                                     "attempt": "1", "phase": "reserved", "reservedAt": NOW})
-        self.assertEqual(self.approval.path.name, "full-audit-release-20261004.json")
+        self.assertEqual(self.approval.path.name, "scanner-session-release-20261004.json")
         self.assertEqual(stat.S_IMODE(self.approval.path.stat().st_mode), 0o600)
         self.assertEqual(self.approval.path.stat().st_uid, os.geteuid())
         self.approval.consume()
@@ -93,6 +93,26 @@ class ApprovalStateTests(unittest.TestCase):
                 with self.assertRaisesRegex(release.ReleaseError, "already has state"):
                     self.new_approval(proof, run, attempt).reserve()
                 self.assertEqual(self.approval.path.read_bytes(), consumed)
+
+    def test_scanner_grant_never_alters_or_clears_the_consumed_full_audit_state(self):
+        previous = self.root / "full-audit-release-20261004.json"
+        consumed = b'{"id":"tickets-full-audit-20261004","phase":"consumed"}\n'
+        release.atomic_write(previous, consumed)
+        self.assertNotEqual(self.approval.path, previous)
+        self.approval.reserve()
+        self.approval.consume()
+        self.approval.failed()
+        self.assertEqual(self.approval.read()["phase"], "consumed")
+        self.assertEqual(previous.read_bytes(), consumed)
+
+    def test_full_audit_grant_cannot_authorize_the_scanner_source(self):
+        proof = copy.deepcopy(self.proof)
+        proof["auditRelease"].update(id="tickets-full-audit-20261004",
+            approvedAt="2026-10-04T01:12:40Z", expiresAt="2026-10-05T01:12:40Z",
+            expectedActive="42bbaa419f796ca9e2382a6e71c9831343363267")
+        with self.assertRaisesRegex(release.ReleaseError, "exact one-success audit approval"):
+            self.new_approval(proof)
+        self.assertFalse(self.approval.path.exists())
 
     def test_interrupted_failed_unknown_and_corrupt_state_block_new_invocations(self):
         for raw in (b"", b"{", b"null", b'{"phase":"reserved"}', b'{"phase":"pending"}',
