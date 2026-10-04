@@ -92,14 +92,14 @@ export default function Scanner({ actor, role, events, initialEvent, access }: {
     setConnection(current => ({ event: slug, reachable, lastContact: reachable ? now : current.event === slug ? current.lastContact : 0, lastSync: synchronized ? now : current.event === slug ? current.lastSync : 0 }));
   }, []);
 
-  const denyGateAccess = useCallback((response: Response) => {
-    if (response.status !== 401 && response.status !== 403) return false;
+  const denyGateAccess = useCallback((response?: Response) => {
+    if (response && response.status !== 401 && response.status !== 403) return false;
     gateAccessDenied.current = true;
-    try { clearGateManifests(window.localStorage); } catch { /* The in-memory denial still wins. */ }
+    try { clearGateManifests(window.localStorage, response ? undefined : access); } catch { /* The in-memory denial still wins. */ }
     setManifest(null); setCanUndo(false); setMatches([]); setMode("unavailable");
     setMessage("Gate access could not be confirmed. Reload and sign in before scanning.");
     return true;
-  }, []);
+  }, [access]);
 
   const heartbeat = useCallback(async (pendingOfflineScans: number, manifestGeneratedAt?: string | null) => {
     if (!navigator.onLine || !eventSlug) return;
@@ -125,7 +125,7 @@ export default function Scanner({ actor, role, events, initialEvent, access }: {
       setStats({ checkedIn: data.checkedIn, issued: data.issued, tiers: data.tiers ?? [] }); setCanUndo(Boolean(data.canUndo));
       const nextManifest = { eventSlug, generatedAt: data.generatedAt ?? new Date().toISOString(), tickets: data.manifest ?? [], access: data.access! };
       try {
-        if (!saveGateManifest(window.localStorage, access, nextManifest)) { setManifest(null); markContact(eventSlug, false); setSyncMessage("Gate access changed. Reload and sign in before scanning."); return; }
+        if (!saveGateManifest(window.localStorage, access, nextManifest)) { denyGateAccess(); markContact(eventSlug, false); setSyncMessage("Gate access changed. Reload and sign in before scanning."); return; }
         setManifest(nextManifest);
         const waiting = readGateList<QueuedScan>(window.localStorage, QUEUE_KEY).filter(item => item.eventSlug === eventSlug).length;
         const unresolved = readGateList<GateReview>(window.localStorage, GATE_REVIEW_KEY).filter(item => item.eventSlug === eventSlug && !item.reviewedAt).length;
