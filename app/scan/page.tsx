@@ -17,5 +17,5 @@ export default async function ScanPage({ searchParams }: { searchParams: Promise
     const allowed = new Set(assignments.results.map((item) => item.eventSlug));
     events = allEvents.filter((event) => allowed.has(event.slug));
   }
-  return <Scanner actor={session.actor} role={session.role} initialEvent={events.some(event => event.slug === requested) ? requested : undefined} events={events.map(({ slug, title, fullDate, venue }) => ({ slug, title, fullDate, venue }))} />;
+  return <Scanner key={session.sessionId} actor={session.actor} role={session.role} access={{ accountId: session.accountId, sessionId: session.sessionId, expiresAt: session.expiresAt }} initialEvent={events.some(event => event.slug === requested) ? requested : undefined} events={events.map(({ slug, title, fullDate, venue }) => ({ slug, title, fullDate, venue }))} />;
 }
