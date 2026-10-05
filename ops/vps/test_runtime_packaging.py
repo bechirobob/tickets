@@ -100,15 +100,17 @@ class RuntimePackagingTests(unittest.TestCase):
         (self.root / "tracked-source.txt").write_text("Reviewed source must stay unchanged.\n")
         (self.root / ".gitignore").write_text("node_modules/\ndist-vps/\ntickets-vps-runtime.tar.gz*\n")
         (self.root / "scripts").mkdir()
-        (self.root / "scripts/verify-vps-runtime.mjs").write_text(
+        # A fixture-only preparation step exercises shell/source/archive contracts.
+        # The real dependency selector/copy helper has separate Node unit tests.
+        (self.root / "scripts/prepare-vps-runtime.mjs").write_text(
             "import assert from 'node:assert/strict';\n"
+            "import { cp, mkdir } from 'node:fs/promises';\n"
             "import { existsSync } from 'node:fs';\n"
-            "import { createRequire } from 'node:module';\n"
-            "const require = createRequire(import.meta.url);\n"
-            "assert.equal(require('runtime-fixture'), 'runtime-fixture@1.2.3');\n"
-            "assert.equal(require('shared-fixture'), 'shared-fixture@1.0.0');\n"
-            "assert.equal(existsSync('node_modules/development-fixture'), false);\n"
-            "assert.equal(existsSync('node_modules/extraneous-fixture'), false);\n")
+            "await mkdir('dist-vps/node_modules');\n"
+            "for (const name of ['runtime-fixture', 'shared-fixture']) await cp('node_modules/' + name, 'dist-vps/node_modules/' + name, {recursive:true});\n"
+            "assert.equal(existsSync('node_modules/development-fixture'), true);\n"
+            "assert.equal(existsSync('dist-vps/node_modules/development-fixture'), false);\n"
+            "assert.equal(existsSync('dist-vps/node_modules/extraneous-fixture'), false);\n")
         for name in ("dist-vps", "drizzle", "ops/vps"):
             (self.root / name).mkdir(parents=True)
             (self.root / name / "fixture.txt").write_text(name + " fixture\n")
@@ -137,13 +139,14 @@ class RuntimePackagingTests(unittest.TestCase):
         return self.run_command("bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", self.script, check=check)
 
     def test_workflow_keeps_locked_input_and_all_verification_gates(self):
-        self.assertIn("npm prune --omit=dev --ignore-scripts --no-save", self.script)
+        self.assertIn("node scripts/prepare-vps-runtime.mjs", self.script)
+        self.assertNotIn("npm prune", self.script)
+        self.assertNotIn("cp -a node_modules", self.script)
         self.assertNotIn("--package-lock=false", self.script)
         self.assertNotIn("--no-package-lock", self.script)
         self.assertEqual(self.script.count(INTEGRITY_CHECK), 2)
-        self.assertLess(self.script.index(INTEGRITY_CHECK), self.script.index("npm prune"))
-        self.assertLess(self.script.index("npm prune"), self.script.rindex(INTEGRITY_CHECK))
-        self.assertLess(self.script.rindex(INTEGRITY_CHECK), self.script.index("node scripts/verify-vps-runtime.mjs"))
+        self.assertLess(self.script.index(INTEGRITY_CHECK), self.script.index("node scripts/prepare-vps-runtime.mjs"))
+        self.assertLess(self.script.index("node scripts/prepare-vps-runtime.mjs"), self.script.rindex(INTEGRITY_CHECK))
         workflow = WORKFLOW.read_text()
         for command in ("npm ci --no-audit", 'python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall', "npm run lint", "npm run typecheck",
                         "npm test", "npm run test:vps", "python -m unittest discover -s ops/vps -p 'test_*.py'",
@@ -161,12 +164,12 @@ class RuntimePackagingTests(unittest.TestCase):
         self.assertEqual(self.production_files(), self.production_before)
         self.assertNotEqual(self.run_command("git", "diff", "--exit-code", "--quiet", "HEAD", "--", check=False).returncode, 0)
 
-    def test_packaging_prunes_only_development_and_extraneous_packages(self):
+    def test_packaging_copies_only_runtime_and_preserves_the_source_install(self):
         self.run_packaging()
         self.assert_source_unchanged()
         self.assertEqual(self.production_files(), self.production_before)
-        self.assertFalse((self.root / "node_modules/development-fixture").exists())
-        self.assertFalse((self.root / "node_modules/extraneous-fixture").exists())
+        self.assertTrue((self.root / "node_modules/development-fixture").exists())
+        self.assertTrue((self.root / "node_modules/extraneous-fixture").exists())
         self.assertEqual(self.run_command("git", "status", "--porcelain").stdout, "")
         archive = self.root / "tickets-vps-runtime.tar.gz"
         with tarfile.open(archive) as runtime:
@@ -182,7 +185,7 @@ class RuntimePackagingTests(unittest.TestCase):
     def test_packaging_rejects_preexisting_staged_and_unstaged_source_drift(self):
         for staged in (False, True):
             with self.subTest(staged=staged):
-                (self.root / "tracked-source.txt").write_text("Source changed before prune.\n")
+                (self.root / "tracked-source.txt").write_text("Source changed before packaging.\n")
                 if staged:
                     self.run_command("git", "add", "tracked-source.txt")
                 result = self.run_packaging(check=False)
@@ -191,17 +194,17 @@ class RuntimePackagingTests(unittest.TestCase):
                 self.assertTrue((self.root / "node_modules/development-fixture").exists())
                 self.assertFalse((self.root / "tickets-vps-runtime.tar.gz").exists())
 
-    def test_packaging_rejects_source_drift_introduced_by_prune(self):
+    def test_packaging_rejects_source_drift_introduced_by_preparation(self):
         wrappers = self.directory / "wrappers"
         wrappers.mkdir()
-        wrapper = wrappers / "npm"
-        wrapper.write_text(f'#!/bin/sh\n"{self.npm}" "$@" || exit $?\nprintf "changed during prune\\n" >> tracked-source.txt\n')
+        wrapper = wrappers / "node"
+        wrapper.write_text(f'#!/bin/sh\n"{shutil.which("node")}" "$@" || exit $?\nprintf "changed during preparation\\n" >> tracked-source.txt\n')
         wrapper.chmod(0o755)
         self.env["PATH"] = str(wrappers) + os.pathsep + self.env["PATH"]
         result = self.run_packaging(check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("tracked-source.txt", result.stdout)
-        self.assertFalse((self.root / "node_modules/development-fixture").exists())
+        self.assertTrue((self.root / "node_modules/development-fixture").exists())
         self.assertFalse((self.root / "tickets-vps-runtime.tar.gz").exists())
         self.assertNotEqual((self.root / "tracked-source.txt").read_bytes(), self.before["tracked-source.txt"])
 
