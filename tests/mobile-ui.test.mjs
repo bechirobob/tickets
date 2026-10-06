@@ -1134,3 +1134,15 @@ test("checkout quantity uses a labelled native boxed dropdown within existing in
   assert.match(css, /\.quantity-control select \{[^}]*min-height: 46px;[^}]*border: 1px solid/u);
   assert.doesNotMatch(css, /\.quantity-control button/u);
 });
+
+test("mobile checkout header hides optional reassurance without suppressing the logo or back link", async () => {
+  const [checkout, css] = await Promise.all([
+    readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8'),
+    readFile(cssUrl, 'utf8'),
+  ]);
+  assert.match(checkout, /className="checkout-back" aria-label="Back to event"/u);
+  assert.match(css, /\.checkout-header > span, \.checkout-back__detail \{ display: none; \}/u);
+  assert.match(css, /\.checkout-header > a:first-child \{[^}]*min-width: 44px; min-height: 44px;/u);
+  assert.doesNotMatch(css, /\.checkout-header > span \{ font-size: 0;/u);
+  assert.doesNotMatch(css, /\.checkout-header \.brand-mark span:last-child \{ display: none;/u);
+});

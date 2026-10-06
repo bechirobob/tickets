@@ -154,7 +154,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   return (
     <main className="checkout-page">
       <header className="checkout-header">
-        <Link href={`/event/${slug}`}><ArrowLeft size={17} /> Back to event</Link>
+        <Link href={`/event/${slug}`} className="checkout-back" aria-label="Back to event"><ArrowLeft size={17} aria-hidden="true" /><span>Back<span className="checkout-back__detail"> to event</span></span></Link>
         <Link href="/" className="brand-mark"><BrandLogo /></Link>
         <span><LockKeyhole size={15} /> Good plans. Safe payment.</span>
       </header>
