@@ -542,4 +542,148 @@ class RetentionPolicyAttestationTests(unittest.TestCase):
         self.assertTrue(audit.retention_policy_attestation()['host_retention_policy_verified'])
         self.assertTrue(all('--all' in call.args for call in self.run.call_args_list))
 
+    def failed_unit_diagnostics(self):
+        with self.assertRaises(audit.RetentionAttestationError) as raised:
+            audit.retention_policy_attestation()
+        output = io.StringIO()
+        with audit.contextlib.redirect_stderr(output):
+            audit.report_readiness_failure(raised.exception)
+        return raised.exception, output.getvalue()
+
+    def test_systemd_empty_exec_arrays_normalize_but_preserve_raw_presence(self):
+        # systemd v255 systemctl-show.c prints Exec* arrays only inside its
+        # per-command loop, so an empty array can be absent even with --all.
+        def omit_empty_command_arrays(*args):
+            return '\n'.join(f'{key}={value}' for key, value in self.properties[args[2]].items()
+                             if value or not key.startswith('Exec'))
+        self.run.side_effect = omit_empty_command_arrays
+        result = audit.retention_policy_attestation()
+        self.assertTrue(result['host_retention_policy_verified'])
+        self.assertEqual(self.run.call_count, 4)
+        self.assertEqual(set(result['unit_metadata']), {'service_before', 'timer_before', 'service_after', 'timer_after'})
+        for phase in ('before', 'after'):
+            service = result['unit_metadata']['service_' + phase]
+            self.assertTrue(service['present']['ExecStart'])
+            self.assertTrue(all(not service['present'][key] for key in audit.RETENTION_EMPTY_EXEC_ARRAYS))
+            self.assertTrue(service['load_state_parseable'])
+            self.assertEqual(service['load_state'], 'loaded')
+            self.assertTrue(service['matches_expected']['LoadState'])
+            self.assertEqual(service['malformed_count'] + service['duplicate_count'] + service['unexpected_count'], 0)
+
+    def test_malformed_duplicate_and_unexpected_fields_emit_counts_not_names_or_values(self):
+        sentinel = 'private-secret-sentinel'
+        def corrupt_service(*args):
+            raw = self.unit_output(*args)
+            return raw + f'\n{sentinel}\nId={sentinel}\n{sentinel}={sentinel}' if args[2].endswith('.service') else raw
+        self.run.side_effect = corrupt_service
+        error, output = self.failed_unit_diagnostics()
+        service = error.unit_diagnostics['service_before']
+        self.assertEqual(service['malformed_count'], 1)
+        self.assertEqual(service['duplicate_count'], 1)
+        self.assertEqual(service['unexpected_count'], 1)
+        self.assertTrue(service['present']['Id'])
+        self.assertFalse(service['matches_expected']['Id'])
+        self.assertNotIn(sentinel, output)
+        self.assertNotIn(sentinel, json.dumps(error.unit_diagnostics))
+
+    def test_unloaded_unit_and_missing_field_are_distinguishable(self):
+        service_name = 'becore-tickets-retention.service'
+        def unloaded_service(*args):
+            if args[2] == service_name:
+                return 'Id=' + service_name + '\nLoadState=not-found\nFragmentPath='
+            return self.unit_output(*args)
+        self.run.side_effect = unloaded_service
+        error, output = self.failed_unit_diagnostics()
+        item = error.unit_diagnostics['service_before']
+        self.assertEqual(item['load_state'], 'not-found')
+        self.assertTrue(item['matches_expected']['Id'])
+        self.assertFalse(item['matches_expected']['FragmentPath'])
+        self.assertFalse(item['present']['Type'])
+        self.run.side_effect = lambda *args: '\n'.join(line for line in self.unit_output(*args).splitlines() if not line.startswith('Type='))
+        error, output = self.failed_unit_diagnostics()
+        item = error.unit_diagnostics['service_before']
+        self.assertEqual(item['load_state'], 'loaded')
+        self.assertFalse(item['present']['Type'])
+        self.assertTrue(item['present']['ExecCondition'])
+
+    def test_after_phase_shape_failure_keeps_both_before_and_after_summaries(self):
+        calls = 0
+        def missing_after_field(*args):
+            nonlocal calls
+            calls += 1
+            raw = self.unit_output(*args)
+            return '\n'.join(line for line in raw.splitlines() if not line.startswith('DropInPaths=')) if calls == 3 else raw
+        self.run.side_effect = missing_after_field
+        error, output = self.failed_unit_diagnostics()
+        self.assertEqual(str(error), 'service_after_shape')
+        self.assertEqual(set(error.unit_diagnostics), {'service_before', 'timer_before', 'service_after', 'timer_after'})
+        self.assertTrue(error.unit_diagnostics['service_before']['present']['DropInPaths'])
+        self.assertFalse(error.unit_diagnostics['service_after']['present']['DropInPaths'])
+
+    def test_reporter_rejects_forged_summary_content(self):
+        self.run.side_effect = lambda *args: 'LoadState=private-secret-sentinel'
+        error, output = self.failed_unit_diagnostics()
+        self.assertNotIn('private-secret-sentinel', output)
+        original = error.unit_diagnostics['service_before']
+        for field, value in (('load_state', {'private-secret-sentinel': True}),
+                             ('unexpected_count', 'private-secret-sentinel'),
+                             ('present', {'private-secret-sentinel': True})):
+            error.unit_diagnostics = {'service_before': {**original, field: value}}
+            output = io.StringIO()
+            with audit.contextlib.redirect_stderr(output):
+                audit.report_readiness_failure(error)
+            self.assertNotIn('private-secret-sentinel', output.getvalue())
+            self.assertNotIn('Retention unit metadata:', output.getvalue())
+
+    def test_every_nonoptional_property_is_still_required_before_file_reads(self):
+        for name, values in self.properties.items():
+            optional = set(audit.RETENTION_EMPTY_EXEC_ARRAYS) if name.endswith('.service') else set()
+            for omitted in set(values) - optional:
+                with self.subTest(unit=name, omitted=omitted):
+                    def omit_required(*args):
+                        raw = self.unit_output(*args)
+                        return '\n'.join(line for line in raw.splitlines() if not line.startswith(omitted + '=')) if args[2] == name else raw
+                    self.run.side_effect = omit_required
+                    with patch.object(audit.os, 'open') as opened:
+                        self.failed_unit_diagnostics()
+                    opened.assert_not_called()
+
+    def test_each_nonempty_exec_hook_still_prevents_verification_and_is_suppressed(self):
+        service = self.properties['becore-tickets-retention.service']
+        for key in audit.RETENTION_EMPTY_EXEC_ARRAYS:
+            with self.subTest(key=key):
+                service[key] = 'private-unreviewed-command-sentinel'
+                try:
+                    result = audit.retention_policy_attestation()
+                    self.assertFalse(result['host_retention_policy_verified'])
+                    self.assertFalse(result['unit_checks']['becore-tickets-retention.service']['execution_matches'])
+                    self.assertNotIn('private-unreviewed', json.dumps(result))
+                finally:
+                    service[key] = ''
+
+    def test_empty_hook_normalization_does_not_bypass_loaded_identity_or_hashes(self):
+        def omit_empty_command_arrays(*args):
+            return '\n'.join(f'{key}={value}' for key, value in self.properties[args[2]].items()
+                             if value or not key.startswith('Exec'))
+        self.run.side_effect = omit_empty_command_arrays
+        service = self.properties['becore-tickets-retention.service']
+        for key, value in (('LoadState', 'not-found'), ('DropInPaths', '/private/unreviewed'), ('NeedDaemonReload', 'yes')):
+            with self.subTest(key=key):
+                original = service[key]
+                service[key] = value
+                try:
+                    self.assertFalse(audit.retention_policy_attestation()['host_retention_policy_verified'])
+                finally:
+                    service[key] = original
+        self.paths['retention.py'].write_text('unexpected-policy-sentinel')
+        result = audit.retention_policy_attestation()
+        self.assertFalse(result['host_retention_policy_verified'])
+        self.assertFalse(result['files']['retention.py']['matches_reviewed'])
+        self.assertNotIn('unexpected-policy-sentinel', json.dumps(result))
+
+    def test_duplicate_empty_hook_is_rejected_despite_normalization(self):
+        self.run.side_effect = lambda *args: self.unit_output(*args) + ('\nExecStartPre=' if args[2].endswith('.service') else '')
+        error, output = self.failed_unit_diagnostics()
+        self.assertEqual(error.unit_diagnostics['service_before']['duplicate_count'], 1)
+
 if __name__ == '__main__': unittest.main()
