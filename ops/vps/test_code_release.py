@@ -86,6 +86,25 @@ def application_bytes(root, name, *, controls_only=False):
     return (root / name).read_bytes()
 
 
+def staged_family_pins(root):
+    # Both archived layouts are reviewed, but their three differing files must
+    # come from one complete family. Never accept a per-file union of variants.
+    control = release.REVIEWED_CONTROL_BLOBS
+    application = {name: release.REVIEWED_APPLICATION_BLOBS[name] for name in control}
+    observed = {}
+    for name in control:
+        file = root / name
+        if (not file.is_file() or file.is_symlink()
+                or any(parent.is_symlink() for parent in file.parents if root in parent.parents)):
+            raise AssertionError("Staged operator family requires regular files")
+        raw = file.read_bytes()
+        observed[name] = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+    for family in (control, application):
+        if observed == family:
+            return family
+    raise AssertionError("Mixed or unknown staged operator source family")
+
+
 OLD = "1" * 40
 NEW = "2" * 40
 ORIGINAL = release.ORIGINAL_TRANSFER_REVISION
@@ -1970,7 +1989,9 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
     root = Path(__file__).resolve().parents[2]
 
     def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
-        control = controls_only_checkout(self.root) or not (self.root / "package.json").exists()
+        staged = not (self.root / "package.json").exists() and not (self.root / "app").exists()
+        overrides = (staged_family_pins(self.root) if staged else
+                     release.REVIEWED_CONTROL_BLOBS if controls_only_checkout(self.root) else {})
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                      ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
                      "ops/vps/runtime_release.py", "ops/vps/public_runtime_guard.py",
@@ -1979,7 +2000,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                      "ops/vps/test_runtime_packaging.py"):
             content = (self.root / name).read_bytes()
             digest = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
-            expected = (release.REVIEWED_CONTROL_BLOBS.get(name) if control else None)
+            expected = overrides.get(name)
             self.assertEqual(expected or release.REVIEWED_OPERATOR_BLOBS.get(name, release.REVIEWED_APPLICATION_BLOBS[name]), digest, name)
 
     def test_reviewed_application_includes_the_merged_operator_transport(self):
@@ -2034,7 +2055,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                 "ops/vps/test_release_approval.py", "ops/vps/test_code_release.py",
             }
             self.assertEqual({name for name in pins if (self.root / name).exists()}, staged)
-            pins = {name: release.REVIEWED_CONTROL_BLOBS.get(name, pins[name]) for name in staged}
+            family = staged_family_pins(self.root)
+            pins = {name: family.get(name, pins[name]) for name in staged}
         else:
             self.assertTrue((self.root / "package.json").is_file())
             self.assertTrue((self.root / "app").is_dir())
@@ -2364,6 +2386,66 @@ class ReviewedControlSelectionTests(unittest.TestCase):
         self.assertFalse(controls_only_checkout(self.root))
         self.git("commit", "-qm", "unreviewed extra path")
         self.assertFalse(controls_only_checkout(self.root))
+
+
+class StagedOperatorFamilyTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.names = tuple(release.REVIEWED_CONTROL_BLOBS)
+        self.bytes = [{name: (label + name).encode() for name in self.names}
+                      for label in ("control fixture: ", "application fixture: ")]
+        self.pins = [{name: release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+                      for name, raw in family.items()} for family in self.bytes]
+        for attribute, value in (("REVIEWED_CONTROL_BLOBS", self.pins[0]),
+                                 ("REVIEWED_APPLICATION_BLOBS", self.pins[1])):
+            replacement = patch.object(release, attribute, value)
+            replacement.start()
+            self.addCleanup(replacement.stop)
+
+    def write_family(self, choices):
+        for name, choice in zip(self.names, choices):
+            file = self.root / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(self.bytes[choice][name])
+
+    def test_both_complete_reviewed_families_are_accepted(self):
+        for choice in (0, 1):
+            self.write_family([choice] * len(self.names))
+            self.assertEqual(staged_family_pins(self.root), self.pins[choice])
+
+    def test_every_mixed_family_is_rejected(self):
+        self.assertEqual(len(self.names), 3)
+        for mask in range(1, 2 ** len(self.names) - 1):
+            self.write_family([(mask >> index) & 1 for index in range(len(self.names))])
+            with self.subTest(mask=mask), self.assertRaisesRegex(AssertionError, "Mixed or unknown"):
+                staged_family_pins(self.root)
+
+    def test_unknown_missing_and_symlinked_family_files_are_rejected(self):
+        for name in self.names:
+            self.write_family([0] * len(self.names))
+            file = self.root / name
+            file.write_bytes(b"unknown source bytes")
+            with self.assertRaisesRegex(AssertionError, "Mixed or unknown"):
+                staged_family_pins(self.root)
+            file.unlink()
+            with self.assertRaisesRegex(AssertionError, "regular files"):
+                staged_family_pins(self.root)
+            target = self.root / "symlink-target"
+            target.write_bytes(self.bytes[0][name])
+            file.symlink_to(target)
+            with self.assertRaisesRegex(AssertionError, "regular files"):
+                staged_family_pins(self.root)
+            file.unlink()
+
+    def test_symlinked_parent_cannot_select_a_family(self):
+        self.write_family([0] * len(self.names))
+        directory = self.root / ".github/workflows"
+        directory.rename(self.root / ".github/saved-workflows")
+        directory.symlink_to("saved-workflows", target_is_directory=True)
+        with self.assertRaisesRegex(AssertionError, "regular files"):
+            staged_family_pins(self.root)
 
 
 class EmailReleaseAdmissionTests(unittest.TestCase):
