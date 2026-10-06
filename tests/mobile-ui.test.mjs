@@ -1119,3 +1119,18 @@ test("compact booking consent rows preserve alignment and unobstructed evidence"
   assert.match(capture, /elementFromPoint/u);
   assert.doesNotMatch(capture, /addStyleTag|style\.(?:display|visibility)\s*=/u);
 });
+
+test("checkout quantity uses a labelled native boxed dropdown within existing inventory limits", async () => {
+  const [checkout, css] = await Promise.all([
+    readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8'),
+    readFile(cssUrl, 'utf8'),
+  ]);
+  assert.match(checkout, /<select\s+aria-label=\{`\$\{tier.name\} quantity`\}/u);
+  assert.match(checkout, /disabled=\{!ready \|\| isPaying\}/u);
+  assert.match(checkout, /Array\.from\(\{ length: maxPurchasableUnits \}/u);
+  assert.match(checkout, /Math\.min\(selectedTier\.maxUnitsPerOrder, Math\.floor\(selectedTier\.remainingAdmissions \/ selectedTier\.admissionsPerUnit\)\)/u);
+  assert.match(checkout, /setSelectedTierId\(tierId\);\s+setQuantity\(1\)/u);
+  assert.match(checkout, /selected && !soldOut &&/u);
+  assert.match(css, /\.quantity-control select \{[^}]*min-height: 46px;[^}]*border: 1px solid/u);
+  assert.doesNotMatch(css, /\.quantity-control button/u);
+});

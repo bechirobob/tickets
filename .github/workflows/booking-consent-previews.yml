@@ -130,6 +130,17 @@ jobs:
                   name = f'{form}-{browser}.png'
                   (output / name).write_bytes(content)
                   files.append({'file': name, 'browser': browser, 'form': form, 'bytes': len(content), 'sha256': hashlib.sha256(content).hexdigest()})
+          for browser in ('desktop-chromium', 'mobile-chromium'):
+              root = Path('test-results/consent-checkout')
+              matches = [path for path in root.rglob('boxed-ticket-quantity.png') if path.parent.name.endswith('-' + browser)]
+              assert len(matches) == 1, (browser, 'Expected one quantity fixture screenshot', matches)
+              path = matches[0]
+              assert not path.is_symlink() and path.resolve().is_relative_to(root.resolve())
+              content = path.read_bytes()
+              assert content[:8] == b'\x89PNG\r\n\x1a\n' and 0 < len(content) <= 2 * 1024 * 1024
+              name = f'quantity-{browser}.png'
+              (output / name).write_bytes(content)
+              files.append({'file': name, 'browser': browser, 'form': 'quantity', 'bytes': len(content), 'sha256': hashlib.sha256(content).hexdigest()})
           manifest = {'sourceSha': source, 'sourceTree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(), 'runId': os.environ['GITHUB_RUN_ID'], 'fixture': 'isolated local data; registration, payment and recovery requests intercepted', 'results': {'checkout': os.environ['CHECKOUT_RESULT'], 'registration': os.environ['REGISTRATION_RESULT'], 'settings': os.environ['SETTINGS_RESULT']}, 'files': files}
           (output / 'evidence.json').write_text(json.dumps(manifest, indent=2) + '\n')
           PY
@@ -146,6 +157,8 @@ jobs:
             outputs/booking-consent-previews/rsvp-desktop-chromium.png
             outputs/booking-consent-previews/rsvp-mobile-chromium.png
             outputs/booking-consent-previews/rsvp-mobile-webkit.png
+            outputs/booking-consent-previews/quantity-desktop-chromium.png
+            outputs/booking-consent-previews/quantity-mobile-chromium.png
             outputs/booking-consent-previews/evidence.json
           if-no-files-found: error
           retention-days: 3

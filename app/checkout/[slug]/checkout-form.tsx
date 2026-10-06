@@ -3,7 +3,7 @@
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone, Wallet } from "lucide-react";
+import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, ShieldCheck, Smartphone, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { ActionButton } from "../../action";
@@ -183,10 +183,15 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                     <b>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</b>
                   </button>
                   {selected && !soldOut && (
-                    <div className="quantity-control" aria-label={`${tier.name} quantity`}>
-                      <button type="button" disabled={!ready} onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label={`Remove ${tier.name}`}><Minus size={15} /></button>
-                      <b>{quantity}</b>
-                      <button type="button" onClick={() => setQuantity((value) => Math.min(maxPurchasableUnits, value + 1))} disabled={!ready || quantity >= maxPurchasableUnits} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
+                    <div className="quantity-control">
+                      <select
+                        aria-label={`${tier.name} quantity`}
+                        value={quantity}
+                        disabled={!ready || isPaying}
+                        onChange={(event) => setQuantity(Math.max(1, Math.min(maxPurchasableUnits, Number(event.target.value))))}
+                      >
+                        {Array.from({ length: maxPurchasableUnits }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+                      </select>
                     </div>
                   )}
                   {selected && !soldOut ? <small className="tier-availability">{tier.remainingAdmissions} admissions currently available</small> : null}
