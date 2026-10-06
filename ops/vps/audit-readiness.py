@@ -1,5 +1,6 @@
 """Bounded, read-only Tickets readiness observation; never emit customer or secret values."""
 import datetime
+import contextlib
 import fcntl
 import json
 import hashlib
@@ -20,6 +21,15 @@ SERVICE = 'becore-tickets.service'
 STATE = Path('/var/lib/becore-tickets')
 HOME = Path('/srv/becore-tickets')
 MAX_RELEASE_ENTRIES = 128
+SYSTEMD_UNITS = Path('/etc/systemd/system')
+# Identical in reviewed active 4ec84f8645e237596129669205565eb214b6e09e and
+# candidate 531ff7afb6035cc691a6428c86c4ee45b06dc14a. Never load expected hashes
+# from the host being attested.
+RETENTION_SHA256 = {
+    'retention.py': '2df470525d55bc8d69a3c45402e28a12a9b17dfa66f2eb477789cb207a043134',
+    'becore-tickets-retention.service': '89a312bbe7c96886530c05f0a253dbc388dd5bcb3696bbb79e11489aef84379b',
+    'becore-tickets-retention.timer': '94d560a6cbe162529ee750e7fb67d987c5dbd62fe5a898f1476efb97bbfc1699',
+}
 SECRET_NAMES = ('STAFF_LOGIN_DECOY_SECRET', 'SEEV_CHECKOUT_API_KEY', 'SEEV_WEBHOOK_SECRET',
                 'PAYSTACK_SECRET_KEY', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET',
                 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY')
@@ -155,6 +165,108 @@ def release_retention_metadata():
     }
 
 
+def retention_policy_attestation():
+    """Hash only the three fixed policy files; suppress contents and raw unit data."""
+    def identity(metadata, directory=False):
+        fields = ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid')
+        if not directory:
+            fields += ('st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink')
+        return tuple(getattr(metadata, field) for field in fields)
+
+    pointer = HOME / 'current'
+    pointer_stat = pointer.lstat()
+    assert stat.S_ISLNK(pointer_stat.st_mode) and pointer_stat.st_uid == 0
+    link = os.readlink(pointer)
+    target = Path(link) if Path(link).is_absolute() else HOME / link
+    assert target.parent == HOME / 'releases' and re.fullmatch('[a-f0-9]{40}', target.name)
+    paths = {'retention.py': target / 'operations' / 'retention.py',
+             **{name: SYSTEMD_UNITS / name for name in RETENTION_SHA256 if name != 'retention.py'}}
+    units = ('becore-tickets-retention.service', 'becore-tickets-retention.timer')
+    common = 'Id,LoadState,FragmentPath,SourcePath,DropInPaths,NeedDaemonReload,Transient'
+    properties = {
+        units[0]: common + ',Type,ExecStart,ExecStartPre,ExecStartPost,ExecCondition,ExecStop,ExecStopPost,ExecReload',
+        units[1]: common + ',Unit',
+    }
+
+    def unit_metadata():
+        result = {}
+        for name in units:
+            raw = run('systemctl', 'show', name, '--no-pager', '--property=' + properties[name])
+            assert len(raw) <= 16384
+            pairs = [line.split('=', 1) for line in raw.splitlines()]
+            assert all(len(pair) == 2 for pair in pairs)
+            values = dict(pairs)
+            assert len(values) == len(pairs) and set(values) == set(properties[name].split(','))
+            result[name] = values
+        return result
+
+    before_units = unit_metadata()
+    files = {}
+    # Open every directory component without following symlinks, then keep its
+    # descriptor until the bounded read and path/inode rechecks have completed.
+    with contextlib.ExitStack() as stack:
+        directory_checks, file_checks = [], []
+        for name, path in paths.items():
+            directory = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            stack.callback(os.close, directory)
+            metadata = os.fstat(directory)
+            assert metadata.st_uid == 0 and not stat.S_IMODE(metadata.st_mode) & 0o7022
+            for component in path.parts[1:-1]:
+                child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+                stack.callback(os.close, child)
+                metadata = os.fstat(child)
+                assert stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == 0
+                assert not stat.S_IMODE(metadata.st_mode) & 0o7022
+                directory_checks.append((directory, component, identity(metadata, True)))
+                directory = child
+            fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            stack.callback(os.close, fd)
+            metadata = os.fstat(fd)
+            assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0 and metadata.st_nlink == 1
+            assert not stat.S_IMODE(metadata.st_mode) & 0o7022 and metadata.st_size <= 16384
+            content = bytearray()
+            while len(content) <= 16384:
+                chunk = os.read(fd, 16385 - len(content))
+                if not chunk:
+                    break
+                content.extend(chunk)
+            assert len(content) == metadata.st_size and len(content) <= 16384
+            digest = hashlib.sha256(content).hexdigest()
+            files[name] = {'path': str(path), 'sha256': digest, 'matches_reviewed': digest == RETENTION_SHA256[name],
+                           'uid': metadata.st_uid, 'gid': metadata.st_gid, 'mode': oct(stat.S_IMODE(metadata.st_mode)),
+                           'size_bytes': metadata.st_size}
+            file_checks.append((fd, directory, path.name, identity(metadata)))
+        after_units = unit_metadata()
+        for parent, component, expected in directory_checks:
+            assert identity(os.stat(component, dir_fd=parent, follow_symlinks=False), True) == expected
+        for fd, parent, name, expected in file_checks:
+            assert identity(os.fstat(fd)) == expected
+            assert identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == expected
+        assert identity(pointer.lstat()) == identity(pointer_stat) and os.readlink(pointer) == link
+
+    unit_checks = {}
+    for name in units:
+        values = after_units[name]
+        unit_checks[name] = {
+            'metadata_stable': before_units[name] == values,
+            'loaded_identity_matches': all(values[key] == expected for key, expected in {
+                'Id': name, 'LoadState': 'loaded', 'FragmentPath': str(SYSTEMD_UNITS / name),
+                'SourcePath': '', 'DropInPaths': '', 'NeedDaemonReload': 'no', 'Transient': 'no'}.items()),
+        }
+    service = after_units[units[0]]
+    expected_exec = '/usr/bin/python3 ' + str(HOME / 'current/operations/retention.py')
+    unit_checks[units[0]]['execution_matches'] = (
+        service['Type'] == 'oneshot'
+        and all(service[key] == '' for key in ('ExecStartPre', 'ExecStartPost', 'ExecCondition', 'ExecStop', 'ExecStopPost', 'ExecReload'))
+        and bool(re.fullmatch(r'\{ path=/usr/bin/python3 ; argv\[\]=' + re.escape(expected_exec)
+                             + r' ; ignore_errors=no ; [^{}]* \}', service['ExecStart'])))
+    unit_checks[units[1]]['service_target_matches'] = after_units[units[1]]['Unit'] == units[0]
+    verified = all(item['matches_reviewed'] for item in files.values()) and all(all(checks.values()) for checks in unit_checks.values())
+    return {'read_only': True, 'snapshot_atomic': False, 'current_revision': target.name,
+            'scope': 'fixed policy file hashes and loaded unit identity; no guarantee against later changes',
+            'files': files, 'unit_checks': unit_checks, 'host_retention_policy_verified': verified}
+
+
 def inspect_database(path, application=False):
     assert path.is_file() and not path.is_symlink()
     db = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)
@@ -228,6 +340,9 @@ def main():
     assert pointers['current'] == active.name
     output['release_pointers'] = pointers
     output['release_retention_metadata'] = release_metadata
+    output['retention_policy_attestation'] = retention_policy_attestation()
+    assert output['retention_policy_attestation']['current_revision'] == pointers['current']
+    release_metadata['host_retention_policy_verified'] = output['retention_policy_attestation']['host_retention_policy_verified']
     origin_path = Path('/etc/caddy/becore-tickets-origin.caddy')
     origin_fd = os.open(origin_path, os.O_RDONLY | os.O_NOFOLLOW)
     try:
