@@ -6,7 +6,8 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
   let paymentRequests = 0;
   await page.route("**/api/payments/initialize", async (route) => {
     paymentRequests += 1;
-    expect(route.request().postDataJSON()).toMatchObject({ paymentProvider: "seevplus", paymentMethod: "mobile_money", acceptedPolicies: true });
+    expect(route.request().postDataJSON()).toMatchObject({ paymentProvider: "seevplus", paymentMethod: "mobile_money", acceptedPolicies: true, platformAnnouncementsOptIn: paymentRequests > 1 });
+    expect(route.request().postDataJSON()).not.toHaveProperty("announcementsOptIn");
     expect(route.request().headers()["idempotency-key"]).toBeTruthy();
     await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Test payment stopped before contacting SeevPlus." }) });
   });
@@ -21,6 +22,14 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
   } finally { releaseScripts(); }
   await expect(page.getByLabel("Full name")).toBeEnabled();
   await expect(page.getByRole("radio", { name: /Crypto USDC/ })).toHaveCount(0);
+  const updates = page.getByRole("checkbox", { name: "Keep me posted on new nights from BeCore Tickets." });
+  await expect(page.locator(".checkout-main").getByRole("checkbox")).toHaveCount(2);
+  await expect(updates).not.toBeChecked();
+  await expect(updates).not.toHaveAttribute("required", "");
+  await expect(page.getByRole("checkbox", { name: /I accept the ticket terms/ })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Receive notifications for this event and host." })).toHaveCount(0);
+  expect((await updates.locator("..").boundingBox())!.height).toBeLessThanOrEqual(60);
+  await page.locator(".checkout-main").screenshot({ path: test.info().outputPath("checkout-consent-default.png") });
   // Filling buyer details alone must produce guidance, not a silently disabled button.
   await page.getByLabel("Full name").fill("Test Buyer");
   await page.getByLabel("Phone number").fill("0240000000");
@@ -49,11 +58,17 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
   await page.getByRole("button", { name: /Pay with MoMo/ }).click();
   await expect(page.locator("#checkout-payment-message")).toHaveText("Test payment stopped before contacting SeevPlus.");
   expect(paymentRequests).toBe(1);
+  await expect(updates).not.toBeChecked();
+  await updates.check();
+  await page.getByRole("button", { name: /Pay with MoMo/ }).click();
+  await expect(page.locator("#checkout-payment-message")).toHaveText("Test payment stopped before contacting SeevPlus.");
+  expect(paymentRequests).toBe(2);
+  await expect(updates).toBeChecked();
   await expect(page.getByLabel("Full name")).toHaveValue("Test Buyer");
   await expect(page.getByLabel("Email address")).toHaveValue("test@example.com");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   expect(await page.content()).not.toContain("ui-test-only");
-  const a11y = await new AxeBuilder({ page }).include(".checkout-provider-choice").analyze();
+  const a11y = await new AxeBuilder({ page }).include(".checkout-provider-choice").include(".checkout-consent").analyze();
   expect(a11y.violations).toEqual([]);
   await page.screenshot({ path: `test-results/seevplus-${test.info().project.name}.png`, fullPage: true });
   await page.getByRole("radio", { name: "Card", exact: false }).first().check();

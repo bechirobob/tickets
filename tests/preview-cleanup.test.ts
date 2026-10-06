@@ -47,3 +47,65 @@ it('refuses to delete a retired listing that became a real event',async()=>{
  await env.DB.prepare("INSERT INTO curated_event_records(id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,image_url,curation_note,status,created_at,updated_at,is_test_event) VALUES('converted','converted','after-dark-osu','Real event','Venue','Accra','2099-01-01','2099-01-02','Night',0,'/real.jpg','Real event','published','2026-01-01','2026-01-01',0)").run();
  await expect(planPreviewCleanup(env.DB)).rejects.toThrow('converted to a live event');
 });
+
+it('keeps platform consent and withdrawals independent of preview bookings, deleting only known unchecked preview receipts',{timeout:15_000},async()=>{
+ const now=new Date().toISOString();
+ await env.DB.prepare("UPDATE curated_event_records SET is_test_event=1 WHERE slug='after-dark-osu'").run();
+ await env.DB.prepare('DELETE FROM operational_audit_events WHERE id=?').bind(previewCleanupId).run();
+ const cases=[
+  {id:'unchecked-preview',source:'checkout',optedIn:0},
+  {id:'unchecked-rsvp',source:'rsvp',optedIn:0},
+  {id:'platform-member',source:'preferences',optedIn:1,status:'subscribed'},
+  {id:'platform-withdrawal',source:'unsubscribe',optedIn:0,status:'unsubscribed'},
+  {id:'preview-pending',source:'checkout',optedIn:1,status:'pending'},
+  {id:'uncertain-positive',source:'checkout',optedIn:1},
+  {id:'unknown-source',source:'checkout',optedIn:0},
+  {id:'token-only',source:'checkout',optedIn:0},
+  {id:'verification-only',source:'checkout',optedIn:0},
+  {id:'mixed-person',source:'checkout',optedIn:0},
+ ];
+ for(const row of cases){
+  const email=`${row.id}@example.com`,order=`order-${row.id}`;
+  await env.DB.prepare("INSERT INTO attendee_profiles(id,normalized_email,display_name,email_verified_at,created_at,updated_at) VALUES(?,?,?, ?,?,?)").bind(row.id,email,row.id,now,now,now).run();
+  await env.DB.prepare("INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,payment_environment,created_at) VALUES(?,?,'after-dark-osu',1,100,0,100,'GHS',?,'','momo','paid','test',?)").bind(order,`ref-${row.id}`,email,now).run();
+  const sourceId=row.source==='rsvp'?`rsvp-${row.id}`:row.id==='unknown-source'?'unknown-order':order;
+  if(row.source==='rsvp')await env.DB.prepare("INSERT INTO event_registrations(id,event_slug,normalized_email,guest_name,party_size,kind,status,created_at,updated_at) VALUES(?,'after-dark-osu',?,'Guest',1,'rsvp','requested',?,?)").bind(sourceId,email,now,now).run();
+  await env.DB.prepare("INSERT INTO platform_announcement_choices(id,email,source,source_id,opted_in,verified_email,consent_version,created_at) VALUES(?,?,?,?,?,1,'v1',?)").bind(`choice-${row.id}`,email,row.source,sourceId,row.optedIn,now).run();
+  if(row.status)await env.DB.prepare("INSERT INTO platform_announcement_subscriptions(email,status,consent_version,source,source_id,created_at,updated_at) VALUES(?,?,'v1',?,?,?,?)").bind(email,row.status,row.source,sourceId,now,now).run();
+  if(row.id==='token-only')await env.DB.prepare("INSERT INTO platform_announcement_unsubscribe_tokens(token_hash,email,subscription_revision,created_at) VALUES('retained-token',?,1,?)").bind(email,now).run();
+  if(row.id==='verification-only')await env.DB.prepare("INSERT INTO platform_announcement_verifications(grant_type,grant_id,email,subscription_revision,source,source_id,created_at) VALUES('recovery','retained-grant',?,1,'checkout',?,?)").bind(email,sourceId,now).run();
+  if(row.id==='mixed-person')await env.DB.prepare("INSERT INTO platform_announcement_choices(id,email,source,source_id,opted_in,verified_email,consent_version,created_at) VALUES('mixed-live-choice',?,'rsvp','live-rsvp-source',0,1,'v1',?)").bind(email,now).run();
+ }
+ const plan=await planPreviewCleanup(env.DB);
+ expect(plan.counts.platform_announcement_choices).toBe(2);
+ expect(plan.counts.platform_announcement_subscriptions).toBeUndefined();
+ expect(plan.counts.platform_announcement_unsubscribe_tokens).toBeUndefined();
+ expect(plan.counts.platform_announcement_verifications).toBeUndefined();
+ for(const row of cases)expect(plan.targets.attendee_id?.includes(row.id)??false,row.id).toBe(row.id.startsWith('unchecked-'));
+ await env.DB.prepare("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,created_at) VALUES (?,'owner','preview.cleanup','maintenance','preview-cases','pending',?)").bind(previewCleanupId,now).run();
+ const room={getByName:()=>({removeEventContent:vi.fn(),removePreviewContentBefore:vi.fn()})} as unknown as Cloudflare.Env['THE_ROOM'];
+ await runPreviewCleanup({DB:env.DB,THE_ROOM:room});
+ for(const row of cases){
+  const retained=!row.id.startsWith('unchecked-');
+  expect(Boolean(await env.DB.prepare('SELECT 1 FROM attendee_profiles WHERE id=?').bind(row.id).first()),row.id).toBe(retained);
+  expect(Boolean(await env.DB.prepare('SELECT 1 FROM platform_announcement_choices WHERE id=?').bind(`choice-${row.id}`).first()),row.id).toBe(retained);
+ }
+ expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM platform_announcement_subscriptions').first()).toEqual({count:3});
+ expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM platform_announcement_unsubscribe_tokens').first()).toEqual({count:1});
+});
+
+it('stops a resumed cleanup manifest before deleting a newly protected platform member',async()=>{
+ const now=new Date().toISOString();
+ await env.DB.prepare('DELETE FROM operational_audit_events WHERE id=?').bind(previewCleanupId).run();
+ await env.DB.prepare("INSERT INTO attendee_profiles(id,normalized_email,display_name,created_at,updated_at) VALUES('resumed-member','resumed@example.com','Guest',?,?)").bind(now,now).run();
+ await env.DB.prepare("INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,payment_environment,created_at) VALUES('resumed-order','resumed-reference','after-dark-osu',1,100,0,100,'GHS','resumed@example.com','','momo','paid','test',?)").bind(now).run();
+ const plan=await planPreviewCleanup(env.DB);
+ expect(plan.targets.attendee_id).toContain('resumed-member');
+ await env.DB.prepare("INSERT INTO operational_audit_events(id,actor_role,action,target_type,target_id,outcome,detail,created_at) VALUES (?,'owner','preview.cleanup','maintenance','preview-cases','running',?,?)").bind(previewCleanupId,JSON.stringify(plan),now).run();
+ await env.DB.prepare("INSERT INTO platform_announcement_subscriptions(email,status,consent_version,source,source_id,created_at,updated_at) VALUES('resumed@example.com','unsubscribed','v1','preferences','saved-withdrawal',?,?)").bind(now,now).run();
+ const getByName=vi.fn();
+ await expect(runPreviewCleanup({DB:env.DB,THE_ROOM:{getByName} as unknown as Cloudflare.Env['THE_ROOM']})).rejects.toThrow('Platform consent changed');
+ expect(getByName).not.toHaveBeenCalled();
+ expect(await env.DB.prepare("SELECT 1 FROM attendee_profiles WHERE id='resumed-member'").first()).toBeTruthy();
+ expect(await env.DB.prepare("SELECT 1 FROM orders WHERE id='resumed-order'").first()).toBeTruthy();
+});

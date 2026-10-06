@@ -6,6 +6,7 @@ import { POST as claimTickets } from "../app/api/customer/session/route";
 import { createSeevCheckout, recoverSeevPayment, recoverSeevPayments, seevAvailable, seevCryptoAvailable, validSeevCheckoutUrl, verifySeevPayment } from "../lib/seevplus";
 import { expireReservations, fulfillVerifiedPayment, initiatePaystackRefund, runDailyReconciliation } from "../lib/payment-operations";
 import { recoverAbandonedPayments } from "../lib/sales-recovery";
+import { hashToken } from "../lib/attendee-auth";
 
 const runtime = env as unknown as Cloudflare.Env;
 const api = "https://api.seevplus.com/api/v1/developer/payments";
@@ -83,6 +84,47 @@ async function signedWebhook(overrides: Record<string, unknown> = {}, timestamp 
 }
 
 describe("SeevPlus checkout and payment safety", () => {
+  it("rejects an email above 254 characters before claiming an attempt or reserving inventory", async () => {
+    const key = crypto.randomUUID(), email = `${"a".repeat(243)}@example.com`;
+    expect(email).toHaveLength(255);
+    expect((await initialize(request({ email, platformAnnouncementsOptIn: true }, key))).status).toBe(400);
+    expect(await env.DB.prepare("SELECT order_id FROM payment_attempts WHERE key_hash = ?").bind(await hashToken(key)).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug = ?").bind(slug).first()).toEqual({ count: 0 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM inventory_reservations WHERE event_slug = ?").bind(slug).first()).toEqual({ count: 0 });
+    expect(await env.DB.prepare("SELECT email FROM platform_announcement_choices WHERE email = ?").bind(email).first()).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("replays legacy checkout hashes with absent or false platform choice, but rejects changing that choice to true", async () => {
+    const key = crypto.randomUUID(), req = request({}, key), body = await req.clone().json() as { eventSlug: string; ticketTierId?: string; quantity: number; email: string; phone: string; paymentMethod?: string; network?: string; fullName?: string; offer?: string; promoterCode?: string; acceptedPolicies?: boolean; expectedTotalMinor?: number; paymentProvider?: string; announcementsOptIn?: boolean; couponCode?: string };
+    // The pre-platform-consent serialization must remain byte-for-byte stable.
+    const legacyHash = await hashToken(JSON.stringify([
+      body.eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(),
+      body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(),
+      body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack",
+      body.announcementsOptIn === true, body.couponCode?.trim().toUpperCase() ?? "",
+    ]));
+    const payload = { authorizationUrl: "https://pay.seevplus.com/PAY-legacy-test", reference: "BCT-LEGACY-TEST" };
+    await env.DB.prepare(`INSERT INTO payment_attempts (key_hash, request_hash, order_id, created_at, response_json, response_status)
+      VALUES (?, ?, ?, ?, ?, 200)`).bind(await hashToken(key), legacyHash, crypto.randomUUID(), new Date().toISOString(), JSON.stringify(payload)).run();
+    for (const changes of [{}, { platformAnnouncementsOptIn: false }]) {
+      const replay = await initialize(request(changes, key));
+      expect(replay.status).toBe(200);
+      expect(replay.headers.get("idempotency-replayed")).toBe("true");
+      expect(await replay.json()).toEqual(payload);
+    }
+    expect((await initialize(request({ platformAnnouncementsOptIn: true }, key))).status).toBe(409);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug = ?").bind(slug).first()).toEqual({ count: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    const freshKey = crypto.randomUUID();
+    expect((await initialize(request({ platformAnnouncementsOptIn: true }, freshKey))).status).toBe(200);
+    const freshAttempt = await env.DB.prepare("SELECT request_hash AS requestHash FROM payment_attempts WHERE key_hash = ?").bind(await hashToken(freshKey)).first<{ requestHash: string }>();
+    expect(freshAttempt?.requestHash).not.toBe(legacyHash);
+    expect((await initialize(request({ platformAnnouncementsOptIn: true }, freshKey))).headers.get("idempotency-replayed")).toBe("true");
+    expect((await initialize(request({ platformAnnouncementsOptIn: false }, freshKey))).status).toBe(409);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("is disabled by default and isolates test payments from public live events", async () => {
     const config = { ...runtime, ENVIRONMENT: "production" };
     expect(seevAvailable({ ...config, SEEV_ENABLED: undefined }, true)).toBe(false);

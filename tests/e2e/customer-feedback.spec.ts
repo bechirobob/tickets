@@ -96,8 +96,9 @@ test("filtering keeps search focus and reduced motion leaves posters still", asy
 
 for (const kind of ['recovery','transfer'] as const) test(`${kind} link waits for the guest and stays usable after a failed request`,async({page},info)=>{
   const token='a'.repeat(43);let attempts=0;
+  await page.route('**/api/platform-announcements/verification',route=>route.fulfill({json:{confirmsAnnouncements:false}}));
   await page.route(`**/api/customer/${kind==='transfer'?'transfers':'recovery'}/claim`,async route=>{
-    attempts++;expect(route.request().method()).toBe('POST');expect(route.request().postDataJSON()).toEqual({token});
+    attempts++;expect(route.request().method()).toBe('POST');expect(route.request().postDataJSON()).toEqual({token,confirmPlatformAnnouncements:false});
     await route.fulfill({status:503,json:{error:'Give it another moment, then try again.'}});
   });
   await page.goto(`/my-nights/access?kind=${kind}#token=${token}`);

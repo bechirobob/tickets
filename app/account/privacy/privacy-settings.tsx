@@ -1,5 +1,6 @@
 "use client";
 
+import PlatformAnnouncements from "./platform-announcements";
 import BrandLogo from "../../brand-logo";
 import AccountNavigation from "../../account-navigation";
 import Link from "next/link";
@@ -49,6 +50,7 @@ export default function PrivacySettings() {
     <section>{loading ? <div className="my-nights-loading" role="status"><Loader2 className="spin" /> Loading privacy choices</div> : locked ? <div className="privacy-locked"><LockKeyhole /><h1>Sign in to manage privacy.</h1><Link href="/my-nights">Bring back My Nights</Link></div> : <>
       <header><ShieldCheck /><p className="eyebrow">Account privacy</p><h1>Your privacy choices.</h1><p>These are defaults for future nights. You can still change “I&apos;m in” separately for any ticketed event.</p></header>
       {ready ? <><div className="privacy-options"><label><input type="checkbox" checked={visible} disabled={saving} onChange={(event) => { setVisible(event.target.checked); setSaved(false); }} /><span><b>Show me as going by default</b><small>Add me to the attendee count for new ticketed nights. My name is not made public.</small></span></label><label><input type="checkbox" checked={updates} disabled={saving} onChange={(event) => { setUpdates(event.target.checked); setSaved(false); }} /><span><b>Allow followed Host updates</b><small>Keep followed nights in My Nights. External email delivery remains separate.</small></span></label></div><button type="button" onClick={save} disabled={saving}>{saving ? <Loader2 className="spin" size={15} /> : saved ? <Check size={15} /> : <Save size={15} />}{saved ? "Saved" : "Save privacy choices"}</button>{saved ? <p role="status">Privacy choices saved.</p> : null}</> : <button type="button" onClick={load}>Retry loading choices</button>}
+      {ready ? <PlatformAnnouncements /> : null}
     </>}{error ? <p role="alert">{error}</p> : null}</section>
   </main>;
 }

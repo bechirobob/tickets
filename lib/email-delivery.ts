@@ -1,3 +1,4 @@
+import { bindPlatformAnnouncementVerification } from "./platform-announcements";
 import { validTeamInvite } from './organizer-team';
 import { reportDeliveryAllowed } from "./organizer-reports";
 import { emailBrand } from "./email-brand";
@@ -253,6 +254,7 @@ export async function issueRecoveryGrant(input: {
   requestedIp?: string | null;
   ttlMinutes?: number;
   deliveryId?: string;
+  confirmPlatformAnnouncements?: boolean;
 }) {
   const token = createSecureToken();
   const grantId = crypto.randomUUID();
@@ -265,6 +267,7 @@ export async function issueRecoveryGrant(input: {
     ) VALUES (?, ?, ?, ?, ?, ?)
   `).bind(grantId, input.normalizedEmail, await hashToken(token), expiresAt, now.toISOString(), requestedIpHash).run();
 
+  const confirmsAnnouncements = (input.order || input.confirmPlatformAnnouncements) ? await bindPlatformAnnouncementVerification(input.db, { email: input.normalizedEmail, grantType: "recovery", grantId, ...(input.confirmPlatformAnnouncements ? { explicitPreference: true as const } : { sourceId: input.order!.id }) }) : false;
   const recoveryUrl = `${input.origin}/api/customer/recovery/claim?token=${encodeURIComponent(token)}`;
   const name = input.order?.customerName?.trim() || "there";
   const event = input.order ? await input.db.prepare(`
@@ -287,7 +290,7 @@ export async function issueRecoveryGrant(input: {
   const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}</h1><p>Hi ${escapeHtml(name)},</p>${eventBlock}${receipt}<p>This private link opens My Nights on this device and brings together every confirmed purchase on this email. Tickets, perks, Rooms and receipts—no password archaeology. It expires at ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt)))}.</p><p style="margin:28px 0"><a href="${escapeHtml(recoveryUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open My Nights</a></p><p style="color:#666;font-size:13px">The link is one-time and private. Fresh rotating QR passes appear only after you open it. Forwarding it would be a very generous mistake.</p></div>`;
   const plain = `${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}\n\n${event ? `${event.title}\n${event.venue}, ${event.area}\n\n` : ""}${input.order ? `Reference: ${input.order.reference}\nTotal paid: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}Secure one-time My Nights link: ${recoveryUrl}\n\nThis link expires at ${expiresAt}. It does not contain a QR pass.`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;
-  return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId, deliveryId: input.deliveryId });
+  return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html: html + (confirmsAnnouncements ? "<p>Confirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time.</p>" : ""), text: plain + (confirmsAnnouncements ? "\n\nConfirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time." : ""), idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId, deliveryId: input.deliveryId });
 }
 
 export async function sendTicketTransferEmail(input: {

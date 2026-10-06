@@ -11,6 +11,8 @@ export default function TicketAccess() {
   const token = useRef('');
   const submitting = useRef(false);
   const [kind, setKind] = useState<'recovery' | 'transfer'>('recovery');
+  const [checking, setChecking] = useState(true);
+  const [confirmsAnnouncements, setConfirmsAnnouncements] = useState(false);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -19,7 +21,13 @@ export default function TicketAccess() {
 
     token.current = new URLSearchParams(url.hash.slice(1)).get('token') ?? token.current;
     window.history.replaceState(null, '', `${url.pathname}${url.search}`);
-    const timer=setTimeout(()=>{setKind(url.searchParams.get('kind') === 'transfer' ? 'transfer' : 'recovery');setReady(/^[A-Za-z0-9_-]{40,128}$/u.test(token.current));},0);
+    const timer=setTimeout(()=>{
+      const transfer = url.searchParams.get('kind') === 'transfer';
+      setKind(transfer ? 'transfer' : 'recovery');
+      const valid = /^[A-Za-z0-9_-]{40,128}$/u.test(token.current);
+      if (!valid || transfer) { setReady(valid); setChecking(false); return; }
+      void requestJson<{ confirmsAnnouncements?: boolean }>('/api/platform-announcements/verification', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: token.current, grantType: 'recovery' }) }, 5000).then(data => setConfirmsAnnouncements(data.confirmsAnnouncements === true)).catch(() => {}).finally(() => { setReady(true); setChecking(false); });
+    },0);
     return ()=>clearTimeout(timer);
   }, []);
   async function accept() {
@@ -27,7 +35,7 @@ export default function TicketAccess() {
     submitting.current = true; setBusy(true); setMessage('');
     try {
       const data = await requestJson<{ redirectTo: string }>(`/api/customer/${kind === 'transfer' ? 'transfers' : 'recovery'}/claim`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: token.current }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: token.current, confirmPlatformAnnouncements: confirmsAnnouncements }),
       });
       const target = new URL(data.redirectTo, window.location.origin);
       if (target.origin !== window.location.origin || !/^\/my-nights(?:\/|$)/u.test(target.pathname)) throw new Error('Your ticket is saved. Open My Nights to find it.');
@@ -40,8 +48,9 @@ export default function TicketAccess() {
       <Ticket size={32} aria-hidden="true" />
       <p className="eyebrow">My Nights</p>
       <h1 id="ticket-access-title">{kind === 'transfer' ? 'Someone saved you a spot.' : 'Your nights, back in reach.'}</h1>
-      <p>{ready ? kind === 'transfer' ? 'Accept the ticket and make your entrance.' : 'Open your tickets on this device. Outfit still up to you.' : 'This link’s missing a piece. Open the full one from your email, or ask for another in My Nights.'}</p>
-      {ready ? <ActionButton onClick={accept} disabled={busy} aria-busy={busy}>{busy ? 'Opening…' : kind === 'transfer' ? 'Accept ticket' : 'Open my tickets'}</ActionButton> : null}
+      <p>{ready ? kind === 'transfer' ? 'Accept the ticket and make your entrance.' : 'Open your tickets on this device. Outfit still up to you.' : checking ? 'Checking your link…' : 'This link’s missing a piece. Open the full one from your email, or ask for another in My Nights.'}</p>
+      {confirmsAnnouncements ? <p>This also confirms the BeCore Tickets email updates you chose. Unsubscribe any time.</p> : null}
+      {ready ? <ActionButton onClick={accept} disabled={busy} aria-busy={busy}>{busy ? 'Opening…' : kind === 'transfer' ? 'Accept ticket' : confirmsAnnouncements ? 'Confirm email and open My Nights' : 'Open my tickets'}</ActionButton> : null}
       {message ? <p className="ticket-access__message" role="alert">{message}</p> : null}
       <Link className="ticket-access__help" href="/my-nights">{ready ? 'Back to My Nights' : 'Get a fresh link'}</Link>
     </section>

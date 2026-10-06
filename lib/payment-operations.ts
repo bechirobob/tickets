@@ -221,12 +221,19 @@ export async function deliverConfirmedOrder(db: D1Database, order: OrderRecord, 
     WHERE o.id=? AND o.status='paid' AND EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id
       WHERE t.order_id=o.id AND a.attendee_id=o.checkout_attendee_id AND a.status='active' AND t.status IN ('issued','checked_in'))`)
     .bind(order.id).first<{attendeeId:string|null}>();
-  return deliverConfirmation({ env: { ...env, DB: db }, id: `payment-confirmation/${order.id}`, orderId: order.id,
+  const channel = await deliverConfirmation({ env: { ...env, DB: db }, id: `payment-confirmation/${order.id}`, orderId: order.id,
     attendeeId: recipient?.attendeeId ?? null,
     payload: { kind: 'purchase_confirmation', eventSlug: order.eventSlug, sourceId: `payment-confirmation/${order.id}`,
       tag: `paid-${order.id}`, title: 'Your ticket is confirmed', body: order.paymentProvider === 'complimentary' ? 'Your complimentary QR pass is ready in My Nights.' : 'Payment received. Your QR ticket and receipt are ready in My Nights.',
       url: `/my-nights/${order.eventSlug}?view=passes` },
     email: () => sendOrderConfirmation(db, order, origin), skipPush: Boolean(emailed) });
+  // A push proves delivery to a device, not ownership of the typed email.
+  // Keep booking notifications unchanged while the explicit opt-in receives
+  // its one existing-provider email proof, even when the receipt used push.
+  if (channel === 'push' && !emailed && await db.prepare("SELECT 1 FROM platform_announcement_subscriptions WHERE email=? AND status='pending' AND source='checkout' AND source_id=?").bind(order.customerEmail.trim().toLowerCase(), order.id).first()) {
+    await sendOrderConfirmation(db, order, origin);
+  }
+  return channel;
 }
 
 export async function initiatePaystackRefund(db: D1Database, input: { orderId: string; actor: string; reason: string; secret: string; amountMinor?: number; ticketIds?: string[]; batchId?: string }) {
@@ -476,7 +483,10 @@ export async function runDailyReconciliation(db: D1Database, input: { secret: st
 
 export async function retryOrderConfirmations(env: Cloudflare.Env, origin: string) {
   const rows = await env.DB.prepare(`SELECT o.reference FROM confirmation_deliveries d JOIN orders o ON o.id=d.order_id
-    WHERE o.status='paid' AND (d.status='pending' OR (d.status='processing' AND d.lease_until<=?)) ORDER BY d.created_at LIMIT 20`)
+    WHERE o.status='paid' AND (d.status='pending' OR (d.status='processing' AND d.lease_until<=?)
+      OR (d.status='push' AND EXISTS (SELECT 1 FROM platform_announcement_subscriptions s WHERE s.email=LOWER(TRIM(o.customer_email)) AND s.status='pending' AND s.source='checkout' AND s.source_id=o.id)
+        AND NOT EXISTS (SELECT 1 FROM delivery_events email WHERE email.order_id=o.id AND email.kind='payment_confirmation')))
+    ORDER BY d.created_at LIMIT 20`)
     .bind(new Date().toISOString()).all<{reference:string}>();
   if (env.EMAIL_DELIVERY_QUEUE && rows.results.length) {
     await env.EMAIL_DELIVERY_QUEUE.sendBatch(rows.results.map(row => ({ body: { deliveryId: `order-confirmation:${row.reference}` } })));

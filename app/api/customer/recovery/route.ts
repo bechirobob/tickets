@@ -16,6 +16,7 @@ export async function POST(request: Request) {
 
   if (!mutationHasValidOrigin(request)) return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
   const body: unknown = await request.json().catch(() => null);
+  const confirmPlatformAnnouncements = Boolean(body && typeof body === "object" && "confirmPlatformAnnouncements" in body && body.confirmPlatformAnnouncements === true);
   const normalizedEmail = body && typeof body === "object" && "email" in body && typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalizedEmail)) {
     return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
@@ -50,13 +51,14 @@ export async function POST(request: Request) {
       kind: "ticket_recovery",
       requestedIp: ip,
       ttlMinutes: 20,
+      confirmPlatformAnnouncements,
     });
   }
   if (!active) {
     const row = await env.DB.prepare("SELECT id FROM event_registrations WHERE normalized_email = ? ORDER BY updated_at DESC LIMIT 1").bind(normalizedEmail).first<{ id: string }>();
     const reg = row ? await readRegistration(env.DB, row.id) : null;
     const settings = reg ? await registrationSettings(env.DB, reg.eventSlug) : null;
-    if (reg && settings) await sendRegistrationAccess(env.DB, reg, settings.title, new URL(request.url).origin);
+    if (reg && settings) await sendRegistrationAccess(env.DB, reg, settings.title, new URL(request.url).origin, confirmPlatformAnnouncements);
   }
   return Response.json({ message: GENERIC_MESSAGE }, { status: 202, headers: { "cache-control": "no-store" } });
 }

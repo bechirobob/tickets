@@ -1,3 +1,4 @@
+import { preparePlatformAnnouncementChoice, bindPlatformAnnouncementVerification, prepareActivatePlatformAnnouncementVerification } from './platform-announcements';
 import { deliverConfirmation } from './confirmation-delivery';
 import type { AttendeeIdentity } from './attendee-auth';
 import { emailBrand } from "./email-brand";
@@ -43,7 +44,7 @@ export function registrationShareState(settings: RegistrationSettings | null) {
 function signature(s: RegistrationSettings) { return JSON.stringify([s.scheduleStatus, s.startsAt, s.endsAt, s.eventState, s.mode]); }
 export async function readRegistration(db: D1Database, id: string) { return db.prepare(`SELECT ${fields} FROM event_registrations WHERE id = ?`).bind(id).first<Registration>(); }
 
-export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean; acquisitionSource?: string }, origin: string, directRsvp = false, identity?: AttendeeIdentity | null) {
+export async function requestRegistration(db: D1Database, input: { eventSlug: string; email: string; guestName: string; phone: string; partySize: number; announcementsOptIn?: boolean; platformAnnouncementsOptIn?: boolean; acquisitionSource?: string }, origin: string, directRsvp = false, identity?: AttendeeIdentity | null) {
   // Keep recovery tied to the email on this booking. A different booking email
   // receives its own scoped session, just as a new checkout claim does.
   if (identity?.normalizedEmail !== input.email) identity = null;
@@ -53,8 +54,10 @@ export async function requestRegistration(db: D1Database, input: { eventSlug: st
   if (!Number.isInteger(input.partySize) || input.partySize < 1 || input.partySize > (settings.mode === 'interest' ? 1 : settings.maxPartySize)) throw new Error('Choose an allowed number of guests.');
   const now = timestamp();
   const newId = crypto.randomUUID();
-  const inserted = await db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in, acquisition_source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?, ?)`).bind(newId, input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0, input.acquisitionSource ?? 'untracked').run();
+  const [inserted] = await db.batch([db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in, acquisition_source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?, ?)`).bind(newId, input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0, input.acquisitionSource ?? 'untracked'),
+    ...(settings.mode === 'rsvp' ? preparePlatformAnnouncementChoice(db, { email: input.email, source: 'rsvp', sourceId: newId, optedIn: input.platformAnnouncementsOptIn === true, verifiedEmail: identity?.emailVerified === true }) : []),
+  ]);
   const reg = await db.prepare(`SELECT ${fields} FROM event_registrations WHERE event_slug = ? AND normalized_email = ?`).bind(input.eventSlug, input.email).first<Registration>();
   if (!reg) throw new Error('Registration could not be saved. Try again.');
   await recordPolicyConsents({ db, subjectType: 'registration', subjectId: reg.id, actorEmail: input.email, policyKeys: ['purchase', 'privacy'] });
@@ -84,21 +87,27 @@ export async function requestRegistration(db: D1Database, input: { eventSlug: st
     const current = await readRegistration(db, reg.id);
     if (current?.status === 'confirmed' && !current.orderId) await confirmRegistration(db, reg.id);
     if (current) await notifyRegistrationHosts(db, { eventSlug: reg.eventSlug, sourceId: reg.id, guestName: reg.guestName, status: current.status, guests: reg.partySize });
+    if (inserted.meta.changes === 1 && input.platformAnnouncementsOptIn === true && identity?.emailVerified !== true) {
+      // Optional proof must never turn a successful RSVP into a failed booking.
+      try { await sendRegistrationAccess(db, reg, settings.title, origin); }
+      catch { console.error(JSON.stringify({ message: 'Optional announcement verification could not be queued' })); }
+    }
     return { mode: settings.mode, cookie, canManage: Boolean(cookie || (identity && reg.attendeeId === identity.attendeeId)) };
   }
   await sendRegistrationAccess(db, reg, settings.title, origin);
   return { mode: settings.mode };
 }
-export async function sendRegistrationAccess(db: D1Database, reg: Registration, title: string, origin: string) {
+export async function sendRegistrationAccess(db: D1Database, reg: Registration, title: string, origin: string, confirmPlatformAnnouncements = false) {
   const recent = await db.prepare(`SELECT COUNT(*) AS count FROM registration_access_grants WHERE registration_id = ? AND created_at > ?`).bind(reg.id, new Date(Date.now() - 15 * 60000).toISOString()).first<{ count: number }>();
   if ((recent?.count ?? 0) >= 3) return;
-  const token = createSecureToken();
+  const token = createSecureToken(), grantId = crypto.randomUUID();
   await db.prepare(`INSERT INTO registration_access_grants (id, registration_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)`)
-    .bind(crypto.randomUUID(), reg.id, await hashToken(token), new Date(Date.now() + 20 * 60000).toISOString(), timestamp()).run();
+    .bind(grantId, reg.id, await hashToken(token), new Date(Date.now() + 20 * 60000).toISOString(), timestamp()).run();
+  const confirmsAnnouncements = await bindPlatformAnnouncementVerification(db, { email: reg.email, grantType: 'registration', grantId, ...(confirmPlatformAnnouncements ? { explicitPreference: true as const } : { sourceId: reg.id }) });
   const url = `${origin}/rsvp/access#token=${encodeURIComponent(token)}`;
   const subject = `Confirm your email · ${title}`;
-  const text = `Hi ${reg.guestName},\n\nOpen this link to confirm your email and view your registration for ${title}:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.`;
-  await sendEmail({ db, kind: 'registration_access', recipient: reg.email, subject, text, html: `${emailBrand}<p>Hi ${escape(reg.guestName)},</p><p>Confirm your email to continue with ${escape(title)}.</p><p><a href="${escape(url)}">View my registration</a></p><p>This link expires in 20 minutes. A place is only reserved after your RSVP is confirmed.</p>`, idempotencyKey: `registration-access/${await hashToken(token)}` });
+  const text = `Hi ${reg.guestName},\n\nOpen this link to confirm your email and view your registration for ${title}:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.${confirmsAnnouncements ? "\n\nConfirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time." : ""}`;
+  await sendEmail({ db, kind: 'registration_access', recipient: reg.email, subject, text, html: `${emailBrand}<p>Hi ${escape(reg.guestName)},</p><p>Confirm your email to continue with ${escape(title)}.</p><p><a href="${escape(url)}">View my registration</a></p><p>This link expires in 20 minutes. A place is only reserved after your RSVP is confirmed.</p>${confirmsAnnouncements ? "<p>Confirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time.</p>" : ""}`, idempotencyKey: `registration-access/${await hashToken(token)}` });
 }
 
 // Capacity is reserved atomically, including guests who have not verified an
@@ -161,7 +170,7 @@ export async function promoteRegistrations(db: D1Database, eventSlug: string) {
     WHERE r.event_slug = ? AND r.status = 'waitlisted' AND (s.approval_required = 0 OR r.approved_at IS NOT NULL) ORDER BY r.created_at, r.id LIMIT 30`).bind(eventSlug).all<{ id: string }>();
   for (const row of rows.results) { if (!(await confirmRegistration(db, row.id))) break; }
 }
-export async function claimRegistration(db: D1Database, token: string) {
+export async function claimRegistration(db: D1Database, token: string, confirmPlatformAnnouncements = false) {
   const grant = await db.prepare(`SELECT id, registration_id AS registrationId FROM registration_access_grants WHERE token_hash = ? AND claimed_session_id IS NULL AND expires_at > ?`)
     .bind(await hashToken(token), timestamp()).first<{ id: string; registrationId: string }>();
   if (!grant) throw new Error('This link has expired or was already used. Request another from the event page.');
@@ -191,6 +200,7 @@ export async function claimRegistration(db: D1Database, token: string) {
       status = CASE WHEN status = 'unverified' THEN CASE WHEN kind = 'interest' THEN 'interested' WHEN ? = 1 THEN 'requested' ELSE 'waitlisted' END ELSE status END,
       version = version + CASE WHEN status = 'unverified' THEN 1 ELSE 0 END, updated_at = ? WHERE id = ? AND ${owns}`)
       .bind(attendeeId, now, settings.approvalRequired, now, reg.id, grant.id, sessionId),
+    ...prepareActivatePlatformAnnouncementVerification(db, { grantType: 'registration', grantId: grant.id, attendeeId, sessionId, confirmAnnouncements: confirmPlatformAnnouncements }),
   ]);
   if (claimed.meta.changes !== 1) throw new Error('This link was already used. Request another from the event page.');
   const consent = await db.prepare('SELECT announcements_opt_in AS optedIn, created_at AS createdAt FROM event_registrations WHERE id=?').bind(reg.id).first<{optedIn:number;createdAt:string}>();
