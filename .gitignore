@@ -54,3 +54,6 @@ vps-state/
 __pycache__/
 *.pyc
 
+
+# Local dependency builds must not be committed.
+/vendor/**/node_modules/

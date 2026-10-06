@@ -38,6 +38,9 @@ test('registration drafts survive close and back without carrying consent or sub
   await open.click();
   await page.getByLabel('Your name', { exact: true }).fill('Draft Guest');
   await page.getByLabel('Email address', { exact: true }).fill('draft@example.com');
+  const emailChoice = page.locator('.registration-consent input[type=checkbox]:not([name=acceptedTerms])');
+  await expect(emailChoice).not.toBeChecked();
+  await emailChoice.check();
   await page.getByRole('checkbox', { name: /I accept the event terms/ }).check();
   await page.getByRole('button', { name: 'Close form', exact: true }).click();
   await expect(open).toBeFocused();
@@ -45,12 +48,14 @@ test('registration drafts survive close and back without carrying consent or sub
   await expect(page.getByLabel('Your name', { exact: true })).toHaveValue('Draft Guest');
   await expect(page.getByLabel('Email address', { exact: true })).toHaveValue('draft@example.com');
   await expect(page.getByRole('checkbox', { name: /I accept the event terms/ })).not.toBeChecked();
+  await expect(emailChoice).not.toBeChecked();
   await page.locator('.sub-header .back-link').click();
   await expect(page).toHaveURL(/\/events$/);
   await page.goBack();
   // Routers may restore the open screen or remount its collapsed view.
   if (!(await page.getByLabel('Email address', { exact: true }).isVisible())) await open.click();
   await expect(page.getByLabel('Email address', { exact: true })).toHaveValue('draft@example.com');
+  await expect(emailChoice).not.toBeChecked();
   expect(submissions).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: test.info().outputPath('registration-draft.png'), fullPage: true });

@@ -97,11 +97,11 @@ jobs:
       - name: Prepare verified runtime without development dependencies
         run: |
           git diff --exit-code --stat HEAD --
-          # Keep the npm-ci lockfile as input without saving normalized metadata.
-          npm prune --omit=dev --ignore-scripts --no-save
+          # Copy only the reviewed runtime closure from the audited installation.
+          # The preparation step verifies native code and the packaged server
+          # outside the checkout, preventing build-tree module fallback.
+          node scripts/prepare-vps-runtime.mjs
           git diff --exit-code --stat HEAD --
-          node scripts/verify-vps-runtime.mjs
-          cp -a node_modules dist-vps/node_modules
           cp -a drizzle dist-vps/migrations
           # Copy reviewed tracked operator source only; test caches never ship.
           mkdir -p dist-vps/operations

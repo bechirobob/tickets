@@ -42,7 +42,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const [phone, setPhone] = useState("");
   const [feePercent, setFeePercent] = useState(feeBasisPoints / 100);
   const [isPaying, setIsPaying] = useState(false);
-  const [announcementsOptIn, setAnnouncementsOptIn] = useState(false);
+  const [platformAnnouncementsOptIn, setPlatformAnnouncementsOptIn] = useState(false);
   const [acceptedPolicies, setAcceptedPolicies] = useState(false);
   const paying = useRef(false);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -111,7 +111,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
-      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, paymentProvider, network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, announcementsOptIn, offer: params.get("offer"), promoterCode: params.get("ref"), couponCode:activeCoupon?.code??"", expectedTotalMinor: totalMinor });
+      const payload = JSON.stringify({ eventSlug: slug, ticketTierId: selectedTier.id, quantity, paymentMethod, paymentProvider, network: paymentProvider === "paystack" && paymentMethod === "mobile_money" ? network : undefined, email, phone, fullName, acceptedPolicies, platformAnnouncementsOptIn, offer: params.get("offer"), promoterCode: params.get("ref"), couponCode:activeCoupon?.code??"", expectedTotalMinor: totalMinor });
       const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload))), (byte) => byte.toString(16).padStart(2, "0")).join("");
       const storageKey = `bct:payment-attempt:${slug}`;
       if (!paymentAttempt.current) {
@@ -253,8 +253,10 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
               {paymentMethod === "crypto" ? <div className="payment-method-detail"><p className="secure-note">Continue to SeevPlus and review the USDC amount. Use only the asset and network shown there, then follow the payment instructions. Your tickets appear once payment is confirmed.</p></div> : null}
             </section> : null}
           </fieldset>
-          <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={announcementsOptIn} onChange={(event) => setAnnouncementsOptIn(event.target.checked)} /><span>Email me announcements from this event’s organiser. I can unsubscribe at any time.</span></label>
+          <div className="checkout-consents" role="group" aria-label="Email updates and terms">
+          <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={platformAnnouncementsOptIn} onChange={(event) => setPlatformAnnouncementsOptIn(event.target.checked)} /><span>Keep me posted on new nights from BeCore Tickets.</span></label>
           <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
+          </div>
           </>}
         </section>
 

@@ -1,0 +1,33 @@
+/* The two checkout choices share the existing form inset, without another card. */
+.checkout-consents {
+  max-width: 700px;
+  margin: 14px 0 0 49px;
+  display: grid;
+}
+.checkout-consents .checkout-consent {
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.checkout-consent > input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ink);
+}
+.checkout-consent > span { min-width: 0; }
+.checkout-consent a { text-decoration: underline; text-underline-offset: 2px; }
+.registration-confirmation, .registration-consents { display: grid; min-width: 0; gap: 12px; }
+@media (max-width: 640px) {
+  .checkout-consents { margin-left: 0; }
+}

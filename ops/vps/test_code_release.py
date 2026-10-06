@@ -18,6 +18,93 @@ from unittest.mock import call, patch
 spec = importlib.util.spec_from_file_location("code_release", Path(__file__).with_name("code-release.py"))
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
+# Test-only selection of the separately reviewed application. An actual source
+# checkout is never redirected unless every application byte remains the exact
+# independently selected controls baseline and only these two controls changed.
+CONTROL_CHECK_BASE = "e96b686cf437dd9a3288d9cdd36cfae5a07bfe59"
+CONTROL_CHECK_TREE = "104a0970e6e497f938f2aab6bb87f5f89baa0ce3"
+REVIEWED_APP_SNAPSHOT = "afc230df86af83f4180ef1459469293c446b0b2b"
+REVIEWED_APP_TREE = "dba8fffa045cf72dafc9e453776ed7403f27ffa1"
+CONTROL_CHECK_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
+
+
+def checkout_git(root, *args):
+    return subprocess.check_output(["git", "--no-replace-objects", "-C", str(root), *args],
+        stderr=subprocess.DEVNULL, env=release.git_environment(), timeout=60)
+
+
+def controls_only_checkout(root):
+    try:
+        if checkout_git(root, "rev-parse", CONTROL_CHECK_BASE + "^{tree}").decode().strip() != CONTROL_CHECK_TREE:
+            return False
+        changes = set(filter(None, checkout_git(root, "diff", "--name-only", "-z", CONTROL_CHECK_BASE, "--").decode().split("\0")))
+        staged = set(filter(None, checkout_git(root, "diff", "--cached", "--name-only", "-z", CONTROL_CHECK_BASE, "--").decode().split("\0")))
+        if (not changes <= CONTROL_CHECK_FILES or not staged <= CONTROL_CHECK_FILES
+                or checkout_git(root, "ls-files", "--others", "--exclude-standard")
+                or not all((root / name).is_file() and not (root / name).is_symlink()
+                           for name in CONTROL_CHECK_FILES)):
+            return False
+        # Read actual bytes too: index assume-unchanged flags cannot conceal an
+        # application edit and redirect this test to the historical snapshot.
+        for record in checkout_git(root, "ls-tree", "-rz", "--full-tree", CONTROL_CHECK_BASE).split(b"\0"):
+            if not record:
+                continue
+            metadata, name = record.split(b"\t", 1)
+            name = os.fsdecode(name)
+            if name in CONTROL_CHECK_FILES:
+                continue
+            mode, kind, expected = metadata.split()
+            file = root / name
+            info = file.lstat()
+            if kind != b"blob" or mode not in (b"100644", b"100755") or not stat.S_ISREG(info.st_mode):
+                return False
+            if bool(info.st_mode & 0o111) != (mode == b"100755"):
+                return False
+            raw = file.read_bytes()
+            actual = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest().encode()
+            if actual != expected:
+                # Only this baseline-pinned Windows Gradle path has a tracked
+                # CRLF checkout contract. Never consult local info/attributes,
+                # core.attributesFile or a configured clean/smudge filter.
+                if (name != "mobile/android/gradlew.bat"
+                        or checkout_git(root, "rev-parse", CONTROL_CHECK_BASE + ":mobile/.gitattributes").decode().strip()
+                        != "69b47b5ade88fab2dd055b3cfa0858766fb17a47"):
+                    return False
+                raw = raw.replace(b"\r\n", b"\n")
+                if release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest().encode() != expected:
+                    return False
+        return True
+    except (subprocess.CalledProcessError, OSError):
+        return False
+
+
+def application_bytes(root, name, *, controls_only=False):
+    if controls_only and name not in CONTROL_CHECK_FILES:
+        if checkout_git(root, "rev-parse", REVIEWED_APP_SNAPSHOT + "^{tree}").decode().strip() != REVIEWED_APP_TREE:
+            raise AssertionError("Independently reviewed application tree changed")
+        return checkout_git(root, "show", REVIEWED_APP_SNAPSHOT + ":" + name)
+    return (root / name).read_bytes()
+
+
+def staged_family_pins(root):
+    # Both archived layouts are reviewed, but their three differing files must
+    # come from one complete family. Never accept a per-file union of variants.
+    control = release.REVIEWED_CONTROL_BLOBS
+    application = {name: release.REVIEWED_APPLICATION_BLOBS[name] for name in control}
+    observed = {}
+    for name in control:
+        file = root / name
+        if (not file.is_file() or file.is_symlink()
+                or any(parent.is_symlink() for parent in file.parents if root in parent.parents)):
+            raise AssertionError("Staged operator family requires regular files")
+        raw = file.read_bytes()
+        observed[name] = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+    for family in (control, application):
+        if observed == family:
+            return family
+    raise AssertionError("Mixed or unknown staged operator source family")
+
+
 OLD = "1" * 40
 NEW = "2" * 40
 ORIGINAL = release.ORIGINAL_TRANSFER_REVISION
@@ -1902,6 +1989,9 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
     root = Path(__file__).resolve().parents[2]
 
     def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
+        staged = not (self.root / "package.json").exists() and not (self.root / "app").exists()
+        overrides = (staged_family_pins(self.root) if staged else
+                     release.REVIEWED_CONTROL_BLOBS if controls_only_checkout(self.root) else {})
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                      ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
                      "ops/vps/runtime_release.py", "ops/vps/public_runtime_guard.py",
@@ -1910,7 +2000,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                      "ops/vps/test_runtime_packaging.py"):
             content = (self.root / name).read_bytes()
             digest = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
-            self.assertEqual(release.REVIEWED_OPERATOR_BLOBS.get(name, release.REVIEWED_APPLICATION_BLOBS[name]), digest, name)
+            expected = overrides.get(name)
+            self.assertEqual(expected or release.REVIEWED_OPERATOR_BLOBS.get(name, release.REVIEWED_APPLICATION_BLOBS[name]), digest, name)
 
     def test_reviewed_application_includes_the_merged_operator_transport(self):
         expected = {
@@ -1939,6 +2030,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
 
     def test_complete_reviewed_application_manifest_matches_candidate_source(self):
         pins = release.REVIEWED_APPLICATION_BLOBS
+        controls_only = controls_only_checkout(self.root)
         if not (self.root / "package.json").exists() and not (self.root / "app").exists():
             # The release operator deliberately archives only ops/vps and these
             # approved control files. Never treat a missing file in a full checkout as
@@ -1963,12 +2055,13 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                 "ops/vps/test_release_approval.py", "ops/vps/test_code_release.py",
             }
             self.assertEqual({name for name in pins if (self.root / name).exists()}, staged)
-            pins = {name: pins[name] for name in staged}
+            family = staged_family_pins(self.root)
+            pins = {name: family.get(name, pins[name]) for name in staged}
         else:
             self.assertTrue((self.root / "package.json").is_file())
             self.assertTrue((self.root / "app").is_dir())
         for name, digest in pins.items():
-            content = (self.root / name).read_bytes()
+            content = application_bytes(self.root, name, controls_only=controls_only)
             actual = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
             self.assertEqual(actual, digest, name)
 
@@ -2203,6 +2296,231 @@ class FailedReleaseDiagnosticTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         self.diagnostic["backup_schema_evidence"](os.geteuid())
                     opened.assert_not_called()
+
+
+
+
+class ReviewedControlSelectionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.git("init", "-q")
+        self.git("config", "user.name", "Admission fixture")
+        self.git("config", "user.email", "admission@example.invalid")
+        for name in CONTROL_CHECK_FILES | {"app/source.ts"}:
+            file = self.root / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("baseline\n")
+        attributes = self.root / "mobile/.gitattributes"
+        attributes.parent.mkdir()
+        attributes.write_text("*.bat text eol=crlf\n")
+        batch = self.root / "mobile/android/gradlew.bat"
+        batch.parent.mkdir()
+        batch.write_bytes(b"baseline\n")
+        self.base = self.commit()
+        self.base_tree = self.git("rev-parse", "HEAD^{tree}")
+        (self.root / "app/source.ts").write_text("reviewed candidate\n")
+        self.candidate = self.commit()
+        self.candidate_tree = self.git("rev-parse", "HEAD^{tree}")
+        self.git("checkout", "-q", self.base)
+        for name in CONTROL_CHECK_FILES:
+            (self.root / name).write_text("independent control update\n")
+        constants = patch.dict(globals(), CONTROL_CHECK_BASE=self.base,
+            CONTROL_CHECK_TREE=self.base_tree, REVIEWED_APP_SNAPSHOT=self.candidate,
+            REVIEWED_APP_TREE=self.candidate_tree)
+        constants.start()
+        self.addCleanup(constants.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    def commit(self):
+        self.git("add", ".")
+        self.git("commit", "-qm", "isolated fixture")
+        return self.git("rev-parse", "HEAD")
+
+    def test_only_exact_baseline_with_finite_control_overlay_selects_reviewed_snapshot(self):
+        self.assertTrue(controls_only_checkout(self.root))
+        self.assertEqual(application_bytes(self.root, "app/source.ts", controls_only=True), b"reviewed candidate\n")
+        self.assertEqual(application_bytes(self.root, "ops/vps/code-release.py", controls_only=True), b"independent control update\n")
+        with patch.dict(globals(), REVIEWED_APP_TREE="f" * 40), self.assertRaisesRegex(AssertionError, "tree changed"):
+            application_bytes(self.root, "app/source.ts", controls_only=True)
+
+    def test_crlf_is_allowed_only_for_the_baseline_pinned_windows_script(self):
+        batch = self.root / "mobile/android/gradlew.bat"
+        batch.write_bytes(b"baseline\r\n")
+        self.assertTrue(controls_only_checkout(self.root))
+        (self.root / ".git/info/attributes").write_text("app/source.ts text eol=crlf\n")
+        (self.root / "app/source.ts").write_bytes(b"baseline\r\n")
+        self.assertFalse(controls_only_checkout(self.root))
+
+    def test_actual_candidate_and_changed_application_bytes_never_select_control_branch(self):
+        file = self.root / "app/source.ts"
+        for content in ("reviewed candidate\n", "unknown changed application\n"):
+            file.write_text(content)
+            self.assertFalse(controls_only_checkout(self.root))
+            self.assertEqual(application_bytes(self.root, "app/source.ts"), content.encode())
+        self.git("update-index", "--assume-unchanged", "app/source.ts")
+        self.assertFalse(controls_only_checkout(self.root))
+
+    def test_staged_application_edit_or_addition_cannot_hide_behind_restored_worktree(self):
+        file = self.root / "app/source.ts"
+        file.write_text("staged unknown content\n")
+        self.git("add", "app/source.ts")
+        file.write_text("baseline\n")
+        self.assertFalse(controls_only_checkout(self.root))
+        self.git("reset", "-q", self.base, "--", "app/source.ts")
+        self.assertTrue(controls_only_checkout(self.root))
+        extra = self.root / "app/unknown.ts"
+        extra.write_text("staged addition\n")
+        self.git("add", "app/unknown.ts")
+        extra.unlink()
+        self.assertFalse(controls_only_checkout(self.root))
+
+    def test_untracked_tracked_and_staged_unknown_files_cannot_select_control_branch(self):
+        file = self.root / "unknown.txt"
+        file.write_text("unreviewed\n")
+        self.assertFalse(controls_only_checkout(self.root))
+        self.git("add", "unknown.txt")
+        self.assertFalse(controls_only_checkout(self.root))
+        self.git("commit", "-qm", "unreviewed extra path")
+        self.assertFalse(controls_only_checkout(self.root))
+
+
+class StagedOperatorFamilyTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.names = tuple(release.REVIEWED_CONTROL_BLOBS)
+        self.bytes = [{name: (label + name).encode() for name in self.names}
+                      for label in ("control fixture: ", "application fixture: ")]
+        self.pins = [{name: release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+                      for name, raw in family.items()} for family in self.bytes]
+        for attribute, value in (("REVIEWED_CONTROL_BLOBS", self.pins[0]),
+                                 ("REVIEWED_APPLICATION_BLOBS", self.pins[1])):
+            replacement = patch.object(release, attribute, value)
+            replacement.start()
+            self.addCleanup(replacement.stop)
+
+    def write_family(self, choices):
+        for name, choice in zip(self.names, choices):
+            file = self.root / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(self.bytes[choice][name])
+
+    def test_both_complete_reviewed_families_are_accepted(self):
+        for choice in (0, 1):
+            self.write_family([choice] * len(self.names))
+            self.assertEqual(staged_family_pins(self.root), self.pins[choice])
+
+    def test_every_mixed_family_is_rejected(self):
+        self.assertEqual(len(self.names), 3)
+        for mask in range(1, 2 ** len(self.names) - 1):
+            self.write_family([(mask >> index) & 1 for index in range(len(self.names))])
+            with self.subTest(mask=mask), self.assertRaisesRegex(AssertionError, "Mixed or unknown"):
+                staged_family_pins(self.root)
+
+    def test_unknown_missing_and_symlinked_family_files_are_rejected(self):
+        for name in self.names:
+            self.write_family([0] * len(self.names))
+            file = self.root / name
+            file.write_bytes(b"unknown source bytes")
+            with self.assertRaisesRegex(AssertionError, "Mixed or unknown"):
+                staged_family_pins(self.root)
+            file.unlink()
+            with self.assertRaisesRegex(AssertionError, "regular files"):
+                staged_family_pins(self.root)
+            target = self.root / "symlink-target"
+            target.write_bytes(self.bytes[0][name])
+            file.symlink_to(target)
+            with self.assertRaisesRegex(AssertionError, "regular files"):
+                staged_family_pins(self.root)
+            file.unlink()
+
+    def test_symlinked_parent_cannot_select_a_family(self):
+        self.write_family([0] * len(self.names))
+        directory = self.root / ".github/workflows"
+        directory.rename(self.root / ".github/saved-workflows")
+        directory.symlink_to("saved-workflows", target_is_directory=True)
+        with self.assertRaisesRegex(AssertionError, "regular files"):
+            staged_family_pins(self.root)
+
+
+class EmailReleaseAdmissionTests(unittest.TestCase):
+    def setUp(self):
+        modes = patch.object(release, "verify_changed_modes")
+        modes.start()
+        self.addCleanup(modes.stop)
+
+    def test_root_transition_requires_exact_active_baseline_and_both_manifest_blobs(self):
+        changed = "package.json\npackage-lock.json"
+        blobs = ["dc6e4e1cfa53b05beb3b5f70c7a5d07dd5e07b23",
+                 "83f5e03b9fbbdf10f050c8dd24d06ed1ff59260b",
+                 "759d34af76287e214f03def74be98ddefb33780a",
+                 "cc161d4ef33ca9affdf1c6649071cb4bf27b71dc"]
+        with patch.object(release, "git", side_effect=[changed, *blobs]), patch.object(release.subprocess, "run"):
+            self.assertEqual(release.vetted_changes(release.EMAIL_RELEASE_BASELINE, NEW), changed.splitlines())
+        for index in range(len(blobs)):
+            changed_blobs = list(blobs)
+            changed_blobs[index] = "f" * 40
+            with self.subTest(index=index), patch.object(release, "git", side_effect=[changed, *changed_blobs]), patch.object(release.subprocess, "run"), self.assertRaises(release.ReleaseError):
+                release.vetted_changes(release.EMAIL_RELEASE_BASELINE, NEW)
+        with patch.object(release, "git", side_effect=[changed, *blobs]), patch.object(release.subprocess, "run"), self.assertRaises(release.ReleaseError):
+            release.vetted_changes(OLD, NEW)
+        for name in changed.splitlines():
+            with patch.object(release, "git", return_value=name), patch.object(release.subprocess, "run"), self.assertRaisesRegex(release.ReleaseError, "both package files"):
+                release.vetted_changes(release.EMAIL_RELEASE_BASELINE, NEW)
+
+    def test_mobile_transition_is_exact_instead_of_a_generic_new_dependency_allowance(self):
+        name = "mobile/package-lock.json"
+        blobs = ["49254a20c8b66fa1fd584e00b13b04e8539cab58", "ebae7283d0906a9cb42b374b78a90986e7fcdcac"]
+        with patch.object(release, "git", side_effect=[name, *blobs]), patch.object(release.subprocess, "run"):
+            self.assertEqual(release.vetted_changes(release.EMAIL_RELEASE_BASELINE, NEW), [name])
+        for index in range(2):
+            changed = list(blobs)
+            changed[index] = "f" * 40
+            with patch.object(release, "git", side_effect=[name, *changed]), patch.object(release.subprocess, "run"), self.assertRaisesRegex(release.ReleaseError, "exact reviewed email"):
+                release.vetted_changes(release.EMAIL_RELEASE_BASELINE, NEW)
+
+    def test_candidate_operator_must_equal_independently_trusted_executing_bytes(self):
+        name = "ops/vps/code-release.py"
+        raw = Path(release.__file__).read_bytes()
+        expected = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        for blob in (expected, "f" * 40):
+            with patch.object(release, "git", side_effect=[name, blob]), patch.object(release.subprocess, "run"):
+                if blob == expected:
+                    self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                else:
+                    with self.assertRaisesRegex(release.ReleaseError, "independently trusted staged source"):
+                        release.vetted_changes(OLD, NEW)
+
+    def test_registered_vendor_application_and_runtime_files_still_reject_unknown_bytes(self):
+        for name in ("vendor/tooling-glob/adapter-factory.cjs", ".npmrc", "lib/platform-announcements.ts", "scripts/prepare-vps-runtime.mjs"):
+            for digest in (release.REVIEWED_APPLICATION_BLOBS[name], "f" * 40):
+                with patch.object(release, "git", side_effect=[name, digest]), patch.object(release.subprocess, "run"):
+                    if digest == release.REVIEWED_APPLICATION_BLOBS[name]:
+                        self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                    else:
+                        with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                            release.vetted_changes(OLD, NEW)
+        for name in ("vendor/unreviewed/package.json", "scripts/unreviewed-release.py", "app/unreviewed/route.ts"):
+            with patch.object(release, "git", return_value=name), patch.object(release.subprocess, "run"), self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                release.vetted_changes(OLD, NEW)
+
+    def test_consent_migration_has_only_exact_new_schema_and_no_existing_row_changes(self):
+        name = "drizzle/0061_platform_announcement_consent.sql"
+        raw = b"-- Separate, explicit BeCore Tickets consent. Existing event/host permission is\n-- intentionally not copied or changed, and no provider contacts are imported.\nCREATE TABLE platform_announcement_subscriptions (\n  email TEXT PRIMARY KEY NOT NULL,\n  status TEXT NOT NULL CHECK (status IN ('pending', 'subscribed', 'unsubscribed')),\n  consent_version TEXT NOT NULL,\n  consented_at TEXT,\n  verified_at TEXT,\n  unsubscribed_at TEXT,\n  source TEXT NOT NULL CHECK (source IN ('rsvp', 'checkout', 'preferences', 'unsubscribe')),\n  source_id TEXT NOT NULL,\n  revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL\n);\nCREATE INDEX platform_announcement_status_idx ON platform_announcement_subscriptions(status, email);\n\n-- source/source_id is an immutable submission receipt: a replay can never\n-- convert the original unchecked choice, refresh consent or clear suppression.\nCREATE TABLE platform_announcement_choices (\n  id TEXT PRIMARY KEY NOT NULL,\n  email TEXT NOT NULL,\n  source TEXT NOT NULL CHECK (source IN ('rsvp', 'checkout', 'preferences', 'unsubscribe', 'verification')),\n  source_id TEXT NOT NULL,\n  opted_in INTEGER NOT NULL CHECK (opted_in IN (0, 1)),\n  verified_email INTEGER NOT NULL CHECK (verified_email IN (0, 1)),\n  consent_version TEXT NOT NULL,\n  created_at TEXT NOT NULL,\n  UNIQUE (source, source_id)\n);\nCREATE INDEX platform_announcement_choices_email_idx ON platform_announcement_choices(email, created_at);\n\n-- Capabilities are revoke-only and hashed at rest. No arbitrary expiry: a token\n-- remains valid for its consent revision until that subscription changes.\nCREATE TABLE platform_announcement_unsubscribe_tokens (\n  token_hash TEXT PRIMARY KEY NOT NULL,\n  email TEXT NOT NULL,\n  subscription_revision INTEGER NOT NULL,\n  created_at TEXT NOT NULL\n);\nCREATE INDEX platform_announcement_tokens_email_idx ON platform_announcement_unsubscribe_tokens(email, subscription_revision);\n\n-- Proof may finalize only the exact pending choice that the emailed link named.\n-- Existing recovery links have no binding and cannot activate announcements.\nCREATE TABLE platform_announcement_verifications (\n  grant_type TEXT NOT NULL CHECK (grant_type IN ('recovery', 'registration')),\n  grant_id TEXT NOT NULL,\n  email TEXT NOT NULL,\n  subscription_revision INTEGER NOT NULL,\n  source TEXT NOT NULL,\n  source_id TEXT NOT NULL,\n  created_at TEXT NOT NULL,\n  consumed_at TEXT,\n  PRIMARY KEY (grant_type, grant_id)\n);\n"
+        specification = dict(path=name, **release.REVIEWED_MIGRATIONS[name])
+        self.assertEqual(release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest(), specification["blob"])
+        statements, rows = release.reviewed_migration(raw, specification)
+        self.assertEqual(len(statements), 7)
+        self.assertEqual({row[0] for row in rows}, {"table", "index"})
+        self.assertEqual({row[2] for row in rows}, set(specification["tables"]))
+        for changed in (raw + b"\n", raw + b"DELETE FROM orders;\n"):
+            with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                release.reviewed_migration(changed, specification)
 
 
 if __name__ == "__main__":

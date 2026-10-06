@@ -34,6 +34,10 @@ required_tables=(
   consent_records
   delivery_events
   product_metrics_daily
+  platform_announcement_subscriptions
+  platform_announcement_choices
+  platform_announcement_unsubscribe_tokens
+  platform_announcement_verifications
 )
 for table in "${required_tables[@]}"; do
   present="$(sqlite3 "$recovery_db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='$table';")"
@@ -50,7 +54,11 @@ counts_json="$(sqlite3 -json "$recovery_db" "
     (SELECT COUNT(*) FROM tickets) AS tickets,
     (SELECT COUNT(*) FROM staff_accounts) AS staffAccounts,
     (SELECT COUNT(*) FROM consent_records) AS consentRecords,
-    (SELECT COUNT(*) FROM delivery_events) AS deliveryEvents;
+    (SELECT COUNT(*) FROM delivery_events) AS deliveryEvents,
+    (SELECT COUNT(*) FROM platform_announcement_subscriptions) AS platformAnnouncementSubscriptions,
+    (SELECT COUNT(*) FROM platform_announcement_choices) AS platformAnnouncementChoices,
+    (SELECT COUNT(*) FROM platform_announcement_unsubscribe_tokens) AS platformAnnouncementUnsubscribeTokens,
+    (SELECT COUNT(*) FROM platform_announcement_verifications) AS platformAnnouncementVerifications;
 ")"
 export RECOVERY_EXPORT_SHA256="$(sha256sum "$export_file" | cut -d' ' -f1)"
 export RECOVERY_EXPORT_BYTES="$(wc -c < "$export_file" | tr -d ' ')"

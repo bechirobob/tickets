@@ -19,7 +19,7 @@ export const hostAreas = [
   { id: "money", label: "Money", Icon: Wallet },
   { id: "team", label: "Team", Icon: UserRoundCog },
 ];
-const icons: Record<string, typeof Menu> = { "/admin/hosts": UserRoundCog, "/admin/operations": LayoutDashboard, "/admin": Inbox, "/admin/events": CalendarDays, "/admin/registrations": Users, "/admin/promoters": Link2, "/admin/orders": Wallet, "/admin/support": LifeBuoy, "/scan": ScanLine, "/admin/rooms": MessageSquare, "/admin/fees": SlidersHorizontal, "/admin/accounts": UserRoundCog };
+const icons: Record<string, typeof Menu> = { "/admin/platform-audience": Users, "/admin/hosts": UserRoundCog, "/admin/operations": LayoutDashboard, "/admin": Inbox, "/admin/events": CalendarDays, "/admin/registrations": Users, "/admin/promoters": Link2, "/admin/orders": Wallet, "/admin/support": LifeBuoy, "/scan": ScanLine, "/admin/rooms": MessageSquare, "/admin/fees": SlidersHorizontal, "/admin/accounts": UserRoundCog };
 type Item = { href: string; label: string; Icon: typeof Menu; active: boolean };
 
 export default function WorkspaceChrome({ actor, role, active, host = false, event = "", onNavigate }: { actor: string; role: StaffRole; active: string; host?: boolean; event?: string; onNavigate?: (href: string) => void }) {

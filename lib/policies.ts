@@ -27,12 +27,14 @@ export const policies: Record<PolicyKey, { version: string; title: string; summa
     ],
   },
   privacy: {
-    version: "2026-09-09",
+    version: "2026-10-06",
     title: "Privacy and retention",
     summary: "We keep what makes tickets work, restrict who sees it, and delete or anonymise it when the job is finished.",
     points: [
       "Payment details stay with the payment provider; BeCore stores transaction references, amounts, contact details and operational evidence.",
       "Ticket, entry, consent and financial audit records are retained for legal, fraud and reconciliation needs.",
+      "Optional BeCore Tickets email announcements require a separate recorded choice and verified email ownership; event hosts cannot access the platform subscriber list. Booking updates stay separate.",
+      "Email preferences can be changed in Account privacy or through an announcement unsubscribe link. Preference evidence is kept to honour withdrawals and prevent replay subscriptions.",
       "Room content and temporary Flashes follow the event retention controls shown inside the Room.",
       "Authorised staff receive only the event and role access needed for their work.",
     ],

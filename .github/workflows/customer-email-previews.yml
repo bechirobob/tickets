@@ -1,0 +1,64 @@
+name: Customer email previews
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - lib/customer-email.ts
+      - public/events/on-the-guest-list.webp
+      - public/events/on-the-guest-list-email.jpg
+      - lib/email-delivery.ts
+      - lib/event-experience.ts
+      - lib/registrations.ts
+      - lib/platform-announcements.ts
+      - scripts/customer-email-previews.mjs
+      - tests/customer-email-rendering.test.mjs
+      - tests/email-preview/**
+      - playwright.customer-email.config.ts
+      - .github/workflows/customer-email-previews.yml
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer-email-previews-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Check actual customer delivery payloads without sending email
+        run: node --test tests/customer-email-rendering.test.mjs
+      - name: Generate synthetic previews from production templates
+        run: node scripts/customer-email-previews.mjs outputs/customer-emails
+      - name: Install preview browsers
+        run: npx playwright install --with-deps chromium webkit
+      - name: Verify desktop and phone email rendering without provider traffic
+        run: npx playwright test --config playwright.customer-email.config.ts
+      # Only fictional email previews are uploaded. Never upload outbox data,
+      # credentials, browser traces, customer data or release build artifacts.
+      - name: Preserve synthetic email previews for visual review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: customer-email-previews-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            outputs/customer-emails/*.html
+            test-results/customer-email-preview/**/*.png
+          if-no-files-found: error
+          retention-days: 3
