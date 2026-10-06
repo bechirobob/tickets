@@ -346,8 +346,8 @@ export async function sendWaitlistOfferEmail(input: { db: D1Database; entryId: s
   const subject = `${input.eventTitle}: a ticket found its way back`;
   const html = customerEmail({
     title: "Your wait is doing something useful.",
-    preheader: `A ${input.tierName} ticket for ${input.eventTitle} is available.`,
-    body: emailEvent({ title: input.eventTitle }) + emailParagraph(`A <strong>${escapeHtml(input.tierName)}</strong> ticket is available.`) + emailParagraph(`This private checkout link is yours until ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(input.expiresAt)))} (Accra time). After that, the next person gets the nod.`),
+    preheader: `${input.tierName} ticket available for ${input.eventTitle}.`,
+    body: emailEvent({ title: input.eventTitle }) + emailParagraph(`A ticket in <strong>${escapeHtml(input.tierName)}</strong> is available.`) + emailParagraph(`This private checkout link is yours until ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(input.expiresAt)))} (Accra time). After that, the next person gets the nod.`),
     action: { label: "Take the ticket", url: input.claimUrl },
     note: "The invite is private and one-time. Payment still has to complete before the timer does.",
   });
