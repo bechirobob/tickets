@@ -32,6 +32,13 @@ RETENTION_SHA256 = {
 }
 RETENTION_FILE_LABELS = {'retention.py': 'script', 'becore-tickets-retention.service': 'service',
                          'becore-tickets-retention.timer': 'timer'}
+RETENTION_UNIT_FIELDS = {
+    'service': ('Id', 'LoadState', 'FragmentPath', 'SourcePath', 'DropInPaths', 'NeedDaemonReload', 'Transient',
+                'Type', 'ExecStart', 'ExecStartPre', 'ExecStartPost', 'ExecCondition', 'ExecStop', 'ExecStopPost', 'ExecReload'),
+    'timer': ('Id', 'LoadState', 'FragmentPath', 'SourcePath', 'DropInPaths', 'NeedDaemonReload', 'Transient', 'Unit'),
+}
+RETENTION_EMPTY_EXEC_ARRAYS = ('ExecStartPre', 'ExecStartPost', 'ExecCondition', 'ExecStop', 'ExecStopPost', 'ExecReload')
+RETENTION_LOAD_STATES = {'loaded', 'not-found', 'error', 'bad-setting', 'masked', 'merged', 'stub', 'unknown'}
 RETENTION_FAILURE_STAGES = (
     {'pointer_metadata', 'pointer_path', 'pointer_recheck', 'policy_result'}
     | {f'{unit}_{phase}_{step}' for unit in ('service', 'timer') for phase in ('before', 'after')
@@ -186,15 +193,38 @@ def report_readiness_failure(error):
         if isinstance(stage, str) and stage in RETENTION_FAILURE_STAGES:
             message += ' Retention attestation stage: ' + stage + '.'
     print(message, file=sys.stderr)
+    diagnostics = getattr(error, 'unit_diagnostics', None) if isinstance(error, RetentionAttestationError) else None
+    if not isinstance(diagnostics, dict):
+        return
+    safe = {}
+    for unit, fields in RETENTION_UNIT_FIELDS.items():
+        for phase in ('before', 'after'):
+            label = unit + '_' + phase
+            item = diagnostics.get(label)
+            if not isinstance(item, dict) or set(item) != {'present', 'matches_expected', 'malformed_count', 'duplicate_count', 'unexpected_count', 'load_state', 'load_state_parseable'}:
+                continue
+            if any(not isinstance(item[key], dict) or set(item[key]) != set(fields)
+                   or any(type(value) is not bool for value in item[key].values()) for key in ('present', 'matches_expected')):
+                continue
+            if any(type(item[key]) is not int or not 0 <= item[key] <= 16384
+                   for key in ('malformed_count', 'duplicate_count', 'unexpected_count')):
+                continue
+            if type(item['load_state_parseable']) is not bool or type(item['load_state']) is not str or item['load_state'] not in RETENTION_LOAD_STATES:
+                continue
+            safe[label] = item
+    if safe:
+        print('Retention unit metadata: ' + json.dumps(safe, sort_keys=True), file=sys.stderr)
 
 
 def retention_policy_attestation():
-    stage = ['pointer_metadata']
+    stage = ['pointer_metadata', {}]
     try:
         return _retention_policy_attestation(stage)
     except Exception:
         # Only our finite stage vocabulary can escape; never format the cause.
-        raise RetentionAttestationError(stage[0]) from None
+        error = RetentionAttestationError(stage[0])
+        error.unit_diagnostics = stage[1]
+        raise error from None
 
 
 def _retention_policy_attestation(stage):
@@ -215,14 +245,11 @@ def _retention_policy_attestation(stage):
     paths = {'retention.py': target / 'operations' / 'retention.py',
              **{name: SYSTEMD_UNITS / name for name in RETENTION_SHA256 if name != 'retention.py'}}
     units = ('becore-tickets-retention.service', 'becore-tickets-retention.timer')
-    common = 'Id,LoadState,FragmentPath,SourcePath,DropInPaths,NeedDaemonReload,Transient'
-    properties = {
-        units[0]: common + ',Type,ExecStart,ExecStartPre,ExecStartPost,ExecCondition,ExecStop,ExecStopPost,ExecReload',
-        units[1]: common + ',Unit',
-    }
+    properties = {name: ','.join(RETENTION_UNIT_FIELDS[RETENTION_FILE_LABELS[name]]) for name in units}
 
     def unit_metadata(phase):
         result = {}
+        failed_stage = None
         for name in units:
             label = RETENTION_FILE_LABELS[name] + '_' + phase
             stage[0] = label + '_query'
@@ -231,10 +258,45 @@ def _retention_policy_attestation(stage):
             assert len(raw) <= 16384
             stage[0] = label + '_shape'
             pairs = [line.split('=', 1) for line in raw.splitlines()]
-            assert all(len(pair) == 2 for pair in pairs)
-            values = dict(pairs)
-            assert len(values) == len(pairs) and set(values) == set(properties[name].split(','))
+            parsed = [pair for pair in pairs if len(pair) == 2]
+            keys = [key for key, value in parsed]
+            values = dict(parsed)
+            fields = RETENTION_UNIT_FIELDS[RETENTION_FILE_LABELS[name]]
+            expected = {'Id': name, 'LoadState': 'loaded', 'FragmentPath': str(SYSTEMD_UNITS / name),
+                        'SourcePath': '', 'DropInPaths': '', 'NeedDaemonReload': 'no', 'Transient': 'no'}
+            if name == units[0]:
+                expected.update(Type='oneshot', ExecStartPre='', ExecStartPost='', ExecCondition='', ExecStop='', ExecStopPost='', ExecReload='')
+            else:
+                expected['Unit'] = units[0]
+            matches = {key: keys.count(key) == 1 and values[key] == value for key, value in expected.items()}
+            if name == units[0]:
+                matches['ExecStart'] = keys.count('ExecStart') == 1 and bool(re.fullmatch(
+                    r'\{ path=/usr/bin/python3 ; argv\[\]=' + re.escape('/usr/bin/python3 ' + str(HOME / 'current/operations/retention.py'))
+                    + r' ; ignore_errors=no ; [^{}]* \}', values['ExecStart']))
+            stage[1][label] = {
+                'present': {key: key in values for key in fields}, 'matches_expected': matches,
+                'malformed_count': len(pairs) - len(parsed), 'duplicate_count': len(keys) - len(values),
+                'unexpected_count': sum(key not in fields for key in keys),
+                'load_state_parseable': keys.count('LoadState') == 1,
+                'load_state': values['LoadState'] if keys.count('LoadState') == 1 and values['LoadState'] in RETENTION_LOAD_STATES else 'unknown',
+            }
+            # systemd v255 systemctl-show.c's Exec* array printer emits nothing
+            # for zero commands, even with --all. Normalize only these six empty
+            # hooks; keep their raw presence above and require every other field.
+            optional_empty = set(RETENTION_EMPTY_EXEC_ARRAYS) if name == units[0] else set()
+            try:
+                assert all(len(pair) == 2 for pair in pairs)
+                assert len(values) == len(pairs) and not set(values) - set(fields)
+                assert set(fields) - set(values) <= optional_empty
+            except AssertionError:
+                failed_stage = failed_stage or stage[0]
+                continue
+            for key in optional_empty:
+                values.setdefault(key, '')
             result[name] = values
+        if failed_stage:
+            stage[0] = failed_stage
+            raise AssertionError
         return result
 
     before_units = unit_metadata('before')
@@ -313,7 +375,8 @@ def _retention_policy_attestation(stage):
     verified = all(item['matches_reviewed'] for item in files.values()) and all(all(checks.values()) for checks in unit_checks.values())
     return {'read_only': True, 'snapshot_atomic': False, 'current_revision': target.name,
             'scope': 'fixed policy file hashes and loaded unit identity; no guarantee against later changes',
-            'files': files, 'unit_checks': unit_checks, 'host_retention_policy_verified': verified}
+            'files': files, 'unit_checks': unit_checks, 'unit_metadata': stage[1],
+            'host_retention_policy_verified': verified}
 
 
 def inspect_database(path, application=False):
