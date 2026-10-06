@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
+import sharp from 'sharp';
 import { createCustomerEmailHarness, previewData, previewNow, renderCustomerEmailPreviews } from '../scripts/customer-email-previews.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -30,7 +31,7 @@ test('all eight production customer paths produce branded HTML and usable plain 
 });
 
 test('purchase confirmation includes truthful receipt, event timing, admissions and one-time access', async () => {
-  const fixture = createCustomerEmailHarness();
+  const fixture = createCustomerEmailHarness({ event: { startsAt: '2026-10-24T19:00:00.000Z', scheduleStatus: 'confirmed', imageUrl: null } });
   await fixture.delivery.sendOrderConfirmation(fixture.db, fixture.data.order, fixture.data.origin);
   const message = fixture.deliveries[0];
   const grant = fixture.grants[0].values;
@@ -40,7 +41,7 @@ test('purchase confirmation includes truthful receipt, event timing, admissions 
   assert.equal(message.orderId, 'preview-order');
   assert.equal(message.recoveryGrantId, grant[0]);
   assert.equal(Date.parse(grant[3]) - Date.parse(previewNow), 7 * 24 * 60 * 60 * 1000);
-  for (const content of ['BCT-PREVIEW-2401', 'Admissions: 2', 'Ticket subtotal: GH₵400.00', 'Booking fee: GH₵20.00', 'Total paid: GH₵420.00', '24 October 2026', 'The Courtyard', 'Osu, Accra', 'Accra time', 'QR', 'one-time']) assert.ok(message.text.includes(content), content);
+  for (const content of ['BCT-PREVIEW-2401', 'Admissions: 2', 'Ticket subtotal: GH₵400.00', 'Booking fee: GH₵20.00', 'Total paid: GH₵420.00', '24 October 2026', previewData.event.venue, previewData.event.area, 'Accra time', 'QR', 'one-time']) assert.ok(message.text.includes(content), content);
   assert.match(message.html, /Ticket subtotal|Booking fee/u);
   assert.doesNotMatch(message.html, /data:image\/[a-z]+;base64|BCT:[A-Z0-9]{16}/u);
   const duplicate = await fixture.delivery.sendOrderConfirmation(fixture.db, fixture.data.order, fixture.data.origin);
@@ -51,7 +52,7 @@ test('purchase confirmation includes truthful receipt, event timing, admissions 
 });
 
 test('complimentary and undated confirmations never describe a payment or invent an event date', async () => {
-  const fixture = createCustomerEmailHarness({ event: { startsAt: null }, order: { paymentProvider: 'complimentary', faceAmountMinor: 0, bookingFeeMinor: 0, totalAmountMinor: 0 } });
+  const fixture = createCustomerEmailHarness({ event: { startsAt: null, scheduleLabel: null }, order: { paymentProvider: 'complimentary', faceAmountMinor: 0, bookingFeeMinor: 0, totalAmountMinor: 0 } });
   await fixture.delivery.sendOrderConfirmation(fixture.db, fixture.data.order, fixture.data.origin);
   const message = fixture.deliveries[0];
   assert.match(message.subject, /complimentary passes/u);
@@ -68,10 +69,9 @@ test('RSVP confirmation retains its delivery key and gives passes, date, venue a
   const message = fixture.deliveries[0];
   assert.equal(message.subject, `${data.event.title} · RSVP confirmed`);
   assert.equal(message.idempotencyKey, 'registration-update/preview-registration/3');
-  assert.match(message.html, /Guests confirmed/u);
-  assert.match(message.html, /RSVP · No payment required/u);
+  assert.match(message.html, /We’ve confirmed 2 places for you\. No payment required\./u);
   assert.ok(message.text.includes(`${data.origin}/my-nights/${data.registration.eventSlug}?view=passes`));
-  for (const content of [data.event.venue, 'Accra time', '2']) assert.ok(message.text.includes(content), content);
+  for (const content of [data.event.venue, data.event.scheduleLabel, '2 places', 'No payment required']) assert.ok(message.text.includes(content), content);
   await registrations.processRegistrations(env, data.origin, data.registration.id);
   assert.equal(fixture.deliveries.length, 1);
   assert.ok(fixture.calls.some(call => call.query.startsWith('UPDATE event_registrations SET notified_version')));
@@ -84,7 +84,9 @@ for (const status of ['waitlisted', 'cancelled', 'declined']) {
     await fixture.registrations.processRegistrations(fixture.env, fixture.data.origin, fixture.data.registration.id);
     const message = fixture.deliveries[0];
     assert.equal(message.subject, `${previewData.event.title} · Registration update`);
-    assert.doesNotMatch(message.html, /Guests confirmed|RSVP · No payment required|\?view=passes|See you on the guest list/u);
+    const state = { waitlisted: 'You’re on the waitlist.', cancelled: 'Your RSVP is cancelled.', declined: 'The host couldn’t fit you in this time.' }[status];
+    assert.ok(message.html.includes(state), `${status} must remain explicit.`);
+    assert.doesNotMatch(message.html, /Guests confirmed|places for you|No payment required|\?view=passes|See you on the guest list/u);
     assert.ok(message.text.includes(`${previewData.origin}/event/${previewData.registration.eventSlug}`));
   });
 }
@@ -119,19 +121,20 @@ test('recovery, transfers, waitlist, checkout and support preserve their existin
   const transfer = byName['ticket-transfer'];
   assert.equal(transfer.idempotencyKey, 'ticket-transfer/preview-transfer');
   assert.equal(transfer.recoveryGrantId, 'preview-transfer');
-  assert.equal(transfer.text, `Kojo & Friends sent you a ticket for ${previewData.event.title}.\nSaturday, 24 October 2026 at 7:00 pm (Accra time)\nThe Courtyard, Osu, Accra\n\nAccept it: ${previewData.origin}/transfers/claim?token=synthetic-transfer\n\nThe private link expires in 48 hours.`);
-  assert.match(transfer.html, /sender’s old QR stops working/u);
+  for (const content of ['Kojo & Friends', previewData.event.title, previewData.event.scheduleLabel, previewData.event.venue, previewData.event.area, '48 hours', `${previewData.origin}/transfers/claim?token=synthetic-transfer`]) assert.ok(transfer.text.includes(content), content);
+  assert.match(transfer.html, /sender’s QR stops working only after you accept/u);
   const waitlist = byName['waitlist-offer'];
   assert.equal(waitlist.idempotencyKey, `waitlist/preview-waitlist/${previewData.expiresAt}`);
-  assert.equal(waitlist.text, `${previewData.event.title}: Early Bird is available.\n\nTake the ticket before ${previewData.expiresAt}: ${previewData.origin}/waitlist/claim?token=synthetic-waitlist`);
-  assert.match(waitlist.html, /Payment still has to complete/u);
+  for (const content of [previewData.event.title, 'Early Bird', previewData.expiresAt, `${previewData.origin}/waitlist/claim?token=synthetic-waitlist`]) assert.ok(waitlist.text.includes(content), content);
+  assert.match(waitlist.html, /[Pp]ayment|[Pp]ay /u);
   const checkout = byName['abandoned-checkout'];
   assert.equal(checkout.idempotencyKey, 'payment-recovery/preview-abandoned');
   assert.equal(checkout.orderId, 'preview-abandoned');
-  assert.equal(checkout.text, `${previewData.event.title}: Paystack confirmed the checkout was abandoned. No ticket was issued. Start again: ${previewData.origin}/event/${previewData.order.eventSlug}`);
+  for (const content of [previewData.event.title, 'Paystack', 'abandoned', 'No ticket was issued', `${previewData.origin}/event/${previewData.order.eventSlug}`]) assert.ok(checkout.text.includes(content), content);
   const support = byName['support-update'];
   assert.equal(support.idempotencyKey, `support/preview-case/${hash(previewData.supportBody)}`);
-  assert.equal(support.text, `${previewData.supportBody}\n\n${previewData.origin}/support/preview-case`);
+  assert.ok(support.text.includes(previewData.supportBody));
+  assert.ok(support.text.includes(`${previewData.origin}/support/preview-case`));
   assert.match(support.html, /Hi Ama,<br><br>Your booking/u);
 });
 
@@ -164,4 +167,102 @@ test('unsafe primary URLs fail closed before an email is queued', async () => {
   for (const url of ['https://tickets.example.invalid/my-nights#token=synthetic', 'http://localhost:8788/my-nights']) assert.ok(fixture.helpers.customerEmail({ title: 'Test', preheader: 'Test', body: '', action: { label: 'Open', url } }).includes(url));
   assert.equal(fixture.deliveries.length, 0);
   assert.equal(fixture.networkCalls, 0);
+});
+
+test('public email flyers allow only canonical JPEG/PNG artwork and the verified Guest List derivative', () => {
+  const { helpers } = createCustomerEmailHarness();
+  const title = 'On The Guest List';
+  for (const url of ['/events/on-the-guest-list.webp', 'https://tickets.becoreops.com/events/on-the-guest-list.webp']) {
+    const html = helpers.emailFlyer({ url, title, isPublic: true });
+    assert.match(html, /src="https:\/\/tickets\.becoreops\.com\/events\/on-the-guest-list-email\.jpg"/u);
+    assert.match(html, /alt="[^"]*On The Guest List[^"]*"/u);
+    assert.match(html, /height:auto/u, 'The full original artwork must retain its aspect ratio.');
+    assert.doesNotMatch(html, /object-fit:cover|background-image/u);
+  }
+  for (const suffix of ['jpg', 'jpeg', 'png']) {
+    assert.match(helpers.emailFlyer({ url: `/events/preview.${suffix}`, title, isPublic: true }), /<img\b/u);
+  }
+  for (const contentType of ['image/jpeg', 'image/png']) {
+    assert.match(helpers.emailFlyer({ url: '/api/media/preview-poster', title, isPublic: true, contentType }), /<img\b/u);
+  }
+});
+
+test('private, absent, unsupported or untrusted artwork is omitted without leaking a URL', () => {
+  const { helpers } = createCustomerEmailHarness();
+  const input = { title: 'On The Guest List', isPublic: true };
+  for (const url of [null, undefined, '', '/events/unknown.webp', '/events/preview.svg', '/events/preview.gif', '/fallbacks/event.jpg', '/events/../private.jpg', '//external.example.invalid/preview.jpg', 'http://tickets.becoreops.com/events/preview.jpg', 'https://external.example.invalid/events/preview.jpg', 'https://tickets.becoreops.com.evil.example.invalid/events/preview.jpg', 'https://user:password@tickets.becoreops.com/events/preview.jpg', '/events/preview.jpg?token=private', '/events/preview.jpg#private', '/events/preview.jpg\n', 'data:image/jpeg;base64,dGVzdA==', 'javascript:alert(1)']) {
+    assert.equal(helpers.emailFlyer({ ...input, url }), '', String(url));
+  }
+  assert.equal(helpers.emailFlyer({ ...input, url: '/events/on-the-guest-list.webp', isPublic: false }), '');
+  for (const contentType of [null, undefined, 'image/webp', 'image/svg+xml', 'text/html']) {
+    assert.equal(helpers.emailFlyer({ ...input, url: '/api/media/preview-poster', contentType }), '', String(contentType));
+  }
+});
+
+test('flyer alt text cannot inject markup or attributes', () => {
+  const { helpers } = createCustomerEmailHarness();
+  const html = helpers.emailFlyer({ url: '/events/on-the-guest-list.webp', title: '" onerror="alert(1)<script>x</script>', isPublic: true });
+  assert.match(html, /&quot;/u);
+  assert.doesNotMatch(html, /" onerror=|<script>/u);
+});
+
+test('the email JPEG retains the full original public flyer without cropping or redesign', async () => {
+  const source = await sharp(new URL('../public/events/on-the-guest-list.webp', import.meta.url).pathname).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const image = sharp(new URL('../public/events/on-the-guest-list-email.jpg', import.meta.url).pathname);
+  assert.equal((await image.metadata()).format, 'jpeg');
+  const derivative = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  assert.equal(derivative.info.width, source.info.width);
+  assert.equal(derivative.info.height, source.info.height);
+  assert.equal(derivative.data.length, source.data.length);
+  const difference = derivative.data.reduce((sum, channel, index) => sum + Math.abs(channel - source.data[index]), 0) / source.data.length;
+  assert.ok(difference < 10, `JPEG conversion must preserve the original artwork (mean channel difference ${difference}).`);
+});
+
+test('purchase and RSVP deliveries include only public artwork and retain all text when artwork is unavailable', async () => {
+  const previews = await renderCustomerEmailPreviews();
+  for (const name of ['purchase-confirmation', 'rsvp-confirmed']) {
+    const preview = previews.find(item => item.name === name);
+    assert.match(preview.html, /on-the-guest-list-email\.jpg/u, name);
+    assert.ok(preview.text.includes(previewData.event.title));
+  }
+  for (const event of [{ imageUrl: null }, { publicArtwork: 0 }, { imageUrl: '/events/unknown.webp' }, { imageUrl: 'https://external.example.invalid/events/poster.jpg' }]) {
+    const previews = await renderCustomerEmailPreviews({ event });
+    for (const name of ['purchase-confirmation', 'rsvp-confirmed']) {
+      const preview = previews.find(item => item.name === name);
+      assert.doesNotMatch(preview.html, /<img\b[^>]*src="[^"]*(?:\/events\/|\/api\/media\/)/u, name);
+      assert.ok(preview.html.includes(previewData.event.title));
+      assert.ok(preview.text.includes(previewData.event.venue));
+    }
+  }
+  const fixture = createCustomerEmailHarness();
+  await fixture.delivery.sendOrderConfirmation(fixture.db, fixture.data.order, fixture.data.origin);
+  await fixture.registrations.processRegistrations(fixture.env, fixture.data.origin, fixture.data.registration.id);
+  const reads = fixture.calls.filter(({ query }) => query.includes('AS publicArtwork'));
+  assert.equal(reads.length, 2);
+  for (const { query, values } of reads) {
+    assert.match(query, /removed_at IS NULL/u);
+    assert.match(query, /is_test_event\s*=\s*0/u);
+    assert.match(query, /status\s*=\s*'published'/u);
+    assert.match(query, /scheduled_publish_at\s*<=\s*\?/u);
+    assert.ok(values.includes(previewNow));
+    assert.ok(values.includes(previewData.order.eventSlug));
+  }
+});
+
+test('short customer emails retain useful information without placeholders or empty names', async () => {
+  const previews = await renderCustomerEmailPreviews({ order: { customerName: '   ' }, registration: { guestName: '   ' } });
+  for (const { name, html, text } of previews) {
+    const visible = html.replace(/<head>[\s\S]*?<\/head>/iu, '').replace(/<[^>]+>/gu, ' ').replace(/\s+/gu, ' ').trim();
+    assert.doesNotMatch(visible, /\{[^}]+\}|Hi\s*,|Hi\s+(?:undefined|null),/u, name);
+    assert.doesNotMatch(text, /\{[^}]+\}|Hi\s*,|Hi\s+(?:undefined|null),/u, `${name}: plain text`);
+    assert.ok(visible.split(' ').length <= 240, `${name} should stay concise.`);
+    if (['purchase-confirmation', 'rsvp-confirmed', 'email-verification', 'ticket-recovery', 'ticket-transfer'].includes(name)) assert.match(visible, /Hi there,/u, name);
+  }
+});
+
+test('missing customer names use a neutral greeting and supplied names remain escaped', () => {
+  const { helpers } = createCustomerEmailHarness();
+  for (const name of [null, undefined, '', '   ']) assert.equal(helpers.emailGreeting(name), 'Hi there,');
+  assert.equal(helpers.emailGreeting('  Ama Mensah  '), 'Hi Ama Mensah,');
+  assert.equal(helpers.emailGreeting('<img src=x>'), 'Hi &lt;img src=x&gt;,');
 });

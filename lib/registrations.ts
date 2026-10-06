@@ -1,6 +1,6 @@
 import { deliverConfirmation } from './confirmation-delivery';
 import type { AttendeeIdentity } from './attendee-auth';
-import { customerEmail, emailDetails, emailEvent, emailParagraph } from "./customer-email";
+import { customerEmail, emailEvent, emailParagraph, emailFlyer, emailGreeting } from "./customer-email";
 import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from './attendee-auth';
 import { createGateToken, hashGateToken } from './gate-pass';
@@ -8,17 +8,19 @@ import { sendEmail } from './email-delivery';
 import { recordPolicyConsents } from './policies';
 
 export type RegistrationMode = 'paid' | 'rsvp' | 'interest';
-export type RegistrationSettings = { eventSlug: string; title: string; venue?: string; area?: string; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
+export type RegistrationSettings = { eventSlug: string; title: string; venue?: string; area?: string; imageUrl?: string | null; imageContentType?: string | null; publicArtwork?: number; scheduleLabel?: string | null; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
 export type Registration = { id: string; eventSlug: string; email: string; guestName: string; phone: string; partySize: number; kind: string; status: string; attendeeId: string | null; orderId: string | null; version: number; eventSignature: string | null };
 const fields = `id, event_slug AS eventSlug, normalized_email AS email, guest_name AS guestName, phone, party_size AS partySize, kind, status, attendee_id AS attendeeId, order_id AS orderId, version, event_signature AS eventSignature`;
 const timestamp = () => new Date().toISOString();
 const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 export async function registrationSettings(db: D1Database, slug: string) {
-  return db.prepare(`SELECT e.slug AS eventSlug, e.title, e.venue, e.area, e.schedule_status AS scheduleStatus, e.starts_at AS startsAt, e.ends_at AS endsAt, e.event_state AS eventState, e.status AS publication,
+  return db.prepare(`SELECT e.slug AS eventSlug, e.title, e.venue, e.area, e.image_url AS imageUrl,
+    (e.is_test_event=0 AND (e.status='published' OR (e.status='scheduled' AND e.scheduled_publish_at<=?))) AS publicArtwork,
+    (SELECT poster_content_type FROM party_submissions WHERE id=e.submission_id) AS imageContentType, e.schedule_label AS scheduleLabel, e.schedule_status AS scheduleStatus, e.starts_at AS startsAt, e.ends_at AS endsAt, e.event_state AS eventState, e.status AS publication,
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.capacity, 0) AS capacity, COALESCE(s.max_party_size, 1) AS maxPartySize,
     COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, COALESCE(s.accepting,1) AS accepting, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost, COALESCE(s.allow_undated_rsvp,0) AS allowUndatedRsvp
-    FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(slug).first<RegistrationSettings>();
+    FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(timestamp(), slug).first<RegistrationSettings>();
 }
 export function registrationStartConfirmed(settings: Pick<RegistrationSettings, 'scheduleStatus' | 'startsAt'>) {
   return ['confirmed', 'end_pending'].includes(settings.scheduleStatus) && Number.isFinite(Date.parse(settings.startsAt));
@@ -97,11 +99,11 @@ export async function sendRegistrationAccess(db: D1Database, reg: Registration, 
     .bind(crypto.randomUUID(), reg.id, await hashToken(token), new Date(Date.now() + 20 * 60000).toISOString(), timestamp()).run();
   const url = `${origin}/rsvp/access#token=${encodeURIComponent(token)}`;
   const subject = `Confirm your email · ${title}`;
-  const text = `Hi ${reg.guestName},\n\nOpen this link to confirm your email and view your registration for ${title}:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.`;
+  const text = `Hi ${reg.guestName.trim() || 'there'},\n\nOpen this link to confirm your email and view your registration for ${title}:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.`;
   const html = customerEmail({
-    title: "One quick check. Then the plan.",
+    title: "One quick check.",
     preheader: `Confirm your email to continue with ${title}.`,
-    body: emailParagraph(`Hi ${escape(reg.guestName)},`) + emailEvent({ title }) + emailParagraph("Confirm your email to view your registration and continue."),
+    body: emailParagraph(`${emailGreeting(reg.guestName)} confirm this is your email to continue your registration.`) + emailEvent({ title }),
     action: { label: "Confirm my email", url },
     note: "This private link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.",
   });
@@ -252,19 +254,21 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string, 
     const email = async () => {
       if (queued) return;
       const confirmed = reg.status === 'confirmed';
-      const when = registrationStartConfirmed(s) ? `${new Intl.DateTimeFormat('en-GH', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(s.startsAt))} (Accra time)` : 'Date to be announced';
+      const when = registrationStartConfirmed(s) ? `${new Intl.DateTimeFormat('en-GH', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(s.startsAt))} (Accra time)` : s.scheduleLabel || 'Date to be announced';
       const venue = [s.venue, s.area].filter(Boolean).join(', ');
       const eventUrl = `${origin}/event/${encodeURIComponent(reg.eventSlug)}`;
       const actionUrl = confirmed ? `${origin}/my-nights/${encodeURIComponent(reg.eventSlug)}?view=passes` : eventUrl;
-      const nextStep = confirmed ? 'Open My Nights to see your passes. At the door, show the current QR for each guest. If you’re on another device, recover My Nights with the email used for this RSVP.' : 'Check the event page for the latest details. Manage your registration in My Nights.';
+      const intro = confirmed ? `We’ve confirmed ${reg.partySize === 1 ? '1 place' : `${reg.partySize} places`} for you. No payment required.` : detail;
+      const nextStep = confirmed ? 'Show each guest’s current QR at the door.' : '';
+      const note = confirmed ? 'Keep your passes private. On another device? Recover them with the email used for this RSVP.' : 'You can manage your registration in My Nights.';
       const html = customerEmail({
-        title: confirmed ? 'You’re on the list.' : 'Your registration has an update.',
-        preheader: detail,
-        body: emailParagraph(`Hi ${escape(reg.guestName)},`) + emailParagraph(escape(detail)) + emailEvent({ title: s.title, when, venue }) + (confirmed ? emailDetails([{ label: 'Guests confirmed', value: String(reg.partySize) }, { label: 'Admission', value: 'RSVP · No payment required' }]) : '') + emailParagraph(nextStep),
-        action: { label: confirmed ? 'Open My Nights' : 'View event details', url: actionUrl },
-        note: confirmed ? 'Keep your passes private. Your QR passes are in My Nights, not in this email.' : undefined,
+        title: confirmed ? 'You’re on the list.' : 'An update for you.',
+        preheader: confirmed ? `${reg.partySize} ${reg.partySize === 1 ? 'place' : 'places'} confirmed for ${s.title}.` : detail,
+        body: emailParagraph(`${emailGreeting(reg.guestName)} ${escape(intro)}`) + emailFlyer({ url: s.imageUrl, title: s.title, isPublic: s.publicArtwork === 1, contentType: s.imageContentType }) + emailEvent({ title: s.title, when, venue }) + (nextStep ? emailParagraph(nextStep) : ''),
+        action: { label: confirmed ? 'View your passes' : 'View event details', url: actionUrl },
+        note,
       });
-      await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · ${confirmed ? 'RSVP confirmed' : 'Registration update'}`, text: `Hi ${reg.guestName},\n\n${detail}\n\n${s.title}\n${when}\n${venue}\n${confirmed ? `Guests confirmed: ${reg.partySize}\nAdmission: RSVP · No payment required\n` : ''}\n${nextStep}\n\n${actionUrl}\n\nEvent details: ${eventUrl}\nManage your registration in My Nights.\n\nNeed a hand? tickets@becoreops.com`, html, idempotencyKey: key });
+      await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · ${confirmed ? 'RSVP confirmed' : 'Registration update'}`, text: `Hi ${reg.guestName.trim() || 'there'}, ${intro}\n\n${s.title}\n${when}\n${venue}\n\n${nextStep}\n\n${actionUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`, html, idempotencyKey: key });
     };
     if (reg.kind === 'rsvp') {
       const channel = await deliverConfirmation({ env, id: key, attendeeId: reg.attendeeId,

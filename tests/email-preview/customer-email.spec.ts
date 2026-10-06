@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { renderCustomerEmailPreviews } from '../../scripts/customer-email-previews.mjs';
+import { previewData, renderCustomerEmailPreviews } from '../../scripts/customer-email-previews.mjs';
 import { expectVisibleLettering } from '../e2e/text-visibility';
 
 const names = ['purchase-confirmation', 'rsvp-confirmed', 'email-verification', 'ticket-recovery', 'ticket-transfer', 'waitlist-offer', 'abandoned-checkout', 'support-update'];
@@ -48,10 +48,12 @@ for (const name of names) {
     const preview = previews.find(item => item.name === name)!;
     const unexpectedRequests: string[] = [];
     const logo = await readFile(new URL('../../public/brand/becore-ticket.png', import.meta.url));
-    // Keep the exact production HTML. Fulfil its existing hosted PNG locally;
+    const flyer = await readFile(new URL('../../public/events/on-the-guest-list-email.jpg', import.meta.url));
+    // Keep the exact production HTML. Fulfil its existing hosted images locally;
     // every other request is blocked, including any accidental provider call.
     await page.route('**/*', route => {
       if (route.request().url() === 'https://tickets.becoreops.com/brand/becore-ticket.png?v=5') return route.fulfill({ body: logo, contentType: 'image/png' });
+      if (route.request().url() === 'https://tickets.becoreops.com/events/on-the-guest-list-email.jpg') return route.fulfill({ body: flyer, contentType: 'image/jpeg' });
       unexpectedRequests.push(route.request().url());
       return route.abort();
     });
@@ -66,6 +68,19 @@ for (const name of names) {
       await expect(action).toHaveAttribute('href', /^https:\/\/tickets\.example\.invalid\//);
       expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       expect(await page.locator('img').evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+      const artwork = page.locator('img[src="https://tickets.becoreops.com/events/on-the-guest-list-email.jpg"]');
+      if (await artwork.count()) {
+        await expect(artwork).toHaveAttribute('alt', new RegExp(previewData.event.title));
+        const geometry = await artwork.evaluate(image => {
+          const img = image as HTMLImageElement;
+          const rect = img.getBoundingClientRect();
+          return { width: rect.width, height: rect.height, ratio: rect.width / rect.height, naturalRatio: img.naturalWidth / img.naturalHeight, fit: getComputedStyle(img).objectFit };
+        });
+        expect(geometry.width).toBeLessThanOrEqual(240);
+        expect(geometry.height).toBeLessThanOrEqual(380);
+        expect(Math.abs(geometry.ratio - geometry.naturalRatio), 'Show the complete flyer at its original aspect ratio.').toBeLessThan(0.01);
+        expect(geometry.fit).not.toBe('cover');
+      }
       await expectReadableEmail(page);
       const pixels = await page.screenshot({ fullPage: true, ...(colorScheme === 'light' ? { path: info.outputPath(`${name}.png`) } : {}) });
       const digest = createHash('sha256').update(pixels).digest('hex');
@@ -79,9 +94,21 @@ for (const name of names) {
 
 test('long customer and event fields wrap without hiding the primary action', async ({ page }) => {
   const longValue = `AccraAfterHours${'VeryLongUnbrokenReference'.repeat(8)}`;
-  const [preview] = await renderCustomerEmailPreviews({ event: { title: longValue, venue: longValue }, order: { customerName: longValue, reference: longValue } });
+  const [preview] = await renderCustomerEmailPreviews({ event: { title: longValue, venue: longValue, imageUrl: null }, order: { customerName: longValue, reference: longValue } });
   await page.route('**/*', route => route.abort());
   await page.setContent(preview.html);
   await expectReadableEmail(page);
   await expect(page.getByRole('link', { name: 'Open My Nights', exact: true })).toBeVisible();
 });
+
+for (const [name, event] of [['missing', { imageUrl: null }], ['private', { publicArtwork: 0 }], ['unsupported', { imageUrl: '/events/unknown.webp' }]] as const) {
+  test(`${name} flyer still leaves a complete readable customer email`, async ({ page }) => {
+    const [preview] = await renderCustomerEmailPreviews({ event });
+    await page.route('**/*', route => route.abort());
+    await page.setContent(preview.html);
+    await expect(page.locator('img:not([src*="/brand/"])')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: previewData.event.title })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open My Nights', exact: true })).toBeVisible();
+    await expectReadableEmail(page);
+  });
+}

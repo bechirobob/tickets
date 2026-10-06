@@ -13,9 +13,11 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 export const previewNow = '2026-10-06T12:00:00.000Z';
 export const previewData = {
   origin: 'https://tickets.example.invalid',
-  event: { title: 'Accra After Hours & Friends', venue: 'The Courtyard', area: 'Osu, Accra', startsAt: '2026-10-24T19:00:00.000Z' },
-  order: { id: 'preview-order', reference: 'BCT-PREVIEW-2401', eventSlug: 'accra-after-hours', customerEmail: 'guest@example.invalid', customerName: 'Ama Mensah', faceAmountMinor: 40000, bookingFeeMinor: 2000, totalAmountMinor: 42000, currency: 'GHS', quantity: 2, paidAt: previewNow },
-  registration: { id: 'preview-registration', eventSlug: 'accra-after-hours', email: 'guest@example.invalid', guestName: 'Ama Mensah', phone: '', partySize: 2, kind: 'rsvp', status: 'confirmed', attendeeId: null, orderId: 'rsvp_preview-registration', version: 3, eventSignature: null },
+  // The public event identity and unchanged flyer belong together. Customer,
+  // order, payment, transfer and support data below are fictional scenarios.
+  event: { title: 'On The Guest List', venue: 'Asana Restaurant', area: 'Kempinski Gold Coast Hotel, Accra', startsAt: null, scheduleStatus: 'coming_soon', scheduleLabel: 'October · Coming soon', imageUrl: '/events/on-the-guest-list.webp', imageContentType: 'image/webp', publicArtwork: 1 },
+  order: { id: 'preview-order', reference: 'BCT-PREVIEW-2401', eventSlug: 'sun-chasers-labadi', customerEmail: 'guest@example.invalid', customerName: 'Ama Mensah', faceAmountMinor: 40000, bookingFeeMinor: 2000, totalAmountMinor: 42000, currency: 'GHS', quantity: 2, paidAt: previewNow },
+  registration: { id: 'preview-registration', eventSlug: 'sun-chasers-labadi', email: 'guest@example.invalid', guestName: 'Ama Mensah', phone: '', partySize: 2, kind: 'rsvp', status: 'confirmed', attendeeId: null, orderId: 'rsvp_preview-registration', version: 3, eventSignature: null },
   expiresAt: '2026-10-06T12:30:00.000Z',
   supportBody: 'Hi Ama,\n\nYour booking is confirmed for two guests. Open My Nights to see each pass before you leave for the venue.\n\nIf you need anything else, reply in the conversation and we’ll help.',
 };
@@ -36,7 +38,7 @@ export function createCustomerEmailHarness(overrides = {}) {
           if (query.includes('FROM delivery_events') && query.includes('order_id = ?')) return deliveries.find(item => item.orderId === this.values[0]) ?? null;
           if (query.includes('FROM delivery_events') && query.includes('json_extract')) return deliveries.find(item => item.idempotencyKey === this.values[0]) ? { found: 1 } : null;
           if (query.includes('FROM registration_access_grants')) return { count: grants.filter(item => item.kind === 'registration').length };
-          if (query.includes('FROM curated_event_records') && query.includes('event_registration_settings')) return { ...data.event, eventSlug: data.order.eventSlug, mode: 'rsvp', scheduleStatus: 'confirmed', eventState: 'scheduled', publication: 'published', capacity: 100, maxPartySize: 4, approvalRequired: 0, roomAccess: 1, endsAt: '2026-10-25T02:00:00.000Z', ...overrides.settings };
+          if (query.includes('FROM curated_event_records') && query.includes('event_registration_settings')) return { ...data.event, eventSlug: data.order.eventSlug, mode: 'rsvp', eventState: 'scheduled', publication: 'published', capacity: 100, maxPartySize: 4, approvalRequired: 0, roomAccess: 1, endsAt: null, ...overrides.settings };
           if (query.includes('FROM curated_event_records')) return data.event;
           if (query.includes('FROM confirmation_deliveries')) return { status: confirmation.get(this.values[0]) };
           throw new Error(`Unhandled preview read: ${query}`);
@@ -125,10 +127,10 @@ export async function renderCustomerEmailPreviews(overrides = {}) {
     previews.push({ name, actionLabel, ...deliveries.at(-1) });
   }
   await capture('purchase-confirmation', 'Open My Nights', () => delivery.sendOrderConfirmation(db, data.order, data.origin));
-  await capture('rsvp-confirmed', 'Open My Nights', () => registrations.processRegistrations(env, data.origin, data.registration.id));
+  await capture('rsvp-confirmed', 'View your passes', () => registrations.processRegistrations(env, data.origin, data.registration.id));
   await capture('email-verification', 'Confirm my email', () => registrations.sendRegistrationAccess(db, data.registration, data.event.title, data.origin));
   await capture('ticket-recovery', 'Open My Nights', () => delivery.issueRecoveryGrant({ db, normalizedEmail: data.order.customerEmail, origin: data.origin, kind: 'ticket_recovery' }));
-  await capture('ticket-transfer', 'Accept my ticket', () => delivery.sendTicketTransferEmail({ db, transferId: 'preview-transfer', recipientEmail: data.order.customerEmail, recipientName: data.order.customerName, senderName: 'Kojo & Friends', eventTitle: data.event.title, eventDate: 'Saturday, 24 October 2026 at 7:00 pm (Accra time)', venue: `${data.event.venue}, ${data.event.area}`, claimUrl: `${data.origin}/transfers/claim?token=synthetic-transfer` }));
+  await capture('ticket-transfer', 'Accept my ticket', () => delivery.sendTicketTransferEmail({ db, transferId: 'preview-transfer', recipientEmail: data.order.customerEmail, recipientName: data.order.customerName, senderName: 'Kojo & Friends', eventTitle: data.event.title, eventDate: data.event.startsAt ? `${new Intl.DateTimeFormat('en-GH', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(data.event.startsAt))} (Accra time)` : data.event.scheduleLabel || 'Date to be announced', venue: `${data.event.venue}, ${data.event.area}`, claimUrl: `${data.origin}/transfers/claim?token=synthetic-transfer` }));
   await capture('waitlist-offer', 'Take the ticket', () => delivery.sendWaitlistOfferEmail({ db, entryId: 'preview-waitlist', recipient: data.order.customerEmail, eventTitle: data.event.title, tierName: 'Early Bird', expiresAt: data.expiresAt, claimUrl: `${data.origin}/waitlist/claim?token=synthetic-waitlist` }));
   await capture('abandoned-checkout', 'Try the night again', () => delivery.sendAbandonedCheckoutEmail({ db, orderId: 'preview-abandoned', recipient: data.order.customerEmail, eventTitle: data.event.title, eventUrl: `${data.origin}/event/${data.order.eventSlug}` }));
   await capture('support-update', 'Open the conversation', () => delivery.sendSupportUpdateEmail({ db, caseId: 'preview-case', recipient: data.order.customerEmail, subject: 'Your booking question', body: data.supportBody, url: `${data.origin}/support/preview-case` }));
@@ -144,7 +146,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     await writeFile(resolve(output, `${name}.html`), html);
     await writeFile(resolve(output, `${name}.txt`), text);
   }
-  await writeFile(resolve(output, 'manifest.json'), JSON.stringify({ synthetic: true, outboundEmail: false, source: 'Production delivery payloads captured before provider dispatch', previews: previews.map(({ name, subject, kind, actionLabel, idempotencyKey }) => ({ name, subject, kind, actionLabel, idempotencyKey })) }, null, 2));
-  await writeFile(resolve(output, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer email previews</title><body style="font:16px system-ui;padding:24px"><h1>Customer email previews</h1><p>Synthetic data. Exact production HTML; no emails sent. Link destinations are inert preview addresses.</p><ul>${previews.map(({ name }) => `<li><a href="${name}.html">${name}</a> · <a href="${name}.txt">plain text</a></li>`).join('')}</ul></body></html>`);
+  await writeFile(resolve(output, 'manifest.json'), JSON.stringify({ synthetic: true, outboundEmail: false, source: 'Production delivery payloads captured before provider dispatch; public event identity, fictional customer and transaction scenarios', previews: previews.map(({ name, subject, kind, actionLabel, idempotencyKey }) => ({ name, subject, kind, actionLabel, idempotencyKey })) }, null, 2));
+  await writeFile(resolve(output, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer email previews</title><body style="font:16px system-ui;padding:24px"><h1>Customer email previews</h1><p>Exact production HTML with the public On The Guest List identity and flyer. Customer, payment and registration scenarios are fictional, not current event availability or prices. No emails sent; action links use inert preview addresses.</p><ul>${previews.map(({ name }) => `<li><a href="${name}.html">${name}</a> · <a href="${name}.txt">plain text</a></li>`).join('')}</ul></body></html>`);
   console.log(`Saved ${previews.length} synthetic customer email previews to ${output}. No email was sent.`);
 }

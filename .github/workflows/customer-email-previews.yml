@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - lib/customer-email.ts
+      - public/events/on-the-guest-list.webp
+      - public/events/on-the-guest-list-email.jpg
       - lib/email-delivery.ts
       - lib/registrations.ts
       - scripts/customer-email-previews.mjs

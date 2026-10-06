@@ -51,3 +51,21 @@ mobile WebKit, retaining only fictional HTML/PNG review files for three days.
 Its previews are not real messages, bookings, delivery receipts or release
 attestations. Native email clients can apply their own rendering; browser
 screenshots alone do not verify Outlook, Gmail or Apple Mail delivery.
+
+The approved 6 October refinement adds the complete public event flyer to
+purchase and RSVP confirmations at 180 px display width, without cropping.
+The original public Guest List WebP has a JPEG email derivative with the same
+960 × 1423 composition. Generic photos, private/test/removed/future-scheduled
+artwork, external or tokenized image URLs and unsupported formats are omitted.
+Only published/due-public event records may supply artwork; the media endpoint's
+existing publication checks remain authoritative. Event name/date/venue remain
+real text if images are blocked. Uploaded JPEG/PNG artwork uses its public media
+URL; other uploaded formats are omitted until a compatible public asset exists.
+
+Copy now uses a stored customer/guest name when available, a neutral fallback
+when missing, one event section, one action and one private-access note. Full
+names are not guessed to be verified first names. The generic tagline and team
+signoff are removed; the footer provides one help address. Transfer copy makes
+acceptance pending. Preview customers, paid bookings and amounts are fictional;
+the verified public Guest List title/artwork/venue and unannounced date are kept
+consistent across both confirmation examples.
