@@ -88,7 +88,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "fdd0a89fcf0dc58fe6186e772f38a854fa2b3e90",
+    "ops/vps/test_code_release.py": "3d413b8b530f7eee378f88cb540475c2973b8b22",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
