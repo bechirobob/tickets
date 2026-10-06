@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "node scripts/clean-build.mjs && vinext build",
     "start": "vinext start",
-    "test": "npm run test:repo && npm run test:ui && npm run test:password-client && npm run test:rendered && npm run test:worker",
+    "test": "npm run test:tooling && npm run test:repo && npm run test:ui && npm run test:password-client && npm run test:rendered && npm run test:worker",
     "test:repo": "node --test tests/repository-boundaries.test.mjs tests/owner-recovery-issuer.test.mjs tests/app-navigation.test.mjs tests/wallet-provider-actions.test.mjs tests/customer-email-rendering.test.mjs",
     "test:ui": "node --test tests/mobile-ui.test.mjs",
     "test:password-client": "node --test tests/staff-password-client.test.mjs",
@@ -28,7 +28,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "test:capacity": "vitest run --config vitest.capacity.config.ts",
     "build:vps": "node scripts/build-vps.mjs",
-    "test:vps": "node --test tests/vps-database.test.mjs tests/vps-operations.test.mjs tests/vps-moderation-client.test.mjs tests/handover-room-return.test.mjs tests/handover-database-transfer.test.mjs tests/handover-envelope.test.mjs tests/handover-data.test.mjs tests/handover-rpc.test.mjs && vitest run --config vitest.vps.config.ts"
+    "test:vps": "node --test tests/vps-runtime-packaging.test.mjs tests/vps-database.test.mjs tests/vps-operations.test.mjs tests/vps-moderation-client.test.mjs tests/handover-room-return.test.mjs tests/handover-database-transfer.test.mjs tests/handover-envelope.test.mjs tests/handover-data.test.mjs tests/handover-rpc.test.mjs && vitest run --config vitest.vps.config.ts",
+    "test:tooling": "node --test tests/tooling-glob.test.mjs"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
@@ -67,7 +68,11 @@
     "typescript": "5.9.3",
     "vite": "8.2.1",
     "vitest": "4.1.11",
-    "wrangler": "4.120.1"
+    "wrangler": "4.120.1",
+    "@next/eslint-plugin-next": "file:vendor/eslint-plugin-next",
+    "vite-plugin-dynamic-import": "file:vendor/vite-plugin-dynamic-import",
+    "@becoreops/tooling-glob": "file:vendor/tooling-glob",
+    "glob": "13.0.6"
   },
   "overrides": {
     "sharp": "0.35.4",
@@ -78,7 +83,9 @@
     "fflate": "0.7.5",
     "@esbuild-kit/core-utils": {
       "esbuild": "0.25.12"
-    }
+    },
+    "@next/eslint-plugin-next": "$@next/eslint-plugin-next",
+    "vite-plugin-dynamic-import": "$vite-plugin-dynamic-import"
   },
   "type": "module"
 }
