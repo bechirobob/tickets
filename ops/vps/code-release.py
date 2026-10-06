@@ -62,27 +62,36 @@ APPLICATION_FILES = {
 # These pins validate staged operator bytes; they do not expand application approval.
 REVIEWED_OPERATOR_BLOBS = {'ops/vps/runtime_release.py': '043e310a41ff28d23adc20383c88566b181232a6', 'ops/vps/test_runtime_release.py': '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14', 'ops/vps/public_runtime_guard.py': '9a9739f1bd88cbd02dc420001efa3de5b85e3538', 'ops/vps/test_public_runtime_guard.py': 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'}
 
-REVIEWED_APPLICATION_BLOBS = {
-    "tests/e2e/operations.spec.ts": "a03406f337129e9de619131fe6f01cfdf4bc5127",
-    "tests/webhook-signatures.test.ts": "3645102ec5e8bc978ce9735ab34ef6e06e568bd7",
+# The independently staged control baseline retains these older test/producer
+# files; the application candidate must still match REVIEWED_APPLICATION_BLOBS.
+REVIEWED_CONTROL_BLOBS = {
+    ".github/workflows/vps-runtime.yml": "06d83690ed40675dae9f5e423cfcc73b3022fc1f",
+    "ops/vps/test_runtime_packaging.py": "c7bb8a5bdb6a17c547a29d1289d15bdce4a57228",
     "tests/test_audit_release_source.py": "9d987c3d720d119d1bc3834d04af20a1e8efdc6c",
+}
+EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
+
+REVIEWED_APPLICATION_BLOBS = {
+    "tests/e2e/operations.spec.ts": "ed96abb5806f4c1464a36a3608fa9d19fd4cd406",
+    "tests/webhook-signatures.test.ts": "3645102ec5e8bc978ce9735ab34ef6e06e568bd7",
+    "tests/test_audit_release_source.py": "6516f3f4b8582d3874ceda34e1fc3e3b799fec8d",
     "tests/test_audit_release_dependencies.py": "6983998bf40fc1cb424e6dafbb7ba35e5653336d",
     "tests/support-email-rendering.test.mjs": "e36cd295c753c5a28d5056a9ef33794d4c3216b4",
     "tests/scanner-session-client.test.mjs": "3d2665434fbb95d2329dc8370c57368e153ce16b",
     "tests/scanner-manifest.test.ts": "caa44fd148e41523f73219ffda5bf50c6efcfad7",
     "tests/public-catalogue.test.ts": "0eb2322754693cd8c62d433e6f0ccf25954e635a",
     "tests/organizer-scale-audit.test.ts": "a4be4dcfb4d5c4a104724b95bfc4687b7a75dd80",
-    "tests/mobile-ui.test.mjs": "5cc3c4de19d6b73b294cd11feb2a4d200a914122",
+    "tests/mobile-ui.test.mjs": "e11b08eb21ebe3c987fd5d96877e938362c25c7b",
     "tests/gate-checkin.test.ts": "c0a046f6a8b5b68f380487890d614ef4c915c187",
     "tests/e2e/room-identity.spec.ts": "abab7debc8ff8acfcbe1fea21d2b109b845cd647",
     "scripts/verify-audit-release-source.py": "129d7bdbd2d631ad385a9edd7be4ea9895f173cf",
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "61c7b9daf28dacf7e247b06e06d526d0d4646dd1",
+    "ops/vps/test_code_release.py": "fdd0a89fcf0dc58fe6186e772f38a854fa2b3e90",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
-    "app/privacy/page.tsx": "5de9886c16f5eaef51afec15d31863c482b99354",
+    "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
     "app/hosts/[slug]/page.tsx": "04228bb8dd93a831d1a608b0b42c59340ed9a86d",
     "app/api/organizer/analytics/route.ts": "411aac48caa2686c4480ddca4eee8221586ac996",
     ".github/scripts/verify-audit-control.py": "87cd21e095c76efc9e607484b8c0836db9bc58b5",
@@ -104,8 +113,8 @@ REVIEWED_APPLICATION_BLOBS = {
     ".github/backup/test_backup_release.py": "cd805866b06b0a70ab3bf384db19990d96a0dffd",
     ".github/workflows/backup-transport-checks.yml": "7e32458428475121554f43c8a3f646e70d11161e",
     ".github/workflows/deploy.yml": "e90f3ab46d499cfe6a03f859452046ca3a026993",
-    ".github/workflows/tickets-backup.yml": "9077f257dbcfb1a8842dcf54a2bf3dff084461d6",
-    "ops/vps/test_runtime_packaging.py": "c7bb8a5bdb6a17c547a29d1289d15bdce4a57228",
+    ".github/workflows/tickets-backup.yml": "d26451d3b3c4bb7df29be854a71878b76416fb0e",
+    "ops/vps/test_runtime_packaging.py": "6f215f441ff1d9b92b3c870a6f438a54e5ccc1a1",
     ".github/workflows/tickets-code-release.yml": "808e8014f7af281b3370e411be1f6a3808d2e88b",
     "scripts/audit-analytics.mjs": "e8da0ec9f7ef0e9c857c60b059ebaabbc1710baf",
     "playwright.config.ts": "458baa39707043948474dae29bd5341c7ea5a883",
@@ -114,7 +123,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/candidate_evidence.py": "d65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba",
     "ops/vps/runtime_release.py": "043e310a41ff28d23adc20383c88566b181232a6",
     ".github/workflows/tickets-release-operator-checks.yml": "e1674c3407ac586aeaf67a2166a9ad32c7cd5bef",
-    ".github/workflows/vps-runtime.yml": "06d83690ed40675dae9f5e423cfcc73b3022fc1f",
+    ".github/workflows/vps-runtime.yml": "3041cf9b68ba250429e8f58e5404d10b2f9330a0",
     ".github/workflows/browser-audit.yml": "4e0293b58478326e6c22e653f69272ce6e64f7e3",
     ".github/workflows/candidate-checks.yml": "dc127e63338b3ac2f8498a2114fe7a465c64344b",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
@@ -122,7 +131,7 @@ REVIEWED_APPLICATION_BLOBS = {
     ".github/workflows/tickets-readiness-audit.yml": "f47378c33914b0005ec15598fb0f9110d6882c6d",
     "README.md": "d104e3598aadc56d2d410dedf7c25b95570bc90c",
     "app/access-polish.css": "d565de3c7a828d9c415421a2ec954128cdf0fad6",
-    "app/account/privacy/privacy-settings.tsx": "b04b3a832f8e0acdc33e95952875801191a579ef",
+    "app/account/privacy/privacy-settings.tsx": "b524f8c52b370bff99c6eadd09b9e44a567f3151",
     "app/active-night-experience.tsx": "7627990fbd1f6fbb15a340ae1c01a7421164a5e8",
     "app/admin/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/admin/login/login-form.tsx": "ee7957582f7e959106766fb4b418f6524766d386",
@@ -163,8 +172,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/api/customer/notifications/test/route.ts": "9c19d117ecae64463ae5d2391b2429ae965e283d",
     "app/api/customer/preferences/route.ts": "a37a2b56facb1c370f6c43280ddceb8e771094cb",
     "app/api/customer/privacy/route.ts": "627451c277db3d9f1a6c4f07ea5b7ecc9165b712",
-    "app/api/customer/recovery/claim/route.ts": "3e0156f04c0ea06dc74f94970f22203663f7b499",
-    "app/api/customer/recovery/route.ts": "0f2059fcb5c20222756c6ec9174c10ac58a7cdae",
+    "app/api/customer/recovery/claim/route.ts": "382a3980cb5008ac9c5b039ed85c5154d33f1e99",
+    "app/api/customer/recovery/route.ts": "10bb37768f07aa33c092939ce7924a00ca572a01",
     "app/api/customer/registrations/route.ts": "975428e5c4b3d8da9931a8cceaaae01efbbe8b80",
     "app/api/customer/returns/route.ts": "2a7a3b5b5b44a7e3b21ec51d667ae5c9b2513911",
     "app/api/customer/session/route.ts": "b20f8da2dc415e02b0005c33dccbff1c1d969ba6",
@@ -181,14 +190,14 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/api/organizer/reports/route.ts": "9ce231e9df04ca00c6cd80c2011185e250622481",
     "app/api/organizer/team/accept/route.ts": "6726cc0bf08a38878540f4dd54c83c8e0e6c7648",
     "app/api/organizer/workspace/route.ts": "27e4f7dc7ce6c33b7fc19695614462f31f7a0ec4",
-    "app/api/payments/initialize/route.ts": "abbb1f8040a09c7c094e3319ca360dae80c8cc29",
+    "app/api/payments/initialize/route.ts": "cfc6959b3470d9527db619c9839467cd39260d99",
     "app/api/payments/quote/route.ts": "9b483e873c82a3c2dccddfba55fa455a06c1386d",
     "app/api/payments/seevplus/webhook/route.ts": "bfe1b94c32768cf5689c823195f0fd1e45064d68",
     "app/api/payments/webhook/route.ts": "9197d6f67bcd7d172e2d344c744ba77012efda3f",
     "app/api/promoter/route.ts": "9037908c9b60c828b79136674289b9fe48e221e2",
     "app/api/public/events/route.ts": "7893a675d91939964c96808f30b87d1a71aeb26a",
-    "app/api/registrations/claim/route.ts": "ab509df1fa78aafe06655505a9ec69f8b5eb5d7a",
-    "app/api/registrations/route.ts": "2fa745f4f4fc205390f351fc235e4bb6e84fe20e",
+    "app/api/registrations/claim/route.ts": "9a8c644ab2997d7ab4aa531d8fb9628b5bb5ab7c",
+    "app/api/registrations/route.ts": "26d98c17de234463f16d08ec63a9c5d91f2dc1be",
     "app/api/rooms/[slug]/block/route.ts": "c539eaf68f271bebc5bb0c5a125fbf71bd67c2af",
     "app/api/rooms/[slug]/flashes/[id]/report/route.ts": "67afcc73600e25a221bc39960d84d19d3027257d",
     "app/api/rooms/[slug]/flashes/[id]/route.ts": "2f38f44cd8f938c38190ca8c4707402877ea6635",
@@ -210,7 +219,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/home-screen.tsx": "b629019108100f15889edaccd6ac1ee21d4e436d",
     "app/hosts/page.tsx": "f5d2b1129968ba51dc95a6208a408e60f200b05b",
     "app/iphone-interface.css": "3dd3b6b529819123cbc6fa9e71f48a95b193cb1d",
-    "app/layout.tsx": "056b004843736b4c37bf6f1ea256fd1b8ab9e0b7",
+    "app/layout.tsx": "e2b08c91b28ba40311d18723796d9c7e035db2ae",
     "app/mobile-app-frame.tsx": "33559c6475f4b025e821b33c13d55a5b062391e9",
     "app/mobile-navigation.tsx": "cc9e7844b263a473f590b749de26c9c4d91d0773",
     "app/my-nights/[slug]/night-hub.tsx": "ffda3dff3c3fa47e4b3805873298a36681dbb487",
@@ -228,14 +237,14 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/payment-footer.tsx": "bd75bc7b041ebe776877a668a6417a787f020e98",
     "app/promoter/promoter-portal.tsx": "a3a61075a0d532c1f027cb05f723c6f88e8dbf0c",
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
-    "app/registration-form.tsx": "892574dd3198a410d5fea00232e607783d2e77df",
+    "app/registration-form.tsx": "b797f6cf18ec325cff23ea5f33c59067b9055ae8",
     "app/registration-manager.tsx": "cd0b22d16d2ff9bd45adbd917744a3248e2cb04e",
     "app/room-demo.css": "c3d871ed75945a72df7fb32f7c13c962ee4876de",
     "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
     "app/room-preview-carousel.tsx": "c77a4021be9ea6c29b6a8215e49326f2522e9491",
     "app/room/[slug]/room-client.tsx": "043000a1a4d51ea07acd170046f4898894a3945e",
     "app/rsvp/[slug]/page.tsx": "40ba4869d74f15e722834a9e682bc0867e2b054a",
-    "app/rsvp/access/page.tsx": "02c302374244f4e73436acdc2dc80d99e8326d86",
+    "app/rsvp/access/page.tsx": "38bfb0e70087a3e07fc2cd0d1995e10eaa2fcb22",
     "app/scan/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/scan/page.tsx": "345bc4e0eea838c4ae89ad87f24e6d90e6881716",
     "app/scan/scanner.tsx": "1a1605c9297f782f61a2dfcc1c955796f7f04c74",
@@ -246,18 +255,18 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/use-header-panel.ts": "24a3e6e3fb54ed67b28c348d77f1b92e60310448",
     "app/use-layer-history.ts": "8f6421c896a29e90ff1f2bd5742f677c6543a2d2",
     "app/use-room-demo.ts": "7ea2ec4191b5f5b9dff10cdfa2925a69514a434f",
-    "app/workspace-chrome.tsx": "b685c0accdb65f2dcf5ae81c389d0fa1862d9228",
+    "app/workspace-chrome.tsx": "aee4d182363215c729e840aeebc3f3c47efcb908",
     "app/workspace.css": "8c3881d31c50a13246219e74262c27b542e36880",
-    "db/schema.ts": "ee50c0c9821c0d4f47e5b0bfb86df6b902e11afb",
+    "db/schema.ts": "0edec94f9c2b304fd0930dfc099a4c0ec9a81e78",
     "lib/admin-session.ts": "57fa1b554bf27a8aa3759871017b721e682488df",
     "lib/background-health.ts": "4793c1cd2a5204371e75495d9d1b218f24a0a092",
     "lib/customer-screen.ts": "9546a787d811e4a8351e16e30693639c26743b26",
-    "lib/email-delivery.ts": "6046a9696d8f3002c23d0af54e08fa93179e0ee5",
+    "lib/email-delivery.ts": "5c047c09cc05fe4260e91e59d90b7afaa4037e3b",
     "lib/event-guest.ts": "376bf08ff8b52898a4bbc3ab913ea0350134d1db",
     "lib/operational-finance.ts": "7e910e7765074c174695ca32338dee0fd9ae0681",
     "lib/operations-exceptions.ts": "ad4ba837129ba67ffa08745bdb3ff6ea4c838800",
     "lib/organizer-team.ts": "0214111d285e2bb19ee95af1934df68307126919",
-    "lib/payment-operations.ts": "9935707757fe77069210f2f72b510ad09656b781",
+    "lib/payment-operations.ts": "91ece2502c7422141c40d9c15ac5c1c69f93f541",
     "lib/provider-operation-tracking.ts": "63288d84fa93f0a97ee01909a68a654272151cbb",
     "lib/registration-draft.ts": "633cdb6e22cb28a1c8002fab96da0bf9fe6eb91b",
     "lib/registration-guidance.ts": "16bf24b5c2c23fa18e1dd16d14563cbed33164b2",
@@ -265,7 +274,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "lib/scanner-sync.ts": "68d45f670f1cf1d3a26c9ff10c5fbdbf21bb8243",
     "mobile/src/adapters/navigation.tsx": "475edbb849c70e265e5fbdff6931511b40138f52",
     "mobile/src/screen-catalogue.ts": "3c7030e0374696f31af397e7970be77173418194",
-    "mobile/tests/app.spec.ts": "8dc775ae5404008dbe34714639a0c0bd0a3fe904",
+    "mobile/tests/app.spec.ts": "30b9a4d88b7f424d4cc95a00b452a81df6cc30b1",
     "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
     "mobile/tsconfig.json": "be7802b84428c49a3ddeb14b79373b8cdae64234",
     "mobile/vite.config.ts": "985e6a0bab112aeb54e470a7bd6a34bdeccf0b5e",
@@ -276,7 +285,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
     "scripts/capture-iphone-layouts.mjs": "4abbb15794097eed900e009c2af956e06b96c340",
     "scripts/iphone-layout-evidence.mjs": "42daec5963ef6da3f1394fe499c79ba53c647a4d",
-    "scripts/verify-vps-runtime.mjs": "cce13d6b123abb4a7da7341a854de54f049fadef",
+    "scripts/verify-vps-runtime.mjs": "b44c381a413967d246027d1e8b3573a5f301ccf1",
     "styles/customer.css": "c6d3cc402fcb37287444c9ac75777424ceeac891",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b",
@@ -284,6 +293,129 @@ REVIEWED_APPLICATION_BLOBS = {
     "worker/the-room.ts": "e6c0a8b1e39e20b939e3e322ebc44675b8bab7ed",
     "scripts/audit-checkbox-hotfix.py": "5313d8cdc4076b36d434fe8017cc0e7b4824e876",
     "tests/test_checkbox_hotfix_audit.py": "421ec5fd992b1ba258e357ff4a65f6c3a647d2ce",
+    ".github/workflows/booking-consent-previews.yml": "469e4179d6bfc8c2bab4518739d58a67edc5c400",
+    ".github/workflows/customer-email-previews.yml": "30f85c7bb917a1cb16362d4cfb54fbf2daabca3f",
+    ".gitignore": "49c444a761e44c4281baa50238bb18db76405fa7",
+    ".npmrc": "c7d351733b3be766847fabaa08cad86a2e746c5c",
+    "app/account/privacy/platform-announcements.tsx": "ed5267f34069712533db3ab0aefa78e3ae2f1ee6",
+    "app/admin/platform-audience/page.tsx": "ee49f268e4e921da8ae4e99992f80f3d5b0a0f37",
+    "app/admin/platform-audience/platform-audience.tsx": "4e1d18c1c5b1f214108055137e3ba739064e056f",
+    "app/api/admin/platform-audience/route.ts": "1d7e2c70284e866ece245084f8e70638a6072207",
+    "app/api/customer/platform-announcements/route.ts": "e5e739a55196c670deaf7b0bb63893410c936b24",
+    "app/api/platform-announcements/unsubscribe/route.ts": "dda4cbf7155d8e38b7ac2d2a601c2ded4e0ca0e2",
+    "app/api/platform-announcements/verification/route.ts": "3925d4a3fd992f367f8225f36bd744b6a40f37c2",
+    "app/booking-consent.css": "996bc19e3617deef31e179f5a8e168d6e2f6d290",
+    "app/checkout/[slug]/checkout-form.tsx": "26a4705777e2b85cd978d7fa06abc19153d2abf2",
+    "app/my-nights/access/page.tsx": "5efa8d87c33e90d72a2364dc94fefff1a27de7e7",
+    "app/platform-announcements/unsubscribe/page.tsx": "82bcea344cc03168d3c644ea6ebc34b1a1678fc8",
+    "docs/brand-assets.md": "afc5650c6d7a87fbd95388016806b7574f7cb3dc",
+    "docs/operations/platform-announcements.md": "62aca09986bd153474a10aaba76e98f1a91c7ed0",
+    "eslint.config.mjs": "8e06e124d56d8660b8447b53affeede9c5aec056",
+    "lib/customer-email.ts": "206ebfe7f4b8d2dea1ac24b52a62c478a454e246",
+    "lib/platform-announcements.ts": "ab09b51f3d547f1451ab7527d85b1d774d5c4c84",
+    "lib/policies.ts": "3c9e0b06c569aa8cbb15e0f45a138ca6058a7a3a",
+    "lib/preview-cleanup.ts": "dd10b3277598ee7e36f9d5ba4340ec07c231af30",
+    "lib/registrations.ts": "67f84900329822eec9466d04ec904e5b5fc7f588",
+    "lib/staff-roles.ts": "337c567907f545f0ebf96f840858db02789486aa",
+    "playwright.customer-email.config.ts": "88ed1994c64a7253637b9b230620a474e48315e0",
+    "public/events/on-the-guest-list-email.jpg": "39c0317539861395953c6c43b4a23ce6851b03f1",
+    "runtime/vps/package.json": "e37de887cb29595c07fa90025cb314e978222baa",
+    "scripts/build-vps.mjs": "8e4ee60ccaec223f54fd00b6e7a968d706c32f6f",
+    "scripts/customer-email-previews.mjs": "afbba02f4a1db052ad830bee1d11c7f6fb2c12a7",
+    "scripts/prepare-vps-runtime.mjs": "aa0df8e663887c0db9883a5db744bafbfc7de339",
+    "scripts/rehearse-d1-recovery.sh": "675e872ec22d87826cf5eef5e2f1ff24abc3c73a",
+    "scripts/vps-runtime-dependencies.mjs": "9dd795c716f196dc61ee7c87db7699bba0fba2e3",
+    "tests/customer-email-rendering.test.mjs": "75fbf0237c570d3c75cd4d5ac3db5c18a9f5f601",
+    "tests/e2e/analytics-fixture.ts": "26397e2efb63c5871702f686b3fe9b8e4319196b",
+    "tests/e2e/booking-consent.ts": "5ec8a675b127a634f27847033c81f5e41957f9d1",
+    "tests/e2e/customer-feedback.spec.ts": "28c355219aa8a55e51b429072bff8b031fc3f62e",
+    "tests/e2e/guest-clarity.spec.ts": "0601d471b36e783eaa5f2f5bd59d6f279822ac8b",
+    "tests/e2e/platform-announcements.spec.ts": "3eae4c200424d882188085a3eed616c10ac7bb46",
+    "tests/e2e/private-link-recovery.spec.ts": "e29c198e1d2f0849a638ac624da40552c317a35c",
+    "tests/e2e/registration.spec.ts": "2b8f31cdacbab4c8bc29b5459df32b459a5d6f53",
+    "tests/e2e/seevplus-checkout.spec.ts": "036e3cb69226bc2b2c8495e85aa18aba98a974a9",
+    "tests/email-preview/customer-email.spec.ts": "2259c6dafc53fd38f67a71d950837008b5e39de6",
+    "tests/platform-announcements.test.ts": "634c4fee9dc9e7a8facb1933fa8d3ccaaa9d3a19",
+    "tests/preview-cleanup.test.ts": "a74cb6ed1b7b66296576a17634ed3ab89f1465e3",
+    "tests/registrations.test.ts": "f9e27478b8f1302ff52f9af75f5f7d196a62a2c5",
+    "tests/rendered-html.test.mjs": "969c4a6a232f9a62707c94cb67a418aea15bfecd",
+    "tests/seevplus.test.ts": "07f1d32312cbd5f97c96ab2998a5aa5e9e84c025",
+    "tests/tooling-glob.test.mjs": "dd453061a87de6b8e8469a7d9dd5a97a962d9caf",
+    "tests/vps-runtime-packaging.test.mjs": "e280c7dd5b08639a64643fc3eeeeb9f51706a45e",
+    "vendor/README.md": "25c88308f0eb356ff1e1a9d390879910ce384739",
+    "vendor/eslint-plugin-next/BECORE-PROVENANCE.json": "ead4bc5a6b6d78ba3dc52f6c46183e85162cbf5c",
+    "vendor/eslint-plugin-next/LICENSE": "5948ee9bd0de5064423688a2967ab3111c2658ed",
+    "vendor/eslint-plugin-next/README.md": "8daceafdd86646b0e128291ae9d8715abb8455d4",
+    "vendor/eslint-plugin-next/dist/index.d.ts": "1a5cf5c133e410c7c971773b09cf607c0c21181a",
+    "vendor/eslint-plugin-next/dist/index.js": "43f23e94acb482573729da47d6483435f9148790",
+    "vendor/eslint-plugin-next/dist/rules/google-font-display.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/google-font-display.js": "340a72229970050d2beafff07d4c40a21af5bf78",
+    "vendor/eslint-plugin-next/dist/rules/google-font-preconnect.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/google-font-preconnect.js": "45bb27299f7f46b6a3020b18edc143732d71361d",
+    "vendor/eslint-plugin-next/dist/rules/inline-script-id.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/inline-script-id.js": "f18388dd55694bc577b28ee38836daac6c25beff",
+    "vendor/eslint-plugin-next/dist/rules/next-script-for-ga.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/next-script-for-ga.js": "42e6be9d98f98727aee94e65137f73eb56790e91",
+    "vendor/eslint-plugin-next/dist/rules/no-assign-module-variable.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-assign-module-variable.js": "832af471fa7e8d2aa77870037f883de0f2d4739f",
+    "vendor/eslint-plugin-next/dist/rules/no-async-client-component.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-async-client-component.js": "c3e7912ca2b1273854ebd6d2877e48c89328b1be",
+    "vendor/eslint-plugin-next/dist/rules/no-before-interactive-script-outside-document.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-before-interactive-script-outside-document.js": "ec25e1ba0ab02308372c150f828a24c2f5e37bed",
+    "vendor/eslint-plugin-next/dist/rules/no-css-tags.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-css-tags.js": "a8a65de3c3dca99c08dc3689dc2d9a0b4bcb5457",
+    "vendor/eslint-plugin-next/dist/rules/no-document-import-in-page.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-document-import-in-page.js": "f0c30ea619b34fa2bba01fb9bb87a4e8e21958d3",
+    "vendor/eslint-plugin-next/dist/rules/no-duplicate-head.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-duplicate-head.js": "059498a31b48e40738bc2c49793d9297adfb5829",
+    "vendor/eslint-plugin-next/dist/rules/no-head-element.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-head-element.js": "da9dc8af59e27327a46e3453900ee3f652378106",
+    "vendor/eslint-plugin-next/dist/rules/no-head-import-in-document.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-head-import-in-document.js": "3d7403b725791e3c30334494ecb164a0144cbfa8",
+    "vendor/eslint-plugin-next/dist/rules/no-html-link-for-pages.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-html-link-for-pages.js": "521a0d9f72117dfa317f12a8b9bea3727bf85cc8",
+    "vendor/eslint-plugin-next/dist/rules/no-img-element.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-img-element.js": "59390e79cf8662af0f33dff48b45e0b83166d5aa",
+    "vendor/eslint-plugin-next/dist/rules/no-location-assign-relative-destination.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-location-assign-relative-destination.js": "6d66c02f76301a6c80025573d3d6e8911fe2f848",
+    "vendor/eslint-plugin-next/dist/rules/no-page-custom-font.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-page-custom-font.js": "8fee398e99e9554cd7da208d7d59cdd0d7db7811",
+    "vendor/eslint-plugin-next/dist/rules/no-script-component-in-head.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-script-component-in-head.js": "60129ccc9882ec38053b6b85124a012fe5e218bc",
+    "vendor/eslint-plugin-next/dist/rules/no-styled-jsx-in-document.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-styled-jsx-in-document.js": "00b944bb8a8072c12031308a00c3c1ed6f29837b",
+    "vendor/eslint-plugin-next/dist/rules/no-sync-scripts.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-sync-scripts.js": "4f0bad5ac84b7a1ff94cdfbfacca5b02cbf33f29",
+    "vendor/eslint-plugin-next/dist/rules/no-title-in-document-head.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-title-in-document-head.js": "b766e9b2eeff85d31a4526f69fb0dc1a7e4d7a66",
+    "vendor/eslint-plugin-next/dist/rules/no-typos.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-typos.js": "0eded8e676814d57529c895f248f799f9970455f",
+    "vendor/eslint-plugin-next/dist/rules/no-unwanted-polyfillio.d.ts": "fe15a8f7f5f821cf3d98e14da3e801905d01e8bb",
+    "vendor/eslint-plugin-next/dist/rules/no-unwanted-polyfillio.js": "a69b998ad3085759cea9d7856a4e19530c181a4e",
+    "vendor/eslint-plugin-next/dist/utils/define-rule.d.ts": "5b86095100e40b5423ee7cac8f0699061d74a37e",
+    "vendor/eslint-plugin-next/dist/utils/define-rule.js": "19b376203c38d05ff1488ef8e4a0144395bdacd6",
+    "vendor/eslint-plugin-next/dist/utils/get-root-dirs.d.ts": "870f30593029d190d0f2f62eb55714fe30c2d347",
+    "vendor/eslint-plugin-next/dist/utils/get-root-dirs.js": "b42bbc67aa65b22318aeab3038c4e7e91f04622e",
+    "vendor/eslint-plugin-next/dist/utils/node-attributes.d.ts": "fe7bae2e8f03584b6813e693010b524f338fc6ae",
+    "vendor/eslint-plugin-next/dist/utils/node-attributes.js": "b1f1e6778583c2953cda4185f9754a1cd61ad9aa",
+    "vendor/eslint-plugin-next/dist/utils/url.d.ts": "66c9e29743294c340a4bf6b78b53e1a1770bc629",
+    "vendor/eslint-plugin-next/dist/utils/url.js": "d1cf29604c4606085e68495ba6d8b1b289fe4506",
+    "vendor/eslint-plugin-next/package.json": "35af124dbddd097052d62c1627b50847466e10e0",
+    "vendor/tooling-glob/adapter-factory.cjs": "1b25c4dede88f65b2bbe90e97ccc40dc1c75330f",
+    "vendor/tooling-glob/index.cjs": "b52c1fe44d40b6f182db46bce87121034b04cb7a",
+    "vendor/tooling-glob/package.json": "74fc954227e19a0ba259b063805c798a4092b07c",
+    "vendor/vite-plugin-dynamic-import/BECORE-PROVENANCE.json": "0c25dc58edae8342fd91e6195130f01be5e790ed",
+    "vendor/vite-plugin-dynamic-import/LICENSE": "d86fcc01951d83a3755fa116a2948b20bfcd06c5",
+    "vendor/vite-plugin-dynamic-import/README.md": "d7924deef8e094f19afd6f05c646a6db902f7707",
+    "vendor/vite-plugin-dynamic-import/README.zh-CN.md": "6d54dd0646c0a8ea48731e6ba9b3b0f9a4115e71",
+    "vendor/vite-plugin-dynamic-import/dist/dynamic-import-to-glob.d.ts": "2b8426f32237884754d5664b40766077758ad639",
+    "vendor/vite-plugin-dynamic-import/dist/index.d.ts": "f4be1ccce3bce882aaabdc329c5050e8eefd844b",
+    "vendor/vite-plugin-dynamic-import/dist/index.js": "3886f9b34b30facc74c1869fddcc2e715dca45a6",
+    "vendor/vite-plugin-dynamic-import/dist/index.mjs": "d13ea6382c6e9761a21801c27a12c86784997624",
+    "vendor/vite-plugin-dynamic-import/dist/resolve.d.ts": "341f016c3f4275ac7d8f9d2dcc4a1c77384d78ea",
+    "vendor/vite-plugin-dynamic-import/dist/types.d.ts": "a67b7c67f5fcb8e8070ca5e13512fabb31932599",
+    "vendor/vite-plugin-dynamic-import/dist/utils.d.ts": "2a077c9dd869dfc676281b226933a24e90d59c44",
+    "vendor/vite-plugin-dynamic-import/package.json": "f58737d07a2ba5b613d350921a3d44b519669d35"
 }
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
@@ -296,6 +428,17 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    "drizzle/0061_platform_announcement_consent.sql": {
+            "blob": "3f0eea14b46ce9bdd7927a1049bfa23ac430f276",
+            "sha256": "9bef21dd670e7a87c23e2388538e0ec83fb6fb083d3201df986c0ad13127fbd1",
+            "schemaSha256": "0d270a49611676b6608d97aec0adea41a8245947afd861febe2306a10be9b0fd",
+            "tables": [
+                    "platform_announcement_choices",
+                    "platform_announcement_subscriptions",
+                    "platform_announcement_unsubscribe_tokens",
+                    "platform_announcement_verifications"
+            ]
+    },
     STAFF_OWNER_GUARD_PATH: {
         "blob": "72a0d09ba331f2e8463782ef016ba16c50a5d471",
         "sha256": "0b790e43fdde094e465f88218fda35d222bbbba8b8f81aaa9e15eeb60737118a",
@@ -623,6 +766,15 @@ def vetted_changes(expected, source):
     verify_changed_modes(expected, source)
     changed = git("diff", "--name-only", expected, source).splitlines()
     for name in changed:
+        if name == "ops/vps/code-release.py":
+            # verify_trusted_operator already bound these executing bytes to the
+            # independently selected merged control commit. No self-hash or
+            # generic allowlisted candidate operator may expand that authority.
+            trusted = Path(__file__).read_bytes()
+            blob = hashlib.sha1(b"blob " + str(len(trusted)).encode() + b"\0" + trusted).hexdigest()
+            require(git("rev-parse", source + ":" + name) == blob,
+                    "Candidate operator differs from independently trusted staged source.")
+            continue
         if name in REVIEWED_APPLICATION_BLOBS or name in REVIEWED_MIGRATIONS:
             reviewed = REVIEWED_APPLICATION_BLOBS.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
             require(git("rev-parse", source + ":" + name) == reviewed,
@@ -640,17 +792,24 @@ def vetted_changes(expected, source):
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
     if "mobile/package-lock.json" in changed:
-        before = strict_json(git("show", expected + ":mobile/package-lock.json"))
-        after = strict_json(git("show", source + ":mobile/package-lock.json"))
-        package = before["packages"]["node_modules/brace-expansion"]
-        require(package.get("version") == "5.0.9"
-                and package.get("resolved") == "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.9.tgz"
-                and package.get("integrity") == "sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==",
-                "Mobile security patch baseline changed.")
-        package.update(version="5.0.12",
-                       resolved="https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
-                       integrity="sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==")
-        require(before == after, "Only the reviewed mobile brace-expansion lock update may change.")
+        if expected == EMAIL_RELEASE_BASELINE:
+            require(git("rev-parse", expected + ":mobile/package-lock.json")
+                    == "49254a20c8b66fa1fd584e00b13b04e8539cab58"
+                    and git("rev-parse", source + ":mobile/package-lock.json")
+                    == "ebae7283d0906a9cb42b374b78a90986e7fcdcac",
+                    "Mobile dependencies differ from the exact reviewed email release transition.")
+        else:
+            before = strict_json(git("show", expected + ":mobile/package-lock.json"))
+            after = strict_json(git("show", source + ":mobile/package-lock.json"))
+            package = before["packages"]["node_modules/brace-expansion"]
+            require(package.get("version") == "5.0.9"
+                    and package.get("resolved") == "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.9.tgz"
+                    and package.get("integrity") == "sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==",
+                    "Mobile security patch baseline changed.")
+            package.update(version="5.0.12",
+                           resolved="https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
+                           integrity="sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==")
+            require(before == after, "Only the reviewed mobile brace-expansion lock update may change.")
     # Next 16.3.6 security remediation, including npm's reviewed lock metadata.
     # Pin both complete inputs and outputs: scripts, other dependency versions,
     # and every unrelated byte must match this reviewed patch exactly.
@@ -660,6 +819,15 @@ def vetted_changes(expected, source):
         "package-lock.json": ("3916f840669463f8ac586dc25d715456a5d9d0b8",
                               "759d34af76287e214f03def74be98ddefb33780a"),
     }
+    if expected == EMAIL_RELEASE_BASELINE:
+        # Source registrations are separately byte-pinned above. This exact pair
+        # additionally binds every root script, dependency and lock metadata byte.
+        root_dependency_patch = {
+            "package.json": ("dc6e4e1cfa53b05beb3b5f70c7a5d07dd5e07b23",
+                             "83f5e03b9fbbdf10f050c8dd24d06ed1ff59260b"),
+            "package-lock.json": ("759d34af76287e214f03def74be98ddefb33780a",
+                                  "cc161d4ef33ca9affdf1c6649071cb4bf27b71dc"),
+        }
     if root_dependency_patch.keys() & set(changed):
         require(root_dependency_patch.keys() <= set(changed),
                 "The reviewed root dependency patch requires both package files.")
