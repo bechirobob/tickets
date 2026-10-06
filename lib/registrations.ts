@@ -90,9 +90,9 @@ export async function requestRegistration(db: D1Database, input: { eventSlug: st
     const current = await readRegistration(db, reg.id);
     if (current?.status === 'confirmed' && !current.orderId) await confirmRegistration(db, reg.id);
     if (current) await notifyRegistrationHosts(db, { eventSlug: reg.eventSlug, sourceId: reg.id, guestName: reg.guestName, status: current.status, guests: reg.partySize });
-    if (inserted.meta.changes === 1 && input.platformAnnouncementsOptIn === true && identity?.emailVerified !== true) {
+    if (current && inserted.meta.changes === 1 && input.platformAnnouncementsOptIn === true && identity?.emailVerified !== true) {
       // Optional proof must never turn a successful RSVP into a failed booking.
-      try { await sendRegistrationAccess(db, reg, settings.title, origin); }
+      try { await sendRegistrationAccess(db, current, settings.title, origin); }
       catch { console.error(JSON.stringify({ message: 'Optional announcement verification could not be queued' })); }
     }
     return { mode: settings.mode, cookie, canManage: Boolean(cookie || (identity && reg.attendeeId === identity.attendeeId)) };
@@ -108,15 +108,24 @@ export async function sendRegistrationAccess(db: D1Database, reg: Registration, 
     .bind(grantId, reg.id, await hashToken(token), new Date(Date.now() + 20 * 60000).toISOString(), timestamp()).run();
   const confirmsAnnouncements = await bindPlatformAnnouncementVerification(db, { email: reg.email, grantType: 'registration', grantId, ...(confirmPlatformAnnouncements ? { explicitPreference: true as const } : { sourceId: reg.id }) });
   const url = `${origin}/rsvp/access#token=${encodeURIComponent(token)}`;
-  const subject = `Confirm your email · ${title}`;
-  const announcementDisclosure = confirmsAnnouncements ? "Confirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time." : "";
-  const text = `Hi ${reg.guestName.trim() || 'there'},\n\nConfirm your email to view your registration for ${title}. One tap, then back to the plan:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.${announcementDisclosure ? `\n\n${announcementDisclosure}` : ""}`;
+  const optionalUpdates = confirmsAnnouncements && reg.kind === 'rsvp' && reg.status !== 'unverified';
+  const subject = optionalUpdates ? "Confirm your BeCore Tickets email updates" : `Confirm your email · ${title}`;
+  const announcementDisclosure = confirmsAnnouncements && !optionalUpdates ? "Confirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time." : "";
+  const intro = optionalUpdates
+    ? "Your RSVP is already saved. Confirm the BeCore Tickets email updates you chose. Email updates are optional and aren’t needed for your RSVP."
+    : "Confirm this is your email to continue your registration. One tap, then back to the plan.";
+  const note = optionalUpdates
+    ? "This private link expires in 20 minutes. You can unsubscribe at any time. If you did not request these updates, you can ignore this email."
+    : "This private link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.";
+  const text = optionalUpdates
+    ? `Hi ${reg.guestName.trim() || 'there'},\n\n${intro}\n\n${title}\n${url}\n\n${note}`
+    : `Hi ${reg.guestName.trim() || 'there'},\n\nConfirm your email to view your registration for ${title}. One tap, then back to the plan:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.${announcementDisclosure ? `\n\n${announcementDisclosure}` : ""}`;
   const html = customerEmail({
     title: "One quick check.",
-    preheader: `Confirm your email to continue with ${title}.`,
-    body: emailParagraph(`${emailGreeting(reg.guestName)} Confirm this is your email to continue your registration. One tap, then back to the plan.`) + emailEvent({ title }) + (announcementDisclosure ? emailParagraph(announcementDisclosure) : ""),
+    preheader: optionalUpdates ? "Your RSVP is saved. Confirm the optional BeCore Tickets updates you chose." : `Confirm your email to continue with ${title}.`,
+    body: emailParagraph(`${emailGreeting(reg.guestName)} ${intro}`) + emailEvent({ title }) + (announcementDisclosure ? emailParagraph(announcementDisclosure) : ""),
     action: { label: "Confirm my email", url },
-    note: "This private link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.",
+    note,
   });
   await sendEmail({ db, kind: 'registration_access', recipient: reg.email, subject, text, html, idempotencyKey: `registration-access/${await hashToken(token)}` });
 }

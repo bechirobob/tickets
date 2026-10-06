@@ -30,7 +30,7 @@ test('all eight customer paths and both consent variants produce branded HTML an
   }
 });
 
-test('token-bound disclosure is the only email change and stays inside the approved body', async () => {
+test('token-bound disclosure is the only change to genuine verification and stays inside the approved body', async () => {
   const disclosure = 'Confirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time.';
   const paths = [
     { grantType: 'recovery', source: 'checkout', sourceId: previewData.order.id, send: fixture => fixture.delivery.sendOrderConfirmation(fixture.db, fixture.data.order, fixture.data.origin) },
@@ -39,8 +39,8 @@ test('token-bound disclosure is the only email change and stays inside the appro
     { grantType: 'registration', explicit: true, source: 'rsvp', sourceId: '', send: fixture => fixture.registrations.sendRegistrationAccess(fixture.db, fixture.data.registration, fixture.data.event.title, fixture.data.origin, true) },
   ];
   for (const path of paths) {
-    const ordinary = createCustomerEmailHarness();
-    const optedIn = createCustomerEmailHarness({ platformAnnouncementsOptIn: true });
+    const ordinary = createCustomerEmailHarness({ registration: { status: 'unverified' } });
+    const optedIn = createCustomerEmailHarness({ registration: { status: 'unverified' }, platformAnnouncementsOptIn: true });
     await path.send(ordinary);
     await path.send(optedIn);
     const original = ordinary.deliveries[0], message = optedIn.deliveries[0];
@@ -61,6 +61,50 @@ test('token-bound disclosure is the only email change and stays inside the appro
     assert.equal(values[6], path.source);
     assert.equal(values[7], path.sourceId);
     assert.equal(ordinary.networkCalls + optedIn.networkCalls, 0);
+  }
+});
+
+test('proof for an already saved RSVP is optional updates confirmation, never a booking prerequisite', async () => {
+  for (const status of ['confirmed', 'waitlisted', 'requested', 'cancelled', 'declined']) {
+    const fixture = createCustomerEmailHarness({ registration: { status }, platformAnnouncementsOptIn: true });
+    await fixture.registrations.sendRegistrationAccess(fixture.db, fixture.data.registration, fixture.data.event.title, fixture.data.origin);
+    const message = fixture.deliveries[0];
+    assert.equal(message.subject, 'Confirm your BeCore Tickets email updates');
+    for (const body of [message.html, message.text]) {
+      assert.ok(body.includes('Your RSVP is already saved.'));
+      assert.ok(body.includes('Email updates are optional and aren’t needed for your RSVP.'));
+      assert.ok(body.includes('You can unsubscribe at any time.'));
+      assert.ok(body.includes('expires in 20 minutes'));
+      assert.equal(body.split('Confirm the BeCore Tickets email updates you chose.').length - 1, 1);
+      assert.doesNotMatch(body, /continue your registration|place is only reserved|also confirms/u);
+    }
+    const url = actionLinks(message.html).find(link => link.label === 'Confirm my email').url;
+    const token = new URLSearchParams(new URL(url).hash.slice(1)).get('token');
+    assert.equal(new URL(url).pathname, '/rsvp/access');
+    assert.equal(fixture.grants[0].values[2], hash(token));
+    assert.equal(message.idempotencyKey, `registration-access/${hash(token)}`);
+    assert.equal(fixture.verifications.length, 1);
+    assert.equal(fixture.networkCalls, 0);
+  }
+});
+
+test('genuine RSVP and interest verification retain the original subject and full approved HTML', async () => {
+  for (const kind of ['rsvp', 'interest']) {
+    const fixture = createCustomerEmailHarness({ registration: { kind, status: 'unverified' } });
+    await fixture.registrations.sendRegistrationAccess(fixture.db, fixture.data.registration, fixture.data.event.title, fixture.data.origin);
+    const message = fixture.deliveries[0];
+    const url = actionLinks(message.html).find(link => link.label === 'Confirm my email').url;
+    const { customerEmail, emailParagraph, emailGreeting, emailEvent } = fixture.helpers;
+    assert.equal(message.subject, `Confirm your email · ${fixture.data.event.title}`);
+    assert.equal(message.html, customerEmail({
+      title: 'One quick check.',
+      preheader: `Confirm your email to continue with ${fixture.data.event.title}.`,
+      body: emailParagraph(`${emailGreeting(fixture.data.registration.guestName)} Confirm this is your email to continue your registration. One tap, then back to the plan.`) + emailEvent({ title: fixture.data.event.title }),
+      action: { label: 'Confirm my email', url },
+      note: 'This private link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.',
+    }));
+    assert.equal(message.text, `Hi ${fixture.data.registration.guestName},\n\nConfirm your email to view your registration for ${fixture.data.event.title}. One tap, then back to the plan:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.`);
+    assert.doesNotMatch(message.html + message.text, /Your RSVP is already saved|This is optional/u);
   }
 });
 

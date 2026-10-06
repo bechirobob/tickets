@@ -136,7 +136,7 @@ export async function renderCustomerEmailPreviews(overrides = {}) {
   }
   await capture('purchase-confirmation', 'Open My Nights', () => delivery.sendOrderConfirmation(db, data.order, data.origin));
   await capture('rsvp-confirmed', 'View your passes', () => registrations.processRegistrations(env, data.origin, data.registration.id));
-  await capture('email-verification', 'Confirm my email', () => registrations.sendRegistrationAccess(db, data.registration, data.event.title, data.origin));
+  await capture('email-verification', 'Confirm my email', () => registrations.sendRegistrationAccess(db, { ...data.registration, status: 'unverified' }, data.event.title, data.origin));
   await capture('ticket-recovery', 'Open My Nights', () => delivery.issueRecoveryGrant({ db, normalizedEmail: data.order.customerEmail, origin: data.origin, kind: 'ticket_recovery' }));
   await capture('ticket-transfer', 'Accept my ticket', () => delivery.sendTicketTransferEmail({ db, transferId: 'preview-transfer', recipientEmail: data.order.customerEmail, recipientName: data.order.customerName, senderName: 'Kojo & Friends', eventTitle: data.event.title, eventDate: data.event.startsAt ? `${new Intl.DateTimeFormat('en-GH', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(data.event.startsAt))} (Accra time)` : data.event.scheduleLabel || 'Date to be announced', venue: `${data.event.venue}, ${data.event.area}`, claimUrl: `${data.origin}/transfers/claim?token=synthetic-transfer` }));
   await capture('waitlist-offer', 'Take the ticket', () => delivery.sendWaitlistOfferEmail({ db, entryId: 'preview-waitlist', recipient: data.order.customerEmail, eventTitle: data.event.title, tierName: 'Early Bird', expiresAt: data.expiresAt, claimUrl: `${data.origin}/waitlist/claim?token=synthetic-waitlist` }));
@@ -144,7 +144,7 @@ export async function renderCustomerEmailPreviews(overrides = {}) {
   await capture('support-update', 'Open the conversation', () => delivery.sendSupportUpdateEmail({ db, caseId: 'preview-case', recipient: data.order.customerEmail, subject: 'Your booking question', body: data.supportBody, url: `${data.origin}/support/preview-case` }));
   const optedIn = createCustomerEmailHarness({ ...overrides, platformAnnouncementsOptIn: true });
   await capture('purchase-announcement-verification', 'Open My Nights', () => optedIn.delivery.sendOrderConfirmation(optedIn.db, optedIn.data.order, optedIn.data.origin), optedIn);
-  await capture('rsvp-announcement-verification', 'Confirm my email', () => optedIn.registrations.sendRegistrationAccess(optedIn.db, optedIn.data.registration, optedIn.data.event.title, optedIn.data.origin), optedIn);
+  await capture('rsvp-announcement-verification', 'Confirm my email', () => optedIn.registrations.sendRegistrationAccess(optedIn.db, { ...optedIn.data.registration, kind: 'rsvp', status: 'confirmed' }, optedIn.data.event.title, optedIn.data.origin), optedIn);
   assert.equal(optedIn.verifications.length, 2, 'Opted-in previews must exercise both production binding helpers.');
   assert.equal(fixture.networkCalls + optedIn.networkCalls, 0, 'No preview may contact an email provider.');
   return previews;

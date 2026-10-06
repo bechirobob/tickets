@@ -69,11 +69,19 @@ for (const name of names) {
         await expect(page.locator('body')).not.toContainText('Kofi Bills is your host.');
       }
       const disclosure = page.getByText('Confirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time.', { exact: true });
-      if (name.endsWith('-announcement-verification')) {
+      if (name === 'purchase-announcement-verification') {
         await expect(disclosure).toBeVisible();
         expect(await disclosure.evaluate(element => element.closest('td')?.getAttribute('bgcolor'))).toBe('#f8f4ec');
       } else {
         await expect(disclosure).toHaveCount(0);
+      }
+      if (name === 'rsvp-announcement-verification') {
+        const optional = page.getByText('Your RSVP is already saved. Confirm the BeCore Tickets email updates you chose. Email updates are optional and aren’t needed for your RSVP.', { exact: false });
+        await expect(optional).toBeVisible();
+        expect(await optional.evaluate(element => element.closest('td')?.getAttribute('bgcolor'))).toBe('#f8f4ec');
+        await expect(page.locator('body')).not.toContainText('A place is only reserved');
+        await expect(page.locator('body')).not.toContainText('continue your registration');
+        await expect(page.getByText('You can unsubscribe at any time.', { exact: false })).toBeVisible();
       }
       const action = page.getByRole('link', { name: preview.actionLabel, exact: true });
       await expect(action).toBeVisible();

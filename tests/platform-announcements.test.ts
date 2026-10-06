@@ -183,7 +183,7 @@ describe("separate platform consent", () => {
     expect(await readPlatformAnnouncementPreference(env.DB, member.email)).toMatchObject({ status: "unsubscribed", revision: 2 });
   });
 
-  it("queues one existing verification email for a new checked unverified RSVP and finishes consent through its one-time claim", async () => {
+  it("queues optional updates proof after the new RSVP is already confirmed, then finishes consent through its one-time claim", async () => {
     allowsProofEmail = true;
     vi.mocked(fetch).mockResolvedValue(Response.json({ id: "mock-proof-email" }));
     const eventSlug = await rsvpEvent(), email = uniqueEmail();
@@ -194,8 +194,16 @@ describe("separate platform consent", () => {
     expect((await signup(email, true)).status).toBe(202);
     const deliveries = await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE recipient = ? AND kind = 'registration_access'").bind(email).all<{ payload: string }>();
     expect(deliveries.results).toHaveLength(1);
-    const text = JSON.parse(deliveries.results[0].payload).text as string;
-    expect(text).toContain("BeCore Tickets email updates you chose");
+    const { text, html, subject } = JSON.parse(deliveries.results[0].payload) as { text: string; html: string; subject: string };
+    expect(subject).toBe("Confirm your BeCore Tickets email updates");
+    for (const body of [text, html]) {
+      expect(body).toContain("Your RSVP is already saved.");
+      expect(body).toContain("BeCore Tickets email updates you chose");
+      expect(body).toContain("Email updates are optional and aren’t needed for your RSVP.");
+      expect(body).not.toMatch(/continue your registration|place is only reserved|also confirms/u);
+    }
+    expect(await env.DB.prepare("SELECT status FROM event_registrations WHERE event_slug = ? AND normalized_email = ?").bind(eventSlug, email).first()).toEqual({ status: "confirmed" });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM tickets t JOIN orders o ON o.id = t.order_id WHERE o.customer_email = ? AND t.status = 'issued'").bind(email).first()).toEqual({ count: 1 });
     const token = text.match(/#token=([^\s]+)/u)![1];
     expect(await readPlatformAnnouncementVerification(env.DB, { grantType: "registration", token })).toBe(true);
     expect(await readPlatformAnnouncementPreference(env.DB, email)).toMatchObject({ status: "pending", revision: 1 });
@@ -218,6 +226,30 @@ describe("separate platform consent", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(await env.DB.prepare("SELECT consented_at FROM event_audience_contacts WHERE event_slug = ? AND email = ?").bind(eventSlug, email).first()).toEqual({ consented_at: null });
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM tickets t JOIN orders o ON o.id = t.order_id WHERE o.customer_email = ? AND t.status = 'issued'").bind(email).first()).toEqual({ count: 1 });
+  });
+
+  it.each(["waitlisted", "requested"] as const)("keeps optional proof separate from a newly saved %s RSVP", async status => {
+    allowsProofEmail = true;
+    vi.mocked(fetch).mockResolvedValue(Response.json({ id: "mock-optional-proof" }));
+    const eventSlug = await rsvpEvent(), email = uniqueEmail();
+    await env.DB.prepare("UPDATE event_registration_settings SET capacity = ?, approval_required = ? WHERE event_slug = ?")
+      .bind(status === "waitlisted" ? 0 : 100, status === "requested" ? 1 : 0, eventSlug).run();
+    const response = await register(new Request(`${origin}/api/registrations`, {
+      method: "POST", headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ eventSlug, email, guestName: "Test Guest", phone: "", partySize: 1, acceptedTerms: true, platformAnnouncementsOptIn: true }),
+    }));
+    expect(response.status).toBe(202);
+    expect(await env.DB.prepare("SELECT status FROM event_registrations WHERE event_slug = ? AND normalized_email = ?").bind(eventSlug, email).first()).toEqual({ status });
+    const delivery = await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE recipient = ? AND kind = 'registration_access'").bind(email).first<{ payload: string }>();
+    const { text, html, subject } = JSON.parse(delivery!.payload) as { text: string; html: string; subject: string };
+    expect(subject).toBe("Confirm your BeCore Tickets email updates");
+    for (const body of [text, html]) {
+      expect(body).toContain("Your RSVP is already saved.");
+      expect(body).toContain("Email updates are optional and aren’t needed for your RSVP.");
+      expect(body).not.toMatch(/place is only reserved|continue your registration|RSVP is confirmed/u);
+    }
+    expect(await readPlatformAnnouncementPreference(env.DB, email)).toMatchObject({ status: "pending" });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it.each(["pending", "unchecked", "verified", "unsubscribed"] as const)("keeps completed checkout push delivery and sends email proof only for %s consent", async state => {
