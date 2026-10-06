@@ -104,7 +104,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "690e1737c037c4fad6548154e4d34d472857b8ce",
+    "ops/vps/test_code_release.py": "e51cccd3f0f9f8742b3314de2556c8e77f7bc806",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -294,8 +294,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
     "mobile/tsconfig.json": "be7802b84428c49a3ddeb14b79373b8cdae64234",
     "mobile/vite.config.ts": "985e6a0bab112aeb54e470a7bd6a34bdeccf0b5e",
-    "ops/vps/audit-readiness.py": "ed1daf092a16d37aa7004e14e5931a9d6cfd5fe9",
-    "ops/vps/test_audit_readiness.py": "f464f28e4251d95a63fc7daea6df7b2c9bf1674c",
+    "ops/vps/audit-readiness.py": "69c7dff10fc2b8d1046b84e0a43dbdb4dacb3ecf",
+    "ops/vps/test_audit_readiness.py": "086ab0cb48aa88ce934daefb54d60486925d36f8",
     "public/devices/iphone-titanium-front.svg": "9b3995ea6e27f358d03816d603f96466fa8e9acd",
     "runtime/vps/queue.mjs": "67018da3a3683aca80661e29e64f0fd3e5a37e9c",
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
@@ -1780,9 +1780,15 @@ class Deployment:
                 "Rollback release is outside the safe retention grace; exclusive proof lock required.")
         try:
             lock = os.fstat(self._deployment_lock_fd)
-            require(stat.S_ISREG(lock.st_mode) and lock.st_uid == os.geteuid() and lock.st_nlink == 1
-                    and stat.S_IMODE(lock.st_mode) == 0o600
-                    and retention_identity(self.lock.lstat()) == retention_identity(lock), "Retention proof deployment lock changed.")
+            named_lock = self.lock.lstat()
+            # Existing installer/shell writers legitimately create this empty
+            # advisory lock as 0644 and may truncate it before attempting flock.
+            # Its protected inode and ownership matter, not readable bits or data timestamps.
+            require(all(stat.S_ISREG(item.st_mode) and item.st_uid == os.geteuid() and item.st_nlink == 1
+                        and stat.S_IMODE(item.st_mode) & 0o600 == 0o600
+                        and not stat.S_IMODE(item.st_mode) & 0o7133 for item in (lock, named_lock))
+                    and (lock.st_dev, lock.st_ino) == (named_lock.st_dev, named_lock.st_ino),
+                    "Retention proof deployment lock changed.")
             fcntl.flock(self._deployment_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             before = self.retention_inventory()
             inventory, pointers, directory = before
