@@ -152,5 +152,3 @@ export async function generateOpenAIText(input: {
     clearTimeout(timeout);
   }
 }
-
-export const OPENAI_DEFAULT_MODEL = DEFAULT_MODEL;
