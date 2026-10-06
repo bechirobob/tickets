@@ -16,6 +16,7 @@ export const previewData = {
   // The public event identity and unchanged flyer belong together. Customer,
   // order, payment, transfer and support data below are fictional scenarios.
   event: { title: 'On The Guest List', venue: 'Asana Restaurant', area: 'Kempinski Gold Coast Hotel, Accra', startsAt: null, scheduleStatus: 'coming_soon', scheduleLabel: 'October · Coming soon', imageUrl: '/events/on-the-guest-list.webp', imageContentType: 'image/webp', publicArtwork: 1 },
+  host: { id: 'host:kofi-bills', slug: 'kofi-bills', name: 'Kofi Bills', role: 'Host', bio: '', city: 'Accra', verificationStatus: 'unverified', profileImageUrl: null },
   order: { id: 'preview-order', reference: 'BCT-PREVIEW-2401', eventSlug: 'sun-chasers-labadi', customerEmail: 'guest@example.invalid', customerName: 'Ama Mensah', faceAmountMinor: 40000, bookingFeeMinor: 2000, totalAmountMinor: 42000, currency: 'GHS', quantity: 2, paidAt: previewNow },
   registration: { id: 'preview-registration', eventSlug: 'sun-chasers-labadi', email: 'guest@example.invalid', guestName: 'Ama Mensah', phone: '', partySize: 2, kind: 'rsvp', status: 'confirmed', attendeeId: null, orderId: 'rsvp_preview-registration', version: 3, eventSignature: null },
   expiresAt: '2026-10-06T12:30:00.000Z',
@@ -38,6 +39,7 @@ export function createCustomerEmailHarness(overrides = {}) {
           if (query.includes('FROM delivery_events') && query.includes('order_id = ?')) return deliveries.find(item => item.orderId === this.values[0]) ?? null;
           if (query.includes('FROM delivery_events') && query.includes('json_extract')) return deliveries.find(item => item.idempotencyKey === this.values[0]) ? { found: 1 } : null;
           if (query.includes('FROM registration_access_grants')) return { count: grants.filter(item => item.kind === 'registration').length };
+          if (query.includes('FROM event_hosts') && query.includes('JOIN hosts')) return data.host;
           if (query.includes('FROM curated_event_records') && query.includes('event_registration_settings')) return { ...data.event, eventSlug: data.order.eventSlug, mode: 'rsvp', eventState: 'scheduled', publication: 'published', capacity: 100, maxPartySize: 4, approvalRequired: 0, roomAccess: 1, endsAt: null, ...overrides.settings };
           if (query.includes('FROM curated_event_records')) return data.event;
           if (query.includes('FROM confirmation_deliveries')) return { status: confirmation.get(this.values[0]) };

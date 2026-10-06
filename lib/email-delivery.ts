@@ -1,8 +1,9 @@
 import { validTeamInvite } from './organizer-team';
 import { reportDeliveryAllowed } from "./organizer-reports";
 import { emailBrand } from "./email-brand";
-import { customerEmail, emailDetails, emailEvent, emailParagraph, emailFlyer, emailGreeting } from "./customer-email";
+import { customerEmail, emailDetails, emailEvent, emailParagraph, emailFlyer, emailGreeting, emailHostLine } from "./customer-email";
 import { createSecureToken, hashToken } from "./attendee-auth";
+import { findPrimaryHost } from "./event-experience";
 
 type DeliveryKind = "owner_approval_request" | "host_application_decision" | "host_application_verify" | "team_invitation" | "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
@@ -281,7 +282,7 @@ export async function issueRecoveryGrant(input: {
     : "Your Nights are ready to come back";
   const when = event ? (event.startsAt ? `${new Intl.DateTimeFormat("en-GH", { dateStyle: "full", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(event.startsAt))} (Accra time)` : event.scheduleLabel || "Date to be announced") : "";
   const expiry = `${new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt))} (Accra time)`;
-  const title = input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "You’re going out.") : "Back to your nights.";
+  const title = input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "You’re going out.") : "Your nights missed you. Slightly.";
   const receipt = input.order ? emailDetails([
     { label: "Booking reference", value: input.order.reference },
     { label: "Admissions", value: String(input.order.quantity) },
@@ -291,18 +292,21 @@ export async function issueRecoveryGrant(input: {
   ]) : "";
   const eventBlock = event ? emailEvent({ title: event.title, when, venue: [event.venue, event.area].filter(Boolean).join(", ") }) : "";
   const confirmation = input.kind === "payment_confirmation";
-  const intro = confirmation ? (complimentary ? "Your complimentary passes are ready." : "Payment received. Your tickets are ready.") : "Your tickets, passes and receipts are one tap away.";
+  const host = confirmation && event?.publicArtwork === 1 && input.order ? await findPrimaryHost(input.db, input.order.eventSlug) : null;
+  const hostLine = emailHostLine(host);
+  const intro = confirmation ? (complimentary ? "Your complimentary passes are sorted." : "Payment confirmed. Your tickets are sorted.") : "Your tickets, passes and receipts are one tap away.";
+  const welcome = [hostLine, intro, confirmation ? "Now give the group chat the good news." : ""].filter(Boolean).join(" ");
   const nextStep = confirmation ? "Show each guest’s current QR at the door." : "";
   const note = `This private, one-time link expires ${expiry}. If you need a fresh one, request it from My Nights using the same email.`;
   const flyer = event ? emailFlyer({ url: event.imageUrl, title: event.title, isPublic: event.publicArtwork === 1, contentType: event.imageContentType }) : "";
   const html = customerEmail({
     title,
     preheader: confirmation ? (complimentary ? "Your complimentary passes are ready." : "Payment confirmed. Your ticket details are inside.") : "Your private link to tickets, passes and receipts.",
-    body: emailParagraph(`${emailGreeting(input.order?.customerName)} ${intro}`) + flyer + eventBlock + receipt + (nextStep ? emailParagraph(nextStep) : ""),
+    body: emailParagraph(`${emailGreeting(input.order?.customerName)} ${escapeHtml(welcome)}`) + flyer + eventBlock + receipt + (nextStep ? emailParagraph(nextStep) : ""),
     action: { label: "Open My Nights", url: recoveryUrl },
     note,
   });
-  const plain = `${title}\n\nHi ${name},\n\n${intro}\n\n${event ? `${event.title}\n${[event.venue, event.area].filter(Boolean).join(", ")}\n${when}\n\n` : ""}${input.order ? `Booking reference: ${input.order.reference}\nAdmissions: ${input.order.quantity}\nTicket subtotal: ${money(input.order.faceAmountMinor, input.order.currency)}\nBooking fee: ${money(input.order.bookingFeeMinor, input.order.currency)}\n${complimentary ? "Complimentary total" : "Total paid"}: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}${nextStep}\n\nOpen My Nights: ${recoveryUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`;
+  const plain = `${title}\n\nHi ${name},\n\n${welcome}\n\n${event ? `${event.title}\n${[event.venue, event.area].filter(Boolean).join(", ")}\n${when}\n\n` : ""}${input.order ? `Booking reference: ${input.order.reference}\nAdmissions: ${input.order.quantity}\nTicket subtotal: ${money(input.order.faceAmountMinor, input.order.currency)}\nBooking fee: ${money(input.order.bookingFeeMinor, input.order.currency)}\n${complimentary ? "Complimentary total" : "Total paid"}: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}${nextStep}\n\nOpen My Nights: ${recoveryUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;
   return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId, deliveryId: input.deliveryId });
 }
@@ -322,11 +326,11 @@ export async function sendTicketTransferEmail(input: {
   const html = customerEmail({
     title: "A ticket for you.",
     preheader: `${input.senderName} sent you a ticket. Accept it into your own My Nights.`,
-    body: emailParagraph(`${emailGreeting(input.recipientName)} <strong>${escapeHtml(input.senderName)}</strong> sent you one ticket for:`) + emailEvent({ title: input.eventTitle, when: input.eventDate, venue: input.venue }) + emailParagraph("Accept it to move the ticket into your My Nights. The sender’s QR stops working only after you accept."),
+    body: emailParagraph(`${emailGreeting(input.recipientName)} <strong>${escapeHtml(input.senderName)}</strong> sent you one ticket. An excellent development.`) + emailEvent({ title: input.eventTitle, when: input.eventDate, venue: input.venue }) + emailParagraph("Accept it to move the ticket into your My Nights. The sender’s QR stops working only after you accept."),
     action: { label: "Accept my ticket", url: input.claimUrl },
     note: "Use this private link within 48 hours. If this was unexpected, ignore it and the ticket stays with the sender.",
   });
-  const text = `${input.senderName} sent you a ticket for ${input.eventTitle}.\n${input.eventDate}\n${input.venue}\n\nAccept it: ${input.claimUrl}\n\nThe private link expires in 48 hours.`;
+  const text = `${input.senderName} sent you a ticket for ${input.eventTitle}. An excellent development.\n${input.eventDate}\n${input.venue}\n\nAccept it: ${input.claimUrl}\n\nThe private link expires in 48 hours.`;
   return sendEmail({
     db: input.db,
     kind: "ticket_transfer",
@@ -352,7 +356,7 @@ export async function sendOrderConfirmation(db: D1Database, order: OrderForEmail
 export async function sendWaitlistOfferEmail(input: { db: D1Database; entryId: string; recipient: string; eventTitle: string; tierName: string; expiresAt: string; claimUrl: string }) {
   const subject = `${input.eventTitle}: a ticket found its way back`;
   const html = customerEmail({
-    title: "Your turn.",
+    title: "The waitlist did its thing.",
     preheader: `${input.tierName} ticket available for ${input.eventTitle}.`,
     body: emailParagraph(`A ticket in <strong>${escapeHtml(input.tierName)}</strong> is available for you.`) + emailEvent({ title: input.eventTitle }),
     action: { label: "Take the ticket", url: input.claimUrl },
@@ -365,7 +369,7 @@ export async function sendWaitlistOfferEmail(input: { db: D1Database; entryId: s
 export async function sendAbandonedCheckoutEmail(input: { db: D1Database; orderId: string; recipient: string; eventTitle: string; eventUrl: string }) {
   const subject = `${input.eventTitle}: the payment did not finish`;
   const html = customerEmail({
-    title: "Want to try again?",
+    title: "That checkout left early.",
     preheader: "Your checkout was abandoned. No ticket was issued.",
     body: emailParagraph("Your payment didn’t finish, so no ticket was issued. You can start again below.") + emailEvent({ title: input.eventTitle }),
     action: { label: "Try the night again", url: input.eventUrl },

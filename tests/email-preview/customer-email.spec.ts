@@ -63,6 +63,11 @@ for (const name of names) {
       await page.setContent(preview.html, { waitUntil: 'load' });
       await page.evaluate(() => document.fonts.ready);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      if (['purchase-confirmation', 'rsvp-confirmed'].includes(name)) {
+        await expect(page.getByText('Kofi Bills is your host.', { exact: false })).toBeVisible();
+      } else {
+        await expect(page.locator('body')).not.toContainText('Kofi Bills is your host.');
+      }
       const action = page.getByRole('link', { name: preview.actionLabel, exact: true });
       await expect(action).toBeVisible();
       await expect(action).toHaveAttribute('href', /^https:\/\/tickets\.example\.invalid\//);
@@ -108,6 +113,7 @@ for (const [name, event] of [['missing', { imageUrl: null }], ['private', { publ
     await page.setContent(preview.html);
     await expect(page.locator('img:not([src*="/brand/"])')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: previewData.event.title })).toBeVisible();
+    if (name === 'private') await expect(page.locator('body')).not.toContainText('Kofi Bills is your host.');
     await expect(page.getByRole('link', { name: 'Open My Nights', exact: true })).toBeVisible();
     await expectReadableEmail(page);
   });

@@ -19,6 +19,16 @@ export function emailGreeting(name?: string | null) {
   return value ? `Hi ${escapeHtml(value)},<br>` : 'Hi there,<br>';
 }
 
+/** Attribution uses public display names, never a fabricated host quotation. */
+export function emailHostLine(host?: { name: string; role: string } | null) {
+  const name = host?.name.trim();
+  const role = host?.role.trim().toLowerCase();
+  if (!name) return '';
+  if (role === 'host') return `${name} is your host.`;
+  if (role && /^co[- ]?host$/u.test(role)) return `${name} is your co-host.`;
+  return '';
+}
+
 export function emailFlyer(input: { url?: string | null; title: string; isPublic: boolean; contentType?: string | null }) {
   if (!input.isPublic || !input.url || /[\u0000-\u0020\u007f]/u.test(input.url)) return '';
   try {

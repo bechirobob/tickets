@@ -69,3 +69,13 @@ signoff are removed; the footer provides one help address. Transfer copy makes
 acceptance pending. Preview customers, paid bookings and amounts are fictional;
 the verified public Guest List title/artwork/venue and unannounced date are kept
 consistent across both confirmation examples.
+
+Confirmed purchase/RSVP openings may identify the public primary host using the
+same `findPrimaryHost` selection shown on the public event page. Use only its
+public display name and a truthful Host/co-host role. Omit attribution for
+private/test/removed/unpublished events, missing or blank names, and other roles
+such as performers or staff. Do not substitute account names, profile full names,
+or invent a signed first-person host welcome. BeCore Tickets remains the sender.
+Keep one lightly cheeky line beside the clear confirmation, never in place of
+payment, admission, expiry or acceptance conditions. Other customer templates
+keep gentle personality; support replies retain the supplied support wording.

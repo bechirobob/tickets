@@ -1,11 +1,12 @@
 import { deliverConfirmation } from './confirmation-delivery';
 import type { AttendeeIdentity } from './attendee-auth';
-import { customerEmail, emailEvent, emailParagraph, emailFlyer, emailGreeting } from "./customer-email";
+import { customerEmail, emailEvent, emailParagraph, emailFlyer, emailGreeting, emailHostLine } from "./customer-email";
 import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from './attendee-auth';
 import { createGateToken, hashGateToken } from './gate-pass';
 import { sendEmail } from './email-delivery';
 import { recordPolicyConsents } from './policies';
+import { findPrimaryHost } from './event-experience';
 
 export type RegistrationMode = 'paid' | 'rsvp' | 'interest';
 export type RegistrationSettings = { eventSlug: string; title: string; venue?: string; area?: string; imageUrl?: string | null; imageContentType?: string | null; publicArtwork?: number; scheduleLabel?: string | null; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
@@ -99,11 +100,11 @@ export async function sendRegistrationAccess(db: D1Database, reg: Registration, 
     .bind(crypto.randomUUID(), reg.id, await hashToken(token), new Date(Date.now() + 20 * 60000).toISOString(), timestamp()).run();
   const url = `${origin}/rsvp/access#token=${encodeURIComponent(token)}`;
   const subject = `Confirm your email · ${title}`;
-  const text = `Hi ${reg.guestName.trim() || 'there'},\n\nOpen this link to confirm your email and view your registration for ${title}:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.`;
+  const text = `Hi ${reg.guestName.trim() || 'there'},\n\nConfirm your email to view your registration for ${title}. One tap, then back to the plan:\n${url}\n\nThis link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.`;
   const html = customerEmail({
     title: "One quick check.",
     preheader: `Confirm your email to continue with ${title}.`,
-    body: emailParagraph(`${emailGreeting(reg.guestName)} Confirm this is your email to continue your registration.`) + emailEvent({ title }),
+    body: emailParagraph(`${emailGreeting(reg.guestName)} Confirm this is your email to continue your registration. One tap, then back to the plan.`) + emailEvent({ title }),
     action: { label: "Confirm my email", url },
     note: "This private link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.",
   });
@@ -258,7 +259,8 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string, 
       const venue = [s.venue, s.area].filter(Boolean).join(', ');
       const eventUrl = `${origin}/event/${encodeURIComponent(reg.eventSlug)}`;
       const actionUrl = confirmed ? `${origin}/my-nights/${encodeURIComponent(reg.eventSlug)}?view=passes` : eventUrl;
-      const intro = confirmed ? `We’ve confirmed ${reg.partySize === 1 ? '1 place' : `${reg.partySize} places`} for you. No payment required.` : detail;
+      const host = confirmed && s.publicArtwork === 1 ? await findPrimaryHost(env.DB, reg.eventSlug) : null;
+      const intro = confirmed ? [emailHostLine(host), `We’ve confirmed ${reg.partySize === 1 ? '1 place' : `${reg.partySize} places`} for you. No payment required.`, 'The group chat has one less excuse.'].filter(Boolean).join(' ') : detail;
       const nextStep = confirmed ? 'Show each guest’s current QR at the door.' : '';
       const note = confirmed ? 'Keep your passes private. On another device? Recover them with the email used for this RSVP.' : 'You can manage your registration in My Nights.';
       const html = customerEmail({

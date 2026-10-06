@@ -266,3 +266,86 @@ test('missing customer names use a neutral greeting and supplied names remain es
   assert.equal(helpers.emailGreeting('  Ama Mensah  '), 'Hi Ama Mensah,<br>');
   assert.equal(helpers.emailGreeting('<img src=x>'), 'Hi &lt;img src=x&gt;,<br>');
 });
+
+test('host attribution preserves the recorded host or co-host role without inventing another identity', () => {
+  const { helpers } = createCustomerEmailHarness();
+  assert.equal(helpers.emailHostLine({ name: '  Kofi Bills  ', role: 'Host' }), 'Kofi Bills is your host.');
+  for (const role of ['Co-host', 'Co host', 'Cohost']) assert.equal(helpers.emailHostLine({ name: 'Kofi Bills', role }), 'Kofi Bills is your co-host.');
+  for (const host of [null, undefined, { name: '', role: 'Host' }, { name: '   ', role: 'Host' }, ...['', ' ', 'DJ', 'Special Guest DJ', 'Guest', 'Staff', 'Organiser', 'Host / DJ'].map(role => ({ name: 'Kofi Bills', role }))]) {
+    assert.equal(helpers.emailHostLine(host), '', JSON.stringify(host));
+  }
+});
+
+test('public purchase and confirmed RSVP emails open with the real host in HTML and plain text', async () => {
+  const fixture = createCustomerEmailHarness();
+  await fixture.delivery.sendOrderConfirmation(fixture.db, fixture.data.order, fixture.data.origin);
+  await fixture.registrations.processRegistrations(fixture.env, fixture.data.origin, fixture.data.registration.id);
+  assert.equal(fixture.deliveries.length, 2);
+  for (const message of fixture.deliveries) {
+    assert.ok(message.html.includes('Kofi Bills is your host.'));
+    assert.ok(message.text.includes('Kofi Bills is your host.'));
+    assert.ok(message.html.indexOf('Kofi Bills is your host.') < message.html.indexOf('on-the-guest-list-email.jpg'), 'Host introduction belongs before the event flyer.');
+    assert.doesNotMatch(message.html + message.text, /I(?:’|')m Kofi|I(?:’|')ll see you|Yours,\s*Kofi|(?:—|–)\s*Kofi Bills/u);
+    assert.ok(message.text.includes(fixture.data.origin));
+  }
+  const hostReads = fixture.calls.filter(({ query }) => query.includes('FROM event_hosts'));
+  assert.equal(hostReads.length, 2);
+  for (const { query, values } of hostReads) {
+    assert.match(query, /JOIN hosts/u);
+    assert.match(query, /ORDER BY link\.is_primary DESC, host\.name/u);
+    assert.deepEqual(values, [previewData.order.eventSlug]);
+  }
+  assert.equal(fixture.networkCalls, 0);
+});
+
+test('missing, blank and non-host primary identities are omitted while co-host attribution stays accurate', async () => {
+  for (const host of [null, { ...previewData.host, name: '   ' }, { ...previewData.host, role: '' }, { ...previewData.host, role: 'Special Guest DJ' }, { ...previewData.host, role: 'Staff' }, { ...previewData.host, role: 'Co-host' }]) {
+    const previews = await renderCustomerEmailPreviews({ host });
+    for (const name of ['purchase-confirmation', 'rsvp-confirmed']) {
+      const message = previews.find(item => item.name === name);
+      if (host?.role === 'Co-host') {
+        assert.ok(message.html.includes('Kofi Bills is your co-host.'));
+        assert.ok(message.text.includes('Kofi Bills is your co-host.'));
+        assert.doesNotMatch(message.html + message.text, /Kofi Bills is your host\./u);
+      } else {
+        assert.doesNotMatch(message.html + message.text, /Kofi Bills is your|is your (?:co-)?host\.|undefined|null/u);
+      }
+      assert.ok(message.text.includes(previewData.event.title));
+    }
+  }
+});
+
+test('host names are escaped at the HTML boundary while plain text keeps the literal public name', async () => {
+  const name = 'Kofi <img src=x onerror="alert(1)"> & Friends';
+  const previews = await renderCustomerEmailPreviews({ host: { ...previewData.host, name } });
+  for (const scenario of ['purchase-confirmation', 'rsvp-confirmed']) {
+    const message = previews.find(item => item.name === scenario);
+    assert.ok(message.html.includes(`${escape(name)} is your host.`));
+    assert.doesNotMatch(message.html, /<img src=x/u);
+    assert.ok(message.text.includes(`${name} is your host.`));
+  }
+});
+
+test('private confirmations, unconfirmed RSVP and recovery never look up or disclose a host', async () => {
+  const fixtures = [];
+  const privateFixture = createCustomerEmailHarness({ event: { publicArtwork: 0 } });
+  await privateFixture.delivery.sendOrderConfirmation(privateFixture.db, privateFixture.data.order, privateFixture.data.origin);
+  await privateFixture.registrations.processRegistrations(privateFixture.env, privateFixture.data.origin, privateFixture.data.registration.id);
+  fixtures.push(privateFixture);
+  for (const status of ['waitlisted', 'cancelled', 'declined', 'interested']) {
+    const fixture = createCustomerEmailHarness({ registration: { status, ...(status === 'interested' ? { kind: 'interest' } : {}) } });
+    await fixture.registrations.processRegistrations(fixture.env, fixture.data.origin, fixture.data.registration.id);
+    fixtures.push(fixture);
+  }
+  const access = createCustomerEmailHarness();
+  await access.registrations.sendRegistrationAccess(access.db, access.data.registration, access.data.event.title, access.data.origin);
+  for (const order of [undefined, access.data.order]) {
+    await access.delivery.issueRecoveryGrant({ db: access.db, normalizedEmail: access.data.order.customerEmail, origin: access.data.origin, kind: 'ticket_recovery', order });
+  }
+  fixtures.push(access);
+  for (const fixture of fixtures) {
+    assert.equal(fixture.calls.filter(({ query }) => query.includes('FROM event_hosts')).length, 0);
+    assert.ok(fixture.deliveries.length > 0);
+    for (const message of fixture.deliveries) assert.doesNotMatch(message.html + message.text, /Kofi Bills|is your (?:co-)?host\./u);
+  }
+});
