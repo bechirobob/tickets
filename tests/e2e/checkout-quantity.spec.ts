@@ -9,6 +9,9 @@ test('boxed quantity preserves purchase limits, totals and tier changes', async 
   await page.goto('/checkout/after-dark-osu');
   const quantity = page.getByRole('combobox', { name: 'General admission quantity' });
   await expect(quantity).toBeEnabled();
+  await expect(page.locator('.checkout-step > span')).toHaveCount(0);
+  if (process.env.BECORE_CHECKOUT_PREVIEW === 'ordinary') await expect(page.locator('.preview-checkout-note')).toHaveCount(0);
+  else await expect(page.getByText('Test checkout', { exact: true })).toBeVisible();
   await expect(quantity).toHaveValue('1');
   await expect(quantity.locator('option')).toHaveText(['1', '2', '3', '4', '5', '6']);
   const box = (await quantity.boundingBox())!;
@@ -36,7 +39,7 @@ test('boxed quantity preserves purchase limits, totals and tier changes', async 
   const accessibility = await new AxeBuilder({ page }).include('.ticket-tier-list').analyze();
   expect(accessibility.violations).toEqual([]);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: test.info().outputPath('boxed-ticket-quantity.png') });
+  await page.screenshot({ path: test.info().outputPath('boxed-ticket-quantity.png'), fullPage: true });
 });
 
 

@@ -1106,7 +1106,7 @@ test("compact booking consent rows preserve alignment and unobstructed evidence"
   ].map(path => readFile(new URL(path, import.meta.url), "utf8")));
   assert.match(checkout, /className="checkout-consents" role="group" aria-label="Email updates and terms"/u);
   assert.match(registration, /className="registration-confirmation"/u);
-  assert.match(css, /margin:\s*14px 0 0 49px/u);
+  assert.match(css, /margin:\s*14px 0 0;/u);
   assert.match(css, /min-height:\s*44px/u);
   assert.match(css, /gap:\s*8px/u);
   assert.match(css, /font-size:\s*13px/u);
@@ -1145,4 +1145,14 @@ test("mobile checkout header hides optional reassurance without suppressing the 
   assert.match(css, /\.checkout-header > a:first-child \{[^}]*min-width: 44px; min-height: 44px;/u);
   assert.doesNotMatch(css, /\.checkout-header > span \{ font-size: 0;/u);
   assert.doesNotMatch(css, /\.checkout-header \.brand-mark span:last-child \{ display: none;/u);
+});
+
+
+test("checkout keeps semantic section headings without decorative step numbers", async () => {
+  const checkout = await readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(checkout, /<span>[123]<\/span><div><small>/u);
+  assert.match(checkout, /<h1>\{event.title\}<\/h1>/u);
+  assert.match(checkout, /<small>Delivery details<\/small><h2>/u);
+  assert.match(checkout, /<small>Payment<\/small><h2>/u);
+  assert.match(checkout, /event.isTestEvent \? <div className="preview-checkout-note"/u);
 });
