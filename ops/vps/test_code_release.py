@@ -1,6 +1,7 @@
 """Filesystem/service mocks only: these tests never contact a VPS or provider."""
 import argparse
 import copy
+from contextlib import contextmanager
 import fcntl
 import importlib.util
 import io
@@ -261,6 +262,71 @@ class SystemCredentialTests(unittest.TestCase):
                     CREDENTIAL_COMMAND, text=True, stderr=subprocess.PIPE, timeout=90)
 
 
+def retention_unit_fixture(unit):
+    values = {"Id": unit, "LoadState": "loaded", "FragmentPath": "/etc/systemd/system/" + unit,
+              "SourcePath": "", "DropInPaths": "", "NeedDaemonReload": "no", "Transient": "no"}
+    if unit.endswith(".timer"):
+        values["Unit"] = "becore-tickets-retention.service"
+    else:
+        values.update({"Type": "oneshot", "ExecStart": "{ path=/usr/bin/python3 ; argv[]=/usr/bin/python3 /srv/becore-tickets/current/operations/retention.py ; ignore_errors=no ; pid=0 ; code=exited ; status=0 }",
+            "ExecStartPre": "", "ExecStartPost": "", "ExecCondition": "", "ExecStop": "", "ExecStopPost": "", "ExecReload": "",
+            "KillMode": "control-group", "RemainAfterExit": "no", "ActiveState": "inactive", "SubState": "dead", "MainPID": "0", "ControlPID": "0"})
+    return values
+
+
+class SystemRetentionTests(unittest.TestCase):
+    def run_metadata(self, transform=lambda unit, values: values):
+        system = release.System()
+        def response(*args):
+            self.assertIn("--all", args)
+            self.assertEqual(args[:2], ("systemctl", "show"))
+            unit = args[2]
+            values = transform(unit, retention_unit_fixture(unit))
+            return "\n".join(key + "=" + value for key, value in values.items())
+        with patch.object(system, "run", side_effect=response):
+            return system.retention_state()
+
+    def test_exact_fixed_units_keep_empty_properties_and_inactive_execution(self):
+        self.assertEqual(len(self.run_metadata()), 2)
+
+    def test_only_six_documented_empty_exec_array_omissions_are_normalized(self):
+        optional = {"ExecStartPre", "ExecStartPost", "ExecCondition", "ExecStop", "ExecStopPost", "ExecReload"}
+        expected = self.run_metadata()
+        self.assertEqual(self.run_metadata(lambda unit, values: {key: value for key, value in values.items() if key not in optional}), expected)
+        required = set(retention_unit_fixture("becore-tickets-retention.service")) - optional
+        for missing in required:
+            with self.subTest(missing=missing), self.assertRaises(release.ReleaseError):
+                self.run_metadata(lambda unit, values: {key: value for key, value in values.items()
+                                                       if unit.endswith(".timer") or key != missing})
+        for hook in optional:
+            with self.subTest(hook=hook), self.assertRaises(release.ReleaseError):
+                self.run_metadata(lambda unit, values: {**values, hook: "unreviewed command"}
+                                  if unit.endswith(".service") else values)
+
+    def test_malformed_duplicate_and_oversized_unit_records_are_rejected(self):
+        valid = "\n".join(key + "=" + value for key, value in retention_unit_fixture("becore-tickets-retention.service").items())
+        for raw in (valid + "\nmalformed", valid + "\nMainPID=0", "x" * 16385):
+            with patch.object(release.System, "run", return_value=raw), self.assertRaises(release.ReleaseError):
+                release.System().retention_state()
+
+    def test_active_stale_or_altered_unit_identity_is_rejected(self):
+        bad = {"ActiveState": "active", "SubState": "start", "MainPID": "123", "ControlPID": "456",
+               "KillMode": "process", "RemainAfterExit": "yes", "SourcePath": "/elsewhere",
+               "DropInPaths": "/etc/override.conf", "NeedDaemonReload": "yes", "Transient": "yes",
+               "FragmentPath": "/unreviewed", "ExecStartPre": "/unreviewed", "ExecStart": "unreviewed"}
+        for key, value in bad.items():
+            def change(unit, values):
+                if unit.endswith(".service"):
+                    values[key] = value
+                return values
+            with self.subTest(key=key), self.assertRaises(release.ReleaseError):
+                self.run_metadata(change)
+        with self.assertRaises(release.ReleaseError):
+            self.run_metadata(lambda unit, values: {key: value for key, value in values.items() if value})
+        with self.assertRaises(release.ReleaseError):
+            self.run_metadata(lambda unit, values: {**values, "unrequested": "value"})
+
+
 class DeploymentFixture(unittest.TestCase):
     def setUp(self):
         self.approval_patch = patch.object(release, "AuditReleaseApproval")
@@ -365,6 +431,253 @@ class DeploymentFixture(unittest.TestCase):
         self.assertEqual(os.readlink(d.home / "previous"), "releases/" + ORIGINAL)
         self.assertEqual(d.bridge.read_bytes(), b"private bridge unchanged\n")
         self.assertEqual(d.handoff.read_bytes(), b'{"source":"cloudflare","writer":"vps"}\n')
+
+class RetentionProtectionTests(DeploymentFixture):
+    third = "3" * 40
+
+    def setUp(self):
+        super().setUp()
+        self.now = release.time.time()
+        self.policy_root = Path(__file__).resolve().parent
+        for name in release.RETENTION_HASHES:
+            destination = (self.deployment.old_release / "operations" / name if name == "retention.py"
+                           else self.root / "etc/systemd/system" / name)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes((self.policy_root / name).read_bytes())
+            destination.chmod(0o644)
+        third = self.deployment.releases / self.third
+        third.mkdir()
+        self.age(OLD, 47.5)
+        self.age(ORIGINAL, 63)
+        self.age(self.third, 80)
+        self.retention_archive()
+        self.system.retention_state = lambda: {"fixture": "reviewed inactive units"}
+
+    def age(self, name, hours):
+        timestamp = self.now - hours * 3600
+        os.utime(self.deployment.releases / name, (timestamp, timestamp))
+
+    def retention_archive(self, changed=None, root_age=60):
+        entries = []
+        root = tarfile.TarInfo(".")
+        root.type, root.mode, root.mtime = tarfile.DIRTYPE, 0o755, self.now - root_age
+        entries.append(root)
+        for name in release.RETENTION_HASHES:
+            item = tarfile.TarInfo("operations/" + name)
+            item.mode = 0o644
+            raw = (self.policy_root / name).read_bytes()
+            if name == changed:
+                raw += b"\n"
+            entries.append((item, raw))
+        self.make_archive(extra=entries)
+        self.refresh_digests()
+
+    @contextmanager
+    def held(self):
+        with self.deployment.lock.open("a") as lock:
+            os.fchmod(lock.fileno(), 0o600)
+            lock.flush()
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.deployment._deployment_lock_fd = lock.fileno()
+            try:
+                yield self.deployment
+            finally:
+                self.deployment._deployment_lock_fd = None
+
+    def test_old_previous_rank_two_survives_candidate_and_successful_pointer_rotation(self):
+        with self.held():
+            result = self.deployment.transact()
+        self.assertEqual(result["released"], NEW)
+        self.assertTrue((self.deployment.releases / ORIGINAL).is_dir())
+        self.assertEqual(len(self.deployment._retention_proof["inventory"]), 3)
+        self.assertIsNotNone(self.deployment._retention_proof["candidate"])
+
+    def test_old_previous_rank_three_is_rejected_before_any_mutation(self):
+        self.age(self.third, 50)
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "every pointer state"):
+            self.deployment.preflight()
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertFalse(self.deployment.release.exists())
+        self.assert_restored()
+
+    def test_candidate_is_not_double_counted_or_assumed_to_be_newest(self):
+        self.age(OLD, 0.01)
+        self.retention_archive(root_age=120)
+        with self.held() as deployment:
+            deployment.preflight()
+            deployment.unpack()
+            deployment.retention_safe()
+            inventory = deployment.retention_inventory()[0]
+            self.assertEqual(sorted(inventory, key=lambda name: inventory[name][1], reverse=True)[:3], [OLD, NEW, ORIGINAL])
+            deployment.retention_safe()
+
+    def test_shared_current_previous_remains_protected_even_outside_newest_three(self):
+        pointer = self.deployment.home / "previous"
+        pointer.unlink()
+        pointer.symlink_to("releases/" + OLD)
+        self.age(ORIGINAL, 5)
+        self.age(self.third, 10)
+        with self.held():
+            self.deployment.preflight()
+            self.deployment.unpack()
+            self.deployment.retention_safe()
+
+    def test_existing_age_grace_still_works_without_policy_or_exclusive_proof(self):
+        self.age(OLD, 1)
+        self.age(ORIGINAL, 2)
+        self.system.retention_state = lambda: (_ for _ in ()).throw(AssertionError("young path consulted retention policy"))
+        self.deployment.preflight()
+        self.assertIsNone(self.deployment._retention_proof)
+
+    def test_exclusive_lock_and_inactive_cleaner_are_required_for_older_releases(self):
+        with self.assertRaisesRegex(release.ReleaseError, "exclusive proof lock"):
+            self.deployment.preflight()
+        with self.held():
+            self.system.retention_state = lambda: (_ for _ in ()).throw(release.ReleaseError("stale cleaner active"))
+            with self.assertRaisesRegex(release.ReleaseError, "stale cleaner active"):
+                self.deployment.preflight()
+        self.assert_restored()
+
+    def test_installed_candidate_and_unpacked_policy_bytes_must_match(self):
+        installed = self.deployment.old_release / "operations/retention.py"
+        original = installed.read_bytes()
+        installed.write_bytes(original + b"\n")
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "Installed retention policy"):
+            self.deployment.preflight()
+        installed.write_bytes(original)
+        self.retention_archive(changed="retention.py")
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "Candidate retention policy"):
+            self.deployment.preflight()
+        self.retention_archive()
+        with self.held():
+            self.deployment.preflight()
+            self.deployment.unpack()
+            (self.deployment.release / "operations/retention.py").write_bytes(original + b"\n")
+            with self.assertRaisesRegex(release.ReleaseError, "Unpacked candidate retention policy"):
+                self.deployment.retention_safe()
+
+    def test_stale_archive_root_is_not_treated_as_fresh_candidate(self):
+        self.retention_archive(root_age=48 * 3600)
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "archive root.*retention grace"):
+            self.deployment.preflight()
+        self.assertFalse(self.deployment.release.exists())
+
+    def test_ties_unknown_entries_and_unsafe_directory_modes_reject(self):
+        self.age(self.third, 63)
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "Tied retention timestamps"):
+            self.deployment.preflight()
+        self.age(self.third, 80)
+        unknown = self.deployment.releases / "unreviewed"
+        unknown.mkdir()
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "unexpected retention inventory"):
+            self.deployment.preflight()
+        unknown.rmdir()
+        (self.deployment.releases / self.third).chmod(0o777)
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "unexpected retention inventory"):
+            self.deployment.preflight()
+
+    def test_later_unrelated_deletion_is_safe_but_addition_or_identity_drift_rejects(self):
+        with self.held():
+            self.deployment.preflight()
+            self.deployment.unpack()
+            self.deployment.retention_safe()
+            (self.deployment.releases / self.third).rmdir()
+            self.deployment.retention_safe()
+            extra = self.deployment.releases / ("5" * 40)
+            extra.mkdir()
+            with self.assertRaisesRegex(release.ReleaseError, "identities drifted"):
+                self.deployment.retention_safe()
+            extra.rmdir()
+            self.age(ORIGINAL, 62)
+            with self.assertRaisesRegex(release.ReleaseError, "identities drifted"):
+                self.deployment.retention_safe()
+
+    def test_stale_cleaner_deleting_between_topology_and_inactive_observation_rejects(self):
+        calls = 0
+        def stale():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                (self.deployment.releases / self.third).rmdir()
+            return {"fixture": "inactive after old snapshot"}
+        self.system.retention_state = stale
+        with self.held(), self.assertRaises(release.ReleaseError):
+            self.deployment.preflight()
+        self.assertFalse(self.deployment.release.exists())
+        self.assert_restored()
+
+    def test_cleaner_state_changes_between_observations_reject(self):
+        with patch.object(self.system, "retention_state", side_effect=[{"generation": 1}, {"generation": 2}]):
+            with self.held(), self.assertRaisesRegex(release.ReleaseError, "inactive baseline"):
+                self.deployment.preflight()
+
+    def test_separately_read_pointers_cannot_expose_low_ranked_old_current_on_rollback(self):
+        self.age(self.third, 40)
+        self.age(ORIGINAL, 50)
+        self.age(OLD, 70)
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "every pointer state"):
+            self.deployment.preflight()
+
+    def test_policy_inode_changes_and_symlinks_are_not_hidden_by_matching_content(self):
+        path = self.deployment.old_release / "operations/retention.py"
+        raw = path.read_bytes()
+        with self.held():
+            self.deployment.preflight()
+            replacement = path.with_suffix(".replacement")
+            replacement.write_bytes(raw)
+            replacement.chmod(0o644)
+            os.replace(replacement, path)
+            with self.assertRaisesRegex(release.ReleaseError, "policy identity changed"):
+                self.deployment.retention_safe()
+        path.unlink()
+        replacement.write_bytes(raw)
+        path.symlink_to(replacement.name)
+        self.deployment = self.new_deployment()
+        with self.held(), self.assertRaises(release.ReleaseError):
+            self.deployment.preflight()
+
+    def test_bounded_inventory_requires_room_for_exactly_one_candidate(self):
+        with self.held(), patch.object(release, "RETENTION_MAX_ENTRIES", 2), self.assertRaisesRegex(release.ReleaseError, "inventory exceeds"):
+            self.deployment.preflight()
+        with self.held(), patch.object(release, "RETENTION_MAX_ENTRIES", 3), self.assertRaisesRegex(release.ReleaseError, "prospective candidate"):
+            self.deployment.preflight()
+
+    def test_cleaner_starting_after_proof_preserves_targets_at_each_pointer_write(self):
+        specification = importlib.util.spec_from_file_location("reviewed_retention_policy_fixture", self.policy_root / "retention.py")
+        policy = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(policy)
+        replace = release.replace_link
+        seen = []
+        def clean_after_pointer(path, target):
+            replace(path, target)
+            policy.clean(self.deployment.home, now=self.now + 3600)
+            seen.append(path.name)
+            self.assertTrue(self.deployment.old_release.is_dir())
+            self.assertTrue((self.deployment.releases / ORIGINAL).is_dir())
+        with self.held(), patch.object(release, "replace_link", side_effect=clean_after_pointer):
+            self.deployment.transact()
+        self.assertEqual(seen, ["previous", "current"])
+        self.assertFalse((self.deployment.releases / self.third).exists())
+
+    def test_apply_records_only_the_exclusively_held_lock_descriptor(self):
+        def transaction():
+            fd = self.deployment._deployment_lock_fd
+            self.assertIsInstance(fd, int)
+            with self.deployment.lock.open("a") as competing:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(competing, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return "fixture-only"
+        with patch.object(release.os, "geteuid", return_value=0), patch.object(self.deployment, "transact", side_effect=transaction):
+            self.assertEqual(self.deployment.apply(), "fixture-only")
+        self.assertIsNone(self.deployment._deployment_lock_fd)
+
+    def test_old_rollback_targets_survive_failed_candidate_and_pointer_rollback(self):
+        self.system.fail = "public"
+        with self.held(), self.assertRaisesRegex(release.ReleaseError, "previous release restored"):
+            self.deployment.transact()
+        self.assert_restored()
+        self.assertTrue((self.deployment.releases / ORIGINAL).is_dir())
+
 
 class DeploymentTests(DeploymentFixture):
     def test_success_preserves_original_handover_fields_and_canonical_config(self):
