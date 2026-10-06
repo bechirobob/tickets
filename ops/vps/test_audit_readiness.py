@@ -16,6 +16,85 @@ audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)
 
 class ReadinessTests(unittest.TestCase):
+    def test_deployment_lock_observation_reports_permissions_without_content_or_writes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'lock'
+            path.write_text('private-lock-content-sentinel')
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                real_stat = os.stat
+                def fixed_path_stat(name, *, follow_symlinks):
+                    self.assertEqual(name, '/run/lock/becore-tickets-deploy.lock')
+                    self.assertFalse(follow_symlinks)
+                    return real_stat(path, follow_symlinks=False)
+                for mode in (0o600, 0o644):
+                    path.chmod(mode)
+                    before = os.fstat(fd)
+                    with patch.object(audit.os, 'stat', side_effect=fixed_path_stat), \
+                         patch.object(audit.os, 'open', side_effect=AssertionError('No new file open')), \
+                         patch.object(audit.os, 'read', side_effect=AssertionError('No content read')), \
+                         patch.object(audit.os, 'write', side_effect=AssertionError('No write')), \
+                         patch.object(audit.os, 'chmod', side_effect=AssertionError('No mode change')), \
+                         patch.object(audit.os, 'fchmod', side_effect=AssertionError('No mode change')):
+                        result = audit.deployment_lock_metadata(fd)
+                    self.assertTrue(result['stable_identity'])
+                    self.assertEqual(result['descriptor'], result['path'])
+                    self.assertEqual(result['path'], {'uid': before.st_uid, 'gid': before.st_gid,
+                        'mode': oct(mode), 'type': 'regular', 'nlink': 1, 'size_bytes': before.st_size})
+                    self.assertNotIn('private-lock-content', json.dumps(result))
+                    self.assertEqual(os.fstat(fd), before)
+            finally:
+                os.close(fd)
+
+    def test_deployment_lock_identity_drift_and_symlink_are_reported_without_following(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'lock'
+            path.touch()
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                real_stat = os.stat
+                original = Path(folder) / 'old-lock'
+                path.rename(original)
+                for symlink in (False, True):
+                    if symlink:
+                        path.symlink_to(original)
+                    else:
+                        path.touch()
+                    with patch.object(audit.os, 'stat', side_effect=lambda name, **kwargs: real_stat(path, **kwargs)):
+                        result = audit.deployment_lock_metadata(fd)
+                    self.assertFalse(result['stable_identity'])
+                    self.assertEqual(result['descriptor']['type'], 'regular')
+                    self.assertEqual(result['path']['type'], 'symlink' if symlink else 'regular')
+                    path.unlink()
+            finally:
+                os.close(fd)
+
+    def test_deployment_lock_stat_failure_uses_existing_secret_suppression(self):
+        output = io.StringIO()
+        with patch.object(audit.os, 'fstat', side_effect=OSError('private-lock-secret-sentinel')), \
+             audit.contextlib.redirect_stderr(output):
+            try:
+                audit.deployment_lock_metadata(123)
+            except Exception as error:
+                audit.report_readiness_failure(error)
+        self.assertNotIn('private-lock-secret-sentinel', output.getvalue())
+        self.assertIn('sensitive details suppressed', output.getvalue())
+
+    def test_stopped_release_attempt_checks_only_two_fixed_paths_without_contents(self):
+        paths = ('/var/lib/becore-tickets-handover/code-release-37528616045-1',
+                 '/srv/becore-tickets/releases/9dd3b8fde2841d0d72422a221d1b25319b8474b7')
+        with patch.object(audit.os, 'stat', side_effect=FileNotFoundError('private-sentinel')) as checked, \
+             patch.object(audit.os, 'open', side_effect=AssertionError('No content open')):
+            result = audit.stopped_release_attempt_metadata()
+        self.assertEqual([call.args[0] for call in checked.call_args_list], list(paths))
+        self.assertTrue(all(call.kwargs == {'follow_symlinks': False} for call in checked.call_args_list))
+        self.assertEqual(result, {'snapshot': {'exists': False, 'type': 'absent'}, 'candidate': {'exists': False, 'type': 'absent'}})
+        self.assertNotIn('private-sentinel', json.dumps(result))
+        with patch.object(audit.os, 'stat', side_effect=[SimpleNamespace(st_mode=audit.stat.S_IFDIR | 0o700),
+                                                     SimpleNamespace(st_mode=audit.stat.S_IFLNK | 0o777)]):
+            result = audit.stopped_release_attempt_metadata()
+        self.assertEqual(result, {'snapshot': {'exists': True, 'type': 'directory'}, 'candidate': {'exists': True, 'type': 'symlink'}})
+
     def test_secret_values_never_returned(self):
         data = {k: 'private-test-value' for k in audit.SECRET_NAMES}
         data.update(ENVIRONMENT='production', SEEV_ENABLED='true', SEEV_ENVIRONMENT='production')
