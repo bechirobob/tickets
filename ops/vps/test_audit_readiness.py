@@ -1,5 +1,6 @@
 """Read-only diagnostics contract tests using disposable isolated SQLite files."""
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -316,7 +317,8 @@ class RetentionPolicyAttestationTests(unittest.TestCase):
             self.assertEqual(args[:2], ('systemctl', 'show'))
             self.assertIn(args[2], self.properties)
             self.assertEqual(args[3], '--no-pager')
-            self.assertEqual(set(args[4].removeprefix('--property=').split(',')), set(self.properties[args[2]]))
+            self.assertEqual(args[4], '--all')
+            self.assertEqual(set(args[5].removeprefix('--property=').split(',')), set(self.properties[args[2]]))
             return '\n'.join(f'{key}={value}' for key, value in self.properties[args[2]].items())
         self.unit_output = unit_output
         patcher = patch.object(audit, 'run', side_effect=unit_output)
@@ -422,7 +424,7 @@ class RetentionPolicyAttestationTests(unittest.TestCase):
         operations.rename(actual)
         operations.symlink_to(actual)
         with patch.object(audit.os, 'read') as read:
-            with self.assertRaises(OSError):
+            with self.assertRaises(audit.RetentionAttestationError):
                 audit.retention_policy_attestation()
             read.assert_not_called()
 
@@ -488,5 +490,56 @@ class RetentionPolicyAttestationTests(unittest.TestCase):
                 self.run.side_effect = racing_units
                 with self.assertRaises(AssertionError):
                     audit.retention_policy_attestation()
+
+    def test_fixed_stages_suppress_secret_exception_values(self):
+        sentinel = 'secret-sentinel-credential-and-customer-value'
+        for stage in audit.RETENTION_FAILURE_STAGES:
+            with self.subTest(stage=stage):
+                def fail(progress):
+                    progress[0] = stage
+                    raise OSError(sentinel)
+                output = io.StringIO()
+                with patch.object(audit, '_retention_policy_attestation', side_effect=fail), \
+                     audit.contextlib.redirect_stderr(output):
+                    with self.assertRaises(audit.RetentionAttestationError) as raised:
+                        audit.retention_policy_attestation()
+                    audit.report_readiness_failure(raised.exception)
+                self.assertIn('Retention attestation stage: ' + stage + '.', output.getvalue())
+                self.assertNotIn(sentinel, output.getvalue())
+                self.assertNotIn(sentinel, str(raised.exception))
+        for error in (RuntimeError(sentinel), audit.RetentionAttestationError(sentinel),
+                      audit.RetentionAttestationError('pointer_metadata', sentinel)):
+            output = io.StringIO()
+            with audit.contextlib.redirect_stderr(output):
+                audit.report_readiness_failure(error)
+            self.assertNotIn(sentinel, output.getvalue())
+            self.assertNotIn('Retention attestation stage:', output.getvalue())
+
+    def test_unit_shape_failure_reports_stage_without_raw_values(self):
+        self.run.side_effect = None
+        self.run.return_value = 'Id=secret-sentinel-value\nprivate-invalid-line'
+        with self.assertRaises(audit.RetentionAttestationError) as raised:
+            audit.retention_policy_attestation()
+        self.assertEqual(str(raised.exception), 'service_before_shape')
+
+    def test_each_fixed_file_has_a_distinct_safe_metadata_failure_stage(self):
+        for name, path in self.paths.items():
+            with self.subTest(name=name):
+                self.owner_overrides[path.stat().st_ino] = 1000
+                try:
+                    with self.assertRaises(audit.RetentionAttestationError) as raised:
+                        audit.retention_policy_attestation()
+                    self.assertEqual(str(raised.exception), audit.RETENTION_FILE_LABELS[name] + '_file_metadata')
+                finally:
+                    self.owner_overrides.clear()
+
+    def test_explicit_all_preserves_empty_properties_without_widening_selection(self):
+        def suppress_empty_without_all(*args):
+            values = self.properties[args[2]]
+            self.assertEqual(set(args[-1].removeprefix('--property=').split(',')), set(values))
+            return '\n'.join(f'{key}={value}' for key, value in values.items() if value or '--all' in args)
+        self.run.side_effect = suppress_empty_without_all
+        self.assertTrue(audit.retention_policy_attestation()['host_retention_policy_verified'])
+        self.assertTrue(all('--all' in call.args for call in self.run.call_args_list))
 
 if __name__ == '__main__': unittest.main()

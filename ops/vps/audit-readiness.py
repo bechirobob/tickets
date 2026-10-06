@@ -30,6 +30,16 @@ RETENTION_SHA256 = {
     'becore-tickets-retention.service': '89a312bbe7c96886530c05f0a253dbc388dd5bcb3696bbb79e11489aef84379b',
     'becore-tickets-retention.timer': '94d560a6cbe162529ee750e7fb67d987c5dbd62fe5a898f1476efb97bbfc1699',
 }
+RETENTION_FILE_LABELS = {'retention.py': 'script', 'becore-tickets-retention.service': 'service',
+                         'becore-tickets-retention.timer': 'timer'}
+RETENTION_FAILURE_STAGES = (
+    {'pointer_metadata', 'pointer_path', 'pointer_recheck', 'policy_result'}
+    | {f'{unit}_{phase}_{step}' for unit in ('service', 'timer') for phase in ('before', 'after')
+       for step in ('query', 'bound', 'shape')}
+    | {f'{file}_{step}' for file in ('script', 'service', 'timer')
+       for step in ('root_safety', 'parent_safety', 'file_open', 'file_metadata', 'file_bound_mode',
+                    'file_read', 'file_size_stability', 'parent_recheck', 'file_recheck')}
+)
 SECRET_NAMES = ('STAFF_LOGIN_DECOY_SECRET', 'SEEV_CHECKOUT_API_KEY', 'SEEV_WEBHOOK_SECRET',
                 'PAYSTACK_SECRET_KEY', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET',
                 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY')
@@ -165,7 +175,29 @@ def release_retention_metadata():
     }
 
 
+class RetentionAttestationError(AssertionError):
+    pass
+
+
+def report_readiness_failure(error):
+    message = 'Read-only Tickets readiness observation stopped; sensitive details suppressed.'
+    if isinstance(error, RetentionAttestationError):
+        stage = error.args[0] if len(error.args) == 1 else None
+        if isinstance(stage, str) and stage in RETENTION_FAILURE_STAGES:
+            message += ' Retention attestation stage: ' + stage + '.'
+    print(message, file=sys.stderr)
+
+
 def retention_policy_attestation():
+    stage = ['pointer_metadata']
+    try:
+        return _retention_policy_attestation(stage)
+    except Exception:
+        # Only our finite stage vocabulary can escape; never format the cause.
+        raise RetentionAttestationError(stage[0]) from None
+
+
+def _retention_policy_attestation(stage):
     """Hash only the three fixed policy files; suppress contents and raw unit data."""
     def identity(metadata, directory=False):
         fields = ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid')
@@ -176,6 +208,7 @@ def retention_policy_attestation():
     pointer = HOME / 'current'
     pointer_stat = pointer.lstat()
     assert stat.S_ISLNK(pointer_stat.st_mode) and pointer_stat.st_uid == 0
+    stage[0] = 'pointer_path'
     link = os.readlink(pointer)
     target = Path(link) if Path(link).is_absolute() else HOME / link
     assert target.parent == HOME / 'releases' and re.fullmatch('[a-f0-9]{40}', target.name)
@@ -188,11 +221,15 @@ def retention_policy_attestation():
         units[1]: common + ',Unit',
     }
 
-    def unit_metadata():
+    def unit_metadata(phase):
         result = {}
         for name in units:
-            raw = run('systemctl', 'show', name, '--no-pager', '--property=' + properties[name])
+            label = RETENTION_FILE_LABELS[name] + '_' + phase
+            stage[0] = label + '_query'
+            raw = run('systemctl', 'show', name, '--no-pager', '--all', '--property=' + properties[name])
+            stage[0] = label + '_bound'
             assert len(raw) <= 16384
+            stage[0] = label + '_shape'
             pairs = [line.split('=', 1) for line in raw.splitlines()]
             assert all(len(pair) == 2 for pair in pairs)
             values = dict(pairs)
@@ -200,50 +237,62 @@ def retention_policy_attestation():
             result[name] = values
         return result
 
-    before_units = unit_metadata()
+    before_units = unit_metadata('before')
     files = {}
     # Open every directory component without following symlinks, then keep its
     # descriptor until the bounded read and path/inode rechecks have completed.
     with contextlib.ExitStack() as stack:
         directory_checks, file_checks = [], []
         for name, path in paths.items():
+            label = RETENTION_FILE_LABELS[name]
+            stage[0] = label + '_root_safety'
             directory = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             stack.callback(os.close, directory)
             metadata = os.fstat(directory)
             assert metadata.st_uid == 0 and not stat.S_IMODE(metadata.st_mode) & 0o7022
             for component in path.parts[1:-1]:
+                stage[0] = label + '_parent_safety'
                 child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
                 stack.callback(os.close, child)
                 metadata = os.fstat(child)
                 assert stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == 0
                 assert not stat.S_IMODE(metadata.st_mode) & 0o7022
-                directory_checks.append((directory, component, identity(metadata, True)))
+                directory_checks.append((directory, component, identity(metadata, True), label))
                 directory = child
+            stage[0] = label + '_file_open'
             fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
             stack.callback(os.close, fd)
+            stage[0] = label + '_file_metadata'
             metadata = os.fstat(fd)
             assert stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0 and metadata.st_nlink == 1
+            stage[0] = label + '_file_bound_mode'
             assert not stat.S_IMODE(metadata.st_mode) & 0o7022 and metadata.st_size <= 16384
             content = bytearray()
+            stage[0] = label + '_file_read'
             while len(content) <= 16384:
                 chunk = os.read(fd, 16385 - len(content))
                 if not chunk:
                     break
                 content.extend(chunk)
+            stage[0] = label + '_file_size_stability'
             assert len(content) == metadata.st_size and len(content) <= 16384
             digest = hashlib.sha256(content).hexdigest()
             files[name] = {'path': str(path), 'sha256': digest, 'matches_reviewed': digest == RETENTION_SHA256[name],
                            'uid': metadata.st_uid, 'gid': metadata.st_gid, 'mode': oct(stat.S_IMODE(metadata.st_mode)),
                            'size_bytes': metadata.st_size}
-            file_checks.append((fd, directory, path.name, identity(metadata)))
-        after_units = unit_metadata()
-        for parent, component, expected in directory_checks:
+            file_checks.append((fd, directory, path.name, identity(metadata), label))
+        after_units = unit_metadata('after')
+        for parent, component, expected, label in directory_checks:
+            stage[0] = label + '_parent_recheck'
             assert identity(os.stat(component, dir_fd=parent, follow_symlinks=False), True) == expected
-        for fd, parent, name, expected in file_checks:
+        for fd, parent, name, expected, label in file_checks:
+            stage[0] = label + '_file_recheck'
             assert identity(os.fstat(fd)) == expected
             assert identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == expected
+        stage[0] = 'pointer_recheck'
         assert identity(pointer.lstat()) == identity(pointer_stat) and os.readlink(pointer) == link
 
+    stage[0] = 'policy_result'
     unit_checks = {}
     for name in units:
         values = after_units[name]
@@ -380,6 +429,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except Exception:
-        print('Read-only Tickets readiness observation stopped; sensitive details suppressed.', file=sys.stderr)
+    except Exception as error:
+        report_readiness_failure(error)
         sys.exit(1)
