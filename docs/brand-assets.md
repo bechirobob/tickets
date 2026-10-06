@@ -24,3 +24,58 @@ Homepage phone direction: the arrival phone is attendee conversation only (five 
 
 
 Brand consistency pass (September 2026): staff sign-in, recovery, bootstrap, account security, Help, Terms and page recovery now use `BrandLogo`. Offline passes use the approved mark cached with shell v6. Email headers use `lib/email-brand.ts` with a PNG rendition for mail-client compatibility; RSVP, host alerts, announcements, receipts, recovery, transfers and support share it. The social card embeds the approved render rather than the retired flat boxed B. Run `node scripts/refresh-brand-assets.mjs` to refresh the email PNG and social-card PNG/SVG from the WebP source. Existing favicon, Apple touch, PWA, Android/iOS launcher and native splash images were visually checked and already contain the same rendered identity. No native binary release is needed for this web-only correction; installed native icons were already current.
+
+## Customer email identity — 6 October 2026
+
+Customer purchase and RSVP confirmations, email verification, My Nights recovery,
+ticket transfers, waitlist offers, abandoned checkout and support replies use
+`lib/customer-email.ts`. The shell adapts the approved 22 September organiser
+invite: 600 px fluid width; plum `#301d2c`; cream `#f8f4ec`; lime `#d6f075`;
+Arial/Helvetica; the real 36 × 39 px ticket mark; rectangular CTA; original
+header, body and footer spacing. Customer service copy replaces the promotional
+eyebrow and opt-out, without changing marketing subscription preferences.
+
+Purchase confirmation gives the booking reference, admissions, subtotal, fee,
+total, venue and Accra-time schedule. RSVP confirmation gives the confirmed
+party size, date, venue and My Nights passes route. Pending or waitlisted states
+must never claim admission. Private recovery/verification links remain private,
+one-time and expiring; QR passes are viewed in My Nights, never embedded in mail.
+Existing push-first/email-fallback selection, durable queue keys, retries and
+payment/registration state transitions are unchanged.
+
+`node --test tests/customer-email-rendering.test.mjs` invokes the real production
+send paths against a synthetic outbox with network disabled. The preview script
+saves those exact HTML bodies and their plain-text alternatives. The dedicated
+Customer email previews workflow checks desktop Chromium, mobile Chromium and
+mobile WebKit, retaining only fictional HTML/PNG review files for three days.
+Its previews are not real messages, bookings, delivery receipts or release
+attestations. Native email clients can apply their own rendering; browser
+screenshots alone do not verify Outlook, Gmail or Apple Mail delivery.
+
+The approved 6 October refinement adds the complete public event flyer to
+purchase and RSVP confirmations at 180 px display width, without cropping.
+The original public Guest List WebP has a JPEG email derivative with the same
+960 × 1423 composition. Generic photos, private/test/removed/future-scheduled
+artwork, external or tokenized image URLs and unsupported formats are omitted.
+Only published/due-public event records may supply artwork; the media endpoint's
+existing publication checks remain authoritative. Event name/date/venue remain
+real text if images are blocked. Uploaded JPEG/PNG artwork uses its public media
+URL; other uploaded formats are omitted until a compatible public asset exists.
+
+Copy now uses a stored customer/guest name when available, a neutral fallback
+when missing, one event section, one action and one private-access note. Full
+names are not guessed to be verified first names. The generic tagline and team
+signoff are removed; the footer provides one help address. Transfer copy makes
+acceptance pending. Preview customers, paid bookings and amounts are fictional;
+the verified public Guest List title/artwork/venue and unannounced date are kept
+consistent across both confirmation examples.
+
+Confirmed purchase/RSVP openings may identify the public primary host using the
+same `findPrimaryHost` selection shown on the public event page. Use only its
+public display name and a truthful Host/co-host role. Omit attribution for
+private/test/removed/unpublished events, missing or blank names, and other roles
+such as performers or staff. Do not substitute account names, profile full names,
+or invent a signed first-person host welcome. BeCore Tickets remains the sender.
+Keep one lightly cheeky line beside the clear confirmation, never in place of
+payment, admission, expiry or acceptance conditions. Other customer templates
+keep gentle personality; support replies retain the supplied support wording.
