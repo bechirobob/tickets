@@ -1,5 +1,4 @@
 'use client';
-import './booking-consent.css';
 import ConfirmationNotifications from './confirmation-notifications';
 import { FormEvent, useRef, useState } from 'react';
 import Link from 'next/link';

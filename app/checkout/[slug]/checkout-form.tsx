@@ -1,7 +1,5 @@
 "use client";
 
-import "../../booking-consent.css";
-
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
