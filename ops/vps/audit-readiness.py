@@ -19,6 +19,7 @@ import urllib.error
 SERVICE = 'becore-tickets.service'
 STATE = Path('/var/lib/becore-tickets')
 HOME = Path('/srv/becore-tickets')
+MAX_RELEASE_ENTRIES = 128
 SECRET_NAMES = ('STAFF_LOGIN_DECOY_SECRET', 'SEEV_CHECKOUT_API_KEY', 'SEEV_WEBHOOK_SECRET',
                 'PAYSTACK_SECRET_KEY', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET',
                 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY')
@@ -89,6 +90,71 @@ def small_json(path):
         os.close(fd)
 
 
+def release_retention_metadata():
+    """Stat-only snapshot of fixed release paths; never inspect release contents."""
+    now = time.time()
+    releases = HOME / 'releases'
+    assert releases.resolve(strict=True) == releases
+    assert stat.S_ISDIR(releases.lstat().st_mode)
+    pointers, links = {}, {}
+    for name in ('current', 'previous'):
+        pointer = HOME / name
+        assert stat.S_ISLNK(pointer.lstat().st_mode)
+        links[name] = os.readlink(pointer)
+        target = Path(links[name])
+        if not target.is_absolute():
+            target = HOME / target
+        assert target.parent == releases and re.fullmatch('[a-f0-9]{40}', target.name)
+        assert stat.S_ISDIR(target.lstat().st_mode) and target.resolve(strict=True) == target
+        pointers[name] = target.name
+
+    inventory = []
+    # Bound all directory entries, including ignored names; never open child files.
+    with os.scandir(releases) as entries:
+        for count, entry in enumerate(entries):
+            assert count < MAX_RELEASE_ENTRIES
+            if not re.fullmatch('[a-f0-9]{40}', entry.name):
+                continue
+            metadata = entry.stat(follow_symlinks=False)
+            if not stat.S_ISDIR(metadata.st_mode):
+                continue
+            inventory.append({
+                'revision': entry.name, 'resolved_path': str(releases / entry.name),
+                'mtime_epoch': metadata.st_mtime,
+                'mtime_utc': datetime.datetime.fromtimestamp(metadata.st_mtime, datetime.timezone.utc).isoformat(),
+                'age_seconds': now - metadata.st_mtime,
+            })
+    by_revision = {item['revision']: item for item in inventory}
+    assert all(revision in by_revision for revision in pointers.values())
+    assert all(os.readlink(HOME / name) == links[name] for name in pointers)
+    for item in inventory:
+        # Equal mtimes depend on directory iteration order in retention.py. Report
+        # uncertainty at the cutoff instead of inventing a deterministic tie-break.
+        newer = sum(other['mtime_epoch'] > item['mtime_epoch'] for other in inventory)
+        tied = sum(other['mtime_epoch'] == item['mtime_epoch'] for other in inventory)
+        item['newest_rank_min'] = newer + 1
+        item['newest_rank_max'] = newer + tied
+        item['pointer_names'] = [name for name, revision in pointers.items() if revision == item['revision']]
+        item['within_47h_release_guard'] = item['age_seconds'] < 47 * 3600
+        item['older_than_48h_retention_grace'] = item['age_seconds'] > 48 * 3600
+        item['protected_now'] = True if item['pointer_names'] or newer + tied <= 3 else (None if newer < 3 else False)
+        # The new release occupies one newest-three slot; current becomes previous.
+        item['protected_after_one_newer_release_and_pointer_rotation'] = (
+            True if item['revision'] == pointers['current'] or newer + tied <= 2
+            else (None if newer < 2 else False))
+    return {
+        'observed_at': datetime.datetime.fromtimestamp(now, datetime.timezone.utc).isoformat(),
+        'metadata_only': True, 'snapshot_atomic': False, 'host_retention_policy_verified': False,
+        'policy_model': 'repository retention.py: current, previous, newest three; unprotected age > 48h',
+        'projection_assumption': 'one strictly newer release; current becomes previous; other mtimes and directories unchanged',
+        'null_protection_means': 'mtime tie crosses newest-three cutoff',
+        'pointers': {name: by_revision[revision] for name, revision in pointers.items()},
+        'both_pointers_within_47h_release_guard': all(by_revision[revision]['within_47h_release_guard'] for revision in pointers.values()),
+        'release_count': len(inventory), 'entry_limit': MAX_RELEASE_ENTRIES,
+        'directories': sorted(inventory, key=lambda item: (-item['mtime_epoch'], item['revision'])),
+    }
+
+
 def inspect_database(path, application=False):
     assert path.is_file() and not path.is_symlink()
     db = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)
@@ -157,15 +223,11 @@ def main():
     key = Path('/etc/becore-tickets/backup.key').lstat()
     output['backup_key_private_present'] = stat.S_ISREG(key.st_mode) and key.st_size == 32 and not key.st_mode & 0o077
     output['backup_escrow_currently_verified'] = False  # Requires separate Cloudflare secret metadata check, never key export.
-    pointers = {}
-    for name in ('current', 'previous'):
-        p = HOME / name
-        assert p.is_symlink()
-        target = p.resolve(strict=True)
-        assert target.parent == HOME / 'releases' and re.fullmatch('[a-f0-9]{40}', target.name)
-        pointers[name] = target.name
+    release_metadata = release_retention_metadata()
+    pointers = {name: item['revision'] for name, item in release_metadata['pointers'].items()}
     assert pointers['current'] == active.name
     output['release_pointers'] = pointers
+    output['release_retention_metadata'] = release_metadata
     origin_path = Path('/etc/caddy/becore-tickets-origin.caddy')
     origin_fd = os.open(origin_path, os.O_RDONLY | os.O_NOFOLLOW)
     try:
