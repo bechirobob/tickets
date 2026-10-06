@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, MagicMock
 from retention import clean
@@ -258,5 +259,234 @@ class ReleaseRetentionMetadataTests(unittest.TestCase):
         self.releases.symlink_to(actual)
         with self.assertRaises(AssertionError):
             audit.release_retention_metadata()
+
+
+class RetentionPolicyAttestationTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.home = Path(folder.name) / 'home'
+        self.release = self.home / 'releases' / ('1' * 40)
+        operations = self.release / 'operations'
+        operations.mkdir(parents=True)
+        (self.home / 'current').symlink_to(self.release)
+        self.units = Path(folder.name) / 'units'
+        self.units.mkdir()
+        self.paths = {}
+        for name, expected in audit.RETENTION_SHA256.items():
+            content = Path(__file__).with_name(name).read_bytes()
+            self.assertEqual(audit.hashlib.sha256(content).hexdigest(), expected)
+            path = (operations if name == 'retention.py' else self.units) / name
+            path.write_bytes(content)
+            self.paths[name] = path
+        for key, value in (('HOME', self.home), ('SYSTEMD_UNITS', self.units)):
+            patcher = patch.object(audit, key, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+        # Disposable fixtures need no privileged ownership changes. Preserve real
+        # inode/timestamps and fixture-tree modes while modeling root ownership.
+        # Only ancestors outside the fixture model the production secure path;
+        # hosted runners normally put the fixture beneath world-writable /tmp.
+        self.owner_overrides = {}
+        real_stat, real_fstat = os.stat, os.fstat
+        ancestor_ids = {(p.stat().st_dev, p.stat().st_ino) for p in Path(folder.name).parents}
+        self.ancestor_modes = {}
+        def metadata(value):
+            fields = ('st_dev', 'st_ino', 'st_mode', 'st_gid', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink')
+            modeled = {key: getattr(value, key) for key in fields}
+            key = (value.st_dev, value.st_ino)
+            if key in ancestor_ids:
+                modeled['st_mode'] = self.ancestor_modes.get(key, value.st_mode) & ~0o7022
+            return SimpleNamespace(**modeled,
+                                   st_uid=self.owner_overrides.get(value.st_ino, 0))
+        self.ancestor_ids = ancestor_ids
+        for key, real in (('stat', real_stat), ('fstat', real_fstat)):
+            patcher = patch.object(audit.os, key, side_effect=lambda *args, _real=real, **kwargs: metadata(_real(*args, **kwargs)))
+            patcher.start(); self.addCleanup(patcher.stop)
+        self.properties = {}
+        for name in ('becore-tickets-retention.service', 'becore-tickets-retention.timer'):
+            self.properties[name] = {'Id': name, 'LoadState': 'loaded', 'FragmentPath': str(self.units / name),
+                                     'SourcePath': '', 'DropInPaths': '', 'NeedDaemonReload': 'no', 'Transient': 'no'}
+        self.properties['becore-tickets-retention.service'].update(
+            Type='oneshot', ExecStart='{ path=/usr/bin/python3 ; argv[]=/usr/bin/python3 '
+            + str(self.home / 'current/operations/retention.py')
+            + ' ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }',
+            ExecStartPre='', ExecStartPost='', ExecCondition='', ExecStop='', ExecStopPost='', ExecReload='')
+        self.properties['becore-tickets-retention.timer']['Unit'] = 'becore-tickets-retention.service'
+        def unit_output(*args):
+            self.assertEqual(args[:2], ('systemctl', 'show'))
+            self.assertIn(args[2], self.properties)
+            self.assertEqual(args[3], '--no-pager')
+            self.assertEqual(set(args[4].removeprefix('--property=').split(',')), set(self.properties[args[2]]))
+            return '\n'.join(f'{key}={value}' for key, value in self.properties[args[2]].items())
+        self.unit_output = unit_output
+        patcher = patch.object(audit, 'run', side_effect=unit_output)
+        self.run = patcher.start(); self.addCleanup(patcher.stop)
+
+    def test_exact_reviewed_hashes_and_loaded_units_attest_without_contents(self):
+        with patch.object(audit.os, 'open', wraps=os.open) as opened:
+            result = audit.retention_policy_attestation()
+        file_opens = [call.args[0] for call in opened.call_args_list if not call.args[1] & os.O_DIRECTORY]
+        self.assertEqual(file_opens, list(audit.RETENTION_SHA256))
+        self.assertTrue(result['host_retention_policy_verified'])
+        self.assertFalse(result['snapshot_atomic'])
+        self.assertEqual(self.run.call_count, 4)
+        self.assertEqual(set(result['files']), set(audit.RETENTION_SHA256))
+        self.assertNotIn('shutil.rmtree', json.dumps(result))
+        self.assertNotIn('ExecStart=', json.dumps(result))
+        for name, item in result['files'].items():
+            self.assertEqual(item['sha256'], audit.RETENTION_SHA256[name])
+            self.assertEqual(item['path'], str(self.paths[name]))
+            self.assertEqual(item['uid'], 0)
+
+    def test_modified_policy_hash_stays_unverified_and_never_echoes_content(self):
+        self.paths['retention.py'].write_text('private unexpected file content')
+        result = audit.retention_policy_attestation()
+        self.assertFalse(result['host_retention_policy_verified'])
+        self.assertFalse(result['files']['retention.py']['matches_reviewed'])
+        self.assertNotIn('private unexpected', json.dumps(result))
+
+    def test_fixture_ancestor_model_handles_hosted_runner_sticky_tmp(self):
+        self.ancestor_modes.update({key: audit.stat.S_IFDIR | 0o1777 for key in self.ancestor_ids})
+        self.assertTrue(audit.retention_policy_attestation()['host_retention_policy_verified'])
+        # The normalization must never sanitize permissions inside the fixture.
+        self.release.chmod(0o777)
+        with self.assertRaises(AssertionError):
+            audit.retention_policy_attestation()
+
+    def test_loaded_unit_drift_never_attests_or_echoes_values(self):
+        service = self.properties['becore-tickets-retention.service']
+        for key, value in (('FragmentPath', '/private/unreviewed.service'), ('SourcePath', '/private/source'),
+                           ('DropInPaths', '/private/override.conf'), ('NeedDaemonReload', 'yes'),
+                           ('Transient', 'yes'), ('LoadState', 'error'), ('ExecStartPre', '/private/command'),
+                           ('ExecStart', service['ExecStart'] + ' { private extra command }')):
+            with self.subTest(key=key):
+                original = service[key]
+                service[key] = value
+                try:
+                    result = audit.retention_policy_attestation()
+                    self.assertFalse(result['host_retention_policy_verified'])
+                    self.assertNotIn('private', json.dumps(result))
+                finally:
+                    service[key] = original
+        self.properties['becore-tickets-retention.timer']['Unit'] = 'unreviewed.service'
+        self.assertFalse(audit.retention_policy_attestation()['host_retention_policy_verified'])
+
+    def test_unsafe_owner_modes_symlinks_and_hardlinks_are_rejected_before_content_read(self):
+        path = self.paths['retention.py']
+        mode = path.stat().st_mode & 0o777
+        for bad_mode in (0o666, 0o664, 0o4755):
+            with self.subTest(mode=bad_mode):
+                path.chmod(bad_mode)
+                with patch.object(audit.os, 'read', side_effect=AssertionError('No content read')) as read:
+                    with self.assertRaises(AssertionError):
+                        audit.retention_policy_attestation()
+                    read.assert_not_called()
+        path.chmod(mode)
+        self.owner_overrides[path.stat().st_ino] = 1000
+        with patch.object(audit.os, 'read') as read:
+            with self.assertRaises(AssertionError):
+                audit.retention_policy_attestation()
+            read.assert_not_called()
+        self.owner_overrides.clear()
+        original = path.with_name('unapproved.py')
+        path.rename(original)
+        for hardlink in (False, True):
+            with self.subTest(hardlink=hardlink):
+                if hardlink:
+                    path.hardlink_to(original)
+                else:
+                    path.symlink_to(original)
+                try:
+                    with patch.object(audit.os, 'read') as read:
+                        with self.assertRaises((AssertionError, OSError)):
+                            audit.retention_policy_attestation()
+                        read.assert_not_called()
+                finally:
+                    path.unlink()
+
+    def test_unsafe_parent_and_pointer_are_rejected(self):
+        self.release.chmod(0o777)
+        with patch.object(audit.os, 'read') as read:
+            with self.assertRaises(AssertionError):
+                audit.retention_policy_attestation()
+            read.assert_not_called()
+        self.release.chmod(0o755)
+        pointer = self.home / 'current'
+        pointer.unlink(); pointer.symlink_to(self.units)
+        with self.assertRaises(AssertionError):
+            audit.retention_policy_attestation()
+
+    def test_symlink_parent_is_rejected_before_reading_the_target(self):
+        operations = self.release / 'operations'
+        actual = self.release / 'outside-operations'
+        operations.rename(actual)
+        operations.symlink_to(actual)
+        with patch.object(audit.os, 'read') as read:
+            with self.assertRaises(OSError):
+                audit.retention_policy_attestation()
+            read.assert_not_called()
+
+    def test_oversized_files_and_unit_metadata_are_rejected(self):
+        self.paths['retention.py'].write_bytes(b'x' * 16385)
+        with patch.object(audit.os, 'read') as read:
+            with self.assertRaises(AssertionError):
+                audit.retention_policy_attestation()
+            read.assert_not_called()
+        self.run.side_effect = None
+        self.run.return_value = 'x' * 16385
+        with self.assertRaises(AssertionError):
+            audit.retention_policy_attestation()
+
+    def test_content_and_path_replacement_during_hashing_are_rejected(self):
+        original_read = os.read
+        path = self.paths['retention.py']
+        for replacement in (False, True):
+            with self.subTest(replacement=replacement):
+                changed = False
+                def racing_read(fd, count):
+                    nonlocal changed
+                    content = original_read(fd, count)
+                    if not changed:
+                        changed = True
+                        if replacement:
+                            path.unlink()
+                        path.write_text('changed during inspection')
+                    return content
+                with patch.object(audit.os, 'read', side_effect=racing_read):
+                    with self.assertRaises(AssertionError):
+                        audit.retention_policy_attestation()
+
+    def test_unit_metadata_race_does_not_attest(self):
+        calls = 0
+        def changing_units(*args):
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                self.properties['becore-tickets-retention.service']['NeedDaemonReload'] = 'yes'
+            return self.unit_output(*args)
+        self.run.side_effect = changing_units
+        result = audit.retention_policy_attestation()
+        self.assertFalse(result['host_retention_policy_verified'])
+        self.assertFalse(result['unit_checks']['becore-tickets-retention.service']['metadata_stable'])
+
+    def test_pointer_or_parent_replacement_during_observation_is_rejected(self):
+        for change_parent in (False, True):
+            with self.subTest(change_parent=change_parent):
+                calls = 0
+                def racing_units(*args):
+                    nonlocal calls
+                    calls += 1
+                    if calls == 3:
+                        if change_parent:
+                            operations = self.release / 'operations'
+                            operations.rename(self.release / 'old-operations')
+                            operations.mkdir()
+                        else:
+                            pointer = self.home / 'current'
+                            pointer.unlink(); pointer.symlink_to(self.release)
+                    return self.unit_output(*args)
+                self.run.side_effect = racing_units
+                with self.assertRaises(AssertionError):
+                    audit.retention_policy_attestation()
 
 if __name__ == '__main__': unittest.main()
