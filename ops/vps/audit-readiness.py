@@ -117,6 +117,38 @@ def small_json(path):
         os.close(fd)
 
 
+def deployment_lock_metadata(fd):
+    """Inspect only the already-open deployment lock and its fixed path."""
+    before = os.fstat(fd)
+    path = os.stat('/run/lock/becore-tickets-deploy.lock', follow_symlinks=False)
+    after = os.fstat(fd)
+    identity_fields = ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid', 'st_nlink', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+    identities = [tuple(getattr(item, key) for key in identity_fields) for item in (before, path, after)]
+    def summary(item):
+        kind = 'regular' if stat.S_ISREG(item.st_mode) else 'symlink' if stat.S_ISLNK(item.st_mode) else 'directory' if stat.S_ISDIR(item.st_mode) else 'other'
+        return {'uid': item.st_uid, 'gid': item.st_gid, 'mode': oct(stat.S_IMODE(item.st_mode)),
+                'type': kind, 'nlink': item.st_nlink, 'size_bytes': item.st_size}
+    return {'stable_identity': identities[0] == identities[1] == identities[2],
+            'descriptor': summary(after), 'path': summary(path)}
+
+
+def stopped_release_attempt_metadata():
+    """Existence only for the two fixed paths from release run 37528616045/1."""
+    result = {}
+    for name, path in (
+        ('snapshot', '/var/lib/becore-tickets-handover/code-release-37528616045-1'),
+        ('candidate', '/srv/becore-tickets/releases/9dd3b8fde2841d0d72422a221d1b25319b8474b7'),
+    ):
+        try:
+            metadata = os.stat(path, follow_symlinks=False)
+        except FileNotFoundError:
+            result[name] = {'exists': False, 'type': 'absent'}
+        else:
+            kind = 'regular' if stat.S_ISREG(metadata.st_mode) else 'symlink' if stat.S_ISLNK(metadata.st_mode) else 'directory' if stat.S_ISDIR(metadata.st_mode) else 'other'
+            result[name] = {'exists': True, 'type': kind}
+    return result
+
+
 def release_retention_metadata():
     """Stat-only snapshot of fixed release paths; never inspect release contents."""
     now = time.time()
@@ -425,6 +457,7 @@ def main():
     signal.alarm(120)
     lock = os.open('/run/lock/becore-tickets-deploy.lock', os.O_RDONLY | os.O_NOFOLLOW)
     fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    lock_metadata = deployment_lock_metadata(lock)
     props = dict(line.split('=', 1) for line in run('systemctl', 'show', SERVICE, '--property=ActiveState,WorkingDirectory,User,MainPID,NRestarts,MemoryCurrent').splitlines())
     active = Path(props['WorkingDirectory'])
     assert active.parent == HOME / 'releases' and re.fullmatch('[a-f0-9]{40}', active.name)
@@ -440,6 +473,8 @@ def main():
     effective = small_json(Path('/run/becore-tickets-runtime/runtime.json'))
     assert effective == canonical
     output = {'read_only': True, 'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'deployment_lock': lock_metadata,
+              'release_attempt_37528616045_1': stopped_release_attempt_metadata(),
               'revision': active.name, 'service_active': True, 'restarts': int(props['NRestarts']),
               'memory_bytes': int(props['MemoryCurrent']), 'free_disk_bytes': shutil.disk_usage(HOME).free,
               'configuration': configuration_summary(effective),
