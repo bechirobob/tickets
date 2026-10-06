@@ -81,3 +81,13 @@ Local evidence before initial draft publication:
   will be compiled again by isolated preview CI.
 - Independent cleanup review: four tests and a four-table isolated export/restore
   passed. No runtime or source dependency was installed/changed for this feature.
+
+First preview CI (`37464689034`, source `b6a75f3`) passed checkout and RSVP on
+all three browser projects and produced hash-verified synthetic screenshots.
+Visual review caught the previously unstyled checkout consent labels; a scoped
+layout now separates and aligns them. Capture now scrolls the real consent group
+above the phone dock and checks hit targets without hiding fixed UI.
+The settings suite's bound case passed, but subsequent mocked cases reused the
+same fragment-only document. Each case now opens a distinct document and asserts
+one new inspection. This preserves all strict payload/failure checks. Corrected
+preview verification remains pending the next exact-source run.

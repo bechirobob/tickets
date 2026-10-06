@@ -1,5 +1,7 @@
 "use client";
 
+import "../../booking-consent.css";
+
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
@@ -253,8 +255,10 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
               {paymentMethod === "crypto" ? <div className="payment-method-detail"><p className="secure-note">Continue to SeevPlus and review the USDC amount. Use only the asset and network shown there, then follow the payment instructions. Your tickets appear once payment is confirmed.</p></div> : null}
             </section> : null}
           </fieldset>
+          <div className="checkout-consents" role="group" aria-label="Email updates and terms">
           <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={platformAnnouncementsOptIn} onChange={(event) => setPlatformAnnouncementsOptIn(event.target.checked)} /><span>Keep me posted on new nights from BeCore Tickets.</span></label>
           <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
+          </div>
           </>}
         </section>
 

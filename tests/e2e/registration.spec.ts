@@ -1,5 +1,6 @@
 import { test, expect } from './analytics-fixture';
 import AxeBuilder from '@axe-core/playwright';
+import { captureConsentPreview } from './booking-consent';
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
 test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{
   await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'The host is putting the date together. RSVPs open soon.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
@@ -18,7 +19,9 @@ test('free RSVP preserves form details on failure and submits the selected party
   await expect(updates).not.toHaveAttribute('required', '');
   await expect(page.getByRole('checkbox', { name: /I accept the event terms/ })).not.toBeChecked();
   expect((await updates.locator('..').boundingBox())!.height).toBeLessThanOrEqual(60);
-  await page.locator('.registration-form').screenshot({ path: test.info().outputPath('rsvp-consent-default.png') });
+  if (test.info().project.use.isMobile) await expect(page.getByRole('navigation', { name: 'Customer navigation' })).toBeVisible();
+  await captureConsentPreview(page, '.registration-confirmation', test.info().outputPath('rsvp-consent-default.png'));
+  await page.getByRole('button', { name: 'Send RSVP' }).click({ trial: true });
   await updates.check();
   await page.getByRole('checkbox', { name: /I accept the event terms/ }).check();
   let attempts = 0;

@@ -112,8 +112,9 @@ for (const flow of [
 ]) {
   test(`${flow.grantType} access confirms the bound choice in one deliberate action and fails closed on inspection`, async ({ page }) => {
     const token = 'S'.repeat(43);
-    let inspection = 'bound', claims = 0;
+    let inspection = 'bound', claims = 0, inspections = 0;
     await page.route('**/api/platform-announcements/verification', route => {
+      inspections++;
       expect(route.request().postDataJSON()).toEqual({ token, grantType: flow.grantType });
       return route.fulfill({ status: inspection === 'failed' ? 503 : 200, json: inspection === 'failed'
         ? { error: 'Inspection unavailable.' }
@@ -124,10 +125,13 @@ for (const flow of [
       expect(route.request().postDataJSON()).toEqual({ token, confirmPlatformAnnouncements: inspection === 'bound' });
       return route.fulfill({ status: 503, json: { error: 'Isolated claim stopped before changing any preference.' } });
     });
-    for (const state of ['bound', 'unbound', 'failed', 'malformed']) {
+    for (const [index, state] of ['bound', 'unbound', 'failed', 'malformed'].entries()) {
       inspection = state;
       const before = claims;
-      await page.goto(`${flow.path}#token=${token}`);
+      // Each mocked state is a fresh emailed-link document. A fragment-only
+      // navigation reuses the prior mounted screen and never re-inspects.
+      await page.goto(`${flow.path}?scenario=${state}#token=${token}`);
+      await expect.poll(() => inspections).toBe(index + 1);
       const action = page.getByRole('button', { name: state === 'bound' ? flow.boundAction : flow.ordinaryAction, exact: true });
       await expect(action).toBeVisible();
       await expect(page.getByRole('main').getByRole('button')).toHaveCount(1);

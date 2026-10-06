@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - app/booking-consent.css
       - app/registration-form.tsx
       - app/checkout/**
       - app/account/privacy/**
@@ -14,6 +15,7 @@ on:
       - tests/e2e/registration.spec.ts
       - tests/e2e/seevplus-checkout.spec.ts
       - tests/e2e/platform-announcements.spec.ts
+      - tests/e2e/booking-consent.ts
       - tests/e2e/analytics-fixture.ts
       - scripts/browser-worker.mjs
       - scripts/prepare-registration-browser-fixture.mjs
