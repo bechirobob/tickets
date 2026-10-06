@@ -27,7 +27,14 @@ class AuditReleaseSourceFixture(unittest.TestCase):
         self.run_git("config", "user.name", "AuditRelease Gate Test")
         self.run_git("config", "user.email", "audit_release-test@example.invalid")
         self.write("app/audit_release.ts", "original application\n")
-        self.write("package-lock.json", (SCRIPT.parents[1] / "package-lock.json").read_bytes())
+        # This retired grant uses its historical lock, never today's dependencies.
+        lock_blob = "759d34af76287e214f03def74be98ddefb33780a"
+        self.assertEqual(source.LOCK_BLOB, lock_blob)
+        lock = (SCRIPT.parents[1] / "package-lock.json").read_bytes()
+        if source.object_id(b"blob", lock) != lock_blob:
+            lock = source.git(SCRIPT.parents[1], "cat-file", "blob", lock_blob)
+        self.assertEqual(source.object_id(b"blob", lock), lock_blob)
+        self.write("package-lock.json", lock)
         self.write("scripts/checkbox-hotfix-audit-policy.json", '{"schema":1,"projectionDigest":"frozen inert record"}\n')
         self.base = self.commit("base")
         self.write("app/audit_release.ts", "approved audit fixes\n")
