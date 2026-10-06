@@ -1,0 +1,39 @@
+{
+  "name": "@becoreops/vite-plugin-dynamic-import",
+  "version": "1.6.0-becore.glob.1",
+  "description": "Enhance Vite builtin dynamic import",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./*": "./*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vite-plugin/vite-plugin-dynamic-import.git"
+  },
+  "author": "\u8349\u978b\u6ca1\u53f7 <308487730@qq.com>",
+  "license": "MIT",
+  "dependencies": {
+    "acorn": "^8.12.1",
+    "es-module-lexer": "^1.5.4",
+    "magic-string": "^0.30.11",
+    "@becoreops/tooling-glob": "file:../tooling-glob"
+  },
+  "keywords": [
+    "vite",
+    "plugin",
+    "import",
+    "dynamic"
+  ],
+  "files": [
+    "dist",
+    "BECORE-PROVENANCE.json",
+    "LICENSE"
+  ],
+  "private": true
+}

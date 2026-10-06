@@ -6,6 +6,11 @@ import { excludeAuditAnalytics } from '../../scripts/audit-analytics.mjs';
 export const test = base.extend<{ excludeAuditAnalytics: void }>({
   excludeAuditAnalytics: [async ({ context, baseURL }, runTest) => {
     if (!baseURL) throw new Error('Analytics exclusion requires the configured first-party baseURL');
+    if (process.env.BECORE_ISOLATED_PREVIEW === 'true') {
+      const origin = new URL(baseURL).origin;
+      if (!['127.0.0.1', 'localhost'].includes(new URL(origin).hostname)) throw new Error('Synthetic previews require a local fixture.');
+      await context.route(url => url.origin !== origin, route => route.abort());
+    }
     const remove = await excludeAuditAnalytics(context, baseURL);
     try { await runTest(); } finally { await remove(); }
   }, { auto: true }],

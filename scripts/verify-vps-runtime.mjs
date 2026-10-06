@@ -10,7 +10,8 @@ import WebSocket from 'ws';
 import { SqliteDatabase } from '../runtime/vps/database.mjs';
 
 process.umask(0o077);
-const directory = mkdtempSync(path.join(tmpdir(), 'tickets-vps-network-'));
+const distribution = path.resolve(process.env.TICKETS_VERIFY_DISTRIBUTION ?? 'dist-vps');
+const directory = mkdtempSync(path.join(process.env.TICKETS_VERIFY_TEMP_ROOT ?? tmpdir(), 'tickets-vps-network-'));
 const db = new SqliteDatabase(path.join(directory, 'tickets.sqlite'));
 const host = '127.0.0.1:3218', base = `http://${host}`;
 let child, socket, output = '';
@@ -30,7 +31,9 @@ async function sameConnectionRequest(agent, route, method, headers, body = '') {
   });
 }
 async function start() {
-  child = spawn(process.execPath, ['dist-vps/server.mjs'], { env: { ...process.env, TICKETS_CONFIG: path.join(directory, 'config.json'), TICKETS_STATE: directory, TICKETS_HOST: host, TICKETS_PORT: '3218', TICKETS_ACTIVE: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const { NODE_PATH: nodePath, NODE_OPTIONS: nodeOptions, ...environment } = process.env;
+  void nodePath; void nodeOptions;
+  child = spawn(path.join(distribution, 'bin/node'), [path.join(distribution, 'server.mjs')], { cwd: distribution, env: { ...environment, TICKETS_CONFIG: path.join(directory, 'config.json'), TICKETS_STATE: directory, TICKETS_HOST: host, TICKETS_PORT: '3218', TICKETS_ACTIVE: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', data => { output = (output + data).slice(-10000); });
   child.stderr.on('data', data => { output = (output + data).slice(-10000); });
   for (let attempt = 0; attempt < 60; attempt++) {

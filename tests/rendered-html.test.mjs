@@ -86,3 +86,18 @@ test("ships the BeCore Tickets tab icon in modern and fallback formats", async (
   assert.ok((await stat(new URL("apple-touch-icon.png", client))).size > 100);
 });
 
+
+test("every RSC script and stylesheet points to an emitted client asset", async () => {
+  const client = new URL("../dist/client/", import.meta.url);
+  for (const file of ["__vite_rsc_assets_manifest.js", "ssr/__vite_rsc_assets_manifest.js"]) {
+    const raw = await readFile(new URL(`../dist/server/${file}`, import.meta.url), "utf8");
+    const manifest = JSON.parse(raw.replace(/^export default /u, ""));
+    const groups = [manifest.clientEntryDeps, ...Object.values(manifest.clientReferenceDeps), ...Object.values(manifest.serverResources)];
+    const assets = new Set(groups.flatMap(group => [...group.js, ...group.css]));
+    assert.ok(assets.size > 0, "RSC asset manifest must not be empty");
+    for (const asset of assets) {
+      assert.ok(asset.startsWith("/_next/static/"), `Unexpected local asset: ${asset}`);
+      assert.ok((await stat(new URL(asset.slice(1), client))).isFile(), `${file}: missing ${asset}`);
+    }
+  }
+});

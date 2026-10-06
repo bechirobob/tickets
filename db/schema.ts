@@ -1246,3 +1246,43 @@ export const providerOperationRecords = sqliteTable("provider_operation_records"
   check("provider_operation_evidence", sql`(${table.status}='completed' AND ${table.evidenceAt} IS NOT NULL) OR (${table.status} IN ('pending','closed_unpaid') AND ${table.evidenceAt} IS NULL)`),
   check("provider_operation_unpaid", sql`${table.status}<>'closed_unpaid' OR ${table.kind}='refund'`),
 ]);
+
+export const platformAnnouncementSubscriptions = sqliteTable("platform_announcement_subscriptions", {
+  email: text("email").primaryKey().notNull(),
+  status: text("status", { enum: ["pending", "subscribed", "unsubscribed"] }).notNull(),
+  consentVersion: text("consent_version").notNull(), consentedAt: text("consented_at"), verifiedAt: text("verified_at"), unsubscribedAt: text("unsubscribed_at"),
+  source: text("source", { enum: ["rsvp", "checkout", "preferences", "unsubscribe"] }).notNull(), sourceId: text("source_id").notNull(),
+  revision: integer("revision").notNull().default(1), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+}, table => [
+  index("platform_announcement_status_idx").on(table.status, table.email),
+  check("platform_announcement_status", sql`${table.status} IN ('pending','subscribed','unsubscribed')`),
+  check("platform_announcement_source", sql`${table.source} IN ('rsvp','checkout','preferences','unsubscribe')`),
+  check("platform_announcement_revision", sql`${table.revision} > 0`),
+]);
+
+export const platformAnnouncementChoices = sqliteTable("platform_announcement_choices", {
+  id: text("id").primaryKey().notNull(), email: text("email").notNull(),
+  source: text("source", { enum: ["rsvp", "checkout", "preferences", "unsubscribe", "verification"] }).notNull(), sourceId: text("source_id").notNull(),
+  optedIn: integer("opted_in").notNull(), verifiedEmail: integer("verified_email").notNull(),
+  consentVersion: text("consent_version").notNull(), createdAt: text("created_at").notNull(),
+}, table => [
+  uniqueIndex("platform_announcement_choices_source_unique").on(table.source, table.sourceId),
+  index("platform_announcement_choices_email_idx").on(table.email, table.createdAt),
+  check("platform_announcement_choice_source", sql`${table.source} IN ('rsvp','checkout','preferences','unsubscribe','verification')`),
+  check("platform_announcement_choice_opted_in", sql`${table.optedIn} IN (0,1)`),
+  check("platform_announcement_choice_verified_email", sql`${table.verifiedEmail} IN (0,1)`),
+]);
+
+export const platformAnnouncementUnsubscribeTokens = sqliteTable("platform_announcement_unsubscribe_tokens", {
+  tokenHash: text("token_hash").primaryKey().notNull(), email: text("email").notNull(),
+  subscriptionRevision: integer("subscription_revision").notNull(), createdAt: text("created_at").notNull(),
+}, table => [index("platform_announcement_tokens_email_idx").on(table.email, table.subscriptionRevision)]);
+
+export const platformAnnouncementVerifications = sqliteTable("platform_announcement_verifications", {
+  grantType: text("grant_type", { enum: ["recovery", "registration"] }).notNull(), grantId: text("grant_id").notNull(),
+  email: text("email").notNull(), subscriptionRevision: integer("subscription_revision").notNull(),
+  source: text("source").notNull(), sourceId: text("source_id").notNull(), createdAt: text("created_at").notNull(), consumedAt: text("consumed_at"),
+}, table => [
+  primaryKey({columns:[table.grantType,table.grantId]}),
+  check("platform_announcement_verification_grant_type", sql`${table.grantType} IN ('recovery','registration')`),
+]);

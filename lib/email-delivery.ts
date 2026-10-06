@@ -1,7 +1,10 @@
+import { bindPlatformAnnouncementVerification } from "./platform-announcements";
 import { validTeamInvite } from './organizer-team';
 import { reportDeliveryAllowed } from "./organizer-reports";
 import { emailBrand } from "./email-brand";
+import { customerEmail, emailDetails, emailEvent, emailParagraph, emailFlyer, emailGreeting, emailHostLine } from "./customer-email";
 import { createSecureToken, hashToken } from "./attendee-auth";
+import { findPrimaryHost } from "./event-experience";
 
 type DeliveryKind = "owner_approval_request" | "host_application_decision" | "host_application_verify" | "team_invitation" | "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
@@ -253,6 +256,7 @@ export async function issueRecoveryGrant(input: {
   requestedIp?: string | null;
   ttlMinutes?: number;
   deliveryId?: string;
+  confirmPlatformAnnouncements?: boolean;
 }) {
   const token = createSecureToken();
   const grantId = crypto.randomUUID();
@@ -265,27 +269,48 @@ export async function issueRecoveryGrant(input: {
     ) VALUES (?, ?, ?, ?, ?, ?)
   `).bind(grantId, input.normalizedEmail, await hashToken(token), expiresAt, now.toISOString(), requestedIpHash).run();
 
+  const confirmsAnnouncements = (input.order || input.confirmPlatformAnnouncements) ? await bindPlatformAnnouncementVerification(input.db, { email: input.normalizedEmail, grantType: "recovery", grantId, ...(input.confirmPlatformAnnouncements ? { explicitPreference: true as const } : { sourceId: input.order!.id }) }) : false;
+  const announcementDisclosure = confirmsAnnouncements ? "Confirming this link also confirms the BeCore Tickets email updates you chose. You can unsubscribe at any time." : "";
   const recoveryUrl = `${input.origin}/api/customer/recovery/claim?token=${encodeURIComponent(token)}`;
   const name = input.order?.customerName?.trim() || "there";
   const event = input.order ? await input.db.prepare(`
-    SELECT title, venue, area, CASE WHEN schedule_status != 'coming_soon' THEN starts_at END AS startsAt
+    SELECT title, venue, area, image_url AS imageUrl,
+      (removed_at IS NULL AND is_test_event=0 AND (status='published' OR (status='scheduled' AND scheduled_publish_at<=?))) AS publicArtwork,
+      (SELECT poster_content_type FROM party_submissions WHERE id=curated_event_records.submission_id) AS imageContentType,
+      schedule_label AS scheduleLabel, CASE WHEN schedule_status != 'coming_soon' THEN starts_at END AS startsAt
     FROM curated_event_records WHERE slug = ? LIMIT 1
-  `).bind(input.order.eventSlug).first<{ title: string; venue: string; area: string; startsAt: string | null }>() : null;
+  `).bind(now.toISOString(), input.order.eventSlug).first<{ title: string; venue: string; area: string; startsAt: string | null; scheduleLabel: string | null; imageUrl: string | null; imageContentType: string | null; publicArtwork: number }>() : null;
   const complimentary = input.order?.paymentProvider === "complimentary";
   const subject = input.kind === "payment_confirmation" && event
     ? `${event.title}: ${complimentary ? "your complimentary passes are ready" : "payment confirmed and tickets ready"}`
     : "Your Nights are ready to come back";
-  const receipt = input.order ? `
-    <table style="width:100%;border-collapse:collapse;margin:24px 0">
-      <tr><td style="padding:8px 0;color:#666">Reference</td><td style="padding:8px 0;text-align:right;font-weight:700">${escapeHtml(input.order.reference)}</td></tr>
-      <tr><td style="padding:8px 0;color:#666">Admissions</td><td style="padding:8px 0;text-align:right">${input.order.quantity}</td></tr>
-      <tr><td style="padding:8px 0;color:#666">Ticket subtotal</td><td style="padding:8px 0;text-align:right">${money(input.order.faceAmountMinor, input.order.currency)}</td></tr>
-      <tr><td style="padding:8px 0;color:#666">Booking fee</td><td style="padding:8px 0;text-align:right">${money(input.order.bookingFeeMinor, input.order.currency)}</td></tr>
-      <tr><td style="padding:12px 0;border-top:1px solid #ddd;font-weight:700">Total paid</td><td style="padding:12px 0;border-top:1px solid #ddd;text-align:right;font-weight:700">${money(input.order.totalAmountMinor, input.order.currency)}</td></tr>
-    </table>` : "";
-  const eventBlock = event ? `<p style="font-size:18px"><strong>${escapeHtml(event.title)}</strong><br>${escapeHtml(event.venue)}, ${escapeHtml(event.area)}<br>${escapeHtml(event.startsAt ? new Intl.DateTimeFormat("en-GH", { dateStyle: "full", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(event.startsAt)) : "Coming soon")}</p>` : "";
-  const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}</h1><p>Hi ${escapeHtml(name)},</p>${eventBlock}${receipt}<p>This private link opens My Nights on this device and brings together every confirmed purchase on this email. Tickets, perks, Rooms and receipts—no password archaeology. It expires at ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt)))}.</p><p style="margin:28px 0"><a href="${escapeHtml(recoveryUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open My Nights</a></p><p style="color:#666;font-size:13px">The link is one-time and private. Fresh rotating QR passes appear only after you open it. Forwarding it would be a very generous mistake.</p></div>`;
-  const plain = `${input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "Paid. Verified. Your Night is ready.") : "Your Nights missed you. Slightly."}\n\n${event ? `${event.title}\n${event.venue}, ${event.area}\n\n` : ""}${input.order ? `Reference: ${input.order.reference}\nTotal paid: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}Secure one-time My Nights link: ${recoveryUrl}\n\nThis link expires at ${expiresAt}. It does not contain a QR pass.`;
+  const when = event ? (event.startsAt ? `${new Intl.DateTimeFormat("en-GH", { dateStyle: "full", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(event.startsAt))} (Accra time)` : event.scheduleLabel || "Date to be announced") : "";
+  const expiry = `${new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(expiresAt))} (Accra time)`;
+  const title = input.kind === "payment_confirmation" ? (complimentary ? "Your complimentary Night is ready." : "You’re going out.") : "Your nights missed you. Slightly.";
+  const receipt = input.order ? emailDetails([
+    { label: "Booking reference", value: input.order.reference },
+    { label: "Admissions", value: String(input.order.quantity) },
+    { label: "Ticket subtotal", value: money(input.order.faceAmountMinor, input.order.currency) },
+    { label: "Booking fee", value: money(input.order.bookingFeeMinor, input.order.currency) },
+    { label: complimentary ? "Complimentary total" : "Total paid", value: money(input.order.totalAmountMinor, input.order.currency) },
+  ]) : "";
+  const eventBlock = event ? emailEvent({ title: event.title, when, venue: [event.venue, event.area].filter(Boolean).join(", ") }) : "";
+  const confirmation = input.kind === "payment_confirmation";
+  const host = confirmation && event?.publicArtwork === 1 && input.order ? await findPrimaryHost(input.db, input.order.eventSlug) : null;
+  const hostLine = emailHostLine(host);
+  const intro = confirmation ? (complimentary ? "Your complimentary passes are sorted." : "Payment confirmed. Your tickets are sorted.") : "Your tickets, passes and receipts are one tap away.";
+  const welcome = [hostLine, intro, confirmation ? "Now give the group chat the good news." : ""].filter(Boolean).join(" ");
+  const nextStep = confirmation ? "Show each guest’s current QR at the door." : "";
+  const note = `This private, one-time link expires ${expiry}. If you need a fresh one, request it from My Nights using the same email.`;
+  const flyer = event ? emailFlyer({ url: event.imageUrl, title: event.title, isPublic: event.publicArtwork === 1, contentType: event.imageContentType }) : "";
+  const html = customerEmail({
+    title,
+    preheader: confirmation ? (complimentary ? "Your complimentary passes are ready." : "Payment confirmed. Your ticket details are inside.") : "Your private link to tickets, passes and receipts.",
+    body: emailParagraph(`${emailGreeting(input.order?.customerName)} ${escapeHtml(welcome)}`) + flyer + eventBlock + receipt + (nextStep ? emailParagraph(nextStep) : "") + (announcementDisclosure ? emailParagraph(announcementDisclosure) : ""),
+    action: { label: "Open My Nights", url: recoveryUrl },
+    note,
+  });
+  const plain = `${title}\n\nHi ${name},\n\n${welcome}\n\n${event ? `${event.title}\n${[event.venue, event.area].filter(Boolean).join(", ")}\n${when}\n\n` : ""}${input.order ? `Booking reference: ${input.order.reference}\nAdmissions: ${input.order.quantity}\nTicket subtotal: ${money(input.order.faceAmountMinor, input.order.currency)}\nBooking fee: ${money(input.order.bookingFeeMinor, input.order.currency)}\n${complimentary ? "Complimentary total" : "Total paid"}: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}${nextStep}\n\nOpen My Nights: ${recoveryUrl}\n\n${note}${announcementDisclosure ? `\n\n${announcementDisclosure}` : ""}\n\nNeed a hand? tickets@becoreops.com`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;
   return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId, deliveryId: input.deliveryId });
 }
@@ -302,8 +327,14 @@ export async function sendTicketTransferEmail(input: {
   claimUrl: string;
 }) {
   const subject = `${input.senderName} sent you a ticket for ${input.eventTitle}`;
-  const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">A Night has changed hands.</h1><p>Hi ${escapeHtml(input.recipientName)},</p><p><strong>${escapeHtml(input.senderName)}</strong> sent you one ticket for:</p><p style="font-size:18px"><strong>${escapeHtml(input.eventTitle)}</strong><br>${escapeHtml(input.eventDate)}<br>${escapeHtml(input.venue)}</p><p>Accept it below and it will move into your own My Nights with a brand-new QR, Room access and ticket-linked perks. The sender’s old QR stops working the moment you accept.</p><p style="margin:28px 0"><a href="${escapeHtml(input.claimUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Accept my ticket</a></p><p style="color:#666;font-size:13px">This private link expires in 48 hours. If you were not expecting this, ignore it and the ticket stays where it is. Very un-dramatic.</p></div>`;
-  const text = `${input.senderName} sent you a ticket for ${input.eventTitle}.\n${input.eventDate}\n${input.venue}\n\nAccept it: ${input.claimUrl}\n\nThe private link expires in 48 hours.`;
+  const html = customerEmail({
+    title: "A ticket for you.",
+    preheader: `${input.senderName} sent you a ticket. Accept it into your own My Nights.`,
+    body: emailParagraph(`${emailGreeting(input.recipientName)} <strong>${escapeHtml(input.senderName)}</strong> sent you one ticket. An excellent development.`) + emailEvent({ title: input.eventTitle, when: input.eventDate, venue: input.venue }) + emailParagraph("Accept it to move the ticket into your My Nights. The sender’s QR stops working only after you accept."),
+    action: { label: "Accept my ticket", url: input.claimUrl },
+    note: "Use this private link within 48 hours. If this was unexpected, ignore it and the ticket stays with the sender.",
+  });
+  const text = `${input.senderName} sent you a ticket for ${input.eventTitle}. An excellent development.\n${input.eventDate}\n${input.venue}\n\nAccept it: ${input.claimUrl}\n\nThe private link expires in 48 hours.`;
   return sendEmail({
     db: input.db,
     kind: "ticket_transfer",
@@ -328,20 +359,36 @@ export async function sendOrderConfirmation(db: D1Database, order: OrderForEmail
 
 export async function sendWaitlistOfferEmail(input: { db: D1Database; entryId: string; recipient: string; eventTitle: string; tierName: string; expiresAt: string; claimUrl: string }) {
   const subject = `${input.eventTitle}: a ticket found its way back`;
-  const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">Your wait is doing something useful.</h1><p>A <strong>${escapeHtml(input.tierName)}</strong> ticket for <strong>${escapeHtml(input.eventTitle)}</strong> is available.</p><p>This private checkout link is yours until ${escapeHtml(new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(input.expiresAt)))}. After that, the next person gets the nod.</p><p style="margin:28px 0"><a href="${escapeHtml(input.claimUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Take the ticket</a></p><p style="color:#666;font-size:13px">The invite is private and one-time. Payment still has to complete before the timer does.</p></div>`;
+  const html = customerEmail({
+    title: "The waitlist did its thing.",
+    preheader: `${input.tierName} ticket available for ${input.eventTitle}.`,
+    body: emailParagraph(`A ticket in <strong>${escapeHtml(input.tierName)}</strong> is available for you.`) + emailEvent({ title: input.eventTitle }),
+    action: { label: "Take the ticket", url: input.claimUrl },
+    note: `Complete payment by ${new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" }).format(new Date(input.expiresAt))} (Accra time) to confirm your ticket. This private, one-time offer expires then.`,
+  });
   const text = `${input.eventTitle}: ${input.tierName} is available.\n\nTake the ticket before ${input.expiresAt}: ${input.claimUrl}`;
   return sendEmail({ db: input.db, kind: "waitlist_offer", recipient: input.recipient, subject, html, text, idempotencyKey: `waitlist/${input.entryId}/${input.expiresAt}`, recoveryGrantId: input.entryId });
 }
 
 export async function sendAbandonedCheckoutEmail(input: { db: D1Database; orderId: string; recipient: string; eventTitle: string; eventUrl: string }) {
   const subject = `${input.eventTitle}: the payment did not finish`;
-  const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">The plan stopped one tap short.</h1><p>Paystack confirmed that the checkout for <strong>${escapeHtml(input.eventTitle)}</strong> was abandoned—not pending and not still processing.</p><p>No ticket was issued. If the night still has your attention, start a fresh secure checkout.</p><p style="margin:28px 0"><a href="${escapeHtml(input.eventUrl)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Try the night again</a></p></div>`;
+  const html = customerEmail({
+    title: "That checkout left early.",
+    preheader: "Your checkout was abandoned. No ticket was issued.",
+    body: emailParagraph("Your payment didn’t finish, so no ticket was issued. You can start again below.") + emailEvent({ title: input.eventTitle }),
+    action: { label: "Try the night again", url: input.eventUrl },
+  });
   const text = `${input.eventTitle}: Paystack confirmed the checkout was abandoned. No ticket was issued. Start again: ${input.eventUrl}`;
   return sendEmail({ db: input.db, kind: "payment_recovery", recipient: input.recipient, subject, html, text, idempotencyKey: `payment-recovery/${input.orderId}`, orderId: input.orderId, recoveryGrantId: input.orderId });
 }
 
 export async function sendSupportUpdateEmail(input: { db: D1Database; caseId: string; recipient: string; subject: string; body: string; url: string }) {
   const subject = `${input.subject}: ticket support replied`;
-  const html = `<div style="max-width:560px;margin:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#181914">${emailBrand}<h1 style="font-size:28px">Support wrote back.</h1><p>${escapeHtml(input.body)}</p><p style="margin:28px 0"><a href="${escapeHtml(input.url)}" style="background:#181914;color:white;text-decoration:none;padding:14px 20px;border-radius:6px;font-weight:700">Open the conversation</a></p></div>`;
+  const html = customerEmail({
+    title: "A reply for you.",
+    preheader: `An update on ${input.subject}.`,
+    body: emailParagraph(escapeHtml(input.body).replaceAll("\n", "<br>")),
+    action: { label: "Open the conversation", url: input.url },
+  });
   return sendEmail({ db: input.db, kind: "support_update", recipient: input.recipient, subject, html, text: `${input.body}\n\n${input.url}`, idempotencyKey: `support/${input.caseId}/${await hashToken(input.body)}`, recoveryGrantId: input.caseId });
 }

@@ -2,6 +2,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './analytics-fixture';
 
 test.use({ serviceWorkers: 'block' });
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/platform-announcements/verification', route => route.fulfill({ json: { confirmsAnnouncements: false } }));
+});
 // A PR's live audit still targets the previous release; candidate CI runs these
 // regressions locally, and the post-deploy audit verifies the released behavior.
 test.skip(Boolean(process.env.E2E_BASE_URL) && process.env.GITHUB_EVENT_NAME === 'pull_request', 'Private-link retries are verified against the candidate, then the deployed release.');
@@ -63,6 +66,7 @@ test('privacy settings show retry loading, preserve a failed save and confirm on
   let finish!: () => void;
   const responseReady = new Promise<void>(resolve => { finish = resolve; });
   await page.route('**/api/**', route => route.fulfill({ status: 401, json: { error: 'Isolated fixture only' } }));
+  await page.route('**/api/customer/platform-announcements', route => route.fulfill({ json: { platformAnnouncementsOptIn: false, status: 'not_subscribed', revision: 0, emailVerified: true } }));
   await page.route('**/api/customer/privacy', async route => {
     if (route.request().method() === 'PUT') {
       expect(route.request().postDataJSON()).toEqual({ defaultAttendeeVisible: true, allowHostUpdates: false });
@@ -161,7 +165,7 @@ test('a stalled promoter inspection times out and can reuse the in-memory link',
 test('registration confirmation rejects unreadable success and preserves its private link for recovery', async ({ page }, info) => {
   let attempts = 0;
   await page.route('**/api/registrations/claim', route => {
-    expect(route.request().postDataJSON()).toEqual({ token });
+    expect(route.request().postDataJSON()).toEqual({ token, confirmPlatformAnnouncements: false });
     return route.fulfill({ json: ++attempts === 1 ? {} : { registration: { status: 'confirmed', eventSlug: 'isolated-event', partySize: 2 } } });
   });
   await page.goto(`/rsvp/access#token=${token}`);

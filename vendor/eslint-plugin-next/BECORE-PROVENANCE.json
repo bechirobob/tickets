@@ -1,0 +1,10 @@
+{
+  "upstreamPackage": "@next/eslint-plugin-next",
+  "upstreamVersion": "16.3.6",
+  "upstreamIntegrity": "sha512-jowwDX+7DOlDIjJLgTMxudw+k37QnWu1JkZLkSi9MaJBfDYcfhAPMKBhXL0idYzFN/AGg//axnOR4cLkHX/Rng==",
+  "changedFiles": [
+    "dist/utils/get-root-dirs.js",
+    "package.json"
+  ],
+  "purpose": "Project-owned dependency replacement for isolated validation; original lint rules and transform implementation retained"
+}

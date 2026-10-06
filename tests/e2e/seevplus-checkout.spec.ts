@@ -1,12 +1,14 @@
 import { test, expect } from "./analytics-fixture";
 import AxeBuilder from "@axe-core/playwright";
+import { captureConsentPreview } from "./booking-consent";
 
 test("SeevPlus stays compact and sends the selected provider without exposing credentials", async ({ page }) => {
   test.skip(!test.info().config.configFile?.endsWith("playwright.seev.config.ts"), "Requires the isolated SeevPlus UI configuration.");
   let paymentRequests = 0;
   await page.route("**/api/payments/initialize", async (route) => {
     paymentRequests += 1;
-    expect(route.request().postDataJSON()).toMatchObject({ paymentProvider: "seevplus", paymentMethod: "mobile_money", acceptedPolicies: true });
+    expect(route.request().postDataJSON()).toMatchObject({ paymentProvider: "seevplus", paymentMethod: "mobile_money", acceptedPolicies: true, platformAnnouncementsOptIn: paymentRequests > 1 });
+    expect(route.request().postDataJSON()).not.toHaveProperty("announcementsOptIn");
     expect(route.request().headers()["idempotency-key"]).toBeTruthy();
     await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Test payment stopped before contacting SeevPlus." }) });
   });
@@ -21,6 +23,34 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
   } finally { releaseScripts(); }
   await expect(page.getByLabel("Full name")).toBeEnabled();
   await expect(page.getByRole("radio", { name: /Crypto USDC/ })).toHaveCount(0);
+  const updates = page.getByRole("checkbox", { name: "Keep me posted on new nights from BeCore Tickets." });
+  await expect(page.locator(".checkout-main").getByRole("checkbox")).toHaveCount(2);
+  await expect(updates).not.toBeChecked();
+  await expect(updates).not.toHaveAttribute("required", "");
+  await expect(page.getByRole("checkbox", { name: /I accept the ticket terms/ })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Receive notifications for this event and host." })).toHaveCount(0);
+  const rows = await page.locator(".checkout-consent").evaluateAll(labels => labels.map(label => {
+    const row = label.getBoundingClientRect();
+    const box = label.querySelector('input')!.getBoundingClientRect();
+    const text = label.querySelector('span')!.getBoundingClientRect();
+    const style = getComputedStyle(label);
+    return { top: row.top, bottom: row.bottom, height: row.height, boxWidth: box.width, boxHeight: box.height, boxLeft: box.left, gap: text.left - box.right, fontSize: style.fontSize, shadow: style.boxShadow };
+  }));
+  expect(rows).toHaveLength(2);
+  for (const row of rows) {
+    expect(row.height).toBeGreaterThanOrEqual(44);
+    expect(row.height).toBeLessThanOrEqual(60);
+    expect(row.boxWidth).toBe(20);
+    expect(row.boxHeight).toBe(20);
+    expect(row.gap).toBe(8);
+    expect(row.fontSize).toBe('13px');
+    expect(row.shadow).toBe('none');
+  }
+  expect(rows[1].top).toBeGreaterThanOrEqual(rows[0].bottom);
+  expect(rows[1].boxLeft).toBe(rows[0].boxLeft);
+  const details = (await page.locator('.form-grid').boundingBox())!;
+  expect(Math.abs(rows[0].boxLeft - details.x)).toBeLessThanOrEqual(1);
+  await captureConsentPreview(page, '.checkout-consents', test.info().outputPath('checkout-consent-default.png'));
   // Filling buyer details alone must produce guidance, not a silently disabled button.
   await page.getByLabel("Full name").fill("Test Buyer");
   await page.getByLabel("Phone number").fill("0240000000");
@@ -49,11 +79,17 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
   await page.getByRole("button", { name: /Pay with MoMo/ }).click();
   await expect(page.locator("#checkout-payment-message")).toHaveText("Test payment stopped before contacting SeevPlus.");
   expect(paymentRequests).toBe(1);
+  await expect(updates).not.toBeChecked();
+  await updates.check();
+  await page.getByRole("button", { name: /Pay with MoMo/ }).click();
+  await expect(page.locator("#checkout-payment-message")).toHaveText("Test payment stopped before contacting SeevPlus.");
+  expect(paymentRequests).toBe(2);
+  await expect(updates).toBeChecked();
   await expect(page.getByLabel("Full name")).toHaveValue("Test Buyer");
   await expect(page.getByLabel("Email address")).toHaveValue("test@example.com");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   expect(await page.content()).not.toContain("ui-test-only");
-  const a11y = await new AxeBuilder({ page }).include(".checkout-provider-choice").analyze();
+  const a11y = await new AxeBuilder({ page }).include(".checkout-provider-choice").include(".checkout-consent").analyze();
   expect(a11y.violations).toEqual([]);
   await page.screenshot({ path: `test-results/seevplus-${test.info().project.name}.png`, fullPage: true });
   await page.getByRole("radio", { name: "Card", exact: false }).first().check();

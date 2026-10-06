@@ -102,7 +102,8 @@ describe('RSVP admission and interest registrations', () => {
     await processRegistrations(env, origin);
     const notice = await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE kind='registration_update' AND recipient=?").bind('rsvp-approval@example.com').all<{ payload: string }>();
     expect(notice.results).toHaveLength(1);
-    expect(JSON.parse(notice.results[0].payload).text).toContain('Your passes are in My Nights');
+    expect(JSON.parse(notice.results[0].payload).text).toContain('We’ve confirmed 1 place for you. No payment required.');
+    expect(JSON.parse(notice.results[0].payload).text).toContain(`/my-nights/${slug}?view=passes`);
     const nightResponse = await nights(new Request(`${origin}/api/customer/my-nights`, { headers: { cookie: claim.cookie } }));
     expect(nightResponse.status).toBe(200);
     expect((await nightResponse.json() as { nights: unknown[] }).nights).toContainEqual(expect.objectContaining({ eventSlug: slug, ticketCount: 1, admissionActive: true }));

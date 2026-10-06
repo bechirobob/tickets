@@ -1,3 +1,4 @@
+import { prepareActivatePlatformAnnouncementVerification } from "../../../../../lib/platform-announcements";
 import { limitRequestBody } from '../../../../../lib/request-body';
 import { attendeeCookieHeader, attendeeSessionExpiry, createSecureToken, hashToken } from '../../../../../lib/attendee-auth';
 import { mutationHasValidOrigin } from '../../../../../lib/admin-session';
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
   const headers = customerAccessHeaders();
   const invalid = () => Response.json({ error: 'That link has expired or already been used. Request a fresh one in My Nights.' }, { status: 400, headers });
   if (!mutationHasValidOrigin(request)) return Response.json({ error: 'This ticket request was not accepted.' }, { status: 403, headers });
+  const choice = await request.clone().json().catch(() => null) as { confirmPlatformAnnouncements?: unknown } | null;
   const token = await readAccessToken(request);
   if (!token) return invalid();
   const { env } = await import('cloudflare:workers');
@@ -58,6 +60,7 @@ export async function POST(request: Request) {
     env.DB.prepare(`INSERT INTO attendee_sessions (id,attendee_id,token_hash,expires_at,created_at,last_seen_at)
       SELECT ?,?,?,?,?,? WHERE ${owns}`)
       .bind(sessionId, attendeeId, await hashToken(sessionToken), attendeeSessionExpiry(), now, now, grant.id, sessionId),
+    ...prepareActivatePlatformAnnouncementVerification(env.DB, { grantType: "recovery", grantId: grant.id, attendeeId, sessionId, confirmAnnouncements: choice?.confirmPlatformAnnouncements === true }),
   ]);
   if (claimed.meta.changes !== 1) return invalid();
   return Response.json({ redirectTo: '/my-nights?recovered=1' }, { headers: { ...headers, 'set-cookie': attendeeCookieHeader(sessionToken) } });

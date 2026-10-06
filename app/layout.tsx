@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "../styles/customer.css";
+import "./booking-consent.css";
 import CustomerDock from "./customer-dock";
 import PwaRegistration from "./pwa-registration";
 import WorkspaceReturn from "./workspace-return";

@@ -23,7 +23,14 @@ test('shared Home, Drop, full posters and menu use the website destinations', as
   await expect(page.getByRole('heading', { level: 1, name: 'Find your next night.' })).toBeVisible();
   await expect.poll(() => page.locator('.drop-card__image img').evaluateAll(images => images.length === 2 && images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   const posters = await page.locator('.drop-card__image').evaluateAll(nodes => nodes.map(node => ({ height: node.getBoundingClientRect().height, fit: getComputedStyle(node.querySelector('img')!).objectFit })));
-  expect(posters).toHaveLength(2); expect(posters[0]).toEqual(posters[1]); expect(posters[0].fit).toBe('contain');
+  expect(posters).toHaveLength(2);
+  for (const poster of posters) {
+    expect(poster.fit).toBe('contain');
+    expect(poster.height).toBeGreaterThan(0);
+  }
+  // WebKit can round equivalent bounds differently (~0.000061 CSS px apart).
+  // One thousandth of a CSS pixel tolerates that noise, not a layout mismatch.
+  expect(Math.abs(posters[0].height - posters[1].height)).toBeLessThan(0.001);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('shared-drop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();

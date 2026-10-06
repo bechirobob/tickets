@@ -1080,3 +1080,42 @@ test("fee timestamps and labelled order actions retain room for their full conte
   assert.match(actions, /white-space:\s*nowrap/u);
   assert.doesNotMatch(actions, /(?:^|;)\s*(?:width|height):\s*32px/u);
 });
+
+
+test("booking forms replace event marketing with one optional platform announcement choice", async () => {
+  const [registration, checkout] = await Promise.all([
+    "../app/registration-form.tsx", "../app/checkout/[slug]/checkout-form.tsx",
+  ].map(path => readFile(new URL(path, import.meta.url), "utf8")));
+  for (const form of [registration, checkout]) {
+    assert.equal(form.match(/Keep me posted on new nights from BeCore Tickets\./gu)?.length, 1);
+    assert.equal(form.match(/type="checkbox"/gu)?.length, 2, "one optional email checkbox plus required terms");
+    assert.doesNotMatch(form, /Receive notifications for this event and host/iu);
+  }
+  assert.match(registration, /announcementsOptIn: mode === 'interest' && form\.get\('announcementsOptIn'\) === 'on'/u);
+  assert.match(registration, /platformAnnouncementsOptIn: mode === 'rsvp' && form\.get\('platformAnnouncementsOptIn'\) === 'on'/u);
+  assert.match(registration, /Email me updates from this event and host\./u);
+  assert.doesNotMatch(registration, /defaultChecked|checked=\{true\}/u);
+  assert.match(checkout, /\[platformAnnouncementsOptIn, setPlatformAnnouncementsOptIn\] = useState\(false\)/u);
+  assert.doesNotMatch(checkout, /acceptedPolicies, announcementsOptIn/u);
+});
+
+
+test("compact booking consent rows preserve alignment and unobstructed evidence", async () => {
+  const [css, checkout, registration, capture] = await Promise.all([
+    "../app/booking-consent.css", "../app/checkout/[slug]/checkout-form.tsx", "../app/registration-form.tsx", "./e2e/booking-consent.ts",
+  ].map(path => readFile(new URL(path, import.meta.url), "utf8")));
+  assert.match(checkout, /className="checkout-consents" role="group" aria-label="Email updates and terms"/u);
+  assert.match(registration, /className="registration-confirmation"/u);
+  assert.match(css, /margin:\s*14px 0 0 49px/u);
+  assert.match(css, /min-height:\s*44px/u);
+  assert.match(css, /gap:\s*8px/u);
+  assert.match(css, /font-size:\s*13px/u);
+  assert.match(css, /width:\s*20px/u);
+  assert.match(css, /height:\s*20px/u);
+  assert.match(css, /@media \(max-width: 640px\)/u);
+  assert.doesNotMatch(css, /box-shadow|text-shadow|filter:|display:\s*none/u);
+  assert.match(capture, /scrollIntoView/u);
+  assert.match(capture, /overlapsDock/u);
+  assert.match(capture, /elementFromPoint/u);
+  assert.doesNotMatch(capture, /addStyleTag|style\.(?:display|visibility)\s*=/u);
+});

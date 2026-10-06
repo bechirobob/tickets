@@ -1,0 +1,151 @@
+name: Booking consent previews
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - app/booking-consent.css
+      - app/registration-form.tsx
+      - app/checkout/**
+      - app/account/privacy/**
+      - app/rsvp/access/**
+      - app/my-nights/access/**
+      - app/platform-announcements/**
+      - lib/platform-announcements.ts
+      - tests/e2e/registration.spec.ts
+      - tests/e2e/seevplus-checkout.spec.ts
+      - tests/e2e/platform-announcements.spec.ts
+      - tests/e2e/booking-consent.ts
+      - tests/e2e/analytics-fixture.ts
+      - scripts/browser-worker.mjs
+      - scripts/prepare-registration-browser-fixture.mjs
+      - scripts/prepare-seev-browser-fixture.mjs
+      - playwright.config.ts
+      - playwright.registration.config.ts
+      - playwright.seev.config.ts
+      - package.json
+      - package-lock.json
+      - .github/workflows/booking-consent-previews.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: booking-consent-previews-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  BECORE_ISOLATED_PREVIEW: 'true'
+  WRANGLER_SEND_METRICS: 'false'
+
+# Isolated UI review only. This is not release admission, an attestation, a
+# deployable artifact, or a waiver of Candidate verification/security failures.
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact preview source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify preview source identity
+        id: source
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          test -z "${E2E_BASE_URL:-}"
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Install locked preview dependencies
+        run: npm ci --no-audit
+      - name: Compile application once for isolated UI fixtures
+        id: build
+        run: |
+          npm run build
+          node scripts/prepare-deploy.mjs
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; assert.equal(JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")).vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
+      - name: Install desktop and phone preview browsers
+        id: browsers
+        run: npx playwright install --with-deps chromium webkit
+      - name: Prepare isolated local database
+        id: fixtures
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Verify checkout consent without contacting payment providers
+        id: checkout_ui
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs
+          npx playwright test --config playwright.seev.config.ts --workers=1 --retries=0 --output test-results/consent-checkout
+      - name: Verify RSVP consent without sending registration email
+        id: registration_ui
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        run: |
+          node scripts/prepare-registration-browser-fixture.mjs
+          npx playwright test --config playwright.registration.config.ts --workers=1 --retries=0 --output test-results/consent-registration
+      - name: Verify mocked preference and single-link confirmation screens
+        id: settings_ui
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        run: npx playwright test tests/e2e/platform-announcements.spec.ts --workers=1 --retries=0 --output test-results/consent-settings
+      - name: Package only named synthetic screenshots with source and hashes
+        id: evidence
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        env:
+          CHECKOUT_RESULT: ${{ steps.checkout_ui.outcome }}
+          REGISTRATION_RESULT: ${{ steps.registration_ui.outcome }}
+          SETTINGS_RESULT: ${{ steps.settings_ui.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, re, subprocess
+          from pathlib import Path
+          source = os.environ['BECORE_RELEASE_SHA']
+          assert re.fullmatch(r'[a-f0-9]{40}', source)
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == source
+          assert json.loads(Path('dist/server/wrangler.json').read_text())['vars']['RELEASE_SHA'] == source
+          assert not os.environ.get('E2E_BASE_URL')
+          output = Path('outputs/booking-consent-previews')
+          output.mkdir(parents=True, exist_ok=False)
+          files = []
+          for browser in ('desktop-chromium', 'mobile-chromium', 'mobile-webkit'):
+              for form, directory, filename in (
+                  ('checkout', 'consent-checkout', 'checkout-consent-default.png'),
+                  ('rsvp', 'consent-registration', 'rsvp-consent-default.png'),
+              ):
+                  root = Path('test-results') / directory
+                  matches = [path for path in root.rglob(filename) if path.parent.name.endswith('-' + browser)]
+                  assert len(matches) == 1, (browser, form, 'Expected one named fixture screenshot', matches)
+                  path = matches[0]
+                  assert not path.is_symlink() and path.resolve().is_relative_to(root.resolve())
+                  content = path.read_bytes()
+                  assert content[:8] == b'\x89PNG\r\n\x1a\n' and 0 < len(content) <= 2 * 1024 * 1024
+                  name = f'{form}-{browser}.png'
+                  (output / name).write_bytes(content)
+                  files.append({'file': name, 'browser': browser, 'form': form, 'bytes': len(content), 'sha256': hashlib.sha256(content).hexdigest()})
+          manifest = {'sourceSha': source, 'sourceTree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(), 'runId': os.environ['GITHUB_RUN_ID'], 'fixture': 'isolated local data; registration, payment and recovery requests intercepted', 'results': {'checkout': os.environ['CHECKOUT_RESULT'], 'registration': os.environ['REGISTRATION_RESULT'], 'settings': os.environ['SETTINGS_RESULT']}, 'files': files}
+          (output / 'evidence.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
+      # Never upload the compiled app, local database, traces, credentials or logs.
+      - name: Preserve synthetic consent previews for visual review
+        if: ${{ !cancelled() && steps.evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: booking-consent-previews-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            outputs/booking-consent-previews/checkout-desktop-chromium.png
+            outputs/booking-consent-previews/checkout-mobile-chromium.png
+            outputs/booking-consent-previews/checkout-mobile-webkit.png
+            outputs/booking-consent-previews/rsvp-desktop-chromium.png
+            outputs/booking-consent-previews/rsvp-mobile-chromium.png
+            outputs/booking-consent-previews/rsvp-mobile-webkit.png
+            outputs/booking-consent-previews/evidence.json
+          if-no-files-found: error
+          retention-days: 3

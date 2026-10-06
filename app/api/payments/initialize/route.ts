@@ -1,3 +1,4 @@
+import { preparePlatformAnnouncementChoice } from "../../../../lib/platform-announcements";
 import { limitRequestBody } from '../../../../lib/request-body';
 import { couponQuote, couponUsage } from '../../../../lib/organizer-promotions';
 import { paystackAvailable, paystackEnvironment } from "../../../../lib/paystack-environment";
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   request = bounded;
 
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  type PaymentBody = { couponCode?: string; paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
+  type PaymentBody = { couponCode?: string; paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; platformAnnouncementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
   let body: PaymentBody;
   try {
     const value: unknown = await request.json();
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   const metadata = requestMetadata(request);
   const email = body.email?.trim().toLowerCase() ?? "";
   const phone = body.phone?.replace(/[^\d+]/gu, "") ?? "";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) || phone.length < 7 || phone.length > 40) return Response.json({ error: "A valid email and phone number are required." }, { status: 400 });
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) || phone.length < 7 || phone.length > 40) return Response.json({ error: "A valid email and phone number are required." }, { status: 400 });
   const [ipRateAllowed, customerRateAllowed] = await Promise.all([
     enforceRateLimit(env.PAYMENT_NETWORK_RATE_LIMITER, `payment-ip:${await hashStaffToken(metadata.ip || "anonymous")}`),
     enforceRateLimit(env.PAYMENT_RATE_LIMITER, `payment-customer:${await hashStaffToken(email)}`),
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
   const attemptKey = request.headers.get("idempotency-key");
   if (attemptKey && !/^[a-f0-9-]{36,80}$/iu.test(attemptKey)) return Response.json({ error: "Invalid payment attempt." }, { status: 400 });
   const attemptHash = attemptKey ? await hashToken(attemptKey) : null;
-  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack", body.announcementsOptIn === true, body.couponCode?.trim().toUpperCase() ?? ""]));
+  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack", body.announcementsOptIn === true, body.couponCode?.trim().toUpperCase() ?? "", ...(body.platformAnnouncementsOptIn === true ? ["becore-platform-announcements:v1:true"] : [])]));
   if (attemptHash) {
     const replay = await replayPaymentAttempt(env.DB, attemptHash, requestHash);
     if (replay) return replay;
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
       paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? paymentMethod : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, couponId, discountMinor, promoter?.commissionBps ?? 0, id,
     ),
     env.DB.prepare("UPDATE orders SET announcements_opt_in=?,checkout_attendee_id=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,checkoutAttendeeId,id),
+    ...preparePlatformAnnouncementChoice(env.DB, { email, source: "checkout", sourceId: id, optedIn: body.platformAnnouncementsOptIn === true, verifiedEmail: identity?.emailVerified === true && identity.normalizedEmail === email }),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
       SELECT ?, ?, ?, ? FROM orders WHERE id = ?
