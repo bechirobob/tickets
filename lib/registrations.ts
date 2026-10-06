@@ -103,7 +103,7 @@ export async function sendRegistrationAccess(db: D1Database, reg: Registration, 
   const html = customerEmail({
     title: "One quick check.",
     preheader: `Confirm your email to continue with ${title}.`,
-    body: emailParagraph(`${emailGreeting(reg.guestName)} confirm this is your email to continue your registration.`) + emailEvent({ title }),
+    body: emailParagraph(`${emailGreeting(reg.guestName)} Confirm this is your email to continue your registration.`) + emailEvent({ title }),
     action: { label: "Confirm my email", url },
     note: "This private link expires in 20 minutes. A place is only reserved after your RSVP is confirmed. If you did not request this, you can ignore it.",
   });
@@ -268,7 +268,7 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string, 
         action: { label: confirmed ? 'View your passes' : 'View event details', url: actionUrl },
         note,
       });
-      await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · ${confirmed ? 'RSVP confirmed' : 'Registration update'}`, text: `Hi ${reg.guestName.trim() || 'there'}, ${intro}\n\n${s.title}\n${when}\n${venue}\n\n${nextStep}\n\n${actionUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`, html, idempotencyKey: key });
+      await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · ${confirmed ? 'RSVP confirmed' : 'Registration update'}`, text: `Hi ${reg.guestName.trim() || 'there'},\n\n${intro}\n\n${s.title}\n${when}\n${venue}\n\n${nextStep}\n\n${actionUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`, html, idempotencyKey: key });
     };
     if (reg.kind === 'rsvp') {
       const channel = await deliverConfirmation({ env, id: key, attendeeId: reg.attendeeId,

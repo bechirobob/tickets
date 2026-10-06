@@ -16,7 +16,7 @@ export function emailParagraph(content: string) {
 
 export function emailGreeting(name?: string | null) {
   const value = name?.trim();
-  return value ? `Hi ${escapeHtml(value)},` : 'Hi there,';
+  return value ? `Hi ${escapeHtml(value)},<br>` : 'Hi there,<br>';
 }
 
 export function emailFlyer(input: { url?: string | null; title: string; isPublic: boolean; contentType?: string | null }) {

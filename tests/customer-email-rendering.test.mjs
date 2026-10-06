@@ -262,7 +262,7 @@ test('short customer emails retain useful information without placeholders or em
 
 test('missing customer names use a neutral greeting and supplied names remain escaped', () => {
   const { helpers } = createCustomerEmailHarness();
-  for (const name of [null, undefined, '', '   ']) assert.equal(helpers.emailGreeting(name), 'Hi there,');
-  assert.equal(helpers.emailGreeting('  Ama Mensah  '), 'Hi Ama Mensah,');
-  assert.equal(helpers.emailGreeting('<img src=x>'), 'Hi &lt;img src=x&gt;,');
+  for (const name of [null, undefined, '', '   ']) assert.equal(helpers.emailGreeting(name), 'Hi there,<br>');
+  assert.equal(helpers.emailGreeting('  Ama Mensah  '), 'Hi Ama Mensah,<br>');
+  assert.equal(helpers.emailGreeting('<img src=x>'), 'Hi &lt;img src=x&gt;,<br>');
 });

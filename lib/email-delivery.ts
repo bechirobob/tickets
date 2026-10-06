@@ -302,7 +302,7 @@ export async function issueRecoveryGrant(input: {
     action: { label: "Open My Nights", url: recoveryUrl },
     note,
   });
-  const plain = `${title}\n\nHi ${name}, ${intro}\n\n${event ? `${event.title}\n${[event.venue, event.area].filter(Boolean).join(", ")}\n${when}\n\n` : ""}${input.order ? `Booking reference: ${input.order.reference}\nAdmissions: ${input.order.quantity}\nTicket subtotal: ${money(input.order.faceAmountMinor, input.order.currency)}\nBooking fee: ${money(input.order.bookingFeeMinor, input.order.currency)}\n${complimentary ? "Complimentary total" : "Total paid"}: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}${nextStep}\n\nOpen My Nights: ${recoveryUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`;
+  const plain = `${title}\n\nHi ${name},\n\n${intro}\n\n${event ? `${event.title}\n${[event.venue, event.area].filter(Boolean).join(", ")}\n${when}\n\n` : ""}${input.order ? `Booking reference: ${input.order.reference}\nAdmissions: ${input.order.quantity}\nTicket subtotal: ${money(input.order.faceAmountMinor, input.order.currency)}\nBooking fee: ${money(input.order.bookingFeeMinor, input.order.currency)}\n${complimentary ? "Complimentary total" : "Total paid"}: ${money(input.order.totalAmountMinor, input.order.currency)}\n\n` : ""}${nextStep}\n\nOpen My Nights: ${recoveryUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`;
   const idempotencyKey = `${input.kind}/${input.order?.id ?? grantId}/${grantId}`;
   return sendEmail({ db: input.db, kind: input.kind, recipient: input.normalizedEmail, subject, html, text: plain, idempotencyKey, orderId: input.order?.id, recoveryGrantId: grantId, deliveryId: input.deliveryId });
 }
