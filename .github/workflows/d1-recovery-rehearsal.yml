@@ -50,7 +50,17 @@ jobs:
       - name: Capture source bookmark
         run: npx wrangler d1 time-travel info DB --json > "$D1_BOOKMARK_FILE"
       - name: Export production for isolated restore
-        run: npx wrangler d1 export DB --remote --output "$D1_EXPORT_FILE" --skip-confirmation
+        run: |
+          set +x
+          umask 077
+          export_diagnostics="$(mktemp)"
+          trap 'rm -f -- "$export_diagnostics"' EXIT
+          # Wrangler output can contain a signed URL to the customer-data export.
+          npx wrangler d1 export DB --remote --output "$D1_EXPORT_FILE" --skip-confirmation >"$export_diagnostics" 2>&1 || {
+            status=$?
+            echo "D1 export failed; private diagnostics have been withheld." >&2
+            exit "$status"
+          }
       - name: Restore and verify away from production
         run: npm run recovery:rehearse
       - name: Remove customer-data export

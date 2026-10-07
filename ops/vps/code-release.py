@@ -7,7 +7,7 @@ snapshots, and never edits the private credential bridge or original handover fi
 """
 import argparse
 import copy
-from contextlib import closing
+from contextlib import ExitStack, closing
 import fcntl
 import hashlib
 import json
@@ -35,9 +35,23 @@ SERVICE = "becore-tickets.service"
 ORIGINAL_TRANSFER_REVISION = "8a46eeaae8296ab588104ea2406f5287c08e5fb6"
 ROUTES = (("/", 200), ("/events", 200), ("/api/public/events", 200),
           ("/api/version", 200), ("/api/admin/events", 403))
-# retention.py protects current/previous and has a two-day grace. A release must
-# retain at least one hour of that grace before any pointer can lose protection.
+# Keep the one-hour safety margin unless the exact retention policy and stable
+# topology prove continued protection across every deployment/rollback snapshot.
 RETENTION_SAFE_AGE = 2 * 86400 - 3600
+RETENTION_MAX_ENTRIES = 128
+RETENTION_HASHES = {
+    "retention.py": "2df470525d55bc8d69a3c45402e28a12a9b17dfa66f2eb477789cb207a043134",
+    "becore-tickets-retention.service": "89a312bbe7c96886530c05f0a253dbc388dd5bcb3696bbb79e11489aef84379b",
+    "becore-tickets-retention.timer": "94d560a6cbe162529ee750e7fb67d987c5dbd62fe5a898f1476efb97bbfc1699",
+}
+
+
+def retention_identity(info, directory=False):
+    fields = ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid")
+    if not directory:
+        fields += ("st_size", "st_mtime_ns", "st_ctime_ns", "st_nlink")
+    return tuple(getattr(info, field) for field in fields)
+
 # Only individually reviewed blobs below may extend the application/runtime or
 # create additive tables, plus one exact owner-requested public host label fix.
 # Handover, routing, service units and arbitrary scripts remain outside this
@@ -72,6 +86,8 @@ REVIEWED_CONTROL_BLOBS = {
 EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
 
 REVIEWED_APPLICATION_BLOBS = {
+    "tests/d1-recovery-privacy.test.mjs": "a88e879d0fdb6f00160a58fcd1cb077631e70fbf",
+    ".github/workflows/d1-recovery-rehearsal.yml": "aea42d1acb19d54cbe9beba2962aed6c98ac3312",
     "tests/e2e/operations.spec.ts": "ed96abb5806f4c1464a36a3608fa9d19fd4cd406",
     "tests/webhook-signatures.test.ts": "3645102ec5e8bc978ce9735ab34ef6e06e568bd7",
     "tests/test_audit_release_source.py": "6516f3f4b8582d3874ceda34e1fc3e3b799fec8d",
@@ -88,7 +104,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "3d413b8b530f7eee378f88cb540475c2973b8b22",
+    "ops/vps/test_code_release.py": "e51cccd3f0f9f8742b3314de2556c8e77f7bc806",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -98,7 +114,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/test_release_source.py": "ec8a7a5bbbe585941583f50624823b85ec51e586",
     "scripts/checkbox-hotfix-audit-policy.json": "7447247befa4b9ef0a274b27352afdce690e9e1e",
     "ops/vps/test_runtime_workflow_contract.py": "eef0b25e667f6be123c0ed6c5bca774158d390d8",
-    "tests/repository-boundaries.test.mjs": "7d0a749ec3d9a61a365a7c5c7046a6573526cb2a",
+    "tests/repository-boundaries.test.mjs": "94b5ae290dadfd66ee23986aadd072ad3bed4da6",
     "tests/preview-data-inventory.test.mjs": "35f897420e6afe6b50c4bfa8aedd6eeeb370283d",
     "scripts/inspect-preview-data.mjs": "e6c8e9f07262a8088d6daca199e69a6f24c46af5",
     "scripts/inspect-vps-handoff.mjs": "88c049b7357ee319222580d0de63fd079c07ab98",
@@ -278,8 +294,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
     "mobile/tsconfig.json": "be7802b84428c49a3ddeb14b79373b8cdae64234",
     "mobile/vite.config.ts": "985e6a0bab112aeb54e470a7bd6a34bdeccf0b5e",
-    "ops/vps/audit-readiness.py": "0de0b0f96343bbd6acb3b2f800ec2e2983505d22",
-    "ops/vps/test_audit_readiness.py": "226ab932b1b851a4b2c0eb6ede8bc17e66e5bfa9",
+    "ops/vps/audit-readiness.py": "69c7dff10fc2b8d1046b84e0a43dbdb4dacb3ecf",
+    "ops/vps/test_audit_readiness.py": "086ab0cb48aa88ce934daefb54d60486925d36f8",
     "public/devices/iphone-titanium-front.svg": "9b3995ea6e27f358d03816d603f96466fa8e9acd",
     "runtime/vps/queue.mjs": "67018da3a3683aca80661e29e64f0fd3e5a37e9c",
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
@@ -323,7 +339,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/build-vps.mjs": "8e4ee60ccaec223f54fd00b6e7a968d706c32f6f",
     "scripts/customer-email-previews.mjs": "afbba02f4a1db052ad830bee1d11c7f6fb2c12a7",
     "scripts/prepare-vps-runtime.mjs": "aa0df8e663887c0db9883a5db744bafbfc7de339",
-    "scripts/rehearse-d1-recovery.sh": "675e872ec22d87826cf5eef5e2f1ff24abc3c73a",
+    "scripts/rehearse-d1-recovery.sh": "f77442363c6bcb271f8e23408755582210b70c81",
     "scripts/vps-runtime-dependencies.mjs": "9dd795c716f196dc61ee7c87db7699bba0fba2e3",
     "tests/customer-email-rendering.test.mjs": "75fbf0237c570d3c75cd4d5ac3db5c18a9f5f601",
     "tests/e2e/analytics-fixture.ts": "26397e2efb63c5871702f686b3fe9b8e4319196b",
@@ -1227,6 +1243,50 @@ class System:
     def property(self, name):
         return self.run("systemctl", "show", SERVICE, "--property=" + name, "--value")
 
+    def retention_state(self):
+        """Fixed loaded units only; no raw metadata escapes a rejected proof."""
+        common = "Id,LoadState,FragmentPath,SourcePath,DropInPaths,NeedDaemonReload,Transient"
+        service = "becore-tickets-retention.service"
+        specifications = {
+            service: common + ",Type,ExecStart,ExecStartPre,ExecStartPost,ExecCondition,ExecStop,ExecStopPost,ExecReload,KillMode,RemainAfterExit,ActiveState,SubState,MainPID,ControlPID",
+            "becore-tickets-retention.timer": common + ",Unit",
+        }
+        result = {}
+        for name, properties in specifications.items():
+            raw = self.run("systemctl", "show", name, "--no-pager", "--all", "--property=" + properties)
+            require(len(raw) <= 16384, "Oversized retention unit metadata.")
+            pairs = [line.split("=", 1) for line in raw.splitlines()]
+            require(all(len(pair) == 2 for pair in pairs), "Invalid retention unit metadata.")
+            values = dict(pairs)
+            expected_keys = set(properties.split(","))
+            # systemd's special Exec formatter omits empty command arrays even
+            # with --all. Only these six documented optional-empty fields may be
+            # absent; ExecStart, state/identity fields and unknown keys stay strict.
+            optional_empty = ({"ExecStartPre", "ExecStartPost", "ExecCondition", "ExecStop", "ExecStopPost", "ExecReload"}
+                              if name == service else set())
+            require(len(values) == len(pairs) and set(values) <= expected_keys
+                    and expected_keys - set(values) <= optional_empty,
+                    "Incomplete retention unit metadata.")
+            for key in optional_empty:
+                values.setdefault(key, "")
+            require(all(values[key] == expected for key, expected in {
+                "Id": name, "LoadState": "loaded", "FragmentPath": "/etc/systemd/system/" + name,
+                "SourcePath": "", "DropInPaths": "", "NeedDaemonReload": "no", "Transient": "no"}.items()),
+                "Retention unit identity is not the exact reviewed installation.")
+            result[name] = values
+        values = result[service]
+        require(all(values[key] == expected for key, expected in {
+            "Type": "oneshot", "KillMode": "control-group", "RemainAfterExit": "no",
+            "ActiveState": "inactive", "SubState": "dead", "MainPID": "0", "ControlPID": "0"}.items()),
+            "Retention cleaner must be inactive with no running process.")
+        require(all(values[key] == "" for key in
+                    ("ExecStartPre", "ExecStartPost", "ExecCondition", "ExecStop", "ExecStopPost", "ExecReload"))
+                and re.fullmatch(r"\{ path=/usr/bin/python3 ; argv\[\]=/usr/bin/python3 /srv/becore-tickets/current/operations/retention\.py ; ignore_errors=no ; [^{}]* \}", values["ExecStart"]),
+                "Retention execution differs from the reviewed unit.")
+        require(result["becore-tickets-retention.timer"]["Unit"] == service,
+                "Retention timer targets an unreviewed service.")
+        return result
+
     def verify_credential_binding(self):
         # LoadCredential is D-Bus a(ss), which systemctl show's generic property
         # printer cannot represent. Inspect the typed value, not unit-file text.
@@ -1457,6 +1517,9 @@ class Deployment:
         self.lock = self.root / "run/lock/becore-tickets-deploy.lock"
         self.migrations = []
         self.migration_result = None
+        self._deployment_lock_fd = None
+        self._retention_proof = None
+        self._candidate_unpacked = False
 
     def file(self, path, private=False, owner=None):
         info = path.lstat()
@@ -1623,11 +1686,160 @@ class Deployment:
             finally:
                 os.close(fd)
 
+    def retention_file(self, path):
+        """Bounded read through owned, non-symlink directory/file descriptors."""
+        with ExitStack() as stack:
+            directory = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            stack.callback(os.close, directory)
+            checks = []
+            for component in path.relative_to(self.root).parts[:-1]:
+                child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+                stack.callback(os.close, child)
+                info = os.fstat(child)
+                require(info.st_uid == os.geteuid() and not stat.S_IMODE(info.st_mode) & 0o7022,
+                        "Unsafe retention policy directory.")
+                checks.append((directory, component, retention_identity(info, True)))
+                directory = child
+            fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            stack.callback(os.close, fd)
+            before = os.fstat(fd)
+            require(stat.S_ISREG(before.st_mode) and before.st_uid == os.geteuid()
+                    and before.st_nlink == 1 and not stat.S_IMODE(before.st_mode) & 0o7022
+                    and 0 < before.st_size <= 16384, "Unsafe retention policy file.")
+            raw = os.read(fd, 16385)
+            require(len(raw) == before.st_size and retention_identity(os.fstat(fd)) == retention_identity(before)
+                    and retention_identity(os.stat(path.name, dir_fd=directory, follow_symlinks=False)) == retention_identity(before),
+                    "Retention policy changed during observation.")
+            require(all(retention_identity(os.stat(name, dir_fd=parent, follow_symlinks=False), True) == expected
+                        for parent, name, expected in checks), "Retention policy parent changed.")
+            return hashlib.sha256(raw).hexdigest(), retention_identity(before)
+
+    def retention_inventory(self):
+        fd = os.open(self.releases, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            require(info.st_uid == os.geteuid() and not stat.S_IMODE(info.st_mode) & 0o7022,
+                    "Unsafe retention release directory.")
+            inventory = {}
+            with os.scandir(fd) as entries:
+                for entry in entries:
+                    require(len(inventory) < RETENTION_MAX_ENTRIES, "Retention inventory exceeds its reviewed bound.")
+                    item = os.stat(entry.name, dir_fd=fd, follow_symlinks=False)
+                    require(SHA.fullmatch(entry.name) and stat.S_ISDIR(item.st_mode)
+                            and item.st_uid == os.geteuid() and not stat.S_IMODE(item.st_mode) & 0o7022,
+                            "Unsafe or unexpected retention inventory entry.")
+                    inventory[entry.name] = (retention_identity(item), item.st_mtime_ns)
+        finally:
+            os.close(fd)
+        require(len({item[1] for item in inventory.values()}) == len(inventory),
+                "Tied retention timestamps have no reviewed ordering.")
+        pointers = {}
+        for name in ("current", "previous"):
+            pointer = self.home / name
+            item = pointer.lstat()
+            require(stat.S_ISLNK(item.st_mode) and item.st_uid == os.geteuid()
+                    and os.readlink(pointer) == self.links[name], "Retention pointer identity drifted.")
+            pointers[name] = (retention_identity(item), os.readlink(pointer))
+        require(retention_identity(self.releases.lstat(), True) == retention_identity(info, True),
+                "Retention release directory changed.")
+        return inventory, pointers, retention_identity(info, True)
+
+    def retention_candidate(self):
+        # Before extraction, bind the policy to the already digest-verified archive.
+        # Its root timestamp is preserved by tar; a new directory is not implicitly young.
+        if not self._candidate_unpacked:
+            require(not os.path.lexists(self.release), "Older rollback proof requires an absent prospective candidate.")
+            require(digest_file(self.archive) == self.archive_digest, "Candidate archive changed during retention proof.")
+            with tarfile.open(self.archive, "r:gz") as archive:
+                members = {str(PurePosixPath(item.name)): item for item in self.archive_members(archive)}
+                top = members.get(".")
+                require(top is not None and top.isdir() and not top.mode & 0o7022
+                        and 0 <= time.time() - top.mtime < RETENTION_SAFE_AGE,
+                        "Candidate archive root is outside the safe retention grace.")
+                for name, expected in RETENTION_HASHES.items():
+                    item = members.get("operations/" + name)
+                    require(item is not None and item.isfile() and 0 < item.size <= 16384
+                            and not item.mode & 0o7022, "Candidate retention policy is missing or unsafe.")
+                    require(hashlib.sha256(archive.extractfile(item).read(16385)).hexdigest() == expected,
+                            "Candidate retention policy differs from reviewed bytes.")
+            return None
+        require(0 <= time.time() - self.release.lstat().st_mtime < RETENTION_SAFE_AGE,
+                "Unpacked candidate is outside the safe retention grace.")
+        identities = {}
+        for name, expected in RETENTION_HASHES.items():
+            digest, identity = self.retention_file(self.release / "operations" / name)
+            require(digest == expected, "Unpacked candidate retention policy differs from reviewed bytes.")
+            identities[name] = identity
+        return identities
+
     def retention_safe(self):
-        require(all(target.is_dir() and not target.is_symlink()
-                    and time.time() - target.stat().st_mtime < RETENTION_SAFE_AGE
-                    for target in self.rollback_releases),
-                "Rollback release is outside the safe retention grace; inspect before releasing.")
+        if self._retention_proof is None and all(target.is_dir() and not target.is_symlink()
+                and time.time() - target.stat().st_mtime < RETENTION_SAFE_AGE for target in self.rollback_releases):
+            return  # Preserve the original one-hour grace without a policy-dependent exception.
+        require(self._deployment_lock_fd is not None,
+                "Rollback release is outside the safe retention grace; exclusive proof lock required.")
+        try:
+            lock = os.fstat(self._deployment_lock_fd)
+            named_lock = self.lock.lstat()
+            # Existing installer/shell writers legitimately create this empty
+            # advisory lock as 0644 and may truncate it before attempting flock.
+            # Its protected inode and ownership matter, not readable bits or data timestamps.
+            require(all(stat.S_ISREG(item.st_mode) and item.st_uid == os.geteuid() and item.st_nlink == 1
+                        and stat.S_IMODE(item.st_mode) & 0o600 == 0o600
+                        and not stat.S_IMODE(item.st_mode) & 0o7133 for item in (lock, named_lock))
+                    and (lock.st_dev, lock.st_ino) == (named_lock.st_dev, named_lock.st_ino),
+                    "Retention proof deployment lock changed.")
+            fcntl.flock(self._deployment_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            before = self.retention_inventory()
+            inventory, pointers, directory = before
+            actual = self._candidate_unpacked
+            require((self.source in inventory) == actual, "Retention candidate inventory does not match extraction phase.")
+            existing = {name: value for name, value in inventory.items() if name != self.source}
+            proof = self._retention_proof
+            if proof is not None:
+                require(pointers == proof["pointers"] and directory == proof["directory"]
+                        and set(existing) <= set(proof["inventory"])
+                        and all(value == proof["inventory"][name] for name, value in existing.items()),
+                        "Retention inventory, timestamps or identities drifted.")
+            require(all(target.name in existing for target in self.rollback_releases), "Rollback release disappeared.")
+            order = sorted(inventory, key=lambda name: inventory[name][1], reverse=True)
+            if not actual:
+                require(len(order) < RETENTION_MAX_ENTRIES, "No bounded slot for the prospective candidate.")
+                order.insert(0, self.source)  # Worst-case single rank shift, regardless of archive ordering.
+            newest = set(order[:3])
+            current, previous = Path(self.links["current"]).name, Path(self.links["previous"]).name
+            # The cleaner reads pointers separately. Include the mixed snapshot
+            # (candidate, old previous) possible while a rollback restores them.
+            states = tuple((left, right) for left in (current, self.source) for right in (previous, current))
+            require(all(target.name in newest | set(state)
+                        for target in self.rollback_releases for state in states),
+                    "Rollback release is not protected through every pointer state.")
+            candidate = self.retention_candidate()
+            # A pre-existing cleaner may hold an older deletion list. Attest its
+            # inactive/dead state after proving topology, then require an identical
+            # rescan. A cleaner starting later sees only one of the protected states.
+            units = self.system.retention_state()
+            policy = {}
+            for name, expected in RETENTION_HASHES.items():
+                path = (self.old_release / "operations" / name if name == "retention.py"
+                        else self.root / "etc/systemd/system" / name)
+                digest, identity = self.retention_file(path)
+                require(digest == expected, "Installed retention policy differs from reviewed bytes.")
+                policy[name] = identity
+            require(self.system.retention_state() == units and self.retention_inventory() == before,
+                    "Retention state changed across its inactive baseline.")
+            if proof is None:
+                self._retention_proof = {"inventory": existing, "pointers": pointers, "directory": directory,
+                                         "policy": policy, "candidate": None, "candidateFiles": None}
+                proof = self._retention_proof
+            require(policy == proof["policy"], "Installed retention policy identity changed.")
+            if actual:
+                if proof["candidate"] is None:
+                    proof["candidate"], proof["candidateFiles"] = inventory[self.source], candidate
+                require(inventory[self.source] == proof["candidate"] and candidate == proof["candidateFiles"],
+                        "Unpacked candidate identity changed after retention proof.")
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, tarfile.TarError) as exc:
+            raise ReleaseError("Rollback retention protection could not be verified.") from exc
 
     def archive_members(self, archive):
         """Validate the whole archive before creating any extraction directory."""
@@ -1670,6 +1882,7 @@ class Deployment:
                 and (self.release / "server.mjs").is_file() and not (self.release / "server.mjs").is_symlink(),
                 "Runtime executables missing or unsafe.")
         self.system.run(str(self.release / "bin/node"), "--check", str(self.release / "server.mjs"))
+        self._candidate_unpacked = True
 
     def migrate(self):
         if not self.migrations:
@@ -1768,6 +1981,7 @@ class Deployment:
                 "Private raw audit retention failed.")
         self.evidence("prepared")
         self.unpack()  # no service/configuration changes before archive validation
+        self.retention_safe()
         try:
             self.migrate()
         except BaseException:
@@ -1788,6 +2002,7 @@ class Deployment:
             health(self.system, self.expected, public=True)
             if self.approval is not None:
                 self.approval.check_window()
+            self.retention_safe()
             if self.next_config != self.before["config"]:
                 atomic_write(self.config, self.next_config)
             atomic_write(self.override, self.next_override, self.modes["override"])
@@ -1798,8 +2013,8 @@ class Deployment:
             self.preserved()
             require(self.file(self.config, private=True) == self.next_config, "Configuration drifted during release.")
             require(self.file(self.journal, private=True) == self.before["journal"], "Handover journal drifted.")
-            # Keep both old pointers pinned through health verification. Only after
-            # readiness, and with one hour of retention grace left, commit pointers.
+            # Keep old pointers pinned through health verification, then recheck
+            # the original age grace or the attested retention protection proof.
             self.retention_safe()
             if self.approval is not None:
                 self.approval.check_window()
@@ -1875,7 +2090,11 @@ class Deployment:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
                 raise ReleaseError("Another Tickets deployment holds the lock.") from exc
-            return self.transact()
+            self._deployment_lock_fd = lock.fileno()
+            try:
+                return self.transact()
+            finally:
+                self._deployment_lock_fd = None
 
 
 def main():

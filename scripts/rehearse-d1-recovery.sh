@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
+umask 077
 
 export_file="${D1_EXPORT_FILE:-}"
 report_file="${RECOVERY_REPORT_FILE:-recovery-rehearsal-report.json}"
@@ -18,7 +20,12 @@ recovery_dir="$(mktemp -d)"
 recovery_db="$recovery_dir/recovered.sqlite3"
 trap 'rm -rf -- "$recovery_dir"' EXIT
 
-sqlite3 "$recovery_db" ".read $export_file"
+# Import errors can quote SQL statements containing customer data.
+sqlite3 "$recovery_db" ".read $export_file" >"$recovery_dir/restore.log" 2>&1 || {
+  status=$?
+  echo "The isolated SQLite restore failed; private diagnostics have been withheld." >&2
+  exit "$status"
+}
 quick_check="$(sqlite3 "$recovery_db" 'PRAGMA quick_check;')"
 integrity_check="$(sqlite3 "$recovery_db" 'PRAGMA integrity_check;')"
 if [[ "$quick_check" != "ok" || "$integrity_check" != "ok" ]]; then
