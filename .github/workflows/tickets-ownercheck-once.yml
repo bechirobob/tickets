@@ -53,10 +53,11 @@ jobs:
               return {'action': action, 'type': 'TXT', 'name': NAME, 'content': VALUE, 'verified_count': len(verified)}
           
           def main():
-              token = os.environ.get('CLOUDFLARE_API_TOKEN')
+              token = os.environ.get('CLOUDFLARE_API_TOKEN', '').strip()
               if not token:
                   raise RuntimeError('Existing Cloudflare connection is unavailable.')
               def api(path, method='GET', payload=None):
+                  print('Cloudflare stage: ' + ('create_exact_txt' if method == 'POST' else 'read_zone_or_exact_record'), flush=True)
                   request = urllib.request.Request('https://api.cloudflare.com/client/v4' + path,
                       data=None if payload is None else json.dumps(payload).encode(), method=method,
                       headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
