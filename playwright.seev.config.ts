@@ -5,7 +5,7 @@ import base from "./playwright.config";
 // the browser tests intercept initiation and never contact a payment service.
 export default defineConfig({
   ...base,
-  testMatch: "seevplus-checkout.spec.ts",
+  testMatch: process.env.BECORE_CHECKOUT_PREVIEW === "ordinary" ? "checkout-quantity.spec.ts" : ["seevplus-checkout.spec.ts", "checkout-quantity.spec.ts"],
   use: { ...base.use, baseURL: "http://127.0.0.1:8789", serviceWorkers: "block" },
   webServer: {
     command: "node scripts/browser-worker.mjs seev",

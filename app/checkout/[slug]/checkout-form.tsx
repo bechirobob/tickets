@@ -3,7 +3,7 @@
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, Minus, Plus, ShieldCheck, Smartphone, Wallet } from "lucide-react";
+import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, ShieldCheck, Smartphone, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { ActionButton } from "../../action";
@@ -154,7 +154,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   return (
     <main className="checkout-page">
       <header className="checkout-header">
-        <Link href={`/event/${slug}`}><ArrowLeft size={17} /> Back to event</Link>
+        <Link href={`/event/${slug}`} className="checkout-back" aria-label="Back to event"><ArrowLeft size={17} aria-hidden="true" /><span>Back<span className="checkout-back__detail"> to event</span></span></Link>
         <Link href="/" className="brand-mark"><BrandLogo /></Link>
         <span><LockKeyhole size={15} /> Good plans. Safe payment.</span>
       </header>
@@ -162,7 +162,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
         <section className="checkout-main">
           {event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. For Paystack, test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP. {seevEnabled ? "SeevPlus offers success and decline actions in its sandbox checkout." : ""}</span></div> : null}
           <div className="checkout-step">
-            <span>1</span><div><small>Your order</small><h1>{event.title}</h1></div>
+            <div><small>Your order</small><h1>{event.title}</h1></div>
           </div>
           <div className="ticket-tier-list" role="radiogroup" aria-label="Choose ticket tier">
             {event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => {
@@ -183,10 +183,15 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                     <b>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</b>
                   </button>
                   {selected && !soldOut && (
-                    <div className="quantity-control" aria-label={`${tier.name} quantity`}>
-                      <button type="button" disabled={!ready} onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label={`Remove ${tier.name}`}><Minus size={15} /></button>
-                      <b>{quantity}</b>
-                      <button type="button" onClick={() => setQuantity((value) => Math.min(maxPurchasableUnits, value + 1))} disabled={!ready || quantity >= maxPurchasableUnits} aria-label={`Add ${tier.name}`}><Plus size={15} /></button>
+                    <div className="quantity-control">
+                      <select
+                        aria-label={`${tier.name} quantity`}
+                        value={quantity}
+                        disabled={!ready || isPaying}
+                        onChange={(event) => setQuantity(Math.max(1, Math.min(maxPurchasableUnits, Number(event.target.value))))}
+                      >
+                        {Array.from({ length: maxPurchasableUnits }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+                      </select>
                     </div>
                   )}
                   {selected && !soldOut ? <small className="tier-availability">{tier.remainingAdmissions} admissions currently available</small> : null}
@@ -197,7 +202,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
 
           {!paystackEnabled && !seevEnabled ? <div className="checkout-unavailable" role="status"><h2>Tickets are taking a breather.</h2><p>Checkout will be back soon. Your next move? Keep this night on your radar.</p><Link href={`/event/${slug}`}>Back to the event</Link></div> : <>
           <div className="checkout-step checkout-step--second">
-            <span>2</span><div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
+            <div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
           </div>
           <div className="form-grid">
             <label>Full name<input disabled={!ready} ref={nameInput} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); }} /></label>
@@ -206,7 +211,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
           </div>
 
           <div className="checkout-step checkout-step--second">
-            <span>3</span><div><small>Payment</small><h2>Let’s make it official.</h2></div>
+            <div><small>Payment</small><h2>Let’s make it official.</h2></div>
           </div>
           <fieldset className="payment-methods" disabled={!ready || isPaying}>
             <legend className="sr-only">Choose payment method</legend>

@@ -84,6 +84,12 @@ jobs:
         run: |
           node scripts/prepare-seev-browser-fixture.mjs
           npx playwright test --config playwright.seev.config.ts --workers=1 --retries=0 --output test-results/consent-checkout
+      - name: Capture ordinary customer checkout with local synthetic data
+        id: ordinary_checkout_ui
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs ordinary
+          BECORE_CHECKOUT_PREVIEW=ordinary npx playwright test --config playwright.seev.config.ts --workers=1 --retries=0 --output test-results/ordinary-checkout
       - name: Verify RSVP consent without sending registration email
         id: registration_ui
         if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
@@ -99,6 +105,7 @@ jobs:
         if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
         env:
           CHECKOUT_RESULT: ${{ steps.checkout_ui.outcome }}
+          ORDINARY_CHECKOUT_RESULT: ${{ steps.ordinary_checkout_ui.outcome }}
           REGISTRATION_RESULT: ${{ steps.registration_ui.outcome }}
           SETTINGS_RESULT: ${{ steps.settings_ui.outcome }}
         shell: bash
@@ -130,7 +137,18 @@ jobs:
                   name = f'{form}-{browser}.png'
                   (output / name).write_bytes(content)
                   files.append({'file': name, 'browser': browser, 'form': form, 'bytes': len(content), 'sha256': hashlib.sha256(content).hexdigest()})
-          manifest = {'sourceSha': source, 'sourceTree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(), 'runId': os.environ['GITHUB_RUN_ID'], 'fixture': 'isolated local data; registration, payment and recovery requests intercepted', 'results': {'checkout': os.environ['CHECKOUT_RESULT'], 'registration': os.environ['REGISTRATION_RESULT'], 'settings': os.environ['SETTINGS_RESULT']}, 'files': files}
+          for browser in ('desktop-chromium', 'mobile-chromium'):
+              root = Path('test-results/ordinary-checkout')
+              matches = [path for path in root.rglob('boxed-ticket-quantity.png') if path.parent.name.endswith('-' + browser)]
+              assert len(matches) == 1, (browser, 'Expected one quantity fixture screenshot', matches)
+              path = matches[0]
+              assert not path.is_symlink() and path.resolve().is_relative_to(root.resolve())
+              content = path.read_bytes()
+              assert content[:8] == b'\x89PNG\r\n\x1a\n' and 0 < len(content) <= 2 * 1024 * 1024
+              name = f'quantity-{browser}.png'
+              (output / name).write_bytes(content)
+              files.append({'file': name, 'browser': browser, 'form': 'quantity', 'bytes': len(content), 'sha256': hashlib.sha256(content).hexdigest()})
+          manifest = {'sourceSha': source, 'sourceTree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(), 'runId': os.environ['GITHUB_RUN_ID'], 'fixture': 'isolated local data; registration, payment and recovery requests intercepted', 'results': {'checkout': os.environ['CHECKOUT_RESULT'], 'ordinaryCheckout': os.environ['ORDINARY_CHECKOUT_RESULT'], 'registration': os.environ['REGISTRATION_RESULT'], 'settings': os.environ['SETTINGS_RESULT']}, 'files': files}
           (output / 'evidence.json').write_text(json.dumps(manifest, indent=2) + '\n')
           PY
       # Never upload the compiled app, local database, traces, credentials or logs.
@@ -146,6 +164,8 @@ jobs:
             outputs/booking-consent-previews/rsvp-desktop-chromium.png
             outputs/booking-consent-previews/rsvp-mobile-chromium.png
             outputs/booking-consent-previews/rsvp-mobile-webkit.png
+            outputs/booking-consent-previews/quantity-desktop-chromium.png
+            outputs/booking-consent-previews/quantity-mobile-chromium.png
             outputs/booking-consent-previews/evidence.json
           if-no-files-found: error
           retention-days: 3

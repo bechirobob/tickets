@@ -1106,7 +1106,7 @@ test("compact booking consent rows preserve alignment and unobstructed evidence"
   ].map(path => readFile(new URL(path, import.meta.url), "utf8")));
   assert.match(checkout, /className="checkout-consents" role="group" aria-label="Email updates and terms"/u);
   assert.match(registration, /className="registration-confirmation"/u);
-  assert.match(css, /margin:\s*14px 0 0 49px/u);
+  assert.match(css, /margin:\s*14px 0 0;/u);
   assert.match(css, /min-height:\s*44px/u);
   assert.match(css, /gap:\s*8px/u);
   assert.match(css, /font-size:\s*13px/u);
@@ -1118,4 +1118,41 @@ test("compact booking consent rows preserve alignment and unobstructed evidence"
   assert.match(capture, /overlapsDock/u);
   assert.match(capture, /elementFromPoint/u);
   assert.doesNotMatch(capture, /addStyleTag|style\.(?:display|visibility)\s*=/u);
+});
+
+test("checkout quantity uses a labelled native boxed dropdown within existing inventory limits", async () => {
+  const [checkout, css] = await Promise.all([
+    readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8'),
+    readFile(cssUrl, 'utf8'),
+  ]);
+  assert.match(checkout, /<select\s+aria-label=\{`\$\{tier.name\} quantity`\}/u);
+  assert.match(checkout, /disabled=\{!ready \|\| isPaying\}/u);
+  assert.match(checkout, /Array\.from\(\{ length: maxPurchasableUnits \}/u);
+  assert.match(checkout, /Math\.min\(selectedTier\.maxUnitsPerOrder, Math\.floor\(selectedTier\.remainingAdmissions \/ selectedTier\.admissionsPerUnit\)\)/u);
+  assert.match(checkout, /setSelectedTierId\(tierId\);\s+setQuantity\(1\)/u);
+  assert.match(checkout, /selected && !soldOut &&/u);
+  assert.match(css, /\.quantity-control select \{[^}]*min-height: 46px;[^}]*border: 1px solid/u);
+  assert.doesNotMatch(css, /\.quantity-control button/u);
+});
+
+test("mobile checkout header hides optional reassurance without suppressing the logo or back link", async () => {
+  const [checkout, css] = await Promise.all([
+    readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8'),
+    readFile(cssUrl, 'utf8'),
+  ]);
+  assert.match(checkout, /className="checkout-back" aria-label="Back to event"/u);
+  assert.match(css, /\.checkout-header > span, \.checkout-back__detail \{ display: none; \}/u);
+  assert.match(css, /\.checkout-header > a:first-child \{[^}]*min-width: 44px; min-height: 44px;/u);
+  assert.doesNotMatch(css, /\.checkout-header > span \{ font-size: 0;/u);
+  assert.doesNotMatch(css, /\.checkout-header \.brand-mark span:last-child \{ display: none;/u);
+});
+
+
+test("checkout keeps semantic section headings without decorative step numbers", async () => {
+  const checkout = await readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(checkout, /<span>[123]<\/span><div><small>/u);
+  assert.match(checkout, /<h1>\{event.title\}<\/h1>/u);
+  assert.match(checkout, /<small>Delivery details<\/small><h2>/u);
+  assert.match(checkout, /<small>Payment<\/small><h2>/u);
+  assert.match(checkout, /event.isTestEvent \? <div className="preview-checkout-note"/u);
 });

@@ -2911,5 +2911,38 @@ class EmailReleaseAdmissionTests(unittest.TestCase):
                 release.reviewed_migration(changed, specification)
 
 
+class CheckoutUiAdmissionTests(unittest.TestCase):
+    # Only the user-reviewed checkout increment is admitted; neighbouring paths
+    # and a changed byte in any one of these files still fail closed.
+    pins = {
+        ".github/workflows/booking-consent-previews.yml": "457e562c72109975dfb2d8951230661728861003",
+        "app/booking-consent.css": "1c0cdd4081d3a6b05dff7e5b909693ba675f5720",
+        "app/checkout/[slug]/checkout-form.tsx": "24706bdce798c20926c17e83aeeba485b43f1bb6",
+        "app/globals.css": "4ac15d8e4cc0a372123c4309443fd056c74fef92",
+        "playwright.seev.config.ts": "1eeacbb76fc58a3d9aa6d1566e1c8870ad2484e5",
+        "scripts/prepare-seev-browser-fixture.mjs": "46dfe0aa8f609bc810e128ec006d1c3f3a3c9442",
+        "tests/e2e/checkout-quantity.spec.ts": "63118dc45063fdc9d214d1c677846fa47dde0c22",
+        "tests/mobile-ui.test.mjs": "e5d555bfb255df96eb84aa1c73dc5c392b686d2f",
+    }
+
+    def test_checkout_admits_only_the_eight_exact_reviewed_blobs(self):
+        with patch.object(release, "verify_changed_modes"), patch.object(release.subprocess, "run"):
+            for name, blob in self.pins.items():
+                with self.subTest(name=name):
+                    self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], blob)
+                    with patch.object(release, "git", side_effect=[name, blob]):
+                        self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                    with patch.object(release, "git", side_effect=[name, "f" * 40]):
+                        with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                            release.vetted_changes(OLD, NEW)
+
+    def test_checkout_admission_does_not_allow_neighbouring_source_paths(self):
+        with patch.object(release, "verify_changed_modes"), patch.object(release.subprocess, "run"):
+            for name in ("app/checkout/new-flow.tsx", "app/unreviewed-checkout.css", "playwright.new-checkout.config.ts", "scripts/new-checkout-fixture.mjs", ".github/workflows/new-checkout.yml"):
+                with self.subTest(name=name), patch.object(release, "git", return_value=name):
+                    with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                        release.vetted_changes(OLD, NEW)
+
+
 if __name__ == "__main__":
     unittest.main()
