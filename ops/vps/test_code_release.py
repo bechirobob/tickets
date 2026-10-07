@@ -473,9 +473,10 @@ class RetentionProtectionTests(DeploymentFixture):
         self.refresh_digests()
 
     @contextmanager
-    def held(self):
+    def held(self, mode=0o600):
         with self.deployment.lock.open("a") as lock:
-            os.fchmod(lock.fileno(), 0o600)
+            if mode is not None:
+                os.fchmod(lock.fileno(), mode)
             lock.flush()
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.deployment._deployment_lock_fd = lock.fileno()
@@ -483,6 +484,80 @@ class RetentionProtectionTests(DeploymentFixture):
                 yield self.deployment
             finally:
                 self.deployment._deployment_lock_fd = None
+
+    def test_installer_created_readable_lock_preserves_protection_without_chmod(self):
+        previous = os.umask(0o022)
+        try:
+            with self.deployment.lock.open("a"):
+                pass
+        finally:
+            os.umask(previous)
+        self.assertEqual(stat.S_IMODE(self.deployment.lock.stat().st_mode), 0o644)
+        with self.held(mode=None):
+            self.assertEqual(self.deployment.transact()["released"], NEW)
+        self.assertEqual(stat.S_IMODE(self.deployment.lock.stat().st_mode), 0o644)
+
+    def test_safe_readable_modes_pass_but_writable_or_special_modes_fail(self):
+        for mode in (0o600, 0o604, 0o640, 0o644):
+            with self.subTest(mode=oct(mode)), self.held(mode=mode):
+                self.deployment.preflight()
+        for mode in (0o000, 0o200, 0o400, 0o620, 0o602, 0o666, 0o700, 0o644 | 0o111, 0o4600, 0o1600):
+            with self.subTest(mode=oct(mode)), self.held(mode=mode):
+                try:
+                    with self.assertRaisesRegex(release.ReleaseError, "deployment lock changed"):
+                        self.deployment.preflight()
+                finally:
+                    os.fchmod(self.deployment._deployment_lock_fd, 0o600)
+
+    def test_unowned_lock_descriptor_is_rejected_before_transaction_mutations(self):
+        with self.held(mode=0o644):
+            metadata = list(os.fstat(self.deployment._deployment_lock_fd))
+            metadata[4] += 1
+            with patch.object(release.os, "fstat", return_value=os.stat_result(metadata)), self.assertRaisesRegex(release.ReleaseError, "deployment lock changed"):
+                self.deployment.preflight()
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertFalse(self.deployment.release.exists())
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_harmless_lock_truncation_does_not_change_held_inode_or_exclusion(self):
+        original = Path.lstat
+        changed = False
+        def truncate_before_path_stat(path, *args, **kwargs):
+            nonlocal changed
+            if path == self.deployment.lock and not changed:
+                changed = True
+                path.write_bytes(b"ordinary lock metadata change\n")
+            return original(path, *args, **kwargs)
+        with self.held(mode=0o644), patch.object(Path, "lstat", truncate_before_path_stat):
+            self.deployment.preflight()
+            with self.deployment.lock.open("a") as competing, self.assertRaises(BlockingIOError):
+                fcntl.flock(competing, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.assertTrue(changed)
+        self.assertFalse(self.deployment.snapshot.exists())
+
+    def test_replaced_hardlinked_and_symlinked_lock_paths_are_rejected(self):
+        for kind in ("replacement", "hardlink", "symlink"):
+            with self.subTest(kind=kind), self.held(mode=0o644):
+                lock = self.deployment.lock
+                saved = lock.with_name("original-lock")
+                if kind == "hardlink":
+                    os.link(lock, saved)
+                else:
+                    lock.rename(saved)
+                    if kind == "replacement":
+                        lock.write_bytes(b"")
+                    else:
+                        lock.symlink_to(saved.name)
+                try:
+                    with self.assertRaisesRegex(release.ReleaseError, "deployment lock changed"):
+                        self.deployment.preflight()
+                    self.assertFalse(self.deployment.snapshot.exists())
+                finally:
+                    if kind == "hardlink":
+                        saved.unlink()
+                    else:
+                        lock.unlink()
+                        saved.rename(lock)
 
     def test_old_previous_rank_two_survives_candidate_and_successful_pointer_rotation(self):
         with self.held():
