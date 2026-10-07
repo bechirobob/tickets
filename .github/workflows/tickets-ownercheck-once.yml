@@ -14,77 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Add only the owner-approved TXT and verify
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
-          
-          NAME = 'ownercheck.mail.becoreops.com'
-          VALUE = '68449444'
-          ZONE = 'becoreops.com'
-          
-          def ensure_record(api):
-              zones = api('/zones?name=becoreops.com&status=active')
-              if len(zones) != 1 or zones[0]['name'] != ZONE:
-                  raise RuntimeError('Expected one active becoreops.com zone; stopped.')
-              zid = zones[0]['id']
-              if len(zid) != 32 or any(c not in '0123456789abcdef' for c in zid):
-                  raise RuntimeError('Invalid zone identifier; stopped.')
-              base = '/zones/' + zid + '/dns_records'
-              lookup = base + '?name.exact=ownercheck.mail.becoreops.com&per_page=100'
-              records = api(lookup)
-              exact = lambda r: r.get('type') == 'TXT' and r.get('name') == NAME and r.get('content') in (VALUE, '"' + VALUE + '"')
-              if any(not exact(r) for r in records):
-                  raise RuntimeError('A different record exists at the approved name; nothing changed.')
-              if records:
-                  action = 'already_present'
-              else:
-                  # One POST only. Never retry an ambiguous write.
-                  api(base, 'POST', {'type': 'TXT', 'name': NAME, 'content': '"' + VALUE + '"', 'ttl': 300})
-                  action = 'created'
-              verified = api(lookup)
-              if not verified or any(not exact(r) for r in verified):
-                  raise RuntimeError('Exact DNS record verification failed; inspect before any retry.')
-              return {'action': action, 'type': 'TXT', 'name': NAME, 'content': VALUE, 'verified_count': len(verified)}
-          
-          def main():
-              token = os.environ.get('CLOUDFLARE_API_TOKEN', '').strip()
-              if not token:
-                  raise RuntimeError('Existing Cloudflare connection is unavailable.')
-              def api(path, method='GET', payload=None):
-                  print('Cloudflare stage: ' + ('create_exact_txt' if method == 'POST' else 'read_zone_or_exact_record'), flush=True)
-                  request = urllib.request.Request('https://api.cloudflare.com/client/v4' + path,
-                      data=None if payload is None else json.dumps(payload).encode(), method=method,
-                      headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
-                  with urllib.request.urlopen(request, timeout=25) as response:
-                      result = json.load(response)
-                  if not result.get('success'):
-                      raise RuntimeError('Cloudflare request was not successful.')
-                  info = result.get('result_info', {})
-                  if info.get('total_pages', 1) > 1:
-                      raise RuntimeError('Unexpected paginated result; stopped.')
-                  return result['result']
-              print(json.dumps(ensure_record(api)))
-          
-          if __name__ == '__main__':
-              try:
-                  main()
-              except Exception as error:
-                  # No provider body, headers, credentials or zone inventory in public logs.
-                  print('Approved TXT operation could not be verified: ' + type(error).__name__)
-                  raise SystemExit(1)
-          PY
       - name: Verify the exact TXT at both authoritative nameservers
         shell: bash
         run: |
           set -euo pipefail
           for server in langston.ns.cloudflare.com raquel.ns.cloudflare.com; do
             answer="$(dig +time=5 +tries=1 +short TXT ownercheck.mail.becoreops.com @"$server")"
+            printf '%s\n' "$answer"
             if ! printf '%s\n' "$answer" | grep -Fxq '"68449444"'; then
               echo "TXT not yet verified at $server; do not repeat the write."
               exit 1
