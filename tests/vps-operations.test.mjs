@@ -4,6 +4,18 @@ import { DatabaseSync } from 'node:sqlite';
 import { DeliveryQueue } from '../runtime/vps/queue.mjs';
 import { RateLimiter } from '../runtime/vps/rate-limit.mjs';
 
+test('idle delivery polls reuse one prepared claim statement', async t => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    const prepare = t.mock.method(db, 'prepare');
+    const queue = new DeliveryQueue(db);
+    for (let poll = 0; poll < 120; poll++) {
+      assert.equal(await queue.process(() => assert.fail('An idle queue must not invoke its handler.')), false);
+    }
+    assert.equal(prepare.mock.callCount(), 1);
+  } finally { db.close(); }
+});
+
 test('delivery retries survive adapter restarts and duplicate enqueues do not multiply work', async () => {
   const db = new DatabaseSync(':memory:');
   try {

@@ -2944,5 +2944,80 @@ class CheckoutUiAdmissionTests(unittest.TestCase):
                         release.vetted_changes(OLD, NEW)
 
 
+class ResourceReleaseAdmissionTests(unittest.TestCase):
+    pins = {
+        ".github/workflows/browser-audit.yml": "3f99ab138e84a9dbd9c0b0cf36a4c5e5300b16a3",
+        "app/admin/operations/organizer-activity.tsx": "c4ad962d9b1d3d9d13817f88c7673a6fda850aea",
+        "docs/reliability/event-capacity.md": "4bca03f5553f6363de9c34db808bebe4a3936bae",
+        "lib/flashes.ts": "94c8df484d3872ff60d2ff46ebc093edd82d280b",
+        "runtime/vps/queue.mjs": "22b48966ba3f3a25271425dcb846137fd611f96d",
+        "tests/flashes.test.ts": "694627fbedeafaa80e0e6cb61513450b667b2142",
+        "tests/organizer-activity-polling.test.mjs": "6cd0bf5c0b30953f8b9eb917c646b6a49e010527",
+        "tests/repository-boundaries.test.mjs": "afba870d14a247872286ed7006cb31184a6eb465",
+        "tests/room-abuse-boundaries.test.ts": "df61c41a01867ceebf123216e16e6c10f7c2bd3d",
+        "tests/the-room.test.ts": "9431b1eb7231a2e36382d351441c1b3034366096",
+        "tests/vps-operations.test.mjs": "a8fe59356a29502889fd2af41f3338225582f556",
+        "worker/the-room.ts": "baf738dba9c08cc1390fa6863f2ac5603c04e83e",
+    }
+
+    def setUp(self):
+        modes = patch.object(release, "verify_changed_modes")
+        modes.start()
+        self.addCleanup(modes.stop)
+
+    def test_root_transition_requires_exact_active_baseline_and_both_package_blobs(self):
+        self.assertEqual(release.RESOURCE_RELEASE_BASELINE, "5e1b1aada332d8ce4986c26291594a929aa95d53")
+        changed = "package.json\npackage-lock.json"
+        blobs = ["83f5e03b9fbbdf10f050c8dd24d06ed1ff59260b",
+                 "91d44944a682f992880c44785d7b14eda9204c18",
+                 "cc161d4ef33ca9affdf1c6649071cb4bf27b71dc",
+                 "47a4eaca5743b768598462d8b66a2ef49a442b4e"]
+        with patch.object(release, "git", side_effect=[changed, *blobs]) as git, patch.object(release.subprocess, "run"):
+            self.assertEqual(release.vetted_changes(release.RESOURCE_RELEASE_BASELINE, NEW), changed.splitlines())
+            self.assertEqual(git.call_args_list, [
+                call("diff", "--name-only", release.RESOURCE_RELEASE_BASELINE, NEW),
+                call("rev-parse", release.RESOURCE_RELEASE_BASELINE + ":package.json"),
+                call("rev-parse", NEW + ":package.json"),
+                call("rev-parse", release.RESOURCE_RELEASE_BASELINE + ":package-lock.json"),
+                call("rev-parse", NEW + ":package-lock.json")])
+        for index in range(len(blobs)):
+            tampered = list(blobs)
+            tampered[index] = "f" * 40
+            with self.subTest(blob=index), patch.object(release, "git", side_effect=[changed, *tampered]), patch.object(release.subprocess, "run"):
+                with self.assertRaisesRegex(release.ReleaseError, "reviewed security patch"):
+                    release.vetted_changes(release.RESOURCE_RELEASE_BASELINE, NEW)
+        for baseline in (OLD, release.EMAIL_RELEASE_BASELINE):
+            with self.subTest(baseline=baseline), patch.object(release, "git", side_effect=[changed, *blobs]), patch.object(release.subprocess, "run"):
+                with self.assertRaisesRegex(release.ReleaseError, "reviewed security patch"):
+                    release.vetted_changes(baseline, NEW)
+
+    def test_root_transition_rejects_a_partial_package_pair(self):
+        for name in ("package.json", "package-lock.json"):
+            with self.subTest(name=name), patch.object(release, "git", return_value=name) as git, patch.object(release.subprocess, "run"):
+                with self.assertRaisesRegex(release.ReleaseError, "both package files"):
+                    release.vetted_changes(release.RESOURCE_RELEASE_BASELINE, NEW)
+                git.assert_called_once_with("diff", "--name-only", release.RESOURCE_RELEASE_BASELINE, NEW)
+
+    def test_resource_changes_admit_only_the_exact_reviewed_application_bytes(self):
+        with patch.object(release.subprocess, "run"):
+            for name, blob in self.pins.items():
+                with self.subTest(name=name):
+                    self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], blob)
+                    with patch.object(release, "git", side_effect=[name, blob]):
+                        self.assertEqual(release.vetted_changes(release.RESOURCE_RELEASE_BASELINE, NEW), [name])
+                    with patch.object(release, "git", side_effect=[name, "f" * 40]):
+                        with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                            release.vetted_changes(release.RESOURCE_RELEASE_BASELINE, NEW)
+
+    def test_resource_admission_keeps_neighbouring_application_paths_closed(self):
+        with patch.object(release.subprocess, "run"):
+            for name in ("app/admin/operations/unreviewed.tsx", "lib/unreviewed-flashes.ts",
+                         "runtime/vps/unreviewed-queue.mjs", "worker/unreviewed-room.ts",
+                         ".github/workflows/unreviewed-browser.yml"):
+                with self.subTest(name=name), patch.object(release, "git", return_value=name):
+                    with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                        release.vetted_changes(release.RESOURCE_RELEASE_BASELINE, NEW)
+
+
 if __name__ == "__main__":
     unittest.main()

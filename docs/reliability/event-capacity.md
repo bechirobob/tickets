@@ -304,3 +304,124 @@ is below 13,000 writes. Refine the per-run allocation to 15,000 writes while
 retaining the separate 30,000-write production reserve and the provider's full
 100,000-write daily ceiling. The next run must still refuse insufficient headroom;
 no quota or plan is raised, and no load gate is relaxed.
+
+## Resource efficiency pass — 8 October 2026
+
+Baseline: `5e1b1aada332d8ce4986c26291594a929aa95d53`. This pass keeps the
+existing Tickets service, feature behavior, admission checks, moderation,
+notifications, retention and recovery boundaries. It adds no dependencies,
+providers, paid plans or schema changes. Source and isolated tests establish
+operation-count reductions; they do **not** establish a lower production bill.
+
+Implemented:
+
+- Cloudflare handles the browser's exact `{"type":"ping"}` heartbeat with native
+  WebSocket auto-response. An idle socket no longer invokes application JS for
+  those frames. At the existing 25-second interval this avoids up to 144 handler
+  invocations per visible connected guest-hour, or 57,600 for 400 guests. These
+  are arithmetic projections, not measured production requests or dollars.
+  The client needs only a response, not a server timestamp. Other valid ping
+  encodings and the VPS adapter keep their existing application handler.
+- An accepted Room message reuses its own freshly checked ticket badge instead
+  of querying the same admission twice without any intervening asynchronous
+  work. The sender path goes from one session query plus two admission queries
+  to one of each. No result is reused across messages. Recipient authorization,
+  blocks, revocations, unread notification rows and push behavior are unchanged.
+- Expiring up to 200 Flashes updates the exact selected ID snapshot in one SQL
+  statement rather than one statement per image. A regression measures three
+  prepared statements for 200 images (select, receipt cleanup, update), compared
+  with the prior 202. The same rows and indexes are still written; do not count
+  this as a 98.5% D1 row-write or billing reduction. The cap, event scope,
+  concurrent-owner-removal guard and physical image-byte removal are unchanged.
+
+Focused verification covers native/fallback heartbeat responses, malformed
+messages, next-message session/ticket/profile/refund/moderation revocation,
+Flashes' 201-item backlog, exact statement count, cross-event isolation,
+concurrent removals and receipt cleanup with zero matching expiry rows.
+Local validation passed: `npm test` (267 tooling/repository/UI/password/rendered
+checks plus 680 backend checks), `npm run test:vps` (35 Node checks plus the
+same 680 backend checks), lint (one pre-existing warning), typecheck, schema
+check and Worker dry-run. Independent review found no blocking regressions.
+Exact candidate CI and production verification remain release gates; this
+section is not deployment evidence.
+
+Second schema-free increment:
+
+- The current VPS delivery queue prepares its unchanged atomic claim statement
+  once after schema initialization, instead of compiling it on every poll.
+  A regression measures one preparation across 120 idle polls rather than 120.
+  At a continuous one-second idle cadence this projects 86,399 fewer statement
+  preparations/day after initialization, not fewer database polls or a measured
+  CPU-time reduction. Retry, delay, deduplication and stale-consumer guards stay
+  intact.
+- Each of the three production-browser-audit jobs installs only its selected
+  browser engine: Chromium for the two Chrome projects, WebKit for iPhone.
+  Requested engine installations drop from six to three per audit. All three
+  test projects, no-retry behavior, source identity checks and evidence remain.
+  This is configuration counting, not measured downloaded bytes or CI dollars.
+- Organizer Activity pauses its 30-second polling while hidden and refreshes
+  immediately on return. Requests are cancellable on hide/unmount, overlapping
+  polls are suppressed, and a mark-read refresh supersedes an older poll. This
+  avoids up to 120 requests per hidden-tab hour while preserving visible cadence.
+  The component's markup and owner-only API boundary are unchanged.
+
+Ranked next candidates, not included in this patch:
+
+1. Reuse the production Worker build already exercised by `npm test` in the
+   Cloudflare deploy workflow rather than compiling the same source again.
+   Keep the second preparation/readiness pass and add exact artifact-digest
+   validation. This changes pinned release-workflow source and needs its own
+   reviewed admission; no deploy workflow or audit exception was altered here.
+2. Evaluate marketing census upserts that rewrite unchanged contacts about
+   every six minutes. At 1,000 unchanged contacts this projects about 240,000
+   row updates/day. Application freshness uses `marketing_state.checked_at`;
+   avoiding unchanged-contact writes would make the contact's `updated_at`
+   represent last change rather than last observation. Review and document that
+   semantic choice, keeping provider unsubscribe checks and consent intact.
+3. Consider a partial expiry index on `room_flashes(expires_at) WHERE status !=
+   'deleted'`. A disposable SQLite benchmark with 10,000 deleted tombstones and
+   five expired active photos reduced SELECT VM steps from 30,051 to 46 with
+   identical results. This is synthetic evidence, not live timing. It needs a
+   reviewed migration; no index or retention policy was changed in this pass.
+
+Measure current provider usage, VPS CPU/RAM/disk, CI minutes/artifacts and
+notification fanout before larger changes. Flashes transforms and AI moderation
+serve different purposes; do not remove safety checks to claim savings. Keep
+recovery retention, rollback releases and paid-service decisions explicit.
+
+### Dependency gate encountered during this pass
+
+The first candidate (`23d28d2f5b39ed5f44b2d861a86c4903021f977b`, PR #261)
+passed local application/VPS checks, isolated VPS-capacity CI and iPhone-layout
+CI, but the unchanged dependency gate rejected newly reported advisories for
+Next.js 16.3.6 before running candidate browser checks. The fix is isolated in a
+separate dependency commit: pin Next.js 16.3.8 and matching `@next/env`/SWC
+packages. No exception or audit threshold is widened. A fresh install and npm
+audit report zero vulnerabilities after the patch.
+
+This is a dependency-hygiene fix, not proof of production exploitation. Tickets
+serves through Vinext/Vite, and its computed packaged VPS runtime closure omits
+Next.js and `@next/*`. The affected Next server/dev/router/cache configuration
+preconditions were not found in the application. The live artifact was not
+inspected for this assessment. See the vendor's
+[16.3.8 security release](https://github.com/vercel/next.js/releases/tag/v16.3.8).
+Fresh application, VPS, build and exact-head CI gates remain mandatory; earlier
+source/dependency test results must not be substituted for the patched candidate.
+
+Patched local application/VPS suites, lint/types, Worker/VPS builds and isolated
+packaged-runtime verification passed. The package verifier retained 13 runtime
+packages and excluded build dependencies. An additional release-operator suite
+passed 349/350 checks; its exact reviewed-application-manifest test correctly
+rejects changed application bytes until they receive separate release admission.
+Do not refresh that manifest merely to suppress a failing test. Final combined
+source review, approved exact pins, current CI and live verification are still
+required before any production release.
+
+Final combined local verification: `npm test` passed 278 non-backend checks and
+680 backend checks; `npm run test:vps` passed 36 Node checks and 680 backend
+checks. Lint had zero errors and the same pre-existing moderation-export warning;
+types, schema, npm audit (zero vulnerabilities), Worker dry-run, Worker/VPS
+builds, loopback network verification and the isolated 13-package runtime all
+passed. An independent review found no blocking code issues. These receipts
+cover the combined application/dependency changes; exact-head hosted CI, the
+separate reviewed-release admission and live verification remain pending.

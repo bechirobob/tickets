@@ -13,14 +13,20 @@ jobs:
   browser-audit:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    # Fresh hosted runners may spend several minutes installing WebKit system
-    # dependencies before the production checks can begin. Keep enough headroom
-    # for all three browser projects and evidence upload on a slow mirror.
+    # Each job installs only its selected engine. Keep enough headroom for
+    # WebKit system dependencies and evidence upload on a slow mirror.
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         browser: [desktop-chromium, mobile-chromium, mobile-webkit]
+        include:
+          - browser: desktop-chromium
+            engine: chromium
+          - browser: mobile-chromium
+            engine: chromium
+          - browser: mobile-webkit
+            engine: webkit
     steps:
       # Candidate verification tests the full PR tree against its isolated build.
       # This separate audit must use the tests belonging to the actual live build.
@@ -103,7 +109,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install real-browser engines
-        run: npx playwright install --with-deps chromium webkit
+        run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Confirm production still matches the audited source
         env:
           DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}

@@ -103,11 +103,10 @@ export async function purgeExpiredFlashes(db: D1Database, eventSlug?: string): P
     (SELECT id FROM room_flashes WHERE (status = 'deleted' OR expires_at <= ?) ${eventSlug ? "AND event_slug = ?" : ""})`)
     .bind(...(eventSlug ? [now, eventSlug] : [now])).run();
   if (rows.results.length === 0) return 0;
-  const statements = rows.results.map((row) => db.prepare(`
+  await db.prepare(`
     UPDATE room_flashes
     SET image_data = NULL, status = 'deleted', moderation_result = 'expired', deleted_at = ?
-    WHERE id = ? AND status != 'deleted'
-  `).bind(now, row.id));
-  await db.batch(statements);
+    WHERE id IN (SELECT value FROM json_each(?)) AND status != 'deleted'
+  `).bind(now, JSON.stringify(rows.results.map((row) => row.id))).run();
   return rows.results.length;
 }
