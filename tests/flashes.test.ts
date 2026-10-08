@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DELETE as deleteFlash } from "../app/api/rooms/[slug]/flashes/[id]/route";
 import { hashToken } from "../lib/attendee-auth";
 import {
@@ -68,6 +68,87 @@ describe("Room Flashes", () => {
       .toEqual({ imageData: null, status: "deleted", moderationResult: "expired" });
     expect(await env.DB.prepare("SELECT image_data AS imageData FROM room_flashes WHERE id = ?").bind(liveId).first())
       .toEqual({ imageData: [4, 5, 6] });
+  });
+
+  it("expires at most 200 scoped Flashes with one update and clears all expired receipts", async () => {
+    const slug = crypto.randomUUID(), now = new Date().toISOString();
+    const expired = new Date(Date.now() - 60_000).toISOString();
+    const ids = Array.from({ length: 201 }, (_, index) => `${slug}/${index}`);
+    await env.DB.prepare(`INSERT INTO room_flashes
+      (id,event_slug,attendee_id,image_data,width,height,byte_size,status,created_at,expires_at)
+      SELECT value,?,? ,X'010203',1,1,3,CASE WHEN key=0 THEN 'hidden' ELSE 'active' END,?,?
+      FROM json_each(?)`).bind(slug, slug, now, expired, JSON.stringify(ids)).run();
+    await env.DB.prepare(`INSERT INTO room_flashes
+      (id,event_slug,attendee_id,image_data,width,height,byte_size,created_at,expires_at)
+      VALUES (?, ?, ?, X'040506',1,1,3,?,?)`).bind(`${slug}/other`, `${slug}-other`, slug, now, expired).run();
+    await env.DB.prepare(`INSERT INTO room_flash_views(flash_id,attendee_id,view_id,opened_at,view_until)
+      SELECT id,?,id,?,? FROM room_flashes WHERE event_slug IN (?,?)`)
+      .bind(slug, expired, expired, slug, `${slug}-other`).run();
+    const prepare = vi.fn((query: string) => env.DB.prepare(query));
+    const db = { prepare } as unknown as D1Database;
+
+    expect(await purgeExpiredFlashes(db, slug)).toBe(200);
+    expect(prepare).toHaveBeenCalledTimes(3);
+    expect(prepare.mock.calls.filter(([query]) => query.trim().startsWith("UPDATE"))).toHaveLength(1);
+    expect(await env.DB.prepare(`SELECT COUNT(*) AS total,SUM(image_data IS NULL) AS erased,
+      SUM(status='deleted' AND moderation_result='expired') AS expired FROM room_flashes WHERE event_slug=?`)
+      .bind(slug).first()).toEqual({ total: 201, erased: 200, expired: 200 });
+    expect(await env.DB.prepare("SELECT flash_id FROM room_flash_views WHERE attendee_id=?").bind(slug).all())
+      .toMatchObject({ results: [{ flash_id: `${slug}/other` }] });
+    expect(await purgeExpiredFlashes(env.DB, slug)).toBe(1);
+    expect(await env.DB.prepare("SELECT status,image_data AS bytes FROM room_flashes WHERE id=?").bind(`${slug}/0`).first())
+      .toEqual({ status: "deleted", bytes: null });
+    expect(await env.DB.prepare("SELECT status,image_data AS bytes FROM room_flashes WHERE id=?").bind(`${slug}/other`).first())
+      .toEqual({ status: "active", bytes: [4, 5, 6] });
+  });
+
+  it("keeps the selected ID snapshot and preserves a concurrent owner removal", async () => {
+    const slug = crypto.randomUUID(), expired = new Date(Date.now() - 60_000).toISOString();
+    const insert = (id: string) => env.DB.prepare(`INSERT INTO room_flashes
+      (id,event_slug,attendee_id,image_data,width,height,byte_size,created_at,expires_at)
+      VALUES (?, ?, ?, X'010203',1,1,3,?,?)`).bind(id, slug, slug, expired, expired).run();
+    await insert(`${slug}/selected`);
+    const db = { prepare(query: string) {
+      const statement = env.DB.prepare(query);
+      if (!query.trim().startsWith("SELECT id")) return statement;
+      return { bind(...values: unknown[]) {
+        return { async all() {
+          const rows = await statement.bind(...values).all<{ id: string }>();
+          await env.DB.prepare("UPDATE room_flashes SET status='deleted',image_data=NULL,moderation_result='owner_removed',deleted_at=? WHERE id=?")
+            .bind(expired, `${slug}/selected`).run();
+          await insert(`${slug}/later`);
+          return rows;
+        } };
+      } };
+    } } as unknown as D1Database;
+
+    expect(await purgeExpiredFlashes(db, slug)).toBe(1);
+    expect(await env.DB.prepare("SELECT status,moderation_result AS reason,deleted_at AS deletedAt FROM room_flashes WHERE id=?")
+      .bind(`${slug}/selected`).first()).toEqual({ status: "deleted", reason: "owner_removed", deletedAt: expired });
+    expect(await env.DB.prepare("SELECT status,image_data AS bytes FROM room_flashes WHERE id=?").bind(`${slug}/later`).first())
+      .toEqual({ status: "active", bytes: [1, 2, 3] });
+  });
+
+  it("clears removed-photo receipts when no Flashes need expiry, including the global pass", async () => {
+    const slug = crypto.randomUUID(), now = new Date().toISOString();
+    const future = new Date(Date.now() + 60_000).toISOString();
+    await env.DB.prepare(`INSERT INTO room_flashes
+      (id,event_slug,attendee_id,width,height,byte_size,status,moderation_result,created_at,expires_at,deleted_at)
+      SELECT value,value,?,1,1,0,'deleted','owner_removed',?,?,? FROM json_each(?)`)
+      .bind(slug, now, future, now, JSON.stringify([slug, `${slug}-other`])).run();
+    await env.DB.prepare(`INSERT INTO room_flash_views(flash_id,attendee_id,view_id,opened_at,view_until)
+      SELECT id,?,id,?,? FROM room_flashes WHERE attendee_id=?`).bind(slug, now, future, slug).run();
+    const prepare = vi.fn((query: string) => env.DB.prepare(query));
+
+    expect(await purgeExpiredFlashes({ prepare } as unknown as D1Database, slug)).toBe(0);
+    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(await env.DB.prepare("SELECT flash_id FROM room_flash_views WHERE attendee_id=?").bind(slug).all())
+      .toMatchObject({ results: [{ flash_id: `${slug}-other` }] });
+    await purgeExpiredFlashes(env.DB);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM room_flash_views WHERE attendee_id=?").bind(slug).first())
+      .toEqual({ count: 0 });
+    expect(await env.DB.prepare("SELECT moderation_result AS reason,deleted_at AS deletedAt FROM room_flashes WHERE id=?").bind(slug).first())
+      .toEqual({ reason: "owner_removed", deletedAt: now });
   });
 
   it("lets the owner permanently remove a live Flash", async () => {

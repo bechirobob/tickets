@@ -87,6 +87,13 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
+    // Native heartbeats keep idle Cloudflare sockets alive without waking JS.
+    // The VPS adapter keeps using the handler below; it has no hibernation API.
+    if (typeof ctx.setWebSocketAutoResponse === "function") {
+      ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(
+        JSON.stringify({ type: "ping" }), JSON.stringify({ type: "pong" }),
+      ));
+    }
     ctx.blockConcurrencyWhile(async () => {
       this.ctx.storage.sql.exec(`
         CREATE TABLE IF NOT EXISTS room_config (
@@ -344,6 +351,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       return;
     }
 
+    let currentBadge: "VIP" | null = null;
     if (input.type === "message" || input.type === "reaction") {
       const peers = this.ctx.getWebSockets().filter(peer => peer.readyState === WebSocket.OPEN
         && (peer.deserializeAttachment() as ConnectionState | null)?.attendeeId === state.attendeeId);
@@ -358,7 +366,9 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         return;
       }
       const session=state.sessionId && await this.env.DB.prepare("SELECT 1 FROM attendee_sessions WHERE id=? AND attendee_id=? AND revoked_at IS NULL AND expires_at>?").bind(state.sessionId,state.attendeeId,new Date().toISOString()).first();
-      if (!session || await this.currentRoomBadge(state.attendeeId) === undefined) {socket.close(4003,"Room access changed");return;}
+      const badge = session ? await this.currentRoomBadge(state.attendeeId) : undefined;
+      if (badge === undefined) {socket.close(4003,"Room access changed");return;}
+      currentBadge = badge;
     }
     if (input.type === "message") {
       if (readOnly) {
@@ -376,11 +386,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         socket.send(JSON.stringify({ type: "error", error: "That reply target is no longer available." }));
         return;
       }
-      const currentBadge = await this.currentRoomBadge(state.attendeeId);
-      if (currentBadge === undefined) {
-        socket.close(4003, "Ticket access changed");
-        return;
-      }
+      // Reuse this action's fresh admission result, with no intervening await.
       const previousMessage = this.identityBudgets.get(state.attendeeId)?.lastMessageAt ?? state.lastMessageAt;
       if (state.slowModeSeconds > 0 && now - previousMessage < state.slowModeSeconds * 1000) {
         const wait = Math.ceil((state.slowModeSeconds * 1000 - (now - previousMessage)) / 1000);

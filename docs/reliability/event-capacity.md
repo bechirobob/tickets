@@ -304,3 +304,72 @@ is below 13,000 writes. Refine the per-run allocation to 15,000 writes while
 retaining the separate 30,000-write production reserve and the provider's full
 100,000-write daily ceiling. The next run must still refuse insufficient headroom;
 no quota or plan is raised, and no load gate is relaxed.
+
+## Resource efficiency pass — 8 October 2026
+
+Baseline: `5e1b1aada332d8ce4986c26291594a929aa95d53`. This pass keeps the
+existing Tickets service, feature behavior, admission checks, moderation,
+notifications, retention and recovery boundaries. It adds no dependencies,
+providers, paid plans or schema changes. Source and isolated tests establish
+operation-count reductions; they do **not** establish a lower production bill.
+
+Implemented:
+
+- Cloudflare handles the browser's exact `{"type":"ping"}` heartbeat with native
+  WebSocket auto-response. An idle socket no longer invokes application JS for
+  those frames. At the existing 25-second interval this avoids up to 144 handler
+  invocations per visible connected guest-hour, or 57,600 for 400 guests. These
+  are arithmetic projections, not measured production requests or dollars.
+  The client needs only a response, not a server timestamp. Other valid ping
+  encodings and the VPS adapter keep their existing application handler.
+- An accepted Room message reuses its own freshly checked ticket badge instead
+  of querying the same admission twice without any intervening asynchronous
+  work. The sender path goes from one session query plus two admission queries
+  to one of each. No result is reused across messages. Recipient authorization,
+  blocks, revocations, unread notification rows and push behavior are unchanged.
+- Expiring up to 200 Flashes updates the exact selected ID snapshot in one SQL
+  statement rather than one statement per image. A regression measures three
+  prepared statements for 200 images (select, receipt cleanup, update), compared
+  with the prior 202. The same rows and indexes are still written; do not count
+  this as a 98.5% D1 row-write or billing reduction. The cap, event scope,
+  concurrent-owner-removal guard and physical image-byte removal are unchanged.
+
+Focused verification covers native/fallback heartbeat responses, malformed
+messages, next-message session/ticket/profile/refund/moderation revocation,
+Flashes' 201-item backlog, exact statement count, cross-event isolation,
+concurrent removals and receipt cleanup with zero matching expiry rows.
+Local validation passed: `npm test` (267 tooling/repository/UI/password/rendered
+checks plus 680 backend checks), `npm run test:vps` (35 Node checks plus the
+same 680 backend checks), lint (one pre-existing warning), typecheck, schema
+check and Worker dry-run. Independent review found no blocking regressions.
+Exact candidate CI and production verification remain release gates; this
+section is not deployment evidence.
+
+Ranked next candidates, not included in this patch:
+
+1. Reuse the production Worker build already exercised by `npm test` in the
+   Cloudflare deploy workflow rather than compiling the same source again.
+   Preserve exact-release identity validation, dry-run and all test gates.
+2. Install only each browser-audit matrix job's selected engine. The existing
+   three jobs each install Chromium and WebKit, for six engine installations
+   instead of three; retain all three browser projects and evidence.
+3. Pause Organizer Activity's 30-second poll while the page is hidden, with
+   refresh on return. This can avoid 120 requests per hidden-tab hour; test
+   visibility changes, failures and unmount cleanup before changing it.
+4. Evaluate marketing census upserts that rewrite unchanged contacts about
+   every six minutes. At 1,000 unchanged contacts this projects about 240,000
+   row updates/day. Application freshness uses `marketing_state.checked_at`;
+   avoiding unchanged-contact writes would make the contact's `updated_at`
+   represent last change rather than last observation. Review and document that
+   semantic choice, keeping provider unsubscribe checks and consent intact.
+
+5. Consider a partial expiry index on `room_flashes(expires_at) WHERE status !=
+   'deleted'`. A disposable SQLite benchmark with 10,000 deleted tombstones and
+   five expired active photos reduced SELECT VM steps from 30,051 to 46 with
+   identical results. This is synthetic evidence, not live timing. It needs a
+   reviewed migration; no index or retention policy was changed in this pass.
+
+Measure current provider usage, VPS CPU/RAM/disk, CI minutes/artifacts and
+notification fanout before larger changes. Flashes transforms and AI moderation
+serve different purposes; do not remove safety checks to claim savings. Keep
+recovery retention, rollback releases and paid-service decisions explicit.

@@ -11,6 +11,44 @@ const policy = {
 };
 
 describe("The Room Durable Object", () => {
+  it("answers native and legacy heartbeats without changing the client protocol", async () => {
+    const room = env.THE_ROOM.getByName(`heartbeat-${crypto.randomUUID()}`);
+    const future = new Date(Date.now() + 86_400_000).toISOString();
+    const response = await room.fetch(new Request("https://room.internal/socket", { headers: {
+      upgrade: "websocket", "x-bct-room-authorized": "1",
+      "x-bct-session-id": "heartbeat-session", "x-bct-attendee-id": "heartbeat-guest",
+      "x-bct-display-name": "Guest", "x-bct-event-slug": "heartbeat-test",
+      "x-bct-event-title": "Heartbeat test", "x-bct-starts-at": new Date().toISOString(),
+      "x-bct-ends-at": future, "x-bct-read-only-at": future,
+    } }));
+    expect(response.status).toBe(101);
+    const socket = response.webSocket!;
+    const replies: Array<{ type: string; sentAt?: string }> = [];
+    socket.addEventListener("message", event => { replies.push(JSON.parse(String(event.data))); });
+    socket.accept();
+    try {
+      await expect.poll(() => replies.some(reply => reply.type === "snapshot")).toBe(true);
+      socket.send(JSON.stringify({ type: "ping" }));
+      await expect.poll(() => replies.filter(reply => reply.type === "pong").length).toBe(1);
+      const pong = replies.find(reply => reply.type === "pong")!;
+      if (typeof WebSocketRequestResponsePair !== "undefined") {
+        // The JS fallback adds sentAt. Its absence proves the runtime handled
+        // this exact heartbeat without invoking the application's handler.
+        expect(pong).toEqual({ type: "pong" });
+      } else {
+        expect(pong.sentAt).toEqual(expect.any(String));
+      }
+      // Other valid JSON encodings still use the existing fallback handler.
+      socket.send('{ "type": "ping" }');
+      await expect.poll(() => replies.filter(reply => reply.type === "pong").length).toBe(2);
+      expect(replies.filter(reply => reply.type === "pong")[1].sentAt).toEqual(expect.any(String));
+      socket.send("invalid json");
+      await expect.poll(() => replies.some(reply => reply.type === "error")).toBe(true);
+    } finally {
+      socket.close(1000, "Test complete");
+    }
+  });
+
   it("converges presence after a join burst and the last departure", async () => {
     const room = env.THE_ROOM.getByName(`presence-${crypto.randomUUID()}`);
     const sockets: WebSocket[] = [];

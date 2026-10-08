@@ -95,3 +95,20 @@ it('shares slow-mode timing across a guest’s devices',async()=>{
   try {expect((await send(a,'First device')).type).toBe('message');expect((await send(b,'Second device')).error).toContain('Slow mode');}
   finally {close(a);close(b);}
 });
+
+
+it.each(['session', 'ticket', 'profile', 'refund', 'suspension'] as const)('rechecks %s admission on the next message after a successful post', async reason => {
+  const f = await attendeeFixture();
+  const socket = (await connect(f.room, f.slug, f.id)).socket;
+  try {
+    expect((await send(socket, 'Before access changed')).type).toBe('message');
+    if (reason === 'session') await env.DB.prepare('UPDATE attendee_sessions SET revoked_at=? WHERE id=?').bind(new Date().toISOString(), f.id).run();
+    if (reason === 'ticket') await env.DB.prepare("UPDATE ticket_assignments SET status='revoked' WHERE attendee_id=?").bind(f.id).run();
+    if (reason === 'profile') await env.DB.prepare("UPDATE attendee_profiles SET status='suspended' WHERE id=?").bind(f.id).run();
+    if (reason === 'refund') await env.DB.prepare("UPDATE orders SET status='refunded' WHERE id=?").bind(f.id).run();
+    if (reason === 'suspension') await env.DB.prepare("INSERT INTO room_suspensions(event_slug,attendee_id,reason,suspended_at,suspended_by) VALUES(?,?,'Test',?,'test')").bind(f.slug, f.id, new Date().toISOString()).run();
+    const closed = new Promise<number>(resolve => socket.addEventListener('close', event => resolve(event.code), { once: true }));
+    socket.send(JSON.stringify({ type: 'message', content: 'Must not be posted' }));
+    expect(await closed).toBe(4003);
+  } finally { close(socket); }
+});
