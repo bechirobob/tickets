@@ -84,8 +84,17 @@ REVIEWED_CONTROL_BLOBS = {
     "tests/test_audit_release_source.py": "9d987c3d720d119d1bc3834d04af20a1e8efdc6c",
 }
 EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
+RESOURCE_RELEASE_BASELINE = "5e1b1aada332d8ce4986c26291594a929aa95d53"
 
 REVIEWED_APPLICATION_BLOBS = {
+    "app/admin/operations/organizer-activity.tsx": "c4ad962d9b1d3d9d13817f88c7673a6fda850aea",
+    "docs/reliability/event-capacity.md": "4bca03f5553f6363de9c34db808bebe4a3936bae",
+    "lib/flashes.ts": "94c8df484d3872ff60d2ff46ebc093edd82d280b",
+    "tests/flashes.test.ts": "694627fbedeafaa80e0e6cb61513450b667b2142",
+    "tests/organizer-activity-polling.test.mjs": "6cd0bf5c0b30953f8b9eb917c646b6a49e010527",
+    "tests/room-abuse-boundaries.test.ts": "df61c41a01867ceebf123216e16e6c10f7c2bd3d",
+    "tests/the-room.test.ts": "9431b1eb7231a2e36382d351441c1b3034366096",
+    "tests/vps-operations.test.mjs": "a8fe59356a29502889fd2af41f3338225582f556",
     "tests/d1-recovery-privacy.test.mjs": "a88e879d0fdb6f00160a58fcd1cb077631e70fbf",
     ".github/workflows/d1-recovery-rehearsal.yml": "aea42d1acb19d54cbe9beba2962aed6c98ac3312",
     "tests/e2e/operations.spec.ts": "ed96abb5806f4c1464a36a3608fa9d19fd4cd406",
@@ -104,7 +113,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "c6f355014f6e1131ddf00eb066f09a1df4c74160",
+    "ops/vps/test_code_release.py": "1c5031c9814796eefca72e9161c0c94869101862",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -114,7 +123,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/test_release_source.py": "ec8a7a5bbbe585941583f50624823b85ec51e586",
     "scripts/checkbox-hotfix-audit-policy.json": "7447247befa4b9ef0a274b27352afdce690e9e1e",
     "ops/vps/test_runtime_workflow_contract.py": "eef0b25e667f6be123c0ed6c5bca774158d390d8",
-    "tests/repository-boundaries.test.mjs": "94b5ae290dadfd66ee23986aadd072ad3bed4da6",
+    "tests/repository-boundaries.test.mjs": "afba870d14a247872286ed7006cb31184a6eb465",
     "tests/preview-data-inventory.test.mjs": "35f897420e6afe6b50c4bfa8aedd6eeeb370283d",
     "scripts/inspect-preview-data.mjs": "e6c8e9f07262a8088d6daca199e69a6f24c46af5",
     "scripts/inspect-vps-handoff.mjs": "88c049b7357ee319222580d0de63fd079c07ab98",
@@ -140,7 +149,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/runtime_release.py": "043e310a41ff28d23adc20383c88566b181232a6",
     ".github/workflows/tickets-release-operator-checks.yml": "e1674c3407ac586aeaf67a2166a9ad32c7cd5bef",
     ".github/workflows/vps-runtime.yml": "3041cf9b68ba250429e8f58e5404d10b2f9330a0",
-    ".github/workflows/browser-audit.yml": "4e0293b58478326e6c22e653f69272ce6e64f7e3",
+    ".github/workflows/browser-audit.yml": "3f99ab138e84a9dbd9c0b0cf36a4c5e5300b16a3",
     ".github/workflows/candidate-checks.yml": "dc127e63338b3ac2f8498a2114fe7a465c64344b",
     ".github/workflows/dependency-security.yml": "dc3be8220217d4c6db65549d4e179374cd2b5fda",
     ".github/workflows/full-audit-capacity.yml": "67ea27fb202cf216596bd27d73e51515f656b19c",
@@ -297,7 +306,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "ops/vps/audit-readiness.py": "69c7dff10fc2b8d1046b84e0a43dbdb4dacb3ecf",
     "ops/vps/test_audit_readiness.py": "086ab0cb48aa88ce934daefb54d60486925d36f8",
     "public/devices/iphone-titanium-front.svg": "9b3995ea6e27f358d03816d603f96466fa8e9acd",
-    "runtime/vps/queue.mjs": "67018da3a3683aca80661e29e64f0fd3e5a37e9c",
+    "runtime/vps/queue.mjs": "22b48966ba3f3a25271425dcb846137fd611f96d",
     "runtime/vps/server.mjs": "bdbea3652bed999a03adfba96df5fcb56dd07c6c",
     "scripts/capture-iphone-layouts.mjs": "4abbb15794097eed900e009c2af956e06b96c340",
     "scripts/iphone-layout-evidence.mjs": "42daec5963ef6da3f1394fe499c79ba53c647a4d",
@@ -306,7 +315,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
     "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b",
     "worker/security-response.ts": "3d9d92746405583edcd173694d763c868a1b09fd",
-    "worker/the-room.ts": "e6c0a8b1e39e20b939e3e322ebc44675b8bab7ed",
+    "worker/the-room.ts": "baf738dba9c08cc1390fa6863f2ac5603c04e83e",
     "scripts/audit-checkbox-hotfix.py": "5313d8cdc4076b36d434fe8017cc0e7b4824e876",
     "tests/test_checkbox_hotfix_audit.py": "421ec5fd992b1ba258e357ff4a65f6c3a647d2ce",
     ".github/workflows/booking-consent-previews.yml": "457e562c72109975dfb2d8951230661728861003",
@@ -846,6 +855,14 @@ def vetted_changes(expected, source):
                              "83f5e03b9fbbdf10f050c8dd24d06ed1ff59260b"),
             "package-lock.json": ("759d34af76287e214f03def74be98ddefb33780a",
                                   "cc161d4ef33ca9affdf1c6649071cb4bf27b71dc"),
+        }
+    elif expected == RESOURCE_RELEASE_BASELINE:
+        # Next 16.3.8 changes only this exact reviewed pair from the active release.
+        root_dependency_patch = {
+            "package.json": ("83f5e03b9fbbdf10f050c8dd24d06ed1ff59260b",
+                             "91d44944a682f992880c44785d7b14eda9204c18"),
+            "package-lock.json": ("cc161d4ef33ca9affdf1c6649071cb4bf27b71dc",
+                                  "47a4eaca5743b768598462d8b66a2ef49a442b4e"),
         }
     if root_dependency_patch.keys() & set(changed):
         require(root_dependency_patch.keys() <= set(changed),
