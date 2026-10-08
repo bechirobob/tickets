@@ -4,6 +4,7 @@ export class DeliveryQueue {
   constructor(connection) {
     this.connection = connection;
     connection.exec("CREATE TABLE IF NOT EXISTS delivery_queue(id TEXT PRIMARY KEY, body TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, available INTEGER NOT NULL, lease INTEGER, created INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS delivery_queue_pending ON delivery_queue(available,lease)");
+    this.claim = connection.prepare('UPDATE delivery_queue SET lease=?,attempts=attempts+1 WHERE id=(SELECT id FROM delivery_queue WHERE available<=? AND (lease IS NULL OR lease<=?) ORDER BY available LIMIT 1) RETURNING *');
   }
   async send(body, options = {}) {
     if (typeof body?.deliveryId !== 'string' || body.deliveryId.length < 1 || body.deliveryId.length > 300) throw new Error('Invalid delivery task.');
@@ -21,7 +22,7 @@ export class DeliveryQueue {
   }
   async process(handler) {
     const now = Date.now();
-    const job = this.connection.prepare('UPDATE delivery_queue SET lease=?,attempts=attempts+1 WHERE id=(SELECT id FROM delivery_queue WHERE available<=? AND (lease IS NULL OR lease<=?) ORDER BY available LIMIT 1) RETURNING *').get(now + 300000, now, now);
+    const job = this.claim.get(now + 300000, now, now);
     if (!job) return false;
     let acknowledged = false, delay = 60;
     const message = { body: JSON.parse(job.body), ack() { acknowledged = true; }, retry(options) { delay = options?.delaySeconds ?? 60; } };

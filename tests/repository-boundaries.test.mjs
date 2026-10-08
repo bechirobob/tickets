@@ -12,6 +12,7 @@ import './browser-audit-harness.test.mjs';
 import './preview-data-inventory.test.mjs';
 import './scanner-session-client.test.mjs';
 import './d1-recovery-privacy.test.mjs';
+import './organizer-activity-polling.test.mjs';
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 
@@ -346,6 +347,14 @@ test("production audit covers the deployed main revision while candidate CI cove
   const job = workflow.jobs["browser-audit"];
   assert.equal(job.if, "github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'");
   assert.deepEqual(job.strategy.matrix.browser, ["desktop-chromium", "mobile-chromium", "mobile-webkit"]);
+  assert.deepEqual(job.strategy.matrix.include, [
+    { browser: "desktop-chromium", engine: "chromium" },
+    { browser: "mobile-chromium", engine: "chromium" },
+    { browser: "mobile-webkit", engine: "webkit" },
+  ]);
+  assert.deepEqual(Object.keys(job.strategy.matrix).sort(), ["browser", "include"], "Do not add duplicate matrix jobs");
+  const install = candidateStep(job, "Install real-browser engines");
+  assert.equal(install.run, "npx playwright install --with-deps ${{ matrix.engine }}");
   const resolve = candidateStep(job, "Resolve and verify the active production revision");
   assert.equal(job.steps[0], resolve, "No repository code may run before production identity is verified");
   assert.match(resolve.run, /--proto '=https' --tlsv1\.2 --connect-timeout 5 --max-time 20 --max-filesize 65536/u);

@@ -345,25 +345,40 @@ check and Worker dry-run. Independent review found no blocking regressions.
 Exact candidate CI and production verification remain release gates; this
 section is not deployment evidence.
 
+Second schema-free increment:
+
+- The current VPS delivery queue prepares its unchanged atomic claim statement
+  once after schema initialization, instead of compiling it on every poll.
+  A regression measures one preparation across 120 idle polls rather than 120.
+  At a continuous one-second idle cadence this projects 86,399 fewer statement
+  preparations/day after initialization, not fewer database polls or a measured
+  CPU-time reduction. Retry, delay, deduplication and stale-consumer guards stay
+  intact.
+- Each of the three production-browser-audit jobs installs only its selected
+  browser engine: Chromium for the two Chrome projects, WebKit for iPhone.
+  Requested engine installations drop from six to three per audit. All three
+  test projects, no-retry behavior, source identity checks and evidence remain.
+  This is configuration counting, not measured downloaded bytes or CI dollars.
+- Organizer Activity pauses its 30-second polling while hidden and refreshes
+  immediately on return. Requests are cancellable on hide/unmount, overlapping
+  polls are suppressed, and a mark-read refresh supersedes an older poll. This
+  avoids up to 120 requests per hidden-tab hour while preserving visible cadence.
+  The component's markup and owner-only API boundary are unchanged.
+
 Ranked next candidates, not included in this patch:
 
 1. Reuse the production Worker build already exercised by `npm test` in the
    Cloudflare deploy workflow rather than compiling the same source again.
-   Preserve exact-release identity validation, dry-run and all test gates.
-2. Install only each browser-audit matrix job's selected engine. The existing
-   three jobs each install Chromium and WebKit, for six engine installations
-   instead of three; retain all three browser projects and evidence.
-3. Pause Organizer Activity's 30-second poll while the page is hidden, with
-   refresh on return. This can avoid 120 requests per hidden-tab hour; test
-   visibility changes, failures and unmount cleanup before changing it.
-4. Evaluate marketing census upserts that rewrite unchanged contacts about
+   Keep the second preparation/readiness pass and add exact artifact-digest
+   validation. This changes pinned release-workflow source and needs its own
+   reviewed admission; no deploy workflow or audit exception was altered here.
+2. Evaluate marketing census upserts that rewrite unchanged contacts about
    every six minutes. At 1,000 unchanged contacts this projects about 240,000
    row updates/day. Application freshness uses `marketing_state.checked_at`;
    avoiding unchanged-contact writes would make the contact's `updated_at`
    represent last change rather than last observation. Review and document that
    semantic choice, keeping provider unsubscribe checks and consent intact.
-
-5. Consider a partial expiry index on `room_flashes(expires_at) WHERE status !=
+3. Consider a partial expiry index on `room_flashes(expires_at) WHERE status !=
    'deleted'`. A disposable SQLite benchmark with 10,000 deleted tombstones and
    five expired active photos reduced SELECT VM steps from 30,051 to 46 with
    identical results. This is synthetic evidence, not live timing. It needs a
@@ -401,3 +416,12 @@ rejects changed application bytes until they receive separate release admission.
 Do not refresh that manifest merely to suppress a failing test. Final combined
 source review, approved exact pins, current CI and live verification are still
 required before any production release.
+
+Final combined local verification: `npm test` passed 278 non-backend checks and
+680 backend checks; `npm run test:vps` passed 36 Node checks and 680 backend
+checks. Lint had zero errors and the same pre-existing moderation-export warning;
+types, schema, npm audit (zero vulnerabilities), Worker dry-run, Worker/VPS
+builds, loopback network verification and the isolated 13-package runtime all
+passed. An independent review found no blocking code issues. These receipts
+cover the combined application/dependency changes; exact-head hosted CI, the
+separate reviewed-release admission and live verification remain pending.
