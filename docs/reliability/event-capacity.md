@@ -373,3 +373,31 @@ Measure current provider usage, VPS CPU/RAM/disk, CI minutes/artifacts and
 notification fanout before larger changes. Flashes transforms and AI moderation
 serve different purposes; do not remove safety checks to claim savings. Keep
 recovery retention, rollback releases and paid-service decisions explicit.
+
+### Dependency gate encountered during this pass
+
+The first candidate (`23d28d2f5b39ed5f44b2d861a86c4903021f977b`, PR #261)
+passed local application/VPS checks, isolated VPS-capacity CI and iPhone-layout
+CI, but the unchanged dependency gate rejected newly reported advisories for
+Next.js 16.3.6 before running candidate browser checks. The fix is isolated in a
+separate dependency commit: pin Next.js 16.3.8 and matching `@next/env`/SWC
+packages. No exception or audit threshold is widened. A fresh install and npm
+audit report zero vulnerabilities after the patch.
+
+This is a dependency-hygiene fix, not proof of production exploitation. Tickets
+serves through Vinext/Vite, and its computed packaged VPS runtime closure omits
+Next.js and `@next/*`. The affected Next server/dev/router/cache configuration
+preconditions were not found in the application. The live artifact was not
+inspected for this assessment. See the vendor's
+[16.3.8 security release](https://github.com/vercel/next.js/releases/tag/v16.3.8).
+Fresh application, VPS, build and exact-head CI gates remain mandatory; earlier
+source/dependency test results must not be substituted for the patched candidate.
+
+Patched local application/VPS suites, lint/types, Worker/VPS builds and isolated
+packaged-runtime verification passed. The package verifier retained 13 runtime
+packages and excluded build dependencies. An additional release-operator suite
+passed 349/350 checks; its exact reviewed-application-manifest test correctly
+rejects changed application bytes until they receive separate release admission.
+Do not refresh that manifest merely to suppress a failing test. Final combined
+source review, approved exact pins, current CI and live verification are still
+required before any production release.
