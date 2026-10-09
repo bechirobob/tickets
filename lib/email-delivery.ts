@@ -1,3 +1,4 @@
+import { sendTransactional, transactionalConfigured, transactionalProvider, validTransactionalId } from './transactional-email';
 import { bindPlatformAnnouncementVerification } from "./platform-announcements";
 import { validTeamInvite } from './organizer-team';
 import { reportDeliveryAllowed } from "./organizer-reports";
@@ -51,6 +52,7 @@ export async function sendEmail(input: {
   deliveryId?: string;
 }) {
   const { env } = await import("cloudflare:workers");
+  const provider = transactionalProvider(env, input.kind);
   const deliveryId = input.deliveryId ?? (input.kind === "payment_confirmation" && input.orderId ? `payment-confirmation/${input.orderId}` : crypto.randomUUID());
   const now = new Date().toISOString();
   const inserted = await input.db.prepare(`
@@ -60,33 +62,24 @@ export async function sendEmail(input: {
     ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)
   `).bind(
     deliveryId, input.orderId ?? null, input.recoveryGrantId ?? null, input.kind, input.recipient,
-    JSON.stringify({ subject: input.subject, html: input.html, text: input.text, idempotencyKey: input.idempotencyKey }), now, now,
+    JSON.stringify({ subject: input.subject, html: input.html, text: input.text, idempotencyKey: input.idempotencyKey, provider }), now, now,
   ).run();
 
   if (!inserted.meta.changes) return {sent:false,reason:'already_queued' as const};
-  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
+  if (!transactionalConfigured(env, provider)) {
     await input.db.prepare("UPDATE delivery_events SET status = 'failed', failure_reason = ?, attempt_count = 0, next_attempt_at = ?, updated_at = ? WHERE id = ?")
       .bind("Transactional email is not configured.", new Date(Date.now() + 5 * 60_000).toISOString(), now, deliveryId).run();
     return { sent: false, reason: "not_configured" as const };
   }
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "content-type": "application/json",
-        "idempotency-key": input.idempotencyKey.slice(0, 256),
-      },
-      body: JSON.stringify({ from: env.EMAIL_FROM, to: [input.recipient], subject: input.subject, html: input.html, text: input.text }),
-    });
-    const result = await response.json() as { id?: string; name?: string; message?: string; error?: { message?: string } };
-    if(response.status===429) {
+    const response = await sendTransactional(env, provider, input);
+    const result = await response.json().catch(() => ({})) as { id?: string; name?: string; message?: string; error?: { message?: string } };
+    if(response.status===429 || (provider === 'vps' && response.status === 503)) {
       await input.db.prepare("UPDATE delivery_events SET status='failed',attempt_count=0,next_attempt_at=?,failure_reason=?,updated_at=? WHERE id=?").bind(quotaRetryAt(response,result.name),result.message??'Email provider quota reached.',now,deliveryId).run();
       return {sent:false,reason:'provider_quota' as const};
     }
-    if (!response.ok || !result.id) throw new Error(result.message ?? result.error?.message ?? "Email provider rejected the message.");
+    if (!response.ok || !validTransactionalId(provider, result.id)) throw new Error(result.message ?? result.error?.message ?? "Email provider rejected the message.");
     await input.db.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = 1, next_attempt_at = NULL, updated_at = ? WHERE id = ?")
       .bind(result.id, new Date().toISOString(), deliveryId).run();
     return { sent: true, providerId: result.id };
@@ -129,17 +122,17 @@ export async function applyDeliveryWebhook(db: D1Database, input: {
 }
 
 export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, scope: 'all' | 'audience' | 'standard' | 'invitations' | 'host_applications' = 'all') {
-  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return { attempted: 0, delivered: 0 };
+  if (!transactionalConfigured(env, 'resend') && !transactionalConfigured(env, 'vps')) return { attempted: 0, delivered: 0 };
   const scopeSql = scope === 'host_applications' ? "kind IN ('host_application_verify','host_application_decision')" : scope === 'invitations' ? "kind IN ('organizer_invitation','team_invitation')" : scope === 'audience' ? "kind IN ('event_announcement','organizer_signup')" : scope === 'standard' ? "kind NOT IN ('event_announcement','organizer_signup')" : '1=1';
   const due = await env.DB.prepare(`
     SELECT id, kind, recovery_grant_id AS grantId, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
-    WHERE (${scopeSql}) AND ((status='failed' AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (status='queued' AND julianday(updated_at) < julianday('now','-5 minutes')))
+    WHERE provider_id IS NULL AND (${scopeSql}) AND ((status='failed' AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (status='queued' AND julianday(updated_at) < julianday('now','-5 minutes')))
     ORDER BY next_attempt_at LIMIT ?
   `).bind(new Date().toISOString(), limit).all<{ id: string; kind: DeliveryKind; grantId: string | null; recipient: string; payloadJson: string | null; attemptCount: number }>();
   let delivered = 0;
   for (const item of due.results) {
-    const lease=await env.DB.prepare("UPDATE delivery_events SET status='queued',updated_at=?,next_attempt_at=NULL WHERE id=? AND ((status='failed' AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now')) OR (status='queued' AND julianday(updated_at)<julianday('now','-5 minutes'))) ").bind(new Date().toISOString(),item.id).run();
+    const lease=await env.DB.prepare("UPDATE delivery_events SET status='queued',updated_at=?,next_attempt_at=NULL WHERE id=? AND provider_id IS NULL AND ((status='failed' AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now')) OR (status='queued' AND julianday(updated_at)<julianday('now','-5 minutes'))) ").bind(new Date().toISOString(),item.id).run();
     if (!lease.meta.changes) continue;
     try {
       if (item.kind === 'host_application_verify') {
@@ -169,8 +162,11 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
           continue;
         }
       }
-      const payload = JSON.parse(item.payloadJson ?? "{}") as { subject?: string; html?: string; text?: string; idempotencyKey?: string };
+      const payload = JSON.parse(item.payloadJson ?? "{}") as { subject?: string; html?: string; text?: string; idempotencyKey?: string; provider?: 'resend' | 'vps' };
       if (!payload.subject || !payload.html || !payload.text || !payload.idempotencyKey) throw new Error("Saved delivery payload is incomplete.");
+      // A lost response may already have been accepted. Never change providers,
+      // including when switching configuration or replaying pre-integration rows.
+      const provider = payload.provider === 'vps' ? 'vps' : 'resend';
       // Quota deferral must not send expired or cancelled invitations later.
       let accessValid = true;
       const now = new Date().toISOString();
@@ -197,17 +193,17 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
         if(!allowed){await env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL WHERE id=?").bind(item.id).run();continue;}
       }
       if(/^(event-announcement|organizer-signup)\//u.test(payload.idempotencyKey))await new Promise(resolve=>setTimeout(resolve,200));
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        signal: AbortSignal.timeout(10_000),
-        headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": payload.idempotencyKey.slice(0, 256) },
-        body: JSON.stringify({ from: env.EMAIL_FROM, to: [item.recipient], subject: payload.subject, html: payload.html, text: payload.text }),
-      });
-      const result = await response.json() as { id?: string; name?:string; message?: string };
-      if(response.status===429) {
+      if (!transactionalConfigured(env, provider)) {
+        await env.DB.prepare("UPDATE delivery_events SET status='failed',next_attempt_at=?,failure_reason='Transactional email is not configured.',updated_at=? WHERE id=? AND status='queued'")
+          .bind(new Date(Date.now() + 5 * 60_000).toISOString(),new Date().toISOString(),item.id).run();
+        continue;
+      }
+      const response = await sendTransactional(env, provider, { recipient: item.recipient, kind: item.kind, subject: payload.subject, html: payload.html, text: payload.text, idempotencyKey: payload.idempotencyKey });
+      const result = await response.json().catch(() => ({})) as { id?: string; name?:string; message?: string };
+      if(response.status===429 || (provider === 'vps' && response.status === 503)) {
         await env.DB.prepare("UPDATE delivery_events SET status='failed',next_attempt_at=?,failure_reason=?,updated_at=? WHERE id=?").bind(quotaRetryAt(response,result.name),result.message??'Email provider quota reached.',new Date().toISOString(),item.id).run();continue;
       }
-      if (!response.ok || !result.id) throw new Error(result.message ?? "Email retry was rejected.");
+      if (!response.ok || !validTransactionalId(provider, result.id)) throw new Error(result.message ?? "Email retry was rejected.");
       await env.DB.prepare("UPDATE delivery_events SET status = 'sent', provider_id = ?, attempt_count = attempt_count + 1, failure_reason = NULL, next_attempt_at = NULL, updated_at = ? WHERE id = ? AND status='queued'")
         .bind(result.id, new Date().toISOString(), item.id).run();
       delivered += 1;

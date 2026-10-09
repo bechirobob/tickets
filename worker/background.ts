@@ -1,3 +1,4 @@
+import { reconcileVpsDeliveries } from "../lib/transactional-email";
 import { observeBackgroundJob } from "../lib/background-health";
 import { trackedOperation, HandoverPaused } from "./handover-control";
 import { queueOwnerApprovalAlerts } from '../lib/owner-approval-alerts';
@@ -87,6 +88,7 @@ async function runScheduledOperationsUntracked(controller: ScheduledController, 
   } catch (error) {
     await failed("email-delivery-retry", error);
   }
+  try { await reconcileVpsDeliveries(env); } catch (error) { await failed("vps-email-status", error); }
   if (env.PAYSTACK_SECRET_KEY) {
     try {
       await processRefundBatches(env);
