@@ -30,8 +30,8 @@ export async function PATCH(request: Request) {
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This notification request was not accepted." }, { status: 403 });
   const body = await request.json() as { id?: string; all?: boolean };
   const now = new Date().toISOString();
-  if (body.all) await env.DB.prepare("UPDATE attendee_notifications SET read_at = COALESCE(read_at, ?) WHERE attendee_id = ?").bind(now, identity.attendeeId).run();
-  else if (body.id) await env.DB.prepare("UPDATE attendee_notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND attendee_id = ?").bind(now, body.id, identity.attendeeId).run();
+  if (body.all) await env.DB.prepare("UPDATE attendee_notifications SET read_at = COALESCE(read_at, ?) WHERE attendee_id = ? AND read_at IS NULL").bind(now, identity.attendeeId).run();
+  else if (body.id) await env.DB.prepare("UPDATE attendee_notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND attendee_id = ? AND read_at IS NULL").bind(now, body.id, identity.attendeeId).run();
   else return Response.json({ error: "Choose a notification to mark as read." }, { status: 400 });
   return Response.json({ updated: true }, { headers: { "cache-control": "no-store" } });
 }

@@ -13,6 +13,8 @@ import './preview-data-inventory.test.mjs';
 import './scanner-session-client.test.mjs';
 import './d1-recovery-privacy.test.mjs';
 import './organizer-activity-polling.test.mjs';
+import './cloudflare-image-budget.test.mjs';
+import './cloudflare-notification-metering.test.mjs';
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 

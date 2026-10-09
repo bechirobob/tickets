@@ -2948,12 +2948,12 @@ class ResourceReleaseAdmissionTests(unittest.TestCase):
     pins = {
         ".github/workflows/browser-audit.yml": "3f99ab138e84a9dbd9c0b0cf36a4c5e5300b16a3",
         "app/admin/operations/organizer-activity.tsx": "c4ad962d9b1d3d9d13817f88c7673a6fda850aea",
-        "docs/reliability/event-capacity.md": "4bca03f5553f6363de9c34db808bebe4a3936bae",
+        "docs/reliability/event-capacity.md": "e52c861a5ce2465610aafc58d9c37ffdd2fb1fc6",
         "lib/flashes.ts": "94c8df484d3872ff60d2ff46ebc093edd82d280b",
         "runtime/vps/queue.mjs": "22b48966ba3f3a25271425dcb846137fd611f96d",
         "tests/flashes.test.ts": "694627fbedeafaa80e0e6cb61513450b667b2142",
         "tests/organizer-activity-polling.test.mjs": "6cd0bf5c0b30953f8b9eb917c646b6a49e010527",
-        "tests/repository-boundaries.test.mjs": "afba870d14a247872286ed7006cb31184a6eb465",
+        "tests/repository-boundaries.test.mjs": "cf49012d4db8fef0273603b3ffbadd5a422341cd",
         "tests/room-abuse-boundaries.test.ts": "df61c41a01867ceebf123216e16e6c10f7c2bd3d",
         "tests/the-room.test.ts": "9431b1eb7231a2e36382d351441c1b3034366096",
         "tests/vps-operations.test.mjs": "a8fe59356a29502889fd2af41f3338225582f556",
@@ -3017,6 +3017,43 @@ class ResourceReleaseAdmissionTests(unittest.TestCase):
                 with self.subTest(name=name), patch.object(release, "git", return_value=name):
                     with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
                         release.vetted_changes(release.RESOURCE_RELEASE_BASELINE, NEW)
+
+
+class CloudflareCostAdmissionTests(unittest.TestCase):
+    pins = {
+        "app/api/customer/notifications/route.ts": "6712aa29c24593ee65650c2c0e1a2e52e1636462",
+        "docs/reliability/event-capacity.md": "e52c861a5ce2465610aafc58d9c37ffdd2fb1fc6",
+        "tests/cloudflare-image-budget.test.mjs": "6b67fac15bc5e620ddd666ff85bbe20299c4e276",
+        "tests/cloudflare-notification-metering.test.mjs": "0b226d1cce9c255c92c49f62fee3aee0296041ae",
+        "tests/notification-read-budget.test.ts": "c7d44367f67124f70f3c10c26d6c84a7d8f8a9e8",
+        "tests/repository-boundaries.test.mjs": "cf49012d4db8fef0273603b3ffbadd5a422341cd",
+        "worker/index.ts": "620c06554292d8a8236d35349462f53371ab7415",
+    }
+
+    def test_cost_guards_admit_only_the_seven_exact_reviewed_blobs(self):
+        with patch.object(release, "verify_changed_modes"), patch.object(release.subprocess, "run"):
+            for name, blob in self.pins.items():
+                with self.subTest(name=name):
+                    self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], blob)
+                    with patch.object(release, "git", side_effect=[name, blob]):
+                        self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                    with patch.object(release, "git", side_effect=[name, "f" * 40]):
+                        with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                            release.vetted_changes(OLD, NEW)
+
+    def test_cost_admission_keeps_neighbouring_application_paths_closed(self):
+        with patch.object(release, "verify_changed_modes"), patch.object(release.subprocess, "run"):
+            for name in ("app/api/customer/notifications/unreviewed.ts", "worker/unreviewed-image.ts",
+                         "lib/unreviewed-notification.ts", "wrangler.unreviewed.jsonc"):
+                with self.subTest(name=name), patch.object(release, "git", return_value=name):
+                    with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                        release.vetted_changes(OLD, NEW)
+
+    def test_cost_candidate_cannot_be_its_own_trusted_operator_baseline(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=NEW), patch.object(release.subprocess, "check_output") as git:
+            with self.assertRaisesRegex(release.ReleaseError, "cannot be its own trusted"):
+                release.verify_trusted_operator(NEW)
+            git.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -425,3 +425,82 @@ builds, loopback network verification and the isolated 13-package runtime all
 passed. An independent review found no blocking code issues. These receipts
 cover the combined application/dependency changes; exact-head hosted CI, the
 separate reviewed-release admission and live verification remain pending.
+
+## Cloudflare-specific cost guards — separate follow-up
+
+This follow-up is separate from PR #261's frozen application/release admission.
+Cloudflare affordability is the primary goal; VPS/CI efficiency does not prove
+that a future Cloudflare bill stays within the Workers subscription minimum.
+
+Implemented in this follow-up:
+
+- Notification acknowledgements skip rows whose `read_at` is already non-null.
+  The existing COALESCE expression already preserves the first-read timestamp;
+  this guard changes matched writes, not stored values, privacy or responses.
+  In an isolated migrated database with 1,000 notifications (980 already read),
+  the original statement matches 1,000 updates and the guarded route performs
+  20. A lost-response retry performs zero additional notification updates.
+  Already-read single notifications and another attendee's IDs cause zero writes.
+  The inbox index contains `read_at`, so avoiding these writes also avoids its
+  maintenance. A separate runnable Miniflare/workerd D1 regression uses the real
+  table/index migration without instrumentation triggers: `rows_written` falls
+  from 2,000 to 40, then 0 on replay; `rows_read` falls from 1,000 to 61, then 1.
+  These are isolated D1 metadata measurements with identical final row values,
+  not live account usage or guaranteed invoice savings. A replay can still touch
+  session activity, and new unread notifications arriving later remain eligible.
+- The Cloudflare-bound `/_vinext/image` route permits only the existing client
+  quality 75, using Vinext's own validator before asset fetch/transformation.
+  All 15 supported widths and AVIF/WebP/JPEG negotiation are retained. The other
+  99 numeric qualities and malformed/duplicate parameters are rejected before
+  any Images work. The theoretical source/width/quality/format space falls from
+  4,500 to 45 variants per source, a 99% reduction in abuse exposure rather than
+  a promised reduction in normal traffic. Existing `/_next/image` app-router
+  delegation remains unchanged; no new route or image-quality downgrade is added.
+
+Billing interpretation, checked against official documentation on 8 October 2026:
+
+- [D1](https://developers.cloudflare.com/d1/platform/pricing/) charges for rows
+  scanned/written, including index maintenance, not SQL statement count. Paid
+  includes 50 million written rows and 25 billion read rows/month. Eliminating
+  wasted work preserves this shared account allowance; it cannot reduce the
+  fixed [Workers minimum](https://developers.cloudflare.com/workers/platform/pricing/).
+- [Images](https://developers.cloudflare.com/images/pricing/) counts unique
+  source/parameter transformations per calendar month, including binding calls;
+  `info()` is free. The 5,000 included transformations are shared with other image
+  uses. Paid overage is $0.50/1,000; Free rejects new transformations at its limit.
+  Repeated identical source/parameters do not imply a new billed transformation,
+  although repeating moderation still invokes AI.
+- The earlier native heartbeat change avoids application handler work and its
+  duration. An already hibernation-eligible idle Room was not continuously billed
+  merely because a socket stayed connected. Duration is shared per object, not
+  multiplied by every attendee. No production GB-second saving is claimed.
+  [Durable Object billing](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+
+Larger Cloudflare decisions remain explicit:
+
+- Marketing census can rewrite 1,000 unchanged contacts about every six minutes:
+  7.2 million logical writes per 30 days, roughly 14.4% of Paid's included write
+  allowance. Preserving last-observed timestamps while removing per-contact
+  rewrites needs a deliberate data contract; no timestamp is redefined here.
+- A 400-guest Room message creates up to 399 inbox rows. Its three indexes suggest
+  about 1,596 index-inclusive writes, before push outcome updates/read receipts.
+  This is a schema-derived estimate, not live billing. Coalescing inbox messages
+  or omitting online recipients would alter current behavior and is not included.
+- Flash preflight and atomic storage caps already protect active-photo capacity.
+  They do not bound rejected moderation attempts, replacements or concurrent
+  processing losers. Direct Workers AI calls bypass the organizer Gateway budget.
+  An atomic attempt allowance needs an explicit quota and exhausted-budget
+  behavior, while retaining fail-closed moderation. No such feature limit is
+  imposed here, and no Images/AI call saving for ordinary Flash uploads is claimed.
+- Existing organizer Gateway policy is $5/day, $25/30 days and $1/user/day;
+  it is deployment-managed and eventually consistent. It is not a strict $5
+  total-bill guarantee. No spending policy, credentials or provider is changed.
+
+Follow-up verification: full application checks/build and all 683 backend tests
+passed; the VPS suite passed 36 Node checks plus the same 683 backend tests.
+After test-only portability and metering additions, the complete repository
+suite passed 174 tests, and its 91-test entry file also passed with native
+TypeScript stripping disabled. Lint/types and Worker dry-run passed; lint retains
+one unrelated pre-existing warning. Independent initial and supplemental reviews
+found no blocking changes. Hosted exact-source CI and separate release admission
+are still required. No hosted AI measurement or production data mutation occurred.
