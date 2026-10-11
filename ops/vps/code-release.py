@@ -87,6 +87,17 @@ EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
 RESOURCE_RELEASE_BASELINE = "5e1b1aada332d8ce4986c26291594a929aa95d53"
 
 REVIEWED_APPLICATION_BLOBS = {
+    "ops/vps/test_pink_edition.py": "fcdaf67437188b2547642d859568d6ee16e682c0",
+    "tests/preview-events.test.ts": "2b209daa6b801aa82d642b2c30ce307c38586929",
+    "tests/guest-experience.test.ts": "3b34f2afea56fc64c445595f4e2e6c70e6d943e0",
+    "tests/event-copy.test.ts": "039fb82e0afad0ca0b4defe63de62fb19a336cb3",
+    "tests/e2e/host-profile.spec.ts": "f06375db38ea245da55096aed7ed6f5fb658b48e",
+    "tests/e2e/event-details.spec.ts": "76775953efa8ef1a4358e6a25acdf26a53c14736",
+    "tests/e2e/cuppy-guest.spec.ts": "eed6faa0bc527217cba95a9d3f53163a6638bd1f",
+    "scripts/prepare-registration-browser-fixture.mjs": "75b999087d6be1c3d38e82532fc675c1e541aeec",
+    "public/events/on-the-guest-list-20261025.webp": "72e1f93f21289f16ff62de525d7ace61cea05219",
+    "public/events/on-the-guest-list-20261025-email.jpg": "f62f1cfeaf6e2d91974acb38c9171352905101ab",
+    "app/event/[slug]/event-story.tsx": "240ab3fdc28ec358307446aa773e8f01e89bef07",
     "tests/cloudflare-image-budget.test.mjs": "6b67fac15bc5e620ddd666ff85bbe20299c4e276",
     "tests/cloudflare-notification-metering.test.mjs": "0b226d1cce9c255c92c49f62fee3aee0296041ae",
     "tests/notification-read-budget.test.ts": "c7d44367f67124f70f3c10c26d6c84a7d8f8a9e8",
@@ -108,7 +119,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "tests/support-email-rendering.test.mjs": "e36cd295c753c5a28d5056a9ef33794d4c3216b4",
     "tests/scanner-session-client.test.mjs": "3d2665434fbb95d2329dc8370c57368e153ce16b",
     "tests/scanner-manifest.test.ts": "caa44fd148e41523f73219ffda5bf50c6efcfad7",
-    "tests/public-catalogue.test.ts": "0eb2322754693cd8c62d433e6f0ccf25954e635a",
+    "tests/public-catalogue.test.ts": "a4d09f4656c00b6cb1ff5635ec341179fd1fe4d7",
     "tests/organizer-scale-audit.test.ts": "a4be4dcfb4d5c4a104724b95bfc4687b7a75dd80",
     "tests/mobile-ui.test.mjs": "e5d555bfb255df96eb84aa1c73dc5c392b686d2f",
     "tests/gate-checkin.test.ts": "c0a046f6a8b5b68f380487890d614ef4c915c187",
@@ -117,7 +128,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "5d01b78f74fe29051683f3fc384764b95b92acd6",
+    "ops/vps/test_code_release.py": "f8d80b476d4c4b7394cbe1ba9031118eda7780fd",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -241,7 +252,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/discovery-back-link.tsx": "1b4ca8d4348b1a940c18b1aa9327a8a764b4c631",
     "app/discovery.css": "1a7f0dd172987dcc84c156dac0685237cbcb1e94",
     "app/event-explorer.tsx": "27c001bd0ba7742b251a7f03252c3dbaf5b2a3fe",
-    "app/event/[slug]/event-screen.tsx": "3700cc0de1f68a63912d9caf428d48908ee266e4",
+    "app/event/[slug]/event-screen.tsx": "dda8eb43f6d32ca4e567567a859e40f225593fcc",
     "app/event/[slug]/page.tsx": "cc0bb5b17c3f7bae00c02a2b82c065cc8b991387",
     "app/globals.css": "4ac15d8e4cc0a372123c4309443fd056c74fef92",
     "app/help/help-centre.tsx": "ab497ef8bce6a41b168d31d9b94fc1a8dc4b4e97",
@@ -266,13 +277,13 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/payment-footer.tsx": "bd75bc7b041ebe776877a668a6417a787f020e98",
     "app/promoter/promoter-portal.tsx": "a3a61075a0d532c1f027cb05f723c6f88e8dbf0c",
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
-    "app/registration-form.tsx": "b797f6cf18ec325cff23ea5f33c59067b9055ae8",
+    "app/registration-form.tsx": "118e80b64e67626ce479f60d3ab862003fa137a7",
     "app/registration-manager.tsx": "cd0b22d16d2ff9bd45adbd917744a3248e2cb04e",
     "app/room-demo.css": "c3d871ed75945a72df7fb32f7c13c962ee4876de",
     "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
     "app/room-preview-carousel.tsx": "c77a4021be9ea6c29b6a8215e49326f2522e9491",
     "app/room/[slug]/room-client.tsx": "043000a1a4d51ea07acd170046f4898894a3945e",
-    "app/rsvp/[slug]/page.tsx": "40ba4869d74f15e722834a9e682bc0867e2b054a",
+    "app/rsvp/[slug]/page.tsx": "b745284eb452b1e0dc5234d474eb018ac9b8012b",
     "app/rsvp/access/page.tsx": "38bfb0e70087a3e07fc2cd0d1995e10eaa2fcb22",
     "app/scan/layout.tsx": "d66e9b510543e73deb36c7d56b39dac83b60afa2",
     "app/scan/page.tsx": "345bc4e0eea838c4ae89ad87f24e6d90e6881716",
@@ -298,12 +309,12 @@ REVIEWED_APPLICATION_BLOBS = {
     "lib/payment-operations.ts": "91ece2502c7422141c40d9c15ac5c1c69f93f541",
     "lib/provider-operation-tracking.ts": "63288d84fa93f0a97ee01909a68a654272151cbb",
     "lib/registration-draft.ts": "633cdb6e22cb28a1c8002fab96da0bf9fe6eb91b",
-    "lib/registration-guidance.ts": "16bf24b5c2c23fa18e1dd16d14563cbed33164b2",
+    "lib/registration-guidance.ts": "7db692341537e327b2af9eaeb5329d60f6294d27",
     "lib/request-body.ts": "3a948295f1551a837bd71e6cb45b46548db38c27",
     "lib/scanner-sync.ts": "68d45f670f1cf1d3a26c9ff10c5fbdbf21bb8243",
     "mobile/src/adapters/navigation.tsx": "475edbb849c70e265e5fbdff6931511b40138f52",
     "mobile/src/screen-catalogue.ts": "3c7030e0374696f31af397e7970be77173418194",
-    "mobile/tests/app.spec.ts": "30b9a4d88b7f424d4cc95a00b452a81df6cc30b1",
+    "mobile/tests/app.spec.ts": "81c1a99ab072e86b6b2d18769820fc6f317eeadf",
     "mobile/tests/screen-catalogue.test.ts": "2fa5352cac4af250d6ac5a85cf880b0630020d61",
     "mobile/tsconfig.json": "be7802b84428c49a3ddeb14b79373b8cdae64234",
     "mobile/vite.config.ts": "985e6a0bab112aeb54e470a7bd6a34bdeccf0b5e",
@@ -340,11 +351,11 @@ REVIEWED_APPLICATION_BLOBS = {
     "docs/brand-assets.md": "afc5650c6d7a87fbd95388016806b7574f7cb3dc",
     "docs/operations/platform-announcements.md": "62aca09986bd153474a10aaba76e98f1a91c7ed0",
     "eslint.config.mjs": "8e06e124d56d8660b8447b53affeede9c5aec056",
-    "lib/customer-email.ts": "206ebfe7f4b8d2dea1ac24b52a62c478a454e246",
+    "lib/customer-email.ts": "31622bd55a37b546dc4cc72ccd1cc36ad9a48ee6",
     "lib/platform-announcements.ts": "ab09b51f3d547f1451ab7527d85b1d774d5c4c84",
     "lib/policies.ts": "3c9e0b06c569aa8cbb15e0f45a138ca6058a7a3a",
     "lib/preview-cleanup.ts": "dd10b3277598ee7e36f9d5ba4340ec07c231af30",
-    "lib/registrations.ts": "67f84900329822eec9466d04ec904e5b5fc7f588",
+    "lib/registrations.ts": "8b35fb96f3655df25e66161442e658be15077fb8",
     "lib/staff-roles.ts": "337c567907f545f0ebf96f840858db02789486aa",
     "playwright.customer-email.config.ts": "88ed1994c64a7253637b9b230620a474e48315e0",
     "public/events/on-the-guest-list-email.jpg": "39c0317539861395953c6c43b4a23ce6851b03f1",
@@ -358,7 +369,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "tests/e2e/analytics-fixture.ts": "26397e2efb63c5871702f686b3fe9b8e4319196b",
     "tests/e2e/booking-consent.ts": "5ec8a675b127a634f27847033c81f5e41957f9d1",
     "tests/e2e/customer-feedback.spec.ts": "28c355219aa8a55e51b429072bff8b031fc3f62e",
-    "tests/e2e/guest-clarity.spec.ts": "0601d471b36e783eaa5f2f5bd59d6f279822ac8b",
+    "tests/e2e/guest-clarity.spec.ts": "04d01ce755a13fe93bcb358377ac818eb7bc439f",
     "tests/e2e/platform-announcements.spec.ts": "3eae4c200424d882188085a3eed616c10ac7bb46",
     "tests/e2e/private-link-recovery.spec.ts": "e29c198e1d2f0849a638ac624da40552c317a35c",
     "tests/e2e/registration.spec.ts": "2b8f31cdacbab4c8bc29b5459df32b459a5d6f53",
@@ -366,7 +377,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "tests/email-preview/customer-email.spec.ts": "2259c6dafc53fd38f67a71d950837008b5e39de6",
     "tests/platform-announcements.test.ts": "634c4fee9dc9e7a8facb1933fa8d3ccaaa9d3a19",
     "tests/preview-cleanup.test.ts": "a74cb6ed1b7b66296576a17634ed3ab89f1465e3",
-    "tests/registrations.test.ts": "f9e27478b8f1302ff52f9af75f5f7d196a62a2c5",
+    "tests/registrations.test.ts": "155cf4f8374eda7769357a0b60e2ecc275ba82f7",
     "tests/rendered-html.test.mjs": "969c4a6a232f9a62707c94cb67a418aea15bfecd",
     "tests/seevplus.test.ts": "07f1d32312cbd5f97c96ab2998a5aa5e9e84c025",
     "tests/tooling-glob.test.mjs": "dd453061a87de6b8e8469a7d9dd5a97a962d9caf",
@@ -451,6 +462,7 @@ REVIEWED_APPLICATION_BLOBS = {
 }
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
+PINK_EDITION_PATH = "drizzle/0062_guest_list_confirmed_october_25.sql"
 # Confirmed in the immutable pre-failure backup and generated from the original
 # handover writerGuardStatements(['hosts']). Never remove or disable these guards.
 HOST_WRITER_GUARDS = {
@@ -460,6 +472,7 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    PINK_EDITION_PATH: {'kind': 'pink-edition-confirmed', 'blob': 'f6282183059583f9ac9254977e1cc36706c7f3ca', 'sha256': '338d89e27f255535a41f05b2a60c5eb6639f690218db61f38060b11c8c506df5'},
     "drizzle/0061_platform_announcement_consent.sql": {
             "blob": "3f0eea14b46ce9bdd7927a1049bfa23ac430f276",
             "sha256": "9bef21dd670e7a87c23e2388538e0ec83fb6fb083d3201df986c0ad13127fbd1",
@@ -1067,6 +1080,12 @@ def migration_plan(changes):
 
 
 def reviewed_migration(raw, specification):
+    if specification.get("kind") == "pink-edition-confirmed":
+        expected = dict(path=PINK_EDITION_PATH, **REVIEWED_MIGRATIONS[PINK_EDITION_PATH])
+        require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
+                and hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == expected["blob"],
+                "Pink Edition migration differs from the exact reviewed source.")
+        return [], []
     if specification.get("path") == STAFF_OWNER_GUARD_PATH:
         # Only this exact additive UPDATE guard is permitted. Do not broaden the
         # general migration grammar or permit arbitrary existing-table triggers.
@@ -1179,6 +1198,74 @@ def correct_host_verification(connection, raw):
             "beforeStatus": previous, "afterStatus": "verified", "preservedOnCodeRollback": True}
 
 
+def confirm_pink_edition(connection, raw):
+    """Apply only the owner's exact event update, preserving other rows and fields."""
+    require(connection.in_transaction, "Event correction requires the migration transaction.")
+    slug = "sun-chasers-labadi"
+    allowed = {
+        "curated_event_records": {"starts_at", "ends_at", "schedule_status", "schedule_label", "sales_open_at", "sales_close_at", "image_url", "venue", "area", "lineup", "curation_note", "updated_at"},
+        "event_registration_settings": {"accepting", "allow_undated_rsvp", "updated_at"},
+        "party_submissions": {"starts_at", "ends_at", "venue_name", "area", "lineup", "updated_at"},
+        "event_updates": {"title", "body", "published_by"},
+    }
+    control = connection.execute("SELECT id,frozen,transfer_id FROM _bct_handover_state ORDER BY id").fetchall()
+    require(len(control) == 1 and control[0][0:2] == (1, 0), "Event correction requires the active VPS writer.")
+    control_schema = connection.execute("SELECT sql FROM sqlite_schema WHERE type='table' AND name='_bct_handover_state'").fetchone()
+    require(control_schema and hashlib.sha256(control_schema[0].encode()).hexdigest() == HOST_WRITER_CONTROL_SCHEMA,
+            "Event correction requires the exact handover control schema.")
+    before_schema = schema_rows(connection)
+    snapshots = {}
+    for table in allowed:
+        columns = connection.execute('PRAGMA table_xinfo("' + table + '")').fetchall()
+        require(columns and all(column[6] == 0 for column in columns), "Event correction requires ordinary existing tables.")
+        columns = [column[1] for column in columns]
+        key = "event_slug" if table == "event_registration_settings" else "id"
+        rows = connection.execute('SELECT * FROM "' + table + '" ORDER BY "' + key + '"').fetchall()
+        snapshots[table] = (columns, key, rows)
+        guards = connection.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name=?", (table,)).fetchall()
+        expected = {}
+        for operation in ("insert", "update", "delete"):
+            name = "_bct_guard_" + table + "_" + operation
+            expected[name] = ('CREATE TRIGGER "' + name + '" BEFORE ' + operation.upper() + ' ON "' + table
+                              + '" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END')
+        require(dict(guards) == expected, "Event correction refuses missing or unknown writer guards.")
+    columns, _, events = snapshots["curated_event_records"]
+    targets = [dict(zip(columns, row)) for row in events if row[columns.index("slug")] == slug]
+    require(len(targets) == 1 and targets[0]["status"] == "published" and targets[0]["removed_at"] is None,
+            "Exact published Pink Edition event is missing or ambiguous.")
+    require(connection.execute("SELECT mode FROM event_registration_settings WHERE event_slug=?", (slug,)).fetchall() == [("rsvp",)],
+            "Event correction requires the existing RSVP mode.")
+    identities = {"curated_event_records": targets[0]["id"], "event_registration_settings": slug,
+                  "party_submissions": targets[0]["submission_id"], "event_updates": "update:" + slug + ":preview"}
+    def authorize(action, table, column, database, origin):
+        if action == sqlite3.SQLITE_UPDATE:
+            permitted = database == "main" and table in allowed and column in allowed[table] and origin is None
+        else:
+            permitted = action in (sqlite3.SQLITE_READ, sqlite3.SQLITE_SELECT) or (
+                action == sqlite3.SQLITE_FUNCTION and ((column == "current_timestamp" and origin is None)
+                or (column == "raise" and origin in {"_bct_guard_" + name + "_update" for name in allowed})))
+        return sqlite3.SQLITE_OK if permitted else sqlite3.SQLITE_DENY
+    connection.set_authorizer(authorize)
+    try:
+        # execute each fixed statement without executescript's implicit COMMIT.
+        for statement in raw.decode("utf-8").split("--> statement-breakpoint"):
+            connection.execute(statement)
+    finally:
+        connection.set_authorizer(None)
+    for table, (columns, key, before) in snapshots.items():
+        after = connection.execute('SELECT * FROM "' + table + '" ORDER BY "' + key + '"').fetchall()
+        require(len(before) == len(after), "Event correction changed a row count.")
+        for old, new in zip(before, after):
+            target = old[columns.index(key)] == identities[table]
+            for index, column in enumerate(columns):
+                require(old[index] == new[index] or (target and column in allowed[table]),
+                        "Event correction changed unrelated data.")
+    require(schema_rows(connection) == before_schema
+            and connection.execute("SELECT id,frozen,transfer_id FROM _bct_handover_state ORDER BY id").fetchall() == control,
+            "Event correction changed schema or writer state.")
+    return {"eventSlug": slug, "preservedOnCodeRollback": True}
+
+
 def migrate_database(database, staging, migrations):
     """Service-user SQLite transaction. Never restore, replace or delete live data."""
     database, staging = Path(database), Path(staging)
@@ -1199,7 +1286,7 @@ def migrate_database(database, staging, migrations):
         reviewed.extend(statements)
         additions.extend(rows)
         if specification.get("kind"):
-            corrections.append(raw)
+            corrections.append((specification["kind"], raw))
     require(not corrections or len(corrections) == len(migrations) == 1,
             "The exact host correction must be the only migration in its release.")
     names = [row[1] for row in additions]
@@ -1234,7 +1321,11 @@ def migrate_database(database, staging, migrations):
         if not present:
             for statement in reviewed:
                 connection.execute(statement)
-        correction = correct_host_verification(connection, corrections[0]) if corrections else None
+        correction = None
+        if corrections:
+            kind, raw = corrections[0]
+            correction = (confirm_pink_edition(connection, raw) if kind == "pink-edition-confirmed"
+                          else correct_host_verification(connection, raw))
         after = schema_rows(connection)
         require(sorted(row for row in after if row[1] in names) == sorted(additions)
                 and [row for row in after if row[1] not in names]
@@ -1248,7 +1339,7 @@ def migrate_database(database, staging, migrations):
               "created": bool(additions) and not bool(present), "tablesPreservedOnRollback": True,
               "migrations": [specification for specification, _ in migrations]}
     if correction is not None:
-        result["publicHostCorrection"] = correction
+        result["publicEventCorrection" if corrections[0][0] == "pink-edition-confirmed" else "publicHostCorrection"] = correction
     write_json(staging / "result.json", result)
     return result
 

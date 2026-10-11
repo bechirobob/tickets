@@ -2441,6 +2441,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                 "scripts/audit-checkbox-hotfix.py", "tests/test_checkbox_hotfix_audit.py",
                 "tests/test_audit_release_source.py", "tests/test_audit_release_dependencies.py",
                 "ops/vps/test_release_approval.py", "ops/vps/test_code_release.py",
+                "ops/vps/test_pink_edition.py",
             }
             self.assertEqual({name for name in pins if (self.root / name).exists()}, staged)
             family = staged_family_pins(self.root)
