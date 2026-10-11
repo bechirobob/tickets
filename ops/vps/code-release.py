@@ -87,7 +87,8 @@ EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
 RESOURCE_RELEASE_BASELINE = "5e1b1aada332d8ce4986c26291594a929aa95d53"
 
 REVIEWED_APPLICATION_BLOBS = {
-    "ops/vps/test_pink_edition.py": "db6fd42d405ebe3b15860cc5e2ec5110828a1292",
+    ".github/workflows/native-apps.yml": "426a9b8219d3f2ca73d3ad0de93b9a7d73ab3c89",
+    "ops/vps/test_pink_edition.py": "be26c898ac1e19f7f737dbe5112c5e40b6e90c68",
     "tests/preview-events.test.ts": "2b209daa6b801aa82d642b2c30ce307c38586929",
     "tests/guest-experience.test.ts": "3b34f2afea56fc64c445595f4e2e6c70e6d943e0",
     "tests/event-copy.test.ts": "039fb82e0afad0ca0b4defe63de62fb19a336cb3",
@@ -464,6 +465,10 @@ REVIEWED_APPLICATION_BLOBS = {
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
 PINK_EDITION_PATH = "drizzle/0062_guest_list_confirmed_october_25.sql"
+PINK_EDITION_ASSETS = {
+    "/events/on-the-guest-list-20261025.webp": "339f178efb30268411b30ccc418a28d8b210262e7fd76552ded804fe23c2c43d",
+    "/events/on-the-guest-list-20261025-email.jpg": "ee0a8c9450ec9ebf58c03667f8fec1c848feb65f263a3865068ef17318a4e64b",
+}
 # Confirmed in the immutable pre-failure backup and generated from the original
 # handover writerGuardStatements(['hosts']). Never remove or disable these guards.
 HOST_WRITER_GUARDS = {
@@ -1745,6 +1750,9 @@ class Deployment:
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
         self.migrations = migration_plan(changes)
+        if any(item.get("kind") == "pink-edition-confirmed" for item in self.migrations):
+            require(len(self.migrations) == 1,
+                    "Pink Edition correction requires its isolated code-first migration boundary.")
         require(self.proof.get("migrations", []) == self.migrations,
                 "Release migrations differ from the reviewed source manifest.")
         if self.migrations:
@@ -1761,6 +1769,8 @@ class Deployment:
         self.modes = {"override": stat.S_IMODE(self.override.stat().st_mode)}
         self.next_override = release_override(self.before["override"], self.old_release, self.release)
         self.record = strict_json(self.before["journal"])
+        require(not self.record.get("lastCodeRelease", {}).get("pendingDataMigrations"),
+                "A prior event correction is pending; inspect its private evidence before another release.")
         require(self.record.get("phase") == "active"
                 and self.record.get("activeRevision") == self.expected
                 and self.record.get("revision") == ORIGINAL_TRANSFER_REVISION
@@ -2135,6 +2145,11 @@ class Deployment:
 
     def transact(self):
         self.preflight()
+        # This data-only correction needs the new opening-time enforcement and
+        # flyer asset. Commit the independently verified compatible runtime
+        # first; never expose these fields to the old application on rollback.
+        pink_after_code = bool(self.migrations) and all(
+            item.get("kind") == "pink-edition-confirmed" for item in self.migrations)
         if self.recover_prepared:
             self.quarantine_prepared()
         self.snapshot.mkdir(mode=0o700)
@@ -2149,11 +2164,12 @@ class Deployment:
         self.evidence("prepared")
         self.unpack()  # no service/configuration changes before archive validation
         self.retention_safe()
-        try:
-            self.migrate()
-        except BaseException:
-            self.evidence("migration-failed")
-            raise
+        if not pink_after_code:
+            try:
+                self.migrate()
+            except BaseException:
+                self.evidence("migration-failed")
+                raise
         if self.approval is not None:
             self.approval.reserve()
         journal_after = None
@@ -2176,6 +2192,12 @@ class Deployment:
             self.system.restart()
             require(self.system.property("WorkingDirectory") == str(self.release), "Candidate unit did not load.")
             ready(self.system, self.source, candidate=True)
+            if pink_after_code:
+                for public in (False, True):
+                    for path, expected_digest in PINK_EDITION_ASSETS.items():
+                        status, body = self.system.request(path, public)
+                        require(status == 200 and hashlib.sha256(body).hexdigest() == expected_digest,
+                                "Compatible event flyer verification failed: " + path)
             self.system.verify_effective_config(self.next_config)
             self.preserved()
             require(self.file(self.config, private=True) == self.next_config, "Configuration drifted during release.")
@@ -2194,19 +2216,18 @@ class Deployment:
                 "revision": self.source, "archiveSha256": self.archive_digest,
                 "provenanceSha256": self.provenance_digest,
                 "cryptoEnabledRequested": self.enable_crypto}
-            if self.migrations:
+            if self.migrations and not pink_after_code:
                 key = "reviewedDataMigrations" if any(item.get("kind") for item in self.migrations) else "additiveMigrations"
                 record["lastCodeRelease"][key] = self.migrations
                 record["lastCodeRelease"]["databaseBackupSha256"] = self.migration_result["backupSha256"]
+            if pink_after_code:
+                record["lastCodeRelease"]["pendingDataMigrations"] = self.migrations
             require(self.file(self.journal, private=True) == self.before["journal"], "Handover journal drifted before commit.")
             journal_after = (json.dumps(record, sort_keys=True) + "\n").encode()
             atomic_write(self.journal, journal_after)
-            self.evidence("verified")
+            self.evidence("code-verified-event-pending" if pink_after_code else "verified")
             if self.approval is not None:
                 self.approval.consume()
-            return {"released": self.source, "previous": self.expected, "active": True,
-                    "runtime": "vps", "publicVerified": True, "dataMigration": bool(self.migrations),
-                    "cryptoEnabledRequested": self.enable_crypto}
         except BaseException as failure:
             try:
                 # Restore only bytes/pointers owned by this transaction. An outside
@@ -2247,6 +2268,32 @@ class Deployment:
                 self.evidence("rollback-needs-attention")
                 raise ReleaseError("Rollback verification failed; inspect private release evidence.") from rollback_failure
             raise ReleaseError("Candidate failed; previous release restored and verified.") from failure
+
+        # The code transaction is committed. A failure from here must retain
+        # this healthy compatible runtime, never roll back to old RSVP logic.
+        # SQLite handles a failed data transaction; no live database is copied
+        # over customer writes. Ambiguous completion requires operator review.
+        if pink_after_code:
+            try:
+                require(self.system.property("WorkingDirectory") == str(self.release),
+                        "Compatible event runtime changed before correction.")
+                ready(self.system, self.source, candidate=True)
+                require(self.file(self.journal, private=True) == journal_after,
+                        "Release journal drifted before event correction.")
+                self.migrate()
+                require(self.file(self.journal, private=True) == journal_after,
+                        "Release journal drifted during event correction.")
+                del record["lastCodeRelease"]["pendingDataMigrations"]
+                record["lastCodeRelease"]["reviewedDataMigrations"] = self.migrations
+                record["lastCodeRelease"]["databaseBackupSha256"] = self.migration_result["backupSha256"]
+                atomic_write(self.journal, (json.dumps(record, sort_keys=True) + "\n").encode())
+                self.evidence("verified")
+            except BaseException as failure:
+                self.evidence("event-correction-needs-attention")
+                raise ReleaseError("Compatible runtime retained; event correction needs review. No old-code rollback or database restore was performed.") from failure
+        return {"released": self.source, "previous": self.expected, "active": True,
+                "runtime": "vps", "publicVerified": True, "dataMigration": bool(self.migrations),
+                "cryptoEnabledRequested": self.enable_crypto}
 
     def apply(self):
         require(os.geteuid() == 0, "Root access required.")

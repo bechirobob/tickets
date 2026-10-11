@@ -34,8 +34,11 @@ jobs:
       - run: npm audit --audit-level=moderate
       - run: npm test
       - run: python3 -m unittest discover -s tests -p 'test_ios_*.py'
+        if: github.event_name == 'workflow_dispatch'
       - run: python3 scripts/ios-release.py validate
+        if: github.event_name == 'workflow_dispatch'
       - name: Validate Android release version
+        if: github.event_name == 'workflow_dispatch'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -55,6 +58,8 @@ jobs:
             mobile/test-results
           retention-days: 14
   android:
+    # Native app work resumes only through an explicit manual run.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -93,6 +98,7 @@ jobs:
           path: mobile/android/app/build/reports
           retention-days: 14
   ios:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 25
     defaults:

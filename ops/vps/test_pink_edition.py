@@ -1,5 +1,8 @@
 """Exact Pink Edition correction: isolated SQLite, no host or customer access."""
 import importlib.util
+import json
+import shutil
+import tarfile
 from contextlib import closing
 from pathlib import Path
 import sqlite3
@@ -192,3 +195,169 @@ class PinkEditionMigrationTests(unittest.TestCase):
                 self.migrate()
         with closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(before, {name: db.execute('SELECT * FROM "'+name+'"').fetchall() for name in before})
+
+
+# Exercise the real release transaction and SQLite migration together. The
+# service boundary is simulated; no test contacts production or a mail provider.
+deployment_spec = importlib.util.spec_from_file_location(
+    'deployment_fixtures', Path(__file__).with_name('test_code_release.py'))
+deployment_fixtures = importlib.util.module_from_spec(deployment_spec)
+deployment_spec.loader.exec_module(deployment_fixtures)
+operator = deployment_fixtures.release
+
+
+class PinkEditionDeploymentTests(deployment_fixtures.DeploymentFixture):
+    def setUp(self):
+        super().setUp()
+        fixture = PinkEditionMigrationTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        state = self.root / 'var/lib/becore-tickets'
+        state.chmod(0o700)
+        self.database = state / 'tickets.sqlite'
+        shutil.copy2(fixture.database, self.database)
+        # Match the actual pre-release baseline: undated RSVP was already open.
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute('UPDATE event_registration_settings SET accepting=1')
+        member = tarfile.TarInfo('migrations/' + Path(operator.PINK_EDITION_PATH).name)
+        member.mode = 0o644
+        self.make_archive(extra=(member, SQL))
+        self.proof['changedFiles'] = [operator.PINK_EDITION_PATH]
+        self.proof['migrations'] = operator.migration_plan(self.proof['changedFiles'])
+        self.refresh_digests()
+        # The staged operator test layout deliberately omits application assets.
+        # Exercise response-byte verification with small isolated asset fixtures.
+        assets = {path: ('verified fixture ' + path).encode() for path in operator.PINK_EDITION_ASSETS}
+        asset_pins = patch.dict(operator.PINK_EDITION_ASSETS,
+            {path: operator.hashlib.sha256(raw).hexdigest() for path, raw in assets.items()}, clear=True)
+        asset_pins.start()
+        self.addCleanup(asset_pins.stop)
+        original_request = self.system.request
+        def request(path, public=False):
+            if path in operator.PINK_EDITION_ASSETS:
+                self.system.requests.append((self.system.revision, path, public))
+                self.assertEqual(self.system.revision, deployment_fixtures.NEW)
+                return 200, assets[path]
+            return original_request(path, public)
+        self.system.request = request
+
+    def event(self):
+        with closing(sqlite3.connect(self.database)) as db:
+            return db.execute("SELECT schedule_status,sales_open_at,image_url FROM curated_event_records WHERE id='event'").fetchone()
+
+    def customer_write(self):
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("INSERT INTO orders VALUES ('concurrent-order','paid')")
+
+    def assert_compatible_retained(self, pending=True):
+        self.assertEqual(self.system.revision, deployment_fixtures.NEW)
+        self.assertEqual(self.system.restarts, 1)
+        self.assertEqual((self.deployment.home / 'current').resolve(), self.deployment.release)
+        record = json.loads(self.deployment.journal.read_bytes())
+        self.assertEqual(record['activeRevision'], deployment_fixtures.NEW)
+        self.assertEqual('pendingDataMigrations' in record['lastCodeRelease'], pending)
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute("SELECT status FROM orders WHERE id='concurrent-order'").fetchone(), ('paid',))
+
+    def test_code_and_both_flyers_verified_before_exact_data_transaction(self):
+        migrate = self.deployment.migrate
+        def checked_migration():
+            self.assertEqual(self.event(), ('coming_soon', None, 'old'))
+            self.customer_write()
+            self.assert_compatible_retained()
+            self.assertEqual(json.loads((self.deployment.snapshot / 'result.json').read_bytes())['phase'], 'code-verified-event-pending')
+            for path in operator.PINK_EDITION_ASSETS:
+                for public in (False, True):
+                    self.assertIn((deployment_fixtures.NEW, path, public), self.system.requests)
+            migrate()
+        with patch.object(self.deployment, 'migrate', side_effect=checked_migration):
+            self.assertTrue(self.deployment.transact()['dataMigration'])
+        self.assert_compatible_retained(pending=False)
+        self.assertEqual(self.event(), ('confirmed', '2026-10-12T00:00:00.000Z', '/events/on-the-guest-list-20261025.webp'))
+        record = json.loads(self.deployment.journal.read_bytes())['lastCodeRelease']
+        self.assertEqual(record['reviewedDataMigrations'], self.proof['migrations'])
+        self.assertEqual(record['databaseBackupSha256'], operator.digest_file(self.deployment.snapshot / 'database/before.sqlite'))
+
+    def test_candidate_health_failure_restores_old_code_before_any_event_change(self):
+        self.system.fail = 'public'
+        with patch.object(self.deployment, 'migrate') as migrate:
+            with self.assertRaisesRegex(operator.ReleaseError, 'previous release restored'):
+                self.deployment.transact()
+        migrate.assert_not_called()
+        self.assert_restored()
+        self.assertEqual(self.event(), ('coming_soon', None, 'old'))
+
+    def test_missing_public_flyer_rolls_back_before_any_event_change(self):
+        request = self.system.request
+        def missing(path, public=False):
+            if public and path in operator.PINK_EDITION_ASSETS:
+                return 404, b''
+            return request(path, public)
+        self.system.request = missing
+        with patch.object(self.deployment, 'migrate') as migrate:
+            with self.assertRaisesRegex(operator.ReleaseError, 'previous release restored'):
+                self.deployment.transact()
+        migrate.assert_not_called()
+        self.assert_restored()
+        self.assertEqual(self.event(), ('coming_soon', None, 'old'))
+
+    def test_failed_data_transaction_retains_compatible_code_and_customer_writes(self):
+        original = operator.confirm_pink_edition
+        def fail_after_sql(db, raw):
+            original(db, raw)
+            raise operator.ReleaseError('injected transaction failure')
+        migrate = self.deployment.migrate
+        def with_customer_write():
+            self.customer_write()
+            migrate()
+        with patch.object(operator, 'confirm_pink_edition', side_effect=fail_after_sql), patch.object(self.deployment, 'migrate', side_effect=with_customer_write):
+            with self.assertRaisesRegex(operator.ReleaseError, 'Compatible runtime retained'):
+                self.deployment.transact()
+        self.assert_compatible_retained()
+        self.assertEqual(self.event(), ('coming_soon', None, 'old'))
+        self.assertEqual(json.loads((self.deployment.snapshot / 'result.json').read_bytes())['phase'], 'event-correction-needs-attention')
+
+    def test_post_commit_evidence_failure_never_restores_old_code_or_database(self):
+        migrate = self.deployment.migrate
+        def fail_after_commit():
+            self.customer_write()
+            migrate()
+            raise operator.ReleaseError('injected evidence failure after database commit')
+        with patch.object(self.deployment, 'migrate', side_effect=fail_after_commit):
+            with self.assertRaisesRegex(operator.ReleaseError, 'Compatible runtime retained'):
+                self.deployment.transact()
+        self.assert_compatible_retained()
+        self.assertEqual(self.event()[0], 'confirmed')
+
+    def test_external_journal_change_after_data_commit_is_preserved(self):
+        migrate = self.deployment.migrate
+        external = b'{"external":"preserve this operator record"}\n'
+        def drift_after_commit():
+            self.customer_write()
+            migrate()
+            operator.atomic_write(self.deployment.journal, external)
+        with patch.object(self.deployment, 'migrate', side_effect=drift_after_commit):
+            with self.assertRaisesRegex(operator.ReleaseError, 'Compatible runtime retained'):
+                self.deployment.transact()
+        self.assertEqual(self.deployment.journal.read_bytes(), external)
+        self.assertEqual(self.system.revision, deployment_fixtures.NEW)
+        self.assertEqual(self.system.restarts, 1)
+        self.assertEqual(self.event()[0], 'confirmed')
+
+    def test_pending_prior_correction_blocks_new_release_before_changes(self):
+        record = json.loads(self.deployment.journal.read_bytes())
+        record['lastCodeRelease'] = {'pendingDataMigrations': self.proof['migrations']}
+        operator.atomic_write(self.deployment.journal, json.dumps(record).encode())
+        with self.assertRaisesRegex(operator.ReleaseError, 'prior event correction is pending'):
+            self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assertEqual(self.event(), ('coming_soon', None, 'old'))
+
+    def test_pink_correction_cannot_use_legacy_order_in_mixed_migration_batch(self):
+        self.proof['changedFiles'].append(operator.HOST_VERIFICATION_PATH)
+        self.proof['migrations'] = operator.migration_plan(self.proof['changedFiles'])
+        self.refresh_digests()
+        with self.assertRaisesRegex(operator.ReleaseError, 'isolated code-first migration boundary'):
+            self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assertEqual(self.event(), ('coming_soon', None, 'old'))
