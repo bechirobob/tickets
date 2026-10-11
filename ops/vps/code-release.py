@@ -87,7 +87,7 @@ EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
 RESOURCE_RELEASE_BASELINE = "5e1b1aada332d8ce4986c26291594a929aa95d53"
 
 REVIEWED_APPLICATION_BLOBS = {
-    "ops/vps/test_pink_edition.py": "fcdaf67437188b2547642d859568d6ee16e682c0",
+    "ops/vps/test_pink_edition.py": "db6fd42d405ebe3b15860cc5e2ec5110828a1292",
     "tests/preview-events.test.ts": "2b209daa6b801aa82d642b2c30ce307c38586929",
     "tests/guest-experience.test.ts": "3b34f2afea56fc64c445595f4e2e6c70e6d943e0",
     "tests/event-copy.test.ts": "039fb82e0afad0ca0b4defe63de62fb19a336cb3",
@@ -1199,6 +1199,21 @@ def correct_host_verification(connection, raw):
             "beforeStatus": previous, "afterStatus": "verified", "preservedOnCodeRollback": True}
 
 
+PINK_EDITION_BUSINESS_TRIGGERS = {
+    "curated_event_records": {
+        "apple_wallet_event_refresh": "54e57e889240610c7e7bd466235cb92581a5c6551dc2f0b0b6dd709a16cd550f",
+        "curated_events_verify_insert": "54aa368c97db09e17c5480c477cf23ef903e0dcf6bcc34bad5f0ba582d8892ad",
+        "curated_events_verify_update": "211f00db14c4bb69da57d79a699cfca64e07b30adc8eb2e4e70ddfb6b4555eec",
+        "operations_cancelled_event_guard": "af63b8b295ebc210a1355ca97cec102ecb40a38a311b34df74ce8f42d36346a9",
+        "removed_event_stays_removed": "1ac7d479203de4aad271d6660201d30c9a37c8dfd08acb78dd47f1995d12b015",
+    },
+    "party_submissions": {
+        "owner_event_draft_submitted": "4e39fb52c9075f383c44c056de69d50f28cd6a117109ff902607a48d66dfb31f",
+        "owner_event_review_created": "e913c5bb74a74040995b7291c6c7960da3965e0b9083d3a693426efaaefddc1b",
+    },
+}
+
+
 def confirm_pink_edition(connection, raw):
     """Apply only the owner's exact event update, preserving other rows and fields."""
     require(connection.in_transaction, "Event correction requires the migration transaction.")
@@ -1216,7 +1231,11 @@ def confirm_pink_edition(connection, raw):
             "Event correction requires the exact handover control schema.")
     before_schema = schema_rows(connection)
     snapshots = {}
-    for table in allowed:
+    # Preserve the exact existing wallet refresh, including its writer guards.
+    # Only target passes may receive a new tag/timestamp; other wallet data is
+    # checked byte-for-value below. The clock advances once only when needed.
+    wallet = {"apple_wallet_passes": "id", "apple_wallet_update_clock": "id"}
+    for table in (*allowed, *wallet):
         columns = connection.execute('PRAGMA table_xinfo("' + table + '")').fetchall()
         require(columns and all(column[6] == 0 for column in columns), "Event correction requires ordinary existing tables.")
         columns = [column[1] for column in columns]
@@ -1224,12 +1243,24 @@ def confirm_pink_edition(connection, raw):
         rows = connection.execute('SELECT * FROM "' + table + '" ORDER BY "' + key + '"').fetchall()
         snapshots[table] = (columns, key, rows)
         guards = connection.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name=?", (table,)).fetchall()
-        expected = {}
+        expected = dict(PINK_EDITION_BUSINESS_TRIGGERS.get(table, {}))
         for operation in ("insert", "update", "delete"):
             name = "_bct_guard_" + table + "_" + operation
-            expected[name] = ('CREATE TRIGGER "' + name + '" BEFORE ' + operation.upper() + ' ON "' + table
-                              + '" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END')
-        require(dict(guards) == expected, "Event correction refuses missing or unknown writer guards.")
+            sql = ('CREATE TRIGGER "' + name + '" BEFORE ' + operation.upper() + ' ON "' + table
+                   + '" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END')
+            expected[name] = hashlib.sha256(sql.encode()).hexdigest()
+        observed = {name: hashlib.sha256(sql.encode()).hexdigest() for name, sql in guards}
+        require(observed == expected, "Event correction refuses missing or unknown writer guards or business triggers.")
+    wallet_columns, _, wallet_rows = snapshots["apple_wallet_passes"]
+    target_passes = sum(row[wallet_columns.index("event_slug")] == slug for row in wallet_rows)
+    clock_columns, _, clock_rows = snapshots["apple_wallet_update_clock"]
+    require(len(clock_rows) == 1 and clock_rows[0][clock_columns.index("id")] == 1,
+            "Event correction requires the single wallet update clock.")
+    clock = clock_rows[0][clock_columns.index("value")]
+    require(type(clock) is int and 1 <= clock < 9223372036854775807,
+            "Event correction requires a valid wallet update clock.")
+    expected_clock = clock + int(target_passes > 0)
+    wallet_time_before = connection.execute("SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now')").fetchone()[0]
     columns, _, events = snapshots["curated_event_records"]
     targets = [dict(zip(columns, row)) for row in events if row[columns.index("slug")] == slug]
     require(len(targets) == 1 and targets[0]["status"] == "published" and targets[0]["removed_at"] is None,
@@ -1240,11 +1271,18 @@ def confirm_pink_edition(connection, raw):
                   "party_submissions": targets[0]["submission_id"], "event_updates": "update:" + slug + ":preview"}
     def authorize(action, table, column, database, origin):
         if action == sqlite3.SQLITE_UPDATE:
-            permitted = database == "main" and table in allowed and column in allowed[table] and origin is None
+            permitted = database == "main" and (
+                (table in allowed and column in allowed[table] and origin is None)
+                or (origin == "apple_wallet_event_refresh" and (
+                    (table == "apple_wallet_update_clock" and column == "value")
+                    or (table == "apple_wallet_passes" and column in {"update_tag", "updated_at"}))))
         else:
             permitted = action in (sqlite3.SQLITE_READ, sqlite3.SQLITE_SELECT) or (
                 action == sqlite3.SQLITE_FUNCTION and ((column == "current_timestamp" and origin is None)
-                or (column == "raise" and origin in {"_bct_guard_" + name + "_update" for name in allowed})))
+                or (column == "strftime" and origin == "apple_wallet_event_refresh")
+                or (column == "raise" and origin in (
+                    {"_bct_guard_" + name + "_update" for name in (*allowed, *wallet)}
+                    | {"removed_event_stays_removed"}))))
         return sqlite3.SQLITE_OK if permitted else sqlite3.SQLITE_DENY
     connection.set_authorizer(authorize)
     try:
@@ -1253,10 +1291,23 @@ def confirm_pink_edition(connection, raw):
             connection.execute(statement)
     finally:
         connection.set_authorizer(None)
+    wallet_time_after = connection.execute("SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now')").fetchone()[0]
     for table, (columns, key, before) in snapshots.items():
         after = connection.execute('SELECT * FROM "' + table + '" ORDER BY "' + key + '"').fetchall()
         require(len(before) == len(after), "Event correction changed a row count.")
         for old, new in zip(before, after):
+            if table in wallet:
+                for index, column in enumerate(columns):
+                    if table == "apple_wallet_update_clock" and column == "value":
+                        valid = new[index] == expected_clock
+                    elif table == "apple_wallet_passes" and old[columns.index("event_slug")] == slug and column == "update_tag":
+                        valid = new[index] == expected_clock
+                    elif table == "apple_wallet_passes" and old[columns.index("event_slug")] == slug and column == "updated_at":
+                        valid = isinstance(new[index], str) and wallet_time_before <= new[index] <= wallet_time_after
+                    else:
+                        valid = old[index] == new[index]
+                    require(valid, "Event correction changed wallet data outside its reviewed refresh.")
+                continue
             target = old[columns.index(key)] == identities[table]
             for index, column in enumerate(columns):
                 require(old[index] == new[index] or (target and column in allowed[table]),
