@@ -61,13 +61,16 @@ test('registration drafts survive close and back without carrying consent or sub
   await page.screenshot({ path: test.info().outputPath('registration-draft.png'), fullPage: true });
 });
 
-test('the existing approved special guest is readable on details and direct RSVP', async ({ page, catalogue }) => {
-  const guestList=catalogue.screens?.find(screen => screen.event.slug === 'sun-chasers-labadi' && ['/events/on-the-guest-list.webp','/events/on-the-guest-list-20261025.webp'].includes(screen.event.image));
-  test.skip(!guestList, 'The approved Guest List artwork is not published in this fixture');
+test('the confirmed Pink Edition keeps its host and removes performer details', async ({ page, catalogue }) => {
+  const guestList=catalogue.screens?.find(screen => screen.event.slug === 'sun-chasers-labadi');
+  expect(guestList?.event.image).toBe('/events/on-the-guest-list-20261025.webp');
   await page.goto('/event/sun-chasers-labadi');
-  await expect(page.locator('.event-practical-details')).toContainText('Special Guest DJ');
-  await expect(page.locator('.event-practical-details')).toContainText('Cuppy');
+  await expect(page.locator('.event-host')).toContainText('Kofi Bills');
+  await expect(page.locator('.event-story-intro')).toContainText('Club House Inc');
+  await expect(page.locator('.event-credits section')).toHaveCount(0);
+  await expect(page.getByText('Cuppy', {exact:true})).toHaveCount(0);
+  await expect(page.getByText('Special Guest DJ', {exact:true})).toHaveCount(0);
   await page.goto('/rsvp/sun-chasers-labadi');
-  await expect(page.locator('.rsvp-signup__event')).toContainText('Special Guest DJ · Cuppy');
   await expect(page.locator('.rsvp-signup__facts')).toContainText(guestList!.event.fullDate);
+  await expect(page.getByText('Special Guest DJ · Cuppy')).toHaveCount(0);
 });

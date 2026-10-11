@@ -24,6 +24,7 @@ describe("launch event inventory", () => {
     expect((await getPublicEvents()).map((event) => event.slug)).toEqual(["the-weekend-braai", "sun-chasers-labadi"]);
   });
   it("redacts Guest List dates and keeps coming-soon events discoverable", async () => {
+    await env.DB.prepare("UPDATE curated_event_records SET schedule_status='coming_soon',schedule_label='October · Coming soon',sales_open_at=NULL,sales_close_at=NULL WHERE slug='sun-chasers-labadi'").run();
     const event = await findCuratedEvent("sun-chasers-labadi");
     expect(event).toMatchObject({ startsAt: null, endsAt: null, rescheduledFrom: null, salesOpenAt: null, salesCloseAt: null, fullDate: "October · Coming soon", scheduleStatus: "coming_soon", dressCode: "Light pink & white", isVerified: true });
     expect(JSON.stringify(event)).not.toMatch(/2026-10-04|2026-09-13/);

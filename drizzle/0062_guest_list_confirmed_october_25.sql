@@ -8,7 +8,8 @@ SET starts_at = '2026-10-25T14:00:00.000Z',
     sales_close_at = '2026-10-25T14:00:00.000Z',
     image_url = '/events/on-the-guest-list-20261025.webp',
     venue = 'Asana Bar & Kitchen', area = 'Kempinski Hotel Gold Coast City, Accra',
-    curation_note = 'Sunday 25 October is sorted. Join Kofi Bills at Asana Bar & Kitchen, Kempinski Hotel Gold Coast City, from 2 PM to 10 PM. A little pink, good music and familiar faces. Light pink and white, free mimosas till 5 PM. Tell the group chat.',
+    lineup = '',
+    curation_note = 'Club House Inc brings the Pink Edition to Asana. Sunday 25 October, 2–10 PM. Light pink and white. Free mimosas till 5 PM. Tell the group chat.',
     updated_at = CURRENT_TIMESTAMP
 WHERE slug = 'sun-chasers-labadi' AND status = 'published' AND removed_at IS NULL;
 --> statement-breakpoint
@@ -19,7 +20,7 @@ WHERE event_slug = 'sun-chasers-labadi' AND mode = 'rsvp'
 --> statement-breakpoint
 UPDATE party_submissions
 SET starts_at = '2026-10-25T14:00:00.000Z', ends_at = '2026-10-25T22:00:00.000Z',
-    venue_name = 'Asana Bar & Kitchen', area = 'Kempinski Hotel Gold Coast City, Accra',
+    venue_name = 'Asana Bar & Kitchen', area = 'Kempinski Hotel Gold Coast City, Accra', lineup = '',
     updated_at = CURRENT_TIMESTAMP
 WHERE id IN (SELECT submission_id FROM curated_event_records WHERE slug = 'sun-chasers-labadi' AND status = 'published' AND removed_at IS NULL);
 --> statement-breakpoint

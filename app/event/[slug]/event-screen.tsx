@@ -2,8 +2,7 @@
 
 import DiscoveryBackLink from "../../discovery-back-link";
 import EventStory from "./event-story";
-import CuppyGuest from "./cuppy-guest";
-import { eventArtworkPath, eventSpecialGuest } from "../../../lib/event-guest";
+import { eventArtworkPath } from "../../../lib/event-guest";
 import RegistrationForm from "../../registration-form";
 import { registrationOpeningMessage } from "../../../lib/registration-guidance";
 import BrandLogo from "../../brand-logo";
@@ -28,7 +27,6 @@ import type { CustomerEventScreen } from "../../../lib/customer-screen";
 export default function EventScreen({ event, host, registration, promoterCode = "" }: CustomerEventScreen & { promoterCode?: string }) {
   const runtime = useCustomerRuntime();
   const slug = event.slug;
-  const specialGuest = eventSpecialGuest(event);
   const registrationMode = registration?.mode ?? "paid";
   const start = event.startsAt ? new Date(event.startsAt) : null;
   const calendarMonth = start ? new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Africa/Accra" }).format(start) : "";
@@ -44,7 +42,7 @@ export default function EventScreen({ event, host, registration, promoterCode = 
     <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>
 
     <div className="event-detail-layout">
-      <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized />{specialGuest ? <CuppyGuest /> : null}</figure>
+      <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized /></figure>
       <section className="event-detail-overview" aria-labelledby="event-title">
         <p className="eyebrow">{event.vibe}{event.isVerified ? <span className="event-detail-verified"><BadgeCheck size={15} aria-hidden="true" /> Verified event</span> : null}</p><h1 id="event-title">{event.title}</h1>
         <div className="event-detail-facts">
@@ -56,7 +54,6 @@ export default function EventScreen({ event, host, registration, promoterCode = 
           <dl className="event-practical-details">
             <div><dt>Find us</dt><dd>{event.venueMapUrl ? <Link href={event.venueMapUrl} target="_blank" rel="noreferrer" className="event-detail-venue">{event.venue}<ArrowUpRight size={15} aria-hidden="true" /></Link> : <strong>{event.venue}</strong>}<span>{event.area}</span></dd></div>
             {event.dressCode ? <div className="event-dress-code"><dt>Dress code</dt><dd><strong>{event.dressCode}</strong>{/^light pink\s*(?:&|and)\s*white$/iu.test(event.dressCode) ? <span className="event-dress-swatches" aria-hidden="true"><i /><i /></span> : null}</dd></div> : null}
-            {specialGuest ? <div><dt>{specialGuest.role}</dt><dd><strong>{specialGuest.name}</strong></dd></div> : null}
           </dl>
           {event.guestPerk ? <p className="event-guest-perk"><EventPerkIcon perk={event.guestPerk} /><span>{event.guestPerk}</span></p> : null}
           {event.awarenessNote ? <p className="event-awareness-note"><Ribbon size={19} strokeWidth={1.7} aria-hidden="true" />{event.awarenessNote}</p> : null}
