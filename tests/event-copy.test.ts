@@ -33,6 +33,7 @@ describe("individual event copy", () => {
   });
 
   it("lets staff edit a coming-soon event line without inventing dates or inventory", async () => {
+    await env.DB.prepare("UPDATE curated_event_records SET schedule_status='coming_soon',schedule_label='October · Coming soon' WHERE slug='sun-chasers-labadi'").run();
     const now = new Date().toISOString();
     await env.DB.prepare("INSERT INTO staff_accounts (id, normalized_email, display_name, role, password_hash, password_salt, password_iterations, must_change_password, status, failed_login_count, password_changed_at, created_at, created_by, updated_at) VALUES ('copy-editor', 'copy-editor@example.com', 'Copy editor', 'owner', 'test-hash', 'test-salt', 100000, 0, 'active', 0, ?, ?, 'test', ?)").bind(now, now, now).run();
     const token = await createStaffSession(env.DB, { id: "copy-editor" });

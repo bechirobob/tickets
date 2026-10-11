@@ -10,7 +10,7 @@ import { recordPolicyConsents } from './policies';
 import { findPrimaryHost } from './event-experience';
 
 export type RegistrationMode = 'paid' | 'rsvp' | 'interest';
-export type RegistrationSettings = { eventSlug: string; title: string; venue?: string; area?: string; imageUrl?: string | null; imageContentType?: string | null; publicArtwork?: number; scheduleLabel?: string | null; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
+export type RegistrationSettings = { eventSlug: string; title: string; venue?: string; area?: string; imageUrl?: string | null; imageContentType?: string | null; publicArtwork?: number; scheduleLabel?: string | null; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; opensAt?: string | null; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
 export type Registration = { id: string; eventSlug: string; email: string; guestName: string; phone: string; partySize: number; kind: string; status: string; attendeeId: string | null; orderId: string | null; version: number; eventSignature: string | null };
 const fields = `id, event_slug AS eventSlug, normalized_email AS email, guest_name AS guestName, phone, party_size AS partySize, kind, status, attendee_id AS attendeeId, order_id AS orderId, version, event_signature AS eventSignature`;
 const timestamp = () => new Date().toISOString();
@@ -21,7 +21,7 @@ export async function registrationSettings(db: D1Database, slug: string) {
     (SELECT poster_content_type FROM party_submissions WHERE id=e.submission_id) AS imageContentType, e.schedule_label AS scheduleLabel, e.schedule_status AS scheduleStatus, e.starts_at AS startsAt, e.ends_at AS endsAt, e.event_state AS eventState, e.status AS publication,
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.capacity, 0) AS capacity, COALESCE(s.max_party_size, 1) AS maxPartySize,
-    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, COALESCE(s.accepting,1) AS accepting, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost, COALESCE(s.allow_undated_rsvp,0) AS allowUndatedRsvp
+    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, COALESCE(s.accepting,1) AS accepting, e.sales_open_at AS opensAt, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost, COALESCE(s.allow_undated_rsvp,0) AS allowUndatedRsvp
     FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(timestamp(), slug).first<RegistrationSettings>();
 }
 export function registrationStartConfirmed(settings: Pick<RegistrationSettings, 'scheduleStatus' | 'startsAt'>) {
@@ -31,7 +31,7 @@ export function registrationScheduleReady(settings: RegistrationSettings) {
   return registrationStartConfirmed(settings) || (settings.scheduleStatus === 'coming_soon' && settings.allowUndatedRsvp === 1);
 }
 export function registrationsOpen(settings: RegistrationSettings) {
-  return settings.accepting !== 0 && (!settings.closesAt || settings.closesAt > timestamp()) && settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)
+  return settings.accepting !== 0 && (!settings.opensAt || settings.opensAt <= timestamp()) && (!settings.closesAt || settings.closesAt > timestamp()) && settings.publication === 'published' && !['cancelled', 'postponed'].includes(settings.eventState)
     && (settings.mode === 'rsvp' ? registrationScheduleReady(settings) && (settings.scheduleStatus === 'coming_soon' || settings.startsAt > timestamp()) : settings.scheduleStatus === 'coming_soon' || settings.endsAt > timestamp());
 }
 export function registrationShareState(settings: RegistrationSettings | null) {

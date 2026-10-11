@@ -1,9 +1,12 @@
 import { env } from 'cloudflare:test';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET } from '../app/api/public/events/route';
 import type { PublicCatalogue } from '../lib/public-event';
 
 describe('packaged app public catalogue', () => {
+  beforeEach(async () => {
+    await env.DB.prepare("UPDATE curated_event_records SET schedule_status='coming_soon',schedule_label='October · Coming soon',sales_open_at=NULL,sales_close_at=NULL WHERE slug='sun-chasers-labadi'").run();
+  });
   it('returns only real listings, redacts pending dates and excludes private inventory', async () => {
     const response = await GET();
     expect(response.status).toBe(200);

@@ -28,8 +28,8 @@ describe('guest expectations follow event state', () => {
   });
   it('keeps host approval and an unpublished date explicit without granting a place or Room', () => {
     const guidance = rsvpGuestGuidance({ approvalRequired: true, schedulePending: true, roomAccess: false });
-    expect(guidance.beforeRequest).toContain('host reviews each request');
-    expect(guidance.form).toContain('isn’t confirmed yet');
+    expect(guidance.beforeRequest).toContain('once the host confirms');
+    expect(guidance.form).toContain('once the host confirms');
     expect(guidance.schedule).toContain('still to be announced');
     expect(guidance.schedule).not.toMatch(/2 PM|10 PM|October \d/);
     expect(guidance.room).toBe('The Room isn’t included with this RSVP.');
@@ -62,9 +62,9 @@ describe('guest expectations follow event state', () => {
     const catalogue = await response.json() as PublicCatalogue;
     const screen = catalogue.screens?.find(screen => screen.event.slug === 'sun-chasers-labadi');
     expect(screen?.registration?.roomAccess).toBe(Boolean(roomAccess));
-    expect(screen?.event.startsAt).toBeNull();
-    expect(screen?.event.endsAt).toBeNull();
-    expect(screen?.event.fullDate).toBe('October · Coming soon');
+    expect(screen?.event.startsAt).toBe('2026-10-25T14:00:00.000Z');
+    expect(screen?.event.endsAt).toBe('2026-10-25T22:00:00.000Z');
+    expect(screen?.event.fullDate).toBe('Sunday, 25 October 2026');
     expect(JSON.stringify(screen)).not.toMatch(/capacity|normalized_email|token_hash|notifyHost|2026-10-04/);
   });
 });
