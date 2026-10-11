@@ -185,8 +185,8 @@ it('suppresses failed announcement retries after unsubscribe and recovers abando
  await env.DB.prepare('UPDATE event_audience_contacts SET unsubscribed_at=? WHERE event_slug=?').bind(new Date(Date.now()+1000).toISOString(),slug).run();
  await retryFailedDeliveries(env);
  expect(await env.DB.prepare("SELECT status FROM delivery_events WHERE kind='event_announcement'").first()).toEqual({status:'suppressed'});
- // A worker can stop between creating a delivery and contacting the provider.
- await env.DB.prepare("UPDATE delivery_events SET status='queued',created_at='2020-01-01T00:00:00Z',updated_at='2020-01-01T00:00:00Z' WHERE kind='organizer_signup'").run();
+ // A worker can stop before contacting the provider: no accepted provider ID.
+ await env.DB.prepare("UPDATE delivery_events SET provider_id=NULL,status='queued',created_at='2020-01-01T00:00:00Z',updated_at='2020-01-01T00:00:00Z' WHERE kind='organizer_signup'").run();
  const standard=await retryFailedDeliveries(env,20,'standard');expect(standard.delivered).toBe(0);
  expect(await env.DB.prepare("SELECT status FROM delivery_events WHERE kind='organizer_signup'").first()).toEqual({status:'queued'});
  const prepare=vi.spyOn(env.DB,'prepare');
