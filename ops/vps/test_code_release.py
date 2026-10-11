@@ -29,6 +29,66 @@ REVIEWED_APP_TREE = "dba8fffa045cf72dafc9e453776ed7403f27ffa1"
 CONTROL_CHECK_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
 
 
+class TransactionalMailAdmissionTests(unittest.TestCase):
+    """Exercise the unchanged source gate with isolated real Git objects."""
+    admitted = {
+        "lib/email-delivery.ts": "66891436fcaabbca25dc67a06d69df30a03960ed",
+        "lib/transactional-email.ts": "6d7ea0dda0b1b0538e07be352b0b7ae39de1d8ce",
+        "worker/background.ts": "0ea11c3f9c8be00a48b625ac18cc4abf1806654e",
+    }
+
+    def test_only_exact_mail_outputs_are_admitted(self):
+        for name, blob in self.admitted.items():
+            self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], blob)
+            self.assertNotIn(name, release.APPLICATION_FILES)
+
+    def test_mail_source_gate_rejects_mutation_unrelated_path_and_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous = Path.cwd()
+            os.chdir(root)
+            self.addCleanup(os.chdir, previous)
+            def git(*args):
+                return subprocess.check_output(["git", *args], text=True,
+                    stderr=subprocess.DEVNULL).strip()
+            def write(name, content):
+                file = root / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text(content)
+                return file
+            def commit():
+                git("add", "-A")
+                git("commit", "-qm", "isolated admission fixture")
+                return git("rev-parse", "HEAD")
+            git("init", "-q")
+            git("config", "user.name", "Release tests")
+            git("config", "user.email", "tests@example.invalid")
+            write("README.md", "baseline\n")
+            baseline = commit()
+            for name in self.admitted:
+                write(name, "reviewed fixture " + name + "\n")
+            candidate = commit()
+            pins = {name: git("rev-parse", candidate + ":" + name) for name in self.admitted}
+            with patch.dict(release.REVIEWED_APPLICATION_BLOBS, pins):
+                release.vetted_changes(baseline, candidate)
+                for name in self.admitted:
+                    git("reset", "--hard", candidate)
+                    file = root / name
+                    file.write_text(file.read_text() + "x")
+                    changed = commit()
+                    with self.subTest(path=name), self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
+                        release.vetted_changes(baseline, changed)
+                git("reset", "--hard", candidate)
+                write("lib/unreviewed-mail.ts", "not admitted\n")
+                with self.assertRaisesRegex(release.ReleaseError, "Unvetted source path"):
+                    release.vetted_changes(baseline, commit())
+                git("reset", "--hard", candidate)
+                (root / "lib/transactional-email.ts").chmod(0o755)
+                with self.assertRaisesRegex(release.ReleaseError, "New executable"):
+                    release.vetted_changes(baseline, commit())
+            os.chdir(previous)
+
+
 def checkout_git(root, *args):
     return subprocess.check_output(["git", "--no-replace-objects", "-C", str(root), *args],
         stderr=subprocess.DEVNULL, env=release.git_environment(), timeout=60)

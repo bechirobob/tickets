@@ -87,7 +87,8 @@ EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
 RESOURCE_RELEASE_BASELINE = "5e1b1aada332d8ce4986c26291594a929aa95d53"
 
 REVIEWED_APPLICATION_BLOBS = {
-    "ops/vps/test_pink_edition.py": "fcdaf67437188b2547642d859568d6ee16e682c0",
+    ".github/workflows/native-apps.yml": "426a9b8219d3f2ca73d3ad0de93b9a7d73ab3c89",
+    "ops/vps/test_pink_edition.py": "be26c898ac1e19f7f737dbe5112c5e40b6e90c68",
     "tests/preview-events.test.ts": "2b209daa6b801aa82d642b2c30ce307c38586929",
     "tests/guest-experience.test.ts": "3b34f2afea56fc64c445595f4e2e6c70e6d943e0",
     "tests/event-copy.test.ts": "039fb82e0afad0ca0b4defe63de62fb19a336cb3",
@@ -128,7 +129,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "f8d80b476d4c4b7394cbe1ba9031118eda7780fd",
+    "ops/vps/test_code_release.py": "d87e6e236c97d71efddb8d8dae69b7ddd7c49e44",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -301,7 +302,8 @@ REVIEWED_APPLICATION_BLOBS = {
     "lib/admin-session.ts": "57fa1b554bf27a8aa3759871017b721e682488df",
     "lib/background-health.ts": "4793c1cd2a5204371e75495d9d1b218f24a0a092",
     "lib/customer-screen.ts": "9546a787d811e4a8351e16e30693639c26743b26",
-    "lib/email-delivery.ts": "5c047c09cc05fe4260e91e59d90b7afaa4037e3b",
+    "lib/email-delivery.ts": "66891436fcaabbca25dc67a06d69df30a03960ed",
+    "lib/transactional-email.ts": "6d7ea0dda0b1b0538e07be352b0b7ae39de1d8ce",
     "lib/event-guest.ts": "376bf08ff8b52898a4bbc3ab913ea0350134d1db",
     "lib/operational-finance.ts": "7e910e7765074c174695ca32338dee0fd9ae0681",
     "lib/operations-exceptions.ts": "ad4ba837129ba67ffa08745bdb3ff6ea4c838800",
@@ -328,7 +330,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/verify-vps-runtime.mjs": "b44c381a413967d246027d1e8b3573a5f301ccf1",
     "styles/customer.css": "c6d3cc402fcb37287444c9ac75777424ceeac891",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
-    "worker/background.ts": "b266dec887de9f00a426ff78ab79ff9bb3af6a3b",
+    "worker/background.ts": "0ea11c3f9c8be00a48b625ac18cc4abf1806654e",
     "worker/security-response.ts": "3d9d92746405583edcd173694d763c868a1b09fd",
     "worker/the-room.ts": "baf738dba9c08cc1390fa6863f2ac5603c04e83e",
     "scripts/audit-checkbox-hotfix.py": "5313d8cdc4076b36d434fe8017cc0e7b4824e876",
@@ -463,6 +465,10 @@ REVIEWED_APPLICATION_BLOBS = {
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
 PINK_EDITION_PATH = "drizzle/0062_guest_list_confirmed_october_25.sql"
+PINK_EDITION_ASSETS = {
+    "/events/on-the-guest-list-20261025.webp": "339f178efb30268411b30ccc418a28d8b210262e7fd76552ded804fe23c2c43d",
+    "/events/on-the-guest-list-20261025-email.jpg": "ee0a8c9450ec9ebf58c03667f8fec1c848feb65f263a3865068ef17318a4e64b",
+}
 # Confirmed in the immutable pre-failure backup and generated from the original
 # handover writerGuardStatements(['hosts']). Never remove or disable these guards.
 HOST_WRITER_GUARDS = {
@@ -1198,6 +1204,21 @@ def correct_host_verification(connection, raw):
             "beforeStatus": previous, "afterStatus": "verified", "preservedOnCodeRollback": True}
 
 
+PINK_EDITION_BUSINESS_TRIGGERS = {
+    "curated_event_records": {
+        "apple_wallet_event_refresh": "54e57e889240610c7e7bd466235cb92581a5c6551dc2f0b0b6dd709a16cd550f",
+        "curated_events_verify_insert": "54aa368c97db09e17c5480c477cf23ef903e0dcf6bcc34bad5f0ba582d8892ad",
+        "curated_events_verify_update": "211f00db14c4bb69da57d79a699cfca64e07b30adc8eb2e4e70ddfb6b4555eec",
+        "operations_cancelled_event_guard": "af63b8b295ebc210a1355ca97cec102ecb40a38a311b34df74ce8f42d36346a9",
+        "removed_event_stays_removed": "1ac7d479203de4aad271d6660201d30c9a37c8dfd08acb78dd47f1995d12b015",
+    },
+    "party_submissions": {
+        "owner_event_draft_submitted": "4e39fb52c9075f383c44c056de69d50f28cd6a117109ff902607a48d66dfb31f",
+        "owner_event_review_created": "e913c5bb74a74040995b7291c6c7960da3965e0b9083d3a693426efaaefddc1b",
+    },
+}
+
+
 def confirm_pink_edition(connection, raw):
     """Apply only the owner's exact event update, preserving other rows and fields."""
     require(connection.in_transaction, "Event correction requires the migration transaction.")
@@ -1215,7 +1236,11 @@ def confirm_pink_edition(connection, raw):
             "Event correction requires the exact handover control schema.")
     before_schema = schema_rows(connection)
     snapshots = {}
-    for table in allowed:
+    # Preserve the exact existing wallet refresh, including its writer guards.
+    # Only target passes may receive a new tag/timestamp; other wallet data is
+    # checked byte-for-value below. The clock advances once only when needed.
+    wallet = {"apple_wallet_passes": "id", "apple_wallet_update_clock": "id"}
+    for table in (*allowed, *wallet):
         columns = connection.execute('PRAGMA table_xinfo("' + table + '")').fetchall()
         require(columns and all(column[6] == 0 for column in columns), "Event correction requires ordinary existing tables.")
         columns = [column[1] for column in columns]
@@ -1223,12 +1248,24 @@ def confirm_pink_edition(connection, raw):
         rows = connection.execute('SELECT * FROM "' + table + '" ORDER BY "' + key + '"').fetchall()
         snapshots[table] = (columns, key, rows)
         guards = connection.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name=?", (table,)).fetchall()
-        expected = {}
+        expected = dict(PINK_EDITION_BUSINESS_TRIGGERS.get(table, {}))
         for operation in ("insert", "update", "delete"):
             name = "_bct_guard_" + table + "_" + operation
-            expected[name] = ('CREATE TRIGGER "' + name + '" BEFORE ' + operation.upper() + ' ON "' + table
-                              + '" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END')
-        require(dict(guards) == expected, "Event correction refuses missing or unknown writer guards.")
+            sql = ('CREATE TRIGGER "' + name + '" BEFORE ' + operation.upper() + ' ON "' + table
+                   + '" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END')
+            expected[name] = hashlib.sha256(sql.encode()).hexdigest()
+        observed = {name: hashlib.sha256(sql.encode()).hexdigest() for name, sql in guards}
+        require(observed == expected, "Event correction refuses missing or unknown writer guards or business triggers.")
+    wallet_columns, _, wallet_rows = snapshots["apple_wallet_passes"]
+    target_passes = sum(row[wallet_columns.index("event_slug")] == slug for row in wallet_rows)
+    clock_columns, _, clock_rows = snapshots["apple_wallet_update_clock"]
+    require(len(clock_rows) == 1 and clock_rows[0][clock_columns.index("id")] == 1,
+            "Event correction requires the single wallet update clock.")
+    clock = clock_rows[0][clock_columns.index("value")]
+    require(type(clock) is int and 1 <= clock < 9223372036854775807,
+            "Event correction requires a valid wallet update clock.")
+    expected_clock = clock + int(target_passes > 0)
+    wallet_time_before = connection.execute("SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now')").fetchone()[0]
     columns, _, events = snapshots["curated_event_records"]
     targets = [dict(zip(columns, row)) for row in events if row[columns.index("slug")] == slug]
     require(len(targets) == 1 and targets[0]["status"] == "published" and targets[0]["removed_at"] is None,
@@ -1239,11 +1276,18 @@ def confirm_pink_edition(connection, raw):
                   "party_submissions": targets[0]["submission_id"], "event_updates": "update:" + slug + ":preview"}
     def authorize(action, table, column, database, origin):
         if action == sqlite3.SQLITE_UPDATE:
-            permitted = database == "main" and table in allowed and column in allowed[table] and origin is None
+            permitted = database == "main" and (
+                (table in allowed and column in allowed[table] and origin is None)
+                or (origin == "apple_wallet_event_refresh" and (
+                    (table == "apple_wallet_update_clock" and column == "value")
+                    or (table == "apple_wallet_passes" and column in {"update_tag", "updated_at"}))))
         else:
             permitted = action in (sqlite3.SQLITE_READ, sqlite3.SQLITE_SELECT) or (
                 action == sqlite3.SQLITE_FUNCTION and ((column == "current_timestamp" and origin is None)
-                or (column == "raise" and origin in {"_bct_guard_" + name + "_update" for name in allowed})))
+                or (column == "strftime" and origin == "apple_wallet_event_refresh")
+                or (column == "raise" and origin in (
+                    {"_bct_guard_" + name + "_update" for name in (*allowed, *wallet)}
+                    | {"removed_event_stays_removed"}))))
         return sqlite3.SQLITE_OK if permitted else sqlite3.SQLITE_DENY
     connection.set_authorizer(authorize)
     try:
@@ -1252,10 +1296,23 @@ def confirm_pink_edition(connection, raw):
             connection.execute(statement)
     finally:
         connection.set_authorizer(None)
+    wallet_time_after = connection.execute("SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now')").fetchone()[0]
     for table, (columns, key, before) in snapshots.items():
         after = connection.execute('SELECT * FROM "' + table + '" ORDER BY "' + key + '"').fetchall()
         require(len(before) == len(after), "Event correction changed a row count.")
         for old, new in zip(before, after):
+            if table in wallet:
+                for index, column in enumerate(columns):
+                    if table == "apple_wallet_update_clock" and column == "value":
+                        valid = new[index] == expected_clock
+                    elif table == "apple_wallet_passes" and old[columns.index("event_slug")] == slug and column == "update_tag":
+                        valid = new[index] == expected_clock
+                    elif table == "apple_wallet_passes" and old[columns.index("event_slug")] == slug and column == "updated_at":
+                        valid = isinstance(new[index], str) and wallet_time_before <= new[index] <= wallet_time_after
+                    else:
+                        valid = old[index] == new[index]
+                    require(valid, "Event correction changed wallet data outside its reviewed refresh.")
+                continue
             target = old[columns.index(key)] == identities[table]
             for index, column in enumerate(columns):
                 require(old[index] == new[index] or (target and column in allowed[table]),
@@ -1693,6 +1750,9 @@ class Deployment:
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
         self.migrations = migration_plan(changes)
+        if any(item.get("kind") == "pink-edition-confirmed" for item in self.migrations):
+            require(len(self.migrations) == 1,
+                    "Pink Edition correction requires its isolated code-first migration boundary.")
         require(self.proof.get("migrations", []) == self.migrations,
                 "Release migrations differ from the reviewed source manifest.")
         if self.migrations:
@@ -1709,6 +1769,8 @@ class Deployment:
         self.modes = {"override": stat.S_IMODE(self.override.stat().st_mode)}
         self.next_override = release_override(self.before["override"], self.old_release, self.release)
         self.record = strict_json(self.before["journal"])
+        require(not self.record.get("lastCodeRelease", {}).get("pendingDataMigrations"),
+                "A prior event correction is pending; inspect its private evidence before another release.")
         require(self.record.get("phase") == "active"
                 and self.record.get("activeRevision") == self.expected
                 and self.record.get("revision") == ORIGINAL_TRANSFER_REVISION
@@ -2083,6 +2145,11 @@ class Deployment:
 
     def transact(self):
         self.preflight()
+        # This data-only correction needs the new opening-time enforcement and
+        # flyer asset. Commit the independently verified compatible runtime
+        # first; never expose these fields to the old application on rollback.
+        pink_after_code = bool(self.migrations) and all(
+            item.get("kind") == "pink-edition-confirmed" for item in self.migrations)
         if self.recover_prepared:
             self.quarantine_prepared()
         self.snapshot.mkdir(mode=0o700)
@@ -2097,11 +2164,12 @@ class Deployment:
         self.evidence("prepared")
         self.unpack()  # no service/configuration changes before archive validation
         self.retention_safe()
-        try:
-            self.migrate()
-        except BaseException:
-            self.evidence("migration-failed")
-            raise
+        if not pink_after_code:
+            try:
+                self.migrate()
+            except BaseException:
+                self.evidence("migration-failed")
+                raise
         if self.approval is not None:
             self.approval.reserve()
         journal_after = None
@@ -2124,6 +2192,12 @@ class Deployment:
             self.system.restart()
             require(self.system.property("WorkingDirectory") == str(self.release), "Candidate unit did not load.")
             ready(self.system, self.source, candidate=True)
+            if pink_after_code:
+                for public in (False, True):
+                    for path, expected_digest in PINK_EDITION_ASSETS.items():
+                        status, body = self.system.request(path, public)
+                        require(status == 200 and hashlib.sha256(body).hexdigest() == expected_digest,
+                                "Compatible event flyer verification failed: " + path)
             self.system.verify_effective_config(self.next_config)
             self.preserved()
             require(self.file(self.config, private=True) == self.next_config, "Configuration drifted during release.")
@@ -2142,19 +2216,18 @@ class Deployment:
                 "revision": self.source, "archiveSha256": self.archive_digest,
                 "provenanceSha256": self.provenance_digest,
                 "cryptoEnabledRequested": self.enable_crypto}
-            if self.migrations:
+            if self.migrations and not pink_after_code:
                 key = "reviewedDataMigrations" if any(item.get("kind") for item in self.migrations) else "additiveMigrations"
                 record["lastCodeRelease"][key] = self.migrations
                 record["lastCodeRelease"]["databaseBackupSha256"] = self.migration_result["backupSha256"]
+            if pink_after_code:
+                record["lastCodeRelease"]["pendingDataMigrations"] = self.migrations
             require(self.file(self.journal, private=True) == self.before["journal"], "Handover journal drifted before commit.")
             journal_after = (json.dumps(record, sort_keys=True) + "\n").encode()
             atomic_write(self.journal, journal_after)
-            self.evidence("verified")
+            self.evidence("code-verified-event-pending" if pink_after_code else "verified")
             if self.approval is not None:
                 self.approval.consume()
-            return {"released": self.source, "previous": self.expected, "active": True,
-                    "runtime": "vps", "publicVerified": True, "dataMigration": bool(self.migrations),
-                    "cryptoEnabledRequested": self.enable_crypto}
         except BaseException as failure:
             try:
                 # Restore only bytes/pointers owned by this transaction. An outside
@@ -2195,6 +2268,32 @@ class Deployment:
                 self.evidence("rollback-needs-attention")
                 raise ReleaseError("Rollback verification failed; inspect private release evidence.") from rollback_failure
             raise ReleaseError("Candidate failed; previous release restored and verified.") from failure
+
+        # The code transaction is committed. A failure from here must retain
+        # this healthy compatible runtime, never roll back to old RSVP logic.
+        # SQLite handles a failed data transaction; no live database is copied
+        # over customer writes. Ambiguous completion requires operator review.
+        if pink_after_code:
+            try:
+                require(self.system.property("WorkingDirectory") == str(self.release),
+                        "Compatible event runtime changed before correction.")
+                ready(self.system, self.source, candidate=True)
+                require(self.file(self.journal, private=True) == journal_after,
+                        "Release journal drifted before event correction.")
+                self.migrate()
+                require(self.file(self.journal, private=True) == journal_after,
+                        "Release journal drifted during event correction.")
+                del record["lastCodeRelease"]["pendingDataMigrations"]
+                record["lastCodeRelease"]["reviewedDataMigrations"] = self.migrations
+                record["lastCodeRelease"]["databaseBackupSha256"] = self.migration_result["backupSha256"]
+                atomic_write(self.journal, (json.dumps(record, sort_keys=True) + "\n").encode())
+                self.evidence("verified")
+            except BaseException as failure:
+                self.evidence("event-correction-needs-attention")
+                raise ReleaseError("Compatible runtime retained; event correction needs review. No old-code rollback or database restore was performed.") from failure
+        return {"released": self.source, "previous": self.expected, "active": True,
+                "runtime": "vps", "publicVerified": True, "dataMigration": bool(self.migrations),
+                "cryptoEnabledRequested": self.enable_crypto}
 
     def apply(self):
         require(os.geteuid() == 0, "Root access required.")
