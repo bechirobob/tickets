@@ -9,7 +9,7 @@ test.describe("fixed launch fixtures", () => {
     await page.clock.setFixedTime(new Date("2026-09-19T12:00:00Z"));
   });
 
-test("poster, event facts and pending sales fit both launch events", async ({ page }, testInfo) => {
+test("poster, confirmed event facts and registration availability fit both launch events", async ({ page }, testInfo) => {
   const posterSizes: Array<{ width: number; height: number }> = [];
   for (const slug of ["the-weekend-braai", "sun-chasers-labadi"]) {
     await page.goto(`/event/${slug}`);
@@ -26,23 +26,30 @@ test("poster, event facts and pending sales fit both launch events", async ({ pa
     }
     await expect(page.getByRole("button", { name: "Copy Link", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Get tickets", exact: true })).toHaveCount(0);
-    const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string}[]};
-    const mode=catalogue.events.find(event=>event.slug===slug)?.registrationMode;
+    const catalogue = await (await page.request.get('/api/public/events')).json() as {events:{slug:string;registrationMode:string;registrationOpen:boolean}[]};
+    const event=catalogue.events.find(event=>event.slug===slug);
+    const mode=event?.registrationMode;
     if (mode === 'interest') await expect(page.getByRole("button", { name: "Keep me posted", exact: true })).toBeVisible();
-    else if (mode === 'rsvp') await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP)$/})).toBeVisible();
+    else if (mode === 'rsvp' && event?.registrationOpen) await expect(page.getByRole('button', {name:/^(Request an RSVP|RSVP)$/})).toBeVisible();
+    else if (mode === 'rsvp') await expect(page.locator('#register')).toContainText('RSVP opens 12 October, 12 AM GMT. See you here.');
     else await expect(page.locator(".event-state-notice")).toContainText("Ticket sales open soon");
     await expect(page.locator(".event-detail-preview")).toHaveCount(0);
     await expect(page.locator(".event-detail-verified")).toContainText("Verified event");
     if (slug === "sun-chasers-labadi") {
-      await expect(page.locator(".event-coming-soon")).toContainText("Coming soon");
-      await expect(page.locator(".event-detail-facts time")).toHaveCount(0);
-      await expect(page.getByRole("timer")).toHaveCount(0);
-      await expect(page.getByRole("link", { name: "Add to calendar" })).toHaveCount(0);
+      await expect(page.locator(".event-coming-soon")).toHaveCount(0);
+      await expect(page.locator(".event-detail-facts time")).toHaveAttribute("datetime", "2026-10-25T14:00:00.000Z");
+      await expect(page.getByRole("timer")).toBeVisible();
+      await expect(page.getByRole("link", { name: "Add to calendar" })).toBeVisible();
+      await expect(page.locator(".event-hours")).toHaveAttribute("aria-label", /2\s?PM to 10\s?PM, Accra time/);
       await expect(page.locator(".event-dress-code")).toContainText("Light pink & white");
       await expect(page.locator(".event-guest-perk .mimosa-glass")).toBeVisible();
-      await expect(page.locator(".event-detail-layout")).not.toContainText(/4 October|13 September|10 PM|first Sunday/i);
-      await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
-      expect((await page.request.get("/api/calendar/sun-chasers-labadi")).status()).toBe(404);
+      await expect(page.locator(".event-detail-layout")).not.toContainText(/4 October|13 September|first Sunday/i);
+      await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(1);
+      const calendar = await page.request.get("/api/calendar/sun-chasers-labadi");
+      expect(calendar.status()).toBe(200);
+      const ics = await calendar.text();
+      expect(ics).toContain("DTSTART:20261025T140000Z");
+      expect(ics).toContain("DTEND:20261025T220000Z");
     } else {
       await expect(page.getByRole("heading", { name: "The Weekend Braai — Birthday Edition", exact: true })).toBeVisible();
       await expect(page.locator(".event-detail-facts time")).toHaveAttribute("datetime", "2026-09-20T14:00:00.000Z");
@@ -113,7 +120,7 @@ test("full flyers and event lettering stay visible on the two-event Drop", async
     });
     expect(Math.min(...bounds)).toBeGreaterThanOrEqual(-1);
   }
-  await expect(cards.filter({ hasText: "On The Guest List" })).toContainText("Coming soon");
+  await expect(cards.filter({ hasText: "On The Guest List" })).toContainText("25 OCT");
   await expect(page.locator(".discovery-home .night-drop--compact")).toHaveCSS("background-color", "rgb(48, 32, 51)");
   await expectVisibleLettering(page, ".discovery-grid");
   await page.screenshot({ path: testInfo.outputPath("two-event-home.png"), fullPage: true });
