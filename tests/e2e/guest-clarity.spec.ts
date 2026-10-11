@@ -62,12 +62,12 @@ test('registration drafts survive close and back without carrying consent or sub
 });
 
 test('the existing approved special guest is readable on details and direct RSVP', async ({ page, catalogue }) => {
-  test.skip(!catalogue.screens?.some(screen => screen.event.slug === 'sun-chasers-labadi' && screen.event.image === '/events/on-the-guest-list.webp'), 'The approved Guest List artwork is not published in this fixture');
+  const guestList=catalogue.screens?.find(screen => screen.event.slug === 'sun-chasers-labadi' && ['/events/on-the-guest-list.webp','/events/on-the-guest-list-20261025.webp'].includes(screen.event.image));
+  test.skip(!guestList, 'The approved Guest List artwork is not published in this fixture');
   await page.goto('/event/sun-chasers-labadi');
   await expect(page.locator('.event-practical-details')).toContainText('Special Guest DJ');
   await expect(page.locator('.event-practical-details')).toContainText('Cuppy');
   await page.goto('/rsvp/sun-chasers-labadi');
   await expect(page.locator('.rsvp-signup__event')).toContainText('Special Guest DJ · Cuppy');
-  await expect(page.locator('.rsvp-signup__facts')).toContainText('Coming soon');
-  await expect(page.locator('.rsvp-signup__facts')).not.toContainText('2PM');
+  await expect(page.locator('.rsvp-signup__facts')).toContainText(guestList!.event.fullDate);
 });

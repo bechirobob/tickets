@@ -35,6 +35,7 @@ export function emailFlyer(input: { url?: string | null; title: string; isPublic
     const url = new URL(input.url, 'https://tickets.becoreops.com');
     if (url.origin !== 'https://tickets.becoreops.com' || url.username || url.password || url.search || url.hash) return '';
     if (url.pathname === '/events/on-the-guest-list.webp') url.pathname = '/events/on-the-guest-list-email.jpg';
+    if (url.pathname === '/events/on-the-guest-list-20261025.webp') url.pathname = '/events/on-the-guest-list-20261025-email.jpg';
     const staticFlyer = /^\/events\/[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png)$/u.test(url.pathname);
     const publicUpload = /^\/api\/media\/[a-zA-Z0-9_-]+$/u.test(url.pathname) && ['image/jpeg', 'image/png'].includes(input.contentType ?? '');
     if (!staticFlyer && !publicUpload) return '';

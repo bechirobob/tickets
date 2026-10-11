@@ -21,22 +21,30 @@ test('Kofi Bills profile shows the portrait, public socials and linked event',as
   await page.screenshot({path:`test-results/kofi-bills-${test.info().project.name}.png`,fullPage:true});
 });
 
-test('October RSVP is available without a fabricated date or paid checkout',async({page})=>{
+test('confirmed October RSVP respects its opening and avoids paid checkout',async({page})=>{
   // Registration fixture suites deliberately change this event to interest-only.
   test.skip(Boolean(test.info().config.configFile?.match(/registration|seev|operations/)),'Public migration state only.');
+  const catalogue=await (await page.request.get('/api/public/events')).json();
+  const event=catalogue.events.find((event:{slug:string})=>event.slug==='sun-chasers-labadi');
+  expect(event.startsAt).toBe('2026-10-25T14:00:00.000Z');
+  expect(event.scheduleStatus).toBe('confirmed');
   await page.goto('/event/sun-chasers-labadi');
   await expect(page.locator('.event-host')).toContainText('Kofi Bills');
   await expect(page.locator('.event-host')).toContainText('Verified host');
   await expect(page.locator('.event-host')).not.toContainText('Reviewed Host');
-  await expect(page.getByRole('heading',{name:'October · Coming soon',exact:true})).toBeVisible();
-  await expect(page.getByText('Limited RSVP spots. Get your name in early.')).toBeVisible();
-  await page.getByRole('button',{name:/^(Request an )?RSVP$/}).click();
-  await expect(page.getByLabel('Your name')).toBeVisible();
+  await expect(page.locator('.event-date-display')).toHaveAttribute('datetime','2026-10-25T14:00:00.000Z');
+  if(event.registrationOpen){
+    await page.getByRole('button',{name:/^(Request an )?RSVP$/}).click();
+    await expect(page.getByLabel('Your name')).toBeVisible();
+  }else{
+    await expect(page.getByText('The guest list opens 12 October at 12 AM GMT. Set your reminder.')).toBeVisible();
+    await expect(page.getByLabel('Your name')).toHaveCount(0);
+  }
   await expect(page.getByRole('link',{name:/Get tickets/})).toHaveCount(0);
   await page.goto('/rsvp/sun-chasers-labadi');
-  await expect(page.getByLabel('Your name')).toBeVisible();
-  await expect(page.getByText('October · Coming soon',{exact:true})).toBeVisible();
-  await expect(page.getByText('Limited RSVP spots. Get your name in early.')).toBeVisible();
+  if(event.registrationOpen)await expect(page.getByLabel('Your name')).toBeVisible();
+  else await expect(page.getByRole('heading',{name:'The guest list opens 12 October at 12 AM GMT. Set your reminder.'})).toBeVisible();
+  await expect(page.locator('.rsvp-signup__facts')).toContainText('Sunday 25 October 2026');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({path:`test-results/october-rsvp-${test.info().project.name}.png`,fullPage:true});
 });

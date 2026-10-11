@@ -10,7 +10,7 @@ export function eventArtworkPath(source: string) {
  * The artwork guard keeps it off replacement artwork and unrelated events.
  */
 export function eventSpecialGuest(event: { slug: string; image: string }) {
-  return event.slug === 'sun-chasers-labadi' && eventArtworkPath(event.image) === '/events/on-the-guest-list.webp'
+  return event.slug === 'sun-chasers-labadi' && ['/events/on-the-guest-list.webp', '/events/on-the-guest-list-20261025.webp'].includes(eventArtworkPath(event.image) ?? '')
     ? { name: 'Cuppy', role: 'Special Guest DJ' }
     : null;
 }

@@ -15,7 +15,7 @@ test("Cuppy keeps the flyer and booking layout intact, with controllable motion"
   expect((await page.request.get("/events/dj-cuppy-decks.webp")).ok()).toBe(true);
   const poster = page.locator(".event-detail-poster > img");
   await expect.poll(() => poster.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
-  await expect(poster).toHaveAttribute("src", /on-the-guest-list\.webp/);
+  await expect(poster).toHaveAttribute("src", /on-the-guest-list(?:-20261025)?\.webp/);
   await expect(poster).toHaveCSS("mix-blend-mode", "multiply");
 
   const sizes = page.viewportSize()!.width > 760 ? [1280, 800] : [390, 320];

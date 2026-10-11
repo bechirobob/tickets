@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { requestRegistration, claimRegistration, readRegistration, cancelRegistration, processRegistrations, registrationSettings } from '../lib/registrations';
+import { requestRegistration, claimRegistration, readRegistration, cancelRegistration, processRegistrations, registrationSettings, registrationsOpen } from '../lib/registrations';
 import { notifyRoomMessage } from '../lib/notifications';
 import { readAttendeeRoomAccess, readAttendeeIdentity } from '../lib/attendee-auth';
 import { adminCookieHeader, createStaffSession } from '../lib/admin-session';
@@ -45,8 +45,24 @@ beforeEach(async () => {
   await env.DB.prepare("INSERT INTO event_registration_settings (event_slug, mode, capacity, max_party_size, updated_at) VALUES (?, 'rsvp', 2, 2, ?) ON CONFLICT(event_slug) DO UPDATE SET mode = 'rsvp', capacity = 2, max_party_size = 2, approval_required = 0, room_access = 0")
     .bind(slug, new Date().toISOString()).run();
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('RSVP admission and interest registrations', () => {
+  it('blocks early RSVP submissions and opens at the exact saved GMT instant', async () => {
+    const opensAt = new Date(Date.now() + 3600000).toISOString();
+    await env.DB.prepare('UPDATE curated_event_records SET sales_open_at=? WHERE slug=?').bind(opensAt, slug).run();
+    const settings = (await registrationSettings(env.DB, slug))!;
+    expect(settings.opensAt).toBe(opensAt);
+    expect(registrationsOpen(settings)).toBe(false);
+    await expect(requestRegistration(env.DB, {eventSlug:slug,email:'early@example.com',guestName:'Early Guest',phone:'',partySize:1}, origin, true)).rejects.toThrow('Registration is not open');
+    expect(await env.DB.prepare('SELECT id FROM event_registrations WHERE normalized_email=?').bind('early@example.com').first()).toBeNull();
+    vi.useFakeTimers({toFake:['Date']});
+    vi.setSystemTime(new Date(Date.parse(opensAt)-1));
+    expect(registrationsOpen(settings)).toBe(false);
+    vi.setSystemTime(new Date(opensAt));
+    expect(registrationsOpen(settings)).toBe(true);
+    vi.useRealTimers();
+    await env.DB.prepare('UPDATE curated_event_records SET sales_open_at=NULL WHERE slug=?').bind(slug).run();
+  });
   it('verifies inbox ownership before reserving a group and issues real, zero-cost QR passes', async () => {
     const pending = await access('rsvp-group@example.com', 2);
     expect((await readRegistration(env.DB, pending.id))?.status).toBe('unverified');
