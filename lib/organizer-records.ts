@@ -9,33 +9,34 @@ export async function listOrganizerEvents(db:D1Database,session:AdminSession){
     (SELECT COUNT(*) FROM tickets t WHERE t.event_slug=e.slug AND t.status IN ('issued','checked_in')) AS admissions,
     (SELECT COUNT(*) FROM tickets t WHERE t.event_slug=e.slug AND t.status='checked_in') AS arrivals,
     (SELECT COALESCE(SUM(o.face_amount_minor),0) FROM orders o WHERE o.event_slug=e.slug AND o.status='paid') AS salesMinor
-    FROM curated_event_records e WHERE e.removed_at IS NULL AND ${scope.sql} ORDER BY e.starts_at DESC LIMIT 500`)
+    FROM curated_event_records e WHERE e.removed_at IS NULL AND e.archived_at IS NULL AND ${scope.sql} ORDER BY e.starts_at DESC LIMIT 500`)
     .bind(session.accountId,session.email,...scope.bindings).all()).results;
 }
 export async function readMoney(db:D1Database,session:AdminSession,slug:string){
+  const owner=session.role==='owner';
   const scope=organizerScope(session);if(slug!=='all')await requireOrganizerEvent(db,session,slug);
   const events=`SELECT e.slug FROM curated_event_records e WHERE e.removed_at IS NULL AND ${scope.sql} AND (?='all' OR e.slug=?)`;
   const bindings=[...scope.bindings,slug,slug];
   const [totals,statements,transfers,payoutTotals]=await Promise.all([
-    db.prepare(`SELECT COALESCE(SUM(total_amount_minor),0) AS collectedMinor,COALESCE(SUM(booking_fee_minor),0) AS feesMinor,
+    db.prepare(`SELECT COALESCE(SUM(${owner?'total_amount_minor':'face_amount_minor'}),0) AS collectedMinor,${owner?'COALESCE(SUM(booking_fee_minor),0) AS feesMinor,':''}
       COALESCE(SUM(refunded_amount_minor),0) AS refundsMinor,COALESCE(SUM(face_amount_minor),0) AS faceMinor,
       COALESCE(SUM(CASE WHEN total_amount_minor>0 THEN ROUND(refunded_amount_minor*1.0*face_amount_minor/total_amount_minor) ELSE 0 END),0) AS ticketRefundsMinor
       FROM orders WHERE event_slug IN (${events}) AND status IN ('paid','refund_pending','refunded','disputed','requires_refund')`).bind(...bindings).first(),
     db.prepare(`SELECT s.id,s.event_slug AS eventSlug,e.title AS eventTitle,s.period_start AS periodStart,s.period_end AS periodEnd,
-      s.gross_minor AS grossMinor,s.booking_fees_minor AS feesMinor,s.refunds_minor AS refundsMinor,s.net_ticket_sales_minor AS netMinor,s.currency,s.status
+      s.gross_minor AS grossMinor,${owner?'s.booking_fees_minor AS feesMinor,':''}s.refunds_minor AS refundsMinor,s.net_ticket_sales_minor AS netMinor,s.currency,s.status
       FROM event_settlements s JOIN curated_event_records e ON e.slug=s.event_slug WHERE s.event_slug IN (${events}) ORDER BY s.period_end DESC LIMIT 250`).bind(...bindings).all(),
     db.prepare(`SELECT p.id,p.event_slug AS eventSlug,p.settlement_id AS settlementId,p.reference,p.amount_minor AS amountMinor,p.currency,p.status,p.paid_at AS paidAt,p.created_at AS createdAt,
       a.account_name AS accountName,a.account_number_masked AS accountNumberMasked FROM payout_transfers p LEFT JOIN organizer_payout_accounts a ON a.id=p.payout_account_id
       WHERE p.event_slug IN (${events}) ORDER BY p.created_at DESC LIMIT 250`).bind(...bindings).all(),
     db.prepare(`SELECT COALESCE(SUM(CASE WHEN status='success' THEN amount_minor ELSE 0 END),0) AS paidMinor,COALESCE(SUM(CASE WHEN status IN ('pending_approval','queued','otp','pending') THEN amount_minor ELSE 0 END),0) AS pendingMinor FROM payout_transfers WHERE event_slug IN (${events})`).bind(...bindings).first(),
   ]);
-  return {totals,payoutTotals,statements:statements.results,transfers:transfers.results};
+  return {financialScope:owner?'platform':'tickets',totals:owner?totals:{...totals,refundsMinor:totals?.ticketRefundsMinor},payoutTotals,statements:statements.results,transfers:transfers.results};
 }
-const roster=`WITH roster AS (
+const roster=(session:AdminSession)=>`WITH roster AS (
  SELECT 'order' AS kind,o.id,COALESCE(o.customer_name,'Guest') AS name,o.customer_email AS email,o.reference,o.status,o.quantity AS admissions,
-   o.total_amount_minor AS amountMinor,o.payment_provider AS source,o.created_at AS createdAt,
+   o.${session.role==='owner'?'total_amount_minor':'face_amount_minor'} AS amountMinor,o.payment_provider AS source,o.created_at AS createdAt,
    (SELECT COUNT(*) FROM tickets t WHERE t.order_id=o.id AND t.status='checked_in') AS arrivals FROM orders o WHERE o.event_slug=? AND o.payment_provider<>'rsvp'
- UNION ALL SELECT 'registration',r.id,r.guest_name,r.normalized_email,COALESCE(o.reference,''),r.status,r.party_size,COALESCE(o.total_amount_minor,0),r.kind,r.created_at,
+ UNION ALL SELECT 'registration',r.id,r.guest_name,r.normalized_email,COALESCE(o.reference,''),r.status,r.party_size,COALESCE(o.${session.role==='owner'?'total_amount_minor':'face_amount_minor'},0),r.kind,r.created_at,
    (SELECT COUNT(*) FROM tickets t WHERE t.order_id=r.order_id AND t.status='checked_in') FROM event_registrations r LEFT JOIN orders o ON o.id=r.order_id WHERE r.event_slug=? AND r.status<>'unverified'
  UNION ALL SELECT 'door',g.id,g.guest_name,COALESCE(g.guest_email,''),'',g.status,g.admission_count,0,g.kind,g.created_at,
    CASE WHEN g.status='checked_in' THEN g.admission_count ELSE 0 END FROM guest_entries g WHERE g.event_slug=? AND g.created_by<>'system:rsvp'
@@ -45,15 +46,15 @@ export async function readGuests(db:D1Database,session:AdminSession,slug:string,
   const q=(params.get('q')??'').trim().slice(0,120),status=(params.get('status')??'').slice(0,32),offset=Math.min(50000,Math.max(0,Number.parseInt(params.get('offset')??'0')||0));
   const filter=`WHERE (?='' OR instr(lower(name),lower(?))>0 OR instr(lower(email),lower(?))>0 OR instr(lower(reference),lower(?))>0 OR EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id AND a.status='active' JOIN attendee_profiles h ON h.id=a.attendee_id AND h.status='active' WHERE t.order_id=roster.id AND roster.kind='order' AND (instr(lower(h.display_name),lower(?))>0 OR instr(lower(h.normalized_email),lower(?))>0))) AND (?='' OR status=?)`;
   const binds=[slug,slug,slug,q,q,q,q,q,q,status,status];
-  const counts=await db.prepare(`${roster} SELECT COUNT(*) AS records,COALESCE(SUM(admissions),0) AS admissions,COALESCE(SUM(arrivals),0) AS arrivals FROM roster ${filter}`).bind(...binds).first();
+  const counts=await db.prepare(`${roster(session)} SELECT COUNT(*) AS records,COALESCE(SUM(admissions),0) AS admissions,COALESCE(SUM(arrivals),0) AS arrivals FROM roster ${filter}`).bind(...binds).first();
   const show=params.get('show')==='1'||Boolean(q)||params.get('format')==='csv';
-  const rows=show?(await db.prepare(`${roster} SELECT * FROM roster ${filter} ORDER BY createdAt DESC,id LIMIT ? OFFSET ?`).bind(...binds,params.get('format')==='csv'?10001:25,params.get('format')==='csv'?0:offset).all()).results:[];
+  const rows=show?(await db.prepare(`${roster(session)} SELECT * FROM roster ${filter} ORDER BY createdAt DESC,id LIMIT ? OFFSET ?`).bind(...binds,params.get('format')==='csv'?10001:25,params.get('format')==='csv'?0:offset).all()).results:[];
   if(rows.length>10000)throw new OrganizerError('Narrow your search before exporting more than 10,000 records.');
-  return {counts,rows,offset};
+  return {financialScope:session.role==='owner'?'platform':'tickets',counts,rows,offset};
 }
 export async function guestDetails(db:D1Database,session:AdminSession,slug:string,kind:string,id:string){
   await requireOrganizerEvent(db,session,slug);
-  const record=await db.prepare(`${roster} SELECT * FROM roster WHERE kind=? AND id=?`).bind(slug,slug,slug,kind,id).first();
+  const record=await db.prepare(`${roster(session)} SELECT * FROM roster WHERE kind=? AND id=?`).bind(slug,slug,slug,kind,id).first();
   if(!record)throw new OrganizerError('Guest record not found.',404);
   const orderId=kind==='order'?id:kind==='registration'?(await db.prepare('SELECT order_id AS id FROM event_registrations WHERE id=? AND event_slug=?').bind(id,slug).first<{id:string}>())?.id:null;
   const tickets=orderId?(await db.prepare(`SELECT t.id,t.ticket_type AS ticketType,t.status,t.checked_in_at AS checkedInAt,
@@ -66,7 +67,8 @@ export async function guestDetails(db:D1Database,session:AdminSession,slug:strin
     JOIN event_questions q ON q.id=a.question_id AND q.event_slug=? JOIN attendee_profiles p ON p.id=a.attendee_id
     WHERE EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments ta ON ta.ticket_id=t.id AND ta.status='active' WHERE t.order_id=? AND ta.attendee_id=a.attendee_id)`).bind(slug,orderId).all()).results:[];
   const confirmation=orderId?await db.prepare('SELECT status,completed_at AS updatedAt FROM confirmation_deliveries WHERE order_id=?').bind(orderId).first():null;
-  return {record,orderId,tickets,delivery,confirmation,questions};
+  const canRequestRefund=Boolean(orderId&&(await db.prepare('SELECT 1 AS eligible FROM orders WHERE id=? AND event_slug=? AND total_amount_minor>0').bind(orderId,slug).first()));
+  return {financialScope:session.role==='owner'?'platform':'tickets',record,orderId,canRequestRefund,tickets,delivery,confirmation,questions};
 }
 export async function readAudience(db:D1Database,session:AdminSession,params:URLSearchParams){
   const scope=organizerScope(session),q=(params.get('q')??'').trim().slice(0,120),segment=params.get('segment')??'all',offset=Math.min(50000,Math.max(0,Number.parseInt(params.get('offset')??'0')||0));

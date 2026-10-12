@@ -4,7 +4,7 @@ import { expect, test } from "./catalogue";
 // The signed-in Room fixture never contacts live attendee APIs or a live socket.
 test.use({ serviceWorkers: "block" });
 
-test('an announcement link opens the host update above later chat messages', async ({page,eventSlug}) => {
+test('an announcement link reveals the host bubble above later chat messages', async ({page,eventSlug}) => {
   const room={eventSlug,eventTitle:'Garden Party',readOnlyAt:new Date(Date.now()+86400000).toISOString(),readOnly:false};
   const base={roomBadge:null,parentId:null,pinned:false,deletedAt:null,reactions:[],createdAt:new Date().toISOString()};
   await page.route('**/api/**',route=>{
@@ -23,7 +23,8 @@ test('an announcement link opens the host update above later chat messages', asy
   });
   await page.goto(`/room/${eventSlug}?from=notification&announcement=old-host`);
   const announcement=page.locator('[data-announcement="old-host"]');
-  await expect(announcement).toHaveJSProperty('open',true);
+  await expect(announcement).toHaveClass(/room-message--host/u);
+  await expect(announcement.locator('.room-host-badge')).toHaveAccessibleName('Event host');
   await expect(announcement.locator('p')).toBeInViewport();
   await expect(page.locator('.room-stream')).toHaveJSProperty('scrollTop',0);
 });

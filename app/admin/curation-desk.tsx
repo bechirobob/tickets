@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- moderation images are private API responses and must bypass the public image optimizer. */
 "use client";
 
+import HostRsvpAlerts from "../organizer/workspace/host-rsvp-alerts";
 import OrganizerAccess from "./organizer-access";
 
 import { operationsFetch } from "../../lib/operations-client";
@@ -20,7 +21,7 @@ type Submission = {
 
 const labels: Record<string, string> = { submitted: "New", in_review: "In review", changes_requested: "Changes requested", approved: "Approved", rejected: "Rejected", scheduled: "Scheduled", published: "Published", unpublished: "Unpublished", archived: "Archived" };
 
-export default function CurationDesk({ actor, role, initialSubmissionId }: { actor: string; role: StaffRole; initialSubmissionId?: string }) {
+export default function CurationDesk({ actor, role, accountId, initialSubmissionId }: { actor: string; role: StaffRole; accountId?: string; initialSubmissionId?: string }) {
   const [view, setView] = useState("active");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -98,6 +99,7 @@ export default function CurationDesk({ actor, role, initialSubmissionId }: { act
     <main className="curation-page">
       <OperationsNav actor={actor} role={role} active="/admin" />
       <section className="curation-main">
+        {role === "owner" && accountId ? <HostRsvpAlerts accountId={accountId} owner mode="prompt" /> : null}
         <header><div><p>BeCore editorial operations</p><h1>Submission queue</h1></div><span>{items.filter((item) => groups.active.includes(item.status)).length} to review</span></header>
         {error && !selected ? <p className="curation-error" role="alert">{error} <button onClick={() => void load()}>Retry</button></p> : null}
         {notice ? <p className="ops-message" role="status">{notice}</p> : null}

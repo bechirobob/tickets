@@ -7,5 +7,5 @@ export default async function AdminPage({searchParams}:{searchParams:Promise<{su
   const params = await searchParams;
   const id = typeof params.submission === 'string' && /^[\w-]{1,128}$/.test(params.submission) ? params.submission : undefined;
   const session = await requireAdminSession(`/admin${id ? `?submission=${encodeURIComponent(id)}` : ''}`, "curation.manage");
-  return <CurationDesk actor={session.actor} role={session.role} initialSubmissionId={id} />;
+  return <CurationDesk actor={session.actor} role={session.role} accountId={session.accountId} initialSubmissionId={id} />;
 }

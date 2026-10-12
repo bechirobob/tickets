@@ -1161,3 +1161,183 @@ test('fee effective time retains the locale date and day-period without clipping
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
   await page.screenshot({ path: info.outputPath('fee-effective-time.png'), fullPage: true, scale: 'css' });
 });
+
+for (const width of [320, 390, 768, 1280]) {
+  test(`workspace metric boxes stay aligned at ${width}px with short and wrapping labels`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/admin/operations');
+    const tiles = page.locator('.operations-journey > div > span');
+    await expect(tiles).toHaveCount(5);
+    await expect(tiles.first()).toBeVisible();
+    async function expectEqualTiles(selector: string) {
+      const bounds = await page.locator(selector).evaluateAll(nodes => nodes.map(node => {
+        const rect = node.getBoundingClientRect();
+        const el = node as HTMLElement;
+        return { width: rect.width, height: rect.height, top: rect.top, left: rect.left,
+          overflowX: el.scrollWidth > el.clientWidth + 1, overflowY: el.scrollHeight > el.clientHeight + 1 };
+      }));
+      expect(bounds.length).toBeGreaterThan(1);
+      for (const box of bounds) {
+        expect(Math.abs(box.width - bounds[0].width), selector).toBeLessThan(1);
+        expect(Math.abs(box.height - bounds[0].height), selector).toBeLessThan(1);
+        expect(box.overflowX || box.overflowY, `${selector} must keep its text readable`).toBe(false);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    }
+    await expectEqualTiles('.operations-journey > div > span');
+    await expectEqualTiles('.operations-metrics > article');
+    await page.locator('.operations-journey').screenshot({ path: info.outputPath(`journey-aligned-${width}.png`) });
+    // Stress the actual component and final cascade, without changing stored data.
+    await tiles.nth(3).evaluate(node => {
+      node.replaceChildren(Object.assign(document.createElement('b'), { textContent: '123456789' }),
+        document.createTextNode('payment attempts awaiting provider confirmation'));
+    });
+    await tiles.evaluateAll(nodes => nodes.forEach(node => {
+      (node as HTMLElement).style.fontSize = '24px';
+      (node.querySelector('b') as HTMLElement).style.fontSize = '36px';
+    }));
+    await expectEqualTiles('.operations-journey > div > span');
+    await page.locator('.operations-journey').screenshot({ path: info.outputPath(`journey-large-text-${width}.png`) });
+    await page.goto('/admin/registrations');
+    await expect(page.locator('.registration-live__counts')).toBeVisible();
+    await expectEqualTiles('.registration-live__counts > span');
+  });
+}
+
+// These journeys render the real Operations components, but every browser API
+// request is intercepted. No archive, restore or deletion reaches fixture/live data.
+const archiveDialogEvent = {
+  slug: 'archive-dialog-test', title: 'Synthetic archive event', venue: 'Fixture venue', venueMapUrl: 'https://example.com', area: 'Accra',
+  startsAt: '2001-01-01T18:00:00Z', endsAt: '2001-01-02T02:00:00Z', vibe: 'Late night', salesOpenAt: null, salesCloseAt: null,
+  ageRestriction: '18+', lineup: 'Fixture lineup', eventState: 'on_sale', scheduleStatus: 'confirmed', isTestEvent: true,
+  rescheduledFrom: null, curationNote: 'Synthetic fixture only', status: 'published', tiers: [],
+};
+async function archiveDialogFixture(page: Page) {
+  const unexpected: string[] = [];
+  await page.route('**/api/**', route => {
+    if (route.request().method() !== 'GET') unexpected.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+    return route.fulfill({ status: 403, json: { error: 'Isolated archive fixture: unconfigured API' } });
+  });
+  await page.route('**/api/admin/events', route => route.fulfill({ json: { events: [archiveDialogEvent] } }));
+  return unexpected;
+}
+
+test('owner archive and restore dialogs require exact event confirmation and preserve cancellation', async ({ page }, info) => {
+  const unexpected = await archiveDialogFixture(page);
+  const writes: Array<Record<string, unknown>> = [];
+  let archived = false;
+  await page.route('**/api/admin/events', route => route.fulfill({ json: { events: archived ? [] : [archiveDialogEvent] } }));
+  await page.route('**/api/admin/events/archive', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { events: archived ? [{ ...archiveDialogEvent, archivedAt: '2026-10-12T18:00:00Z' }] : [] } });
+    const body = route.request().postDataJSON(); writes.push(body);
+    expect(body.confirmation).toBe(archiveDialogEvent.slug);
+    archived = body.action === 'archive';
+    return route.fulfill({ json: { archived } });
+  });
+  await page.goto('/admin/events');
+  await page.getByRole('button', { name: 'Previews', exact: true }).click();
+  await page.locator('.ops-directory__row').filter({ hasText: archiveDialogEvent.title }).click();
+  await page.getByRole('button', { name: 'Archive event', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Event archive', exact: true });
+  await expect(panel.getByText(/Records and customer ticket history are preserved/)).toBeVisible();
+  const confirm = panel.getByRole('button', { name: 'Confirm archive', exact: true });
+  await expect(confirm).toBeDisabled();
+  await panel.getByLabel(`Type ${archiveDialogEvent.slug} to confirm`, { exact: true }).fill('wrong-event');
+  await expect(confirm).toBeDisabled(); expect(writes).toEqual([]);
+  await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(panel).toHaveCount(0); expect(writes).toEqual([]);
+  await page.getByRole('button', { name: 'Archive event', exact: true }).click();
+  await panel.getByLabel(`Type ${archiveDialogEvent.slug} to confirm`, { exact: true }).fill(archiveDialogEvent.slug);
+  await expect(confirm).toBeEnabled(); await confirm.click();
+  await expect(page.getByText('Event archived. Its records are preserved.', { exact: true })).toBeVisible();
+  expect(writes.map(body => body.action)).toEqual(['archive']);
+  await page.getByRole('button', { name: 'Archived events', exact: true }).click();
+  await panel.getByRole('button', { name: 'Restore', exact: true }).click();
+  const restore = panel.getByRole('button', { name: 'Confirm restore', exact: true });
+  await expect(restore).toBeDisabled();
+  await panel.getByLabel(`Type ${archiveDialogEvent.slug} to confirm`, { exact: true }).fill(archiveDialogEvent.slug);
+  await page.screenshot({ path: info.outputPath('archive-restore-confirmation.png'), fullPage: true });
+  await restore.click();
+  await expect(page.getByText('Event archive updated.', { exact: true })).toBeVisible();
+  expect(writes.map(body => body.action)).toEqual(['archive', 'restore']); expect(unexpected).toEqual([]);
+});
+
+test('permanent archived deletion requires exact DELETE text, shows retained records and rechecks after stale impact', async ({ page }, info) => {
+  const unexpected = await archiveDialogFixture(page);
+  let reads = 0, deletes = 0;
+  await page.route('**/api/admin/events/archive', route => route.fulfill({ json: { events: [{ ...archiveDialogEvent, archivedAt: '2026-10-12T18:00:00Z' }] } }));
+  await page.route('**/api/admin/events/archive/deletion**', route => {
+    if (route.request().method() === 'GET') {
+      reads++;
+      return route.fulfill({ json: { confirmationVersion: `review-${reads}`, eligible: 1, registrations: 2, issuedTickets: 1, guestEntries: 3, flashes: 4, paidBookings: 0 } });
+    }
+    deletes++;
+    expect(route.request().postDataJSON()).toMatchObject({ slug: archiveDialogEvent.slug, confirmation: `DELETE ${archiveDialogEvent.slug}`, confirmationVersion: `review-${reads}`, reason: 'Remove synthetic obsolete content' });
+    return deletes === 1 ? route.fulfill({ status: 409, json: { error: 'The archive or its bookings changed. Review the deletion impact again.' } }) : route.fulfill({ json: { removed: true } });
+  });
+  await page.goto('/admin/events'); await page.getByRole('button', { name: 'Archived events', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete permanently…', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Confirm permanent archived event deletion', exact: true });
+  await expect(panel.getByText(/This is not a full database purge/)).toBeVisible();
+  await expect(panel.getByText(/2 active registrations/)).toBeVisible();
+  const remove = panel.getByRole('button', { name: 'Permanently delete event content', exact: true });
+  await panel.getByLabel('Reason', { exact: true }).fill('Remove synthetic obsolete content');
+  await panel.getByLabel(`Type DELETE ${archiveDialogEvent.slug}`, { exact: true }).fill(archiveDialogEvent.slug);
+  await expect(remove).toBeDisabled(); expect(deletes).toBe(0);
+  await panel.getByLabel(`Type DELETE ${archiveDialogEvent.slug}`, { exact: true }).fill(`DELETE ${archiveDialogEvent.slug}`);
+  await remove.click();
+  await expect(panel.getByRole('alert')).toContainText('Review the deletion impact again'); await expect(remove).toBeDisabled();
+  expect(deletes).toBe(1);
+  await panel.getByRole('button', { name: 'Keep archived event', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete permanently…', exact: true }).click();
+  await expect(panel.getByText(/2 active registrations/)).toBeVisible(); expect(reads).toBe(2);
+  await expect(panel.getByLabel(`Type DELETE ${archiveDialogEvent.slug}`, { exact: true })).toHaveValue('');
+  await expect(remove).toBeDisabled();
+  await panel.getByLabel(`Type DELETE ${archiveDialogEvent.slug}`, { exact: true }).fill(`DELETE ${archiveDialogEvent.slug}`);
+  await panel.getByLabel('Reason', { exact: true }).fill('Remove synthetic obsolete content');
+  await page.screenshot({ path: info.outputPath('archived-permanent-content-confirmation.png'), fullPage: true });
+  await remove.click(); await expect(panel).toHaveCount(0); expect(deletes).toBe(2); expect(unexpected).toEqual([]);
+});
+
+test('bulk archive review excludes protected and blocked events and reports partial results', async ({ page }, info) => {
+  const unexpected = await archiveDialogFixture(page);
+  let writes = 0;
+  const candidates = [
+    { id: 'preview:event:sun-chasers-labadi', slug: 'sun-chasers-labadi', title: 'On The Guest List', blockedReason: 'Protected: On The Guest List is kept visible.' },
+    { id: 'unsettled', slug: 'unsettled-fixture', title: 'Unsettled fixture', blockedReason: 'Blocked: pending payment, refund or dispute work.' },
+    { id: 'eligible-one', slug: 'eligible-one', title: 'Eligible fixture one', blockedReason: null },
+    { id: 'eligible-two', slug: 'eligible-two', title: 'Eligible fixture two', blockedReason: null },
+  ].map(item => ({ ...item, version: `${item.id}:review`, orders: 2, registrations: 3 }));
+  await page.route('**/api/admin/events/archive/cleanup', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { events: candidates, truncated: false } });
+    writes++;
+    expect(route.request().postDataJSON()).toEqual({ confirmation: 'ARCHIVE OTHER EVENTS', events: candidates.slice(2).map(({slug,version}) => ({slug,version})) });
+    return route.fulfill({ json: { results: [{slug:'eligible-one',archived:true},{slug:'eligible-two',archived:false,error:'The event changed. Review it again.'}] } });
+  });
+  await page.goto('/admin/events'); await page.getByRole('button', { name: 'Archive other events', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Review other events for archive', exact: true });
+  await expect(panel.getByRole('checkbox', { name: 'On The Guest List · sun-chasers-labadi', exact: true })).toBeDisabled();
+  await expect(panel.getByRole('checkbox', { name: 'On The Guest List · sun-chasers-labadi', exact: true })).not.toBeChecked();
+  await expect(panel.getByRole('checkbox', { name: 'Unsettled fixture · unsettled-fixture', exact: true })).toBeDisabled();
+  await expect(panel.getByText('Blocked: pending payment, refund or dispute work.', { exact: true })).toBeVisible();
+  const archive = panel.getByRole('button', { name: 'Archive 2 selected events', exact: true });
+  await expect(archive).toBeDisabled(); expect(writes).toBe(0);
+  await panel.getByLabel('Type ARCHIVE OTHER EVENTS', { exact: true }).fill('ARCHIVE OTHER EVENTS');
+  await page.screenshot({ path: info.outputPath('reviewed-other-events-cleanup.png'), fullPage: true });
+  await archive.click();
+  await expect(panel.getByRole('status')).toContainText('1 events archived. Not archived: eligible-two: The event changed. Review it again.');
+  await expect(panel.getByRole('button', { name: /Archive \d+ selected events/ })).toHaveCount(0);
+  expect(writes).toBe(1); expect(unexpected).toEqual([]);
+});
+
+test('host cannot open owner archive management or its deletion controls', async ({ page, context, baseURL }) => {
+  const unexpected = await archiveDialogFixture(page);
+  await context.clearCookies();
+  await context.addCookies([{ name: 'bct_staff', value: fixture.organizerToken, url: baseURL!, httpOnly: true, sameSite: 'Strict' }]);
+  await page.goto('/admin/events');
+  await expect(page).not.toHaveURL(/\/admin\/events(?:\?|$)/);
+  await expect(page.getByRole('button', { name: 'Archive other events', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Archived events', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Delete permanently…', exact: true })).toHaveCount(0);
+  expect(unexpected).toEqual([]);
+});

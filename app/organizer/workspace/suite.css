@@ -13,7 +13,3 @@
 .organizer-suite .organizer-workspace--embedded .organizer-dashboard{display:block;padding:0;margin:0;border:0}
 /* Keep task controls stationary while focus or a tap brings them into view. */
 html:has(.organizer-suite){scroll-behavior:auto}
-
-.host-rsvp-alerts button{min-height:44px}
-
-.host-notification-prompt{width:min(620px,100%);margin:0 0 24px;padding:20px;border:1px solid #dbcfe3;border-radius:18px;background:#fff;color:#241729;box-shadow:0 8px 32px #24172920}.host-notification-prompt h2{margin:0 0 8px;font-size:1.2rem}.host-notification-prompt p{font-size:.9rem;line-height:1.5}.host-notification-prompt button{margin:4px 8px 4px 0;padding:10px 14px;border-radius:10px;border:1px solid #d8c9df;background:#fff;color:inherit}.host-notification-prompt button:first-of-type{background:#241729;color:#fff}.host-notification-prompt button:focus-visible{outline:3px solid #a47abe;outline-offset:2px}

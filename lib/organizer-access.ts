@@ -21,7 +21,7 @@ export async function requireOrganizerEvent(db: D1Database, session: AdminSessio
   const scope = organizerScope(session);
   const event = await db.prepare(`SELECT e.slug,e.title,e.status,e.event_state AS eventState,e.starts_at AS startsAt,e.ends_at AS endsAt,
     CASE WHEN e.organizer_owner_id=? OR EXISTS (SELECT 1 FROM party_submissions s WHERE s.id=e.submission_id AND lower(trim(s.contact_email))=?) THEN 1 ELSE 0 END AS isLead
-    FROM curated_event_records e WHERE e.slug=? AND e.removed_at IS NULL AND ${scope.sql}`)
+    FROM curated_event_records e WHERE e.slug=? AND e.removed_at IS NULL AND e.archived_at IS NULL AND ${scope.sql}`)
     .bind(session.accountId,session.email,slug,...scope.bindings).first<{slug:string;title:string;status:string;eventState:string;startsAt:string;endsAt:string;isLead:number}>();
   if (!event || lead && session.role !== 'owner' && !event.isLead) throw new OrganizerError(lead ? 'Only the lead host can manage this event’s team.' : 'This Night is not assigned to your account.',403);
   return event;

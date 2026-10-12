@@ -22,9 +22,8 @@ async function deliverOrganizerPush(env: Cloudflare.Env, id: string, kind: Alert
     FROM ${config.table} d JOIN organizer_push_subscriptions p ON p.id=d.subscription_id AND p.account_id=d.account_id AND p.consent_id=d.subscription_version
     JOIN staff_accounts s ON s.id=p.account_id JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=s.id
     JOIN ${config.source} r ON r.id=d.${config.column} JOIN curated_event_records e ON e.slug=r.event_slug
-    JOIN staff_event_assignments a ON a.account_id=s.id AND a.event_slug=r.event_slug
-    WHERE d.id=? AND d.claim=? AND d.completed_at IS NULL AND d.lease_until>? AND p.revoked_at IS NULL AND ss.revoked_at IS NULL AND ss.expires_at>? AND s.status='active' AND s.role='organizer' AND s.must_change_password=0
-    AND e.removed_at IS NULL AND e.status='published' AND e.event_state NOT IN ('cancelled','postponed') AND ${config.eligible}`)
+    WHERE d.id=? AND d.claim=? AND d.completed_at IS NULL AND d.lease_until>? AND p.revoked_at IS NULL AND ss.revoked_at IS NULL AND ss.expires_at>? AND s.status='active' AND (s.role='owner' OR (s.role='organizer' AND EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id=s.id AND a.event_slug=r.event_slug))) AND s.must_change_password=0
+    AND e.removed_at IS NULL AND e.archived_at IS NULL AND e.status='published' AND e.event_state NOT IN ('cancelled','postponed') AND ${config.eligible}`)
     .bind(id,claim,new Date().toISOString(),new Date().toISOString()).first<{subscriptionId:string;subscriptionVersion:string;endpoint:string;p256dh:string;auth:string;slug:string;title:string;scheduleStatus:string;eventState:string;endsAt:string;createdAt:string;attempts:number}>();
    return row&&!hostEventEnded(row,Date.now())?row:null;
   };
@@ -70,10 +69,10 @@ export const enqueueOrganizerPurchasePush=(db:D1Database,queue:Cloudflare.Env['E
 export function captureOrganizerPurchasePush(db:D1Database,orderId:string,now:string){
  return db.prepare(`INSERT OR IGNORE INTO organizer_purchase_push_deliveries(id,order_id,subscription_id,account_id,subscription_version)
  SELECT lower(hex(randomblob(16))),o.id,p.id,p.account_id,p.consent_id FROM orders o
- JOIN organizer_push_subscriptions p JOIN staff_event_assignments a ON a.account_id=p.account_id AND a.event_slug=o.event_slug
+ JOIN organizer_push_subscriptions p
  JOIN staff_accounts s ON s.id=p.account_id JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=p.account_id
  JOIN curated_event_records e ON e.slug=o.event_slug
  WHERE changes()=1 AND o.id=? AND o.status='paid' AND o.payment_verified_at IS NOT NULL AND o.total_amount_minor>0
- AND p.revoked_at IS NULL AND s.role='organizer' AND s.status='active' AND s.must_change_password=0 AND ss.revoked_at IS NULL AND ss.expires_at>?
- AND e.removed_at IS NULL AND e.status='published' AND e.event_state NOT IN ('cancelled','postponed')`).bind(orderId,now);
+ AND p.revoked_at IS NULL AND (s.role='owner' OR (s.role='organizer' AND EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id=s.id AND a.event_slug=o.event_slug))) AND s.status='active' AND s.must_change_password=0 AND ss.revoked_at IS NULL AND ss.expires_at>?
+ AND e.removed_at IS NULL AND e.archived_at IS NULL AND e.status='published' AND e.event_state NOT IN ('cancelled','postponed')`).bind(orderId,now);
 }
