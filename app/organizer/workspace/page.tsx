@@ -19,5 +19,5 @@ export default async function OrganizerWorkspacePage({ searchParams }: { searchP
   }
   const filters = params.toString();
   const session = await requireAdminSession(`/organizer/workspace${filters ? `?${filters}` : ""}`, "organizer.workspace");
-  return <OrganizerWorkspace actor={session.actor} role={session.role} email={session.email} />;
+  return <OrganizerWorkspace actor={session.actor} role={session.role} email={session.email} accountId={session.accountId} />;
 }

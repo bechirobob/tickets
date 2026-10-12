@@ -932,7 +932,7 @@ test('team invitations show delivery recovery and return acceptance to the assig
   return route.continue();
  });
  await page.goto('/organizer/workspace?area=team&event=rsvp-browser');await expect(page.getByText('Email needs attention',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Resend invitation',exact:true}).click();await expect(page.getByRole('status')).toContainText('Fresh invitation queued');await expect(page.getByText('Email queued',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Resend invitation',exact:true}).click();await expect(page.locator('.suite-section').filter({has:page.getByRole('button',{name:'Refresh team status',exact:true})}).getByRole('status')).toContainText('Fresh invitation queued');await expect(page.getByText('Email queued',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Refresh team status',exact:true}).click();await expect(page.getByText('Email queued',{exact:true})).toBeVisible();expect(resends).toBe(1);
  await page.route('**/api/organizer/team/accept',route=>route.fulfill({json:route.request().postDataJSON().action==='inspect'?{email:'door@example.com',role:'gate',eventTitle:'RSVP browser gathering',eventSlug:'rsvp-browser',needsPassword:false}:{accepted:true,role:'gate',eventSlug:'rsvp-browser'}}));
  await page.goto('/organizer/team/accept#token=isolated-test-invitation');await expect(page.getByRole('button',{name:'Accept invitation',exact:true})).toBeVisible();expect(new URL(page.url()).hash).toBe('');
