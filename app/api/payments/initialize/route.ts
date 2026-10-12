@@ -134,6 +134,7 @@ export async function POST(request: Request) {
       FROM curated_event_records event
       JOIN event_ticket_tiers tier ON tier.event_slug = event.slug
       WHERE event.slug = ?
+        AND event.archived_at IS NULL AND event.removed_at IS NULL
         AND NOT EXISTS (SELECT 1 FROM event_registration_settings registration WHERE registration.event_slug = event.slug AND (registration.mode <> 'paid' OR registration.accepting=0 OR (registration.closes_at IS NOT NULL AND registration.closes_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now')))) AND tier.id = ? AND tier.code = ?
         AND (event.status = 'published' OR (event.status = 'scheduled' AND event.scheduled_publish_at <= ?))
         AND event.schedule_status = 'confirmed'

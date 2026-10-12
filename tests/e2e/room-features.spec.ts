@@ -84,11 +84,10 @@ test("concierge belongs to the Room and preserves a failed request through recov
   const pin = page.locator(".room-pinned");
   expect((await pin.boundingBox())!.height).toBeLessThanOrEqual(44);
   await expect(page.locator(".room-stream")).not.toContainText("Gate 2 tonight");
-  const host = page.locator(".room-host-update");
-  expect((await host.boundingBox())!.height).toBeLessThanOrEqual(44);
-  await host.locator("summary").click();
+  const host = page.locator('.room-message[data-announcement="host-later"]');
+  await expect(host.locator(".room-bubble p")).toBeVisible();
   await expect(host.locator("p")).toContainText("Water is by the bar");
-  await host.locator("summary").click();
+  await expect(host.locator(".room-host-badge")).toHaveAccessibleName("Event host");
   const concierge = page.getByRole("button", { name: "Open VIP services" });
   await concierge.click();
   const sheet = page.getByRole("dialog", { name: "VIP concierge" });

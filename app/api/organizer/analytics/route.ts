@@ -35,6 +35,7 @@ export async function enforceAnalyticsReadLimit(limiter: RateLimiter, accountId:
 function analyticsCsv(data: Record<string, unknown>) {
   const overview = data.overview as Record<string, unknown>;
   const rsvp = data.rsvp as RsvpAnalytics;
+  const salesLabel=data.financialScope==='platform'?'Gross collected (minor units)':'Ticket sales (minor units)';
   const rows: unknown[][] = [
     ["BeCore Tickets organiser analytics"],
     ["Scope", (data.scope as Record<string, unknown>).label],
@@ -46,13 +47,13 @@ function analyticsCsv(data: Record<string, unknown>) {
     ["Tracked event views", overview.eventViews],
     ["Tracked RSVP page views", overview.rsvpViews],
     ["Ticket face value (minor units)", overview.faceValueMinor],
-    ["Booking fees (minor units)", overview.bookingFeesMinor],
-    ["Collected less refunds (minor units)", Number(overview.revenueMinor) - Number(overview.refundsMinor)],
+    ...(data.financialScope === "platform" ? [["Booking fees (minor units)", overview.bookingFeesMinor]] : []),
+    [data.financialScope==='platform'?"Collected less refunds (minor units)":"Ticket sales less ticket refunds (minor units)", Number(overview.revenueMinor) - Number(overview.refundsMinor)],
     ["Checkout starts", overview.checkoutStarts],
     ["Paid orders", overview.paidOrders],
     ["Admissions sold", overview.admissions],
-    ["Gross collected (minor units)", overview.revenueMinor],
-    ["Refunded (minor units)", overview.refundsMinor],
+    [salesLabel, overview.revenueMinor],
+    [data.financialScope==='platform'?"Refunded (minor units)":"Ticket refunds (minor units)", overview.refundsMinor],
     ["Unique buyers", overview.uniqueBuyers],
     ["Repeat buyers", overview.repeatBuyers],
     [],
@@ -69,19 +70,19 @@ function analyticsCsv(data: Record<string, unknown>) {
     ...rsvp.sources.map(row => [row.eventTitle, row.label, row.requests, row.guests, row.confirmedGuests, row.checkedIn]),
     [],
     ["Sales trend"],
-    ["Day", "Orders", "Admissions", "Gross collected (minor units)"],
+    ["Day", "Orders", "Admissions", salesLabel],
     ...((data.salesTrend as Array<Record<string, unknown>>).map((item) => [item.day, item.orders, item.admissions, item.revenueMinor])),
     [],
     ["Ticket tiers"],
-    ["Event", "Tier", "Orders", "Admissions", "Capacity", "Gross collected (minor units)"],
+    ["Event", "Tier", "Orders", "Admissions", "Capacity", salesLabel],
     ...((data.ticketTiers as Array<Record<string, unknown>>).map((item) => [item.eventTitle, item.name, item.orders, item.admissions, item.capacityAdmissions, item.revenueMinor])),
     [],
     ["Promoter attribution"],
-    ["Event", "Code", "Label", "Orders", "Admissions", "Gross collected (minor units)"],
+    ["Event", "Code", "Label", "Orders", "Admissions", salesLabel],
     ...((data.promoters as Array<Record<string, unknown>>).map((item) => [item.eventTitle, item.code, item.label, item.orders, item.admissions, item.revenueMinor])),
     [],
     ["Payment methods"],
-    ["Channel", "Orders", "Gross collected (minor units)"],
+    ["Channel", "Orders", salesLabel],
     ...((data.paymentMethods as Array<Record<string, unknown>>).map((item) => [item.channel, item.orders, item.revenueMinor])),
   ];
   return rows.map((row) => row.map(csvCell).join(",")).join("\n");
@@ -129,12 +130,15 @@ export async function GET(request: Request) {
   const baseline = await readAnalyticsBaseline(env.DB);
   const fullPeriod = !baseline || baseline <= (window.previousStart ?? window.start);
   window.start = analyticsStart(window.start, baseline);
+  const owner=session.role==='owner';
+  const salesColumn=owner?'total_amount_minor':'face_amount_minor';
+  const refundColumn=owner?'refunded_amount_minor':'CASE WHEN total_amount_minor>0 THEN ROUND(refunded_amount_minor*1.0*face_amount_minor/total_amount_minor) ELSE 0 END';
   const scope=organizerScope(session,'event');
   const eventStatement = env.DB.prepare(`
     SELECT event.slug, event.title, event.starts_at AS startsAt, event.event_state AS eventState
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    WHERE event.removed_at IS NULL
+    WHERE event.removed_at IS NULL AND event.archived_at IS NULL
     AND ${scope.sql}
     ORDER BY event.starts_at DESC
   `);
@@ -160,9 +164,10 @@ export async function GET(request: Request) {
   const rangeLabel = window.range === "all" ? "All time" : `Last ${window.range} days`;
   const empty = {
     events: events.results,
+    financialScope:owner?'platform':'tickets',
     scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel, baseline },
     generatedAt: new Date().toISOString(),
-    overview: { rsvpViews: 0, eventViews: 0, checkoutViews: 0, checkoutStarts: 0, paymentAttempts: 0, paymentsConfirmed: 0, paymentFailed: 0, shares: 0, paidOrders: 0, revenueMinor: 0, faceValueMinor: 0, bookingFeesMinor: 0, refundsMinor: 0, admissions: 0, checkedIn: 0, uniqueBuyers: 0, repeatBuyers: 0, averageOrderValueMinor: 0 },
+    overview: { rsvpViews: 0, eventViews: 0, checkoutViews: 0, checkoutStarts: 0, paymentAttempts: 0, paymentsConfirmed: 0, paymentFailed: 0, shares: 0, paidOrders: 0, revenueMinor: 0, faceValueMinor: 0, ...(owner?{bookingFeesMinor:0}:{}), refundsMinor: 0, admissions: 0, checkedIn: 0, uniqueBuyers: 0, repeatBuyers: 0, averageOrderValueMinor: 0 },
     comparison: null, rsvp: emptyRsvpAnalytics(),
     salesTrend: [], journeyTrend: [], ticketTiers: [], paymentMethods: [], promoters: [], checkIns: [], vipUsage: [],
   };
@@ -179,11 +184,11 @@ export async function GET(request: Request) {
   const metricTrendBucket = window.range === "all" ? "substr(day, 1, 7) || '-01'" : "day";
   const [orders, admissions, product, salesTrend, journeyTrend, ticketTiers, paymentMethods, promoters, checkIns, vipUsage, repeatBuyers] = await Promise.all([
     env.DB.prepare(`
-      SELECT COUNT(*) AS paidOrders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor,
-        COALESCE(SUM(face_amount_minor), 0) AS faceValueMinor, COALESCE(SUM(booking_fee_minor), 0) AS bookingFeesMinor,
-        COALESCE(SUM(refunded_amount_minor), 0) AS refundsMinor,
+      SELECT COUNT(*) AS paidOrders, COALESCE(SUM(${salesColumn}), 0) AS revenueMinor,
+        COALESCE(SUM(face_amount_minor), 0) AS faceValueMinor, ${owner?'COALESCE(SUM(booking_fee_minor), 0) AS bookingFeesMinor,':''}
+        COALESCE(SUM(${refundColumn}), 0) AS refundsMinor,
         COUNT(DISTINCT lower(customer_email)) AS uniqueBuyers,
-        COALESCE(ROUND(AVG(total_amount_minor)), 0) AS averageOrderValueMinor
+        COALESCE(ROUND(AVG(${salesColumn})), 0) AS averageOrderValueMinor
       FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
     `).bind(...orderBindings).first<Record<string, unknown>>(),
     env.DB.prepare(`
@@ -207,7 +212,7 @@ export async function GET(request: Request) {
     `).bind(...metricBindings).first<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT ${orderTrendBucket} AS day, COUNT(*) AS orders,
-        COALESCE(SUM(quantity), 0) AS admissions, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor
+        COALESCE(SUM(quantity), 0) AS admissions, COALESCE(SUM(${salesColumn}), 0) AS revenueMinor
       FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
       GROUP BY day ORDER BY day LIMIT 400
     `).bind(...orderBindings).all<Record<string, unknown>>(),
@@ -223,20 +228,20 @@ export async function GET(request: Request) {
     env.DB.prepare(`
       SELECT tier.id, tier.event_slug AS eventSlug, event.title AS eventTitle, tier.name, tier.price_minor AS priceMinor,
         tier.capacity_admissions AS capacityAdmissions, COUNT(orders.id) AS orders,
-        COALESCE(SUM(orders.quantity), 0) AS admissions, COALESCE(SUM(orders.total_amount_minor), 0) AS revenueMinor
+        COALESCE(SUM(orders.quantity), 0) AS admissions, COALESCE(SUM(orders.${salesColumn}), 0) AS revenueMinor
       FROM event_ticket_tiers tier JOIN curated_event_records event ON event.slug = tier.event_slug
       LEFT JOIN orders ON orders.ticket_tier_id = tier.id AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at, orders.created_at) >= ?
       WHERE tier.event_slug IN (${marks}) GROUP BY tier.id ORDER BY event.starts_at DESC, tier.sort_order
     `).bind(window.start, scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`
-      SELECT payment_channel AS channel, COUNT(*) AS orders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor
+      SELECT payment_channel AS channel, COUNT(*) AS orders, COALESCE(SUM(${salesColumn}), 0) AS revenueMinor
       FROM orders WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ?
       GROUP BY payment_channel ORDER BY orders DESC
     `).bind(...orderBindings).all<Record<string, unknown>>(),
     env.DB.prepare(`
       SELECT orders.event_slug AS eventSlug, event.title AS eventTitle, COALESCE(orders.promoter_code, 'direct') AS code,
         COALESCE(MAX(promoter.label), 'Direct / untagged') AS label, COUNT(*) AS orders,
-        COALESCE(SUM(orders.quantity), 0) AS admissions, COALESCE(SUM(orders.total_amount_minor), 0) AS revenueMinor
+        COALESCE(SUM(orders.quantity), 0) AS admissions, COALESCE(SUM(orders.${salesColumn}), 0) AS revenueMinor
       FROM orders JOIN curated_event_records event ON event.slug = orders.event_slug LEFT JOIN event_promoter_codes promoter ON promoter.event_slug = orders.event_slug AND promoter.code = orders.promoter_code
       WHERE orders.event_slug IN (${marks}) AND orders.status IN (${paidStatuses}) AND COALESCE(orders.payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at, orders.created_at) >= ?
       GROUP BY orders.event_slug, COALESCE(orders.promoter_code, 'direct') ORDER BY orders DESC, orders.event_slug, code
@@ -265,14 +270,14 @@ export async function GET(request: Request) {
     rsvpViews: number(product?.rsvpViews), eventViews: number(product?.eventViews), checkoutViews: number(product?.checkoutViews), checkoutStarts: number(product?.checkoutStarts),
     paymentAttempts: number(product?.paymentAttempts), paymentsConfirmed: number(product?.paymentsConfirmed), paymentFailed: number(product?.paymentFailed), shares: number(product?.shares),
     paidOrders: number(orders?.paidOrders), revenueMinor: number(orders?.revenueMinor), faceValueMinor: number(orders?.faceValueMinor),
-    bookingFeesMinor: number(orders?.bookingFeesMinor), refundsMinor: number(orders?.refundsMinor), averageOrderValueMinor: number(orders?.averageOrderValueMinor),
+    ...(owner?{bookingFeesMinor:number(orders?.bookingFeesMinor)}:{}), refundsMinor: number(orders?.refundsMinor), averageOrderValueMinor: number(orders?.averageOrderValueMinor),
     admissions: number(admissions?.admissions), checkedIn: number(admissions?.checkedIn), uniqueBuyers: number(orders?.uniqueBuyers), repeatBuyers: number(repeatBuyers?.repeatBuyers),
   };
 
   let comparison: Record<string, number> | null = null;
   if (fullPeriod && window.previousStart && window.previousEnd) {
     const [previousOrders, previousProduct] = await Promise.all([
-      env.DB.prepare(`SELECT COUNT(*) AS paidOrders, COALESCE(SUM(total_amount_minor), 0) AS revenueMinor FROM orders
+      env.DB.prepare(`SELECT COUNT(*) AS paidOrders, COALESCE(SUM(${salesColumn}), 0) AS revenueMinor FROM orders
         WHERE event_slug IN (${marks}) AND status IN (${paidStatuses}) AND COALESCE(payment_provider, '') NOT IN ('rsvp','complimentary') AND COALESCE(paid_at, created_at) >= ? AND COALESCE(paid_at, created_at) < ?`)
         .bind(scopedSlugs, window.previousStart, window.previousEnd).first<Record<string, unknown>>(),
       env.DB.prepare(`SELECT COALESCE(SUM(CASE WHEN metric = 'event_view' THEN count ELSE 0 END), 0) AS eventViews FROM product_metrics_daily
@@ -284,6 +289,7 @@ export async function GET(request: Request) {
 
   const data = {
     events: events.results,
+    financialScope:owner?'platform':'tickets',
     scope: { eventSlug: requestedSlug, label, range: window.range, rangeLabel, baseline },
     generatedAt: new Date().toISOString(),
     overview,

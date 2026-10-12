@@ -124,3 +124,10 @@ presence, reporting, blocking, moderation removal, rate limiting, automatic
 reconnection and temporary Flashes. Flash image bytes are privately served from
 the active database and permanently erased when the Room closes; only moderation metadata remains.
 The text conversation becomes a 72-hour post-event read-only archive.
+
+Unpinned Host announcements appear as normal conversation bubbles with the
+Host name and a compact checked badge. The badge comes from the server-issued
+announcement kind or organiser role, never a guest's display name. Pinned
+announcements retain their separate disclosure; notification links reveal the
+matching bubble or pin. This presentation does not add attendee actions to
+announcements or change room access, sending permissions or delivery semantics.

@@ -4,7 +4,7 @@ import { readRsvpAnalytics } from './rsvp-analytics';
 export const hostScope = `EXISTS (SELECT 1 FROM staff_event_assignments x WHERE x.account_id=a.id AND x.event_slug=e.slug)`;
 export async function canReadHostEvent(db: D1Database, accountId: string, slug: string, owner = false) {
   return Boolean(await db.prepare(`SELECT 1 FROM curated_event_records e JOIN staff_accounts a ON a.id=?
-    WHERE e.slug=? AND e.removed_at IS NULL AND a.status='active' AND ((${owner ? "a.role='owner'" : "a.role='organizer'"}) AND ${owner ? '1=1' : hostScope})`)
+    WHERE e.slug=? AND e.removed_at IS NULL AND e.archived_at IS NULL AND a.status='active' AND ((${owner ? "a.role='owner'" : "a.role='organizer'"}) AND ${owner ? '1=1' : hostScope})`)
     .bind(accountId,slug).first());
 }
 export async function readHostSummary(db: D1Database, slug: string) {
@@ -14,7 +14,7 @@ export async function readHostSummary(db: D1Database, slug: string) {
     COALESCE(r.approval_required,0) AS approvalRequired,r.updated_at AS setupAt,
     (SELECT COUNT(*) FROM staff_event_assignments x JOIN staff_accounts a ON a.id=x.account_id WHERE x.event_slug=e.slug AND a.role='gate' AND a.status='active') AS gateStaff,
     (SELECT COUNT(*) FROM event_ticket_tiers t WHERE t.event_slug=e.slug AND t.status IN ('available','sold_out') AND t.capacity_admissions>0 AND t.price_minor>0) AS activeTiers
-    FROM curated_event_records e LEFT JOIN event_registration_settings r ON r.event_slug=e.slug WHERE e.slug=? AND e.removed_at IS NULL`)
+    FROM curated_event_records e LEFT JOIN event_registration_settings r ON r.event_slug=e.slug WHERE e.slug=? AND e.removed_at IS NULL AND e.archived_at IS NULL`)
     .bind(slug).first<{slug:string;title:string;venue:string;venueMapUrl:string;lineup:string;startsAt:string;endsAt:string;status:string;eventState:string;scheduleStatus:string;mode:string;capacity:number;accepting:number;closesAt:string|null;approvalRequired:number;setupAt:string|null;gateStaff:number;activeTiers:number}>();
   if (!event) return null;
   const baseline = await readAnalyticsBaseline(db);

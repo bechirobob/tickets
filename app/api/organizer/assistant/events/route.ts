@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     SELECT event.slug, event.title, event.starts_at AS startsAt, event.event_state AS eventState
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    WHERE event.removed_at IS NULL
+    WHERE event.removed_at IS NULL AND event.archived_at IS NULL
       AND ${scope.sql}
     ORDER BY event.starts_at DESC
     LIMIT 100

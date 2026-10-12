@@ -5,6 +5,6 @@ export const dynamic = "force-dynamic";
 
 export default async function OperationsPage() {
   const session = await requireAdminSession("/admin/operations", "operations.view");
-  return <EventOperationsHub actor={session.actor} role={session.role} />;
+  return <EventOperationsHub actor={session.actor} role={session.role} accountId={session.accountId} />;
 }
 

@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       status, locked_until AS lockedUntil, last_login_at AS lastLoginAt, created_at AS createdAt FROM staff_accounts ORDER BY created_at`)
       .all<Record<string, unknown>>(),
     env.DB.prepare("SELECT account_id AS accountId, event_slug AS eventSlug FROM staff_event_assignments ORDER BY event_slug").all<{ accountId: string; eventSlug: string }>(),
-    env.DB.prepare("SELECT slug, title, starts_at AS startsAt FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all<Record<string, unknown>>(),
+    env.DB.prepare("SELECT slug, title, starts_at AS startsAt FROM curated_event_records WHERE removed_at IS NULL AND archived_at IS NULL ORDER BY starts_at DESC").all<Record<string, unknown>>(),
   ]);
   return Response.json({
     accounts: accounts.results.map((account) => ({ ...account, eventSlugs: assignments.results.filter((item) => item.accountId === account.id).map((item) => item.eventSlug) })),
