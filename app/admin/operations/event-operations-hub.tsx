@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { StaffRole } from "../../../lib/admin-session";
 import {ActionLink} from "../../action";
 import OperationsNav from "../operations-nav";
+import HostRsvpAlerts from "../../organizer/workspace/host-rsvp-alerts";
 import OrganizerActivity from "./organizer-activity";
 
 type Event = {
@@ -126,9 +127,11 @@ function approvalDetail(item: Approval): { removeEvent?: boolean; reason?: strin
 export default function EventOperationsHub({
   actor,
   role,
+  accountId,
 }: {
   actor: string;
   role: StaffRole;
+  accountId?: string;
 }) {
   const [data, setData] = useState<{
     background?: { exceptions: OperationException[]; jobs: BackgroundHealth[] };
@@ -249,6 +252,7 @@ export default function EventOperationsHub({
     <main className="ops-page">
       <OperationsNav actor={actor} role={role} active="/admin/operations" />
       <section className="ops-main operations-hub">
+        {role === "owner" && accountId ? <HostRsvpAlerts accountId={accountId} owner mode="prompt" /> : null}
         <header>
           <div>
             <p>

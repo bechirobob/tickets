@@ -847,7 +847,7 @@ test("approved Hosts and ticket-holder preparation reach only the assigned organ
   assert.match(adminSubmissions, /db\.insert\(hosts\)/u);
   assert.match(adminSubmissions, /db\.insert\(eventHosts\)/u);
   assert.match(organizerWorkspaceApi, /WHERE question\.event_slug IN \(\$\{placeholders\}\)/u);
-  assert.match(organizerWorkspaceApi, /INSERT INTO event_updates/u);
+  assert.match(organizerWorkspaceApi, /INSERT OR IGNORE INTO event_updates/u);
   assert.match(organizerWorkspace, />Before the Night</u);
   assert.match(organizerWorkspace, /data\.attendeeAnswers\.filter\(\(item\) => item\.eventSlug === selectedSlug\)/u);
   assert.match(css, /\.organizer-answers\s*\{[^}]*grid-template-columns:\s*repeat\(2/su);
@@ -1155,4 +1155,37 @@ test("checkout keeps semantic section headings without decorative step numbers",
   assert.match(checkout, /<small>Delivery details<\/small><h2>/u);
   assert.match(checkout, /<small>Payment<\/small><h2>/u);
   assert.match(checkout, /event.isTestEvent \? <div className="preview-checkout-note"/u);
+});
+
+
+test("Host announcements share the conversation bubbles without changing authority or actions", async () => {
+  const room = await readFile(new URL("../app/room/[slug]/room-client.tsx", import.meta.url), "utf8");
+  const features = await readFile(new URL("../app/room-features.css", import.meta.url), "utf8");
+  assert.doesNotMatch(room, /className="room-host-update"/u);
+  assert.match(room, /const host = announcement \|\| message\.role === "organizer"/u);
+  assert.match(room, /const name = announcement \? "Host"/u);
+  assert.match(room, /className="room-host-badge" role="img" aria-label="Event host"/u);
+  assert.match(room, /data-announcement=\{announcement \? message\.id : undefined\}/u);
+  assert.match(room, /announcement \? <div className="room-bubble">/u);
+  assert.match(room, /if \(target instanceof HTMLDetailsElement\) target\.open = true/u);
+  assert.doesNotMatch(features, /\.room-host-update/u);
+  assert.match(features, /\.room-host-badge \{[^}]*flex: 0 0 auto[^}]*border: 1px solid/su);
+});
+
+test("workspace metric tiles share equal content-sized rows without clipping labels", async () => {
+  const css = await readFile(new URL('../app/operations-design.css', import.meta.url), 'utf8');
+  const journey = css.match(/\.operations-journey > div \{([^}]+)\}/u)?.[1] ?? '';
+  assert.match(journey, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/u);
+  assert.match(journey, /grid-auto-rows:1fr/u);
+  assert.match(journey, /align-items:stretch/u);
+  for (const selector of ['.operations-metrics,.organizer-metrics', '.registration-live__counts']) {
+    const rule = css.slice(css.indexOf(`${selector} {`)).split('}')[0];
+    assert.match(rule, /grid-auto-rows:1fr/u);
+    assert.match(rule, /align-items:stretch/u);
+  }
+  const tile = css.match(/\.operations-journey > div > span \{([^}]+)\}/u)?.[1] ?? '';
+  assert.match(tile, /min-width:0/u);
+  assert.match(tile, /overflow-wrap:anywhere/u);
+  assert.doesNotMatch(tile, /(?:height:|overflow:hidden|line-clamp|text-overflow)/u);
+  assert.match(css, /@media\(max-width:600px\)[^\n]*\.operations-journey > div \{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/u);
 });

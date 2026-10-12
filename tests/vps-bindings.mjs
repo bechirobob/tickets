@@ -33,3 +33,13 @@ export async function applyD1Migrations(db) {
 }
 export async function closeBindings() { await env.THE_ROOM.close(); env.DB.close(); operations.close(); rmSync(directory, { recursive: true, force: true }); }
 
+
+// Test-only equivalent of cloudflare:test's storage inspection helper. The
+// supplied stub still targets its own serialized Room; production exports no hook.
+export async function runInDurableObject(stub, callback) {
+  const entry = [...env.THE_ROOM.instances.values()].find(item => item.ctx === stub.ctx);
+  if (!entry) throw new Error('Unknown test Room stub.');
+  await entry.drain();
+  await entry.ctx.ready;
+  return callback(entry.room, entry.ctx);
+}

@@ -58,6 +58,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("payment ticket validation", () => {
+  it("rejects checkout when archive wins after the initial event read", async () => {
+    const batch = env.DB.batch.bind(env.DB);
+    const intercepted = vi.spyOn(env.DB, 'batch').mockImplementationOnce(async statements => {
+      await env.DB.prepare('UPDATE curated_event_records SET archived_at=? WHERE slug=?').bind(new Date().toISOString(),eventSlug).run();
+      return batch(statements);
+    });
+    try {
+      const response = await initializePayment(paymentRequest(eventSlug, 'general'));
+      expect(response.status).toBe(409);
+      expect(await env.DB.prepare('SELECT 1 FROM orders WHERE event_slug=?').bind(eventSlug).first()).toBeNull();
+      expect(await env.DB.prepare('SELECT 1 FROM inventory_reservations WHERE event_slug=?').bind(eventSlug).first()).toBeNull();
+      expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    } finally { intercepted.mockRestore(); await env.DB.prepare('UPDATE curated_event_records SET archived_at=NULL WHERE slug=?').bind(eventSlug).run(); }
+  });
+
   it("loads Room metadata without changing public event fields or checkout tiers", async () => {
     const checkout = await findCuratedEvent(eventSlug);
     const room = await findPublicRoomEvent(eventSlug);

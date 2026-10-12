@@ -15,7 +15,7 @@ export async function GET(request:Request){
   env.DB.prepare('SELECT id,subject,status,scheduled_at AS scheduledAt,recipient_count AS recipientCount,created_at AS createdAt,error,metrics_json AS metricsJson,metrics_at AS metricsAt FROM marketing_campaigns WHERE event_slug=? ORDER BY created_at DESC LIMIT 20').bind(slug).all(),
   env.DB.prepare('SELECT title FROM curated_event_records WHERE slug=? AND removed_at IS NULL').bind(slug).first(),
  ]);
- return json({...summary,event,campaigns:campaigns.results.map(c=>({...c,metrics:JSON.parse(String(c.metricsJson))})),configured:Boolean(env.RESEND_API_KEY)});
+ return json({...summary,event,phoneAlertsAvailable:Boolean(env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY&&env.VAPID_SUBJECT),canPostPhoneUpdates:!session.mustChangePassword&&hasPermission(session,'organizer.workspace'),campaigns:campaigns.results.map(c=>({...c,metrics:JSON.parse(String(c.metricsJson))})),configured:Boolean(env.RESEND_API_KEY)});
 }
 export async function POST(request:Request){
   const bounded = await limitRequestBody(request);

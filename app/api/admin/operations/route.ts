@@ -63,7 +63,7 @@ export async function GET(request: Request) {
   const isOwner = session.role === "owner";
   const analyticsBaseline = await readAnalyticsBaseline(env.DB);
   const events = await env.DB.prepare(
-    "SELECT slug, title, venue, starts_at AS startsAt, event_state AS eventState FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC LIMIT 100",
+    "SELECT slug, title, venue, starts_at AS startsAt, event_state AS eventState FROM curated_event_records WHERE removed_at IS NULL AND archived_at IS NULL ORDER BY starts_at DESC LIMIT 100",
   ).all<{
     slug: string;
     title: string;
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
         (SELECT COUNT(*) FROM gate_devices WHERE event_slug = event.slug AND julianday(last_seen_at) > julianday('now','-2 minutes')) AS activeDevices,
         (SELECT COALESCE(SUM(pending_offline_scans),0) FROM gate_devices WHERE event_slug = event.slug AND julianday(last_seen_at) > julianday('now','-30 minutes')) AS pendingOffline,
         (SELECT MAX(created_at) FROM gate_checkin_events WHERE event_slug = event.slug) AS lastEntryAt
-      FROM curated_event_records event WHERE event.removed_at IS NULL ORDER BY event.starts_at DESC
+      FROM curated_event_records event WHERE event.removed_at IS NULL AND event.archived_at IS NULL ORDER BY event.starts_at DESC
     `,
     ).all<Record<string, unknown>>(),
     env.DB.prepare(

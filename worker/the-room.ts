@@ -151,9 +151,9 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     this.assertWriterAvailable();
     return this.trackedRoomOperation('room:webSocketMessage', () => this.webSocketMessageUntracked(socket, payload));
   }
-  async publishAnnouncement(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput): Promise<RoomMessage> {
+  async publishAnnouncement(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput, submissionId?: string): Promise<RoomMessage> {
     this.assertWriterAvailable();
-    return this.trackedRoomOperation('room:publishAnnouncement', () => this.publishAnnouncementUntracked(actor, content, pinned, policy));
+    return this.trackedRoomOperation('room:publishAnnouncement', () => this.publishAnnouncementUntracked(actor, content, pinned, policy, submissionId));
   }
   async removeEventContent(): Promise<void> {
     this.assertWriterAvailable();
@@ -499,11 +499,20 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     this.schedulePresence();
   }
 
-  private async publishAnnouncementUntracked(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput): Promise<RoomMessage> {
+  private async publishAnnouncementUntracked(actor: string, content: string, pinned: boolean, policy: RoomPolicyInput, submissionId?: string): Promise<RoomMessage> {
     const cleaned = content.trim();
     if (!cleaned || cleaned.length > MAX_MESSAGE_LENGTH) throw new Error("Invalid announcement length");
     this.configure(policy);
-    const message = this.insertMessage({
+    if (submissionId && !/^[a-f0-9]{64}$/u.test(submissionId)) throw new Error("Invalid announcement submission");
+    const previous = submissionId ? this.ctx.storage.sql.exec<StoredRoomMessage>(`
+      SELECT id, sequence, attendee_id AS attendeeId, display_name AS displayName, role, room_badge AS roomBadge, kind,
+        content, parent_id AS parentId, pinned, created_at AS createdAt, deleted_at AS deletedAt
+      FROM messages WHERE id = ? LIMIT 1
+    `, submissionId).toArray()[0] : undefined;
+    if (previous && (previous.attendeeId !== `admin:${actor}` || previous.kind !== 'announcement' || previous.content !== cleaned || Boolean(previous.pinned) !== pinned || previous.deletedAt)) {
+      throw new Error("This announcement changed. Start a new announcement.");
+    }
+    const message: RoomMessage = previous ? { ...previous, pinned: Boolean(previous.pinned), reactions: [] } : this.insertMessage({
       attendeeId: `admin:${actor}`,
       displayName: "BeCore Host",
       role: "organizer",
@@ -512,9 +521,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       content: cleaned,
       parentId: null,
       pinned,
-    });
-    this.broadcast({ type: "message", message });
-    await notifyRoomMessage(this.env, {
+    }, submissionId);
+    if (!previous) this.broadcast({ type: "message", message });
+    // A stale retry must not recreate push jobs after their retention period.
+    if (!previous || Date.now() - Date.parse(previous.createdAt) < 86400000) await notifyRoomMessage(this.env, {
       eventSlug: policy.eventSlug,
       messageId: message.id,
       senderAttendeeId: `admin:${actor}`,
@@ -687,8 +697,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     return row.roomBadge === "VIP" ? "VIP" : null;
   }
 
-  private insertMessage(input: Omit<RoomMessage, "id" | "sequence" | "createdAt" | "deletedAt" | "reactions">): RoomMessage {
-    const id = crypto.randomUUID();
+  private insertMessage(input: Omit<RoomMessage, "id" | "sequence" | "createdAt" | "deletedAt" | "reactions">, id: string = crypto.randomUUID()): RoomMessage {
     const createdAt = new Date().toISOString();
     this.recentMessages = null;
     const row = this.ctx.storage.sql.exec<{ sequence: number }>(`

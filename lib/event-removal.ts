@@ -1,4 +1,32 @@
 import { recordAudit, type AdminSession } from './admin-session';
+import { eventArchiveEligibility } from './event-archive';
+
+// This is an optimistic-concurrency receipt, not an authorization token. Owner
+// access, archived state and booking obligations are checked independently.
+const archiveRemovalVersion = `json_array(archived_at, updated_at,
+  (SELECT COUNT(*) FROM event_registrations r WHERE r.event_slug=curated_event_records.slug),
+  (SELECT COUNT(*) FROM tickets t WHERE t.event_slug=curated_event_records.slug),
+  (SELECT COUNT(*) FROM guest_entries g WHERE g.event_slug=curated_event_records.slug),
+  (SELECT COUNT(*) FROM room_flashes f WHERE f.event_slug=curated_event_records.slug),
+  (SELECT COUNT(*) FROM orders o WHERE o.event_slug=curated_event_records.slug),
+  (SELECT COUNT(*) FROM event_audience_contacts c WHERE c.event_slug=curated_event_records.slug),
+  (SELECT COUNT(*) FROM tickets t WHERE t.event_slug=curated_event_records.slug AND t.status='issued'),
+  (SELECT COUNT(*) FROM event_registrations r WHERE r.event_slug=curated_event_records.slug AND r.status IN ('confirmed','requested','waitlisted','interested','unverified')),
+  (SELECT COUNT(*) FROM orders o WHERE o.event_slug=curated_event_records.slug AND o.payment_provider NOT IN ('rsvp','complimentary') AND o.total_amount_minor>o.refunded_amount_minor AND o.status IN ('paid','refund_pending','requires_refund','disputed')),
+  (SELECT COUNT(*) FROM room_flashes f WHERE f.event_slug=curated_event_records.slug AND f.status<>'deleted'))`;
+export async function archivedRemovalImpact(db: D1Database, slug: string) {
+  return db.prepare(`SELECT slug, title,
+    (SELECT COUNT(*) FROM orders o WHERE o.event_slug=curated_event_records.slug AND o.payment_provider NOT IN ('rsvp','complimentary') AND o.total_amount_minor>o.refunded_amount_minor AND o.status IN ('paid','refund_pending','requires_refund','disputed')) AS paidBookings,
+    (SELECT COUNT(*) FROM event_registrations r WHERE r.event_slug=curated_event_records.slug AND r.status IN ('confirmed','requested','waitlisted','interested','unverified')) AS registrations,
+    archived_at AS archivedAt, ${archiveRemovalVersion} AS confirmationVersion,
+    (${eventArchiveEligibility}) AS eligible,
+    (SELECT COUNT(*) FROM tickets t WHERE t.event_slug=curated_event_records.slug AND t.status='issued') AS issuedTickets,
+    (SELECT COUNT(*) FROM guest_entries g WHERE g.event_slug=curated_event_records.slug) AS guestEntries,
+    (SELECT COUNT(*) FROM room_flashes f WHERE f.event_slug=curated_event_records.slug AND f.status<>'deleted') AS flashes
+    FROM curated_event_records WHERE slug=? AND archived_at IS NOT NULL AND removed_at IS NULL`).bind(slug)
+    .first<{slug:string;title:string;paidBookings:number;registrations:number;archivedAt:string;confirmationVersion:string;eligible:number;issuedTickets:number;guestEntries:number;flashes:number}>();
+}
+
 export async function removalImpact(db: D1Database, slug: string) {
   return db.prepare(`SELECT e.slug, e.title, e.removed_at AS removedAt, e.event_state AS eventState,
     (e.schedule_status = 'coming_soon' OR julianday(e.ends_at) >= julianday('now')) AS upcoming,
@@ -7,17 +35,20 @@ export async function removalImpact(db: D1Database, slug: string) {
     FROM curated_event_records e WHERE e.slug = ?`).bind(slug).first<{ slug: string; title: string; removedAt: string | null; eventState: string; upcoming: number; paidBookings: number; registrations: number }>();
 }
 /** Tombstone first; cleanup is repeatable and may safely resume after a failure. */
-export async function removeEvent(env: Cloudflare.Env, session: AdminSession, slug: string, approved = false, reason = "Event removal") {
+export async function removeEvent(env: Cloudflare.Env, session: AdminSession, slug: string, approved = false, reason = "Event removal", archiveConfirmation?: string) {
+  if (archiveConfirmation !== undefined && (session.role !== 'owner' || session.mustChangePassword)) throw new Error('Owner access is required.');
   const impact = await removalImpact(env.DB, slug);
   if (!impact) throw new Error('Event not found.');
   if (!approved && !impact.removedAt && impact.eventState !== "cancelled" && impact.upcoming && impact.paidBookings) throw new Error('This event has paid bookings. Request removal approval first.');
   const now = new Date().toISOString();
   const guard = approved || impact.removedAt || impact.eventState === 'cancelled' ? '' : `AND NOT ((schedule_status = 'coming_soon' OR julianday(ends_at) >= julianday('now')) AND EXISTS (SELECT 1 FROM orders WHERE event_slug = curated_event_records.slug AND payment_provider NOT IN ('rsvp','complimentary') AND total_amount_minor > refunded_amount_minor AND status IN ('paid','refund_pending','requires_refund','disputed')))`;
+  const archiveGuard = archiveConfirmation === undefined ? '' : `AND archived_at IS NOT NULL AND ${eventArchiveEligibility} AND ${archiveRemovalVersion} = ?`;
+  const markBindings = archiveConfirmation === undefined ? [now, now, slug] : [now, now, slug, archiveConfirmation];
   const [marked] = await env.DB.batch([
-    env.DB.prepare(`UPDATE curated_event_records SET removed_at = COALESCE(removed_at, ?), status = 'unpublished', scheduled_publish_at = NULL, updated_at = ? WHERE slug = ? ${guard}`).bind(now, now, slug),
+    env.DB.prepare(`UPDATE curated_event_records SET removed_at = COALESCE(removed_at, ?), status = 'unpublished', scheduled_publish_at = NULL, updated_at = ? WHERE slug = ? ${guard} ${archiveGuard}`).bind(...markBindings),
     env.DB.prepare("INSERT OR IGNORE INTO event_removal_cleanup (event_slug, created_at) SELECT slug, ? FROM curated_event_records WHERE slug = ? AND removed_at IS NOT NULL").bind(now, slug),
   ]);
-  if (!marked.meta.changes) throw new Error('New bookings arrived. Refresh and request removal approval.');
+  if (!marked.meta.changes) throw new Error(archiveConfirmation === undefined ? 'New bookings arrived. Refresh and request removal approval.' : 'The archive or its bookings changed. Review the deletion impact again.');
   await recordAudit(env.DB, { session, action: 'event.removed', targetType: 'event', targetId: slug, outcome: 'success', detail: reason.slice(0, 500) });
   await cleanupRemovedEvent(env, slug);
   return { removed: true };

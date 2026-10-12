@@ -10,7 +10,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // scheduled artwork remains available only to the curation workspace.
   const media = await env.DB.prepare(`SELECT poster_data AS body, poster_content_type AS type,
     EXISTS (SELECT 1 FROM curated_event_records e WHERE e.submission_id=s.id
-      AND e.removed_at IS NULL AND e.is_test_event=0
+      AND e.removed_at IS NULL AND e.archived_at IS NULL AND e.is_test_event=0
       AND (e.status='published' OR (e.status='scheduled' AND e.scheduled_publish_at<=?))) AS public
     FROM party_submissions s WHERE s.id=? LIMIT 1`)
     .bind(new Date().toISOString(), id).first<{body: number[] | ArrayBuffer; type: string; public: number}>();

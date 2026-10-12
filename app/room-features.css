@@ -27,18 +27,12 @@
 .room-page .room-pinned summary b { font-size: 12px; flex: 0 0 auto; }
 .room-page .room-pinned summary span { order: 0; flex-basis: auto; padding-left: 0; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .room-page .room-pinned > p { padding: 0 10px 12px 32px; margin: 0; font-size: 14px; line-height: 1.5; }
-.room-host-update { margin: 12px 0 12px 36px; border: 0; background: transparent; color: #f5d3b5; }
-.room-host-update summary { min-height: 44px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
-.room-host-update summary::-webkit-details-marker, .room-pinned summary::-webkit-details-marker { display: none; }
-.room-host-update summary b { flex: 0 0 auto; font-size: 12px; font-weight: 600; }
-.room-host-update summary span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ead6df; font-size: 13px; }
-.room-host-update summary > svg { flex: 0 0 auto; }
-.room-host-update > div { margin: 0; padding: 0 20px 10px 23px; }
-.room-host-update p { margin: 0 0 6px; font-size: 14px; line-height: 1.5; color: #fff0e4; white-space: pre-wrap; }
-.room-host-update time { font-size: 12px; color: #d5bfcd; }
-:is(.room-host-update, .room-pinned)[open] summary > svg:last-child { rotate: 0deg; transform: rotate(180deg); }
-:is(.room-host-update, .room-pinned) summary > svg:last-child { transition: transform 160ms ease; }
-:is(.room-host-update, .room-pinned)[open] > :not(summary) { animation: room-note-in 160ms ease-out; }
+/* Host identity uses a compact mark; its message keeps the normal chat bubble. */
+.room-message__body > header .room-host-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto; min-width: 18px; min-height: 18px; padding: 2px; border: 1px solid #ac8999; border-radius: 5px; color: #f5d3b5; font-size: 10px; line-height: 1; letter-spacing: 0; text-transform: none; }
+.room-pinned summary::-webkit-details-marker { display: none; }
+.room-pinned[open] summary > svg:last-child { rotate: 0deg; transform: rotate(180deg); }
+.room-pinned summary > svg:last-child { transition: transform 160ms ease; }
+.room-pinned[open] > :not(summary) { animation: room-note-in 160ms ease-out; }
 .room-page .room-flash-message { padding-block: 3px; align-items: center; }
 .room-page .room-flash-message__body { width: auto; max-width: min(70%, 340px); }
 .room-page .room-flash-message__body > button { display: block; width: auto; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; }
@@ -210,7 +204,7 @@
   .chat-action-tray:popover-open, .chat-action-tray[data-phase='closing']:popover-open,
   .chat-action-tray .chat-action-reactions button > span, .chat-tapbacks .chat-reaction,
   .room-overlay::backdrop, .room-overlay[data-phase='closing']::backdrop, .room-overlay > *, .room-overlay[data-phase='closing'] > *,
-  :is(.room-host-update, .room-pinned)[open] > :not(summary), .room-concierge-sent > svg { animation: none; }
+  .room-pinned[open] > :not(summary), .room-concierge-sent > svg { animation: none; }
   .flash-viewer__progress i, .flash-mark__glyph svg, .chat-action-reactions button > span { transition: none; }
 }
 @media (prefers-reduced-transparency: reduce) { .room-overlay::backdrop { backdrop-filter: none; background: #211820; } }

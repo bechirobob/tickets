@@ -31,12 +31,12 @@ export async function GET(request: Request) {
            event.capacity, event.status, submission.status AS submissionStatus, submission.created_at AS submittedAt,
            COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS paidOrders,
            (SELECT started_at FROM analytics_baseline WHERE id=1) AS analyticsBaseline,
-           COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS grossMinor,
+           COALESCE((SELECT SUM(${session.role==='owner'?'total_amount_minor':'face_amount_minor'}) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS grossMinor,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status IN ('issued','checked_in')), 0) AS issuedAdmissions,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status = 'checked_in'), 0) AS checkedInAdmissions
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    WHERE ${scope.sql} AND event.removed_at IS NULL
+    WHERE ${scope.sql} AND event.removed_at IS NULL AND event.archived_at IS NULL
     ORDER BY event.starts_at DESC
   `);
   const submissionScope=organizerScope(session,'linked');
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     SELECT id, organizer_name AS organizerName, title, status, review_note AS reviewNote,
            event_slug AS eventSlug, starts_at AS startsAt, created_at AS createdAt, updated_at AS updatedAt
     FROM party_submissions
-    ${session.role === "owner" ? "WHERE 1 = 1" : "WHERE contact_email = ?"} AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = party_submissions.event_slug AND e.removed_at IS NOT NULL)
+    ${session.role === "owner" ? "WHERE 1 = 1" : "WHERE contact_email = ?"} AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = party_submissions.event_slug AND (e.removed_at IS NOT NULL OR e.archived_at IS NOT NULL))
     AND (event_slug IS NULL OR EXISTS(SELECT 1 FROM curated_event_records linked WHERE linked.slug=party_submissions.event_slug AND ${submissionScope.sql}))
     ORDER BY created_at DESC
     LIMIT 250
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
       FROM event_ticket_tiers tier LEFT JOIN inventory_reservations reservation ON reservation.ticket_tier_id = tier.id
       WHERE tier.event_slug IN (${placeholders}) GROUP BY tier.id ORDER BY tier.event_slug, tier.sort_order`).bind(now, scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT id, event_slug AS eventSlug, period_start AS periodStart, period_end AS periodEnd, gross_minor AS grossMinor,
-      booking_fees_minor AS bookingFeesMinor, refunds_minor AS refundsMinor, net_ticket_sales_minor AS netTicketSalesMinor, currency, status
+      ${session.role==='owner'?'booking_fees_minor AS bookingFeesMinor,':''} refunds_minor AS refundsMinor, net_ticket_sales_minor AS netTicketSalesMinor, currency, status
       FROM event_settlements WHERE event_slug IN (${placeholders}) ORDER BY period_end DESC`).bind(scopedSlugs).all<Record<string, unknown>>(),
     env.DB.prepare(`SELECT id, event_slug AS eventSlug, kind, order_id AS orderId, detail, status, review_note AS reviewNote, created_at AS createdAt
       FROM organizer_requests WHERE event_slug IN (${placeholders}) ORDER BY created_at DESC LIMIT 100`).bind(scopedSlugs).all<Record<string, unknown>>(),
@@ -136,16 +136,19 @@ export async function POST(request: Request) {
     const requestId = requestMetadata(request).requestId;
 
     if (action === "announcement") {
-      const content = String(body.content ?? "").trim().slice(0, 1000);
-      if (content.length < 2) throw new Error("Write a clear announcement first.");
+      const content = String(body.content ?? "").trim();
+      if (content.length < 2 || content.length > 500) throw new Error("Write an announcement of 2 to 500 characters.");
+      if (body.submissionKey !== undefined && (typeof body.submissionKey !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(body.submissionKey))) throw new Error('Preview this announcement again.');
+      // A caller's UUID cannot address another author, event or operation.
+      const submissionId = body.submissionKey ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['host-announcement', session.accountId, eventSlug, body.submissionKey])))), byte => byte.toString(16).padStart(2, '0')).join('') : undefined;
       const policy = await resolveRoomPolicy(env.DB, eventSlug);
       if (!policy) throw new Error("This Room is not available.");
-      const message = await env.THE_ROOM.getByName(eventSlug).publishAnnouncement(session.actor, content, Boolean(body.pinned), policy);
+      const message = await env.THE_ROOM.getByName(eventSlug).publishAnnouncement(session.actor, content, Boolean(body.pinned), policy, submissionId);
       await env.DB.batch([
-        env.DB.prepare(`INSERT INTO room_moderation_actions (id, event_slug, actor, action, message_id, note, created_at) VALUES (?, ?, ?, 'announcement', ?, ?, ?)`)
-          .bind(crypto.randomUUID(), eventSlug, `${session.email} (${session.role})`, message.id, content, now),
-        env.DB.prepare(`INSERT INTO event_updates (id, event_slug, title, body, pinned, published_at, published_by) VALUES (?, ?, 'Night Update', ?, ?, ?, ?)`)
-          .bind(crypto.randomUUID(), eventSlug, content, Boolean(body.pinned), now, session.actor),
+        env.DB.prepare(`INSERT OR IGNORE INTO room_moderation_actions (id, event_slug, actor, action, message_id, note, created_at) VALUES (?, ?, ?, 'announcement', ?, ?, ?)`)
+          .bind(submissionId ?? crypto.randomUUID(), eventSlug, `${session.email} (${session.role})`, message.id, content, message.createdAt),
+        env.DB.prepare(`INSERT OR IGNORE INTO event_updates (id, event_slug, title, body, pinned, published_at, published_by) VALUES (?, ?, 'Night Update', ?, ?, ?, ?)`)
+          .bind(submissionId ?? crypto.randomUUID(), eventSlug, content, Boolean(body.pinned), message.createdAt, session.actor),
       ]);
       await recordAudit(env.DB, { session, action: "organizer.room_announcement", targetType: "event", targetId: eventSlug, outcome: "success", requestId });
       return Response.json({ announced: true, messageId: message.id });
