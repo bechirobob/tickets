@@ -53,7 +53,7 @@ def retention_identity(info, directory=False):
     return tuple(getattr(info, field) for field in fields)
 
 # Only individually reviewed blobs below may extend the application/runtime or
-# create additive tables, plus one exact owner-requested public host label fix.
+# perform the exact reviewed additive/schema transitions and public corrections.
 # Handover, routing, service units and arbitrary scripts remain outside this
 # operator. Existing customer rows are never rewritten.
 APPLICATION_FILES = {
@@ -135,7 +135,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "8c32eaef83058229a828eeb9902d4e691338b9a8",
+    "ops/vps/test_code_release.py": "58e0c663648e6edaabc72bda3be24e55b0f37bef",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -468,7 +468,111 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/prepare-seev-browser-fixture.mjs": "46dfe0aa8f609bc810e128ec006d1c3f3a3c9442",
     "tests/e2e/checkout-quantity.spec.ts": "63118dc45063fdc9d214d1c677846fa47dde0c22",
 }
+# One exact workspace release; historical application pins remain unchanged.
+# The published snapshot is application evidence, never its own control anchor.
+WORKSPACE_RELEASE_BASELINE = "379be609c49e8994dbd6b5bf5883c9be733369b1"
+WORKSPACE_BASE_TREE = "f02fe2f1b013af5c0ac873e4d9af2eddb47e636a"
+WORKSPACE_APP_SNAPSHOT = "f37648b5a12c51117f6796b219cecacf14f533db"
+WORKSPACE_APP_TREE = "cb4e9eb42769b2f64cc905c7456f2237dfcc8b02"
+WORKSPACE_PACKAGE_BLOBS = ("91d44944a682f992880c44785d7b14eda9204c18",
+                           "ee7d351bd660b932e9870b6d542da4426386eca5")
+WORKSPACE_LOCK_BLOB = "47a4eaca5743b768598462d8b66a2ef49a442b4e"
+WORKSPACE_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
+WORKSPACE_MIGRATION_FILES = {
+    "drizzle/0065_recoverable_event_archive.sql",
+    "drizzle/0066_owner_event_notifications.sql",
+}
+WORKSPACE_APPLICATION_BLOBS = {
+    "README.md": "ee8c4c39e0bda6627d6e223d735389c7c09cc3b8",
+    "app/access-polish.css": "7bbd696c2ebe334da3a67b94c35fb9465a5d6224",
+    "app/admin/account/page.tsx": "13b7dadef5035b32247428ea663bc1ddd7fad999",
+    "app/admin/curation-desk.tsx": "5d126b05427503f25140aeae8c154155996dfc86",
+    "app/admin/events/archived-event-deletion.tsx": "582f038594cbb4ede01c166d7ab814ac23198f84",
+    "app/admin/events/event-archive.tsx": "6187b91f13045c291f522e05f7ebd309236fb8c3",
+    "app/admin/events/event-cleanup.tsx": "63254af50fc3381bb1f52ec15556fac1edd4e744",
+    "app/admin/events/event-operations.tsx": "9789d349e4d38692711d16bc1cb47d98155d92b8",
+    "app/admin/operations/event-operations-hub.tsx": "d0683e7a9110ec1adca8d3d98b619852f3e2cfbe",
+    "app/admin/operations/page.tsx": "07ed7b1c256376a696d2387f1417b5abe3a26feb",
+    "app/admin/page.tsx": "8ea6bd9ea97a5e8aba1a5cecf1e147cb016162af",
+    "app/announcement-composer.tsx": "0191df00ae288b769e2e764af8f11bba5fa389bc",
+    "app/api/admin/accounts/route.ts": "82a912a9b82f2b305d91a038d027f31748ed06e8",
+    "app/api/admin/campaigns/route.ts": "22346091e68f9592748e9dc4d893bec11ce117f7",
+    "app/api/admin/events/archive/cleanup/route.ts": "08e4a4940ca0165af9ba312ef23dd57c748c814f",
+    "app/api/admin/events/archive/deletion/route.ts": "a21f98ac70244c5a6e62a2166a58d4d2c9914610",
+    "app/api/admin/events/archive/route.ts": "325c492f81f7df44e18d14451cd6e420a108506f",
+    "app/api/admin/events/route.ts": "79a6ec6502966c51e3f0ae967336ec290939540c",
+    "app/api/admin/operations/route.ts": "7a884be2befef67e94447aadab30865cdd3e4b7e",
+    "app/api/admin/promoters/route.ts": "d2f795d704f06c720e1b9a2d223c2ee8768f4f12",
+    "app/api/admin/rooms/route.ts": "aa6c19353815ef771319ca2313878067925fbded",
+    "app/api/admin/submissions/route.ts": "d0c97047577d574cd75d9ca3f734495dd53d4fa9",
+    "app/api/media/[id]/route.ts": "3deb1a3773b8dc1c8ebe9783923ee5df0954b9fa",
+    "app/api/organizer/analytics/route.ts": "75203bf6aff0bc13488bf0d0155d33650f20ce2a",
+    "app/api/organizer/assistant/events/route.ts": "857f205b2104e077ee50d79ccdb5d50ef5443001",
+    "app/api/organizer/assistant/route.ts": "9f268a5ee56c891402988ee79592fc88d9c99bc6",
+    "app/api/organizer/business/route.ts": "d6b9db136e59f27b0e6a8c95f1ee3c6e44b02c81",
+    "app/api/organizer/notifications/subscription/route.ts": "00510d6ff34994a514871d8c7a3bc4892ff8b3d3",
+    "app/api/organizer/workspace/route.ts": "91ce18864faed995274f8d41334fb19019e4a51e",
+    "app/api/payments/initialize/route.ts": "c5f33c5322ee3213fe1231990dd896551447242f",
+    "app/api/waitlist/route.ts": "8254e4244e4d3e9444db6b65b496eb09a93fc327",
+    "app/events.ts": "88331e11bef5ae8f9417d65c6eb0a325850a517d",
+    "app/help/help-centre.tsx": "f9b394985c7660b760e5f5628358ea1d128216c7",
+    "app/operations-design.css": "389e146a6393036fe88d61130caea57cb9576951",
+    "app/organizer/analytics/organizer-analytics.tsx": "f85e24f1fb9c1115de4c738c5ae1755a1198f14e",
+    "app/organizer/workspace/host-rsvp-alerts.css": "533779ab2ab6f356252eb547342bab2f2d02e3d6",
+    "app/organizer/workspace/host-rsvp-alerts.tsx": "7747a4e3ac8e7dab8fb9cd7b8879c42b0fb8d7f2",
+    "app/organizer/workspace/organizer-suite.tsx": "4dc74e21268f8d31b72efbac18cebe08c1962af1",
+    "app/organizer/workspace/organizer-workspace.tsx": "b8d40a84d83d6d17507ac77b2d9f6756f4050dca",
+    "app/organizer/workspace/suite-records.tsx": "6014ec26425de6f5e77413c5009eea13596c4daf",
+    "app/organizer/workspace/suite.css": "0b44251a102b84f004114efc58e223529a13f289",
+    "app/phone-announcement-composer.tsx": "12c95fee7dd4f459b681388bb260fcb292c1051b",
+    "app/room-features.css": "11bda156d6b7884535417e3a6cac6427763f842b",
+    "app/room/[slug]/room-client.tsx": "4f26b437d821f0edeabcfa6a2c4bf163afed5fd3",
+    "db/schema.ts": "5acd9cb94f4a57e7c7665af311065544318e1b1b",
+    "docs/operations/host-rsvp-push.md": "6a3cb719719ae5c24eb088f5a8e861da804fcc8c",
+    "lib/admin-session.ts": "2cbf5e145a7a24d27dbc70419f8daaddb72ef611",
+    "lib/event-archive.ts": "f497f6c4e03e0e0ce40dc0dffae2991dd829880f",
+    "lib/event-removal.ts": "bf5d4a55f91c81e0392bf67eb36618ebe023a468",
+    "lib/host-summary.ts": "4f60b4df73ce53d601fda743283425085c62927e",
+    "lib/organizer-access.ts": "f7d980bb51c9a326c8f09bfec2e818803a7dc202",
+    "lib/organizer-records.ts": "882f087425b5c0740eefd4cddcb651a9bdbe5c61",
+    "lib/organizer-rsvp-push.ts": "7774bdd2061f47c18bd4c4f1f08ebd44622f7752",
+    "lib/preview-events.ts": "aded66795d7e3e9712d29e5f3801b2d8bafb1d2b",
+    "lib/registrations.ts": "8c0479748e3981ba238903f7fc5189a4263b71ad",
+    "package.json": "ee7d351bd660b932e9870b6d542da4426386eca5",
+    "styles/workspace.css": "f2e4451bd6226fa036e24acb5186bd4aa8b5f91f",
+    "tests/app-navigation.test.mjs": "7a8789d4b74987df393cd8bdcd1795991a25b7a5",
+    "tests/e2e/host-announcement-channels.spec.ts": "6c2be77a05fd9a205f666df38287dd81d27a855a",
+    "tests/e2e/host-rsvp-alerts.spec.ts": "f35bc36174d47e151004c4429e19a93a241731e6",
+    "tests/e2e/operations.spec.ts": "859e8cd2132ccbaf300a8481a4f1043c0de48332",
+    "tests/e2e/room-features.spec.ts": "b49a9e1340a151bfaa94509a299513a181cd5060",
+    "tests/e2e/room-host-messages.spec.ts": "6635518901d17a54e54f4b9c811c0779f14b02ab",
+    "tests/e2e/room-identity.spec.ts": "da440a0e39dc06cef8d7c8b3695d16b6ca738a4e",
+    "tests/event-archive.test.ts": "8786fdb9c6502760b748d5f89e08fc12afa301db",
+    "tests/host-announcement-channel.test.ts": "424f1dab02f8aeecdfe2a7c0088e6cda0a457823",
+    "tests/mobile-ui.test.mjs": "f8b8e14f44355fefff33b559d5a63fc91e8c34c9",
+    "tests/organizer-analytics.test.ts": "82719fc4b85051a92091823e8ed115fe085ae583",
+    "tests/organizer-business.test.ts": "7d293efc50662bcb279a9c3e284d3923a8c0b0a5",
+    "tests/organizer-finance-ui.test.mjs": "4f4699ac19b186e5eb5b75746224d78fd23b90dc",
+    "tests/organizer-rsvp-push.test.ts": "cf56520260c6d5aa425251fcea629ca789f56c35",
+    "tests/owner-notification-wiring.test.mjs": "f4ddb1b381dd07957eb868f91d3d3b6b19b3d86d",
+    "tests/payment-selection.test.ts": "1e63fdfed33240ad0d955e667717eccfe54327f5",
+    "tests/registrations.test.ts": "6f4a156f28f301ad3dd7a1609d742c87104ab5ce",
+    "tests/vps-bindings.mjs": "89a9d7d85e2839d7ccc35836b1e7378b56d331b3",
+    "worker/the-room.ts": "f5849f1cd02093e6d752631b36267af336b31a14",
+}
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
+RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
+OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
+WORKSPACE_SCHEMA_PATHS = (RECOVERABLE_ARCHIVE_PATH, OWNER_NOTIFICATIONS_PATH)
+# The two outbox tables and three indexes from the exact admitted 0063 schema.
+# Neither these objects nor their existing rows may change when replacing its
+# two capture triggers. No historical deliveries are inserted by this release.
+OWNER_NOTIFICATION_PREREQUISITES = {
+    "organizer_push_subscriptions", "organizer_push_account",
+    "organizer_rsvp_push_deliveries", "organizer_rsvp_push_device", "organizer_rsvp_push_pending",
+}
+OWNER_NOTIFICATION_PREREQUISITES_SHA256 = "3c72c8eae3da1a730338f35f9ea5980a13ab1b5576c4c1e378c8b49996de2527"
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
 PINK_EDITION_PATH = "drizzle/0062_guest_list_confirmed_october_25.sql"
@@ -485,6 +589,22 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    RECOVERABLE_ARCHIVE_PATH: {
+        "kind": "recoverable-event-archive",
+        "blob": "28970c4f5b2dcd706357c60e1af9178201c57408",
+        "sha256": "8c6781a96369ac46546df248416b9e670138cfaabf955e63b2e78d6692043cc9",
+        "beforeSchemaSha256": "4bda7df653f889115f123decc2e1d85fed245fdf697e60aab0b2aa19931e7e07",
+        "schemaSha256": "b9a877b17f682097be0b324321cf51c9afa737fd440c6ece2ddfa0a6576b2305",
+        "objects": ["curated_event_archive_idx", "curated_event_records"],
+    },
+    OWNER_NOTIFICATIONS_PATH: {
+        "kind": "owner-event-notifications",
+        "blob": "e9842189f6b63dc72c90997773cb61edb34842b7",
+        "sha256": "a23ddeeb8e4d4e8cad94246d6a807a9c4aba2037e427a0a2e7052f61e7396f25",
+        "beforeSchemaSha256": "a4a54363400ac45a9ded3decc38f989194c1740239461e9dd336de9def056d63",
+        "schemaSha256": "ecbaffb928eb8994cd254d749ef6f034d8d7c0dab82ef296459a89194832a5fb",
+        "objects": ["organizer_rsvp_push_created", "organizer_rsvp_push_verified"],
+    },
     "drizzle/0064_host_purchase_push.sql": {'blob': 'a0abdccd9551012b5759294db1cc32f83bf69240', 'sha256': '483a853e328a9217cd3195a9ea4bc86be3bd4eabce5bd5afe228b4b3737391cd', 'schemaSha256': 'b8b8ef20df80920fba1e0a45425aed53a907646bdc43a5bfc4ce19cf9b0e2d75', 'tables': ['organizer_purchase_push_deliveries']},
     HOST_RSVP_PUSH_PATH: {'blob': '77ab9cbf55b43609f3e478fb5ff8807d7927f02a', 'sha256': '916a7f508d43fbd97061df03db9f1745f5ffabf95de764772c9725e78be539ea', 'schemaSha256': 'a9f7a6cf47d5e95bedf5b971496c305177b75ed9cc783451e733962765bd69f8', 'tables': ['organizer_push_subscriptions', 'organizer_rsvp_push_deliveries'], 'triggers': {'organizer_rsvp_push_created': 'event_registrations', 'organizer_rsvp_push_verified': 'event_registrations'}},
     PINK_EDITION_PATH: {'kind': 'pink-edition-confirmed', 'blob': 'f6282183059583f9ac9254977e1cc36706c7f3ca', 'sha256': '338d89e27f255535a41f05b2a60c5eb6639f690218db61f38060b11c8c506df5'},
@@ -820,11 +940,45 @@ def verify_changed_modes(expected, source):
             require(before_mode == after_mode, "Source file mode changed without review.")
 
 
+def reviewed_application_blobs(expected, source):
+    """Select the exact workspace tree only from its approved live baseline."""
+    if expected != WORKSPACE_RELEASE_BASELINE:
+        return REVIEWED_APPLICATION_BLOBS
+    require(git("rev-parse", expected + "^{tree}") == WORKSPACE_BASE_TREE
+            and git("rev-parse", WORKSPACE_APP_SNAPSHOT + "^{tree}") == WORKSPACE_APP_TREE
+            and git("rev-list", "--parents", "-n", "1", WORKSPACE_APP_SNAPSHOT)
+            == WORKSPACE_APP_SNAPSHOT + " " + expected,
+            "Workspace snapshot or its exact baseline changed.")
+    require(set(git("diff", "--name-only", expected, WORKSPACE_APP_SNAPSHOT).splitlines())
+            == set(WORKSPACE_APPLICATION_BLOBS) | WORKSPACE_MIGRATION_FILES,
+            "Workspace snapshot differs from its complete reviewed inventory.")
+    # C must be independently selected and already merged, with no application
+    # changes. P copies S application bytes onto C; S need not be a P ancestor.
+    verify_trusted_operator(source)
+    trusted = os.environ["BECORE_TRUSTED_BASE"]
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) <= WORKSPACE_CONTROL_FILES,
+            "Workspace trusted controls contain application changes.")
+    require(set(git("diff", "--name-only", WORKSPACE_APP_SNAPSHOT, source).splitlines())
+            <= WORKSPACE_CONTROL_FILES,
+            "Workspace candidate differs from the exact application snapshot.")
+    pins = {**REVIEWED_APPLICATION_BLOBS, **WORKSPACE_APPLICATION_BLOBS}
+    for name in sorted(WORKSPACE_CONTROL_FILES):
+        blob = git("rev-parse", trusted + ":" + name)
+        require(git("rev-parse", source + ":" + name) == blob,
+                "Workspace candidate controls differ from the trusted baseline.")
+        pins[name] = blob
+    # SQL still requires its independent reviewed-migration entry and validator.
+    return pins
+
+
 def vetted_changes(expected, source):
     subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, source], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
     verify_changed_modes(expected, source)
     changed = git("diff", "--name-only", expected, source).splitlines()
+    application_pins = reviewed_application_blobs(expected, source)
     for name in changed:
         if name == "ops/vps/code-release.py":
             # verify_trusted_operator already bound these executing bytes to the
@@ -835,8 +989,8 @@ def vetted_changes(expected, source):
             require(git("rev-parse", source + ":" + name) == blob,
                     "Candidate operator differs from independently trusted staged source.")
             continue
-        if name in REVIEWED_APPLICATION_BLOBS or name in REVIEWED_MIGRATIONS:
-            reviewed = REVIEWED_APPLICATION_BLOBS.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
+        if name in application_pins or name in REVIEWED_MIGRATIONS:
+            reviewed = application_pins.get(name) or REVIEWED_MIGRATIONS[name]["blob"]
             require(git("rev-parse", source + ":" + name) == reviewed,
                     "Application or additive schema differs from reviewed source: " + name)
             continue
@@ -870,6 +1024,21 @@ def vetted_changes(expected, source):
                            resolved="https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
                            integrity="sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==")
             require(before == after, "Only the reviewed mobile brace-expansion lock update may change.")
+    if expected == WORKSPACE_RELEASE_BASELINE:
+        # Only the exact test:ui script registration changes. A dependency or lock
+        # edit cannot inherit this scripts-only approval or an old audit exception.
+        require({"package.json", "package-lock.json"} & set(changed) == {"package.json"},
+                "Workspace release permits only the reviewed package scripts change.")
+        for revision, package in zip((expected, source), WORKSPACE_PACKAGE_BLOBS):
+            require(git("rev-parse", revision + ":package.json") == package
+                    and git("rev-parse", revision + ":package-lock.json")
+                    == WORKSPACE_LOCK_BLOB,
+                    "Workspace package scripts or unchanged dependency lock differ from reviewed source.")
+        before = strict_json(git("show", expected + ":package.json"))
+        after = strict_json(git("show", source + ":package.json"))
+        before["scripts"] = after["scripts"]
+        require(before == after, "Workspace package change is not scripts-only.")
+        return changed
     # Next 16.3.6 security remediation, including npm's reviewed lock metadata.
     # Pin both complete inputs and outputs: scripts, other dependency versions,
     # and every unrelated byte must match this reviewed patch exactly.
@@ -1095,6 +1264,23 @@ def migration_plan(changes):
 
 
 def reviewed_migration(raw, specification):
+    if specification.get("path") in WORKSPACE_SCHEMA_PATHS:
+        # Only these immutable statements may alter an existing table or replace
+        # triggers. This is not an extension of the additive SQL grammar.
+        path = specification["path"]
+        expected = dict(path=path, **REVIEWED_MIGRATIONS[path])
+        require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
+                and hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == expected["blob"],
+                "Workspace schema migration differs from the exact reviewed source.")
+        statements, pending = [], ""
+        for character in raw.decode("utf-8"):
+            pending += character
+            if character == ";" and sqlite3.complete_statement(pending):
+                statements.append(pending)
+                pending = ""
+        require(not pending.strip() and len(statements) == (2 if path == RECOVERABLE_ARCHIVE_PATH else 4),
+                "Workspace schema migration has an unexpected statement inventory.")
+        return statements, []
     if specification.get("path") == HOST_RSVP_PUSH_PATH:
         # One byte-pinned additive migration only. Never broaden the generic
         # grammar to accept arbitrary triggers on existing registration tables.
@@ -1359,6 +1545,59 @@ def confirm_pink_edition(connection, raw):
     return {"eventSlug": slug, "preservedOnCodeRollback": True}
 
 
+def workspace_writer_state(connection, table):
+    """Recognize the active original handover writer without editing its guards."""
+    control = connection.execute("SELECT sql FROM sqlite_schema WHERE type='table' AND name='_bct_handover_state'").fetchone()
+    require(control and hashlib.sha256(control[0].encode()).hexdigest() == HOST_WRITER_CONTROL_SCHEMA,
+            "Workspace schema migration requires the exact handover control schema.")
+    state = connection.execute("SELECT id,frozen,transfer_id FROM _bct_handover_state ORDER BY id").fetchall()
+    require(len(state) == 1 and state[0][:2] == (1, 0),
+            "Workspace schema migration requires the active VPS writer.")
+    expected = {}
+    for operation in ("insert", "update", "delete"):
+        name = "_bct_guard_" + table + "_" + operation
+        expected[name] = ('CREATE TRIGGER "' + name + '" BEFORE ' + operation.upper() + ' ON "' + table
+                          + '" WHEN (SELECT frozen FROM _bct_handover_state WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,\'Source writer is paused for verified handover\'); END')
+    guards = connection.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name=?", (table,)).fetchall()
+    require({name: sql for name, sql in guards if name.startswith("_bct_guard_")} == expected
+            and not connection.execute("SELECT 1 FROM sqlite_temp_schema WHERE type='trigger' AND tbl_name=?", (table,)).fetchall(),
+            "Workspace schema migration refuses missing or drifted writer guards.")
+    return state
+
+
+def apply_workspace_schema(connection, specification, statements):
+    """Perform one exact old-to-new schema transition, never a data correction."""
+    require(connection.in_transaction, "Workspace schema changes require the migration transaction.")
+    path = specification["path"]
+    archive = path == RECOVERABLE_ARCHIVE_PATH
+    table = "curated_event_records" if archive else "event_registrations"
+    writer = workspace_writer_state(connection, table)
+    before = schema_rows(connection)
+    names = specification["objects"]
+    if not archive:
+        require(schema_digest([row for row in before if row[1] in OWNER_NOTIFICATION_PREREQUISITES])
+                == OWNER_NOTIFICATION_PREREQUISITES_SHA256,
+                "Owner notification prerequisites differ from the exact reviewed schema.")
+    observed = schema_digest([row for row in before if row[1] in names])
+    require(observed in (specification["beforeSchemaSha256"], specification["schemaSha256"]),
+            "Workspace schema is partial or differs from the exact reviewed old/new state.")
+    if observed == specification["schemaSha256"]:
+        return False  # Preserve populated archive fields, devices and deliveries.
+    changes = connection.total_changes
+    for statement in statements:
+        connection.execute(statement)
+    after = schema_rows(connection)
+    require(schema_digest([row for row in after if row[1] in names]) == specification["schemaSha256"]
+            and [row for row in after if row[1] not in names] == [row for row in before if row[1] not in names]
+            and connection.total_changes == changes
+            and workspace_writer_state(connection, table) == writer,
+            "Workspace schema migration changed unreviewed schema, rows or writer state.")
+    if archive:
+        require(connection.execute("SELECT 1 FROM curated_event_records WHERE archived_at IS NOT NULL LIMIT 1").fetchone() is None,
+                "Archive migration must not backfill existing events.")
+    return True
+
+
 def migrate_database(database, staging, migrations):
     """Service-user SQLite transaction. Never restore, replace or delete live data."""
     database, staging = Path(database), Path(staging)
@@ -1373,15 +1612,21 @@ def migrate_database(database, staging, migrations):
             require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
                     and info.st_uid == os.geteuid() and not stat.S_IMODE(info.st_mode) & 0o077,
                     "Unsafe live database sidecar.")
-    reviewed, additions, corrections = [], [], []
+    reviewed, additions, corrections, transitions = [], [], [], []
     for specification, raw in migrations:
         statements, rows = reviewed_migration(raw, specification)
+        if specification.get("path") in WORKSPACE_SCHEMA_PATHS:
+            transitions.append((specification, statements))
+            continue
         reviewed.extend(statements)
         additions.extend(rows)
         if specification.get("kind"):
             corrections.append((specification["kind"], raw))
     require(not corrections or len(corrections) == len(migrations) == 1,
             "The exact host correction must be the only migration in its release.")
+    paths = [specification["path"] for specification, _ in transitions]
+    require(not transitions or (len(transitions) == len(migrations) and paths == sorted(set(paths))),
+            "Workspace schema transitions require an isolated, ordered, non-duplicate migration plan.")
     names = [row[1] for row in additions]
     require(len(names) == len(set(names)), "Additive migration objects overlap.")
     staging.mkdir(mode=0o700)
@@ -1419,17 +1664,20 @@ def migrate_database(database, staging, migrations):
             kind, raw = corrections[0]
             correction = (confirm_pink_edition(connection, raw) if kind == "pink-edition-confirmed"
                           else correct_host_verification(connection, raw))
+        transitioned = [apply_workspace_schema(connection, specification, statements)
+                        for specification, statements in transitions]
         after = schema_rows(connection)
+        transition_names = {name for specification, _ in transitions for name in specification["objects"]}
         require(sorted(row for row in after if row[1] in names) == sorted(additions)
-                and [row for row in after if row[1] not in names]
-                    == [row for row in before if row[1] not in names],
+                and [row for row in after if row[1] not in names and row[1] not in transition_names]
+                    == [row for row in before if row[1] not in names and row[1] not in transition_names],
                 "An existing database schema changed during additive migration.")
         require(connection.execute("PRAGMA foreign_key_check").fetchall() == [],
                 "Additive migration failed foreign-key verification.")
         connection.commit()
     result = {"phase": "verified", "backupSha256": digest_file(backup),
-              "schemaSha256": schema_digest(sorted(additions)),
-              "created": bool(additions) and not bool(present), "tablesPreservedOnRollback": True,
+              "schemaSha256": schema_digest(sorted(additions + [row for row in after if row[1] in transition_names])),
+              "created": any(transitioned) or (bool(additions) and not bool(present)), "tablesPreservedOnRollback": True,
               "migrations": [specification for specification, _ in migrations]}
     if correction is not None:
         result["publicEventCorrection" if corrections[0][0] == "pink-edition-confirmed" else "publicHostCorrection"] = correction

@@ -94,25 +94,25 @@ def checkout_git(root, *args):
         stderr=subprocess.DEVNULL, env=release.git_environment(), timeout=60)
 
 
-def controls_only_checkout(root):
+def exact_application_checkout(root, baseline, tree, controls):
     try:
-        if checkout_git(root, "rev-parse", CONTROL_CHECK_BASE + "^{tree}").decode().strip() != CONTROL_CHECK_TREE:
+        if checkout_git(root, "rev-parse", baseline + "^{tree}").decode().strip() != tree:
             return False
-        changes = set(filter(None, checkout_git(root, "diff", "--name-only", "-z", CONTROL_CHECK_BASE, "--").decode().split("\0")))
-        staged = set(filter(None, checkout_git(root, "diff", "--cached", "--name-only", "-z", CONTROL_CHECK_BASE, "--").decode().split("\0")))
-        if (not changes <= CONTROL_CHECK_FILES or not staged <= CONTROL_CHECK_FILES
+        changes = set(filter(None, checkout_git(root, "diff", "--name-only", "-z", baseline, "--").decode().split("\0")))
+        staged = set(filter(None, checkout_git(root, "diff", "--cached", "--name-only", "-z", baseline, "--").decode().split("\0")))
+        if (not changes <= controls or not staged <= controls
                 or checkout_git(root, "ls-files", "--others", "--exclude-standard")
                 or not all((root / name).is_file() and not (root / name).is_symlink()
-                           for name in CONTROL_CHECK_FILES)):
+                           for name in controls)):
             return False
         # Read actual bytes too: index assume-unchanged flags cannot conceal an
         # application edit and redirect this test to the historical snapshot.
-        for record in checkout_git(root, "ls-tree", "-rz", "--full-tree", CONTROL_CHECK_BASE).split(b"\0"):
+        for record in checkout_git(root, "ls-tree", "-rz", "--full-tree", baseline).split(b"\0"):
             if not record:
                 continue
             metadata, name = record.split(b"\t", 1)
             name = os.fsdecode(name)
-            if name in CONTROL_CHECK_FILES:
+            if name in controls:
                 continue
             mode, kind, expected = metadata.split()
             file = root / name
@@ -128,7 +128,7 @@ def controls_only_checkout(root):
                 # CRLF checkout contract. Never consult local info/attributes,
                 # core.attributesFile or a configured clean/smudge filter.
                 if (name != "mobile/android/gradlew.bat"
-                        or checkout_git(root, "rev-parse", CONTROL_CHECK_BASE + ":mobile/.gitattributes").decode().strip()
+                        or checkout_git(root, "rev-parse", baseline + ":mobile/.gitattributes").decode().strip()
                         != "69b47b5ade88fab2dd055b3cfa0858766fb17a47"):
                     return False
                 raw = raw.replace(b"\r\n", b"\n")
@@ -137,6 +137,10 @@ def controls_only_checkout(root):
         return True
     except (subprocess.CalledProcessError, OSError):
         return False
+
+
+def controls_only_checkout(root):
+    return exact_application_checkout(root, CONTROL_CHECK_BASE, CONTROL_CHECK_TREE, CONTROL_CHECK_FILES)
 
 
 def application_bytes(root, name, *, controls_only=False):
@@ -2478,6 +2482,9 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
     def test_complete_reviewed_application_manifest_matches_candidate_source(self):
         pins = release.REVIEWED_APPLICATION_BLOBS
         controls_only = controls_only_checkout(self.root)
+        if exact_application_checkout(self.root, release.WORKSPACE_APP_SNAPSHOT,
+                                      release.WORKSPACE_APP_TREE, release.WORKSPACE_CONTROL_FILES):
+            pins = {**pins, **release.WORKSPACE_APPLICATION_BLOBS}
         if not (self.root / "package.json").exists() and not (self.root / "app").exists():
             # The release operator deliberately archives only ops/vps and these
             # approved control files. Never treat a missing file in a full checkout as
@@ -2512,6 +2519,16 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             content = application_bytes(self.root, name, controls_only=controls_only)
             actual = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
             self.assertEqual(actual, digest, name)
+
+    def test_workspace_checkout_keeps_one_complete_application_family(self):
+        if not (self.root / "package.json").exists() and not (self.root / "app").exists():
+            return  # The separate staged-layout test verifies every staged byte.
+        self.assertTrue(any(exact_application_checkout(self.root, revision, tree,
+                                                       release.WORKSPACE_CONTROL_FILES)
+                            for revision, tree in (
+                                (release.WORKSPACE_RELEASE_BASELINE, release.WORKSPACE_BASE_TREE),
+                                (release.WORKSPACE_APP_SNAPSHOT, release.WORKSPACE_APP_TREE))),
+                        "Checkout is neither the complete base nor workspace application family")
 
     def test_candidate_is_one_read_only_job_with_every_browser_gate(self):
         text = (self.root / ".github/workflows/candidate-checks.yml").read_text()
@@ -3419,6 +3436,608 @@ class HostNotificationsDeploymentTests(DeploymentFixture):
             self.assertEqual(db.execute('SELECT order_id FROM organizer_purchase_push_deliveries').fetchall(),[('new-paid-order',)])
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
         # Structural rollback; separate exact-F application rehearsal verifies mail policy.
+
+
+class WorkspaceReleaseAdmissionTests(unittest.TestCase):
+    """Real Git: independent controls C and copied snapshot S application bytes."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git("init", "-q")
+        self.git("config", "user.name", "Workspace release tests")
+        self.git("config", "user.email", "tests@example.invalid")
+        self.write("app/source.ts", "baseline application\n")
+        self.write("ops/vps/code-release.py", "baseline operator\n")
+        self.write("ops/vps/test_code_release.py", "baseline tests\n")
+        self.write("scripts/audit-release-manifest.json", "frozen expired exception\n")
+        self.write("package.json", '{"scripts":{"test:ui":"old"},"dependencies":{"same":"1"}}\n')
+        self.write("package-lock.json", '{"locked":"unchanged"}\n')
+        self.base = self.commit()
+        self.write("app/source.ts", "reviewed workspace application\n")
+        self.write("package.json", '{"scripts":{"test:ui":"new"},"dependencies":{"same":"1"}}\n')
+        self.snapshot = self.commit()
+        self.pins = {name: self.git("rev-parse", self.snapshot + ":" + name)
+                     for name in ("app/source.ts", "package.json")}
+        self.git("checkout", "-q", self.base)
+        self.write("ops/vps/code-release.py", "independently reviewed operator\n")
+        self.write("ops/vps/test_code_release.py", "independently reviewed tests\n")
+        self.control = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", self.control)
+        for name in self.pins:
+            self.write(name, self.git("show", self.snapshot + ":" + name) + "\n")
+        self.candidate = self.commit()
+        settings = {
+            "WORKSPACE_RELEASE_BASELINE": self.base,
+            "WORKSPACE_BASE_TREE": self.git("rev-parse", self.base + "^{tree}"),
+            "WORKSPACE_APP_SNAPSHOT": self.snapshot,
+            "WORKSPACE_APP_TREE": self.git("rev-parse", self.snapshot + "^{tree}"),
+            "WORKSPACE_APPLICATION_BLOBS": self.pins,
+            "WORKSPACE_MIGRATION_FILES": set(),
+            "WORKSPACE_PACKAGE_BLOBS": tuple(self.git("rev-parse", ref + ":package.json")
+                                             for ref in (self.base, self.snapshot)),
+            "WORKSPACE_LOCK_BLOB": self.git("rev-parse", self.base + ":package-lock.json"),
+            "__file__": str(self.root / "ops/vps/code-release.py"),
+        }
+        for name, value in settings.items():
+            patcher = patch.object(release, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        environment = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(raw)
+        return path
+
+    def commit(self):
+        self.git("add", "-A")
+        self.git("commit", "-qm", "isolated workspace release")
+        return self.git("rev-parse", "HEAD")
+
+    def verify(self, candidate=None):
+        return release.vetted_changes(self.base, candidate or self.candidate)
+
+    def test_exact_snapshot_copy_onto_independent_controls_is_accepted(self):
+        self.assertEqual(set(self.verify()), set(self.pins) | release.WORKSPACE_CONTROL_FILES)
+        self.assertNotEqual(self.snapshot, self.candidate)
+        result = subprocess.run(["git", "merge-base", "--is-ancestor", self.snapshot, self.candidate],
+                                capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_snapshot_tree_parent_and_complete_inventory_are_immutable(self):
+        for name, value in (("WORKSPACE_BASE_TREE", "f" * 40),
+                            ("WORKSPACE_APP_TREE", "f" * 40),
+                            ("WORKSPACE_APPLICATION_BLOBS", {"app/source.ts": self.pins["app/source.ts"]})):
+            with self.subTest(field=name), patch.object(release, name, value):
+                with self.assertRaisesRegex(release.ReleaseError, "snapshot"):
+                    self.verify()
+        other = self.git("commit-tree", release.WORKSPACE_APP_TREE, "-m", "unrelated snapshot")
+        with patch.object(release, "WORKSPACE_APP_SNAPSHOT", other):
+            with self.assertRaisesRegex(release.ReleaseError, "snapshot"):
+                self.verify()
+
+    def test_application_mutation_missing_change_and_unrelated_paths_are_rejected(self):
+        for name, raw in (("app/source.ts", "unreviewed\n"),
+                          ("app/source.ts", "baseline application\n"),
+                          ("docs/unreviewed.md", "even ordinary documentation is outside this snapshot\n"),
+                          ("tests/unreviewed.test.ts", "unreviewed test\n"),
+                          ("scripts/audit-release-manifest.json", "revived exception\n")):
+            with self.subTest(path=name, raw=raw):
+                self.git("reset", "--hard", self.candidate)
+                self.write(name, raw)
+                with self.assertRaisesRegex(release.ReleaseError, "exact application snapshot"):
+                    self.verify(self.commit())
+
+    def test_exact_new_application_blob_is_not_admitted_from_another_baseline(self):
+        with self.assertRaises(release.ReleaseError):
+            release.vetted_changes(self.control, self.candidate)
+
+    def test_candidate_cannot_select_itself_or_snapshot_as_control(self):
+        for trusted in (self.candidate, self.snapshot):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_control_must_be_merged_and_ancestor_of_the_candidate(self):
+        self.git("update-ref", "refs/remotes/origin/main", self.base)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+        self.git("update-ref", "refs/remotes/origin/main", self.control)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify(self.snapshot)
+
+    def test_changed_control_bytes_and_application_in_trusted_controls_fail_closed(self):
+        self.write("ops/vps/test_code_release.py", "candidate rewrote its tests\n")
+        with self.assertRaisesRegex(release.ReleaseError, "controls differ"):
+            self.verify(self.commit())
+        self.git("reset", "--hard", self.control)
+        self.write("app/source.ts", "changed inside controls\n")
+        changed_control = self.commit()
+        for name in self.pins:
+            self.write(name, self.git("show", self.snapshot + ":" + name) + "\n")
+        candidate = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", changed_control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed_control):
+            with self.assertRaisesRegex(release.ReleaseError, "controls contain application"):
+                self.verify(candidate)
+
+    def test_deletion_symlink_and_mode_changes_remain_rejected(self):
+        for kind in ("delete", "symlink", "executable"):
+            self.git("reset", "--hard", self.candidate)
+            path = self.root / "app/source.ts"
+            if kind == "executable":
+                path.chmod(0o755)
+            else:
+                path.unlink()
+                if kind == "symlink":
+                    path.symlink_to("../package.json")
+            with self.subTest(kind=kind), self.assertRaises(release.ReleaseError):
+                self.verify(self.commit())
+
+    def test_package_and_lock_each_require_the_exact_reviewed_blobs(self):
+        for field, value in (("WORKSPACE_PACKAGE_BLOBS", ("f" * 40, release.WORKSPACE_PACKAGE_BLOBS[1])),
+                             ("WORKSPACE_PACKAGE_BLOBS", (release.WORKSPACE_PACKAGE_BLOBS[0], "f" * 40)),
+                             ("WORKSPACE_LOCK_BLOB", "f" * 40)):
+            with self.subTest(field=field, value=value), patch.object(release, field, value):
+                with self.assertRaisesRegex(release.ReleaseError, "unchanged dependency lock"):
+                    self.verify()
+        original = release.git
+        def non_script_change(*args):
+            raw = original(*args)
+            if args == ("show", self.candidate + ":package.json"):
+                return raw.replace('"same":"1"', '"same":"2"')
+            return raw
+        with patch.object(release, "git", side_effect=non_script_change):
+            with self.assertRaisesRegex(release.ReleaseError, "not scripts-only"):
+                self.verify()
+
+    def test_complete_application_byte_pins_are_checked_after_snapshot_selection(self):
+        with patch.dict(release.WORKSPACE_APPLICATION_BLOBS, {"app/source.ts": "f" * 40}):
+            with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                self.verify()
+
+    def test_git_replacement_cannot_redirect_the_snapshot(self):
+        self.git("replace", self.snapshot, self.candidate)
+        self.assertEqual(set(self.verify()), set(self.pins) | release.WORKSPACE_CONTROL_FILES)
+
+
+class WorkspaceReleasePinTests(unittest.TestCase):
+    def test_scope_is_finite_and_root_dependencies_are_unchanged(self):
+        self.assertEqual(release.WORKSPACE_RELEASE_BASELINE, "379be609c49e8994dbd6b5bf5883c9be733369b1")
+        self.assertEqual(release.WORKSPACE_APP_TREE, "cb4e9eb42769b2f64cc905c7456f2237dfcc8b02")
+        self.assertEqual(len(release.WORKSPACE_APPLICATION_BLOBS), 76)
+        self.assertEqual(release.WORKSPACE_CONTROL_FILES,
+                         {"ops/vps/code-release.py", "ops/vps/test_code_release.py"})
+        self.assertEqual(release.WORKSPACE_PACKAGE_BLOBS,
+                         ("91d44944a682f992880c44785d7b14eda9204c18", "ee7d351bd660b932e9870b6d542da4426386eca5"))
+        self.assertEqual(release.WORKSPACE_LOCK_BLOB, "47a4eaca5743b768598462d8b66a2ef49a442b4e")
+        self.assertFalse(set(release.WORKSPACE_APPLICATION_BLOBS) & release.WORKSPACE_MIGRATION_FILES)
+        self.assertNotIn("scripts/audit-release-manifest.json", release.WORKSPACE_APPLICATION_BLOBS)
+        self.assertNotIn("scripts/audit-release-dependencies.py", release.WORKSPACE_APPLICATION_BLOBS)
+
+
+
+class WorkspaceSchemaMigrationTests(unittest.TestCase):
+    # Exact reviewed application SQL is embedded for the staged-control layout.
+    ARCHIVE_SQL = b'-- A reversible display archive. Do not reuse removed_at: removal destroys data.\nALTER TABLE curated_event_records ADD COLUMN archived_at TEXT;\nCREATE INDEX curated_event_archive_idx ON curated_event_records(archived_at, starts_at);\n'
+    OWNER_SQL = b"-- Extend opt-in notifications to owner existing all-event access. No historical backfill.\nDROP TRIGGER organizer_rsvp_push_created;\nDROP TRIGGER organizer_rsvp_push_verified;\nCREATE TRIGGER organizer_rsvp_push_created AFTER INSERT ON event_registrations\nWHEN NEW.kind='rsvp' AND NEW.status IN ('requested','waitlisted','confirmed')\nBEGIN\n INSERT OR IGNORE INTO organizer_rsvp_push_deliveries(id,registration_id,subscription_id,account_id,subscription_version)\n SELECT lower(hex(randomblob(16))),NEW.id,p.id,p.account_id,p.consent_id\n FROM organizer_push_subscriptions p\n JOIN staff_accounts s ON s.id=p.account_id JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=p.account_id\n WHERE p.revoked_at IS NULL AND (s.role='owner' OR (s.role='organizer' AND EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id=s.id AND a.event_slug=NEW.event_slug))) AND s.status='active'\n AND ss.revoked_at IS NULL AND s.must_change_password=0 AND ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now');\nEND;\nCREATE TRIGGER organizer_rsvp_push_verified AFTER UPDATE OF status ON event_registrations\nWHEN NEW.kind='rsvp' AND OLD.status='unverified' AND NEW.status IN ('requested','waitlisted','confirmed')\nBEGIN\n INSERT OR IGNORE INTO organizer_rsvp_push_deliveries(id,registration_id,subscription_id,account_id,subscription_version)\n SELECT lower(hex(randomblob(16))),NEW.id,p.id,p.account_id,p.consent_id\n FROM organizer_push_subscriptions p\n JOIN staff_accounts s ON s.id=p.account_id JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=p.account_id\n WHERE p.revoked_at IS NULL AND (s.role='owner' OR (s.role='organizer' AND EXISTS (SELECT 1 FROM staff_event_assignments a WHERE a.account_id=s.id AND a.event_slug=NEW.event_slug))) AND s.status='active'\n AND ss.revoked_at IS NULL AND s.must_change_password=0 AND ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now');\nEND;\n"
+    # Result of the curated-table CREATE/ALTER statements in migrations 0001–0054.
+    ARCHIVE_BEFORE_SQL = "CREATE TABLE `curated_event_records` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`submission_id` text NOT NULL,\n\t`slug` text NOT NULL,\n\t`title` text NOT NULL,\n\t`venue` text NOT NULL,\n\t`area` text NOT NULL,\n\t`starts_at` text NOT NULL,\n\t`ends_at` text NOT NULL,\n\t`vibe` text NOT NULL,\n\t`price_from_minor` integer NOT NULL,\n\t`image_url` text NOT NULL,\n\t`curation_note` text NOT NULL,\n\t`status` text NOT NULL,\n\t`scheduled_publish_at` text,\n\t`published_at` text,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n, `capacity` integer DEFAULT 0 NOT NULL, `sales_open_at` text, `sales_close_at` text, `venue_map_url` text, `age_restriction` text DEFAULT '18+' NOT NULL, `lineup` text DEFAULT 'Line-up to be announced' NOT NULL, `event_state` text DEFAULT 'on_sale' NOT NULL, `rescheduled_from` text, `is_test_event` integer DEFAULT false NOT NULL, `dress_code` text, `colour_scheme` text, `awareness_note` text, `guest_perk` text, `schedule_status` text DEFAULT 'confirmed' NOT NULL, `is_verified` integer DEFAULT false NOT NULL, `tagline` text, `removed_at` text, schedule_label TEXT, organizer_owner_id TEXT)"
+
+    @staticmethod
+    def seed(db):
+        HostRsvpPushMigrationTests.seed(db)
+        db.execute(WorkspaceSchemaMigrationTests.ARCHIVE_BEFORE_SQL)
+        db.executescript("""
+            CREATE UNIQUE INDEX `curated_events_submission_unique` ON `curated_event_records` (`submission_id`);
+            CREATE UNIQUE INDEX `curated_events_slug_unique` ON `curated_event_records` (`slug`);
+            CREATE INDEX `curated_events_publication_idx` ON `curated_event_records` (`status`,`scheduled_publish_at`);
+            CREATE TABLE preserved_payload(id TEXT PRIMARY KEY, order_id TEXT REFERENCES orders(id), payload BLOB CHECK(length(payload)>0));
+            INSERT INTO preserved_payload VALUES('private-payload','preserved-order',x'00ff1122');
+            CREATE TRIGGER removed_event_stays_removed BEFORE UPDATE ON curated_event_records
+            WHEN OLD.removed_at IS NOT NULL AND (NEW.removed_at IS NULL OR NEW.status <> 'unpublished')
+            BEGIN SELECT RAISE(ABORT, 'Removed events cannot be republished'); END;
+        """)
+        for event in ('event', 'removed', 'other'):
+            db.execute("""INSERT INTO curated_event_records
+                (id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,
+                 price_from_minor,image_url,curation_note,status,created_at,updated_at,removed_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (event, 'submission-' + event, event, 'Preserved ' + event, 'Venue', 'Area',
+                 '2026-11-01', '2026-11-02', 'vibe', 123, '/event.webp', 'note',
+                 'unpublished' if event == 'removed' else 'published', 'before', 'before',
+                 'already-removed' if event == 'removed' else None))
+        db.executescript(HostRsvpPushMigrationTests.SQL.decode())
+        db.executescript(HostPurchaseMigrationTests.SQL.decode())
+        HostRsvpPushMigrationTests.opt_in(db)
+        db.executescript("""
+            INSERT INTO staff_accounts VALUES('owner','owner','active',0);
+            INSERT INTO staff_sessions VALUES('owner-session','owner',NULL,'2099-01-01');
+            INSERT INTO organizer_push_subscriptions(id,account_id,session_id,consent_id,endpoint,p256dh,auth,created_at,updated_at)
+            VALUES('owner-device','owner','owner-session','owner-consent','https://fcm.googleapis.com/fcm/send/owner','fixture','fixture','before','before');
+            INSERT INTO event_registrations VALUES('pending-before','event','rsvp','requested');
+            INSERT INTO organizer_purchase_push_deliveries(id,subscription_version,order_id,subscription_id,account_id)
+            VALUES('purchase-before','consent','preserved-order','device','host');
+        """)
+        for statement in HostVerificationMigrationTests.WRITER_GUARD_STATEMENTS[:2]:
+            db.execute(statement)
+        db.execute("UPDATE _bct_handover_state SET transfer_id='preserved-transfer'")
+        # These are the original handover generator's exact, quoted guards.
+        for table in ('curated_event_records', 'event_registrations', 'orders'):
+            for statement in HostVerificationMigrationTests.WRITER_GUARD_STATEMENTS[2:]:
+                db.execute(statement.replace('hosts', table))
+        db.commit()
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.use_database('initial')
+
+    def use_database(self, name):
+        self.database = self.root / (name + '.sqlite')
+        self.staging = self.root / (name + '-backup')
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.seed(db)
+        self.database.chmod(0o600)
+
+    def plan(self):
+        return list(zip(release.migration_plan(release.WORKSPACE_SCHEMA_PATHS), (self.ARCHIVE_SQL, self.OWNER_SQL)))
+
+    def migrate(self, migrations=None):
+        return release.migrate_database(self.database, self.staging, self.plan() if migrations is None else migrations)
+
+    def snapshot(self, database=None):
+        with release.closing(release.sqlite3.connect(database or self.database)) as db:
+            schema = release.schema_rows(db)
+            data = {name: db.execute('SELECT * FROM "' + name + '" ORDER BY rowid').fetchall()
+                    for kind, name, _, _ in schema if kind == 'table'}
+            return schema, data
+
+    def test_exact_schema_pins_preserve_all_data_constraints_and_writer_guards(self):
+        before, data = self.snapshot()
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            columns = db.execute('PRAGMA table_xinfo(curated_event_records)').fetchall()
+        result = self.migrate()
+        after, actual = self.snapshot()
+        expected_data = dict(data, curated_event_records=[row + (None,) for row in data['curated_event_records']])
+        self.assertEqual(actual, expected_data)
+        changed = {name for spec, _ in self.plan() for name in spec['objects']}
+        self.assertEqual([row for row in before if row[1] not in changed], [row for row in after if row[1] not in changed])
+        for spec, _ in self.plan():
+            self.assertEqual(release.schema_digest([row for row in before if row[1] in spec['objects']]), spec['beforeSchemaSha256'])
+            self.assertEqual(release.schema_digest([row for row in after if row[1] in spec['objects']]), spec['schemaSha256'])
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            self.assertEqual(db.execute('PRAGMA table_xinfo(curated_event_records)').fetchall(),
+                             columns + [(len(columns), 'archived_at', 'TEXT', 0, None, 0, 0)])
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+            self.assertEqual(db.execute('PRAGMA integrity_check').fetchall(), [('ok',)])
+            with self.assertRaises(release.sqlite3.IntegrityError):
+                db.execute("UPDATE curated_event_records SET id=NULL WHERE id='event'")
+            with self.assertRaises(release.sqlite3.IntegrityError):
+                db.execute("UPDATE curated_event_records SET slug='event' WHERE id='other'")
+            with self.assertRaisesRegex(release.sqlite3.IntegrityError, 'cannot be republished'):
+                db.execute("UPDATE curated_event_records SET removed_at=NULL WHERE id='removed'")
+            db.execute('UPDATE _bct_handover_state SET frozen=1')
+            for sql in ("UPDATE curated_event_records SET archived_at='later' WHERE id='event'",
+                        "INSERT INTO event_registrations VALUES('blocked','event','rsvp','requested')",
+                        "DELETE FROM orders WHERE id='preserved-order'"):
+                with self.assertRaisesRegex(release.sqlite3.IntegrityError, 'paused for verified handover'):
+                    db.execute(sql)
+        self.assertTrue(result['created'])
+        self.assertTrue(result['tablesPreservedOnRollback'])
+        self.assertEqual(result['migrations'], [spec for spec, _ in self.plan()])
+        self.assertEqual(result['backupSha256'], release.digest_file(self.staging / 'before.sqlite'))
+        self.assertEqual(stat.S_IMODE((self.staging / 'before.sqlite').stat().st_mode), 0o600)
+        self.assertEqual(self.snapshot(self.staging / 'before.sqlite'), (before, data))
+
+    def test_complete_replay_is_noop_preserving_archives_and_pending_work(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE curated_event_records SET archived_at='owner-archived' WHERE id='event'")
+            db.execute("INSERT INTO event_registrations VALUES('new-pending','other','rsvp','requested')")
+        before = self.snapshot()
+        self.staging = self.root / 'replay-backup'
+        self.assertFalse(self.migrate()['created'])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_individual_migrations_and_resumed_pair_remain_exact(self):
+        archive, owner = self.plan()
+        self.assertTrue(self.migrate([archive])['created'])
+        self.staging = self.root / 'resume-backup'
+        self.assertTrue(self.migrate()['created'])
+        self.staging = self.root / 'owner-replay-backup'
+        self.assertFalse(self.migrate([owner])['created'])
+        self.use_database('owner-first')
+        self.assertTrue(self.migrate([owner])['created'])
+        self.staging = self.root / 'archive-after-owner-backup'
+        self.assertTrue(self.migrate([archive])['created'])
+
+    def test_owner_capture_and_old_registration_writes_work_without_backfill(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            self.assertEqual(db.execute('SELECT registration_id,account_id FROM organizer_rsvp_push_deliveries').fetchall(),
+                             [('pending-before', 'host')])
+            # Legacy runtime insert/update shapes remain valid. Owners need no
+            # assignment; organizers still need the existing event assignment.
+            for identity, event, kind, status in (
+                    ('assigned', 'event', 'rsvp', 'requested'),
+                    ('unassigned', 'other', 'rsvp', 'requested'),
+                    ('unverified', 'other', 'rsvp', 'unverified'),
+                    ('ticket', 'other', 'ticket', 'confirmed'),
+                    ('cancelled', 'other', 'rsvp', 'cancelled')):
+                db.execute('INSERT INTO event_registrations VALUES(?,?,?,?)', (identity, event, kind, status))
+            db.execute("UPDATE event_registrations SET status='requested' WHERE id='unverified'")
+            db.execute("UPDATE event_registrations SET status='confirmed' WHERE id='unverified'")
+            self.assertEqual(db.execute('SELECT registration_id,account_id FROM organizer_rsvp_push_deliveries ORDER BY registration_id,account_id').fetchall(),
+                             [('assigned', 'host'), ('assigned', 'owner'), ('pending-before', 'host'),
+                              ('unassigned', 'owner'), ('unverified', 'owner')])
+            self.assertEqual(db.execute("SELECT archived_at FROM curated_event_records WHERE id='event'").fetchone(), (None,))
+
+    def test_owner_capture_preserves_optin_role_session_and_account_boundaries(self):
+        self.migrate()
+        cases = (
+            "UPDATE organizer_push_subscriptions SET revoked_at='revoked' WHERE account_id='owner'",
+            "UPDATE staff_accounts SET status='disabled' WHERE id='owner'",
+            "UPDATE staff_accounts SET role='scanner' WHERE id='owner'",
+            "UPDATE staff_accounts SET must_change_password=1 WHERE id='owner'",
+            "UPDATE staff_sessions SET revoked_at='revoked' WHERE account_id='owner'",
+            "UPDATE staff_sessions SET expires_at='2000-01-01' WHERE account_id='owner'",
+            "UPDATE organizer_push_subscriptions SET session_id='session' WHERE account_id='owner'",
+        )
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            for index, sql in enumerate(cases):
+                with self.subTest(sql=sql):
+                    db.execute('BEGIN')
+                    db.execute(sql)
+                    db.execute("INSERT INTO event_registrations VALUES(?, 'other','rsvp','requested')", ('blocked-' + str(index),))
+                    self.assertEqual(db.execute('SELECT COUNT(*) FROM organizer_rsvp_push_deliveries WHERE registration_id=?', ('blocked-' + str(index),)).fetchone(), (0,))
+                    db.rollback()
+
+    def test_mutated_sql_and_every_forged_specification_field_fail_before_backup(self):
+        for spec, raw in self.plan():
+            for mutation in (raw + b'\n', raw + b'DELETE FROM orders;', raw.replace(b'curated_event_records', b'orders')
+                             if spec['path'] == release.RECOVERABLE_ARCHIVE_PATH else raw.replace(b's.role=\'owner\'', b'1=1')):
+                with self.subTest(path=spec['path'], mutation=release.hashlib.sha256(mutation).hexdigest()), self.assertRaisesRegex(release.ReleaseError, 'exact reviewed source'):
+                    self.migrate([(spec, mutation)])
+                self.assertFalse(self.staging.exists())
+            for key in spec:
+                value = ['orders'] if key == 'objects' else 'forged'
+                with self.subTest(path=spec['path'], field=key), self.assertRaises(release.ReleaseError):
+                    self.migrate([(dict(spec, **{key: value}), raw)])
+                self.assertFalse(self.staging.exists())
+            with self.assertRaises(release.ReleaseError):
+                self.migrate([(dict(spec, extra=True), raw)])
+            self.assertFalse(self.staging.exists())
+
+    def test_generic_alter_drop_and_arbitrary_trigger_grammar_remain_closed(self):
+        for raw in (b'ALTER TABLE curated_event_records ADD COLUMN other TEXT;',
+                    b'DROP TRIGGER organizer_rsvp_push_created;',
+                    b'CREATE TRIGGER arbitrary AFTER INSERT ON event_registrations BEGIN SELECT 1; END;'):
+            spec = dict(path='drizzle/unreviewed.sql', sha256=release.hashlib.sha256(raw).hexdigest(),
+                        tables=['curated_event_records'], schemaSha256='0' * 64)
+            with self.subTest(sql=raw), self.assertRaises(release.ReleaseError):
+                release.reviewed_migration(raw, spec)
+        archive, owner = self.plan()
+        for plan in ([archive, archive], [owner, archive],
+                     [archive, (AdditiveMigrationTests.specification(), AdditiveMigrationTests.SQL)],
+                     [(release.migration_plan([release.HOST_RSVP_PUSH_PATH])[0], HostRsvpPushMigrationTests.SQL), owner]):
+            with self.subTest(paths=[spec['path'] for spec, _ in plan]), self.assertRaisesRegex(release.ReleaseError, 'isolated, ordered, non-duplicate'):
+                self.migrate(plan)
+            self.assertFalse(self.staging.exists())
+
+    def test_archive_partial_column_index_and_constraint_drift_rejected(self):
+        cases = (
+            'ALTER TABLE curated_event_records ADD COLUMN archived_at TEXT',
+            'CREATE INDEX curated_event_archive_idx ON curated_event_records(starts_at)',
+            'ALTER TABLE curated_event_records ADD COLUMN archived_at INTEGER',
+            "ALTER TABLE curated_event_records ADD COLUMN archived_at TEXT NOT NULL DEFAULT 'changed'",
+            'ALTER TABLE curated_event_records ADD COLUMN unreviewed TEXT',
+        )
+        for index, sql in enumerate(cases):
+            self.use_database('archive-drift-' + str(index))
+            with release.closing(release.sqlite3.connect(self.database)) as db, db:
+                db.execute(sql)
+            before = self.snapshot()
+            with self.subTest(sql=sql), self.assertRaisesRegex(release.ReleaseError, 'partial or differs'):
+                self.migrate()
+            self.assertEqual(self.snapshot(), before)
+
+    def test_missing_drifted_mixed_and_replayed_trigger_states_rejected(self):
+        for index, state in enumerate(('missing', 'changed', 'mixed', 'new-missing')):
+            self.use_database('trigger-drift-' + str(index))
+            if state in ('mixed', 'new-missing'):
+                self.migrate()
+                self.staging = self.root / ('trigger-replay-' + str(index))
+            with release.closing(release.sqlite3.connect(self.database)) as db, db:
+                db.execute('DROP TRIGGER organizer_rsvp_push_created')
+                if state == 'changed':
+                    db.execute('CREATE TRIGGER organizer_rsvp_push_created AFTER INSERT ON event_registrations BEGIN SELECT 1; END')
+                if state == 'mixed':
+                    old = release.reviewed_migration(HostRsvpPushMigrationTests.SQL,
+                                                    release.migration_plan([release.HOST_RSVP_PUSH_PATH])[0])[0]
+                    db.execute(old[-2])
+            before = self.snapshot()
+            with self.subTest(state=state), self.assertRaisesRegex(release.ReleaseError, 'partial or differs'):
+                self.migrate()
+            # In pre-migration states, 0065 has also been rolled back atomically.
+            self.assertEqual(self.snapshot(), before)
+
+    def test_drifted_outbox_prerequisites_fail_without_altering_archive_or_rows(self):
+        for index, sql in enumerate((
+                'DROP INDEX organizer_rsvp_push_device',
+                'ALTER TABLE organizer_rsvp_push_deliveries ADD COLUMN unreviewed TEXT',
+                'DROP INDEX organizer_push_account')):
+            self.use_database('prerequisite-drift-' + str(index))
+            with release.closing(release.sqlite3.connect(self.database)) as db, db:
+                db.execute(sql)
+            before = self.snapshot()
+            with self.subTest(sql=sql), self.assertRaisesRegex(release.ReleaseError, 'prerequisites differ'):
+                self.migrate()
+            self.assertEqual(self.snapshot(), before)
+
+    def test_frozen_missing_and_drifted_writer_state_rejected_including_replay(self):
+        cases = (
+            'UPDATE _bct_handover_state SET frozen=1',
+            'DELETE FROM _bct_handover_state',
+            'ALTER TABLE _bct_handover_state ADD COLUMN unreviewed TEXT',
+            'DROP TRIGGER _bct_guard_curated_event_records_update',
+            'DROP TRIGGER _bct_guard_event_registrations_insert',
+            'DROP TRIGGER _bct_guard_curated_event_records_delete; CREATE TRIGGER _bct_guard_curated_event_records_delete BEFORE DELETE ON curated_event_records BEGIN SELECT 1; END;',
+        )
+        for applied in (False, True):
+            for index, sql in enumerate(cases):
+                self.use_database('writer-' + str(applied) + '-' + str(index))
+                if applied:
+                    self.migrate()
+                    self.staging = self.root / ('writer-replay-' + str(index))
+                with release.closing(release.sqlite3.connect(self.database)) as db, db:
+                    db.executescript(sql)
+                before = self.snapshot()
+                with self.subTest(applied=applied, sql=sql), self.assertRaises(release.ReleaseError):
+                    self.migrate()
+                self.assertEqual(self.snapshot(), before)
+
+    def test_sql_failure_after_each_ddl_statement_rolls_back_both_migrations(self):
+        original = release.reviewed_migration
+        for path, count in ((release.RECOVERABLE_ARCHIVE_PATH, 2), (release.OWNER_NOTIFICATIONS_PATH, 4)):
+            for stop in range(1, count + 1):
+                self.use_database('failure-' + Path(path).stem + '-' + str(stop))
+                before = self.snapshot()
+                def inject_failure(raw, spec):
+                    statements, rows = original(raw, spec)
+                    if spec['path'] == path:
+                        statements = statements[:stop] + ['INSERT INTO missing_table VALUES(1)'] + statements[stop:]
+                    return statements, rows
+                with patch.object(release, 'reviewed_migration', side_effect=inject_failure):
+                    with self.subTest(path=path, stop=stop), self.assertRaises(release.sqlite3.OperationalError):
+                        self.migrate()
+                self.assertEqual(self.snapshot(), before)
+                self.assertEqual(self.snapshot(self.staging / 'before.sqlite'), before)
+                self.assertEqual(release.strict_json((self.staging / 'result.json').read_bytes())['phase'], 'backed-up')
+
+    def test_unreviewed_schema_or_row_mutation_after_exact_ddl_rolls_back(self):
+        original = release.reviewed_migration
+        for index, extra in enumerate(('CREATE TABLE unreviewed(id TEXT)',
+                                       "UPDATE orders SET status='rewritten'",
+                                       'DROP TRIGGER _bct_guard_orders_update')):
+            self.use_database('postcondition-' + str(index))
+            before = self.snapshot()
+            def inject_mutation(raw, spec):
+                statements, rows = original(raw, spec)
+                return statements + ([extra] if spec['path'] == release.OWNER_NOTIFICATIONS_PATH else []), rows
+            with patch.object(release, 'reviewed_migration', side_effect=inject_mutation):
+                with self.subTest(extra=extra), self.assertRaisesRegex(release.ReleaseError, 'unreviewed schema, rows or writer state'):
+                    self.migrate()
+            self.assertEqual(self.snapshot(), before)
+
+    def test_pair_is_invisible_until_commit_and_competing_writer_cannot_interleave(self):
+        before = self.snapshot()
+        original = release.apply_workspace_schema
+        def observe_transaction(connection, specification, statements):
+            changed = original(connection, specification, statements)
+            # A second connection still sees the complete original schema and
+            # data even after ALTER and each trigger replacement have run.
+            self.assertEqual(self.snapshot(), before)
+            with release.closing(release.sqlite3.connect(self.database, timeout=0)) as competing:
+                with self.assertRaisesRegex(release.sqlite3.OperationalError, 'locked'):
+                    competing.execute("INSERT INTO event_registrations VALUES('concurrent','event','rsvp','requested')")
+            return changed
+        with patch.object(release, 'apply_workspace_schema', side_effect=observe_transaction):
+            self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute("INSERT INTO event_registrations VALUES('after-commit','event','rsvp','requested')")
+            self.assertEqual(db.execute("SELECT account_id FROM organizer_rsvp_push_deliveries WHERE registration_id='after-commit' ORDER BY account_id").fetchall(), [('host',), ('owner',)])
+
+    def test_post_commit_evidence_failure_preserves_schema_and_safe_replay(self):
+        original = release.write_json
+        def fail_verified_result(path, value):
+            if value.get('phase') == 'verified':
+                raise OSError('simulated evidence write failure')
+            return original(path, value)
+        with patch.object(release, 'write_json', side_effect=fail_verified_result):
+            with self.assertRaisesRegex(OSError, 'evidence write failure'):
+                self.migrate()
+        before = self.snapshot()
+        self.staging = self.root / 'recovery-backup'
+        self.assertFalse(self.migrate()['created'])
+        self.assertEqual(self.snapshot(), before)
+
+
+class WorkspaceSchemaDeploymentTests(DeploymentFixture):
+    def prepare_workspace(self, tampered=False):
+        state = self.root / 'var/lib/becore-tickets'
+        state.chmod(0o700)
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db:
+            WorkspaceSchemaMigrationTests.seed(db)
+        (state / 'tickets.sqlite').chmod(0o600)
+        items = []
+        for path, raw in zip(release.WORKSPACE_SCHEMA_PATHS,
+                             (WorkspaceSchemaMigrationTests.ARCHIVE_SQL, WorkspaceSchemaMigrationTests.OWNER_SQL)):
+            member = tarfile.TarInfo('migrations/' + Path(path).name)
+            member.mode = 0o644
+            items.append((member, raw + (b'\n' if tampered and path == release.OWNER_NOTIFICATIONS_PATH else b'')))
+        self.make_archive(extra=items)
+        self.proof['changedFiles'] = list(release.WORKSPACE_SCHEMA_PATHS)
+        self.proof['migrations'] = release.migration_plan(self.proof['changedFiles'])
+        self.refresh_digests()
+        return state
+
+    def test_success_records_exact_migrations_private_backup_and_preserved_schema(self):
+        self.prepare_workspace()
+        self.assertTrue(self.deployment.transact()['dataMigration'])
+        journal = release.strict_json(self.deployment.journal.read_bytes())
+        self.assertEqual(journal['lastCodeRelease']['reviewedDataMigrations'], self.proof['migrations'])
+        self.assertEqual(len(journal['lastCodeRelease']['databaseBackupSha256']), 64)
+        self.assertTrue((self.deployment.snapshot / 'database/before.sqlite').is_file())
+
+    def test_tampered_migration_prevents_restart_or_schema_change(self):
+        state = self.prepare_workspace(tampered=True)
+        with self.assertRaises(release.ReleaseError):
+            self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assert_restored()
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db:
+            self.assertNotIn('archived_at', [row[1] for row in db.execute('PRAGMA table_xinfo(curated_event_records)')])
+
+    def test_runtime_rollback_preserves_new_schema_and_post_activation_data(self):
+        state = self.prepare_workspace()
+        self.system.fail = 'local'
+        restart = self.system.restart
+        def activated():
+            restart()
+            if self.system.revision == NEW:
+                with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+                    db.execute("UPDATE curated_event_records SET archived_at='owner-archived' WHERE id='event'")
+                    db.execute("INSERT INTO orders VALUES('new-paid-order','paid')")
+                    db.execute("INSERT INTO event_registrations VALUES('new-owner-alert','other','rsvp','requested')")
+        self.system.restart = activated
+        with self.assertRaisesRegex(release.ReleaseError, 'previous release restored'):
+            self.deployment.transact()
+        self.assert_restored()
+        self.assertEqual(self.system.revision, OLD)
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM orders').fetchone(), (2,))
+            self.assertEqual(db.execute("SELECT archived_at FROM curated_event_records WHERE id='event'").fetchone(), ('owner-archived',))
+            self.assertEqual(db.execute("SELECT account_id FROM organizer_rsvp_push_deliveries WHERE registration_id='new-owner-alert'").fetchall(), [('owner',)])
+            # The previous runtime still has compatible explicit-column writes.
+            db.execute("UPDATE curated_event_records SET title='Old runtime write' WHERE id='event'")
+            db.execute("INSERT INTO event_registrations VALUES('after-rollback','event','rsvp','requested')")
+            self.assertEqual(db.execute("SELECT account_id FROM organizer_rsvp_push_deliveries WHERE registration_id='after-rollback' ORDER BY account_id").fetchall(), [('host',), ('owner',)])
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+        self.assertTrue((self.deployment.snapshot / 'database/before.sqlite').is_file())
+        # This proves schema/data compatibility, not old-application delivery of
+        # the newly captured owner work. Keep pending work for forward recovery.
 
 
 if __name__ == "__main__":
