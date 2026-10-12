@@ -1,5 +1,6 @@
 import { generateRequestDetails } from 'web-push-neo';
 import { validPushEndpoint } from './push-subscription';
+import { hostEventEnded } from './analytics-period';
 
 type AlertKind = 'rsvp' | 'purchase';
 const sources = {
@@ -16,14 +17,17 @@ async function deliverOrganizerPush(env: Cloudflare.Env, id: string, kind: Alert
     .bind(claim,new Date(Date.now()+120000).toISOString(),id,now).run();
   if(!acquired.meta.changes)return;
   const finish=(outcome:string)=>env.DB.prepare(`UPDATE ${config.table} SET completed_at=?,outcome=?,claim=NULL,lease_until=NULL WHERE id=? AND claim=?`).bind(new Date().toISOString(),outcome,id,claim).run();
-  const eligible=()=>env.DB.prepare(`SELECT p.id AS subscriptionId,p.endpoint,p.p256dh,p.auth,p.consent_id AS subscriptionVersion,r.event_slug AS slug,e.title,d.created_at AS createdAt,d.attempts
+  const eligible=async()=>{
+   const row=await env.DB.prepare(`SELECT p.id AS subscriptionId,p.endpoint,p.p256dh,p.auth,p.consent_id AS subscriptionVersion,r.event_slug AS slug,e.title,e.schedule_status AS scheduleStatus,e.event_state AS eventState,e.ends_at AS endsAt,d.created_at AS createdAt,d.attempts
     FROM ${config.table} d JOIN organizer_push_subscriptions p ON p.id=d.subscription_id AND p.account_id=d.account_id AND p.consent_id=d.subscription_version
     JOIN staff_accounts s ON s.id=p.account_id JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=s.id
     JOIN ${config.source} r ON r.id=d.${config.column} JOIN curated_event_records e ON e.slug=r.event_slug
     JOIN staff_event_assignments a ON a.account_id=s.id AND a.event_slug=r.event_slug
     WHERE d.id=? AND d.claim=? AND d.completed_at IS NULL AND d.lease_until>? AND p.revoked_at IS NULL AND ss.revoked_at IS NULL AND ss.expires_at>? AND s.status='active' AND s.role='organizer' AND s.must_change_password=0
     AND e.removed_at IS NULL AND e.status='published' AND e.event_state NOT IN ('cancelled','postponed') AND ${config.eligible}`)
-    .bind(id,claim,new Date().toISOString(),new Date().toISOString()).first<{subscriptionId:string;subscriptionVersion:string;endpoint:string;p256dh:string;auth:string;slug:string;title:string;createdAt:string;attempts:number}>();
+    .bind(id,claim,new Date().toISOString(),new Date().toISOString()).first<{subscriptionId:string;subscriptionVersion:string;endpoint:string;p256dh:string;auth:string;slug:string;title:string;scheduleStatus:string;eventState:string;endsAt:string;createdAt:string;attempts:number}>();
+   return row&&!hostEventEnded(row,Date.now())?row:null;
+  };
   const row=await eligible();
   if(!row||Date.parse(row.createdAt)+86400000<=Date.now()){await finish('ineligible');return;}
   if(!validPushEndpoint(row.endpoint)){await finish('invalid_endpoint');return;}
