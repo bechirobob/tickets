@@ -22,10 +22,10 @@ spec.loader.exec_module(release)
 # Test-only selection of the separately reviewed application. An actual source
 # checkout is never redirected unless every application byte remains the exact
 # independently selected controls baseline and only these two controls changed.
-CONTROL_CHECK_BASE = "17067b3309967494e86c86e6cafee4ab7ad5738f"
-CONTROL_CHECK_TREE = "a00e06278f68008bbf16238d68debd97af7a5024"
-REVIEWED_APP_SNAPSHOT = "e00df22fa6a2ddfcceeb352aa62f68d16ab52238"
-REVIEWED_APP_TREE = "2f793b057ed7e83e5ff6867ddd9dd14077e7fdb3"
+CONTROL_CHECK_BASE = "ae76d2d69e27a0ad9c8e07d98e3955ab8e2e75af"
+CONTROL_CHECK_TREE = "dfca7a11184d75c91e1cc13d5fa3b5edf027e450"
+REVIEWED_APP_SNAPSHOT = "991217dedb580ffd007d6a9d999b96bc59b1d0b3"
+REVIEWED_APP_TREE = "a5709436005ba1aaa7df67cd23eb3611f08ae983"
 CONTROL_CHECK_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
 
 
@@ -3117,7 +3117,7 @@ class CloudflareCostAdmissionTests(unittest.TestCase):
 
 
 class HostRsvpPushAdmissionTests(unittest.TestCase):
-    pins = {'app/api/organizer/notifications/subscription/route.ts': '1326df418932f18b8007e3410232a725f105f7eb', 'app/organizer/workspace/host-rsvp-alerts.tsx': '115997d66a344c59ed233306a6bcdbd4bb5c6279', 'app/organizer/workspace/organizer-suite.tsx': 'fbe4e78c876ce03a3bc36c26ce97087ab24931a5', 'app/organizer/workspace/page.tsx': 'b92e80fb99297cab5cfb100bf62e85f8948c2bfa', 'app/organizer/workspace/suite.css': '427038c93ca19550c65e7cbafe4eb95c5ad250c7', 'app/registration-manager.tsx': '388a488887b5d0b52a5a77b536904659dc311d32', 'db/schema.ts': 'bcd304ce4bf518e2b71d707e36a1438c6a65ee04', 'lib/event-audience.ts': 'fb8e73aee376426e9b58abb02dc6dc8ba85e3892', 'lib/organizer-rsvp-push.ts': '54a064db4bd8861815b582b5b41b2fd2ca807b37', 'lib/payment-operations.ts': 'd8701182ced11abcbae5b3590a4d6db203ee45b7', 'public/sw.js': '5e59b045ded41b5e6033fea174993349d5742373', 'worker/background.ts': 'd5683c2699242330cec52fe5962614e33e635bdb', 'lib/email-delivery.ts': 'dcad73b8a824af75949a8b02cba9977d00b182f8'}
+    pins = {'app/api/organizer/notifications/subscription/route.ts': '1326df418932f18b8007e3410232a725f105f7eb', 'app/organizer/workspace/host-rsvp-alerts.tsx': 'eac1f7be6fa0a3515dc87549b0cdd1fc6b870832', 'app/organizer/workspace/organizer-suite.tsx': 'fbe4e78c876ce03a3bc36c26ce97087ab24931a5', 'app/organizer/workspace/page.tsx': 'b92e80fb99297cab5cfb100bf62e85f8948c2bfa', 'app/organizer/workspace/suite.css': '427038c93ca19550c65e7cbafe4eb95c5ad250c7', 'app/registration-manager.tsx': '388a488887b5d0b52a5a77b536904659dc311d32', 'db/schema.ts': 'bcd304ce4bf518e2b71d707e36a1438c6a65ee04', 'lib/event-audience.ts': 'fb8e73aee376426e9b58abb02dc6dc8ba85e3892', 'lib/organizer-rsvp-push.ts': 'f843394ca5c7c4f9d823aa37e78ecb4f25585126', 'lib/payment-operations.ts': 'd8701182ced11abcbae5b3590a4d6db203ee45b7', 'public/sw.js': '5e59b045ded41b5e6033fea174993349d5742373', 'worker/background.ts': 'd5683c2699242330cec52fe5962614e33e635bdb', 'lib/email-delivery.ts': 'dcad73b8a824af75949a8b02cba9977d00b182f8'}
 
     def test_exact_application_pins_and_no_neighbouring_authority(self):
         for name, digest in self.pins.items():
