@@ -3614,7 +3614,7 @@ class WorkspaceReleaseAdmissionTests(unittest.TestCase):
 class WorkspaceReleasePinTests(unittest.TestCase):
     def test_scope_is_finite_and_root_dependencies_are_unchanged(self):
         self.assertEqual(release.WORKSPACE_RELEASE_BASELINE, "379be609c49e8994dbd6b5bf5883c9be733369b1")
-        self.assertEqual(release.WORKSPACE_APP_TREE, "cb4e9eb42769b2f64cc905c7456f2237dfcc8b02")
+        self.assertEqual(release.WORKSPACE_APP_TREE, "1f2533264b8e48d440ee6bbeeb3c503652e1f659")
         self.assertEqual(len(release.WORKSPACE_APPLICATION_BLOBS), 76)
         self.assertEqual(release.WORKSPACE_CONTROL_FILES,
                          {"ops/vps/code-release.py", "ops/vps/test_code_release.py"})

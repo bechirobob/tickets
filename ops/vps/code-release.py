@@ -135,7 +135,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "58e0c663648e6edaabc72bda3be24e55b0f37bef",
+    "ops/vps/test_code_release.py": "55a69859771dfcb4a29be699efbedbc387cfc4c4",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -472,8 +472,8 @@ REVIEWED_APPLICATION_BLOBS = {
 # The published snapshot is application evidence, never its own control anchor.
 WORKSPACE_RELEASE_BASELINE = "379be609c49e8994dbd6b5bf5883c9be733369b1"
 WORKSPACE_BASE_TREE = "f02fe2f1b013af5c0ac873e4d9af2eddb47e636a"
-WORKSPACE_APP_SNAPSHOT = "f37648b5a12c51117f6796b219cecacf14f533db"
-WORKSPACE_APP_TREE = "cb4e9eb42769b2f64cc905c7456f2237dfcc8b02"
+WORKSPACE_APP_SNAPSHOT = "b0b1b4534584ab74b20c6923cf1e77bf189fa94d"
+WORKSPACE_APP_TREE = "1f2533264b8e48d440ee6bbeeb3c503652e1f659"
 WORKSPACE_PACKAGE_BLOBS = ("91d44944a682f992880c44785d7b14eda9204c18",
                            "ee7d351bd660b932e9870b6d542da4426386eca5")
 WORKSPACE_LOCK_BLOB = "47a4eaca5743b768598462d8b66a2ef49a442b4e"
@@ -518,7 +518,7 @@ WORKSPACE_APPLICATION_BLOBS = {
     "app/help/help-centre.tsx": "f9b394985c7660b760e5f5628358ea1d128216c7",
     "app/operations-design.css": "389e146a6393036fe88d61130caea57cb9576951",
     "app/organizer/analytics/organizer-analytics.tsx": "f85e24f1fb9c1115de4c738c5ae1755a1198f14e",
-    "app/organizer/workspace/host-rsvp-alerts.css": "533779ab2ab6f356252eb547342bab2f2d02e3d6",
+    "app/organizer/workspace/host-rsvp-alerts.css": "f22597dd486810d0d8ae24ac5c1de6300d6f8362",
     "app/organizer/workspace/host-rsvp-alerts.tsx": "7747a4e3ac8e7dab8fb9cd7b8879c42b0fb8d7f2",
     "app/organizer/workspace/organizer-suite.tsx": "4dc74e21268f8d31b72efbac18cebe08c1962af1",
     "app/organizer/workspace/organizer-workspace.tsx": "b8d40a84d83d6d17507ac77b2d9f6756f4050dca",
@@ -526,7 +526,7 @@ WORKSPACE_APPLICATION_BLOBS = {
     "app/organizer/workspace/suite.css": "0b44251a102b84f004114efc58e223529a13f289",
     "app/phone-announcement-composer.tsx": "12c95fee7dd4f459b681388bb260fcb292c1051b",
     "app/room-features.css": "11bda156d6b7884535417e3a6cac6427763f842b",
-    "app/room/[slug]/room-client.tsx": "4f26b437d821f0edeabcfa6a2c4bf163afed5fd3",
+    "app/room/[slug]/room-client.tsx": "ba6d41b70521ecb638edd19518f19e40656b4a53",
     "db/schema.ts": "5acd9cb94f4a57e7c7665af311065544318e1b1b",
     "docs/operations/host-rsvp-push.md": "6a3cb719719ae5c24eb088f5a8e861da804fcc8c",
     "lib/admin-session.ts": "2cbf5e145a7a24d27dbc70419f8daaddb72ef611",
@@ -541,20 +541,20 @@ WORKSPACE_APPLICATION_BLOBS = {
     "package.json": "ee7d351bd660b932e9870b6d542da4426386eca5",
     "styles/workspace.css": "f2e4451bd6226fa036e24acb5186bd4aa8b5f91f",
     "tests/app-navigation.test.mjs": "7a8789d4b74987df393cd8bdcd1795991a25b7a5",
-    "tests/e2e/host-announcement-channels.spec.ts": "6c2be77a05fd9a205f666df38287dd81d27a855a",
-    "tests/e2e/host-rsvp-alerts.spec.ts": "f35bc36174d47e151004c4429e19a93a241731e6",
-    "tests/e2e/operations.spec.ts": "859e8cd2132ccbaf300a8481a4f1043c0de48332",
+    "tests/e2e/host-announcement-channels.spec.ts": "8b73b4d41049e9dfd482f46607fc8081467d09b3",
+    "tests/e2e/host-rsvp-alerts.spec.ts": "92c2ffb99dd5607d54009ebc83b3f69e35eaf1cb",
+    "tests/e2e/operations.spec.ts": "613880e1a8e42e7e045329dc7c20e8273859cdcd",
     "tests/e2e/room-features.spec.ts": "b49a9e1340a151bfaa94509a299513a181cd5060",
     "tests/e2e/room-host-messages.spec.ts": "6635518901d17a54e54f4b9c811c0779f14b02ab",
     "tests/e2e/room-identity.spec.ts": "da440a0e39dc06cef8d7c8b3695d16b6ca738a4e",
     "tests/event-archive.test.ts": "8786fdb9c6502760b748d5f89e08fc12afa301db",
     "tests/host-announcement-channel.test.ts": "424f1dab02f8aeecdfe2a7c0088e6cda0a457823",
-    "tests/mobile-ui.test.mjs": "f8b8e14f44355fefff33b559d5a63fc91e8c34c9",
+    "tests/mobile-ui.test.mjs": "7be7869649ce4d5880c2cf51be54a5b3ce77a528",
     "tests/organizer-analytics.test.ts": "82719fc4b85051a92091823e8ed115fe085ae583",
     "tests/organizer-business.test.ts": "7d293efc50662bcb279a9c3e284d3923a8c0b0a5",
     "tests/organizer-finance-ui.test.mjs": "4f4699ac19b186e5eb5b75746224d78fd23b90dc",
     "tests/organizer-rsvp-push.test.ts": "cf56520260c6d5aa425251fcea629ca789f56c35",
-    "tests/owner-notification-wiring.test.mjs": "f4ddb1b381dd07957eb868f91d3d3b6b19b3d86d",
+    "tests/owner-notification-wiring.test.mjs": "99ff61ff4529fdcf794cc7c9848a361729f96869",
     "tests/payment-selection.test.ts": "1e63fdfed33240ad0d955e667717eccfe54327f5",
     "tests/registrations.test.ts": "6f4a156f28f301ad3dd7a1609d742c87104ab5ce",
     "tests/vps-bindings.mjs": "89a9d7d85e2839d7ccc35836b1e7378b56d331b3",
