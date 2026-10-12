@@ -1,3 +1,4 @@
+import { enqueueOrganizerRsvpPush } from './organizer-rsvp-push';
 import { emailBrand } from "./email-brand";
 import { createSecureToken } from './attendee-auth';
 import { processAppleWalletUpdatePushes } from './apple-wallet-updates';
@@ -61,6 +62,16 @@ export async function processEventAnnouncements(env: Cloudflare.Env, origin: str
 
 /** Stable per-booking deliveries make repeated payment/verification callbacks harmless. */
 export async function notifyRegistrationHosts(db:D1Database,input:{eventSlug:string;sourceId:string;guestName:string;status:string;guests:number},origin='https://tickets.becoreops.com') {
+  const rsvp = await db.prepare("SELECT 1 FROM event_registrations WHERE id=? AND event_slug=? AND kind='rsvp'").bind(input.sourceId,input.eventSlug).first();
+  if (rsvp) {
+    // Capture already committed with the RSVP. Queue failure must not undo signup.
+    try {
+      const { env } = await import('cloudflare:workers');
+      await enqueueOrganizerRsvpPush(db, env.EMAIL_DELIVERY_QUEUE, input.sourceId);
+    } catch { console.error(JSON.stringify({message:'Host RSVP push awaits scheduled recovery'})); }
+    return;
+  }
+
   const hosts=await db.prepare(`SELECT s.id,s.normalized_email AS email,e.title FROM staff_event_assignments a JOIN staff_accounts s ON s.id=a.account_id JOIN curated_event_records e ON e.slug=a.event_slug LEFT JOIN event_registration_settings r ON r.event_slug=e.slug
     WHERE a.event_slug=? AND s.role='organizer' AND s.status='active' AND e.removed_at IS NULL AND COALESCE(r.notify_host,1)=1`).bind(input.eventSlug).all<{id:string;email:string;title:string}>();
   for(const host of hosts.results){

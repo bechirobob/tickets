@@ -1,3 +1,4 @@
+import { deliverOrganizerRsvpPush, retryOrganizerRsvpPush, deliverOrganizerPurchasePush, retryOrganizerPurchasePush } from '../lib/organizer-rsvp-push';
 import { reconcileVpsDeliveries } from "../lib/transactional-email";
 import { observeBackgroundJob } from "../lib/background-health";
 import { trackedOperation, HandoverPaused } from "./handover-control";
@@ -26,6 +27,8 @@ async function processQueueUntracked(batch: MessageBatch<{ deliveryId: string }>
       try {
         if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
         else if (message.body?.deliveryId?.startsWith('host-announcement:')) await deliverHostAnnouncement(env, message.body.deliveryId.slice('host-announcement:'.length));
+        else if (message.body?.deliveryId?.startsWith('organizer-purchase:')) await deliverOrganizerPurchasePush(env, message.body.deliveryId.slice('organizer-purchase:'.length));
+        else if (message.body?.deliveryId?.startsWith('organizer-rsvp:')) await deliverOrganizerRsvpPush(env, message.body.deliveryId.slice('organizer-rsvp:'.length));
         else if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
         else if (message.body?.deliveryId?.startsWith('registration-confirmation:')) await processRegistrations(env, 'https://tickets.becoreops.com', message.body.deliveryId.slice('registration-confirmation:'.length));
         else if (message.body?.deliveryId?.startsWith('order-confirmation:')) await deliverOrderConfirmationByReference(env, message.body.deliveryId.slice('order-confirmation:'.length), 'https://tickets.becoreops.com');
@@ -54,6 +57,8 @@ async function runScheduledOperationsUntracked(controller: ScheduledController, 
   if (env.ENVIRONMENT === "production") { try { await runPreviewCleanup(env); } catch (error) { await failed("preview-cleanup", error); } }
   if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await failed("event-announcements",error); } return failures;}
   try { await retryEventRemovals(env); } catch (error) { await failed("event-removal-cleanup", error); }
+  try { await retryOrganizerRsvpPush(env); } catch (error) { await failed('host-rsvp-push', error); }
+  try { await retryOrganizerPurchasePush(env); } catch (error) { await failed('host-purchase-push', error); }
   try { await retryHostAnnouncements(env); } catch (error) { await failed('host-announcements', error); }
   try { await retryOrderConfirmations(env, "https://tickets.becoreops.com"); } catch (error) { await failed("order-confirmations", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await failed("event-registrations", error); }
