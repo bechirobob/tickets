@@ -22,10 +22,10 @@ spec.loader.exec_module(release)
 # Test-only selection of the separately reviewed application. An actual source
 # checkout is never redirected unless every application byte remains the exact
 # independently selected controls baseline and only these two controls changed.
-CONTROL_CHECK_BASE = "75af4f8e57393ddbed7bd05a31e636098c4532ab"
-CONTROL_CHECK_TREE = "a929954660a55d6f275d9954bede3b4d12eeac9d"
-REVIEWED_APP_SNAPSHOT = "bf126a56968b640ab2151a83b486ea0171b077c2"
-REVIEWED_APP_TREE = "436fba188c16a907410f5ef8c7dbb628136ccbae"
+CONTROL_CHECK_BASE = "17067b3309967494e86c86e6cafee4ab7ad5738f"
+CONTROL_CHECK_TREE = "a00e06278f68008bbf16238d68debd97af7a5024"
+REVIEWED_APP_SNAPSHOT = "31af82c85baf53b3a8206b2e78b1b7159ac88b91"
+REVIEWED_APP_TREE = "1528028b8c0b6dff634ed65544775ec0f79590e4"
 CONTROL_CHECK_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
 
 
@@ -34,7 +34,7 @@ class TransactionalMailAdmissionTests(unittest.TestCase):
     admitted = {
         "lib/email-delivery.ts": "dcad73b8a824af75949a8b02cba9977d00b182f8",
         "lib/transactional-email.ts": "6d7ea0dda0b1b0538e07be352b0b7ae39de1d8ce",
-        "worker/background.ts": "0ea11c3f9c8be00a48b625ac18cc4abf1806654e",
+        "worker/background.ts": "d5683c2699242330cec52fe5962614e33e635bdb",
     }
 
     def test_only_exact_mail_outputs_are_admitted(self):
@@ -3114,6 +3114,311 @@ class CloudflareCostAdmissionTests(unittest.TestCase):
             with self.assertRaisesRegex(release.ReleaseError, "cannot be its own trusted"):
                 release.verify_trusted_operator(NEW)
             git.assert_not_called()
+
+
+class HostRsvpPushAdmissionTests(unittest.TestCase):
+    pins = {'app/api/organizer/notifications/subscription/route.ts': '1326df418932f18b8007e3410232a725f105f7eb', 'app/organizer/workspace/host-rsvp-alerts.tsx': '115997d66a344c59ed233306a6bcdbd4bb5c6279', 'app/organizer/workspace/organizer-suite.tsx': '4bfca7a142de21719f816cb9b0056e8f7418b754', 'app/organizer/workspace/page.tsx': 'b92e80fb99297cab5cfb100bf62e85f8948c2bfa', 'app/organizer/workspace/suite.css': 'da892f45a196da0a3217afa19826543de9074600', 'app/registration-manager.tsx': '388a488887b5d0b52a5a77b536904659dc311d32', 'db/schema.ts': 'bcd304ce4bf518e2b71d707e36a1438c6a65ee04', 'lib/event-audience.ts': 'fb8e73aee376426e9b58abb02dc6dc8ba85e3892', 'lib/organizer-rsvp-push.ts': '54a064db4bd8861815b582b5b41b2fd2ca807b37', 'lib/payment-operations.ts': 'd8701182ced11abcbae5b3590a4d6db203ee45b7', 'public/sw.js': '5e59b045ded41b5e6033fea174993349d5742373', 'worker/background.ts': 'd5683c2699242330cec52fe5962614e33e635bdb', 'lib/email-delivery.ts': 'dcad73b8a824af75949a8b02cba9977d00b182f8'}
+
+    def test_exact_application_pins_and_no_neighbouring_authority(self):
+        for name, digest in self.pins.items():
+            self.assertEqual(release.REVIEWED_APPLICATION_BLOBS[name], digest)
+            self.assertNotIn(name, release.APPLICATION_FILES)
+        with patch.object(release, 'verify_changed_modes'), patch.object(release.subprocess, 'run'):
+            for name, digest in self.pins.items():
+                with self.subTest(path=name), patch.object(release, 'git', side_effect=[name, digest]):
+                    self.assertEqual(release.vetted_changes(OLD, NEW), [name])
+                with self.subTest(changed=name), patch.object(release, 'git', side_effect=[name, 'f'*40]):
+                    with self.assertRaisesRegex(release.ReleaseError, 'reviewed source'):
+                        release.vetted_changes(OLD, NEW)
+            for name in ('lib/unreviewed-host-push.ts', 'app/api/organizer/notifications/admin/route.ts', 'drizzle/0064_unreviewed.sql'):
+                with self.subTest(unrelated=name), patch.object(release, 'git', return_value=name):
+                    with self.assertRaisesRegex(release.ReleaseError, 'Unvetted source path'):
+                        release.vetted_changes(OLD, NEW)
+
+
+class HostRsvpPushMigrationTests(unittest.TestCase):
+    # Embedded exact bytes allow the production staged-operator layout to run
+    # these checks without copying application SQL into its trusted control tree.
+    SQL = b"-- Additive, opt-in host devices; no historical RSVP backfill.\nCREATE TABLE organizer_push_subscriptions (\n id TEXT PRIMARY KEY,\n account_id TEXT NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,\n session_id TEXT NOT NULL REFERENCES staff_sessions(id) ON DELETE CASCADE,\n consent_id TEXT NOT NULL,\n endpoint TEXT NOT NULL UNIQUE,\n p256dh TEXT NOT NULL,\n auth TEXT NOT NULL,\n created_at TEXT NOT NULL,\n updated_at TEXT NOT NULL,\n revoked_at TEXT\n);\nCREATE INDEX organizer_push_account ON organizer_push_subscriptions(account_id, revoked_at);\nCREATE TABLE organizer_rsvp_push_deliveries (\n id TEXT PRIMARY KEY,\n subscription_version TEXT NOT NULL,\n registration_id TEXT NOT NULL REFERENCES event_registrations(id) ON DELETE CASCADE,\n subscription_id TEXT NOT NULL REFERENCES organizer_push_subscriptions(id) ON DELETE CASCADE,\n account_id TEXT NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,\n created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n attempts INTEGER NOT NULL DEFAULT 0,\n lease_until TEXT,\n claim TEXT,\n completed_at TEXT,\n outcome TEXT\n);\nCREATE UNIQUE INDEX organizer_rsvp_push_device ON organizer_rsvp_push_deliveries(registration_id, subscription_id);\nCREATE INDEX organizer_rsvp_push_pending ON organizer_rsvp_push_deliveries(completed_at, lease_until, created_at);\nCREATE TRIGGER organizer_rsvp_push_created AFTER INSERT ON event_registrations\nWHEN NEW.kind='rsvp' AND NEW.status IN ('requested','waitlisted','confirmed')\nBEGIN\n INSERT OR IGNORE INTO organizer_rsvp_push_deliveries(id,registration_id,subscription_id,account_id,subscription_version)\n SELECT lower(hex(randomblob(16))),NEW.id,p.id,p.account_id,p.consent_id\n FROM organizer_push_subscriptions p JOIN staff_event_assignments a ON a.account_id=p.account_id\n JOIN staff_accounts s ON s.id=p.account_id JOIN staff_sessions ss ON ss.id=p.session_id\n WHERE a.event_slug=NEW.event_slug AND p.revoked_at IS NULL AND s.role='organizer' AND s.status='active'\n AND ss.revoked_at IS NULL AND s.must_change_password=0 AND ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now');\nEND;\nCREATE TRIGGER organizer_rsvp_push_verified AFTER UPDATE OF status ON event_registrations\nWHEN NEW.kind='rsvp' AND OLD.status='unverified' AND NEW.status IN ('requested','waitlisted','confirmed')\nBEGIN\n INSERT OR IGNORE INTO organizer_rsvp_push_deliveries(id,registration_id,subscription_id,account_id,subscription_version)\n SELECT lower(hex(randomblob(16))),NEW.id,p.id,p.account_id,p.consent_id\n FROM organizer_push_subscriptions p JOIN staff_event_assignments a ON a.account_id=p.account_id\n JOIN staff_accounts s ON s.id=p.account_id JOIN staff_sessions ss ON ss.id=p.session_id\n WHERE a.event_slug=NEW.event_slug AND p.revoked_at IS NULL AND s.role='organizer' AND s.status='active'\n AND ss.revoked_at IS NULL AND s.must_change_password=0 AND ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now');\nEND;\n"
+
+    @staticmethod
+    def seed(connection):
+        connection.executescript("""
+            CREATE TABLE orders(id TEXT PRIMARY KEY, status TEXT);
+            INSERT INTO orders VALUES('preserved-order','paid');
+            CREATE TABLE staff_accounts(id TEXT PRIMARY KEY, role TEXT, status TEXT, must_change_password INTEGER);
+            INSERT INTO staff_accounts VALUES('host','organizer','active',0);
+            CREATE TABLE staff_sessions(id TEXT PRIMARY KEY,account_id TEXT,revoked_at TEXT,expires_at TEXT);
+            INSERT INTO staff_sessions VALUES('session','host',NULL,'2099-01-01');
+            CREATE TABLE staff_event_assignments(account_id TEXT,event_slug TEXT);
+            INSERT INTO staff_event_assignments VALUES('host','event');
+            CREATE TABLE event_registrations(id TEXT PRIMARY KEY,event_slug TEXT,kind TEXT,status TEXT);
+            INSERT INTO event_registrations VALUES('historical','event','rsvp','requested');
+            CREATE TABLE preserved_business_audit(registration_id TEXT);
+            CREATE TRIGGER existing_business_trigger AFTER INSERT ON event_registrations
+            BEGIN INSERT INTO preserved_business_audit VALUES(NEW.id); END;
+        """)
+        connection.commit()
+
+    @staticmethod
+    def opt_in(connection):
+        connection.execute("INSERT INTO organizer_push_subscriptions(id,account_id,session_id,consent_id,endpoint,p256dh,auth,created_at,updated_at) VALUES('device','host','session','consent','https://fcm.googleapis.com/fcm/send/fixture','fixture','fixture','2026-01-01','2026-01-01')")
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.database = self.root/'tickets.sqlite'
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.seed(connection)
+        self.database.chmod(0o600)
+        self.staging = self.root/'backup'
+        self.spec = release.migration_plan([release.HOST_RSVP_PUSH_PATH])[0]
+
+    def migrate(self, raw=None, spec=None):
+        return release.migrate_database(self.database, self.staging, [(self.spec if spec is None else spec, self.SQL if raw is None else raw)])
+
+    def test_exact_admission_backup_and_no_backfill_preserve_existing_schema_and_rows(self):
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            before=release.schema_rows(connection)
+        result=self.migrate()
+        self.assertTrue(result['created'])
+        self.assertTrue(result['tablesPreservedOnRollback'])
+        self.assertEqual(result['backupSha256'],release.digest_file(self.staging/'before.sqlite'))
+        self.assertEqual(stat.S_IMODE((self.staging/'before.sqlite').stat().st_mode),0o600)
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.assertTrue(all(row in release.schema_rows(connection) for row in before))
+            self.assertEqual(connection.execute('SELECT * FROM orders').fetchall(),[('preserved-order','paid')])
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM organizer_rsvp_push_deliveries').fetchone(),(0,))
+            self.opt_in(connection)
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM organizer_rsvp_push_deliveries').fetchone(),(0,))
+            self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(),[])
+
+    def test_replay_is_exact_noop_preserving_devices_and_captured_work(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.opt_in(connection)
+            connection.execute("INSERT INTO event_registrations VALUES('new','event','rsvp','requested')")
+            before=connection.execute('SELECT * FROM organizer_rsvp_push_deliveries').fetchall()
+        self.staging=self.root/'second-backup'
+        self.assertFalse(self.migrate()['created'])
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.assertEqual(connection.execute('SELECT * FROM organizer_rsvp_push_deliveries').fetchall(),before)
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM organizer_push_subscriptions').fetchone(),(1,))
+
+    def test_modified_bytes_target_timing_and_forged_specification_rejected_before_backup(self):
+        for raw in (self.SQL+b'\n',self.SQL+b'DELETE FROM orders;',self.SQL.replace(b'AFTER INSERT',b'BEFORE INSERT'),self.SQL.replace(b'ON event_registrations',b'ON orders')):
+            with self.subTest(raw=release.hashlib.sha256(raw).hexdigest()), self.assertRaisesRegex(release.ReleaseError,'exact reviewed source'):
+                self.migrate(raw=raw)
+            self.assertFalse(self.staging.exists())
+        for key,value in [('sha256','a'*64),('blob','a'*40),('schemaSha256','a'*64),('tables',['orders']),('triggers',{'arbitrary':'orders'})]:
+            with self.subTest(field=key),self.assertRaisesRegex(release.ReleaseError,'exact reviewed source'):
+                self.migrate(spec=dict(self.spec,**{key:value}))
+            self.assertFalse(self.staging.exists())
+
+    def test_generic_trigger_grammar_stays_closed(self):
+        with self.assertRaisesRegex(release.ReleaseError,'Only the reviewed refund rollback guard'):
+            release.additive_statements(self.SQL,self.spec)
+        with self.assertRaises(release.ReleaseError):
+            release.reviewed_migration(self.SQL,dict(self.spec,path='drizzle/0064_unreviewed.sql'))
+
+    def test_partial_schema_rejected_and_existing_booking_preserved(self):
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            connection.execute('CREATE TABLE organizer_push_subscriptions(id TEXT PRIMARY KEY)')
+        with self.assertRaisesRegex(release.ReleaseError,'partial or differs'):
+            self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.assertEqual(connection.execute('SELECT * FROM orders').fetchall(),[('preserved-order','paid')])
+            self.assertIsNone(connection.execute("SELECT name FROM sqlite_schema WHERE name='organizer_rsvp_push_deliveries'").fetchone())
+
+    def test_drifted_trigger_rejected_without_destroying_pending_work(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.opt_in(connection)
+            connection.execute("INSERT INTO event_registrations VALUES('new','event','rsvp','requested')")
+            connection.execute('DROP TRIGGER organizer_rsvp_push_created')
+            connection.execute('CREATE TRIGGER organizer_rsvp_push_created AFTER INSERT ON event_registrations BEGIN SELECT 1; END')
+        self.staging=self.root/'second-backup'
+        with self.assertRaisesRegex(release.ReleaseError,'partial or differs'):
+            self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.assertEqual(connection.execute('SELECT registration_id FROM organizer_rsvp_push_deliveries').fetchall(),[('new',)])
+
+    def test_booking_capture_rolls_back_and_later_approval_does_not_duplicate(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.opt_in(connection);connection.commit()
+            with self.assertRaises(release.sqlite3.OperationalError), connection:
+                connection.execute("INSERT INTO event_registrations VALUES('rollback','event','rsvp','requested')")
+                connection.execute('INSERT INTO missing_table VALUES(1)')
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM organizer_rsvp_push_deliveries').fetchone(),(0,))
+            connection.execute("INSERT INTO event_registrations VALUES('new','event','rsvp','unverified')")
+            connection.execute("UPDATE event_registrations SET status='requested' WHERE id='new'")
+            connection.execute("UPDATE event_registrations SET status='confirmed' WHERE id='new'")
+            self.assertEqual(connection.execute('SELECT registration_id FROM organizer_rsvp_push_deliveries').fetchall(),[('new',)])
+
+    def test_failed_schema_transaction_rolls_back_every_addition(self):
+        # Simulate a disk/SQL failure after the exact admitted first statement;
+        # the live operator must roll back rather than leave a partial schema.
+        original=release.reviewed_migration
+        def fail_after_first(raw,spec):
+            statements,rows=original(raw,spec)
+            return [statements[0],'INSERT INTO missing_table VALUES(1)'],rows
+        with patch.object(release,'reviewed_migration',side_effect=fail_after_first):
+            with self.assertRaises(release.sqlite3.OperationalError):self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as connection, connection:
+            self.assertIsNone(connection.execute("SELECT name FROM sqlite_schema WHERE name='organizer_push_subscriptions'").fetchone())
+            self.assertEqual(connection.execute('SELECT * FROM orders').fetchall(),[('preserved-order','paid')])
+
+
+class HostRsvpPushDeploymentTests(DeploymentFixture):
+    def prepare_push(self, raw=None):
+        state=self.root/'var/lib/becore-tickets';state.chmod(0o700)
+        with release.closing(release.sqlite3.connect(state/'tickets.sqlite')) as connection, connection:HostRsvpPushMigrationTests.seed(connection)
+        (state/'tickets.sqlite').chmod(0o600)
+        member=tarfile.TarInfo('migrations/0063_host_rsvp_push.sql');member.mode=0o644
+        self.make_archive(extra=(member,HostRsvpPushMigrationTests.SQL if raw is None else raw))
+        self.proof['changedFiles']=[release.HOST_RSVP_PUSH_PATH]
+        self.proof['migrations']=release.migration_plan(self.proof['changedFiles'])
+        self.refresh_digests()
+        return state
+
+    def test_tampered_migration_never_restarts_the_service(self):
+        self.prepare_push(HostRsvpPushMigrationTests.SQL+b'\n')
+        with self.assertRaises(release.ReleaseError):self.deployment.transact()
+        self.assertEqual(self.system.restarts,0)
+        self.assert_restored()
+
+    def test_failed_activation_preserves_bookings_devices_and_pending_alerts(self):
+        state=self.prepare_push();self.system.fail='local'
+        restart=self.system.restart
+        def activated():
+            restart()
+            if self.system.revision==NEW:
+                with release.closing(release.sqlite3.connect(state/'tickets.sqlite')) as connection, connection:
+                    HostRsvpPushMigrationTests.opt_in(connection)
+                    connection.execute("INSERT INTO orders VALUES('new-paid-order','paid')")
+                    connection.execute("INSERT INTO event_registrations VALUES('new','event','rsvp','requested')")
+        self.system.restart=activated
+        with self.assertRaisesRegex(release.ReleaseError,'previous release restored'):self.deployment.transact()
+        self.assert_restored()
+        self.assertEqual(self.system.revision,OLD)
+        with release.closing(release.sqlite3.connect(state/'tickets.sqlite')) as connection, connection:
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM orders').fetchone(),(2,))
+            self.assertEqual(connection.execute('SELECT registration_id FROM organizer_rsvp_push_deliveries').fetchall(),[('new',)])
+        # Structural rollback only. OLD restores its original host-email behavior;
+        # it does not inherit the candidate's push-only suppression. Release review
+        # must explicitly retain that caveat/forward-recovery plan, never erase data.
+        self.assertTrue((self.deployment.snapshot/'database/before.sqlite').is_file())
+
+    def test_successful_activation_records_exact_migration_and_backup(self):
+        self.prepare_push();result=self.deployment.transact()
+        self.assertTrue(result['dataMigration'])
+        journal=release.strict_json(self.deployment.journal.read_bytes())
+        self.assertEqual(journal['lastCodeRelease']['additiveMigrations'],release.migration_plan([release.HOST_RSVP_PUSH_PATH]))
+        self.assertEqual(len(journal['lastCodeRelease']['databaseBackupSha256']),64)
+
+
+class HostPurchaseMigrationTests(unittest.TestCase):
+    SQL = b"-- Additive delivery outbox; captured by the verified-payment transaction only.\nCREATE TABLE organizer_purchase_push_deliveries (\n id TEXT PRIMARY KEY,\n subscription_version TEXT NOT NULL,\n order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,\n subscription_id TEXT NOT NULL REFERENCES organizer_push_subscriptions(id) ON DELETE CASCADE,\n account_id TEXT NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,\n created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n attempts INTEGER NOT NULL DEFAULT 0,\n lease_until TEXT,\n claim TEXT,\n completed_at TEXT,\n outcome TEXT\n);\nCREATE UNIQUE INDEX organizer_purchase_push_device ON organizer_purchase_push_deliveries(order_id, subscription_id);\nCREATE INDEX organizer_purchase_push_pending ON organizer_purchase_push_deliveries(completed_at, lease_until, created_at);\n"
+    PATH = 'drizzle/0064_host_purchase_push.sql'
+
+    def setUp(self):
+        self.temporary=tempfile.TemporaryDirectory();self.addCleanup(self.temporary.cleanup)
+        self.root=Path(self.temporary.name);self.database=self.root/'tickets.sqlite';self.staging=self.root/'backup'
+        with release.closing(release.sqlite3.connect(self.database)) as db,db:
+            HostRsvpPushMigrationTests.seed(db)
+            db.executescript(HostRsvpPushMigrationTests.SQL.decode())
+            HostRsvpPushMigrationTests.opt_in(db)
+        self.database.chmod(0o600)
+        self.spec=release.migration_plan([self.PATH])[0]
+
+    def migrate(self,raw=None):
+        return release.migrate_database(self.database,self.staging,[(self.spec,self.SQL if raw is None else raw)])
+
+    def test_exact_existing_grammar_accepts_only_new_table_and_indexes(self):
+        statements,rows=release.additive_statements(self.SQL,self.spec)
+        self.assertEqual(len(statements),3)
+        self.assertEqual(sorted(row[0] for row in rows),['index','index','table'])
+        self.assertTrue(all(row[2]=='organizer_purchase_push_deliveries' for row in rows))
+        self.assertNotIn('triggers',self.spec)
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            before=release.schema_rows(db)
+        result=self.migrate();self.assertTrue(result['created'])
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.assertTrue(all(row in release.schema_rows(db) for row in before))
+            self.assertEqual(db.execute('SELECT * FROM orders').fetchall(),[('preserved-order','paid')])
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM organizer_purchase_push_deliveries').fetchone(),(0,))
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
+        self.assertEqual(stat.S_IMODE((self.staging/'before.sqlite').stat().st_mode),0o600)
+
+    def test_one_byte_target_or_extra_statement_rejected_before_backup(self):
+        for raw in (self.SQL+b'\n',self.SQL.replace(b'ON organizer_purchase_push_deliveries',b'ON orders'),self.SQL+b'DELETE FROM orders;'):
+            with self.subTest(raw=release.hashlib.sha256(raw).hexdigest()),self.assertRaises(release.ReleaseError):self.migrate(raw)
+            self.assertFalse(self.staging.exists())
+
+    def test_generic_existing_table_trigger_restriction_is_unchanged(self):
+        raw=b'CREATE TRIGGER purchase_test BEFORE INSERT ON orders BEGIN SELECT 1; END;'
+        forged=dict(self.spec,sha256=release.hashlib.sha256(raw).hexdigest(),triggers={'purchase_test':'orders'})
+        with self.assertRaisesRegex(release.ReleaseError,'Only the reviewed refund rollback guard'):release.additive_statements(raw,forged)
+
+    def test_replay_preserves_captured_purchase_and_parent_booking(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db,db:
+            db.execute("INSERT INTO organizer_purchase_push_deliveries(id,subscription_version,order_id,subscription_id,account_id) VALUES('capture','consent','preserved-order','device','host')")
+            before=db.execute('SELECT * FROM organizer_purchase_push_deliveries').fetchall()
+        self.staging=self.root/'second-backup';self.assertFalse(self.migrate()['created'])
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute('SELECT * FROM organizer_purchase_push_deliveries').fetchall(),before)
+            self.assertEqual(db.execute('SELECT * FROM orders').fetchall(),[('preserved-order','paid')])
+
+    def test_partial_schema_rejected_without_rewriting_bookings(self):
+        with release.closing(release.sqlite3.connect(self.database)) as db,db:db.execute('CREATE TABLE organizer_purchase_push_deliveries(id TEXT)')
+        with self.assertRaisesRegex(release.ReleaseError,'partial or differs'):self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db:self.assertEqual(db.execute('SELECT * FROM orders').fetchall(),[('preserved-order','paid')])
+
+
+class HostNotificationsDeploymentTests(DeploymentFixture):
+    def prepare_notifications(self,tampered=False):
+        state=self.root/'var/lib/becore-tickets';state.chmod(0o700)
+        with release.closing(release.sqlite3.connect(state/'tickets.sqlite')) as db,db:HostRsvpPushMigrationTests.seed(db)
+        (state/'tickets.sqlite').chmod(0o600)
+        items=[]
+        for path,raw in [(release.HOST_RSVP_PUSH_PATH,HostRsvpPushMigrationTests.SQL),(HostPurchaseMigrationTests.PATH,HostPurchaseMigrationTests.SQL+(b'\n' if tampered else b''))]:
+            member=tarfile.TarInfo('migrations/'+Path(path).name);member.mode=0o644;items.append((member,raw))
+        self.make_archive(extra=items);self.proof['changedFiles']=[release.HOST_RSVP_PUSH_PATH,HostPurchaseMigrationTests.PATH]
+        self.proof['migrations']=release.migration_plan(self.proof['changedFiles']);self.refresh_digests();return state
+
+    def test_both_migrations_and_backup_recorded(self):
+        self.prepare_notifications();self.assertTrue(self.deployment.transact()['dataMigration'])
+        journal=release.strict_json(self.deployment.journal.read_bytes())
+        self.assertEqual(journal['lastCodeRelease']['additiveMigrations'],self.proof['migrations'])
+        self.assertEqual(len(journal['lastCodeRelease']['databaseBackupSha256']),64)
+
+    def test_tampered_purchase_sql_prevents_any_restart(self):
+        self.prepare_notifications(tampered=True)
+        with self.assertRaises(release.ReleaseError):self.deployment.transact()
+        self.assertEqual(self.system.restarts,0);self.assert_restored()
+
+    def test_failed_activation_retains_both_outboxes_and_new_paid_booking(self):
+        state=self.prepare_notifications();self.system.fail='local';restart=self.system.restart
+        def activated():
+            restart()
+            if self.system.revision==NEW:
+                with release.closing(release.sqlite3.connect(state/'tickets.sqlite')) as db,db:
+                    HostRsvpPushMigrationTests.opt_in(db)
+                    db.execute("INSERT INTO orders VALUES('new-paid-order','paid')")
+                    db.execute("INSERT INTO event_registrations VALUES('new','event','rsvp','requested')")
+                    db.execute("INSERT INTO organizer_purchase_push_deliveries(id,subscription_version,order_id,subscription_id,account_id) VALUES('capture','consent','new-paid-order','device','host')")
+        self.system.restart=activated
+        with self.assertRaisesRegex(release.ReleaseError,'previous release restored'):self.deployment.transact()
+        self.assert_restored()
+        with release.closing(release.sqlite3.connect(state/'tickets.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM orders').fetchone(),(2,))
+            self.assertEqual(db.execute('SELECT registration_id FROM organizer_rsvp_push_deliveries').fetchall(),[('new',)])
+            self.assertEqual(db.execute('SELECT order_id FROM organizer_purchase_push_deliveries').fetchall(),[('new-paid-order',)])
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
+        # Structural rollback; separate exact-F application rehearsal verifies mail policy.
 
 
 if __name__ == "__main__":

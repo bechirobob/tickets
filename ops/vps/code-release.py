@@ -87,6 +87,12 @@ EMAIL_RELEASE_BASELINE = "4ec84f8645e237596129669205565eb214b6e09e"
 RESOURCE_RELEASE_BASELINE = "5e1b1aada332d8ce4986c26291594a929aa95d53"
 
 REVIEWED_APPLICATION_BLOBS = {
+    "public/sw.js": "5e59b045ded41b5e6033fea174993349d5742373",
+    "lib/organizer-rsvp-push.ts": "54a064db4bd8861815b582b5b41b2fd2ca807b37",
+    "lib/event-audience.ts": "fb8e73aee376426e9b58abb02dc6dc8ba85e3892",
+    "app/organizer/workspace/suite.css": "da892f45a196da0a3217afa19826543de9074600",
+    "app/organizer/workspace/host-rsvp-alerts.tsx": "115997d66a344c59ed233306a6bcdbd4bb5c6279",
+    "app/api/organizer/notifications/subscription/route.ts": "1326df418932f18b8007e3410232a725f105f7eb",
     ".github/workflows/native-apps.yml": "426a9b8219d3f2ca73d3ad0de93b9a7d73ab3c89",
     "ops/vps/test_pink_edition.py": "be26c898ac1e19f7f737dbe5112c5e40b6e90c68",
     "tests/preview-events.test.ts": "2b209daa6b801aa82d642b2c30ce307c38586929",
@@ -129,7 +135,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "322c8b32761df3c7a59d0c7c53d95e6748814200",
+    "ops/vps/test_code_release.py": "e89771ec8908f62946346df2f4afedbd68a79bc5",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
@@ -271,15 +277,15 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/organizer/layout.tsx": "64f7c8b3f26dc0b06ad9fe7dbe6a729d5477fa99",
     "app/organizer/team/accept/accept-invitation.tsx": "f629b25c9bf1dd0440a036a54777f04a20ba5c34",
     "app/organizer/workspace/host-start.tsx": "5bbea7dfe02494f50630a4fec30d0ee26fe02185",
-    "app/organizer/workspace/organizer-suite.tsx": "862a58d8943098467ae3f8bfb026d3ce4201eea8",
-    "app/organizer/workspace/page.tsx": "13657322abdb8645e203ac6e1b3ea982de2332f3",
+    "app/organizer/workspace/organizer-suite.tsx": "4bfca7a142de21719f816cb9b0056e8f7418b754",
+    "app/organizer/workspace/page.tsx": "b92e80fb99297cab5cfb100bf62e85f8948c2bfa",
     "app/organizer/workspace/suite-promote.tsx": "3cf32f511abc810e8758346a929f011ec55f99c5",
     "app/organizer/workspace/suite-records.tsx": "418120b13234eee93fd9f43d9225a3557035555c",
     "app/payment-footer.tsx": "bd75bc7b041ebe776877a668a6417a787f020e98",
     "app/promoter/promoter-portal.tsx": "a3a61075a0d532c1f027cb05f723c6f88e8dbf0c",
     "app/public-browsing-memory.ts": "00d86692aaae040fb6932429220166fc5f48a304",
     "app/registration-form.tsx": "118e80b64e67626ce479f60d3ab862003fa137a7",
-    "app/registration-manager.tsx": "cd0b22d16d2ff9bd45adbd917744a3248e2cb04e",
+    "app/registration-manager.tsx": "388a488887b5d0b52a5a77b536904659dc311d32",
     "app/room-demo.css": "c3d871ed75945a72df7fb32f7c13c962ee4876de",
     "app/room-overlay.tsx": "97d273e63be52e8154925512524d25062237d69b",
     "app/room-preview-carousel.tsx": "c77a4021be9ea6c29b6a8215e49326f2522e9491",
@@ -298,7 +304,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "app/use-room-demo.ts": "7ea2ec4191b5f5b9dff10cdfa2925a69514a434f",
     "app/workspace-chrome.tsx": "aee4d182363215c729e840aeebc3f3c47efcb908",
     "app/workspace.css": "8c3881d31c50a13246219e74262c27b542e36880",
-    "db/schema.ts": "0edec94f9c2b304fd0930dfc099a4c0ec9a81e78",
+    "db/schema.ts": "bcd304ce4bf518e2b71d707e36a1438c6a65ee04",
     "lib/admin-session.ts": "57fa1b554bf27a8aa3759871017b721e682488df",
     "lib/background-health.ts": "4793c1cd2a5204371e75495d9d1b218f24a0a092",
     "lib/customer-screen.ts": "9546a787d811e4a8351e16e30693639c26743b26",
@@ -308,7 +314,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "lib/operational-finance.ts": "7e910e7765074c174695ca32338dee0fd9ae0681",
     "lib/operations-exceptions.ts": "ad4ba837129ba67ffa08745bdb3ff6ea4c838800",
     "lib/organizer-team.ts": "0214111d285e2bb19ee95af1934df68307126919",
-    "lib/payment-operations.ts": "91ece2502c7422141c40d9c15ac5c1c69f93f541",
+    "lib/payment-operations.ts": "d8701182ced11abcbae5b3590a4d6db203ee45b7",
     "lib/provider-operation-tracking.ts": "63288d84fa93f0a97ee01909a68a654272151cbb",
     "lib/registration-draft.ts": "633cdb6e22cb28a1c8002fab96da0bf9fe6eb91b",
     "lib/registration-guidance.ts": "7db692341537e327b2af9eaeb5329d60f6294d27",
@@ -330,7 +336,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/verify-vps-runtime.mjs": "b44c381a413967d246027d1e8b3573a5f301ccf1",
     "styles/customer.css": "c6d3cc402fcb37287444c9ac75777424ceeac891",
     "styles/workspace.css": "a3e99468e1ad940dfdea923fd535d7421570a2bc",
-    "worker/background.ts": "0ea11c3f9c8be00a48b625ac18cc4abf1806654e",
+    "worker/background.ts": "d5683c2699242330cec52fe5962614e33e635bdb",
     "worker/security-response.ts": "3d9d92746405583edcd173694d763c868a1b09fd",
     "worker/the-room.ts": "baf738dba9c08cc1390fa6863f2ac5603c04e83e",
     "scripts/audit-checkbox-hotfix.py": "5313d8cdc4076b36d434fe8017cc0e7b4824e876",
@@ -462,6 +468,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/prepare-seev-browser-fixture.mjs": "46dfe0aa8f609bc810e128ec006d1c3f3a3c9442",
     "tests/e2e/checkout-quantity.spec.ts": "63118dc45063fdc9d214d1c677846fa47dde0c22",
 }
+HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 STAFF_OWNER_GUARD_PATH = "drizzle/0060_staff_owner_integrity.sql"
 HOST_VERIFICATION_PATH = "drizzle/0059_kofi_bills_verified_host.sql"
 PINK_EDITION_PATH = "drizzle/0062_guest_list_confirmed_october_25.sql"
@@ -478,6 +485,8 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    "drizzle/0064_host_purchase_push.sql": {'blob': 'a0abdccd9551012b5759294db1cc32f83bf69240', 'sha256': '483a853e328a9217cd3195a9ea4bc86be3bd4eabce5bd5afe228b4b3737391cd', 'schemaSha256': 'b8b8ef20df80920fba1e0a45425aed53a907646bdc43a5bfc4ce19cf9b0e2d75', 'tables': ['organizer_purchase_push_deliveries']},
+    HOST_RSVP_PUSH_PATH: {'blob': '77ab9cbf55b43609f3e478fb5ff8807d7927f02a', 'sha256': '916a7f508d43fbd97061df03db9f1745f5ffabf95de764772c9725e78be539ea', 'schemaSha256': 'a9f7a6cf47d5e95bedf5b971496c305177b75ed9cc783451e733962765bd69f8', 'tables': ['organizer_push_subscriptions', 'organizer_rsvp_push_deliveries'], 'triggers': {'organizer_rsvp_push_created': 'event_registrations', 'organizer_rsvp_push_verified': 'event_registrations'}},
     PINK_EDITION_PATH: {'kind': 'pink-edition-confirmed', 'blob': 'f6282183059583f9ac9254977e1cc36706c7f3ca', 'sha256': '338d89e27f255535a41f05b2a60c5eb6639f690218db61f38060b11c8c506df5'},
     "drizzle/0061_platform_announcement_consent.sql": {
             "blob": "3f0eea14b46ce9bdd7927a1049bfa23ac430f276",
@@ -1086,6 +1095,33 @@ def migration_plan(changes):
 
 
 def reviewed_migration(raw, specification):
+    if specification.get("path") == HOST_RSVP_PUSH_PATH:
+        # One byte-pinned additive migration only. Never broaden the generic
+        # grammar to accept arbitrary triggers on existing registration tables.
+        expected = dict(path=HOST_RSVP_PUSH_PATH, **REVIEWED_MIGRATIONS[HOST_RSVP_PUSH_PATH])
+        require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
+                and hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == expected["blob"],
+                "Host RSVP push migration differs from the exact reviewed source.")
+        statements, pending = [], ""
+        for character in raw.decode("utf-8"):
+            pending += character
+            if character == ";" and sqlite3.complete_statement(pending):
+                statements.append(pending)
+                pending = ""
+        require(not pending.strip() and len(statements) == 7,
+                "Host RSVP push migration has an unexpected statement inventory.")
+        with closing(sqlite3.connect(":memory:")) as temporary:
+            # Schema-only stand-in; never created/changed in the live database.
+            temporary.execute("CREATE TABLE event_registrations(id TEXT, event_slug TEXT, kind TEXT, status TEXT)")
+            before = schema_rows(temporary)
+            for statement in statements:
+                temporary.execute(statement)
+            rows = [row for row in schema_rows(temporary) if row not in before]
+        require(len(rows) == 7 and schema_digest(rows) == expected["schemaSha256"]
+                and {row[1] for row in rows if row[0] == "table"} == set(expected["tables"])
+                and {row[1]: row[2] for row in rows if row[0] == "trigger"} == expected["triggers"],
+                "Host RSVP push schema differs from the exact reviewed source.")
+        return statements, rows
     if specification.get("kind") == "pink-edition-confirmed":
         expected = dict(path=PINK_EDITION_PATH, **REVIEWED_MIGRATIONS[PINK_EDITION_PATH])
         require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
