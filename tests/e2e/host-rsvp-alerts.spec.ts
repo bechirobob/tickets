@@ -7,16 +7,17 @@ test.beforeAll(async()=>{
  const result=await build({stdin:{contents:"import React from 'react';import {createRoot} from 'react-dom/client';import Alerts from './app/organizer/workspace/host-rsvp-alerts';createRoot(document.getElementById('root')).render(<Alerts accountId={new URL(location.href).searchParams.get('account')||'host-one'} mode={new URL(location.href).searchParams.has('prompt')?'prompt':'settings'}/>);",resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,format:'iife',jsx:'automatic'});
  script=result.outputFiles[0].text;
 });
-async function fixture(page:Page,mode:'ready'|'denied'|'ios'|'ios-no-push'|'granted'='ready'){
+async function fixture(page:Page,mode:'ready'|'denied'|'ios'|'ios-no-push'|'granted'|'registration-fails'|'unsupported'='ready'){
  await page.addInitScript(({mode})=>{
   Object.defineProperty(navigator,'userAgent',{configurable:true,value:mode.startsWith('ios')?'iPhone':'Android Chrome'});
   Object.defineProperty(navigator,'platform',{configurable:true,value:mode.startsWith('ios')?'iPhone':'Linux'});
   Object.defineProperty(window,'Notification',{configurable:true,value:{permission:mode==='denied'?'denied':mode==='granted'?'granted':'default',requestPermission:async()=>{sessionStorage.setItem('permission-requests',String(Number(sessionStorage.getItem('permission-requests')||0)+1));Object.defineProperty(window.Notification,'permission',{value:'granted',configurable:true});return 'granted';}}});
   Object.defineProperty(window,'PushManager',{configurable:true,value:class {}});
+  if(mode==='unsupported')Reflect.deleteProperty(window,'PushManager');
   if(mode==='ios-no-push'){Reflect.deleteProperty(window,'Notification');Reflect.deleteProperty(window,'PushManager');}
   const subscription={endpoint:'https://fcm.googleapis.com/fcm/send/fixture',toJSON:()=>({endpoint:'https://fcm.googleapis.com/fcm/send/fixture',keys:{auth:'fixture',p256dh:'fixture'}})};
   const worker={pushManager:{getSubscription:async()=>subscription,subscribe:async()=>subscription}};
-  Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{register:async()=>worker,ready:Promise.resolve(worker)}});
+  Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{register:async()=>{if(mode==='registration-fails'&&!sessionStorage.getItem('registration-failed')){sessionStorage.setItem('registration-failed','1');throw new Error('Offline');}return worker;},ready:Promise.resolve(worker)}});
  },{mode});
  const css=readFileSync(resolve('app/organizer/workspace/suite.css'),'utf8');
  await page.route('**/__host_rsvp_fixture**',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:system-ui;background:#fff;color:#241729}${css}</style></head><body><main class="organizer-suite"><div class="suite-content" id="root"></div></main><script>${script.replaceAll('</script','<\\/script')}</script></body></html>`}));
@@ -74,4 +75,69 @@ test('prompt asks permission only after Enable and saves once',async({page})=>{
  expect(saves).toBe(1);expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBe('1');
  await page.reload();await expect(page.getByRole('dialog')).toHaveCount(0);
  await page.goto('/__host_rsvp_fixture');await expect(page.getByRole('button',{name:'Turn off host notifications'})).toBeVisible();
+});
+
+for(const failure of ['registration','config'] as const){
+ test(`initial ${failure} failure exposes a permission-free retry`,async({page})=>{
+  await fixture(page,failure==='registration'?'registration-fails':'ready');let reads=0;
+  await page.route('**/api/organizer/notifications/subscription**',route=>{
+   expect(route.request().method()).toBe('GET');reads++;
+   if(failure==='config'&&reads===1)return route.fulfill({status:503,json:{error:'Offline'}});
+   return route.fulfill({json:{available:true,deviceSubscribed:false,publicKey:'AQID'}});
+  });
+  await page.goto('/__host_rsvp_fixture?prompt=1');
+  await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByText(/unavailable right now/)).toBeVisible();
+  await page.getByRole('button',{name:'Try again'}).click();
+  await expect(page.getByRole('button',{name:'Enable notifications'})).toBeVisible();
+  expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();
+  expect(await page.evaluate(()=>localStorage.getItem('bct:host-notifications:choice:v1:host-one'))).toBeNull();
+ });
+}
+
+test('Not now during a pending retry survives late completion and focus',async({page})=>{
+ await fixture(page);let reads=0;let finish:()=>void=()=>{};
+ await page.route('**/api/organizer/notifications/subscription**',async route=>{
+  expect(route.request().method()).toBe('GET');reads++;
+  if(reads===1)return route.fulfill({status:503,json:{error:'Offline'}});
+  await new Promise<void>(resolve=>{finish=resolve;});
+  return route.fulfill({json:{available:true,deviceSubscribed:false,publicKey:'AQID'}});
+ });
+ await page.goto('/__host_rsvp_fixture?prompt=1');await page.getByRole('button',{name:'Try again'}).click();
+ await expect(page.getByText('Checking this device…')).toBeVisible();await expect.poll(()=>reads).toBe(2);
+ await page.getByRole('button',{name:'Not now'}).click();
+ const response=page.waitForResponse(url=>url.url().includes('/notifications/subscription'));finish();await response;
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('dialog')).toHaveCount(0);
+ expect(reads).toBe(2);expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();
+});
+
+test('already subscribed device stays hidden without requesting permission',async({page})=>{
+ await fixture(page,'granted');
+ await page.route('**/api/organizer/notifications/subscription**',route=>{
+  expect(route.request().method()).toBe('GET');return route.fulfill({json:{available:true,deviceSubscribed:true,publicKey:'AQID'}});
+ });
+ await page.goto('/__host_rsvp_fixture?prompt=1');
+ await expect.poll(()=>page.evaluate(()=>localStorage.getItem('bct:host-notifications:choice:v1:host-one'))).toBe('seen');
+ await expect(page.getByRole('dialog')).toHaveCount(0);expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();
+});
+
+test('unsupported browser keeps honest guidance without retry or permission',async({page})=>{
+ await fixture(page,'unsupported');await page.goto('/__host_rsvp_fixture?prompt=1');
+ await expect(page.getByText(/does not support phone alerts/)).toBeVisible();
+ await expect(page.getByRole('button',{name:'Try again'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Enable notifications'})).toHaveCount(0);
+ expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();
+});
+
+test('Account settings can retry after a previous prompt dismissal',async({page})=>{
+ await fixture(page,'registration-fails');
+ await page.addInitScript(()=>localStorage.setItem('bct:host-notifications:choice:v1:host-one','seen'));
+ await page.route('**/api/organizer/notifications/subscription**',route=>{
+  expect(route.request().method()).toBe('GET');return route.fulfill({json:{available:true,deviceSubscribed:false,publicKey:'AQID'}});
+ });
+ await page.goto('/__host_rsvp_fixture');await page.getByRole('button',{name:'Try again'}).click();
+ await expect(page.getByRole('button',{name:'Enable notifications'})).toBeVisible();
+ expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();
 });

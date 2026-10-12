@@ -20,15 +20,17 @@ function rememberChoice(key:string){choices.add(key);try{localStorage.setItem(ke
 export default function HostRsvpAlerts({accountId,mode='settings'}:{accountId?:string;mode?:'settings'|'prompt'}={}) {
   const prompt=mode==='prompt',key=accountId?choiceKey(accountId):null;
   const [hidden,setHidden]=useState(true);
-  const dismiss=()=>{if(key)rememberChoice(key);setHidden(true);};
+  const [attempt,setAttempt]=useState(0);
   const [state, setState] = useState('loading'), [message, setMessage] = useState(''), [busy, setBusy] = useState(false);
   const active = useRef(false), loadVersion = useRef(0);
+  const dismiss=()=>{++loadVersion.current;if(key)rememberChoice(key);setHidden(true);};
+  const retry=()=>{setState('loading');setMessage('');setAttempt(value=>value+1);};
   useEffect(() => {
     let stopped = false;
     const load = async () => {
       if (active.current) return;
-      if(prompt&&(!key||seenChoice(key))){setHidden(true);return;}
       const version = ++loadVersion.current;
+      if(prompt&&(!key||seenChoice(key))){setHidden(true);return;}
       const ios = /iPhone|iPad|iPod/u.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (ios && !window.matchMedia('(display-mode: standalone)').matches && !(navigator as Navigator & {standalone?:boolean}).standalone) { setState('install'); setHidden(false); return; }
       if (!('Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window)) { setState('unsupported'); setHidden(false); return; }
@@ -37,13 +39,18 @@ export default function HostRsvpAlerts({accountId,mode='settings'}:{accountId?:s
         const config = await requestJson<Config>(endpoint + (subscription ? `?endpoint=${encodeURIComponent(subscription.endpoint)}` : ''));
         if (!stopped && !active.current && version === loadVersion.current) {
           setState(config.deviceSubscribed ? 'on' : Notification.permission === 'denied' ? 'denied' : config.available ? 'ready' : 'unavailable');
-          if(prompt&&config.deviceSubscribed){if(key)rememberChoice(key);setHidden(true);}else setHidden(false);
+          if(prompt&&config.deviceSubscribed){if(key)rememberChoice(key);setHidden(true);}else setHidden(prompt&&!!key&&seenChoice(key));
         }
-      } catch { if (!stopped && !active.current && version === loadVersion.current) setState('unavailable'); }
+      } catch {
+        if (!stopped && !active.current && version === loadVersion.current) {
+          setState('unavailable');
+          setHidden(prompt&&!!key&&seenChoice(key));
+        }
+      }
     };
     void load(); window.addEventListener('focus', load); window.addEventListener('storage',load); window.addEventListener('host-notifications-updated',load);
     return () => { stopped = true; window.removeEventListener('focus', load); window.removeEventListener('storage',load); window.removeEventListener('host-notifications-updated',load); };
-  }, [prompt,key]);
+  }, [prompt,key,attempt]);
   async function change() {
     if (active.current) return;
     ++loadVersion.current;
@@ -75,8 +82,8 @@ export default function HostRsvpAlerts({accountId,mode='settings'}:{accountId?:s
   }
   const help:Record<string,string> = {loading:'Checking this device…',ready:'Get browser notifications for confirmed ticket purchases and incoming RSVPs to your events. Host RSVP emails are off; other emails are unchanged.',on:'Confirmed ticket purchases and new RSVPs will appear on this device. Alerts stay on while you’re signed in. Enable them again after signing back in.',install:'On iPhone or iPad, add Tickets to your Home Screen, open it there, sign in as host, then enable notifications.',unsupported:'This browser does not support phone alerts. You can still check your guest list.',denied:'Notifications are blocked. Allow them in your browser settings, then return here.',unavailable:'Phone alerts are unavailable right now. You can still check your guest list.'};
   if(prompt){
-    if(hidden||state==='loading')return null;
-    return <aside className="host-notification-prompt" role="dialog" aria-label="Host notifications"><h2>Keep up with your guests</h2><p>{help[state]}</p>{state==='ready'?<button type="button" disabled={busy} onClick={()=>void change()}>{busy?'Saving…':'Enable notifications'}</button>:null}<button type="button" disabled={busy} onClick={dismiss}>Not now</button><p>Change this anytime in Account settings.</p><p role="status">{message}</p></aside>;
+    if(hidden)return null;
+    return <aside className="host-notification-prompt" role="dialog" aria-label="Host notifications"><h2>Keep up with your guests</h2><p>{help[state]}</p>{state==='ready'?<button type="button" disabled={busy} onClick={()=>void change()}>{busy?'Saving…':'Enable notifications'}</button>:null}{state==='unavailable'?<button type="button" onClick={retry}>Try again</button>:null}<button type="button" disabled={busy} onClick={dismiss}>Not now</button><p>Change this anytime in Account settings.</p><p role="status">{message}</p></aside>;
   }
-  return <section className="suite-section host-rsvp-alerts"><h2>Ticket & RSVP notifications</h2><p>{help[state]}</p>{['ready','on'].includes(state)?<button type="button" disabled={busy} aria-busy={busy} onClick={()=>void change()}>{busy?'Saving…':state==='on'?'Turn off host notifications':'Enable notifications'}</button>:null}<p role="status">{message}</p></section>;
+  return <section className="suite-section host-rsvp-alerts"><h2>Ticket & RSVP notifications</h2><p>{help[state]}</p>{['ready','on'].includes(state)?<button type="button" disabled={busy} aria-busy={busy} onClick={()=>void change()}>{busy?'Saving…':state==='on'?'Turn off host notifications':'Enable notifications'}</button>:null}{state==='unavailable'?<button type="button" onClick={retry}>Try again</button>:null}<p role="status">{message}</p></section>;
 }
