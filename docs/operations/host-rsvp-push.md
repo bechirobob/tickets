@@ -1,0 +1,37 @@
+# Host RSVP browser alerts
+
+Candidate branch: feature/host-rsvp-push, based on live main 75af4f8e57393ddbed7bd05a31e636098c4532ab.
+
+Incoming RSVP alerts for assigned hosts use browser push only. New organizer-signup emails for RSVP registrations are suppressed, as are old pending retries. Guest registration confirmations, recovery messages, paid signup emails, interest-list signup emails, and other email types retain their existing behavior. There is no email fallback when a host has not opted in or a push fails.
+
+Hosts enable RSVP phone alerts in workspace Account settings on each device. Permission is requested only after a tap; success requires a saved server subscription. The subscription belongs to the signed-in organizer and session, separate from guest subscriptions. Signing out, session expiration, disabling the account, removing event access or disabling device alerts stops future delivery. After signing in again, explicitly enable alerts again. iOS Home Screen requirements still apply.
+
+Migration 0063 adds two tables and initial-RSVP triggers. It does not rewrite existing bookings, change event settings or backfill old RSVPs. The transaction captures only devices opted in when the initial request becomes requested, waitlisted or confirmed. Interest registrations and later approval changes do not create another alert. A unique registration/device key deduplicates work. Every opt-in renews an opaque consent version so disabled/re-enabled devices cannot receive old queued alerts.
+
+Signup attempts enqueue captured device alerts immediately through the existing delivery queue. Queue failures leave the RSVP successful and the durable alert available. The existing five-minute recovery job repairs interruptions and enqueues up to 50 device deliveries per sweep. Each queue job handles one device and rechecks session, account, event assignment, event state, RSVP eligibility and consent. A two-minute lease prevents concurrent attempts. Provider requests have seven-second timeouts, at most three attempts, and a 24-hour horizon. HTTP 404/410 revokes the device. Provider acceptance is recorded separately from banner display; a crash after acceptance may replay with the same notification tag. No guest name, email or ticket credential appears in the push payload.
+
+Notification clicks permit only the same-origin organizer workspace for this notification type and select that event's RSVP roster. Guest windows remain untouched, guest alerts cannot navigate to staff pages, and the workspace performs its normal login/access checks.
+
+## Release status
+
+Not released. The last confirmed production revision is 75af4f8e. Apply the additive migration through the reviewed VPS release path, with its exact-source admission and migration controls updated and verified before publication. Preserve the existing VAPID identity, guest subscriptions and live database. Do not use the Cloudflare deployment path while Hermes is the active writer. The current operator automatically restores the exact previous runtime if activation fails. At baseline 75af4f8e that restores host RSVP email sending, including eligible old retries. No runtime flag in that baseline selectively suppresses those emails. A forward-recovery preference cannot change this automatic behavior. Release stays blocked until a separately reviewed suppression-preserving fallback is built and verified, or the user explicitly accepts the rollback behavior regression. Never restore the old database over new bookings to work around this constraint.
+
+## Recovery review — 12 October 2026
+
+The recovered candidate remains on feature/host-rsvp-push, based on 75af4f8e. The original candidate was preserved before repair. Fixed inactive-device reassignment after explicit fresh opt-in, excluded expired/revoked sessions from the active-device limit, rechecked consent/session/event eligibility after asynchronous encryption immediately before dispatch, corrected unavailable-state email copy, and showed iPhone Home Screen guidance even when push APIs are absent.
+
+Final repaired-source validation: 180 integration tests across nine files passed, including host and guest push, staff authorization, registrations, confirmations, audience/email suppression and organizer behavior. TypeScript without incremental writes, focused ESLint, eight desktop/mobile Chromium browser fixtures, and the VPS production build passed. Four isolated SQLite checks applying migrations through 0063 passed: existing rows/schema preserved, no historical backfill, failed migration rollback, booking/capture transaction rollback, compatible existing-schema writes and rejection of accidental migration replay without state replacement. Evidence is saved in /home/bechirob/Documents/Codex/2026-10-12/task/evidence. Browser fixtures simulate permission and provider behavior.
+
+The initial test run needed temporary-cache write access; the repeated authorized run passed. A new test fixture's request body type was corrected before the final TypeScript/integration passes. No native Android/iOS checks were run.
+
+The trusted release operator has NOT been changed. Its existing exact application pins reject this candidate, and migration 0063's existing-table triggers are not admitted. A separately reviewed, exact-source control change and migration admission is required before any release; no generic trigger permission or security authority was expanded. The local build is a dirty-worktree verification build, not a publishable exact-commit release artifact.
+
+Physical-device banner display has not been tested; provider mocks and browser fixtures cannot prove delivery to a real phone. After an approved release, enable alerts on one assigned host's device (installed Home Screen app on iPhone), then authorize one isolated test RSVP to verify a single generic notification and the matching organizer roster route. No external test email or customer notification was sent during this work.
+
+## Independent review follow-up
+
+A real installed-worker browser check reproduced a VPS-specific installation failure: `/offline-ticket` returned 404 while the static `/offline-ticket.html` existed. Installation now tries that static fallback and retains the canonical offline cache key. It rejects installation if both responses fail. A regression test covers the canonical success, VPS fallback and failed fallback paths.
+
+The new local runtime browser journey uses the built application, real organizer session authentication, actual SQLite subscription API, actual service-worker registration/activation and the production push/click handlers. The new-subscription branch is exercised with only the PushManager provider boundary simulated; notifications permission is granted by browser automation. Synthetic browser PushEvent/NotificationEvent objects test display and navigation, not provider delivery or an OS click. The journey verifies saved subscription persistence after reload, the authenticated event RSVP roster and the sign-in return destination after removing the session cookie. No provider notification or email is sent; the fixture runtime is inactive and has no production credentials.
+
+The standalone control proposal uses an exact baseline/application snapshot selector without loosening source, staged-family or ancestry checks. Its control-only commit, staged layout and application descendant require separate review and verification. These local review commits are not merged trust anchors or production release artifacts.

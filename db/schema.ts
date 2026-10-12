@@ -1286,3 +1286,50 @@ export const platformAnnouncementVerifications = sqliteTable("platform_announcem
   primaryKey({columns:[table.grantType,table.grantId]}),
   check("platform_announcement_verification_grant_type", sql`${table.grantType} IN ('recovery','registration')`),
 ]);
+
+export const organizerPushSubscriptions = sqliteTable('organizer_push_subscriptions', {
+  consentId: text('consent_id').notNull(),
+  id: text('id').primaryKey(),
+  accountId: text('account_id').notNull().references(() => staffAccounts.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => staffSessions.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  revokedAt: text('revoked_at'),
+}, table => [index('organizer_push_account').on(table.accountId, table.revokedAt)]);
+
+export const organizerRsvpPushDeliveries = sqliteTable('organizer_rsvp_push_deliveries', {
+  id: text('id').primaryKey(),
+  subscriptionVersion: text('subscription_version').notNull(),
+  registrationId: text('registration_id').notNull().references(() => eventRegistrations.id, { onDelete: 'cascade' }),
+  subscriptionId: text('subscription_id').notNull().references(() => organizerPushSubscriptions.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').notNull().references(() => staffAccounts.id, { onDelete: 'cascade' }),
+  createdAt: text('created_at').notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  attempts: integer('attempts').notNull().default(0),
+  leaseUntil: text('lease_until'),
+  claim: text('claim'),
+  completedAt: text('completed_at'),
+  outcome: text('outcome'),
+}, table => [
+  uniqueIndex('organizer_rsvp_push_device').on(table.registrationId, table.subscriptionId),
+  index('organizer_rsvp_push_pending').on(table.completedAt, table.leaseUntil, table.createdAt),
+]);
+
+export const organizerPurchasePushDeliveries = sqliteTable('organizer_purchase_push_deliveries', {
+  id: text('id').primaryKey(),
+  subscriptionVersion: text('subscription_version').notNull(),
+  orderId: text('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  subscriptionId: text('subscription_id').notNull().references(() => organizerPushSubscriptions.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').notNull().references(() => staffAccounts.id, { onDelete: 'cascade' }),
+  createdAt: text('created_at').notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  attempts: integer('attempts').notNull().default(0),
+  leaseUntil: text('lease_until'),
+  claim: text('claim'),
+  completedAt: text('completed_at'),
+  outcome: text('outcome'),
+}, table => [
+  uniqueIndex('organizer_purchase_push_device').on(table.orderId, table.subscriptionId),
+  index('organizer_purchase_push_pending').on(table.completedAt, table.leaseUntil, table.createdAt),
+]);
