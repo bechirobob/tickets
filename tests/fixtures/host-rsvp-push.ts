@@ -1,4 +1,4 @@
--- Additive, opt-in host devices; no historical RSVP backfill.
+export default String.raw`-- Additive, opt-in host devices; no historical RSVP backfill.
 CREATE TABLE organizer_push_subscriptions (
  id TEXT PRIMARY KEY,
  account_id TEXT NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,
@@ -47,3 +47,4 @@ BEGIN
  WHERE a.event_slug=NEW.event_slug AND p.revoked_at IS NULL AND s.role='organizer' AND s.status='active'
  AND ss.revoked_at IS NULL AND s.must_change_password=0 AND ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now');
 END;
+`;

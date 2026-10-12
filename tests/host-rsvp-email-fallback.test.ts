@@ -1,18 +1,32 @@
 import { env } from 'cloudflare:test';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import sql from './fixtures/host-rsvp-push';
 import { sendEmail, retryFailedDeliveries } from '../lib/email-delivery';
 import { notifyRegistrationHosts } from '../lib/event-audience';
 
-// The same fallback code must work before push exists and after its migration.
-// Retain these regressions when the subsequent push checkout includes 0063.
-const startsMigrated=existsSync(new URL('../drizzle/0063_host_rsvp_push.sql',import.meta.url));
+// Inspect the actual database after setup. Static SQL works in both workerd
+// and Node; no host filesystem paths or environment-based skips are used.
+const pushObjects=['organizer_push_subscriptions','organizer_push_account','organizer_rsvp_push_deliveries','organizer_rsvp_push_device','organizer_rsvp_push_pending','organizer_rsvp_push_created','organizer_rsvp_push_verified'].sort();
+const schemaNames=async()=>(await env.DB.prepare("SELECT name FROM sqlite_schema WHERE name IN (?,?,?,?,?,?,?) ORDER BY name").bind(...pushObjects).all<{name:string}>()).results.map(row=>row.name);
+let startsMigrated:boolean;
+beforeAll(async()=>{
+ const names=await schemaNames();startsMigrated=names.length>0;
+ expect(names,'Startup push schema must be complete or wholly absent').toEqual(startsMigrated?pushObjects:[]);
+ expect(startsMigrated,'SQLite must match the migrations supplied by the test configuration').toBe(env.TEST_MIGRATIONS.some(migration=>migration.name==='0063_host_rsvp_push.sql'));
+ const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(sql))),byte=>byte.toString(16).padStart(2,'0')).join('');
+ expect(hash).toBe('916a7f508d43fbd97061df03db9f1745f5ffabf95de764772c9725e78be539ea');
+});
 for (const migrated of [false, true]) describe(migrated ? 'fallback after push migration' : 'fallback on startup schema', () => {
  let slug:string, host:string, rsvp:string;
  beforeAll(async()=>{
-  if(migrated && !startsMigrated){const sql=readFileSync(new URL('./fixtures/host-rsvp-push.sql',import.meta.url),'utf8');expect(createHash('sha256').update(sql).digest('hex')).toBe('916a7f508d43fbd97061df03db9f1745f5ffabf95de764772c9725e78be539ea');await env.DB.exec(sql);}
-  expect(Boolean(await env.DB.prepare("SELECT name FROM sqlite_schema WHERE name='organizer_push_subscriptions'").first())).toBe(migrated || startsMigrated);
+  if(migrated && !startsMigrated){
+   // The hash-pinned fixture has seven CREATE statements. Splitting at CREATE
+   // boundaries preserves each trigger body as one D1 prepared statement.
+   const statements=sql.split(/(?=^CREATE )/mu).filter(statement=>statement.startsWith('CREATE '));
+   expect(statements).toHaveLength(7);
+   await env.DB.batch(statements.map(statement=>env.DB.prepare(statement)));
+  }
+  expect(await schemaNames(),'Required schema scenario was not installed').toEqual(migrated||startsMigrated?pushObjects:[]);
  });
  async function registration(kind='rsvp'){
   const id=crypto.randomUUID(),now=new Date().toISOString();await env.DB.prepare("INSERT INTO event_registrations(id,event_slug,normalized_email,guest_name,party_size,kind,status,created_at,updated_at) VALUES(?,?,?,'Guest',1,?,'requested',?,?)").bind(id,slug,`${id}@example.invalid`,kind,now,now).run();return id;
