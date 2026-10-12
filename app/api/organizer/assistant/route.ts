@@ -81,13 +81,13 @@ async function eventContext(
            event.event_state AS eventState, event.status, event.capacity,
            COALESCE((SELECT COUNT(*) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND orders.payment_provider NOT IN ('rsvp','complimentary') AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS paidOrders,
            (SELECT started_at FROM analytics_baseline WHERE id=1) AS analyticsBaseline,
-           COALESCE((SELECT SUM(total_amount_minor) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS grossMinor,
+           COALESCE((SELECT SUM(${session.role === 'owner' ? 'total_amount_minor' : 'face_amount_minor'}) FROM orders WHERE orders.event_slug = event.slug AND orders.status = 'paid' AND COALESCE(orders.paid_at,orders.created_at)>=COALESCE((SELECT started_at FROM analytics_baseline WHERE id=1),'1970-01-01')), 0) AS grossMinor,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status IN ('issued','checked_in')), 0) AS issuedAdmissions,
            COALESCE((SELECT COUNT(*) FROM tickets WHERE tickets.event_slug = event.slug AND tickets.status = 'checked_in'), 0) AS checkedInAdmissions,
            COALESCE((SELECT COUNT(*) FROM organizer_requests WHERE organizer_requests.event_slug = event.slug AND organizer_requests.status = 'open'), 0) AS openRequests
     FROM curated_event_records event
     LEFT JOIN party_submissions submission ON submission.id = event.submission_id
-    WHERE event.slug = ? AND event.removed_at IS NULL
+    WHERE event.slug = ? AND event.removed_at IS NULL AND event.archived_at IS NULL
       AND ${scope.sql}
     LIMIT 1
   `).bind(eventSlug,...scope.bindings).first<EventContext>();
@@ -121,7 +121,7 @@ async function settlementsFor(db: D1Database, eventSlug: string): Promise<Settle
   return result.results;
 }
 
-function safeContext(event: EventContext, tiers: TierContext[], settlements: SettlementContext[]) {
+function safeContext(event: EventContext, tiers: TierContext[], settlements: SettlementContext[], owner: boolean) {
   return {
     event: {
       slug: event.slug,
@@ -136,7 +136,7 @@ function safeContext(event: EventContext, tiers: TierContext[], settlements: Set
       paidOrders: Number(event.paidOrders),
       salesMeasuredSince: event.analyticsBaseline ?? 'Original records',
       operationalRecords: 'Admissions, inventory and settlements include all current records.',
-      grossCollected: money(Number(event.grossMinor)),
+      ...(owner ? { grossCollected: money(Number(event.grossMinor)) } : { ticketSales: money(Number(event.grossMinor)) }),
       admissionsIssued: Number(event.issuedAdmissions),
       checkedIn: Number(event.checkedInAdmissions),
       openOperationsRequests: Number(event.openRequests),
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
       tiersFor(env.DB, eventSlug),
       settlementsFor(env.DB, eventSlug),
     ]);
-    const context = safeContext(event, tiers, settlements);
+    const context = safeContext(event, tiers, settlements, session.role === 'owner');
     const safetyIdentifier = await hashToken(`tickets-organizer:${session.accountId}`);
     const result = await generateOpenAIText({
       apiKey: env.OPENAI_API_KEY,

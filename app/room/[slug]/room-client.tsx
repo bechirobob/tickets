@@ -83,10 +83,10 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('announcement');
     if (!requested || openedAnnouncement.current === requested) return;
-    const target = [...(roomRef.current?.querySelectorAll<HTMLDetailsElement>('[data-announcement]') ?? [])].find(element => element.dataset.announcement === requested);
+    const target = [...(roomRef.current?.querySelectorAll<HTMLElement>('[data-announcement]') ?? [])].find(element => element.dataset.announcement === requested);
     if (target) {
       nearBottomRef.current = false;
-      target.open = true;
+      if (target instanceof HTMLDetailsElement) target.open = true;
       target.scrollIntoView({block:'center'});
       openedAnnouncement.current = requested;
     }
@@ -395,24 +395,26 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
             </article>;
           }
           const message = item.value;
-          if (message.kind === "announcement" && !message.deletedAt) return <details key={message.id} className="room-host-update" data-announcement={message.id}><summary><BadgeCheck aria-hidden="true" size={15} /><b>Host</b><span>{message.content}</span><ChevronDown aria-hidden="true" size={14} /></summary><div><p>{message.content}</p><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div></details>;
+          const announcement = message.kind === "announcement";
+          const host = announcement || message.role === "organizer";
+          const name = announcement ? "Host" : message.attendeeId === selfId ? "You" : message.displayName;
           const parent = message.parentId ? messages.find((candidate) => candidate.id === message.parentId) : null;
           const own = message.attendeeId === selfId;
           const prior = timeline[index - 1];
           const sameDay = prior && new Date(prior.createdAt).toDateString() === new Date(message.createdAt).toDateString();
           const grouped = sameDay && prior?.type === "message" && prior.value.attendeeId === message.attendeeId && prior.value.kind === "message" && message.kind === "message" && !prior.value.deletedAt && !message.deletedAt && Date.parse(message.createdAt) - Date.parse(prior.createdAt) < 180_000;
-          return <Fragment key={message.id}>{!sameDay && <p className="room-day"><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}</time></p>}<article className={`room-message ${own ? "own" : ""} ${grouped ? "grouped" : ""} ${message.kind === "announcement" ? "announcement" : ""}`} aria-label={`${own ? "You" : message.displayName}, ${new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}>
-            {!own && <div className="room-avatar" aria-hidden="true">{message.kind === "announcement" ? <BadgeCheck aria-hidden="true" size={17} /> : message.displayName.slice(0, 1).toUpperCase()}</div>}
+          return <Fragment key={message.id}>{!sameDay && <p className="room-day"><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}</time></p>}<article className={`room-message ${own ? "own" : ""} ${grouped ? "grouped" : ""} ${host ? "room-message--host" : ""}`} data-announcement={announcement ? message.id : undefined} aria-label={`${name}, ${new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}>
+            {!own && <div className="room-avatar" aria-hidden="true">{announcement ? "H" : message.displayName.slice(0, 1).toUpperCase()}</div>}
             <div className="room-message__body">
-              <header><b>{message.kind === "announcement" ? "Host update" : own ? "You" : message.displayName}</b>{message.kind !== "announcement" && message.role !== "attendee" ? <span><BadgeCheck aria-hidden="true" size={12} /> {message.role === "moderator" ? "Moderator" : "Host"}</span> : message.roomBadge === "VIP" ? <span className="room-vip-badge" aria-label="VIP ticket holder" title="VIP ticket holder"><Gem size={11} aria-hidden="true" /></span> : null}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
+              <header><b>{name}</b>{host ? <span className="room-host-badge" role="img" aria-label="Event host" title="Event host"><BadgeCheck aria-hidden="true" size={12} />{!announcement && "Host"}</span> : message.role === "moderator" ? <span><BadgeCheck aria-hidden="true" size={12} /> Moderator</span> : message.roomBadge === "VIP" ? <span className="room-vip-badge" role="img" aria-label="VIP ticket holder" title="VIP ticket holder"><Gem size={11} aria-hidden="true" /></span> : null}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
                 {parent && <div className="room-reply-preview"><Reply aria-hidden="true" size={12} /><b>{parent.attendeeId === selfId ? "You" : parent.displayName}</b><span>{parent.content.slice(0, 90)}</span></div>}
-              <MessageTools content={message.content} name={message.displayName} own={own} disabled={Boolean(policy?.readOnly) || status !== "connected"} removed={Boolean(message.deletedAt)} reactions={message.reactions}
+              {announcement ? <div className="room-bubble"><p className={message.deletedAt ? "removed" : ""}>{message.content}</p></div> : <MessageTools content={message.content} name={message.displayName} own={own} disabled={Boolean(policy?.readOnly) || status !== "connected"} removed={Boolean(message.deletedAt)} reactions={message.reactions}
                 onReact={(emoji) => react(message.id, emoji)}
                 onReply={() => { setReplyingTo(message); window.requestAnimationFrame(() => composerRef.current?.focus()); }}
                 onReport={!own && message.role === "attendee" ? () => { setFormError(""); setReporting(message); } : undefined}
                 onBlock={!own && message.role === "attendee" ? () => { setFormError(""); setBlocking({ id: message.attendeeId, name: message.displayName }); } : undefined}>
                 <p className={message.deletedAt ? "removed" : ""}>{message.content}</p>
-              </MessageTools>
+              </MessageTools>}
             </div>
           </article></Fragment>;
         })}

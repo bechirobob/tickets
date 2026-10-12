@@ -1,10 +1,11 @@
 import { test, expect, type Page } from './analytics-fixture';
 import { build } from 'esbuild';
+import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 let script:string;
 test.beforeAll(async()=>{
- const result=await build({stdin:{contents:"import React from 'react';import {createRoot} from 'react-dom/client';import Alerts from './app/organizer/workspace/host-rsvp-alerts';createRoot(document.getElementById('root')).render(<Alerts accountId={new URL(location.href).searchParams.get('account')||'host-one'} mode={new URL(location.href).searchParams.has('prompt')?'prompt':'settings'}/>);",resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,format:'iife',jsx:'automatic'});
+ const result=await build({stdin:{contents:"import React from 'react';import {createRoot} from 'react-dom/client';import Alerts from './app/organizer/workspace/host-rsvp-alerts';createRoot(document.getElementById('root')).render(<Alerts owner={new URL(location.href).searchParams.has('owner')} accountId={new URL(location.href).searchParams.get('account')||'host-one'} mode={new URL(location.href).searchParams.has('prompt')?'prompt':'settings'}/>);",resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,format:'iife',jsx:'automatic'});
  script=result.outputFiles[0].text;
 });
 async function fixture(page:Page,mode:'ready'|'denied'|'ios'|'ios-no-push'|'granted'|'registration-fails'|'unsupported'='ready'){
@@ -19,7 +20,7 @@ async function fixture(page:Page,mode:'ready'|'denied'|'ios'|'ios-no-push'|'gran
   const worker={pushManager:{getSubscription:async()=>subscription,subscribe:async()=>subscription}};
   Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{register:async()=>{if(mode==='registration-fails'&&!sessionStorage.getItem('registration-failed')){sessionStorage.setItem('registration-failed','1');throw new Error('Offline');}return worker;},ready:Promise.resolve(worker)}});
  },{mode});
- const css=readFileSync(resolve('app/organizer/workspace/suite.css'),'utf8');
+ const css=readFileSync(resolve('app/organizer/workspace/host-rsvp-alerts.css'),'utf8')+readFileSync(resolve('app/organizer/workspace/suite.css'),'utf8');
  await page.route('**/__host_rsvp_fixture**',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:system-ui;background:#fff;color:#241729}${css}</style></head><body><main class="organizer-suite"><div class="suite-content" id="root"></div></main><script>${script.replaceAll('</script','<\\/script')}</script></body></html>`}));
 }
 test('host device opt-in waits for save, retries failure, persists and turns off',async({page},info)=>{
@@ -140,4 +141,47 @@ test('Account settings can retry after a previous prompt dismissal',async({page}
  await page.goto('/__host_rsvp_fixture');await page.getByRole('button',{name:'Try again'}).click();
  await expect(page.getByRole('button',{name:'Enable notifications'})).toBeVisible();
  expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();
+});
+
+test('owner choice and device subscription are shared across workspace entries',async({page},info)=>{
+ await fixture(page);let subscribed=false,saves=0,removes=0;
+ await page.route('**/api/organizer/notifications/subscription**',route=>{
+  if(route.request().method()==='POST'){subscribed=true;saves++;}
+  if(route.request().method()==='DELETE'){subscribed=false;removes++;}
+  return route.fulfill({json:{available:true,deviceSubscribed:subscribed,publicKey:'AQID'}});
+ });
+ const entry='/__host_rsvp_fixture?owner=1&account=owner-one';
+ await page.goto(entry+'&prompt=1&workspace=operations');
+ await expect(page.getByText(/across all events/)).toBeVisible();
+ expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();
+ await page.getByRole('button',{name:'Not now'}).click();
+ await page.goto(entry+'&prompt=1&workspace=organizer');await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.goto(entry+'&workspace=organizer-account');
+ await page.getByRole('button',{name:'Enable notifications'}).click();await expect.poll(()=>saves).toBe(1);
+ await expect(page.getByRole('button',{name:'Turn off host notifications'})).toBeVisible();
+ await page.goto(entry+'&workspace=operations-account');
+ await expect(page.getByRole('button',{name:'Turn off host notifications'})).toBeVisible();expect(saves).toBe(1);
+ await page.getByRole('button',{name:'Turn off host notifications'}).click();await expect.poll(()=>removes).toBe(1);
+ await expect(page.getByRole('button',{name:'Enable notifications'})).toBeVisible();
+ await page.goto(entry+'&prompt=1&workspace=operations');await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.goto(entry+'&workspace=organizer-account');await expect(page.getByRole('button',{name:'Enable notifications'})).toBeVisible();expect(saves).toBe(1);
+ await page.screenshot({path:info.outputPath('owner-shared-notification-settings.png'),fullPage:true});
+});
+
+test('owner prompt explains scope and opt-in stays off before a tap',async({page},info)=>{
+ await fixture(page);let saves=0;
+ await page.route('**/api/organizer/notifications/subscription**',route=>{
+  if(route.request().method()==='POST')saves++;
+  return route.fulfill({json:{available:true,deviceSubscribed:false,publicKey:'AQID'}});
+ });
+ await page.goto('/__host_rsvp_fixture?owner=1&account=owner-one&prompt=1');
+ await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByText(/across all events/)).toBeVisible();
+ expect(await page.evaluate(()=>sessionStorage.getItem('permission-requests'))).toBeNull();expect(saves).toBe(0);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ const enable=page.getByRole('button',{name:'Enable notifications',exact:true});
+ await enable.hover();
+ await expect(enable).toHaveCSS('background-color','rgb(59, 41, 66)');
+ await expect(enable).toHaveCSS('color','rgb(255, 255, 255)');
+ expect((await new AxeBuilder({page}).include('.host-notification-prompt').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()).violations).toEqual([]);
+ await page.screenshot({path:info.outputPath('owner-notification-prompt.png'),fullPage:true});
 });

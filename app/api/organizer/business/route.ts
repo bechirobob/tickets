@@ -19,10 +19,10 @@ export async function GET(request:Request){
     if(section==='events')result={events:await listOrganizerEvents(db,session)};
     else if(section==='submissions'){
       const scope=organizerScope(session,'linked');
-      result={submissions:(await db.prepare(`SELECT s.id,s.title,s.status,s.review_note AS reviewNote,s.created_at AS createdAt,s.event_slug AS eventSlug FROM party_submissions s WHERE (?='owner' OR lower(trim(s.contact_email))=?) AND (s.event_slug IS NULL OR EXISTS(SELECT 1 FROM curated_event_records linked WHERE linked.slug=s.event_slug AND ${scope.sql})) AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.submission_id=s.id AND e.removed_at IS NOT NULL) ORDER BY s.created_at DESC LIMIT 250`).bind(session.role,session.email,...scope.bindings).all()).results};
+      result={submissions:(await db.prepare(`SELECT s.id,s.title,s.status,s.review_note AS reviewNote,s.created_at AS createdAt,s.event_slug AS eventSlug FROM party_submissions s WHERE (?='owner' OR lower(trim(s.contact_email))=?) AND (s.event_slug IS NULL OR EXISTS(SELECT 1 FROM curated_event_records linked WHERE linked.slug=s.event_slug AND ${scope.sql})) AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.submission_id=s.id AND (e.removed_at IS NOT NULL OR e.archived_at IS NOT NULL)) ORDER BY s.created_at DESC LIMIT 250`).bind(session.role,session.email,...scope.bindings).all()).results};
     }else if(section==='money'){
       const data=await readMoney(db,session,slug);
-      if(format==='csv')return csvResponse([['Statement','Event','Period start','Period end','Gross (GHS minor)','Fees (GHS minor)','Refunds (GHS minor)','Net ticket sales (GHS minor)','Status'],...data.statements.map(x=>[x.id,x.eventTitle,x.periodStart,x.periodEnd,x.grossMinor,x.feesMinor,x.refundsMinor,x.netMinor,x.status])],'becore-statements');
+      if(format==='csv')return csvResponse([['Statement','Event','Period start','Period end',session.role==='owner'?'Gross (GHS minor)':'Ticket sales (GHS minor)',...(session.role==='owner'?['Fees (GHS minor)']:[]),'Refunds (GHS minor)','Net ticket sales (GHS minor)','Status'],...data.statements.map(x=>[x.id,x.eventTitle,x.periodStart,x.periodEnd,x.grossMinor,...(session.role==='owner'?[x.feesMinor]:[]),x.refundsMinor,x.netMinor,x.status])],'becore-statements');
       result=data;
     }else if(section==='guests'){
       const data=await readGuests(db,session,slug,p);
@@ -35,9 +35,9 @@ export async function GET(request:Request){
       result=data;
     }else if(section==='audience_history'){
       const scope=organizerScope(session),email=(p.get('email')??'').trim().toLowerCase();
-      const rows=await db.prepare(`SELECT e.slug,e.title,o.created_at AS bookedAt,o.status,o.payment_provider AS source,o.quantity AS admissions,o.total_amount_minor AS amountMinor FROM orders o JOIN curated_event_records e ON e.slug=o.event_slug WHERE e.removed_at IS NULL AND ${scope.sql} AND lower(o.customer_email)=?
+      const rows=await db.prepare(`SELECT e.slug,e.title,o.created_at AS bookedAt,o.status,o.payment_provider AS source,o.quantity AS admissions,o.${session.role==='owner'?'total_amount_minor':'face_amount_minor'} AS amountMinor FROM orders o JOIN curated_event_records e ON e.slug=o.event_slug WHERE e.removed_at IS NULL AND ${scope.sql} AND lower(o.customer_email)=?
         UNION ALL SELECT e.slug,e.title,r.created_at,r.status,r.kind,r.party_size,0 FROM event_registrations r JOIN curated_event_records e ON e.slug=r.event_slug WHERE e.removed_at IS NULL AND ${scope.sql} AND r.normalized_email=? AND r.status<>'unverified' ORDER BY bookedAt DESC LIMIT 100`).bind(...scope.bindings,email,...scope.bindings,email).all();
-      result={rows:rows.results};
+      result={financialScope:session.role==='owner'?'platform':'tickets',rows:rows.results};
     }else if(section==='team')result=await readTeam(db,session,slug);
     else{
       await requireOrganizerEvent(db,session,slug);

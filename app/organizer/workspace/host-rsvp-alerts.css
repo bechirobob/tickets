@@ -1,0 +1,6 @@
+.host-rsvp-alerts button{min-height:44px}
+
+.host-notification-prompt{box-sizing:border-box;width:min(620px,100%);margin:0 0 24px;padding:20px;border:1px solid #dbcfe3;border-radius:18px;background:#fff;color:#241729;box-shadow:0 8px 32px #00000014}.host-notification-prompt h2{margin:0 0 8px;font-size:1.2rem}.host-notification-prompt p{font-size:.9rem;line-height:1.5}.host-notification-prompt button{margin:4px 8px 4px 0;padding:10px 14px;border-radius:10px;border:1px solid #d8c9df;background:#fff;color:inherit}.host-notification-prompt button:first-of-type{background:#241729;color:#fff}.host-notification-prompt button:focus-visible{outline:3px solid #a47abe;outline-offset:2px}
+
+/* Keep the primary label readable when shared workspace hover rules load later. */
+.host-notification-prompt button:first-of-type:hover{background:#3b2942;color:#fff}

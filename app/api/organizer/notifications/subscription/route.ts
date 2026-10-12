@@ -7,7 +7,7 @@ const headers = { 'cache-control': 'no-store' };
 async function context(request: Request) {
   const { env } = await import('cloudflare:workers');
   const session = await readAdminSession(request.headers.get('cookie'), env.DB);
-  return { env, session: session?.role === 'organizer' && !session.mustChangePassword ? session : null };
+  return { env, session: (session?.role === 'organizer' || session?.role === 'owner') && !session.mustChangePassword ? session : null };
 }
 export async function GET(request: Request) {
   const { env, session } = await context(request);
@@ -43,7 +43,7 @@ async function mutate(request: Request, remove: boolean) {
       WHERE organizer_push_subscriptions.account_id=excluded.account_id OR organizer_push_subscriptions.revoked_at IS NOT NULL
         OR NOT EXISTS (SELECT 1 FROM staff_sessions ss JOIN staff_accounts s ON s.id=ss.account_id
           WHERE ss.id=organizer_push_subscriptions.session_id AND ss.account_id=organizer_push_subscriptions.account_id
-          AND ss.revoked_at IS NULL AND ss.expires_at>? AND s.status='active' AND s.role='organizer' AND s.must_change_password=0)`)
+          AND ss.revoked_at IS NULL AND ss.expires_at>? AND s.status='active' AND s.role IN ('organizer','owner') AND s.must_change_password=0)`)
       .bind(crypto.randomUUID(),session.accountId,session.sessionId,body.endpoint,body.keys.p256dh,body.keys.auth,now,now,crypto.randomUUID(),session.accountId,body.endpoint,now,now).run();
     if (!result.meta.changes) return Response.json({ error: 'This device could not be added. Turn off alerts on an old device and try again.' }, { status: 409, headers });
   }

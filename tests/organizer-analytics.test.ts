@@ -100,10 +100,11 @@ describe("organiser analytics", () => {
       promoters: Array<Record<string, unknown>>;
       vipUsage: Array<Record<string, unknown>>;
     };
-    expect(data.overview).toMatchObject({ rsvpViews: 11, eventViews: 20, checkoutStarts: 8, paymentAttempts: 4, paymentsConfirmed: 2, paidOrders: 2, revenueMinor: 39000, refundsMinor: 3000, admissions: 3, checkedIn: 2, uniqueBuyers: 1, repeatBuyers: 1 });
+    expect(data.overview).toMatchObject({ rsvpViews: 11, eventViews: 20, checkoutStarts: 8, paymentAttempts: 4, paymentsConfirmed: 2, paidOrders: 2, revenueMinor: 36000, refundsMinor: 2769, admissions: 3, checkedIn: 2, uniqueBuyers: 1, repeatBuyers: 1 });
+    expect(data.overview).not.toHaveProperty("bookingFeesMinor");
     expect(data.rsvp.totals.confirmedGuests).toBe(5);
     expect(data.events.map((event) => event.slug)).toEqual([slug]);
-    expect(data.ticketTiers).toEqual([expect.objectContaining({ name: "=General Admission", orders: 2, admissions: 3, revenueMinor: 39000 })]);
+    expect(data.ticketTiers).toEqual([expect.objectContaining({ name: "=General Admission", orders: 2, admissions: 3, revenueMinor: 36000 })]);
     expect(data.promoters).toEqual(expect.arrayContaining([expect.objectContaining({ code: "NANA", orders: 1 }), expect.objectContaining({ code: "direct", orders: 1 })]));
     expect(data.vipUsage).toEqual([expect.objectContaining({ kind: "bottle_service", status: "confirmed", count: 1 })]);
     expect(JSON.stringify(data)).not.toContain("Private Night");
@@ -124,6 +125,8 @@ describe("organiser analytics", () => {
     const csv = await readAnalytics(new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}&range=30&format=csv`, { headers: { cookie: account.cookie } }));
     expect(csv.headers.get("content-type")).toContain("text/csv");
     const exportText = await csv.text();
+    expect(exportText).not.toContain("Booking fees");
+    expect(exportText).toContain("Ticket sales (minor units)");
     expect(exportText).toContain("Analytics Night");
     expect(exportText).toContain("Confirmed guests,5");
     expect(exportText).toContain('"\t=General Admission"');
@@ -204,12 +207,12 @@ it('resets every analytics cohort once while preserving bookings and excluding a
     await env.DB.prepare('INSERT OR IGNORE INTO analytics_baseline(id,reset_key,started_at) VALUES(1,?,?)').bind(slug,now).run();
     const request=new Request(`https://tickets.becoreops.com/api/organizer/analytics?eventSlug=${slug}&range=all`,{headers:{cookie:account.cookie}});
     const result=await (await readAnalytics(request)).json() as {scope:{baseline:string};overview:{paidOrders:number;revenueMinor:number;eventViews:number;admissions:number};rsvp:{totals:{requests:number}};salesTrend:unknown[];comparison:unknown};
-    expect(result.scope.baseline).toBe(baseline);expect(result.overview).toMatchObject({paidOrders:1,revenueMinor:11000,eventViews:1,admissions:1});expect(result.rsvp.totals.requests).toBe(1);
+    expect(result.scope.baseline).toBe(baseline);expect(result.overview).toMatchObject({paidOrders:1,revenueMinor:10000,eventViews:1,admissions:1});expect(result.rsvp.totals.requests).toBe(1);
     expect(result.comparison).toBeNull();
     const summary=await readHostSummary(env.DB,slug);expect(summary).toMatchObject({baseline,sales:{orders:1},pending:2});
     expect(summary?.rsvp.totals.requests).toBe(1);
     const workspace=await (await readWorkspace(new Request('https://tickets.becoreops.com/api/organizer/workspace',{headers:{cookie:account.cookie}}))).json() as {events:Array<{slug:string;analyticsBaseline:string;paidOrders:number;grossMinor:number;issuedAdmissions:number}>};
-    expect(workspace.events.find(event=>event.slug===slug)).toMatchObject({analyticsBaseline:baseline,paidOrders:1,grossMinor:11000,issuedAdmissions:2});
+    expect(workspace.events.find(event=>event.slug===slug)).toMatchObject({analyticsBaseline:baseline,paidOrders:1,grossMinor:10000,issuedAdmissions:2});
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE event_slug=?').bind(slug).first()).toEqual({n:2});
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM tickets WHERE event_slug=?').bind(slug).first()).toEqual({n:2});
     for(const headers of ([{'x-becore-analytics':'exclude'},{'user-agent':'HeadlessChrome/150'}] as Array<Record<string,string>>)) {

@@ -265,3 +265,16 @@ it('keeps verified ownership when inbox recovery races host approval', async () 
   expect((await (await passes(req('/api/customer/tickets',{},verified.cookie))).json() as {orders:unknown[]}).orders).toHaveLength(1);
   expect((await (await passes(req('/api/customer/tickets',{},deviceCookie))).json() as {orders:unknown[]}).orders).toHaveLength(0);
 });
+
+
+it('rejects a new RSVP when archive wins after its initial settings read', async () => {
+  const batch=env.DB.batch.bind(env.DB);
+  const intercepted=vi.spyOn(env.DB,'batch').mockImplementationOnce(async statements=>{
+    await env.DB.prepare('UPDATE curated_event_records SET archived_at=? WHERE slug=?').bind(new Date().toISOString(),slug).run();
+    return batch(statements);
+  });
+  try {
+    await expect(requestRegistration(env.DB,{eventSlug:slug,email:'archive-race@example.com',guestName:'Guest',phone:'',partySize:1},origin)).rejects.toThrow('Registration could not be saved');
+    expect(await env.DB.prepare('SELECT 1 FROM event_registrations WHERE event_slug=?').bind(slug).first()).toBeNull();
+  } finally { intercepted.mockRestore(); await env.DB.prepare('UPDATE curated_event_records SET archived_at=NULL WHERE slug=?').bind(slug).run(); }
+});

@@ -45,6 +45,75 @@ function mockPayment(){vi.spyOn(globalThis,'fetch').mockImplementation(async(_ur
 async function buy(f:Awaited<ReturnType<typeof fixture>>,email:string,extra:object={}){const r=await checkout(new Request(`${origin}/api/payments/initialize`,{method:'POST',headers:{origin,'content-type':'application/json','idempotency-key':crypto.randomUUID()},body:JSON.stringify({eventSlug:f.slug,ticketTierId:'general',quantity:1,email,phone:'233200000000',fullName:'Buyer',acceptedPolicies:true,network:'mtn',couponCode:'WELCOME',...extra})}));return {r,data:await r.json() as {reference:string;error?:string}};}
 afterEach(()=>vi.restoreAllMocks());
 describe('organizer business suite',()=>{
+ it('keeps platform fees owner-only in money, analytics, workspace and CSV without altering settlement obligations',async()=>{
+  const f=await fixture(),other=await fixture(),owner=await staff('owner'),stamp=now();
+  await env.DB.prepare(`INSERT INTO event_ticket_tiers(id,event_slug,code,name,description,price_minor,admissions_per_unit,capacity_admissions,max_units_per_order,status,created_at,updated_at) VALUES (?,?,'vip','VIP','One admission',203,1,20,10,'available',?,?)`).bind(`${f.slug}-vip`,f.slug,stamp,stamp).run();
+  for(const [suffix,face,fee,refund] of [['partial',101,9,5],['full',203,17,220],['paid',307,23,0]] as const){
+   await env.DB.prepare(`INSERT INTO orders(id,reference,event_slug,ticket_type,ticket_tier_id,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,refunded_amount_minor,created_at,paid_at) VALUES(?,?,?,'general',?,1,?,?,?,'GHS','finance@example.com','','card','paid',?,?,?)`).bind(`${f.slug}-${suffix}`,`BCT-${f.slug}-${suffix}`,f.slug,suffix==='full'?`${f.slug}-vip`:f.tier,face,fee,face+fee,refund,stamp,stamp).run();
+  }
+  for(const event of [f,other])await env.DB.prepare(`INSERT INTO event_settlements(id,run_id,event_slug,period_start,period_end,gross_minor,booking_fees_minor,refunds_minor,net_ticket_sales_minor,currency,status,created_at) VALUES(?,?,?,?,?,611,49,225,386,'GHS','ready',?)`).bind(`${event.slug}-settlement`,'test',event.slug,stamp,stamp,stamp).run();
+  await env.DB.prepare(`INSERT INTO payout_transfers(id,settlement_id,event_slug,payout_account_id,reference,amount_minor,currency,status,initiated_by,created_at,updated_at) VALUES(?,?,?,'test-account',?,386,'GHS','success','test',?,?)`).bind(`${f.slug}-transfer`,`${f.slug}-settlement`,f.slug,`${f.slug}-ref`,stamp,stamp).run();
+  const before=await env.DB.prepare('SELECT * FROM event_settlements WHERE event_slug=?').bind(f.slug).all();
+  const hostMoney=await readMoney(env.DB,f.session,'all');
+  expect(hostMoney.financialScope).toBe('tickets');
+  expect(hostMoney.totals).toMatchObject({collectedMinor:611,faceMinor:611,refundsMinor:208,ticketRefundsMinor:208});
+  expect(hostMoney.totals).not.toHaveProperty('feesMinor');
+  expect(hostMoney.payoutTotals).toMatchObject({paidMinor:386,pendingMinor:0});
+  expect(hostMoney.transfers).toEqual(expect.arrayContaining([expect.objectContaining({amountMinor:386,currency:'GHS',status:'success'})]));
+  expect(hostMoney.statements).toHaveLength(1);
+  expect(hostMoney.statements[0]).toMatchObject({grossMinor:611,refundsMinor:225,netMinor:386,currency:'GHS'});
+  expect(hostMoney.statements[0]).not.toHaveProperty('feesMinor');
+  expect(JSON.stringify(hostMoney)).not.toContain(other.slug);
+  const ownerMoney=await readMoney(env.DB,owner.session,f.slug);
+  expect(ownerMoney.totals).toMatchObject({collectedMinor:660,feesMinor:49,refundsMinor:225});
+  expect(ownerMoney.statements[0]).toMatchObject({grossMinor:611,feesMinor:49,refundsMinor:225,netMinor:386});
+  for(const person of [f,owner]){
+   const isOwner=person===owner;
+   const guestList=await readGuests(env.DB,person.session,f.slug,new URLSearchParams('show=1'));
+   expect(guestList.rows.reduce((sum,row)=>sum+Number(row.amountMinor),0)).toBe(isOwner?660:611);
+   const detail=await guestDetails(env.DB,person.session,f.slug,'order',`${f.slug}-paid`);
+   expect(detail.record.amountMinor).toBe(isOwner?330:307);
+   expect(detail.financialScope).toBe(isOwner?'platform':'tickets');expect(detail.canRequestRefund).toBe(true);
+   const audience=await (await GET(req(person.cookie,'audience_history',f.slug,'email=finance%40example.com'))).json() as {rows:{amountMinor:number}[]};
+   expect(audience.rows.reduce((sum,row)=>sum+row.amountMinor,0)).toBe(isOwner?660:611);
+
+   const csv=await (await GET(req(person.cookie,'money',f.slug,'format=csv'))).text();
+   expect(csv.includes('Fees (GHS minor)')).toBe(isOwner);
+   expect(csv).not.toContain(other.slug);
+   const workspace=await (await legacyWorkspace(new Request(`${origin}/api/organizer/workspace?event=${f.slug}`,{headers:{cookie:person.cookie}}))).json() as {settlements:Record<string,unknown>[]};
+   expect(Object.hasOwn(workspace.settlements[0],'bookingFeesMinor')).toBe(isOwner);
+   expect(workspace.settlements[0]).toMatchObject({grossMinor:611,refundsMinor:225,netTicketSalesMinor:386});
+   const report=await (await analytics(new Request(`${origin}/api/organizer/analytics?eventSlug=${f.slug}&range=all`,{headers:{cookie:person.cookie}}))).json() as {overview:Record<string,unknown>;salesTrend:{revenueMinor:number}[];ticketTiers:{revenueMinor:number}[];paymentMethods:{revenueMinor:number}[];promoters:{revenueMinor:number}[]};
+   expect(Object.hasOwn(report.overview,'bookingFeesMinor')).toBe(isOwner);
+   expect(report.overview).toMatchObject({revenueMinor:isOwner?660:611,refundsMinor:isOwner?225:208});
+   for(const rows of [report.salesTrend,report.ticketTiers,report.paymentMethods,report.promoters])expect(rows.reduce((sum,row)=>sum+row.revenueMinor,0)).toBe(isOwner?660:611);
+   const analyticsCsv=await (await analytics(new Request(`${origin}/api/organizer/analytics?eventSlug=${f.slug}&range=all&format=csv`,{headers:{cookie:person.cookie}}))).text();
+   expect(analyticsCsv.includes('Booking fees')).toBe(isOwner);
+  }
+  expect((await env.DB.prepare('SELECT * FROM event_settlements WHERE event_slug=?').bind(f.slug).all()).results).toEqual(before.results);
+  await env.DB.prepare('UPDATE orders SET face_amount_minor=0,booking_fee_minor=total_amount_minor WHERE id=?').bind(`${f.slug}-paid`).run();
+  const zeroFace=await guestDetails(env.DB,f.session,f.slug,'order',`${f.slug}-paid`);
+  expect(zeroFace.record.amountMinor).toBe(0);expect(zeroFace.canRequestRefund).toBe(true);
+ });
+
+ it('sends only role-scoped ticket sales to the event assistant model',async()=>{
+  const f=await fixture(),owner=await staff('owner'),stamp=now();
+  await env.DB.prepare(`INSERT INTO orders(id,reference,event_slug,ticket_type,ticket_tier_id,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,payment_channel,status,created_at,paid_at) VALUES(?,?,?,'general',?,1,10000,1250,11250,'GHS','assistant@example.com','','card','paid',?,?)`).bind(`${f.slug}-order`,`BCT-${f.slug}`,f.slug,f.tier,stamp,stamp).run();
+  const previous={key:env.OPENAI_API_KEY,cost:env.AI_COST_CONTROL_REQUIRED,gateway:env.OPENAI_GATEWAY_BASE_URL};
+  env.OPENAI_API_KEY='test-only-key';env.AI_COST_CONTROL_REQUIRED='false';env.OPENAI_GATEWAY_BASE_URL='';
+  const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'Test answer'}]}]}),{status:200}));
+  try {
+   for(const person of [f,owner]){
+    const response=await assistant(new Request(`${origin}/api/organizer/assistant`,{method:'POST',headers:{origin,cookie:person.cookie,'content-type':'application/json'},body:JSON.stringify({eventSlug:f.slug,message:'What are my ticket sales?'})}));
+    expect(response.status).toBe(200);
+    const body=JSON.parse(String(transport.mock.calls.at(-1)?.[1]?.body)) as {input:string};
+    const context=JSON.parse(body.input.split('\n')[1]) as {event:Record<string,unknown>};
+    if(person===owner){expect(context.event.grossCollected).toMatch(/112\.50/u);expect(context.event).not.toHaveProperty('ticketSales');}
+    else {expect(context.event.ticketSales).toMatch(/100\.00/u);expect(context.event).not.toHaveProperty('grossCollected');expect(body.input).not.toMatch(/112\.50|12\.50/u);}
+   }
+  } finally {env.OPENAI_API_KEY=previous.key;env.AI_COST_CONTROL_REQUIRED=previous.cost;env.OPENAI_GATEWAY_BASE_URL=previous.gateway;}
+ });
+
  it('requires an explicit event assignment across every host report, even when a submission repeats their email',async()=>{
   const a=await fixture(),b=await fixture(),owner=await staff('owner'),stamp=now();
   await env.DB.prepare(`INSERT INTO party_submissions(id,organizer_name,contact_name,contact_email,contact_phone,title,concept,venue_name,area,starts_at,ends_at,vibe,lineup,capacity,price_from_minor,age_restriction,status,event_slug,created_at,updated_at) VALUES (?,'Another host','Contact',?,'123','Private other event','Other private concept','Venue','Accra',?,?,'Late night','DJ',20,10000,'18+','published',?,?,?)`).bind(b.slug,a.email,future(),future(11),b.slug,stamp,stamp).run();

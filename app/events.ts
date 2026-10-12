@@ -146,7 +146,7 @@ async function loadPublicEventRecords(slug?: string): Promise<EventRecord[]> {
               ORDER BY effective_at DESC LIMIT 1), 750
            ) AS bookingFeeBasisPoints
     FROM curated_event_records
-    WHERE (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
+    WHERE archived_at IS NULL AND removed_at IS NULL AND (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
       ${slugFilter}
     ORDER BY CASE WHEN schedule_status = 'coming_soon' THEN 1 ELSE 0 END, starts_at, title
     LIMIT 100
@@ -249,7 +249,7 @@ export async function findPublicRoomEvent(slug: string): Promise<{ title: string
            schedule_status AS scheduleStatus, schedule_label AS scheduleLabel,
            image_url AS imageUrl
     FROM curated_event_records
-    WHERE slug = ? AND (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
+    WHERE slug = ? AND archived_at IS NULL AND removed_at IS NULL AND (status = 'published' OR (status = 'scheduled' AND scheduled_publish_at <= ?))
     LIMIT 1
   `).bind(slug, new Date().toISOString()).first<Pick<EventRecord, "title" | "startsAt" | "endsAt" | "scheduleStatus" | "scheduleLabel" | "imageUrl">>();
   if (!record) return null;

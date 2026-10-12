@@ -1258,7 +1258,7 @@
 .operations-journey > header span b { font-size: 14px; }
 .operations-journey > header span small { margin-top: 3px; color: var(--muted); font-size: 11px; }
 .operations-journey > header p { margin: 0; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
-.operations-journey > div { margin-top: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr) auto) minmax(0, 1fr); align-items: center; }
+.operations-journey > div { margin-top: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr) auto) minmax(0, 1fr); align-items: stretch; }
 .operations-journey > div span b, .operations-journey > div span { display: block; }
 .operations-journey > div span { color: var(--muted); font-size: 11px; }
 .operations-journey > div span b { margin-bottom: 2px; color: var(--ink); font-size: 21px; }
