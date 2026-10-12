@@ -22,17 +22,17 @@ spec.loader.exec_module(release)
 # Test-only selection of the separately reviewed application. An actual source
 # checkout is never redirected unless every application byte remains the exact
 # independently selected controls baseline and only these two controls changed.
-CONTROL_CHECK_BASE = "e96b686cf437dd9a3288d9cdd36cfae5a07bfe59"
-CONTROL_CHECK_TREE = "104a0970e6e497f938f2aab6bb87f5f89baa0ce3"
-REVIEWED_APP_SNAPSHOT = "afc230df86af83f4180ef1459469293c446b0b2b"
-REVIEWED_APP_TREE = "dba8fffa045cf72dafc9e453776ed7403f27ffa1"
+CONTROL_CHECK_BASE = "75af4f8e57393ddbed7bd05a31e636098c4532ab"
+CONTROL_CHECK_TREE = "a929954660a55d6f275d9954bede3b4d12eeac9d"
+REVIEWED_APP_SNAPSHOT = "bf126a56968b640ab2151a83b486ea0171b077c2"
+REVIEWED_APP_TREE = "436fba188c16a907410f5ef8c7dbb628136ccbae"
 CONTROL_CHECK_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
 
 
 class TransactionalMailAdmissionTests(unittest.TestCase):
     """Exercise the unchanged source gate with isolated real Git objects."""
     admitted = {
-        "lib/email-delivery.ts": "66891436fcaabbca25dc67a06d69df30a03960ed",
+        "lib/email-delivery.ts": "dcad73b8a824af75949a8b02cba9977d00b182f8",
         "lib/transactional-email.ts": "6d7ea0dda0b1b0538e07be352b0b7ae39de1d8ce",
         "worker/background.ts": "0ea11c3f9c8be00a48b625ac18cc4abf1806654e",
     }
@@ -2438,8 +2438,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
 
     def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
         staged = not (self.root / "package.json").exists() and not (self.root / "app").exists()
-        overrides = (staged_family_pins(self.root) if staged else
-                     release.REVIEWED_CONTROL_BLOBS if controls_only_checkout(self.root) else {})
+        overrides = staged_family_pins(self.root) if staged else {}
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                      ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
                      "ops/vps/runtime_release.py", "ops/vps/public_runtime_guard.py",
