@@ -39,6 +39,13 @@ function quotaRetryAt(response:Response,name?:string) {
   return new Date(Date.now()+Math.max(60,Number.isFinite(seconds)?Math.min(seconds,86400):60)*1000).toISOString();
 }
 
+/** Host RSVP alerts are push-only; guest receipts and other signup kinds are unchanged. */
+async function hostRsvpEmail(db: D1Database, kind: string, key: string) {
+  if (kind !== 'organizer_signup' || !key.startsWith('organizer-signup/')) return false;
+  const [, slug, sourceId] = key.split('/');
+  return Boolean(await db.prepare("SELECT 1 FROM event_registrations WHERE id=? AND event_slug=? AND kind='rsvp'").bind(sourceId ?? '', slug ?? '').first());
+}
+
 export async function sendEmail(input: {
   db: D1Database;
   kind: DeliveryKind;
@@ -51,6 +58,7 @@ export async function sendEmail(input: {
   recoveryGrantId?: string;
   deliveryId?: string;
 }) {
+  if (await hostRsvpEmail(input.db, input.kind, input.idempotencyKey)) return { sent: false, reason: 'host_rsvp_push_only' as const };
   const { env } = await import("cloudflare:workers");
   const provider = transactionalProvider(env, input.kind);
   const deliveryId = input.deliveryId ?? (input.kind === "payment_confirmation" && input.orderId ? `payment-confirmation/${input.orderId}` : crypto.randomUUID());
@@ -186,6 +194,10 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
           env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,updated_at=? WHERE id=?").bind(new Date().toISOString(),item.id),
           env.DB.prepare("UPDATE event_announcement_recipients SET status='skipped' WHERE campaign_id=? AND contact_id=?").bind(campaignId,contactId),
         ]);continue;}
+      }
+      if (await hostRsvpEmail(env.DB, item.kind, payload.idempotencyKey)) {
+        await env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,failure_reason='Host RSVP alerts use browser push only.',updated_at=? WHERE id=?").bind(now,item.id).run();
+        continue;
       }
       if(payload.idempotencyKey.startsWith('organizer-signup/')) {
         const [,slug,,accountId]=payload.idempotencyKey.split('/');

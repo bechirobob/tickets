@@ -43,3 +43,45 @@ test('ticket confirmations open My Nights without Room mute actions', async () =
     assert.equal(shown.actions.some(action=>action.action==='quiet'),['room_message','host_update'].includes(kind));
   }
 });
+
+test('host RSVP taps open only the host workspace and preserve guest windows', async () => {
+  const url='/organizer/workspace?area=events&event=one&view=rsvp&tab=roster';
+  const guest={url:'https://tickets.becoreops.com/my-nights',focus(){throw new Error('Guest window was hijacked');}};
+  assert.deepEqual(await clickNotification({kind:'organizer_rsvp',url},[guest]),[url]);
+  const steps=[];
+  const host={url:'https://tickets.becoreops.com/organizer/workspace',async navigate(target){steps.push(target);return this;},focus(){steps.push('focus');}};
+  await clickNotification({kind:'organizer_rsvp',url},[guest,host]);
+  assert.deepEqual(steps,[url,'focus']);
+  for(const unsafe of ['https://evil.test/organizer/workspace','/api/admin/registrations','/admin','/my-nights','javascript:alert(1)']) {
+    assert.deepEqual(await clickNotification({kind:'organizer_rsvp',url:unsafe}),['/organizer/workspace']);
+  }
+  assert.deepEqual(await clickNotification({kind:'registration_update',url}),['/notifications']);
+});
+
+
+test('worker installation accepts canonical and VPS static offline pages, rejecting failed fallback', async () => {
+  for (const statuses of [[200], [404, 200], [404, 404]]) {
+    const handlers = new Map(), fetched = [], cached = [], shell = [];
+    let activated = false, complete;
+    const self = { addEventListener: (name, handler) => handlers.set(name, handler), skipWaiting: async () => { activated = true; } };
+    const caches = { open: async () => ({ addAll: async urls => shell.push(...urls), put: async (url, response) => cached.push([url, response.status]) }) };
+    const fetch = async url => { fetched.push(url); return { ok: statuses[fetched.length - 1] === 200, status: statuses[fetched.length - 1] }; };
+    vm.runInNewContext(source, { self, URL, caches, fetch });
+    handlers.get('install')({ waitUntil: work => { complete = work; } });
+    if (statuses.at(-1) === 404) {
+      await assert.rejects(complete, /Offline ticket page is unavailable/);
+      assert.equal(activated, false); assert.deepEqual(cached, []);
+    } else {
+      await complete; assert.equal(activated, true);
+      assert.deepEqual(cached, [['/offline-ticket', 200]]);
+      assert.ok(shell.includes('/manifest.webmanifest')); assert.ok(!shell.includes('/offline-ticket'));
+    }
+    assert.deepEqual(fetched, statuses.length === 1 ? ['/offline-ticket'] : ['/offline-ticket', '/offline-ticket.html']);
+  }
+});
+
+test('host purchase notifications open the event guest desk and reject foreign destinations',async()=>{
+ const target='/organizer/workspace?area=events&event=one&view=guests';
+ assert.deepEqual(await clickNotification({kind:'organizer_purchase',url:target}),[target]);
+ for(const url of ['https://evil.test/organizer/workspace','/admin','/my-nights'])assert.deepEqual(await clickNotification({kind:'organizer_purchase',url}),['/organizer/workspace']);
+});

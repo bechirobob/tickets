@@ -140,15 +140,15 @@ it('enforces paused registration and deadlines while preserving previously confi
  await expect(signup('late@example.com')).rejects.toThrow('not open');
  expect((await registrationSettings(env.DB,slug))?.closesAt).toBe('2020-01-01T00:00:00.000Z');
 });
-it('updates live signup counts and sends each assigned organiser one alert per verified signup',async()=>{
+it('updates live signup counts without emailing assigned organisers about RSVPs',async()=>{
  const result=await signup('live@example.com');
  const live=await (await registrations(get(`/api/admin/registrations?eventSlug=${slug}&live=1`))).json() as {confirmed:number;latest:{name:string}[]};
  expect(live.confirmed).toBe(1);expect(live.latest[0].name).toBe('Guest <One>');
  await notifyRegistrationHosts(env.DB,{eventSlug:slug,sourceId:result.registration!.id,guestName:'Guest <One>',status:'confirmed',guests:1});
  const alerts=await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE kind='organizer_signup' AND recipient=?").bind(`${hostId}@example.com`).all<{payload:string}>();
- expect(alerts.results).toHaveLength(1);expect(JSON.parse(alerts.results[0].payload).html).toContain('&lt;One&gt;');
+ expect(alerts.results).toHaveLength(0);
  await settings({notifyHost:false});await signup('quiet@example.com');
- expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM delivery_events WHERE kind='organizer_signup' AND recipient=?").bind(`${hostId}@example.com`).first<{count:number}>())?.count).toBe(1);
+ expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM delivery_events WHERE kind='organizer_signup' AND recipient=?").bind(`${hostId}@example.com`).first<{count:number}>())?.count).toBe(0);
 });
 it('captures paid emails after verified payment without inventing announcement consent',async()=>{
  await settings({mode:'paid',capacity:10,priceMinor:10000});const now=new Date().toISOString(),id=crypto.randomUUID();
@@ -179,6 +179,7 @@ it('unsubscribes before queued send without cancelling admission and blocks resu
  expect(await env.DB.prepare('SELECT status FROM event_registrations WHERE id=?').bind(registered.registration!.id).first()).toEqual({status:'confirmed'});
 });
 it('suppresses failed announcement retries after unsubscribe and recovers abandoned queued delivery',async()=>{
+ expect((await settings({mode:'interest'})).status).toBe(200);
  await signup('retry@example.com',true);await campaign();vi.mocked(fetch).mockResolvedValueOnce(Response.json({message:'Unavailable'},{status:503}));
  await processEventAnnouncements(env,origin);
  await env.DB.prepare("UPDATE delivery_events SET next_attempt_at='2020-01-01T00:00:00Z' WHERE kind='event_announcement'").run();

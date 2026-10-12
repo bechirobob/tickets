@@ -1,0 +1,13 @@
+# Host notification candidate
+
+Organizers see one compact optional prompt on their first authenticated workspace visit in each browser/account. Enable requests browser permission from the click; Not now records dismissal. Account settings remain available. iOS browser visits explain Home Screen installation; unsupported and denied states do not claim delivery. Local storage persistence follows browser storage lifetime; the in-memory fallback lasts the current page session.
+
+Confirmed paid purchases and initial incoming RSVPs use separate durable delivery tables and the same owned device subscription. Purchase capture immediately follows the verified paid-state UPDATE inside its D1 batch, before tickets are issued in the same transaction. changes() gates the first paid transition; the unique order/device index prevents duplicate callback capture. There is no historical backfill or checkout-initiation alert. Free orders do not generate purchase notifications.
+
+Both delivery paths recheck active account/session, assignment, consent version, event eligibility and source state after encryption. Provider acceptance is not OS display evidence. Retries are bounded to three claims, two-minute leases and 24-hour age; delivery cannot promise exactly once after an ambiguous provider response. Notification previews omit guest identity, price and contact information. RSVP opens the RSVP roster; purchases open the event guest desk.
+
+Only host RSVP signup email is suppressed. Paid/interest host signup and guest confirmation/access email remain unchanged. No external provider was contacted during local tests.
+
+Release hold: this application snapshot is based on the previously reviewed push descendant for comparison. It is not the final production ancestry. Review and activate the suppression-only fallback first; build and review the final push control/application chain from that fallback. Migration0064 introduces one table and two indexes, no trigger or existing-object rewrite. Its exact bytes and changed protected application blobs require fresh admission review. Do not broaden the migration parser, permissions, source authority or rollback policy. The existing0063 exception does not approve0064. Preserve the fallback on the previous release path.
+
+The fixture-backed host-rsvp-runtime Playwright test must be explicitly run with BECORE_HOST_PUSH_FIXTURE against the exact final built candidate; ordinary CI skips it. It uses a real built app/auth/API/service worker, simulated PushManager provider boundary and synthetic PushEvent/NotificationEvent, not provider delivery or an OS tap. Local fixture deployment is inactive and cannot run background jobs.

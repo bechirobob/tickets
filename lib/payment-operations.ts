@@ -1,3 +1,4 @@
+import { captureOrganizerPurchasePush, enqueueOrganizerPurchasePush } from './organizer-rsvp-push';
 import { deliverConfirmation } from './confirmation-delivery';
 import { paystackEnvironment } from "./paystack-environment";
 import { rememberEventContact, notifyRegistrationHosts } from './event-audience';
@@ -182,6 +183,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
       WHERE id = ? AND (status IN ('payment_pending', 'expired', 'failed') OR
         (status = 'paid' AND EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = orders.event_slug AND (e.removed_at IS NOT NULL OR e.event_state = 'cancelled'))))
     `).bind(verification.providerReference ?? verification.reference, String(verification.id), now, now, verification.paidAt ?? now, order.id),
+    captureOrganizerPurchasePush(db,order.id,now),
     db.prepare(`UPDATE orders SET failure_reason = 'Payment succeeded after the event, admission or discount was no longer available.' WHERE id = ? AND status = 'requires_refund'`).bind(order.id),
     db.prepare(`UPDATE inventory_reservations SET status = 'released', updated_at = ? WHERE order_id = ? AND status IN ('held', 'expired', 'consumed')
       AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'requires_refund')`).bind(now, order.id, order.id),
@@ -201,6 +203,8 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
   if (paidOrder?.status === "requires_refund") return { result: "requires_refund" as const, order: paidOrder };
   if (!paidOrder || paidOrder.status !== "paid") return { result: "not_fulfilled" as const, order };
   const newlyPaid = results[1].meta.changes === 1;
+  try { const {env}=await import('cloudflare:workers'); await enqueueOrganizerPurchasePush(db,env.EMAIL_DELIVERY_QUEUE,paidOrder.id); }
+  catch { console.error(JSON.stringify({message:'Host purchase push awaits scheduled recovery'})); }
   const consent = await db.prepare('SELECT announcements_opt_in AS optedIn,created_at AS createdAt FROM orders WHERE id=?').bind(paidOrder.id).first<{optedIn:number;createdAt:string}>();
   await rememberEventContact(db,{eventSlug:paidOrder.eventSlug,email:paidOrder.customerEmail,guestName:paidOrder.customerName ?? 'Guest',source:'paid',consentedAt:consent?.optedIn ? consent.createdAt : null});
   await notifyRegistrationHosts(db,{eventSlug:paidOrder.eventSlug,sourceId:paidOrder.id,guestName:paidOrder.customerName??'Guest',status:'paid',guests:paidOrder.quantity});
