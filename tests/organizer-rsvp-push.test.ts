@@ -41,13 +41,14 @@ it('sends once under concurrent delivery and links to the host roster without gu
  const payload=JSON.parse(vi.mocked(generateRequestDetails).mock.calls[0][1] as string);
  expect(payload.url).toContain(`event=${slug}&view=rsvp&tab=roster`);expect(JSON.stringify(payload)).not.toContain('Private Guest');
 });
-it.each(['unassigned','disabled','logout','expired','cancelled','removed','consent_changed'])('suppresses queued work after %s',async(change)=>{
+it.each(['unassigned','disabled','logout','expired','cancelled','removed','archived','consent_changed'])('suppresses queued work after %s',async(change)=>{
  const id=await captured();
  if(change==='unassigned')await env.DB.prepare('DELETE FROM staff_event_assignments WHERE account_id=?').bind(accountId).run();
  if(change==='disabled')await env.DB.prepare("UPDATE staff_accounts SET status='disabled' WHERE id=?").bind(accountId).run();
  if(change==='logout')await env.DB.prepare('UPDATE staff_sessions SET revoked_at=? WHERE account_id=?').bind(new Date().toISOString(),accountId).run();
  if(change==='expired')await env.DB.prepare("UPDATE staff_sessions SET expires_at='2000-01-01' WHERE account_id=?").bind(accountId).run();
  if(change==='cancelled')await env.DB.prepare("UPDATE event_registrations SET status='cancelled' WHERE event_slug=?").bind(slug).run();
+ if(change==='archived')await env.DB.prepare('UPDATE curated_event_records SET archived_at=? WHERE slug=?').bind(new Date().toISOString(),slug).run();
  if(change==='removed')await env.DB.prepare('UPDATE curated_event_records SET removed_at=? WHERE slug=?').bind(new Date().toISOString(),slug).run();
  if(change==='consent_changed')await env.DB.prepare("UPDATE organizer_push_subscriptions SET consent_id='changed' WHERE account_id=?").bind(accountId).run();
  await deliverOrganizerRsvpPush(env,id);expect(fetch).not.toHaveBeenCalled();expect((await pending())[0].outcome).toBe('ineligible');
@@ -70,7 +71,7 @@ it('requires host authentication, same origin and valid keys; cannot steal anoth
  expect((await POST(request('POST',{endpoint,keys},cookie,'https://evil.test'))).status).toBe(403);
  expect((await POST(request('POST',{endpoint,keys:{auth:'bad',p256dh:'bad'}}))).status).toBe(400);
  const other=await staff();expect((await POST(request('POST',{endpoint,keys},other.cookie))).status).toBe(409);
- const owner=await staff('owner');expect((await GET(request('GET',{},owner.cookie))).status).toBe(403);
+ const owner=await staff('owner');expect((await GET(request('GET',{},owner.cookie))).status).toBe(200);
  expect((await GET(new Request(origin+'/api/organizer/notifications/subscription?endpoint='+encodeURIComponent(endpoint),{headers:{cookie:other.cookie}}))).status).toBe(200);
 });
 it('rolls back the captured alert with the RSVP transaction',async()=>{
@@ -135,7 +136,7 @@ it.each(['logout','unassigned','optout'])('rechecks %s while encryption yields b
  });
  await deliverOrganizerRsvpPush(env,id);expect(fetch).not.toHaveBeenCalled();expect((await pending())[0].outcome).toBe('ineligible');
 });
-it.each(['support','finance','gate','moderator','curator','owner'])('rejects subscriptions for the %s role',async(role)=>{
+it.each(['support','finance','gate','moderator','curator'])('rejects subscriptions for the %s role',async(role)=>{
  const other=await staff(role);expect((await POST(request('POST',{endpoint,keys},other.cookie))).status).toBe(403);
 });
 it('old sessions cannot revoke the device after it is transferred to another account',async()=>{
@@ -258,5 +259,76 @@ for(const kind of ['rsvp','purchase'] as const){
    vi.spyOn(Date,'now').mockReturnValue(now);
   }
   await job.deliver();await job.deliver();expect(fetch).toHaveBeenCalledTimes(1);expect(await job.outcome()).toBe('accepted');
+ });
+}
+
+async function useOwner(){
+ await DELETE(request('DELETE'));
+ const owner=await staff('owner');accountId=owner.id;cookie=owner.cookie;
+ expect((await POST(request('POST'))).status).toBe(200);
+}
+it.each(['requested','unverified'])('owner captures %s RSVPs without assignments, exactly once per device',async status=>{
+ await useOwner();
+ const id=await rsvp(status);
+ if(status==='unverified')await env.DB.prepare("UPDATE event_registrations SET status='requested' WHERE id=?").bind(id).run();
+ await env.DB.prepare("UPDATE event_registrations SET status='confirmed' WHERE id=?").bind(id).run();
+ expect(await pending()).toHaveLength(1);
+ await Promise.all([deliverOrganizerRsvpPush(env,(await pending())[0].id),deliverOrganizerRsvpPush(env,(await pending())[0].id)]);
+ expect(fetch).toHaveBeenCalledTimes(1);
+});
+it('owner and assigned host receive independent alerts without unassigned-host leakage',async()=>{
+ const hostId=accountId,owner=await staff('owner'),other=await staff();
+ expect((await POST(request('POST',{endpoint:endpoint+'-owner',keys},owner.cookie))).status).toBe(200);
+ expect((await POST(request('POST',{endpoint:endpoint+'-other',keys},other.cookie))).status).toBe(200);
+ await rsvp('requested');
+ const recipients=await env.DB.prepare('SELECT account_id FROM organizer_rsvp_push_deliveries ORDER BY account_id').all<{account_id:string}>();
+ expect(recipients.results.map(r=>r.account_id).sort()).toEqual([hostId,owner.id].sort());
+});
+it('owner assignment rows do not multiply notification capture',async()=>{
+ await useOwner();const now=new Date().toISOString();
+ await env.DB.prepare('INSERT INTO staff_event_assignments(account_id,event_slug,assigned_by,assigned_at) VALUES(?,?,?,?)').bind(accountId,slug,accountId,now).run();
+ await rsvp('requested');expect(await pending()).toHaveLength(1);
+ const p=await purchase();await pay(p);await pay(p);expect(await purchaseJobs()).toHaveLength(1);
+});
+it('active owner device cannot be taken over by organizer or another owner',async()=>{
+ await useOwner();
+ for(const role of ['organizer','owner']){
+  const other=await staff(role);
+  expect((await POST(request('POST',{endpoint,keys},other.cookie))).status).toBe(409);
+  expect(await env.DB.prepare('SELECT account_id FROM organizer_push_subscriptions WHERE endpoint=?').bind(endpoint).first()).toEqual({account_id:accountId});
+ }
+});
+it('owner opt-out, re-enable and repeated subscription writes never backfill or duplicate a device',async()=>{
+ await useOwner();await DELETE(request('DELETE'));await rsvp('requested');
+ const p=await purchase();await pay(p);
+ await POST(request('POST'));await POST(request('POST'));await pay(p);
+ expect(await pending()).toHaveLength(0);expect(await purchaseJobs()).toHaveLength(0);
+ expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM organizer_push_subscriptions WHERE endpoint=?').bind(endpoint).first()).toEqual({n:1});
+ await rsvp('requested');expect(await pending()).toHaveLength(1);
+});
+for(const kind of ['rsvp','purchase'] as const){
+ it(`owner receives new ${kind} without assignment`,async()=>{
+  await useOwner();const job=await capturedHostAlert(kind);
+  await job.deliver();await job.deliver();expect(fetch).toHaveBeenCalledTimes(1);expect(await job.outcome()).toBe('accepted');
+ });
+ it.each(['organizer','curator','finance','support','gate','moderator','disabled','password','logout','expired','consent','ended','archived'])(`owner queued ${kind} revalidates %s`,async change=>{
+  await useOwner();const job=await capturedHostAlert(kind);
+  if(['organizer','curator','finance','support','gate','moderator'].includes(change))await env.DB.prepare('UPDATE staff_accounts SET role=? WHERE id=?').bind(change,accountId).run();
+  if(change==='disabled')await env.DB.prepare("UPDATE staff_accounts SET status='disabled' WHERE id=?").bind(accountId).run();
+  if(change==='password')await env.DB.prepare('UPDATE staff_accounts SET must_change_password=1 WHERE id=?').bind(accountId).run();
+  if(change==='logout')await env.DB.prepare("UPDATE staff_sessions SET revoked_at='2020-01-01' WHERE account_id=?").bind(accountId).run();
+  if(change==='expired')await env.DB.prepare("UPDATE staff_sessions SET expires_at='2020-01-01' WHERE account_id=?").bind(accountId).run();
+  if(change==='consent')await DELETE(request('DELETE'));
+  if(change==='archived')await env.DB.prepare('UPDATE curated_event_records SET archived_at=? WHERE slug=?').bind(new Date().toISOString(),slug).run();
+  if(change==='ended')await env.DB.prepare("UPDATE curated_event_records SET event_state='past' WHERE slug=?").bind(slug).run();
+  await job.deliver();expect(fetch).not.toHaveBeenCalled();expect(await job.outcome()).toBe('ineligible');
+ });
+ it(`owner ${kind} revalidates downgrade while encryption yields`,async()=>{
+  await useOwner();const job=await capturedHostAlert(kind);
+  vi.mocked(generateRequestDetails).mockImplementationOnce(async()=>{
+   await env.DB.prepare("UPDATE staff_accounts SET role='organizer' WHERE id=?").bind(accountId).run();
+   return {endpoint,method:'POST',headers:{},body:new Uint8Array([1])};
+  });
+  await job.deliver();expect(fetch).not.toHaveBeenCalled();expect(await job.outcome()).toBe('ineligible');
  });
 }

@@ -515,6 +515,7 @@ export const curatedEventRecords = sqliteTable("curated_event_records", {
   eventState: text("event_state", { enum: ["on_sale", "sold_out", "cancelled", "postponed", "rescheduled"] }).notNull().default("on_sale"),
   rescheduledFrom: text("rescheduled_from"),
   removedAt: text("removed_at"),
+  archivedAt: text("archived_at"),
   isTestEvent: integer("is_test_event", { mode: "boolean" }).notNull().default(false),
   scheduleLabel: text("schedule_label"),
   scheduleStatus: text("schedule_status", { enum: ["confirmed", "coming_soon", "end_pending"] }).notNull().default("confirmed"),

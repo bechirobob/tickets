@@ -152,7 +152,7 @@ const guides: Guide[] = [
   {
     id: "host-money", audience: "Organising", category: "Payments", title: "Check statements and payouts",
     summary: "See collected payments, refunds and what has been paid out.",
-    steps: ["Open Money and choose one event or All my events.", "Check collected payments, booking fees, refunds and ticket value after refunds.", "Use Settlement statements and Payout history to see approval and transfer status. Ticket value is an accounting total, not a promise of an immediate payout.", "Choose Export statements for a CSV. For a query, open the event’s Requests tab and include the statement or transfer reference."],
+    steps: ["Open Money and choose one event or All my events.", "Check ticket sales, ticket refunds and ticket value after refunds.", "Use Settlement statements and Payout history to see approval and transfer status. Ticket value is an accounting total, not a promise of an immediate payout.", "Choose Export statements for a CSV. For a query, open the event’s Requests tab and include the statement or transfer reference."],
     action: { href: "/organizer/workspace?area=money&event=all", label: "Check Money" },
   },
   {

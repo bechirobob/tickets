@@ -21,7 +21,7 @@ export async function registrationSettings(db: D1Database, slug: string) {
     (SELECT poster_content_type FROM party_submissions WHERE id=e.submission_id) AS imageContentType, e.schedule_label AS scheduleLabel, e.schedule_status AS scheduleStatus, e.starts_at AS startsAt, e.ends_at AS endsAt, e.event_state AS eventState, e.status AS publication,
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
     COALESCE(s.capacity, 0) AS capacity, COALESCE(s.max_party_size, 1) AS maxPartySize,
-    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, COALESCE(s.accepting,1) AS accepting, e.sales_open_at AS opensAt, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost, COALESCE(s.allow_undated_rsvp,0) AS allowUndatedRsvp
+    COALESCE(s.approval_required, 0) AS approvalRequired, COALESCE(s.room_access, 0) AS roomAccess, CASE WHEN e.archived_at IS NULL THEN COALESCE(s.accepting,1) ELSE 0 END AS accepting, e.sales_open_at AS opensAt, s.closes_at AS closesAt, COALESCE(s.notify_host,1) AS notifyHost, COALESCE(s.allow_undated_rsvp,0) AS allowUndatedRsvp
     FROM curated_event_records e LEFT JOIN event_registration_settings s ON s.event_slug = e.slug WHERE e.slug = ? AND e.removed_at IS NULL`).bind(timestamp(), slug).first<RegistrationSettings>();
 }
 export function registrationStartConfirmed(settings: Pick<RegistrationSettings, 'scheduleStatus' | 'startsAt'>) {
@@ -58,7 +58,7 @@ export async function requestRegistration(db: D1Database, input: { eventSlug: st
   const now = timestamp();
   const newId = crypto.randomUUID();
   const [inserted] = await db.batch([db.prepare(`INSERT OR IGNORE INTO event_registrations (id, event_slug, normalized_email, guest_name, phone, party_size, kind, status, event_signature, created_at, updated_at, announcements_opt_in, acquisition_source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?, ?)`).bind(newId, input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0, input.acquisitionSource ?? 'untracked'),
+    SELECT ?, ?, ?, ?, ?, ?, ?, 'unverified', ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM curated_event_records WHERE slug=? AND archived_at IS NULL AND removed_at IS NULL)`).bind(newId, input.eventSlug, input.email, input.guestName, input.phone, input.partySize, settings.mode, signature(settings), now, now, input.announcementsOptIn ? 1 : 0, input.acquisitionSource ?? 'untracked', input.eventSlug),
     ...(settings.mode === 'rsvp' ? preparePlatformAnnouncementChoice(db, { email: input.email, source: 'rsvp', sourceId: newId, optedIn: input.platformAnnouncementsOptIn === true, verifiedEmail: identity?.emailVerified === true }) : []),
   ]);
   const reg = await db.prepare(`SELECT ${fields} FROM event_registrations WHERE event_slug = ? AND normalized_email = ?`).bind(input.eventSlug, input.email).first<Registration>();
@@ -142,7 +142,7 @@ export async function confirmRegistration(db: D1Database, id: string) {
   const statements = [db.prepare(`UPDATE event_registrations SET status = 'confirmed', version = version + 1, updated_at = ?
     WHERE id = ? AND kind = 'rsvp' AND status = 'waitlisted'
     AND EXISTS (SELECT 1 FROM event_registration_settings s JOIN curated_event_records e ON e.slug = s.event_slug
-      WHERE s.event_slug = event_registrations.event_slug AND s.mode = 'rsvp' AND e.status = 'published' AND ((e.schedule_status IN ('confirmed', 'end_pending') AND e.starts_at > ?) OR (e.schedule_status = 'coming_soon' AND s.allow_undated_rsvp = 1))
+      WHERE s.event_slug = event_registrations.event_slug AND s.mode = 'rsvp' AND e.status = 'published' AND e.archived_at IS NULL AND ((e.schedule_status IN ('confirmed', 'end_pending') AND e.starts_at > ?) OR (e.schedule_status = 'coming_soon' AND s.allow_undated_rsvp = 1))
       AND e.event_state IN ('on_sale', 'sold_out', 'rescheduled')
       AND (s.approval_required = 0 OR event_registrations.approved_at IS NOT NULL)
       AND event_registrations.party_size <= s.max_party_size

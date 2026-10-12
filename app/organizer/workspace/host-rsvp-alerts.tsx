@@ -17,7 +17,7 @@ const choices=new Set<string>();
 function choiceKey(accountId:string){return `bct:host-notifications:choice:v1:${accountId}`;}
 function seenChoice(key:string){try{return choices.has(key)||localStorage.getItem(key)==='seen';}catch{return choices.has(key);}}
 function rememberChoice(key:string){choices.add(key);try{localStorage.setItem(key,'seen');}catch{/* Memory still avoids repeat prompts in this page session. */}}
-export default function HostRsvpAlerts({accountId,mode='settings'}:{accountId?:string;mode?:'settings'|'prompt'}={}) {
+export default function HostRsvpAlerts({accountId,mode='settings',owner=false}:{accountId?:string;mode?:'settings'|'prompt';owner?:boolean}={}) {
   const prompt=mode==='prompt',key=accountId?choiceKey(accountId):null;
   const [hidden,setHidden]=useState(true);
   const [attempt,setAttempt]=useState(0);
@@ -80,7 +80,7 @@ export default function HostRsvpAlerts({accountId,mode='settings'}:{accountId?:s
     } catch (error) { setMessage(requestErrorMessage(error)); }
     finally { active.current = false; setBusy(false); }
   }
-  const help:Record<string,string> = {loading:'Checking this device…',ready:'Get browser notifications for confirmed ticket purchases and incoming RSVPs to your events. Host RSVP emails are off; other emails are unchanged.',on:'Confirmed ticket purchases and new RSVPs will appear on this device. Alerts stay on while you’re signed in. Enable them again after signing back in.',install:'On iPhone or iPad, add Tickets to your Home Screen, open it there, sign in as host, then enable notifications.',unsupported:'This browser does not support phone alerts. You can still check your guest list.',denied:'Notifications are blocked. Allow them in your browser settings, then return here.',unavailable:'Phone alerts are unavailable right now. You can still check your guest list.'};
+  const help:Record<string,string> = {loading:'Checking this device…',ready:owner?'Get browser notifications for confirmed ticket purchases and incoming RSVPs across all events. Alerts are shared between Operations and your host workspace.':'Get browser notifications for confirmed ticket purchases and incoming RSVPs to your events. Host RSVP emails are off; other emails are unchanged.',on:'Confirmed ticket purchases and new RSVPs will appear on this device. Alerts stay on while you’re signed in. Enable them again after signing back in.',install:'On iPhone or iPad, add Tickets to your Home Screen, open it there, sign in, then enable notifications.',unsupported:'This browser does not support phone alerts. You can still check your guest list.',denied:'Notifications are blocked. Allow them in your browser settings, then return here.',unavailable:'Phone alerts are unavailable right now. You can still check your guest list.'};
   if(prompt){
     if(hidden)return null;
     return <aside className="host-notification-prompt" role="dialog" aria-label="Host notifications"><h2>Keep up with your guests</h2><p>{help[state]}</p>{state==='ready'?<button type="button" disabled={busy} onClick={()=>void change()}>{busy?'Saving…':'Enable notifications'}</button>:null}{state==='unavailable'?<button type="button" onClick={retry}>Try again</button>:null}<button type="button" disabled={busy} onClick={dismiss}>Not now</button><p>Change this anytime in Account settings.</p><p role="status">{message}</p></aside>;

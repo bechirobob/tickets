@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   const actor = await actorOrUnauthorized(request);
   if (!actor) return Response.json({ error: "Sign in is required." }, { status: 401 });
   const db = await getDb();
-  const submissions = await db.select().from(partySubmissions).where(sql`${partySubmissions.status} <> 'draft' AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.submission_id = ${partySubmissions.id} AND event.removed_at IS NOT NULL)`).orderBy(desc(partySubmissions.createdAt));
+  const submissions = await db.select().from(partySubmissions).where(sql`${partySubmissions.status} <> 'draft' AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.submission_id = ${partySubmissions.id} AND (event.removed_at IS NOT NULL OR event.archived_at IS NOT NULL))`).orderBy(desc(partySubmissions.createdAt));
   return Response.json({ submissions }, { headers: { "cache-control": "no-store" } });
 }
 
@@ -66,6 +66,9 @@ export async function PATCH(request: Request) {
     const db = await getDb();
     const [current] = await db.select().from(partySubmissions).where(eq(partySubmissions.id, body.id)).limit(1);
     if (!current) return Response.json({ error: "Submission not found." }, { status: 404 });
+    const archived = await db.select({ slug: curatedEventRecords.slug }).from(curatedEventRecords)
+      .where(sql`${curatedEventRecords.submissionId} = ${current.id} AND ${curatedEventRecords.archivedAt} IS NOT NULL`).limit(1);
+    if (archived.length) return Response.json({ error: "Restore the archived event before editing its submission." }, { status: 409 });
     if (!transitions[body.action].includes(current.status as SubmissionStatus)) {
       return Response.json({ error: `Cannot ${body.action.replaceAll("_", " ")} a ${current.status.replaceAll("_", " ")} submission.` }, { status: 409 });
     }

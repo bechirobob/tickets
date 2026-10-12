@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import "./header-panel-focus.test.mjs";
 import "./room-demo-lifecycle.test.mjs";
+import "./owner-notification-wiring.test.mjs";
 
 const source = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
 async function clickNotification(data, windows = [], action = "") {
