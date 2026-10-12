@@ -216,3 +216,47 @@ it('queue failure preserves a confirmed purchase and durable alert for recovery'
  const p=await purchase();env.EMAIL_DELIVERY_QUEUE={sendBatch:vi.fn().mockRejectedValue(new Error('isolated queue failure')),send:vi.fn().mockResolvedValue(undefined)} as unknown as NonNullable<Cloudflare.Env['EMAIL_DELIVERY_QUEUE']>;
  try{expect((await pay(p)).result).toBe('paid');expect(await purchaseJobs()).toHaveLength(1);expect((await purchaseJobs())[0].outcome).toBeNull();}finally{delete env.EMAIL_DELIVERY_QUEUE;}
 });
+
+async function capturedHostAlert(kind:'rsvp'|'purchase'){
+ const {deliverOrganizerPurchasePush}=await import('../lib/organizer-rsvp-push');
+ const id=kind==='rsvp'?await captured():await (async()=>{const p=await purchase();await pay(p);return (await purchaseJobs())[0].id;})();
+ vi.mocked(fetch).mockClear();vi.mocked(generateRequestDetails).mockClear();
+ return {id,deliver:()=>kind==='rsvp'?deliverOrganizerRsvpPush(env,id):deliverOrganizerPurchasePush(env,id),
+  outcome:async()=>kind==='rsvp'?(await pending())[0].outcome:(await purchaseJobs())[0].outcome};
+}
+for(const kind of ['rsvp','purchase'] as const){
+ it.each(['past','elapsed','cancelled','postponed'])(`suppresses queued ${kind} after event becomes %s`,async state=>{
+  const job=await capturedHostAlert(kind);
+  if(state==='elapsed')await env.DB.prepare('UPDATE curated_event_records SET ends_at=? WHERE slug=?').bind(new Date(Date.now()-1000).toISOString(),slug).run();
+  else await env.DB.prepare('UPDATE curated_event_records SET event_state=? WHERE slug=?').bind(state,slug).run();
+  await job.deliver();expect(fetch).not.toHaveBeenCalled();expect(generateRequestDetails).not.toHaveBeenCalled();expect(await job.outcome()).toBe('ineligible');
+ });
+ it.each(['past','elapsed'])(`rechecks ${kind} event becoming %s during encryption`,async state=>{
+  const job=await capturedHostAlert(kind),end=Date.now()+10000;
+  await env.DB.prepare('UPDATE curated_event_records SET ends_at=? WHERE slug=?').bind(new Date(end).toISOString(),slug).run();
+  vi.mocked(generateRequestDetails).mockImplementationOnce(async()=>{
+   if(state==='past')await env.DB.prepare("UPDATE curated_event_records SET event_state='past' WHERE slug=?").bind(slug).run();
+   else vi.spyOn(Date,'now').mockReturnValue(end+1);
+   return {endpoint,method:'POST',headers:{},body:new Uint8Array([1])};
+  });
+  await job.deliver();expect(generateRequestDetails).toHaveBeenCalledTimes(1);expect(fetch).not.toHaveBeenCalled();expect(await job.outcome()).toBe('ineligible');
+ });
+ it(`stops a recent ${kind} provider retry after the event ends`,async()=>{
+  const job=await capturedHostAlert(kind),end=Date.now()+10000;
+  await env.DB.prepare('UPDATE curated_event_records SET ends_at=? WHERE slug=?').bind(new Date(end).toISOString(),slug).run();
+  vi.mocked(fetch).mockResolvedValueOnce(new Response(null,{status:503}));
+  await job.deliver();expect(fetch).toHaveBeenCalledTimes(1);expect(await job.outcome()).toBeNull();
+  await env.DB.prepare(`UPDATE organizer_${kind}_push_deliveries SET lease_until=NULL WHERE id=?`).bind(job.id).run();
+  vi.spyOn(Date,'now').mockReturnValue(end+1);
+  await job.deliver();expect(fetch).toHaveBeenCalledTimes(1);expect(await job.outcome()).toBe('ineligible');
+ });
+ it.each(['active','coming_soon','exact_end'])(`preserves ${kind} delivery for %s events`,async state=>{
+  const job=await capturedHostAlert(kind),now=Date.now();
+  if(state==='coming_soon')await env.DB.prepare("UPDATE curated_event_records SET schedule_status='coming_soon',ends_at=? WHERE slug=?").bind(new Date(now-1000).toISOString(),slug).run();
+  if(state==='exact_end'){
+   await env.DB.prepare('UPDATE curated_event_records SET ends_at=? WHERE slug=?').bind(new Date(now).toISOString(),slug).run();
+   vi.spyOn(Date,'now').mockReturnValue(now);
+  }
+  await job.deliver();await job.deliver();expect(fetch).toHaveBeenCalledTimes(1);expect(await job.outcome()).toBe('accepted');
+ });
+}
