@@ -88,10 +88,10 @@ RESOURCE_RELEASE_BASELINE = "5e1b1aada332d8ce4986c26291594a929aa95d53"
 
 REVIEWED_APPLICATION_BLOBS = {
     "public/sw.js": "5e59b045ded41b5e6033fea174993349d5742373",
-    "lib/organizer-rsvp-push.ts": "54a064db4bd8861815b582b5b41b2fd2ca807b37",
+    "lib/organizer-rsvp-push.ts": "f843394ca5c7c4f9d823aa37e78ecb4f25585126",
     "lib/event-audience.ts": "fb8e73aee376426e9b58abb02dc6dc8ba85e3892",
     "app/organizer/workspace/suite.css": "427038c93ca19550c65e7cbafe4eb95c5ad250c7",
-    "app/organizer/workspace/host-rsvp-alerts.tsx": "115997d66a344c59ed233306a6bcdbd4bb5c6279",
+    "app/organizer/workspace/host-rsvp-alerts.tsx": "eac1f7be6fa0a3515dc87549b0cdd1fc6b870832",
     "app/api/organizer/notifications/subscription/route.ts": "1326df418932f18b8007e3410232a725f105f7eb",
     ".github/workflows/native-apps.yml": "426a9b8219d3f2ca73d3ad0de93b9a7d73ab3c89",
     "ops/vps/test_pink_edition.py": "be26c898ac1e19f7f737dbe5112c5e40b6e90c68",
@@ -135,7 +135,7 @@ REVIEWED_APPLICATION_BLOBS = {
     "scripts/audit-release-manifest.json": "bcb787e744f9fc5fc201e8068d553c1543b35b86",
     "scripts/audit-release-dependencies.py": "47c7951e8db95ac666680bd2bf32fde3f1748c8e",
     "ops/vps/test_release_approval.py": "48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f",
-    "ops/vps/test_code_release.py": "8197a54e8ce84d7a2f2fa3f3343b5943494d0ffc",
+    "ops/vps/test_code_release.py": "8c32eaef83058229a828eeb9902d4e691338b9a8",
     "lib/scanner-manifest.ts": "028a2afad115457be51346042067dcf82b07b453",
     "lib/rsvp-analytics.ts": "fde1d556cacef67729a338d85773f0336a85486d",
     "app/privacy/page.tsx": "199d44965922d56d9d1f53947ecaf0aa72a8dc0a",
