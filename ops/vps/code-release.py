@@ -566,8 +566,8 @@ WORKSPACE_APPLICATION_BLOBS = {
 # application evidence can never select or supply its own trusted controls C.
 YORKE_RELEASE_BASELINE = "c2058fb39bb6d9a93ef622aad08b1e9e2d22488f"
 YORKE_BASE_TREE = "c85475e968e1cecbd6637fe77710b032dee0ecbd"
-YORKE_APP_SNAPSHOT = "12a302faa11ec18a63a5d4893ef909b6e6cd7b91"
-YORKE_APP_TREE = "ad4718a3df3ec9a7ad4c4e017c07cfb399857de4"
+YORKE_APP_SNAPSHOT = "0babbc74b0a8d2b931289441c73aa93b36e1e52c"
+YORKE_APP_TREE = "28f678b6a2a7812d2d4c11240b04baace9a1ea48"
 YORKE_PACKAGE_BLOBS = ("ee7d351bd660b932e9870b6d542da4426386eca5",
                        "e4f736b3204696fceab081989f1cdddfd5b1bc5e")
 YORKE_LOCK_BLOB = "47a4eaca5743b768598462d8b66a2ef49a442b4e"
@@ -600,6 +600,7 @@ YORKE_APPLICATION_BLOBS = {
     "tests/host-brand-migration.test.mjs": "20ced243776db46b865857ca9e9c97843d113afc",
     "tests/host-brand-preview-package.test.mjs": "515c1c87414fabaf287ab84c61f4cba8ed0ff7b6",
     "tests/host-brand-rendering.test.mjs": "67bc345faa8eeed83486243fe16df088ced9b045",
+    "tests/staff-owner-integrity.test.ts": "c4848f22880124500be8627497fc5df223bcb5d2",
 }
 
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
