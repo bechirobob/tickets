@@ -2482,6 +2482,14 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
     def test_complete_reviewed_application_manifest_matches_candidate_source(self):
         pins = release.REVIEWED_APPLICATION_BLOBS
         controls_only = controls_only_checkout(self.root)
+        yorke_base = exact_application_checkout(self.root, release.YORKE_RELEASE_BASELINE,
+                                                release.YORKE_BASE_TREE, release.YORKE_CONTROL_FILES)
+        yorke_app = exact_application_checkout(self.root, release.YORKE_APP_SNAPSHOT,
+                                               release.YORKE_APP_TREE, release.YORKE_CONTROL_FILES)
+        if yorke_base or yorke_app:
+            pins = {**pins, **release.WORKSPACE_APPLICATION_BLOBS}
+            if yorke_app:
+                pins = {**pins, **release.YORKE_APPLICATION_BLOBS}
         if exact_application_checkout(self.root, release.WORKSPACE_APP_SNAPSHOT,
                                       release.WORKSPACE_APP_TREE, release.WORKSPACE_CONTROL_FILES):
             pins = {**pins, **release.WORKSPACE_APPLICATION_BLOBS}
@@ -2516,6 +2524,11 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             self.assertTrue((self.root / "package.json").is_file())
             self.assertTrue((self.root / "app").is_dir())
         for name, digest in pins.items():
+            if name in release.YORKE_CONTROL_FILES and (
+                    yorke_base or yorke_app or not (self.root / "package.json").exists()):
+                # These are the independently evolving controls under test, not
+                # application evidence. Deployment checks their exact C entries.
+                continue
             content = application_bytes(self.root, name, controls_only=controls_only)
             actual = release.hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
             self.assertEqual(actual, digest, name)
@@ -2527,8 +2540,10 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                                                        release.WORKSPACE_CONTROL_FILES)
                             for revision, tree in (
                                 (release.WORKSPACE_RELEASE_BASELINE, release.WORKSPACE_BASE_TREE),
-                                (release.WORKSPACE_APP_SNAPSHOT, release.WORKSPACE_APP_TREE))),
-                        "Checkout is neither the complete base nor workspace application family")
+                                (release.WORKSPACE_APP_SNAPSHOT, release.WORKSPACE_APP_TREE),
+                                (release.YORKE_RELEASE_BASELINE, release.YORKE_BASE_TREE),
+                                (release.YORKE_APP_SNAPSHOT, release.YORKE_APP_TREE))),
+                        "Checkout is not a complete reviewed base, workspace or Yorke application family")
 
     def test_candidate_is_one_read_only_job_with_every_browser_gate(self):
         text = (self.root / ".github/workflows/candidate-checks.yml").read_text()
@@ -4038,6 +4053,715 @@ class WorkspaceSchemaDeploymentTests(DeploymentFixture):
         self.assertTrue((self.deployment.snapshot / 'database/before.sqlite').is_file())
         # This proves schema/data compatibility, not old-application delivery of
         # the newly captured owner work. Keep pending work for forward recovery.
+
+
+
+class HostBrandIdentityMigrationTests(unittest.TestCase):
+    # Embedded immutable application SQL also supports the staged-control layout.
+    SQL = (b"-- Public brand presentation only. Preserve personal identity, verification,\n"
+           b"-- event associations, organizer credits, permissions and financial records.\n"
+           b"ALTER TABLE hosts ADD COLUMN brand_name TEXT;\n"
+           b"ALTER TABLE hosts ADD COLUMN brand_logo_url TEXT;\n\n"
+           b"UPDATE hosts\n"
+           b"SET brand_name = 'The Yorke Way', brand_logo_url = '/hosts/the-yorke-way.svg',\n"
+           b"    updated_at = CURRENT_TIMESTAMP\n"
+           b"WHERE id = 'host:kofi-bills' AND slug = 'kofi-bills';\n")
+    # Result of the original hosts CREATE in 0011 and the three ALTERs in 0045.
+    BEFORE_SQL = "CREATE TABLE `hosts` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`slug` text NOT NULL,\n\t`name` text NOT NULL,\n\t`bio` text NOT NULL,\n\t`city` text DEFAULT 'Accra' NOT NULL,\n\t`verification_status` text DEFAULT 'reviewed' NOT NULL,\n\t`profile_image_url` text,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n, full_name TEXT, instagram_handle TEXT, snapchat_handle TEXT)"
+
+    @staticmethod
+    def seed(db):
+        db.execute(HostBrandIdentityMigrationTests.BEFORE_SQL)
+        db.executescript("""
+            CREATE UNIQUE INDEX `hosts_slug_unique` ON `hosts` (`slug`);
+            INSERT INTO hosts VALUES ('host:kofi-bills','kofi-bills','Kofi Bills','Personal bio','Accra',
+                'verified','/hosts/kofi-bills.webp','created','before','Henry Yorke','mr.yorke','kofi_billz123');
+            INSERT INTO hosts VALUES ('host:other','other','Other host','Other biography','Cape Coast',
+                'reviewed','/hosts/other.webp','other-created','other-updated','Other Person',NULL,NULL);
+            CREATE TABLE events(id TEXT PRIMARY KEY, title TEXT, flyer TEXT, credit TEXT);
+            INSERT INTO events VALUES('event','Original title','/events/flyer.webp','Club House Inc');
+            CREATE TABLE event_hosts(event_slug TEXT REFERENCES events(id),host_id TEXT REFERENCES hosts(id),role TEXT,is_primary INTEGER);
+            INSERT INTO event_hosts VALUES('event','host:kofi-bills','Host',0);
+            INSERT INTO event_hosts VALUES('event','host:other','Organiser',1);
+            CREATE TABLE staff(id TEXT PRIMARY KEY,role TEXT);
+            INSERT INTO staff VALUES('staff','scanner');
+            CREATE TABLE orders(id TEXT PRIMARY KEY,status TEXT);
+            INSERT INTO orders VALUES('preserved-order','paid');
+            CREATE TABLE preserved_payload(id TEXT PRIMARY KEY,order_id TEXT REFERENCES orders(id),payload BLOB);
+            INSERT INTO preserved_payload VALUES('private','preserved-order',x'00ff1122');
+        """)
+        for statement in HostVerificationMigrationTests.WRITER_GUARD_STATEMENTS:
+            db.execute(statement)
+        db.execute("UPDATE _bct_handover_state SET transfer_id='preserved-original-transfer'")
+        db.commit()
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.specification = release.migration_plan([release.HOST_BRAND_IDENTITY_PATH])[0]
+        self.use_database('initial')
+
+    def use_database(self, name):
+        self.database = self.root / (name + '.sqlite')
+        self.staging = self.root / (name + '-backup')
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.seed(db)
+        self.database.chmod(0o600)
+
+    def migrate(self, plan=None):
+        return release.migrate_database(self.database, self.staging,
+            [(self.specification, self.SQL)] if plan is None else plan)
+
+    def snapshot(self, path=None):
+        with release.closing(release.sqlite3.connect(path or self.database)) as db:
+            schema = release.schema_rows(db)
+            return schema, {row[1]: db.execute('SELECT * FROM "' + row[1] + '" ORDER BY rowid').fetchall()
+                            for row in schema if row[0] == 'table'}
+
+    def test_exact_transition_preserves_every_other_table_and_personal_field(self):
+        before_schema, before = self.snapshot()
+        result = self.migrate()
+        schema, after = self.snapshot()
+        self.assertEqual(result['publicHostBrand'], {'hostId': 'host:kofi-bills', 'changed': True,
+                                                   'preservedOnCodeRollback': True})
+        self.assertTrue(result['created'])
+        self.assertTrue(result['tablesPreservedOnRollback'])
+        self.assertEqual(result['schemaSha256'], self.specification['schemaSha256'])
+        self.assertEqual(result['migrations'], [self.specification])
+        self.assertEqual([r for r in schema if r[1] != 'hosts'], [r for r in before_schema if r[1] != 'hosts'])
+        self.assertEqual({k: v for k, v in after.items() if k != 'hosts'},
+                         {k: v for k, v in before.items() if k != 'hosts'})
+        self.assertEqual(after['hosts'][0][:8] + after['hosts'][0][9:12],
+                         before['hosts'][0][:8] + before['hosts'][0][9:12])
+        self.assertEqual(after['hosts'][0][-2:], ('The Yorke Way', '/hosts/the-yorke-way.svg'))
+        self.assertRegex(after['hosts'][0][8], r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$')
+        self.assertEqual(after['hosts'][1], before['hosts'][1] + (None, None))
+        self.assertEqual(self.snapshot(self.staging / 'before.sqlite'), (before_schema, before))
+        self.assertEqual(stat.S_IMODE(self.staging.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE((self.staging / 'before.sqlite').stat().st_mode), 0o600)
+        self.assertEqual(result['backupSha256'], release.digest_file(self.staging / 'before.sqlite'))
+
+    def test_exact_replay_preserves_timestamps_and_later_unrelated_host_brand(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE hosts SET brand_name='Other brand',brand_logo_url='/other.svg',updated_at='later' WHERE id='host:other'")
+            db.execute("UPDATE hosts SET name='Current personal name',updated_at='later-personal-edit' WHERE id='host:kofi-bills'")
+        before = self.snapshot()
+        self.staging = self.root / 'replay'
+        result = self.migrate()
+        self.assertFalse(result['created'])
+        self.assertFalse(result['publicHostBrand']['changed'])
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.snapshot(self.staging / 'before.sqlite'), before)
+
+    def test_missing_mismatched_or_ambiguous_host_identity_fails_before_ddl(self):
+        cases = (
+            "DELETE FROM event_hosts WHERE host_id='host:kofi-bills'; DELETE FROM hosts WHERE id='host:kofi-bills'",
+            "UPDATE hosts SET slug='different' WHERE id='host:kofi-bills'",
+            "UPDATE hosts SET id='host:different' WHERE slug='kofi-bills'",
+            "UPDATE hosts SET slug='different' WHERE id='host:kofi-bills'; UPDATE hosts SET slug='kofi-bills' WHERE id='host:other'",
+        )
+        for index, sql in enumerate(cases):
+            with self.subTest(sql=sql):
+                self.use_database('identity-' + str(index))
+                with release.closing(release.sqlite3.connect(self.database)) as db:
+                    db.executescript(sql)
+                before = self.snapshot()
+                with self.assertRaises((release.ReleaseError, release.sqlite3.IntegrityError)):
+                    self.migrate()
+                self.assertEqual(self.snapshot(), before)
+
+    def test_partial_and_drifted_schema_fail_closed(self):
+        for index, sql in enumerate((
+            'ALTER TABLE hosts ADD COLUMN brand_name TEXT',
+            'ALTER TABLE hosts ADD COLUMN brand_logo_url TEXT',
+            'ALTER TABLE hosts ADD COLUMN brand_name INTEGER; ALTER TABLE hosts ADD COLUMN brand_logo_url TEXT',
+            'ALTER TABLE hosts ADD COLUMN brand_name TEXT; ALTER TABLE hosts ADD COLUMN brand_logo_url TEXT NOT NULL DEFAULT ""',
+            'ALTER TABLE hosts ADD COLUMN unrelated TEXT',
+            'ALTER TABLE hosts RENAME COLUMN full_name TO changed_name',
+        )):
+            with self.subTest(sql=sql):
+                self.use_database('schema-' + str(index))
+                with release.closing(release.sqlite3.connect(self.database)) as db:
+                    db.executescript(sql)
+                before = self.snapshot()
+                with self.assertRaisesRegex(release.ReleaseError, 'schema is partial'):
+                    self.migrate()
+                self.assertEqual(self.snapshot(), before)
+
+    def test_complete_schema_with_partial_or_drifted_brand_is_not_repaired(self):
+        for index, values in enumerate(((None, None), ('The Yorke Way', None), (None, '/hosts/the-yorke-way.svg'),
+                                         ('Another brand', '/hosts/the-yorke-way.svg'), ('The Yorke Way', '/different.svg'))):
+            with self.subTest(values=values):
+                self.use_database('brand-' + str(index))
+                self.migrate()
+                with release.closing(release.sqlite3.connect(self.database)) as db, db:
+                    db.execute("UPDATE hosts SET brand_name=?,brand_logo_url=? WHERE id='host:kofi-bills'", values)
+                before = self.snapshot()
+                self.staging = self.root / ('drifted-' + str(index))
+                with self.assertRaisesRegex(release.ReleaseError, 'reviewed replay state'):
+                    self.migrate()
+                self.assertEqual(self.snapshot(), before)
+
+    def test_all_original_writer_guards_and_active_state_are_required_even_on_replay(self):
+        cases = (
+            'DROP TRIGGER _bct_guard_hosts_insert',
+            'DROP TRIGGER _bct_guard_hosts_update',
+            'DROP TRIGGER _bct_guard_hosts_delete',
+            'DROP TRIGGER _bct_guard_hosts_update; ' + HostVerificationMigrationTests.WRITER_GUARD_STATEMENTS[3].replace('WHERE id=1)=1', 'WHERE id=1)=0'),
+            "CREATE TRIGGER unsafe AFTER UPDATE ON hosts BEGIN UPDATE staff SET role='owner'; END",
+            'ALTER TABLE _bct_handover_state ADD COLUMN unexpected TEXT',
+            'DELETE FROM _bct_handover_state',
+            'DROP TABLE _bct_handover_state',
+            'UPDATE _bct_handover_state SET frozen=1',
+        )
+        for replay in (False, True):
+            for index, sql in enumerate(cases):
+                with self.subTest(replay=replay, sql=sql):
+                    self.use_database('guard-' + str(replay) + '-' + str(index))
+                    if replay:
+                        self.migrate()
+                        self.staging = self.root / ('replay-guard-' + str(index))
+                    with release.closing(release.sqlite3.connect(self.database)) as db:
+                        db.executescript(sql)
+                    before = self.snapshot()
+                    with self.assertRaises(release.ReleaseError):
+                        self.migrate()
+                    self.assertEqual(self.snapshot(), before)
+
+    def test_temporary_trigger_is_rejected(self):
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            db.execute("CREATE TEMP TRIGGER unsafe AFTER UPDATE ON main.hosts BEGIN UPDATE staff SET role='owner'; END")
+            db.execute('BEGIN IMMEDIATE')
+            statements, _ = release.reviewed_migration(self.SQL, self.specification)
+            with self.assertRaisesRegex(release.ReleaseError, 'hosts triggers'):
+                release.apply_host_brand_identity(db, self.specification, statements)
+            db.rollback()
+
+    def test_exact_sql_spec_and_isolated_plan_are_mandatory(self):
+        for raw, spec in ((self.SQL + b'\n', self.specification),
+                          (self.SQL.replace(b"AND slug = 'kofi-bills'", b'OR 1=1'), self.specification),
+                          (self.SQL.replace(b'The Yorke Way', b'Other Brand'), self.specification),
+                          (self.SQL + b'DELETE FROM staff;', self.specification),
+                          (self.SQL, dict(self.specification, path='drizzle/unreviewed.sql')),
+                          (self.SQL, dict(self.specification, kind='arbitrary-update')),
+                          (self.SQL, dict(self.specification, sha256='a' * 64)),
+                          (self.SQL, dict(self.specification, blob='a' * 40)),
+                          (self.SQL, dict(self.specification, beforeSchemaSha256='a' * 64)),
+                          (self.SQL, dict(self.specification, schemaSha256='a' * 64)),
+                          (self.SQL, dict(self.specification, extra='unexpected'))):
+            with self.subTest(raw=raw, spec=spec), self.assertRaises(release.ReleaseError):
+                self.migrate([(spec, raw)])
+        brand = (self.specification, self.SQL)
+        archive = (release.migration_plan([release.RECOVERABLE_ARCHIVE_PATH])[0], WorkspaceSchemaMigrationTests.ARCHIVE_SQL)
+        for plan in ([brand, brand], [archive, brand], [brand, archive],
+                     [brand, (AdditiveMigrationTests.specification(), AdditiveMigrationTests.SQL)]):
+            with self.subTest(plan=plan), self.assertRaisesRegex(release.ReleaseError, 'only migration'):
+                self.migrate(plan)
+        self.assertFalse(self.staging.exists())
+
+    def test_generic_additive_grammar_still_rejects_alter_update_and_trigger_replacement(self):
+        for raw in (self.SQL, b'ALTER TABLE hosts ADD COLUMN brand_name TEXT;', b'UPDATE hosts SET name="changed";',
+                    b'DROP TRIGGER _bct_guard_hosts_update;'):
+            spec = {'path': 'drizzle/unreviewed.sql', 'sha256': release.hashlib.sha256(raw).hexdigest(), 'tables': []}
+            with self.subTest(raw=raw), self.assertRaisesRegex(release.ReleaseError, 'Only reviewed additive'):
+                release.reviewed_migration(raw, spec)
+
+    def test_authorizer_rejects_unrelated_columns_tables_and_control_writes(self):
+        original = release.reviewed_migration
+        for index, sql in enumerate(("UPDATE hosts SET name='wrong' WHERE id='host:kofi-bills'",
+                                     "UPDATE hosts SET verification_status='revoked' WHERE id='host:kofi-bills'",
+                                     "UPDATE staff SET role='owner'", "UPDATE orders SET status='refunded'",
+                                     'UPDATE _bct_handover_state SET frozen=1', 'DELETE FROM hosts')):
+            self.use_database('authorizer-' + str(index))
+            before = self.snapshot()
+            def inject_update(raw, spec):
+                statements, rows = original(raw, spec)
+                return statements[:2] + [sql], rows
+            with self.subTest(sql=sql), patch.object(release, 'reviewed_migration', side_effect=inject_update):
+                with self.assertRaises(release.sqlite3.DatabaseError):
+                    self.migrate()
+            self.assertEqual(self.snapshot(), before)
+
+    def test_postconditions_reject_wrong_rows_wrong_brand_or_timestamp_and_ddl_side_effects(self):
+        original = release.reviewed_migration
+        cases = (
+            (2, "UPDATE hosts SET brand_name='The Yorke Way',brand_logo_url='/hosts/the-yorke-way.svg',updated_at=CURRENT_TIMESTAMP"),
+            (2, "UPDATE hosts SET brand_name='Wrong brand',brand_logo_url='/hosts/the-yorke-way.svg',updated_at=CURRENT_TIMESTAMP WHERE id='host:kofi-bills'"),
+            (2, "UPDATE hosts SET brand_name='The Yorke Way',brand_logo_url='/hosts/the-yorke-way.svg',updated_at='before' WHERE id='host:kofi-bills'"),
+            (2, "UPDATE hosts SET brand_name='The Yorke Way',brand_logo_url='/hosts/the-yorke-way.svg',updated_at=CURRENT_TIMESTAMP WHERE id='host:other'"),
+            (1, "UPDATE orders SET status='rewritten'"),
+            (1, 'DROP TRIGGER _bct_guard_hosts_update'),
+        )
+        for index, (position, sql) in enumerate(cases):
+            self.use_database('postcondition-' + str(index))
+            before = self.snapshot()
+            def inject_statement(raw, spec):
+                statements, rows = original(raw, spec)
+                statements[position] = sql
+                return statements, rows
+            with self.subTest(sql=sql), patch.object(release, 'reviewed_migration', side_effect=inject_statement):
+                with self.assertRaises(release.ReleaseError):
+                    self.migrate()
+            self.assertEqual(self.snapshot(), before)
+
+    def test_authorizer_blocks_foreign_key_cascade_into_unrelated_data(self):
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            db.executescript("""
+                CREATE UNIQUE INDEX hosts_updated_unique ON hosts(updated_at);
+                CREATE TABLE preserved_host_link(id TEXT PRIMARY KEY, updated TEXT REFERENCES hosts(updated_at) ON UPDATE CASCADE);
+                INSERT INTO preserved_host_link VALUES('link','before');
+            """)
+        before = self.snapshot()
+        with self.assertRaises(release.sqlite3.DatabaseError):
+            self.migrate()
+        self.assertEqual(self.snapshot(), before)
+
+    def test_transaction_and_complete_statement_inventory_are_required(self):
+        statements, _ = release.reviewed_migration(self.SQL, self.specification)
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            with self.assertRaisesRegex(release.ReleaseError, 'migration transaction'):
+                release.apply_host_brand_identity(db, self.specification, statements)
+            db.execute('BEGIN IMMEDIATE')
+            for incomplete in (statements[:2], statements + ['DELETE FROM orders']):
+                with self.subTest(statements=incomplete), self.assertRaisesRegex(release.ReleaseError, 'exactly three'):
+                    release.apply_host_brand_identity(db, self.specification, incomplete)
+            db.rollback()
+
+    def test_failure_after_either_ddl_and_after_update_rolls_back_the_entire_transition(self):
+        original = release.reviewed_migration
+        for stop in (1, 2):
+            self.use_database('failure-' + str(stop))
+            before = self.snapshot()
+            def inject_failure(raw, spec):
+                statements, rows = original(raw, spec)
+                statements[stop] = 'INSERT INTO missing_table VALUES(1)'
+                return statements, rows
+            with self.subTest(stop=stop), patch.object(release, 'reviewed_migration', side_effect=inject_failure):
+                with self.assertRaises(release.sqlite3.DatabaseError):
+                    self.migrate()
+            self.assertEqual(self.snapshot(), before)
+            self.assertEqual(self.snapshot(self.staging / 'before.sqlite'), before)
+            self.assertEqual(release.strict_json((self.staging / 'result.json').read_bytes())['phase'], 'backed-up')
+        self.use_database('writer-postcondition')
+        before = self.snapshot()
+        original_writer = release.host_writer_state
+        calls = [0]
+        def changed_writer(db):
+            result = original_writer(db)
+            calls[0] += 1
+            return [(1, 0, 'wrong-transfer')] if calls[0] == 2 else result
+        with patch.object(release, 'host_writer_state', side_effect=changed_writer):
+            with self.assertRaisesRegex(release.ReleaseError, 'preserved handover control'):
+                self.migrate()
+        self.assertEqual(self.snapshot(), before)
+
+    def test_pending_transition_is_invisible_and_competing_writes_cannot_interleave(self):
+        before = self.snapshot()
+        original = release.apply_host_brand_identity
+        def observe(db, spec, statements):
+            result = original(db, spec, statements)
+            self.assertEqual(self.snapshot(), before)
+            with release.closing(release.sqlite3.connect(self.database, timeout=0)) as competing:
+                with self.assertRaisesRegex(release.sqlite3.OperationalError, 'locked'):
+                    competing.execute("INSERT INTO orders VALUES('concurrent','paid')")
+            return result
+        with patch.object(release, 'apply_host_brand_identity', side_effect=observe):
+            self.migrate()
+
+    def test_prelock_customer_writes_survive_and_a_prelock_freeze_is_obeyed(self):
+        original = release.write_json
+        for freeze in (False, True):
+            self.use_database('prelock-' + str(freeze))
+            def before_lock(path, value):
+                original(path, value)
+                if value.get('phase') == 'backed-up':
+                    with release.closing(release.sqlite3.connect(self.database)) as db, db:
+                        db.execute("INSERT INTO orders VALUES('concurrent-order','paid')")
+                        db.execute("UPDATE hosts SET bio='Concurrent personal edit' WHERE id='host:kofi-bills'")
+                        if freeze:
+                            db.execute('UPDATE _bct_handover_state SET frozen=1')
+            with patch.object(release, 'write_json', side_effect=before_lock):
+                if freeze:
+                    with self.assertRaisesRegex(release.ReleaseError, 'unfrozen'):
+                        self.migrate()
+                else:
+                    self.migrate()
+            schema, rows = self.snapshot()
+            self.assertEqual(rows['hosts'][0][3], 'Concurrent personal edit')
+            self.assertEqual(len(rows['orders']), 2)
+            self.assertEqual(len(self.snapshot(self.staging / 'before.sqlite')[1]['orders']), 1)
+            self.assertEqual('brand_name TEXT' in next(r[3] for r in schema if r[1] == 'hosts'), not freeze)
+
+    def test_postcommit_evidence_failure_has_safe_byte_preserving_replay(self):
+        original = release.write_json
+        def fail_verified(path, value):
+            if value.get('phase') == 'verified':
+                raise OSError('simulated evidence failure')
+            return original(path, value)
+        with patch.object(release, 'write_json', side_effect=fail_verified):
+            with self.assertRaisesRegex(OSError, 'evidence failure'):
+                self.migrate()
+        before = self.snapshot()
+        self.staging = self.root / 'recovery-backup'
+        self.assertFalse(self.migrate()['created'])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_all_three_original_writer_fences_remain_effective_after_transition(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute('UPDATE _bct_handover_state SET frozen=1')
+            for sql in ("UPDATE hosts SET brand_name='blocked' WHERE id='host:kofi-bills'",
+                        "DELETE FROM hosts WHERE id='host:other'",
+                        "INSERT INTO hosts(id,slug,name,bio,created_at,updated_at) VALUES('new','new','New','Bio','now','now')"):
+                with self.subTest(sql=sql), self.assertRaisesRegex(release.sqlite3.IntegrityError, 'Source writer is paused'):
+                    db.execute(sql)
+
+    def test_fixture_matches_original_schema_source_and_exact_brand_sql_when_available(self):
+        root = Path(__file__).resolve().parents[2]
+        if (root / 'drizzle/0011_unique_mantis.sql').is_file():
+            with release.closing(release.sqlite3.connect(':memory:')) as db:
+                source = (root / 'drizzle/0011_unique_mantis.sql').read_text()
+                db.execute(release.re.search(r'CREATE TABLE `hosts` \([\s\S]*?\n\);', source).group())
+                source = (root / 'drizzle/0045_kofi_bills_host.sql').read_text()
+                for statement in release.re.findall(r'ALTER TABLE hosts[^;]+;', source):
+                    db.execute(statement)
+                self.assertEqual(db.execute("SELECT sql FROM sqlite_schema WHERE name='hosts'").fetchone()[0], self.BEFORE_SQL)
+        if (root / release.HOST_BRAND_IDENTITY_PATH).is_file():
+            self.assertEqual((root / release.HOST_BRAND_IDENTITY_PATH).read_bytes(), self.SQL)
+        statements, rows = release.reviewed_migration(self.SQL, self.specification)
+        self.assertEqual(len(statements), 3)
+        self.assertEqual(rows, [])
+        with release.closing(release.sqlite3.connect(':memory:')) as db:
+            db.execute(self.BEFORE_SQL)
+            self.assertEqual(release.schema_digest(release.schema_rows(db)), self.specification['beforeSchemaSha256'])
+            for statement in statements[:2]:
+                db.execute(statement)
+            self.assertEqual(release.schema_digest(release.schema_rows(db)), self.specification['schemaSha256'])
+
+
+class HostBrandIdentityDeploymentTests(DeploymentFixture):
+    def prepare_brand(self, tampered=False):
+        state = self.root / 'var/lib/becore-tickets'
+        state.chmod(0o700)
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db:
+            HostBrandIdentityMigrationTests.seed(db)
+        (state / 'tickets.sqlite').chmod(0o600)
+        member = tarfile.TarInfo('migrations/' + Path(release.HOST_BRAND_IDENTITY_PATH).name)
+        member.mode = 0o644
+        self.make_archive(extra=(member, HostBrandIdentityMigrationTests.SQL + (b'\n' if tampered else b'')))
+        self.proof['changedFiles'] = [release.HOST_BRAND_IDENTITY_PATH]
+        self.proof['migrations'] = release.migration_plan(self.proof['changedFiles'])
+        self.refresh_digests()
+        return state
+
+    def test_activation_records_exact_migration_and_private_rollback_backup(self):
+        self.prepare_brand()
+        self.assertTrue(self.deployment.transact()['dataMigration'])
+        record = release.strict_json(self.deployment.journal.read_bytes())['lastCodeRelease']
+        self.assertEqual(record['reviewedDataMigrations'], self.proof['migrations'])
+        self.assertEqual(record['databaseBackupSha256'], release.digest_file(self.deployment.snapshot / 'database/before.sqlite'))
+
+    def test_tampered_sql_prevents_service_restart_and_schema_change(self):
+        state = self.prepare_brand(tampered=True)
+        with self.assertRaises(release.ReleaseError):
+            self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assert_restored()
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db:
+            self.assertNotIn('brand_name', [r[1] for r in db.execute('PRAGMA table_xinfo(hosts)')])
+
+    def test_code_rollback_keeps_nullable_brand_fields_and_postactivation_customer_data(self):
+        state = self.prepare_brand()
+        self.system.fail = 'local'
+        restart = self.system.restart
+        def activated():
+            restart()
+            if self.system.revision == NEW:
+                with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+                    self.assertEqual(db.execute("SELECT brand_name,brand_logo_url FROM hosts WHERE id='host:kofi-bills'").fetchone(),
+                                     ('The Yorke Way', '/hosts/the-yorke-way.svg'))
+                    db.execute("INSERT INTO orders VALUES('new-paid-order','paid')")
+                    db.execute("UPDATE hosts SET bio='Later biography' WHERE id='host:kofi-bills'")
+        self.system.restart = activated
+        with self.assertRaisesRegex(release.ReleaseError, 'previous release restored'):
+            self.deployment.transact()
+        self.assert_restored()
+        self.assertEqual(self.system.revision, OLD)
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM orders').fetchone(), (2,))
+            self.assertEqual(db.execute("SELECT bio,brand_name FROM hosts WHERE id='host:kofi-bills'").fetchone(),
+                             ('Later biography', 'The Yorke Way'))
+            # The old runtime's explicit-column writes retain nullable defaults.
+            db.execute("UPDATE hosts SET name='Old runtime edit' WHERE id='host:kofi-bills'")
+            db.execute("INSERT INTO hosts(id,slug,name,bio,created_at,updated_at) VALUES('new','new','New','Bio','now','now')")
+            self.assertEqual(db.execute("SELECT brand_name,brand_logo_url FROM hosts WHERE id='new'").fetchone(), (None, None))
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+        with release.closing(release.sqlite3.connect(self.deployment.snapshot / 'database/before.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM orders').fetchone(), (1,))
+            self.assertNotIn('brand_name', [r[1] for r in db.execute('PRAGMA table_xinfo(hosts)')])
+
+
+class YorkeSourceAdmissionTests(unittest.TestCase):
+    """Real Git: independent controls C and copied snapshot S application bytes."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git("init", "-q")
+        self.git("config", "user.name", "Yorke source tests")
+        self.git("config", "user.email", "tests@example.invalid")
+        self.write("app/source.ts", "baseline application\n")
+        self.write("ops/vps/code-release.py", "baseline operator\n")
+        self.write("ops/vps/test_code_release.py", "baseline tests\n")
+        self.write("scripts/audit-release-manifest.json", "frozen expired exception\n")
+        self.write("package.json", '{"scripts":{"test:ui":"old"},"dependencies":{"same":"1"}}\n')
+        self.write("package-lock.json", '{"locked":"unchanged"}\n')
+        self.base = self.commit()
+        self.write("app/source.ts", "reviewed Yorke application\n")
+        self.write("package.json", '{"scripts":{"test:ui":"new"},"dependencies":{"same":"1"}}\n')
+        self.snapshot = self.commit()
+        self.pins = {name: self.git("rev-parse", self.snapshot + ":" + name)
+                     for name in ("app/source.ts", "package.json")}
+        self.git("checkout", "-q", self.base)
+        self.write("ops/vps/code-release.py", "independently reviewed operator\n")
+        self.write("ops/vps/test_code_release.py", "independently reviewed tests\n")
+        self.control = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", self.control)
+        for name in self.pins:
+            self.write(name, self.git("show", self.snapshot + ":" + name) + "\n")
+        self.candidate = self.commit()
+        settings = {
+            "YORKE_RELEASE_BASELINE": self.base,
+            "YORKE_BASE_TREE": self.git("rev-parse", self.base + "^{tree}"),
+            "YORKE_APP_SNAPSHOT": self.snapshot,
+            "YORKE_APP_TREE": self.git("rev-parse", self.snapshot + "^{tree}"),
+            "YORKE_APPLICATION_BLOBS": self.pins,
+            "YORKE_MIGRATION_FILES": set(),
+            "YORKE_PACKAGE_BLOBS": tuple(self.git("rev-parse", ref + ":package.json")
+                                             for ref in (self.base, self.snapshot)),
+            "YORKE_LOCK_BLOB": self.git("rev-parse", self.base + ":package-lock.json"),
+            "__file__": str(self.root / "ops/vps/code-release.py"),
+        }
+        for name, value in settings.items():
+            patcher = patch.object(release, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        environment = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(raw)
+        return path
+
+    def commit(self):
+        self.git("add", "-A")
+        self.git("commit", "-qm", "isolated Yorke source admission")
+        return self.git("rev-parse", "HEAD")
+
+    def verify(self, candidate=None):
+        return release.vetted_changes(self.base, candidate or self.candidate)
+
+    def test_exact_snapshot_copy_onto_independent_controls_is_accepted(self):
+        self.assertEqual(set(self.verify()), set(self.pins) | release.YORKE_CONTROL_FILES)
+        self.assertNotEqual(self.snapshot, self.candidate)
+        result = subprocess.run(["git", "merge-base", "--is-ancestor", self.snapshot, self.candidate],
+                                capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_snapshot_tree_parent_and_complete_inventory_are_immutable(self):
+        for name, value in (("YORKE_BASE_TREE", "f" * 40),
+                            ("YORKE_APP_TREE", "f" * 40),
+                            ("YORKE_APPLICATION_BLOBS", {"app/source.ts": self.pins["app/source.ts"]})):
+            with self.subTest(field=name), patch.object(release, name, value):
+                with self.assertRaisesRegex(release.ReleaseError, "snapshot"):
+                    self.verify()
+        other = self.git("commit-tree", release.YORKE_APP_TREE, "-m", "unrelated snapshot")
+        with patch.object(release, "YORKE_APP_SNAPSHOT", other):
+            with self.assertRaisesRegex(release.ReleaseError, "snapshot"):
+                self.verify()
+
+    def test_application_mutation_missing_change_and_unrelated_paths_are_rejected(self):
+        for name, raw in (("app/source.ts", "unreviewed\n"),
+                          ("app/source.ts", "baseline application\n"),
+                          ("docs/unreviewed.md", "even ordinary documentation is outside this snapshot\n"),
+                          ("tests/unreviewed.test.ts", "unreviewed test\n"),
+                          ("scripts/audit-release-manifest.json", "revived exception\n"),
+                          (".github/workflows/deploy.yml", "unreviewed release workflow\n"),
+                          ("ops/vps/rollback.sh", "unreviewed rollback\n")):
+            with self.subTest(path=name, raw=raw):
+                self.git("reset", "--hard", self.candidate)
+                self.write(name, raw)
+                with self.assertRaisesRegex(release.ReleaseError, "exact application snapshot"):
+                    self.verify(self.commit())
+
+    def test_exact_new_application_blob_is_not_admitted_from_another_baseline(self):
+        with self.assertRaises(release.ReleaseError):
+            release.vetted_changes(self.control, self.candidate)
+
+    def test_candidate_cannot_select_itself_or_snapshot_as_control(self):
+        for trusted in (self.candidate, self.snapshot):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_control_must_be_merged_and_ancestor_of_the_candidate(self):
+        self.git("update-ref", "refs/remotes/origin/main", self.base)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+        self.git("update-ref", "refs/remotes/origin/main", self.control)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify(self.snapshot)
+
+    def test_changed_control_bytes_and_application_in_trusted_controls_fail_closed(self):
+        self.write("ops/vps/test_code_release.py", "candidate rewrote its tests\n")
+        with self.assertRaisesRegex(release.ReleaseError, "controls differ"):
+            self.verify(self.commit())
+        self.git("reset", "--hard", self.control)
+        self.write("app/source.ts", "changed inside controls\n")
+        changed_control = self.commit()
+        for name in self.pins:
+            self.write(name, self.git("show", self.snapshot + ":" + name) + "\n")
+        candidate = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", changed_control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed_control):
+            with self.assertRaisesRegex(release.ReleaseError, "two reviewed control files"):
+                self.verify(candidate)
+
+    def test_deletion_symlink_and_mode_changes_remain_rejected(self):
+        for kind in ("delete", "symlink", "executable"):
+            self.git("reset", "--hard", self.candidate)
+            path = self.root / "app/source.ts"
+            if kind == "executable":
+                path.chmod(0o755)
+            else:
+                path.unlink()
+                if kind == "symlink":
+                    path.symlink_to("../package.json")
+            with self.subTest(kind=kind), self.assertRaises(release.ReleaseError):
+                self.verify(self.commit())
+
+    def test_package_and_lock_each_require_the_exact_reviewed_blobs(self):
+        for field, value in (("YORKE_PACKAGE_BLOBS", ("f" * 40, release.YORKE_PACKAGE_BLOBS[1])),
+                             ("YORKE_PACKAGE_BLOBS", (release.YORKE_PACKAGE_BLOBS[0], "f" * 40)),
+                             ("YORKE_LOCK_BLOB", "f" * 40)):
+            with self.subTest(field=field, value=value), patch.object(release, field, value):
+                with self.assertRaisesRegex(release.ReleaseError, "unchanged dependency lock"):
+                    self.verify()
+        original = release.git
+        def non_script_change(*args):
+            raw = original(*args)
+            if args == ("show", self.candidate + ":package.json"):
+                return raw.replace('"same":"1"', '"same":"2"')
+            return raw
+        with patch.object(release, "git", side_effect=non_script_change):
+            with self.assertRaisesRegex(release.ReleaseError, "not scripts-only"):
+                self.verify()
+
+    def test_complete_application_byte_pins_are_checked_after_snapshot_selection(self):
+        with patch.dict(release.YORKE_APPLICATION_BLOBS, {"app/source.ts": "f" * 40}):
+            with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                self.verify()
+
+    def test_git_replacement_cannot_redirect_the_snapshot(self):
+        self.git("replace", self.snapshot, self.candidate)
+        self.assertEqual(set(self.verify()), set(self.pins) | release.YORKE_CONTROL_FILES)
+
+
+    def test_exact_checkout_family_requires_all_bytes_and_rejects_hidden_edits(self):
+        self.assertTrue(exact_application_checkout(self.root, self.snapshot,
+                                                  release.YORKE_APP_TREE, release.YORKE_CONTROL_FILES))
+        self.git("reset", "--hard", self.control)
+        self.assertTrue(exact_application_checkout(self.root, self.base,
+                                                  release.YORKE_BASE_TREE, release.YORKE_CONTROL_FILES))
+        self.assertFalse(exact_application_checkout(self.root, self.snapshot,
+                                                   release.YORKE_APP_TREE, release.YORKE_CONTROL_FILES))
+        self.git("reset", "--hard", self.candidate)
+        self.git("update-index", "--assume-unchanged", "app/source.ts")
+        self.write("app/source.ts", "hidden unreviewed application\n")
+        self.assertFalse(exact_application_checkout(self.root, self.snapshot,
+                                                   release.YORKE_APP_TREE, release.YORKE_CONTROL_FILES))
+
+    def test_only_one_changed_control_file_cannot_supply_the_control_baseline(self):
+        self.git("reset", "--hard", self.base)
+        self.write("ops/vps/code-release.py", "independently reviewed operator\n")
+        incomplete_control = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", incomplete_control)
+        for name in self.pins:
+            self.write(name, self.git("show", self.snapshot + ":" + name) + "\n")
+        candidate = self.commit()
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=incomplete_control):
+            with self.assertRaisesRegex(release.ReleaseError, "two reviewed control files"):
+                self.verify(candidate)
+
+    def test_bad_control_mode_cannot_be_repaired_only_in_the_candidate(self):
+        self.git("reset", "--hard", self.control)
+        (self.root / "ops/vps/test_code_release.py").chmod(0o755)
+        changed_control = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", changed_control)
+        (self.root / "ops/vps/test_code_release.py").chmod(0o644)
+        for name in self.pins:
+            self.write(name, self.git("show", self.snapshot + ":" + name) + "\n")
+        candidate = self.commit()
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed_control):
+            with self.assertRaisesRegex(release.ReleaseError, "mode changed"):
+                self.verify(candidate)
+
+    def test_audit_window_and_dependency_lock_cannot_change_in_either_tree(self):
+        for name in ("package-lock.json", "scripts/audit-release-manifest.json"):
+            with self.subTest(path=name):
+                self.git("reset", "--hard", self.candidate)
+                self.write(name, "unreviewed dependency or audit exception\n")
+                with self.assertRaisesRegex(release.ReleaseError, "exact application snapshot"):
+                    self.verify(self.commit())
+                self.git("reset", "--hard", self.control)
+                self.write(name, "unreviewed dependency or audit exception\n")
+                changed_control = self.commit()
+                self.git("update-ref", "refs/remotes/origin/main", changed_control)
+                for app in self.pins:
+                    self.write(app, self.git("show", self.snapshot + ":" + app) + "\n")
+                candidate = self.commit()
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed_control):
+                    with self.assertRaisesRegex(release.ReleaseError, "two reviewed control files"):
+                        self.verify(candidate)
+                self.git("update-ref", "refs/remotes/origin/main", self.control)
+
+
+class YorkeSourcePinTests(unittest.TestCase):
+    def test_yorke_scope_is_exact_and_separate_from_historical_workspace_pins(self):
+        self.assertEqual(release.YORKE_RELEASE_BASELINE, "c2058fb39bb6d9a93ef622aad08b1e9e2d22488f")
+        self.assertEqual(release.YORKE_BASE_TREE, "c85475e968e1cecbd6637fe77710b032dee0ecbd")
+        self.assertEqual(release.YORKE_APP_SNAPSHOT, "8db399bbce7c4f0919dae6a08ef5603d4edd323a")
+        self.assertEqual(release.YORKE_APP_TREE, "951dc7a778281b3ea3c5508d97a251f486412de5")
+        self.assertEqual(release.YORKE_PACKAGE_BLOBS,
+                         ("ee7d351bd660b932e9870b6d542da4426386eca5", "e4f736b3204696fceab081989f1cdddfd5b1bc5e"))
+        self.assertEqual(release.YORKE_LOCK_BLOB, "47a4eaca5743b768598462d8b66a2ef49a442b4e")
+        self.assertEqual(release.YORKE_CONTROL_FILES,
+                         {"ops/vps/code-release.py", "ops/vps/test_code_release.py"})
+        self.assertEqual(release.YORKE_MIGRATION_FILES, {"drizzle/0067_host_brand_identity.sql"})
+        self.assertEqual(len(release.YORKE_APPLICATION_BLOBS), 26)
+        self.assertFalse(set(release.YORKE_APPLICATION_BLOBS)
+                         & (release.YORKE_MIGRATION_FILES | release.YORKE_CONTROL_FILES))
+        self.assertEqual(release.YORKE_APPLICATION_BLOBS["package.json"], release.YORKE_PACKAGE_BLOBS[1])
+        self.assertEqual(release.WORKSPACE_RELEASE_BASELINE, "379be609c49e8994dbd6b5bf5883c9be733369b1")
+        self.assertEqual(release.WORKSPACE_APP_SNAPSHOT, "b0b1b4534584ab74b20c6923cf1e77bf189fa94d")
+        self.assertEqual(release.WORKSPACE_APP_TREE, "1f2533264b8e48d440ee6bbeeb3c503652e1f659")
+        self.assertEqual(release.WORKSPACE_APPLICATION_BLOBS["package.json"], release.YORKE_PACKAGE_BLOBS[0])
+        for path in ("scripts/audit-release-manifest.json", "scripts/audit-release-dependencies.py",
+                     ".github/workflows/tickets-code-release.yml", ".github/workflows/deploy.yml",
+                     "ops/vps/runtime_release.py", "package-lock.json", "mobile/package-lock.json"):
+            with self.subTest(path=path):
+                self.assertNotIn(path, release.YORKE_APPLICATION_BLOBS)
 
 
 if __name__ == "__main__":

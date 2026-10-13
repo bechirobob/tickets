@@ -561,9 +561,51 @@ WORKSPACE_APPLICATION_BLOBS = {
     "worker/the-room.ts": "f5849f1cd02093e6d752631b36267af336b31a14",
 }
 
+# One exact Yorke host-brand increment from the current reviewed live release.
+# S includes screenshot-only preview tooling, not publication approval. Its
+# application evidence can never select or supply its own trusted controls C.
+YORKE_RELEASE_BASELINE = "c2058fb39bb6d9a93ef622aad08b1e9e2d22488f"
+YORKE_BASE_TREE = "c85475e968e1cecbd6637fe77710b032dee0ecbd"
+YORKE_APP_SNAPSHOT = "8db399bbce7c4f0919dae6a08ef5603d4edd323a"
+YORKE_APP_TREE = "951dc7a778281b3ea3c5508d97a251f486412de5"
+YORKE_PACKAGE_BLOBS = ("ee7d351bd660b932e9870b6d542da4426386eca5",
+                       "e4f736b3204696fceab081989f1cdddfd5b1bc5e")
+YORKE_LOCK_BLOB = "47a4eaca5743b768598462d8b66a2ef49a442b4e"
+YORKE_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
+YORKE_MIGRATION_FILES = {"drizzle/0067_host_brand_identity.sql"}
+YORKE_APPLICATION_BLOBS = {
+    ".github/workflows/booking-consent-previews.yml": "b87e8c610416c82998849ee5e0eb04ea0ca0045f",
+    "app/api/public/events/route.ts": "291dc36b1731e74597d3fb623a2dae663f822a7d",
+    "app/event/[slug]/event-details.css": "2f4dc2c5702db50cbdd8ea1d4fb9bc1fe50880e4",
+    "app/event/[slug]/event-screen.tsx": "262aa6aec3b6e1ce4330b518a394db59d26a36c2",
+    "app/event/[slug]/page.tsx": "0d1abc7e826da826673c6a064695389d6f8cfe5c",
+    "app/host-brand.css": "fc69403abd5958a420407e863cf7683cb21c00c4",
+    "app/host-portrait.css": "5af605709e139d67e56b145b8122f3e7deec91d5",
+    "app/host-portrait.tsx": "72f4e6dd3314e058d571b1029e3a0313bd9927ab",
+    "app/hosts/[slug]/page.tsx": "4390e2525c64968d22c8e738021293d6fb9e4655",
+    "app/hosts/hosts.css": "1108b1c9f4a8e65813b547ed9b77f978eeac283f",
+    "app/hosts/page.tsx": "fe7afa2f2b702f85673b92849da7938266dfaff4",
+    "db/schema.ts": "530e44bb6c4145cd0daf7d1d90a900fbf1bddbc0",
+    "docs/audits/yorke-host-brand-20261013.md": "a92ed64916569f0ca76c9fc83547cddbaf607b28",
+    "lib/customer-screen.ts": "191a8e6f3b9a362f0319b647b61dbb53af137f76",
+    "lib/event-experience.ts": "6453bd7faee040a030e925c40cb7dd0baed00409",
+    "mobile/src/screen-catalogue.ts": "3b6c0195a091eb7912b4325c2f269e2dee107e02",
+    "mobile/tests/host-brand-catalogue.test.ts": "80788c4ebe3bb4b6c9389256e225c49eb08f4f73",
+    "package.json": "e4f736b3204696fceab081989f1cdddfd5b1bc5e",
+    "public/hosts/the-yorke-way.svg": "d6eecbcae7eb241017e13f19b19e35290ce99c59",
+    "scripts/package-host-brand-previews.mjs": "6160e04a05af0de48e925055c0f3dadd580ec8fc",
+    "tests/e2e/host-brand-identity.spec.ts": "6600e092d53629e4c8fc10d8629a96ecc9ccf7da",
+    "tests/e2e/host-profile.spec.ts": "ba099658c2866802b436855819bcefd39f50074b",
+    "tests/host-brand-identity.test.ts": "790c12145d885b6a869d68b7f000a7e408f4f90d",
+    "tests/host-brand-migration.test.mjs": "20ced243776db46b865857ca9e9c97843d113afc",
+    "tests/host-brand-preview-package.test.mjs": "ebf64927c184a1f7ddf4e25751dc2ac963279ba9",
+    "tests/host-brand-rendering.test.mjs": "67bc345faa8eeed83486243fe16df088ced9b045",
+}
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
+HOST_BRAND_IDENTITY_PATH = "drizzle/0067_host_brand_identity.sql"
 WORKSPACE_SCHEMA_PATHS = (RECOVERABLE_ARCHIVE_PATH, OWNER_NOTIFICATIONS_PATH)
 # The two outbox tables and three indexes from the exact admitted 0063 schema.
 # Neither these objects nor their existing rows may change when replacing its
@@ -589,6 +631,13 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    HOST_BRAND_IDENTITY_PATH: {
+        "kind": "kofi-bills-brand-identity",
+        "blob": "03341823c192635fdb84fa51cb56b7b742e84bd0",
+        "sha256": "a6b7efb3ab1b76dc8d4ff3c91e7f017d47fa3feaeff2ce9145ecb1673744bdec",
+        "beforeSchemaSha256": "c76fe019ff802163ec689af28f8c1bca103ea240eef41a4742be279fa3696c1c",
+        "schemaSha256": "e1811ef41723fb899fc8ad95535725cee147db09d4195fd13dcd56852cbb430c",
+    },
     RECOVERABLE_ARCHIVE_PATH: {
         "kind": "recoverable-event-archive",
         "blob": "28970c4f5b2dcd706357c60e1af9178201c57408",
@@ -940,8 +989,39 @@ def verify_changed_modes(expected, source):
             require(before_mode == after_mode, "Source file mode changed without review.")
 
 
+def reviewed_yorke_application_blobs(expected, source):
+    """Admit only reviewed S application bytes, with independently merged C."""
+    require(git("rev-parse", expected + "^{tree}") == YORKE_BASE_TREE
+            and git("rev-parse", YORKE_APP_SNAPSHOT + "^{tree}") == YORKE_APP_TREE
+            and git("rev-list", "--parents", "-n", "1", YORKE_APP_SNAPSHOT)
+            == YORKE_APP_SNAPSHOT + " " + expected,
+            "Yorke snapshot or its exact baseline changed.")
+    require(set(git("diff", "--name-only", expected, YORKE_APP_SNAPSHOT).splitlines())
+            == set(YORKE_APPLICATION_BLOBS) | YORKE_MIGRATION_FILES,
+            "Yorke snapshot differs from its complete reviewed inventory.")
+    verify_trusted_operator(source)
+    trusted = os.environ["BECORE_TRUSTED_BASE"]
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == YORKE_CONTROL_FILES,
+            "Yorke trusted controls must change only the two reviewed control files.")
+    verify_changed_modes(expected, trusted)
+    require(set(git("diff", "--name-only", YORKE_APP_SNAPSHOT, source).splitlines())
+            <= YORKE_CONTROL_FILES,
+            "Yorke candidate differs from the exact application snapshot.")
+    pins = {**REVIEWED_APPLICATION_BLOBS, **YORKE_APPLICATION_BLOBS}
+    for name in sorted(YORKE_CONTROL_FILES):
+        require(git("ls-tree", source, "--", name) == git("ls-tree", trusted, "--", name),
+                "Yorke candidate controls differ from the trusted baseline.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The SQL path still needs its separate reviewed migration entry/validator.
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
-    """Select the exact workspace tree only from its approved live baseline."""
+    """Select each exact application tree only from its approved live baseline."""
+    if expected == YORKE_RELEASE_BASELINE:
+        return reviewed_yorke_application_blobs(expected, source)
     if expected != WORKSPACE_RELEASE_BASELINE:
         return REVIEWED_APPLICATION_BLOBS
     require(git("rev-parse", expected + "^{tree}") == WORKSPACE_BASE_TREE
@@ -1038,6 +1118,20 @@ def vetted_changes(expected, source):
         after = strict_json(git("show", source + ":package.json"))
         before["scripts"] = after["scripts"]
         require(before == after, "Workspace package change is not scripts-only.")
+        return changed
+    if expected == YORKE_RELEASE_BASELINE:
+        # Exact test:repo/test:ui registrations only, with the same dependency
+        # lock. No dependency or historical audit-window exception is expanded.
+        require({"package.json", "package-lock.json"} & set(changed) == {"package.json"},
+                "Yorke release permits only the reviewed package scripts change.")
+        for revision, package in zip((expected, source), YORKE_PACKAGE_BLOBS):
+            require(git("rev-parse", revision + ":package.json") == package
+                    and git("rev-parse", revision + ":package-lock.json") == YORKE_LOCK_BLOB,
+                    "Yorke package scripts or unchanged dependency lock differ from reviewed source.")
+        before = strict_json(git("show", expected + ":package.json"))
+        after = strict_json(git("show", source + ":package.json"))
+        before["scripts"] = after["scripts"]
+        require(before == after, "Yorke package change is not scripts-only.")
         return changed
     # Next 16.3.6 security remediation, including npm's reviewed lock metadata.
     # Pin both complete inputs and outputs: scripts, other dependency versions,
@@ -1264,6 +1358,21 @@ def migration_plan(changes):
 
 
 def reviewed_migration(raw, specification):
+    if specification.get("path") == HOST_BRAND_IDENTITY_PATH:
+        # A single byte-pinned ALTER/UPDATE exception, not a new SQL grammar.
+        expected = dict(path=HOST_BRAND_IDENTITY_PATH, **REVIEWED_MIGRATIONS[HOST_BRAND_IDENTITY_PATH])
+        require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
+                and hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == expected["blob"],
+                "Host brand migration differs from the exact reviewed source.")
+        statements, pending = [], ""
+        for character in raw.decode("utf-8"):
+            pending += character
+            if character == ";" and sqlite3.complete_statement(pending):
+                statements.append(pending)
+                pending = ""
+        require(not pending.strip() and len(statements) == 3,
+                "Host brand migration has an unexpected statement inventory.")
+        return statements, []
     if specification.get("path") in WORKSPACE_SCHEMA_PATHS:
         # Only these immutable statements may alter an existing table or replace
         # triggers. This is not an extension of the additive SQL grammar.
@@ -1598,6 +1707,74 @@ def apply_workspace_schema(connection, specification, statements):
     return True
 
 
+def apply_host_brand_identity(connection, specification, statements):
+    """Add only the reviewed nullable fields and brand the exact existing host."""
+    require(connection.in_transaction, "Host brand changes require the migration transaction.")
+    require(len(statements) == 3, "Host brand migration requires exactly three reviewed statements.")
+    writer = host_writer_state(connection)
+    before_schema = schema_rows(connection)
+    observed = schema_digest([row for row in before_schema if row[1] == "hosts"])
+    require(observed in (specification["beforeSchemaSha256"], specification["schemaSha256"]),
+            "Host brand schema is partial or differs from the exact reviewed old/new state.")
+    columns = [row[1] for row in connection.execute("PRAGMA table_xinfo(hosts)")]
+    before = connection.execute("SELECT * FROM hosts ORDER BY id").fetchall()
+    identity, slug, updated = (columns.index(name) for name in ("id", "slug", "updated_at"))
+    targets = [index for index, row in enumerate(before)
+               if row[identity] == "host:kofi-bills" or row[slug] == "kofi-bills"]
+    require(len(targets) == 1 and before[targets[0]][identity] == "host:kofi-bills"
+            and before[targets[0]][slug] == "kofi-bills",
+            "Exact existing Kofi Bills host identity is missing or ambiguous.")
+    target = targets[0]
+    brand = ("The Yorke Way", "/hosts/the-yorke-way.svg")
+    changed = observed == specification["beforeSchemaSha256"]
+    if not changed:
+        require(tuple(before[target][columns.index(name)] for name in ("brand_name", "brand_logo_url")) == brand,
+                "Host brand values are partial or differ from the exact reviewed replay state.")
+        return {"hostId": "host:kofi-bills", "changed": False, "preservedOnCodeRollback": True}
+    changes = connection.total_changes
+    for statement in statements[:2]:
+        connection.execute(statement)
+    after_schema = schema_rows(connection)
+    require(schema_digest([row for row in after_schema if row[1] == "hosts"]) == specification["schemaSha256"]
+            and [row for row in after_schema if row[1] != "hosts"]
+                == [row for row in before_schema if row[1] != "hosts"]
+            and connection.total_changes == changes,
+            "Host brand schema change modified unreviewed schema or rows.")
+    earliest = connection.execute("SELECT CURRENT_TIMESTAMP").fetchone()[0]
+    def authorize(action, table, column, database, origin):
+        if action == sqlite3.SQLITE_UPDATE:
+            allowed = (database == "main" and table == "hosts" and origin is None
+                       and column in ("brand_name", "brand_logo_url", "updated_at"))
+        else:
+            allowed = action in (sqlite3.SQLITE_READ, sqlite3.SQLITE_SELECT) or (
+                action == sqlite3.SQLITE_FUNCTION and (
+                    (column == "current_timestamp" and origin is None)
+                    or (column == "raise" and origin == "_bct_guard_hosts_update")))
+        return sqlite3.SQLITE_OK if allowed else sqlite3.SQLITE_DENY
+    connection.set_authorizer(authorize)
+    try:
+        cursor = connection.execute(statements[2])
+    finally:
+        connection.set_authorizer(None)
+    require(cursor.rowcount == 1 and connection.total_changes - changes == 1,
+            "Host brand correction did not change exactly one row.")
+    latest = connection.execute("SELECT CURRENT_TIMESTAMP").fetchone()[0]
+    after = connection.execute("SELECT * FROM hosts ORDER BY id").fetchall()
+    require(len(after) == len(before), "Host brand correction changed the host row count.")
+    timestamp = after[target][updated]
+    require(isinstance(timestamp, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", timestamp)
+            and earliest <= timestamp <= latest, "Host brand correction timestamp is unexpected.")
+    expected = [row + (None, None) for row in before]
+    row = list(expected[target])
+    row[updated], row[-2], row[-1] = timestamp, *brand
+    expected[target] = tuple(row)
+    require(after == expected and schema_rows(connection) == after_schema,
+            "Host brand correction changed unrelated host values or database schema.")
+    require(host_writer_state(connection) == writer,
+            "Host brand correction changed preserved handover control values.")
+    return {"hostId": "host:kofi-bills", "changed": True, "preservedOnCodeRollback": True}
+
+
 def migrate_database(database, staging, migrations):
     """Service-user SQLite transaction. Never restore, replace or delete live data."""
     database, staging = Path(database), Path(staging)
@@ -1613,8 +1790,13 @@ def migrate_database(database, staging, migrations):
                     and info.st_uid == os.geteuid() and not stat.S_IMODE(info.st_mode) & 0o077,
                     "Unsafe live database sidecar.")
     reviewed, additions, corrections, transitions = [], [], [], []
+    host_brand = None
     for specification, raw in migrations:
         statements, rows = reviewed_migration(raw, specification)
+        if specification.get("path") == HOST_BRAND_IDENTITY_PATH:
+            require(len(migrations) == 1, "Host brand identity must be the only migration in its release.")
+            host_brand = (specification, statements)
+            continue
         if specification.get("path") in WORKSPACE_SCHEMA_PATHS:
             transitions.append((specification, statements))
             continue
@@ -1666,8 +1848,11 @@ def migrate_database(database, staging, migrations):
                           else correct_host_verification(connection, raw))
         transitioned = [apply_workspace_schema(connection, specification, statements)
                         for specification, statements in transitions]
+        brand_result = apply_host_brand_identity(connection, *host_brand) if host_brand else None
         after = schema_rows(connection)
         transition_names = {name for specification, _ in transitions for name in specification["objects"]}
+        if host_brand:
+            transition_names.add("hosts")
         require(sorted(row for row in after if row[1] in names) == sorted(additions)
                 and [row for row in after if row[1] not in names and row[1] not in transition_names]
                     == [row for row in before if row[1] not in names and row[1] not in transition_names],
@@ -1677,10 +1862,13 @@ def migrate_database(database, staging, migrations):
         connection.commit()
     result = {"phase": "verified", "backupSha256": digest_file(backup),
               "schemaSha256": schema_digest(sorted(additions + [row for row in after if row[1] in transition_names])),
-              "created": any(transitioned) or (bool(additions) and not bool(present)), "tablesPreservedOnRollback": True,
+              "created": any(transitioned) or bool(brand_result and brand_result["changed"])
+                         or (bool(additions) and not bool(present)), "tablesPreservedOnRollback": True,
               "migrations": [specification for specification, _ in migrations]}
     if correction is not None:
         result["publicEventCorrection" if corrections[0][0] == "pink-edition-confirmed" else "publicHostCorrection"] = correction
+    if brand_result is not None:
+        result["publicHostBrand"] = brand_result
     write_json(staging / "result.json", result)
     return result
 
