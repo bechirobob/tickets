@@ -114,6 +114,7 @@ jobs:
         run: |
           python3 -m unittest discover -s ops/vps -p 'test_candidate_evidence.py' -v
           python3 -m unittest discover -s ops/vps -p 'test_candidate_build.py' -v
+          python3 -m unittest discover -s tests -p 'test_candidate_parallel_workflow.py' -v
       - name: Upload one immutable bounded browser build
         id: upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

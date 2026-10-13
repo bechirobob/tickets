@@ -97,7 +97,7 @@ def checkout_git(root, *args):
 # Advisory benchmark additions are exact test-source pins, not release authority.
 # All-or-none recognition lets the unchanged application-family assertions run
 # against this tooling increment. Deployment admission is deliberately unchanged.
-BENCHMARK_FILE_BLOBS = {'.github/workflows/candidate-parallel-checks.yml': '8f142baef7c2b6f949cec0ced5917a11585a7c1d', 'ops/vps/candidate_build.py': '5820b026f9747961081fc3e8b8e5531bf546621a', 'ops/vps/test_candidate_build.py': 'e5d043abe713290ddaf88be4c4431d67cbe4f51f', 'scripts/release-timing.py': '27f76adcc0ef2ad71b9e9696eb050ff643232d28', 'tests/test_release_timing.py': '874dc439367e2600fc764ba0d26e8fb3c93b37dd', 'docs/reliability/release-timing.md': '4f2bfabd835257370f55b50fa03bb272127436fa', 'docs/reliability/parallel-candidate-benchmark.md': 'c7706b3ffea9fbd2c73a435cc516e3d8c3bde289'}
+BENCHMARK_FILE_BLOBS = {'.github/workflows/candidate-parallel-checks.yml': '313182fc21841d8a059be596c7c31e0a0b179a33', 'ops/vps/candidate_build.py': '5820b026f9747961081fc3e8b8e5531bf546621a', 'ops/vps/test_candidate_build.py': '332079c682451af3c3e1ac36feef0129d1975b29', 'scripts/release-timing.py': '27f76adcc0ef2ad71b9e9696eb050ff643232d28', 'tests/test_release_timing.py': '874dc439367e2600fc764ba0d26e8fb3c93b37dd', 'docs/reliability/release-timing.md': '4f2bfabd835257370f55b50fa03bb272127436fa', 'docs/reliability/parallel-candidate-benchmark.md': 'c7706b3ffea9fbd2c73a435cc516e3d8c3bde289', 'tests/test_candidate_parallel_workflow.py': '26f56b2aca434e930718cb75db3a4a9863131411'}
 
 
 def benchmark_checkout_files(root):
