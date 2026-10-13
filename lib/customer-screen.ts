@@ -40,10 +40,13 @@ export type CuratedEvent = {
   sequence: string;
 };
 
+export type CustomerHost = { slug: string; name: string; role: string; city: string; verificationStatus: string; profileImageUrl?: string | null; brandName?: string | null; brandLogoUrl?: string | null };
+
 /** Only fields rendered on the public website; never account or host contact data. */
 export type CustomerEventScreen = {
   event: CustomerEvent;
-  host: { slug: string; name: string; role: string; city: string; verificationStatus: string; profileImageUrl?: string | null } | null;
+  host: CustomerHost | null;
+  hosts?: CustomerHost[];
   registration: { mode: 'paid' | 'rsvp' | 'interest'; open: boolean; maxPartySize: number; approvalRequired: boolean; deadline: string | null; roomAccess?: boolean } | null;
 };
 
