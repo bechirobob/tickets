@@ -5,6 +5,7 @@ import EventStory from "./event-story";
 import { eventArtworkPath } from "../../../lib/event-guest";
 import RegistrationForm from "../../registration-form";
 import { registrationOpeningMessage } from "../../../lib/registration-guidance";
+import HostPortrait from "../../host-portrait";
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
@@ -65,9 +66,7 @@ export default function EventScreen({ event, host, hosts, registration, promoter
       <article className="compact-event-main event-detail-story">
         <EventStory note={event.note} lineup={event.lineup} quip={event.quip} ageRestriction={event.ageRestriction} showEntry={!salesPending}/>
         {(hosts ?? (host ? [host] : [])).map(host => <section className={`event-host${host.brandName?.trim() ? " event-host--branded" : ""}`} key={host.slug}>
-          <div className="host-monogram">{host.profileImageUrl
-            ? <Image src={host.profileImageUrl} alt={host.name} width={64} height={78} unoptimized />
-            : host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div>
+          <HostPortrait host={host} variant="event" className="event-host__portrait" />
           <div>
             {host.brandName?.trim() ? <>
               <p className="host-brand-eyebrow">{host.brandName}</p>

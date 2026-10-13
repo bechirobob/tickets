@@ -1,0 +1,12 @@
+.host-portrait { position: relative; display: block; width: 100%; --host-seal-size: 52px; --host-seal-offset: -8px; --host-seal-ring: 3px; --host-seal-surface: #281b2b; }
+.host-portrait > .host-portrait__image { display: block; width: 100%; height: auto; border-radius: 14px; }
+.host-portrait__initials { display: grid; place-items: center; width: 100%; aspect-ratio: 886 / 1080; background: #60403e; color: #fff1df; border-radius: 14px; font-size: 24px; font-weight: 600; }
+.host-portrait > .host-portrait__seal { position: absolute; right: var(--host-seal-offset); bottom: var(--host-seal-offset); width: var(--host-seal-size); height: var(--host-seal-size); border: var(--host-seal-ring) solid var(--host-seal-surface); border-radius: 50%; box-sizing: border-box; }
+.host-portrait .host-portrait__seal img { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.host-portrait--directory { width: 120px; --host-seal-size: 32px; --host-seal-offset: -6px; }
+.host-portrait--event { width: 64px; align-self: start; --host-seal-size: 28px; --host-seal-offset: -4px; --host-seal-ring: 2px; --host-seal-surface: var(--event-paper, #f8e9ee); }
+.host-portrait--event > .host-portrait__image, .host-portrait--directory > .host-portrait__image { border-radius: 10px; }
+@media (max-width: 600px) {
+  .host-portrait--profile { --host-seal-size: 36px; --host-seal-offset: -6px; }
+  .host-portrait--directory { width: 82px; --host-seal-size: 28px; --host-seal-offset: -4px; --host-seal-ring: 2px; }
+}

@@ -18,7 +18,7 @@ The public catalogue retains its legacy `host` projection and adds an optional `
 
 ## Verification
 
-- Final local `npm run typecheck`, `npm run lint` and `npm test` passed. The aggregate rebuilt production assets and passed 49 tooling, 185 repository, 64 UI/static-render, 2 password-client, 5 rendered-asset and 890 Worker assertions. Lint reports one pre-existing warning in `ops/moderation/worker.ts`.
+- Final local `npm run typecheck`, `npm run lint` and `npm test` passed. The aggregate rebuilt production assets and passed 49 tooling, 185 repository, 68 UI/static-render, 2 password-client, 5 rendered-asset and 890 Worker assertions. Lint reports one pre-existing warning in `ops/moderation/worker.ts`.
 - The Worker runner returned success for all 81 files; logs also contain intentional failure-path output and a teardown RPC warning. These are not responsive browser evidence.
 - Additional focused VPS tests passed 7/7; shared mobile parser regressions passed 7/7 (plus its existing 4/4 suite). Browser test discovery lists nine desktop/mobile cases (the narrow phone case skips the desktop context); those cases were not executed locally.
 - Migration tests compare all pre-existing tables and original host fields, test exact-identity guards and missing target behavior, and pin source-image byte fidelity.
@@ -36,4 +36,12 @@ No release-control files were changed and no publish, merge, live migration or d
 
 The existing Booking consent previews workflow now captures the exact candidate immediately after local migration seeding, before consent-specific fixtures alter event data. Its existing build is reused; all original checks, triggers and read-only permissions remain unchanged. No deployment, secrets or native-app pipeline is introduced.
 
-The focused browser cases capture the profile, full event and event-story/host section at 1280px desktop and 390px mobile CSS widths, plus 320px phone profile and event-host evidence. Only eight specifically named PNGs plus a source SHA/tree, dimensions and SHA-256 manifest are uploaded as `host-brand-previews-<candidate SHA>`, with three-day retention. The artifact explicitly identifies migration-seeded candidate pages rather than live production. Packaging regression tests verify the allowlist, hashes and source/dimension rejection. Actual hosted rendering and user visual approval remain required before publishing to the live service.
+The focused browser cases capture the directory, profile, full event and event-story/host section at 1280px desktop and 390px mobile CSS widths, plus 320px phone profile and event-host evidence. Only ten specifically named PNGs plus a source SHA/tree, dimensions and SHA-256 manifest are uploaded as `host-brand-previews-<candidate SHA>`, with three-day retention. The artifact explicitly identifies migration-seeded candidate pages rather than live production. Packaging regression tests verify the allowlist, hashes and source/dimension rejection. Actual hosted rendering and user visual approval remain required before publishing to the live service.
+
+## Approved seal expansion and display-name refinement
+
+The user approved the portrait seal and requested it wherever Kofi appears as a host. One `HostPortrait` component now owns the original portrait plus logo seal on all existing public host portrait surfaces: profile, host directory, and every event/co-host credit. Directory data now projects the existing brand logo field. The profile uses Kofi Bills as the sole heading identity; `full_name` remains stored and the biography mentioning Henry Yorke is unchanged.
+
+A read-only inventory found no other existing public host portrait rendering. Room messages and announcements use staff/attendee identities without a host ID; no Kofi association is inferred. Text-only host email attribution and social-preview metadata remain outside the visible portrait treatment.
+
+The 320px screenshot showed an empty lazy-loaded portrait column. Code inspection found no width-specific hiding rule, but that test captured immediately without scrolling the image into view or waiting for decode. The screenshot helper now explicitly scrolls each actual host portrait into view and verifies natural dimensions and decode completion before capture. This addresses the observed evidence gap; the hosted recapture remains the proof of the final 320px result.

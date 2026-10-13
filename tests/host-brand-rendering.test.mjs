@@ -11,11 +11,19 @@ const requireDependency = createRequire(import.meta.url);
 const primary = { slug: 'kofi-bills', name: 'Kofi Bills', role: 'Host', city: 'Accra', verificationStatus: 'verified', profileImageUrl: '/hosts/kofi-bills.webp', brandName: 'The Yorke Way', brandLogoUrl: '/hosts/the-yorke-way.svg' };
 const other = { slug: 'another-host', name: 'Another Host', role: 'Co-host', city: 'Kumasi', verificationStatus: 'reviewed', profileImageUrl: null, brandName: 'Another Collective', brandLogoUrl: '/hosts/another-brand.svg' };
 
+const portraitModule = { exports: {} };
+const portraitSource = await readFile(new URL('../app/host-portrait.tsx', import.meta.url), 'utf8');
+runInNewContext(transformSync(portraitSource, { loader: 'tsx', jsx: 'automatic', format: 'cjs' }).code, {
+  module: portraitModule, exports: portraitModule.exports,
+  require: specifier => specifier.endsWith('.css') ? {} : requireDependency(specifier),
+});
+
 async function renderEvent(host, hosts) {
   const source = await readFile(new URL('../app/event/[slug]/event-screen.tsx', import.meta.url), 'utf8');
   const compiled = transformSync(source, { loader: 'tsx', jsx: 'automatic', format: 'cjs' });
   const componentModule = { exports: {} };
   const require = specifier => {
+    if (specifier === '../../host-portrait') return portraitModule.exports;
     if (specifier === 'next/link') return { __esModule: true, default: ({ children, ...props }) => createElement('a', props, children) };
     if (specifier === 'next/image') return { __esModule: true, default: ({ src, alt, width, height, sizes }) => createElement('img', { src, alt, width, height, sizes }) };
     if (specifier === '../../customer-runtime') return { useCustomerRuntime: () => ({ stale: false }) };
@@ -46,7 +54,8 @@ test('event rendering retains the legacy primary-host contract, portrait and per
   assert.match(html, /src="\/hosts\/kofi-bills.webp"[^>]*alt="Kofi Bills"|alt="Kofi Bills"[^>]*src="\/hosts\/kofi-bills.webp"/);
   assert.match(html, /class="host-brand-eyebrow">The Yorke Way<\/p>/);
   assert.ok(html.indexOf('The Yorke Way</p>') < html.indexOf('<h2>Kofi Bills</h2>'));
-  assert.doesNotMatch(html, /src="\/hosts\/the-yorke-way.svg"/, 'Keep the logo off event posters and event pages');
+  assert.match(html, /class="host-portrait__seal"><img src="\/hosts\/the-yorke-way.svg"/);
+  assert.match(html, /src="\/events\/on-the-guest-list.webp"/);
   assert.match(html, /href="\/hosts\/kofi-bills"/);
   assert.equal((html.match(/<section class="event-host(?: event-host--branded)?"/g) ?? []).length, 1);
 });
@@ -81,4 +90,24 @@ test('events without host relationships render no host branding, including an ex
     assert.doesNotMatch(html, /<section class="event-host(?: event-host--branded)?"|class="host-brand-eyebrow"/);
     assert.match(html, /<h1 id="event-title">An independently named night<\/h1>/);
   }
+});
+
+for (const variant of ['profile', 'directory', 'event']) {
+  test(`shared ${variant} host portrait preserves the person and approved brand seal`, () => {
+    const html = renderToStaticMarkup(createElement(portraitModule.exports.default, { host: primary, variant }));
+    assert.match(html, /class="host-portrait__image"[^>]*src="\/hosts\/kofi-bills.webp"/);
+    assert.match(html, /class="host-portrait__seal"><img src="\/hosts\/the-yorke-way.svg" alt=""/);
+    assert.doesNotMatch(html, /Henry Yorke/);
+  });
+}
+test('shared portrait handles missing brands, logos and portraits without inventing identity', () => {
+  for (const host of [{ ...primary, brandName: null }, { ...primary, brandName: ' ' }, { ...primary, brandLogoUrl: null }]) {
+    const html = renderToStaticMarkup(createElement(portraitModule.exports.default, { host, variant: 'event' }));
+    assert.doesNotMatch(html, /host-portrait__seal/);
+    assert.match(html, /kofi-bills.webp/);
+  }
+  const html = renderToStaticMarkup(createElement(portraitModule.exports.default, { host: { ...primary, profileImageUrl: null }, variant: 'profile' }));
+  assert.match(html, /class="host-portrait__initials" role="img" aria-label="Kofi Bills">KB/);
+  assert.match(html, /host-portrait__seal/);
+  assert.doesNotMatch(html, /src="(?:null|undefined|)"/);
 });

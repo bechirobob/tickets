@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- approved host and event assets are served directly. */
 import type { Metadata } from "next";
+import HostPortrait from "../../host-portrait";
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, BadgeCheck, Instagram, MapPin } from "lucide-react";
@@ -40,14 +41,11 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
     </header>
     <section className={`host-profile host-profile--portrait${host.brandName?.trim() ? " host-profile--branded" : ""}`} aria-labelledby="host-name">
       <div className="host-profile__portrait">
-        {host.profileImageUrl ? <img src={host.profileImageUrl} alt={host.name} width={886} height={1080} fetchPriority="high" />
-          : <div className="host-monogram host-monogram--large">{host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div>}
-        {host.brandName?.trim() && host.brandLogoUrl ? <span className="host-profile__brand-seal"><img src={host.brandLogoUrl} alt="" width={52} height={52} /></span> : null}
+        <HostPortrait host={host} variant="profile" />
       </div>
       <div className="host-profile__identity">
         {host.brandName?.trim() ? <p className="host-brand-eyebrow">{host.brandName}</p> : <p className="eyebrow">{host.verificationStatus === "verified" ? <><BadgeCheck size={14} /> Verified host</> : "Meet your host"}</p>}
         <h1 id="host-name">{host.name}</h1>
-        {host.fullName && host.fullName !== host.name ? <p className="host-profile__full-name">{host.fullName}</p> : null}
         <div className="host-profile__city"><span><MapPin size={14} aria-hidden="true" /> {host.city}</span>{host.brandName?.trim() && host.verificationStatus === "verified" ? <span className="host-profile__verified"><BadgeCheck size={14} aria-hidden="true" /> Verified host</span> : null}</div>
       </div>
       <div className="host-profile__details">

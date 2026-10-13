@@ -13,7 +13,7 @@ async function fixture() {
   for (const [browser, width] of [['desktop-chromium', 1280], ['mobile-chromium', 390]]) {
     const folder = path.join(root, `brand-fixture-${browser}`);
     await mkdir(folder);
-    for (const name of ['yorke-profile.png', 'yorke-event.png', 'yorke-event-host.png', ...(browser === 'mobile-chromium' ? ['yorke-profile-narrow.png', 'yorke-event-host-narrow.png'] : [])]) {
+    for (const name of ['yorke-directory.png', 'yorke-profile.png', 'yorke-event.png', 'yorke-event-host.png', ...(browser === 'mobile-chromium' ? ['yorke-profile-narrow.png', 'yorke-event-host-narrow.png'] : [])]) {
       // Packaging tests inspect PNG envelope and dimensions, not rendered pixels.
       const bytes = Buffer.alloc(33);
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
@@ -25,13 +25,13 @@ async function fixture() {
   return { root, output: path.join(base, 'output'), sourceSha: 'a'.repeat(40), sourceTree: 'b'.repeat(40), runId: 'test-only' };
 }
 
-test('host preview package preserves only the eight named PNGs with exact source and hashes', async () => {
+test('host preview package preserves only the ten named PNGs with exact source and hashes', async () => {
   const options = await fixture();
   const manifest = await packageHostBrandPreviews(options);
   assert.equal(manifest.sourceSha, options.sourceSha);
   assert.equal(manifest.sourceTree, options.sourceTree);
   assert.equal(manifest.environment, 'isolated candidate');
-  assert.equal(manifest.files.length, 8);
+  assert.equal(manifest.files.length, 10);
   for (const file of manifest.files) {
     const bytes = await readFile(path.join(options.output, file.file));
     assert.equal(createHash('sha256').update(bytes).digest('hex'), file.sha256);

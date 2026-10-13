@@ -13,7 +13,7 @@ export async function packageHostBrandPreviews({ root, output, sourceSha, source
   const entries = await readdir(root, { recursive: true });
   const files = [];
   for (const [browser, width] of [['desktop-chromium', 1280], ['mobile-chromium', 390]]) {
-    for (const [view, filename, captureWidth] of [['profile', 'yorke-profile.png', width], ['event', 'yorke-event.png', width], ['event-host', 'yorke-event-host.png', width], ...(browser === 'mobile-chromium' ? [['profile-narrow', 'yorke-profile-narrow.png', 320], ['event-host-narrow', 'yorke-event-host-narrow.png', 320]] : [])]) {
+    for (const [view, filename, captureWidth] of [['directory', 'yorke-directory.png', width], ['profile', 'yorke-profile.png', width], ['event', 'yorke-event.png', width], ['event-host', 'yorke-event-host.png', width], ...(browser === 'mobile-chromium' ? [['profile-narrow', 'yorke-profile-narrow.png', 320], ['event-host-narrow', 'yorke-event-host-narrow.png', 320]] : [])]) {
       const matches = entries.filter(entry => path.basename(entry) === filename && path.basename(path.dirname(entry)).endsWith(`-${browser}`));
       assert.equal(matches.length, 1, `Expected exactly one ${view} screenshot for ${browser}`);
       const source = path.join(root, matches[0]);

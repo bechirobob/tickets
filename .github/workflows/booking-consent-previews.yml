@@ -92,6 +92,8 @@ jobs:
         with:
           name: host-brand-previews-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
+            outputs/host-brand-previews/directory-desktop-chromium.png
+            outputs/host-brand-previews/directory-mobile-chromium.png
             outputs/host-brand-previews/profile-desktop-chromium.png
             outputs/host-brand-previews/profile-mobile-chromium.png
             outputs/host-brand-previews/event-desktop-chromium.png
