@@ -33,6 +33,10 @@ export async function packageHostBrandPreviews({ root, output, sourceSha, source
   const metricKeys = ['hostHeight', 'brandToName', 'nameToMeta', 'metaToLink', 'linkHeight', 'paddingTop', 'paddingBottom', 'nameFontSize', 'nameLineHeight', 'brandFontSize', 'metaFontSize', 'portraitWidth', 'portraitHeight', 'sealWidth'];
   for (const [browser, width, filename] of [['desktop-chromium', 1280, 'yorke-host-spacing.json'], ['mobile-chromium', 390, 'yorke-host-spacing.json'], ['mobile-chromium', 320, 'yorke-host-spacing-narrow.json']]) {
     const matches = entries.filter(entry => path.basename(entry) === filename && path.basename(path.dirname(entry)).endsWith(`-${browser}`));
+    if (matches.length === 0) {
+      spacingComparisons.push({ browser, viewport: { width, height: 900 }, status: 'unavailable', reason: 'Comparison did not complete; screenshots are candidate captures, not proof of geometry checks passing.' });
+      continue;
+    }
     assert.equal(matches.length, 1, 'Expected exactly one bounded spacing comparison');
     const source = path.join(root, matches[0]);
     assert.equal((await lstat(source)).isSymbolicLink(), false);
@@ -55,7 +59,7 @@ export async function packageHostBrandPreviews({ root, output, sourceSha, source
   }
   await mkdir(output, { recursive: false });
   for (const file of files) await writeFile(path.join(output, file.file), file.content, { flag: 'wx' });
-  const manifest = { sourceSha, sourceTree, runId, environment: 'isolated candidate', spacingComparisons, data: 'Local database seeded with the repository migrations, including the approved host brand migration. Not live production.', files: files.map(file => ({ file: file.file, browser: file.browser, view: file.view, viewport: file.viewport, image: file.image, bytes: file.bytes, sha256: file.sha256 })) };
+  const manifest = { sourceSha, sourceTree, runId, environment: 'isolated candidate', uiResult: process.env.HOST_BRAND_UI_RESULT ?? 'not supplied', spacingComparisons, data: 'Local database seeded with the repository migrations, including the approved host brand migration. Not live production.', files: files.map(file => ({ file: file.file, browser: file.browser, view: file.view, viewport: file.viewport, image: file.image, bytes: file.bytes, sha256: file.sha256 })) };
   await writeFile(path.join(output, 'evidence.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' });
   return manifest;
 }

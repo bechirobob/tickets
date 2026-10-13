@@ -31,15 +31,19 @@ async function hostSpacing(host: Locator) {
 async function recordHostSpacing(page: Page, host: Locator, filename: string) {
   // Controlled CSS comparison, not a claim that the old release was rebuilt.
   // These are the exact prior spacing declarations from 7013070856ed3dc9cfb81693b5c70df19005c0e9.
-  const baseline = await page.addStyleTag({ content: `
+  // Serve the fixture as a same-origin stylesheet so production style-src 'self' stays enforced.
+  const baselineUrl = new URL('/__e2e__/yorke-spacing-baseline.css', page.url()).href;
+  await page.route(baselineUrl, route => route.fulfill({ contentType: 'text/css', body: `
     .event-host--branded { padding: 26px 0; }
     .event-host--branded .event-host__portrait { margin-top: 22px; }
     .event-host.event-host--branded .host-brand-eyebrow { margin-bottom: 4px; }
     .event-host--branded h2 { margin: 0 0 6px; line-height: inherit; }
     .event-host--branded a { display: inline-flex; width: auto; margin-top: 12px; }
-  ` });
+  ` }));
+  const baseline = await page.addStyleTag({ url: baselineUrl });
   const before = await hostSpacing(host);
   await baseline.evaluate(element => { element.parentNode?.removeChild(element); });
+  await page.unroute(baselineUrl);
   const after = await hostSpacing(host);
   expect(after.hostHeight).toBeLessThan(before.hostHeight - 30);
   expect(after.brandToName).toBeCloseTo(2, 0);
@@ -94,7 +98,6 @@ test('linked event gives the host a subordinate brand credit without replacing o
   await expect(host.locator('.host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
   await expect(host.locator('.host-portrait__seal img')).toHaveAttribute('src', '/hosts/the-yorke-way.svg');
-  await recordHostSpacing(page, host, 'yorke-host-spacing.json');
   const portrait = await host.locator('.event-host__portrait').boundingBox(), name = await host.locator('h2').boundingBox();
   expect(portrait!.y).toBeCloseTo(name!.y, 0);
   await expect(host.locator('.host-brand-eyebrow')).toHaveCSS('text-transform', 'none');
@@ -105,6 +108,7 @@ test('linked event gives the host a subordinate brand credit without replacing o
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: test.info().outputPath('yorke-event.png'), fullPage: true, scale: 'css' });
   await page.locator('.event-detail-story').screenshot({ path: test.info().outputPath('yorke-event-host.png'), scale: 'css' });
+  await recordHostSpacing(page, host, 'yorke-host-spacing.json');
   await host.getByRole('link', { name: 'View Host', exact: true }).click();
   await expect(page.locator('.host-profile__identity .host-brand-eyebrow')).toHaveText('The Yorke Way');
 });
@@ -124,8 +128,8 @@ test('the portrait seal and brand hierarchy stay contained on a 320px phone', as
   await expect(page.locator('.event-host .host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
   await expect(page.locator('.event-host .host-portrait__seal')).toBeVisible();
-  await recordHostSpacing(page, page.locator('.event-host--branded'), 'yorke-host-spacing-narrow.json');
   await page.locator('.event-detail-story').screenshot({ path: test.info().outputPath('yorke-event-host-narrow.png'), scale: 'css' });
+  await recordHostSpacing(page, page.locator('.event-host--branded'), 'yorke-host-spacing-narrow.json');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
 

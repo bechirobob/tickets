@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -67,4 +67,16 @@ test('spacing evidence rejects changed type size, shrunken targets and mismatche
     const data = JSON.parse(await readFile(file, 'utf8')); mutate(data); await writeFile(file, JSON.stringify(data));
     await assert.rejects(packageHostBrandPreviews(options));
   }
+});
+
+
+test('candidate screenshots remain reviewable when optional comparison is unavailable', async () => {
+  const options = await fixture();
+  const file = path.join(options.root, 'brand-fixture-mobile-chromium/yorke-host-spacing.json');
+  await rename(file, file + '.incomplete');
+  const manifest = await packageHostBrandPreviews(options);
+  assert.equal(manifest.files.length, 10);
+  assert.equal(manifest.spacingComparisons[1].status, 'unavailable');
+  assert.equal(manifest.spacingComparisons[1].before, undefined);
+  assert.equal(manifest.uiResult, 'not supplied');
 });

@@ -84,7 +84,9 @@ jobs:
         run: npx playwright test tests/e2e/host-brand-identity.spec.ts --project desktop-chromium --project mobile-chromium --workers=1 --retries=0 --output test-results/host-brand
       - name: Package only named host-brand screenshots with exact source identity
         id: host_brand_evidence
-        if: ${{ !cancelled() && steps.host_brand_ui.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        env:
+          HOST_BRAND_UI_RESULT: ${{ steps.host_brand_ui.outcome }}
         run: node scripts/package-host-brand-previews.mjs
       - name: Preserve candidate host branding for owner visual approval
         if: ${{ !cancelled() && steps.host_brand_evidence.outcome == 'success' }}
