@@ -1,4 +1,4 @@
-import { findPrimaryHost } from "../../../../lib/event-experience";
+import { findEventHosts } from "../../../../lib/event-experience";
 import { customerEvent, type CustomerEventScreen } from "../../../../lib/customer-screen";
 import { registrationSettings, registrationsOpen } from '../../../../lib/registrations';
 import { getPublicEvents } from '../../../events';
@@ -28,11 +28,12 @@ export async function GET() {
       lineup: event.lineup, ageRestriction: event.ageRestriction, note: event.note, quip: event.quip,
     }));
     const screens: CustomerEventScreen[] = await Promise.all(records.filter(event => !event.isTestEvent).map(async event => {
-      const host = await findPrimaryHost(env.DB, event.slug);
+      const hosts = (await findEventHosts(env.DB, event.slug)).map(host => ({ slug: host.slug, name: host.name, role: host.role, city: host.city, verificationStatus: host.verificationStatus, profileImageUrl: host.profileImageUrl, brandName: host.brandName ?? null, brandLogoUrl: host.brandLogoUrl ?? null }));
       const registration = settings.get(event.slug);
       return {
         event: customerEvent(event),
-        host: host ? { slug: host.slug, name: host.name, role: host.role, city: host.city, verificationStatus: host.verificationStatus, profileImageUrl: host.profileImageUrl } : null,
+        host: hosts[0] ?? null,
+        hosts,
         registration: registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), roomAccess: Boolean(registration.roomAccess), deadline: registration.closesAt ?? null } : null,
       };
     }));
