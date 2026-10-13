@@ -49,6 +49,10 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
         <span className="host-profile__city"><MapPin size={14} aria-hidden="true" /> {host.city}</span>
       </div>
       <div className="host-profile__details">
+        {host.brandName?.trim() ? <div className="host-profile__brand">
+          {host.brandLogoUrl ? <img src={host.brandLogoUrl} alt="" width={64} height={64} /> : null}
+          <span>{host.brandName}</span>
+        </div> : null}
         <p className="host-profile__bio">{host.bio}</p>
         {host.instagramHandle || host.snapchatHandle ? <nav className="host-profile__socials" aria-label={`${host.name} on social media`}>
           {host.instagramHandle ? <a href={`https://www.instagram.com/${encodeURIComponent(host.instagramHandle)}/`} target="_blank" rel="noopener noreferrer"><Instagram size={18} aria-hidden="true" /><span>Instagram<small>@{host.instagramHandle}</small></span><ArrowUpRight size={16} aria-hidden="true" /></a> : null}

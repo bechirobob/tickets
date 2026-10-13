@@ -24,7 +24,7 @@ import "./event-details.css";
 import { useCustomerRuntime } from "../../customer-runtime";
 import type { CustomerEventScreen } from "../../../lib/customer-screen";
 
-export default function EventScreen({ event, host, registration, promoterCode = "" }: CustomerEventScreen & { promoterCode?: string }) {
+export default function EventScreen({ event, host, hosts, registration, promoterCode = "" }: CustomerEventScreen & { promoterCode?: string }) {
   const runtime = useCustomerRuntime();
   const slug = event.slug;
   const registrationMode = registration?.mode ?? "paid";
@@ -63,7 +63,17 @@ export default function EventScreen({ event, host, registration, promoterCode = 
       </section>
       <article className="compact-event-main event-detail-story">
         <EventStory note={event.note} lineup={event.lineup} quip={event.quip} ageRestriction={event.ageRestriction} showEntry={!salesPending}/>
-        {host ? <section className="event-host"><div className="host-monogram">{host.profileImageUrl ? <Image src={host.profileImageUrl} alt={host.name} width={64} height={78} unoptimized /> : host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div><div><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span><Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link></div></section> : null}
+        {(hosts ?? (host ? [host] : [])).map(host => <section className="event-host" key={host.slug}>
+          <div className="host-monogram">{host.profileImageUrl
+            ? <Image src={host.profileImageUrl} alt={host.name} width={64} height={78} unoptimized />
+            : host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div>
+          <div>
+            <p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified host" : "Reviewed Host"}</p>
+            <h2>{host.name}</h2><span>{host.role} · {host.city}</span>
+            {host.brandName?.trim() ? <span className="event-host__brand">{host.brandName}</span> : null}
+            <Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link>
+          </div>
+        </section>)}
       </article>
 
       <aside className="compact-ticket-panel" id="register" inert={runtime.stale || undefined} onClickCapture={e => { if (runtime.stale) { e.preventDefault(); e.stopPropagation(); } }}>

@@ -42,3 +42,13 @@
 }
 
 .host-page .member-locked-note { color: #d9c7d2; }
+
+.host-profile__brand { display: flex; align-items: center; gap: 14px; margin-top: 24px; }
+.host-profile__brand img { display: block; flex: 0 0 64px; width: 64px; height: 64px; border-radius: 50%; }
+.host-profile__brand span { color: #f9eee6; font-size: 20px; font-weight: 650; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.host-profile__brand + .host-profile__bio { margin-top: 18px; }
+.host-directory-brand { display: block; margin-top: 8px; font-size: 15px; font-weight: 650; }
+@media (max-width: 600px) {
+  .host-profile__brand img { flex-basis: 56px; width: 56px; height: 56px; }
+  .host-profile__brand span { font-size: 19px; }
+}

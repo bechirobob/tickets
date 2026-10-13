@@ -139,3 +139,5 @@ body:has(.poster-event-page) .customer-dock a[aria-current="page"] { color: var(
 .event-host .host-monogram:has(img) { height: auto; background: transparent; }
 .event-host .host-monogram img { display: block; width: 64px; height: auto; border-radius: 10px; }
 .event-host a { min-height: 44px; }
+
+.event-host .event-host__brand { display: block; margin-top: 7px; color: var(--muted); font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }

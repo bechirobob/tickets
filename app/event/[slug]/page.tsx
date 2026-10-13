@@ -6,7 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { eventImageUrl } from "../../event-images";
 import { findCuratedEvent } from "../../events";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
-import { findPrimaryHost } from "../../../lib/event-experience";
+import { findEventHosts } from "../../../lib/event-experience";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +45,9 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   if(query.register === "1") redirect(`/rsvp/${encodeURIComponent(slug)}`);
   const promoterCode = query.ref?.trim().toUpperCase().replace(/[^A-Z0-9_-]/gu, "").slice(0, 32) ?? "";
   const { env } = await import("cloudflare:workers");
-  const [event, host] = await Promise.all([findCuratedEvent(slug), findPrimaryHost(env.DB, slug)]);
+  const [event, hosts] = await Promise.all([findCuratedEvent(slug), findEventHosts(env.DB, slug)]);
   if (!event) notFound();
+  const host = hosts[0] ?? null;
   const registration = await registrationSettings(env.DB, slug);
   const registrationMode = registration?.mode ?? "paid";
   const structuredEvent = event.isTestEvent || !event.startsAt ? null : {
@@ -74,6 +75,6 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
   return <>
     {structuredEvent ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredEvent).replace(/</gu, "\\u003c") }} /> : null}
-    <EventScreen event={customerEvent(event)} host={host} registration={registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), roomAccess: Boolean(registration.roomAccess), deadline: registration.closesAt ?? null } : null} promoterCode={promoterCode} />
+    <EventScreen event={customerEvent(event)} host={host} hosts={hosts} registration={registration ? { mode: registration.mode, open: registrationsOpen(registration), maxPartySize: registration.maxPartySize, approvalRequired: Boolean(registration.approvalRequired), roomAccess: Boolean(registration.roomAccess), deadline: registration.closesAt ?? null } : null} promoterCode={promoterCode} />
   </>;
 }
