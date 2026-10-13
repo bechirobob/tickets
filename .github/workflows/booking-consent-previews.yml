@@ -78,6 +78,35 @@ jobs:
       - name: Prepare isolated local database
         id: fixtures
         run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Capture exact candidate host branding before consent fixtures change event data
+        id: host_brand_ui
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        run: npx playwright test tests/e2e/host-brand-identity.spec.ts --project desktop-chromium --project mobile-chromium --workers=1 --retries=0 --output test-results/host-brand
+      - name: Package only named host-brand screenshots with exact source identity
+        id: host_brand_evidence
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        env:
+          HOST_BRAND_UI_RESULT: ${{ steps.host_brand_ui.outcome }}
+        run: node scripts/package-host-brand-previews.mjs
+      - name: Preserve candidate host branding for owner visual approval
+        if: ${{ !cancelled() && steps.host_brand_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: host-brand-previews-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            outputs/host-brand-previews/directory-desktop-chromium.png
+            outputs/host-brand-previews/directory-mobile-chromium.png
+            outputs/host-brand-previews/profile-desktop-chromium.png
+            outputs/host-brand-previews/profile-mobile-chromium.png
+            outputs/host-brand-previews/event-desktop-chromium.png
+            outputs/host-brand-previews/event-mobile-chromium.png
+            outputs/host-brand-previews/event-host-desktop-chromium.png
+            outputs/host-brand-previews/event-host-mobile-chromium.png
+            outputs/host-brand-previews/profile-narrow-mobile-chromium.png
+            outputs/host-brand-previews/event-host-narrow-mobile-chromium.png
+            outputs/host-brand-previews/evidence.json
+          if-no-files-found: error
+          retention-days: 3
       - name: Verify checkout consent without contacting payment providers
         id: checkout_ui
         if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
