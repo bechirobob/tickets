@@ -10,7 +10,7 @@
   overflow-wrap: anywhere;
 }
 .host-profile.host-profile--branded .host-brand-eyebrow { color: #f9eee6; }
-.event-host.event-host--branded .host-brand-eyebrow { color: var(--muted); margin-bottom: 4px; font-size: 13px; line-height: 18px; }
+.event-host.event-host--branded .host-brand-eyebrow { color: var(--muted); margin-bottom: 2px; font-size: 13px; line-height: 18px; }
 @media (max-width: 600px) {
   .host-profile.host-profile--branded .host-brand-eyebrow,
   .event-host.event-host--branded .host-brand-eyebrow { font-size: 13px; line-height: 18px; }

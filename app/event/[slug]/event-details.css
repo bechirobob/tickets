@@ -138,9 +138,9 @@ body:has(.poster-event-page) .customer-dock a[aria-current="page"] { color: var(
 .event-host h2 + span { display: block; }
 .event-host a { min-height: 44px; }
 
-.event-host--branded { align-items: start; grid-template-columns: 64px minmax(0, 1fr); gap: 16px; }
-.event-host--branded .event-host__portrait { align-self: start; margin-top: 22px; }
-.event-host--branded h2 { margin: 0 0 6px; }
+.event-host--branded { padding: 12px 0; align-items: start; grid-template-columns: 64px minmax(0, 1fr); gap: 16px; }
+.event-host--branded .event-host__portrait { align-self: start; margin-top: 20px; }
+.event-host--branded h2 { margin: 0 0 2px; line-height: 1.15; }
 .event-host__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); font-size: 13px; line-height: 20px; }
 .event-host__meta > span { display: inline-flex; align-items: center; gap: 5px; }
-.event-host--branded a { margin-top: 12px; }
+.event-host--branded a { display: flex; width: fit-content; margin-top: 0; }

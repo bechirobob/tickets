@@ -29,9 +29,33 @@ export async function packageHostBrandPreviews({ root, output, sourceSha, source
       files.push({ file: `${view}-${browser}.png`, browser, view, viewport: { width: captureWidth, height: 900 }, image: { width: imageWidth, height: imageHeight }, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), content: bytes });
     }
   }
+  const spacingComparisons = [];
+  const metricKeys = ['hostHeight', 'brandToName', 'nameToMeta', 'metaToLink', 'linkHeight', 'paddingTop', 'paddingBottom', 'nameFontSize', 'nameLineHeight', 'brandFontSize', 'metaFontSize', 'portraitWidth', 'portraitHeight', 'sealWidth'];
+  for (const [browser, width, filename] of [['desktop-chromium', 1280, 'yorke-host-spacing.json'], ['mobile-chromium', 390, 'yorke-host-spacing.json'], ['mobile-chromium', 320, 'yorke-host-spacing-narrow.json']]) {
+    const matches = entries.filter(entry => path.basename(entry) === filename && path.basename(path.dirname(entry)).endsWith(`-${browser}`));
+    assert.equal(matches.length, 1, 'Expected exactly one bounded spacing comparison');
+    const source = path.join(root, matches[0]);
+    assert.equal((await lstat(source)).isSymbolicLink(), false);
+    assert.ok((await realpath(source)).startsWith(resolvedRoot + path.sep));
+    const bytes = await readFile(source);
+    assert.ok(bytes.length > 0 && bytes.length <= 8192);
+    const data = JSON.parse(bytes.toString('utf8'));
+    assert.equal(data.sourceSha, sourceSha);
+    assert.equal(data.baselineSourceSha, '7013070856ed3dc9cfb81693b5c70df19005c0e9');
+    assert.equal(data.viewport.width, width);
+    assert.equal(data.viewport.height, 900);
+    const metrics = value => Object.fromEntries(metricKeys.map(key => {
+      assert.ok(typeof value?.[key] === 'number' && Number.isFinite(value[key]) && value[key] >= -1 && value[key] <= 20000);
+      return [key, value[key]];
+    }));
+    const before = metrics(data.before), after = metrics(data.after);
+    assert.ok(after.linkHeight >= 44 && after.hostHeight < before.hostHeight - 30);
+    for (const key of ['nameFontSize', 'brandFontSize', 'metaFontSize', 'portraitWidth', 'portraitHeight', 'sealWidth']) assert.equal(after[key], before[key]);
+    spacingComparisons.push({ browser, viewport: { width, height: 900 }, baselineSourceSha: data.baselineSourceSha, method: 'Same candidate DOM; exact prior spacing declarations applied temporarily, then removed before candidate screenshots.', before, after, sha256: createHash('sha256').update(bytes).digest('hex') });
+  }
   await mkdir(output, { recursive: false });
   for (const file of files) await writeFile(path.join(output, file.file), file.content, { flag: 'wx' });
-  const manifest = { sourceSha, sourceTree, runId, environment: 'isolated candidate', data: 'Local database seeded with the repository migrations, including the approved host brand migration. Not live production.', files: files.map(file => ({ file: file.file, browser: file.browser, view: file.view, viewport: file.viewport, image: file.image, bytes: file.bytes, sha256: file.sha256 })) };
+  const manifest = { sourceSha, sourceTree, runId, environment: 'isolated candidate', spacingComparisons, data: 'Local database seeded with the repository migrations, including the approved host brand migration. Not live production.', files: files.map(file => ({ file: file.file, browser: file.browser, view: file.view, viewport: file.viewport, image: file.image, bytes: file.bytes, sha256: file.sha256 })) };
   await writeFile(path.join(output, 'evidence.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' });
   return manifest;
 }

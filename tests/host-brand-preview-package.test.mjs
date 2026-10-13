@@ -21,6 +21,12 @@ async function fixture() {
       await writeFile(path.join(folder, name), bytes);
     }
     await writeFile(path.join(folder, 'trace.zip'), 'never-package-this');
+    for (const width of browser === 'mobile-chromium' ? [390, 320] : [1280]) {
+      const before = { hostHeight: 197, brandToName: 4, nameToMeta: 6, metaToLink: 12, linkHeight: 44, paddingTop: 26, paddingBottom: 26, nameFontSize: 25, nameLineHeight: 37.5, brandFontSize: 13, metaFontSize: 13, portraitWidth: 64, portraitHeight: 78, sealWidth: 28 };
+      const after = { ...before, hostHeight: 140, brandToName: 2, nameToMeta: 2, metaToLink: 0, paddingTop: 12, paddingBottom: 12, nameLineHeight: 28.75 };
+      await writeFile(path.join(folder, width === 320 ? 'yorke-host-spacing-narrow.json' : 'yorke-host-spacing.json'), JSON.stringify({ sourceSha: 'a'.repeat(40), baselineSourceSha: '7013070856ed3dc9cfb81693b5c70df19005c0e9', viewport: { width, height: 900 }, before, after }));
+    }
+
   }
   return { root, output: path.join(base, 'output'), sourceSha: 'a'.repeat(40), sourceTree: 'b'.repeat(40), runId: 'test-only' };
 }
@@ -32,6 +38,8 @@ test('host preview package preserves only the ten named PNGs with exact source a
   assert.equal(manifest.sourceTree, options.sourceTree);
   assert.equal(manifest.environment, 'isolated candidate');
   assert.equal(manifest.files.length, 10);
+  assert.equal(manifest.spacingComparisons.length, 3);
+  assert.deepEqual(manifest.spacingComparisons.map(item => item.viewport.width), [1280, 390, 320]);
   for (const file of manifest.files) {
     const bytes = await readFile(path.join(options.output, file.file));
     assert.equal(createHash('sha256').update(bytes).digest('hex'), file.sha256);
@@ -50,4 +58,13 @@ test('host preview package rejects mixed dimensions, duplicate images and malfor
   await writeFile(path.join(folder, 'yorke-profile.png'), bytes);
   await assert.rejects(packageHostBrandPreviews(duplicate), /Expected exactly one/);
   await assert.rejects(packageHostBrandPreviews({ ...await fixture(), sourceSha: 'main' }));
+});
+
+test('spacing evidence rejects changed type size, shrunken targets and mismatched source', async () => {
+  for (const mutate of [data => { data.after.nameFontSize = 20; }, data => { data.after.linkHeight = 32; }, data => { data.sourceSha = 'c'.repeat(40); }]) {
+    const options = await fixture();
+    const file = path.join(options.root, 'brand-fixture-mobile-chromium/yorke-host-spacing.json');
+    const data = JSON.parse(await readFile(file, 'utf8')); mutate(data); await writeFile(file, JSON.stringify(data));
+    await assert.rejects(packageHostBrandPreviews(options));
+  }
 });

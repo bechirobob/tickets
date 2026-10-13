@@ -1,5 +1,7 @@
 import { test, expect, type Page } from './analytics-fixture';
 import AxeBuilder from '@axe-core/playwright';
+import { writeFile } from 'node:fs/promises';
+import type { Locator } from '@playwright/test';
 
 async function readyPortrait(page: Page, selector: string) {
   const portrait = page.locator(selector);
@@ -8,6 +10,44 @@ async function readyPortrait(page: Page, selector: string) {
     await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
     await image.evaluate((element: HTMLImageElement) => element.decode());
   }
+}
+
+async function hostSpacing(host: Locator) {
+  return host.evaluate(element => {
+    const brand = element.querySelector('.host-brand-eyebrow')!, name = element.querySelector('h2')!, meta = element.querySelector('.event-host__meta')!, link = element.querySelector('a')!, portrait = element.querySelector('.host-portrait')!, seal = element.querySelector('.host-portrait__seal')!;
+    const b = brand.getBoundingClientRect(), n = name.getBoundingClientRect(), m = meta.getBoundingClientRect(), l = link.getBoundingClientRect(), p = portrait.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      hostHeight: element.getBoundingClientRect().height,
+      brandToName: n.top - b.bottom, nameToMeta: m.top - n.bottom, metaToLink: l.top - m.bottom,
+      linkHeight: l.height, paddingTop: parseFloat(style.paddingTop), paddingBottom: parseFloat(style.paddingBottom),
+      nameFontSize: parseFloat(getComputedStyle(name).fontSize), nameLineHeight: parseFloat(getComputedStyle(name).lineHeight),
+      brandFontSize: parseFloat(getComputedStyle(brand).fontSize), metaFontSize: parseFloat(getComputedStyle(meta).fontSize),
+      portraitWidth: p.width, portraitHeight: p.height, sealWidth: seal.getBoundingClientRect().width,
+    };
+  });
+}
+
+async function recordHostSpacing(page: Page, host: Locator, filename: string) {
+  // Controlled CSS comparison, not a claim that the old release was rebuilt.
+  // These are the exact prior spacing declarations from 7013070856ed3dc9cfb81693b5c70df19005c0e9.
+  const baseline = await page.addStyleTag({ content: `
+    .event-host--branded { padding: 26px 0; }
+    .event-host--branded .event-host__portrait { margin-top: 22px; }
+    .event-host.event-host--branded .host-brand-eyebrow { margin-bottom: 4px; }
+    .event-host--branded h2 { margin: 0 0 6px; line-height: inherit; }
+    .event-host--branded a { display: inline-flex; width: auto; margin-top: 12px; }
+  ` });
+  const before = await hostSpacing(host);
+  await baseline.evaluate(element => { element.parentNode?.removeChild(element); });
+  const after = await hostSpacing(host);
+  expect(after.hostHeight).toBeLessThan(before.hostHeight - 30);
+  expect(after.brandToName).toBeCloseTo(2, 0);
+  expect(after.nameToMeta).toBeCloseTo(2, 0);
+  expect(after.metaToLink).toBeCloseTo(0, 0);
+  expect(after.linkHeight).toBeGreaterThanOrEqual(44);
+  for (const key of ['nameFontSize', 'brandFontSize', 'metaFontSize', 'portraitWidth', 'portraitHeight', 'sealWidth'] as const) expect(after[key]).toBe(before[key]);
+  await writeFile(test.info().outputPath(filename), JSON.stringify({ sourceSha: process.env.BECORE_RELEASE_SHA ?? null, baselineSourceSha: '7013070856ed3dc9cfb81693b5c70df19005c0e9', method: 'Same candidate DOM; exact prior spacing declarations applied temporarily, then removed before candidate screenshots.', viewport: page.viewportSize(), before, after }, null, 2));
 }
 
 test.beforeEach(async ({ page, request }, info) => {
@@ -54,6 +94,7 @@ test('linked event gives the host a subordinate brand credit without replacing o
   await expect(host.locator('.host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
   await expect(host.locator('.host-portrait__seal img')).toHaveAttribute('src', '/hosts/the-yorke-way.svg');
+  await recordHostSpacing(page, host, 'yorke-host-spacing.json');
   const portrait = await host.locator('.event-host__portrait').boundingBox(), name = await host.locator('h2').boundingBox();
   expect(portrait!.y).toBeCloseTo(name!.y, 0);
   await expect(host.locator('.host-brand-eyebrow')).toHaveCSS('text-transform', 'none');
@@ -83,6 +124,7 @@ test('the portrait seal and brand hierarchy stay contained on a 320px phone', as
   await expect(page.locator('.event-host .host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
   await expect(page.locator('.event-host .host-portrait__seal')).toBeVisible();
+  await recordHostSpacing(page, page.locator('.event-host--branded'), 'yorke-host-spacing-narrow.json');
   await page.locator('.event-detail-story').screenshot({ path: test.info().outputPath('yorke-event-host-narrow.png'), scale: 'css' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
