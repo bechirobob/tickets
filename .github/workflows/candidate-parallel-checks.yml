@@ -1,0 +1,530 @@
+# Advisory benchmark only. Existing Candidate/release admission is unchanged.
+# The branch push trigger gives the executed workflow the exact source SHA;
+# pull_request merge-ref workflow code is deliberately not used for this proof.
+name: Candidate parallel benchmark
+
+on:
+  push:
+    branches: [improve/release-evidence-parallel-20261013]
+  workflow_dispatch:
+    inputs:
+      trusted_base:
+        description: Independently selected reviewed controls ancestor on main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-parallel-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BECORE_RELEASE_SHA: ${{ github.sha }}
+  BECORE_TRUSTED_BASE: ${{ inputs.trusted_base || 'd257f41b669a542de0eebbe09993e7efa8dd5074' }}
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      archive_digest: ${{ steps.build.outputs.archive_digest }}
+      manifest_digest: ${{ steps.build.outputs.manifest_digest }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact source ancestry before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Stage trusted audit verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          umask 077
+          for entry in 'verify-audit-release-source.py:tickets-audit-source.py' 'audit-release-dependencies.py:tickets-approved-audit.py'; do
+            source="scripts/${entry%%:*}"
+            target="$RUNNER_TEMP/${entry#*:}"
+            test "$(git ls-tree "$BECORE_TRUSTED_BASE" -- "$source" | cut -d ' ' -f 1)" = 100644
+            git show "$BECORE_TRUSTED_BASE:$source" > "$target"
+            test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
+          done
+      - name: Verify exact candidate source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          echo "sha=$BECORE_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Audit dependencies
+        id: dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Verify installed audited dependencies
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
+
+      - name: Lint application
+        run: npm run lint
+      - name: Check application types
+        run: npm run typecheck
+      # npm test includes the production build, deployment preparation, rendered
+      # assertions and Worker unit suite. Every browser consumes those same bytes.
+      - name: Verify unit tests and rendered production build
+        run: npm test
+      - name: Check database schema
+        run: npx drizzle-kit check
+      - name: Validate the deployable Worker without publishing
+        run: npx wrangler deploy --config dist/server/wrangler.json --dry-run --outdir dist/worker-dry-run
+      - name: Package verified browser build
+        id: build
+        run: python3 ops/vps/candidate_build.py package --directory "$RUNNER_TEMP/candidate-build"
+      - name: Verify candidate evidence transport
+        run: |
+          python3 -m unittest discover -s ops/vps -p 'test_candidate_evidence.py' -v
+          python3 -m unittest discover -s ops/vps -p 'test_candidate_build.py' -v
+      - name: Upload one immutable bounded browser build
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/candidate-build/browser-build.zip
+            ${{ runner.temp }}/candidate-build/browser-build.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: false
+      - name: Record exact producer transport receipt
+        env:
+          BUILD_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          BUILD_ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          BUILD_ARCHIVE_DIGEST: ${{ steps.build.outputs.archive_digest }}
+          BUILD_MANIFEST_DIGEST: ${{ steps.build.outputs.manifest_digest }}
+        run: python3 ops/vps/candidate_build.py receipt --directory "$RUNNER_TEMP/candidate-build"
+
+  desktop_chromium:
+    name: desktop-chromium
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+      BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
+      BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
+      BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact source ancestry before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Stage trusted audit verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          umask 077
+          for entry in 'verify-audit-release-source.py:tickets-audit-source.py' 'audit-release-dependencies.py:tickets-approved-audit.py'; do
+            source="scripts/${entry%%:*}"
+            target="$RUNNER_TEMP/${entry#*:}"
+            test "$(git ls-tree "$BECORE_TRUSTED_BASE" -- "$source" | cut -d ' ' -f 1)" = 100644
+            git show "$BECORE_TRUSTED_BASE:$source" > "$target"
+            test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
+          done
+      - name: Verify exact candidate source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          echo "sha=$BECORE_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Audit dependencies
+        id: dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Verify installed audited dependencies
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
+
+      - name: Install browsers for event-page verification
+        run: npx playwright install --with-deps chromium webkit
+      - name: Download exact producer artifact by immutable ID
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/candidate-build
+          merge-multiple: true
+      - name: Verify and restore the exact candidate build (desktop-chromium)
+        id: restore_desktop_chromium
+        run: python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser desktop-chromium
+      - name: Prepare isolated event fixtures (desktop-chromium)
+        id: fixtures_desktop_chromium
+        if: ${{ !cancelled() && steps.restore_desktop_chromium.outcome == 'success' }}
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Capture natural Room entry before the full browser suite (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/room-natural-entry.spec.ts --project desktop-chromium --workers=1 --retries=0 --output test-results/room-entry
+      - name: Preserve natural Room entry evidence immediately (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/room-entry --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser desktop-chromium
+      - name: Verify every browser journey before release (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test --project desktop-chromium
+      - name: Verify keyboard navigation focus without retries (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project desktop-chromium --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
+      - name: Verify optional SeevPlus checkout on desktop and mobile (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs
+          npx playwright test --config playwright.seev.config.ts --project desktop-chromium --output test-results/seevplus
+      - name: Verify opt-in USDC checkout without provider traffic (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs crypto
+          npx playwright test --config playwright.seev-crypto.config.ts --project desktop-chromium --output test-results/seevplus-crypto
+      - name: Verify RSVP and interest registration on desktop and mobile (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-registration-browser-fixture.mjs
+          npx playwright test --config playwright.registration.config.ts --project desktop-chromium --output test-results/registration
+      - name: Verify owner Operations workflows on desktop and mobile (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project desktop-chromium --workers=1 --retries=0 --output test-results/operations
+      - name: Preserve required Operations visual evidence immediately (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/operations --stage operations --source-sha "$BECORE_RELEASE_SHA" --browser desktop-chromium
+      - name: Verify host report fixture recovery without retries (desktop-chromium)
+        if: ${{ !cancelled() && steps.fixtures_desktop_chromium.outcome == 'success' }}
+        run: npx playwright test --config playwright.operations.config.ts --project desktop-chromium --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
+
+  mobile_chromium:
+    name: mobile-chromium
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+      BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
+      BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
+      BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact source ancestry before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Stage trusted audit verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          umask 077
+          for entry in 'verify-audit-release-source.py:tickets-audit-source.py' 'audit-release-dependencies.py:tickets-approved-audit.py'; do
+            source="scripts/${entry%%:*}"
+            target="$RUNNER_TEMP/${entry#*:}"
+            test "$(git ls-tree "$BECORE_TRUSTED_BASE" -- "$source" | cut -d ' ' -f 1)" = 100644
+            git show "$BECORE_TRUSTED_BASE:$source" > "$target"
+            test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
+          done
+      - name: Verify exact candidate source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          echo "sha=$BECORE_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Audit dependencies
+        id: dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Verify installed audited dependencies
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
+
+      - name: Install browsers for event-page verification
+        run: npx playwright install --with-deps chromium webkit
+      - name: Download exact producer artifact by immutable ID
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/candidate-build
+          merge-multiple: true
+      - name: Verify and restore the exact candidate build (mobile-chromium)
+        id: restore_mobile_chromium
+        run: python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-chromium
+      - name: Prepare isolated event fixtures (mobile-chromium)
+        id: fixtures_mobile_chromium
+        if: ${{ !cancelled() && steps.restore_mobile_chromium.outcome == 'success' }}
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Capture natural Room entry before the full browser suite (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/room-natural-entry.spec.ts --project mobile-chromium --workers=1 --retries=0 --output test-results/room-entry
+      - name: Preserve natural Room entry evidence immediately (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/room-entry --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser mobile-chromium
+      - name: Verify every browser journey before release (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test --project mobile-chromium
+      - name: Verify keyboard navigation focus without retries (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project mobile-chromium --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
+      - name: Verify optional SeevPlus checkout on desktop and mobile (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs
+          npx playwright test --config playwright.seev.config.ts --project mobile-chromium --output test-results/seevplus
+      - name: Verify opt-in USDC checkout without provider traffic (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs crypto
+          npx playwright test --config playwright.seev-crypto.config.ts --project mobile-chromium --output test-results/seevplus-crypto
+      - name: Verify RSVP and interest registration on desktop and mobile (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-registration-browser-fixture.mjs
+          npx playwright test --config playwright.registration.config.ts --project mobile-chromium --output test-results/registration
+      - name: Verify owner Operations workflows on desktop and mobile (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: |
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project mobile-chromium --workers=1 --retries=0 --output test-results/operations
+      - name: Preserve required Operations visual evidence immediately (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/operations --stage operations --source-sha "$BECORE_RELEASE_SHA" --browser mobile-chromium
+      - name: Verify host report fixture recovery without retries (mobile-chromium)
+        if: ${{ !cancelled() && steps.fixtures_mobile_chromium.outcome == 'success' }}
+        run: npx playwright test --config playwright.operations.config.ts --project mobile-chromium --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
+
+  mobile_webkit:
+    name: mobile-webkit
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+      BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
+      BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
+      BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact source ancestry before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Stage trusted audit verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          umask 077
+          for entry in 'verify-audit-release-source.py:tickets-audit-source.py' 'audit-release-dependencies.py:tickets-approved-audit.py'; do
+            source="scripts/${entry%%:*}"
+            target="$RUNNER_TEMP/${entry#*:}"
+            test "$(git ls-tree "$BECORE_TRUSTED_BASE" -- "$source" | cut -d ' ' -f 1)" = 100644
+            git show "$BECORE_TRUSTED_BASE:$source" > "$target"
+            test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
+          done
+      - name: Verify exact candidate source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          echo "sha=$BECORE_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Audit dependencies
+        id: dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Verify installed audited dependencies
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
+
+      - name: Install browsers for event-page verification
+        run: npx playwright install --with-deps chromium webkit
+      - name: Download exact producer artifact by immutable ID
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/candidate-build
+          merge-multiple: true
+      - name: Verify and restore the exact candidate build (mobile-webkit)
+        id: restore_mobile_webkit
+        run: python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-webkit
+      - name: Prepare isolated event fixtures (mobile-webkit)
+        id: fixtures_mobile_webkit
+        if: ${{ !cancelled() && steps.restore_mobile_webkit.outcome == 'success' }}
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Capture natural Room entry before the full browser suite (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test tests/e2e/room-natural-entry.spec.ts --project mobile-webkit --workers=1 --retries=0 --output test-results/room-entry
+      - name: Preserve natural Room entry evidence immediately (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/room-entry --stage room-entry --source-sha "$BECORE_RELEASE_SHA" --browser mobile-webkit
+      - name: Verify every browser journey before release (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test --project mobile-webkit
+      - name: Verify keyboard navigation focus without retries (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test tests/e2e/navigation-audit.spec.ts --project mobile-webkit --workers=1 --retries=0 --repeat-each=3 --output test-results/navigation-focus
+      - name: Verify optional SeevPlus checkout on desktop and mobile (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs
+          npx playwright test --config playwright.seev.config.ts --project mobile-webkit --output test-results/seevplus
+      - name: Verify opt-in USDC checkout without provider traffic (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs crypto
+          npx playwright test --config playwright.seev-crypto.config.ts --project mobile-webkit --output test-results/seevplus-crypto
+      - name: Verify RSVP and interest registration on desktop and mobile (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-registration-browser-fixture.mjs
+          npx playwright test --config playwright.registration.config.ts --project mobile-webkit --output test-results/registration
+      - name: Verify owner Operations workflows on desktop and mobile (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: |
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project mobile-webkit --workers=1 --retries=0 --output test-results/operations
+      - name: Preserve required Operations visual evidence immediately (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: python3 ops/vps/candidate_evidence.py encode --root test-results/operations --stage operations --source-sha "$BECORE_RELEASE_SHA" --browser mobile-webkit
+      - name: Verify host report fixture recovery without retries (mobile-webkit)
+        if: ${{ !cancelled() && steps.fixtures_mobile_webkit.outcome == 'success' }}
+        run: npx playwright test --config playwright.operations.config.ts --project mobile-webkit --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
+
+  verify:
+    name: verify
+    needs: [build, desktop_chromium, mobile_chromium, mobile_webkit]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every exact browser lane and build to succeed
+        env:
+          BUILD: ${{ needs.build.result }}
+          DESKTOP: ${{ needs.desktop_chromium.result }}
+          MOBILE: ${{ needs.mobile_chromium.result }}
+          WEBKIT: ${{ needs.mobile_webkit.result }}
+        run: |
+          test "$BUILD" = success
+          test "$DESKTOP" = success
+          test "$MOBILE" = success
+          test "$WEBKIT" = success
+          echo 'Advisory parallel benchmark only; production admission remains unchanged.'
