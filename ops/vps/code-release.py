@@ -566,8 +566,8 @@ WORKSPACE_APPLICATION_BLOBS = {
 # application evidence can never select or supply its own trusted controls C.
 YORKE_RELEASE_BASELINE = "c2058fb39bb6d9a93ef622aad08b1e9e2d22488f"
 YORKE_BASE_TREE = "c85475e968e1cecbd6637fe77710b032dee0ecbd"
-YORKE_APP_SNAPSHOT = "8db399bbce7c4f0919dae6a08ef5603d4edd323a"
-YORKE_APP_TREE = "951dc7a778281b3ea3c5508d97a251f486412de5"
+YORKE_APP_SNAPSHOT = "12a302faa11ec18a63a5d4893ef909b6e6cd7b91"
+YORKE_APP_TREE = "ad4718a3df3ec9a7ad4c4e017c07cfb399857de4"
 YORKE_PACKAGE_BLOBS = ("ee7d351bd660b932e9870b6d542da4426386eca5",
                        "e4f736b3204696fceab081989f1cdddfd5b1bc5e")
 YORKE_LOCK_BLOB = "47a4eaca5743b768598462d8b66a2ef49a442b4e"
@@ -586,7 +586,7 @@ YORKE_APPLICATION_BLOBS = {
     "app/hosts/hosts.css": "1108b1c9f4a8e65813b547ed9b77f978eeac283f",
     "app/hosts/page.tsx": "fe7afa2f2b702f85673b92849da7938266dfaff4",
     "db/schema.ts": "530e44bb6c4145cd0daf7d1d90a900fbf1bddbc0",
-    "docs/audits/yorke-host-brand-20261013.md": "a92ed64916569f0ca76c9fc83547cddbaf607b28",
+    "docs/audits/yorke-host-brand-20261013.md": "abf170b3f090bbd88e178e9522f2e536798c3ff7",
     "lib/customer-screen.ts": "191a8e6f3b9a362f0319b647b61dbb53af137f76",
     "lib/event-experience.ts": "6453bd7faee040a030e925c40cb7dd0baed00409",
     "mobile/src/screen-catalogue.ts": "3b6c0195a091eb7912b4325c2f269e2dee107e02",
@@ -594,11 +594,11 @@ YORKE_APPLICATION_BLOBS = {
     "package.json": "e4f736b3204696fceab081989f1cdddfd5b1bc5e",
     "public/hosts/the-yorke-way.svg": "d6eecbcae7eb241017e13f19b19e35290ce99c59",
     "scripts/package-host-brand-previews.mjs": "6160e04a05af0de48e925055c0f3dadd580ec8fc",
-    "tests/e2e/host-brand-identity.spec.ts": "6600e092d53629e4c8fc10d8629a96ecc9ccf7da",
+    "tests/e2e/host-brand-identity.spec.ts": "bc1871859fad35551c438df21d763e9f8dfb46d9",
     "tests/e2e/host-profile.spec.ts": "ba099658c2866802b436855819bcefd39f50074b",
     "tests/host-brand-identity.test.ts": "790c12145d885b6a869d68b7f000a7e408f4f90d",
     "tests/host-brand-migration.test.mjs": "20ced243776db46b865857ca9e9c97843d113afc",
-    "tests/host-brand-preview-package.test.mjs": "ebf64927c184a1f7ddf4e25751dc2ac963279ba9",
+    "tests/host-brand-preview-package.test.mjs": "515c1c87414fabaf287ab84c61f4cba8ed0ff7b6",
     "tests/host-brand-rendering.test.mjs": "67bc345faa8eeed83486243fe16df088ced9b045",
 }
 
