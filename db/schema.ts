@@ -157,6 +157,8 @@ export const hosts = sqliteTable("hosts", {
   verificationStatus: text("verification_status", { enum: ["verified", "reviewed", "unverified"] }).notNull().default("reviewed"),
   profileImageUrl: text("profile_image_url"),
   fullName: text("full_name"),
+  brandName: text("brand_name"),
+  brandLogoUrl: text("brand_logo_url"),
   instagramHandle: text("instagram_handle"),
   snapchatHandle: text("snapchat_handle"),
   createdAt: text("created_at").notNull(),
