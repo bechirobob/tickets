@@ -13,11 +13,11 @@ async function fixture() {
   for (const [browser, width] of [['desktop-chromium', 1280], ['mobile-chromium', 390]]) {
     const folder = path.join(root, `brand-fixture-${browser}`);
     await mkdir(folder);
-    for (const name of ['yorke-profile.png', 'yorke-event.png', 'yorke-event-host.png']) {
+    for (const name of ['yorke-profile.png', 'yorke-event.png', 'yorke-event-host.png', ...(browser === 'mobile-chromium' ? ['yorke-profile-narrow.png', 'yorke-event-host-narrow.png'] : [])]) {
       // Packaging tests inspect PNG envelope and dimensions, not rendered pixels.
       const bytes = Buffer.alloc(33);
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
-      bytes.write('IHDR', 12); bytes.writeUInt32BE(width, 16); bytes.writeUInt32BE(900, 20);
+      bytes.write('IHDR', 12); bytes.writeUInt32BE(name.includes('narrow') ? 320 : width, 16); bytes.writeUInt32BE(900, 20);
       await writeFile(path.join(folder, name), bytes);
     }
     await writeFile(path.join(folder, 'trace.zip'), 'never-package-this');
@@ -25,17 +25,17 @@ async function fixture() {
   return { root, output: path.join(base, 'output'), sourceSha: 'a'.repeat(40), sourceTree: 'b'.repeat(40), runId: 'test-only' };
 }
 
-test('host preview package preserves only the six named PNGs with exact source and hashes', async () => {
+test('host preview package preserves only the eight named PNGs with exact source and hashes', async () => {
   const options = await fixture();
   const manifest = await packageHostBrandPreviews(options);
   assert.equal(manifest.sourceSha, options.sourceSha);
   assert.equal(manifest.sourceTree, options.sourceTree);
   assert.equal(manifest.environment, 'isolated candidate');
-  assert.equal(manifest.files.length, 6);
+  assert.equal(manifest.files.length, 8);
   for (const file of manifest.files) {
     const bytes = await readFile(path.join(options.output, file.file));
     assert.equal(createHash('sha256').update(bytes).digest('hex'), file.sha256);
-    assert.equal(file.viewport.width, file.browser === 'desktop-chromium' ? 1280 : 390);
+    assert.equal(file.viewport.width, file.view.includes('narrow') ? 320 : file.browser === 'desktop-chromium' ? 1280 : 390);
   }
   assert.doesNotMatch(await readFile(path.join(options.output, 'evidence.json'), 'utf8'), /content|trace.zip|never-package/);
 });

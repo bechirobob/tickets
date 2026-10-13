@@ -9,6 +9,7 @@ import { getPublicEvents } from "../../events";
 import { eventTiming, findHostBySlug, listHostEventSlugs } from "../../../lib/event-experience";
 import PublicNavigation from "../../mobile-navigation";
 import "../hosts.css";
+import "../../host-brand.css";
 
 export const dynamic = "force-dynamic";
 
@@ -37,22 +38,19 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
       <Link href="/hosts" aria-label="Back to hosts"><ArrowLeft size={16} /><span className="directory-header__back-label">Hosts</span></Link>
       <Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation />
     </header>
-    <section className="host-profile host-profile--portrait" aria-labelledby="host-name">
+    <section className={`host-profile host-profile--portrait${host.brandName?.trim() ? " host-profile--branded" : ""}`} aria-labelledby="host-name">
       <div className="host-profile__portrait">
         {host.profileImageUrl ? <img src={host.profileImageUrl} alt={host.name} width={886} height={1080} fetchPriority="high" />
           : <div className="host-monogram host-monogram--large">{host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div>}
+        {host.brandName?.trim() && host.brandLogoUrl ? <span className="host-profile__brand-seal"><img src={host.brandLogoUrl} alt="" width={52} height={52} /></span> : null}
       </div>
       <div className="host-profile__identity">
-        <p className="eyebrow">{host.verificationStatus === "verified" ? <><BadgeCheck size={14} /> Verified host</> : "Meet your host"}</p>
+        {host.brandName?.trim() ? <p className="host-brand-eyebrow">{host.brandName}</p> : <p className="eyebrow">{host.verificationStatus === "verified" ? <><BadgeCheck size={14} /> Verified host</> : "Meet your host"}</p>}
         <h1 id="host-name">{host.name}</h1>
         {host.fullName && host.fullName !== host.name ? <p className="host-profile__full-name">{host.fullName}</p> : null}
-        <span className="host-profile__city"><MapPin size={14} aria-hidden="true" /> {host.city}</span>
+        <div className="host-profile__city"><span><MapPin size={14} aria-hidden="true" /> {host.city}</span>{host.brandName?.trim() && host.verificationStatus === "verified" ? <span className="host-profile__verified"><BadgeCheck size={14} aria-hidden="true" /> Verified host</span> : null}</div>
       </div>
       <div className="host-profile__details">
-        {host.brandName?.trim() ? <div className="host-profile__brand">
-          {host.brandLogoUrl ? <img src={host.brandLogoUrl} alt="" width={64} height={64} /> : null}
-          <span>{host.brandName}</span>
-        </div> : null}
         <p className="host-profile__bio">{host.bio}</p>
         {host.instagramHandle || host.snapchatHandle ? <nav className="host-profile__socials" aria-label={`${host.name} on social media`}>
           {host.instagramHandle ? <a href={`https://www.instagram.com/${encodeURIComponent(host.instagramHandle)}/`} target="_blank" rel="noopener noreferrer"><Instagram size={18} aria-hidden="true" /><span>Instagram<small>@{host.instagramHandle}</small></span><ArrowUpRight size={16} aria-hidden="true" /></a> : null}

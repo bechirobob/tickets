@@ -4,8 +4,8 @@
 
 - Base: `c2058fb39bb6d9a93ef622aad08b1e9e2d22488f`.
 - Keep Kofi Bills / Henry Yorke as the person: original portrait, verified state, biography and social links stay unchanged.
-- Add a restrained brand signature below the profile identity: the original circular logo at 64px (56px on small screens) and “The Yorke Way” at 20px / 19px. No new card, shadow or decorative container.
-- Show the brand name below that person's role on event pages and in the host directory. Preserve flyers, event copy, Club House Inc credit, booking behavior and financial data.
+- Revised after visual review: titlecase “The Yorke Way” above the personal name, 14px / 20px desktop and 13px / 18px mobile, weight 600 and a 6px name gap. Verification sits with location. Original logo becomes a lower-right portrait seal, 52px desktop / 36px mobile, with a 3px background ring and 8px / 6px offset. No standalone brand row, card, shadow or glow.
+- Event host credits mirror the brand-above-name hierarchy, with verification/location metadata below. Portraits align with names and links retain 44px hit areas. Keep the brand in the host directory. Preserve flyers, event copy, Club House Inc credit, booking behavior and financial data.
 - Derive event presentation only from actual `event_hosts` relationships, including secondary hosts. Do not infer ownership from names or event copy.
 
 ## Implementation
@@ -18,9 +18,9 @@ The public catalogue retains its legacy `host` projection and adds an optional `
 
 ## Verification
 
-- Final local `npm run typecheck`, `npm run lint` and `npm test` passed. The aggregate rebuilt production assets and passed 49 tooling, 183 repository, 64 UI/static-render, 2 password-client, 5 rendered-asset and 890 Worker assertions. Lint reports one pre-existing warning in `ops/moderation/worker.ts`.
+- Final local `npm run typecheck`, `npm run lint` and `npm test` passed. The aggregate rebuilt production assets and passed 49 tooling, 185 repository, 64 UI/static-render, 2 password-client, 5 rendered-asset and 890 Worker assertions. Lint reports one pre-existing warning in `ops/moderation/worker.ts`.
 - The Worker runner returned success for all 81 files; logs also contain intentional failure-path output and a teardown RPC warning. These are not responsive browser evidence.
-- Additional focused VPS tests passed 7/7; shared mobile parser regressions passed 7/7 (plus its existing 4/4 suite). Browser test discovery lists six desktop/mobile cases; those cases were not executed locally.
+- Additional focused VPS tests passed 7/7; shared mobile parser regressions passed 7/7 (plus its existing 4/4 suite). Browser test discovery lists nine desktop/mobile cases (the narrow phone case skips the desktop context); those cases were not executed locally.
 - Migration tests compare all pre-existing tables and original host fields, test exact-identity guards and missing target behavior, and pin source-image byte fidelity.
 - Worker/VPS tests cover current and future links, primary/secondary hosts, missing relations, unbranded hosts, minimal API projection and unchanged event data.
 - Static rendering tests cover the actual EventScreen with branded and unbranded hosts; these do not establish responsive visual quality.
@@ -36,4 +36,4 @@ No release-control files were changed and no publish, merge, live migration or d
 
 The existing Booking consent previews workflow now captures the exact candidate immediately after local migration seeding, before consent-specific fixtures alter event data. Its existing build is reused; all original checks, triggers and read-only permissions remain unchanged. No deployment, secrets or native-app pipeline is introduced.
 
-The focused browser cases capture the profile, full event and event-story/host section at 1280px desktop and 390px mobile CSS widths. Only six specifically named PNGs plus a source SHA/tree, dimensions and SHA-256 manifest are uploaded as `host-brand-previews-<candidate SHA>`, with three-day retention. The artifact explicitly identifies migration-seeded candidate pages rather than live production. Packaging regression tests verify the allowlist, hashes and source/dimension rejection. Actual hosted rendering and user visual approval remain required before publishing to the live service.
+The focused browser cases capture the profile, full event and event-story/host section at 1280px desktop and 390px mobile CSS widths, plus 320px phone profile and event-host evidence. Only eight specifically named PNGs plus a source SHA/tree, dimensions and SHA-256 manifest are uploaded as `host-brand-previews-<candidate SHA>`, with three-day retention. The artifact explicitly identifies migration-seeded candidate pages rather than live production. Packaging regression tests verify the allowlist, hashes and source/dimension rejection. Actual hosted rendering and user visual approval remain required before publishing to the live service.

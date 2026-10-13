@@ -98,6 +98,8 @@ jobs:
             outputs/host-brand-previews/event-mobile-chromium.png
             outputs/host-brand-previews/event-host-desktop-chromium.png
             outputs/host-brand-previews/event-host-mobile-chromium.png
+            outputs/host-brand-previews/profile-narrow-mobile-chromium.png
+            outputs/host-brand-previews/event-host-narrow-mobile-chromium.png
             outputs/host-brand-previews/evidence.json
           if-no-files-found: error
           retention-days: 3

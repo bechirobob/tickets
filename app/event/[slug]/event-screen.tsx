@@ -20,6 +20,7 @@ import EventCountdown from "./event-countdown";
 import EventPerkIcon from "./event-perk-icon";
 import { eventColourScheme, eventPresentationStyle } from "../../../lib/event-presentation";
 import "./event-details.css";
+import "../../host-brand.css";
 
 import { useCustomerRuntime } from "../../customer-runtime";
 import type { CustomerEventScreen } from "../../../lib/customer-screen";
@@ -63,14 +64,20 @@ export default function EventScreen({ event, host, hosts, registration, promoter
       </section>
       <article className="compact-event-main event-detail-story">
         <EventStory note={event.note} lineup={event.lineup} quip={event.quip} ageRestriction={event.ageRestriction} showEntry={!salesPending}/>
-        {(hosts ?? (host ? [host] : [])).map(host => <section className="event-host" key={host.slug}>
+        {(hosts ?? (host ? [host] : [])).map(host => <section className={`event-host${host.brandName?.trim() ? " event-host--branded" : ""}`} key={host.slug}>
           <div className="host-monogram">{host.profileImageUrl
             ? <Image src={host.profileImageUrl} alt={host.name} width={64} height={78} unoptimized />
             : host.name.split(/\s+/u).map((word) => word[0]).join("").slice(0, 2)}</div>
           <div>
-            <p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified host" : "Reviewed Host"}</p>
-            <h2>{host.name}</h2><span>{host.role} · {host.city}</span>
-            {host.brandName?.trim() ? <span className="event-host__brand">{host.brandName}</span> : null}
+            {host.brandName?.trim() ? <>
+              <p className="host-brand-eyebrow">{host.brandName}</p>
+              <h2>{host.name}</h2>
+              <div className="event-host__meta">
+                {host.role !== "Host" ? <span>{host.role}</span> : null}
+                <span><BadgeCheck size={13} aria-hidden="true" /> {host.verificationStatus === "verified" ? "Verified host" : "Reviewed Host"}</span>
+                <span>{host.city}</span>
+              </div>
+            </> : <><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span></>}
             <Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link>
           </div>
         </section>)}

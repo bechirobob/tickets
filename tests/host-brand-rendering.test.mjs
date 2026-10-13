@@ -44,19 +44,22 @@ test('event rendering retains the legacy primary-host contract, portrait and per
   assert.match(html, /<h1 id="event-title">An independently named night<\/h1>/);
   assert.match(html, /<h2>Kofi Bills<\/h2>/);
   assert.match(html, /src="\/hosts\/kofi-bills.webp"[^>]*alt="Kofi Bills"|alt="Kofi Bills"[^>]*src="\/hosts\/kofi-bills.webp"/);
-  assert.match(html, /class="event-host__brand">The Yorke Way<\/span>/);
+  assert.match(html, /class="host-brand-eyebrow">The Yorke Way<\/p>/);
+  assert.ok(html.indexOf('The Yorke Way</p>') < html.indexOf('<h2>Kofi Bills</h2>'));
   assert.doesNotMatch(html, /src="\/hosts\/the-yorke-way.svg"/, 'Keep the logo off event posters and event pages');
   assert.match(html, /href="\/hosts\/kofi-bills"/);
-  assert.equal((html.match(/<section class="event-host"/g) ?? []).length, 1);
+  assert.equal((html.match(/<section class="event-host(?: event-host--branded)?"/g) ?? []).length, 1);
 });
 
 test('event rendering includes branded secondary hosts and multiple brands without replacing host roles or identity', async () => {
   const html = await renderEvent(other, [other, { ...primary, role: 'Co-host' }]);
-  assert.equal((html.match(/<section class="event-host"/g) ?? []).length, 2);
+  assert.equal((html.match(/<section class="event-host(?: event-host--branded)?"/g) ?? []).length, 2);
   assert.ok(html.indexOf('<h2>Another Host</h2>') < html.indexOf('<h2>Kofi Bills</h2>'));
-  assert.match(html, /class="event-host__brand">Another Collective<\/span>/);
-  assert.match(html, /class="event-host__brand">The Yorke Way<\/span>/);
-  assert.match(html, /Co-host · Accra/);
+  assert.match(html, /class="host-brand-eyebrow">Another Collective<\/p>/);
+  assert.match(html, /class="host-brand-eyebrow">The Yorke Way<\/p>/);
+  assert.ok(html.indexOf('The Yorke Way</p>') < html.indexOf('<h2>Kofi Bills</h2>'));
+  assert.match(html, /<span>Co-host<\/span>/);
+  assert.match(html, /<span>Accra<\/span>/);
   assert.match(html, /href="\/hosts\/another-host"/);
   assert.match(html, /href="\/hosts\/kofi-bills"/);
 });
@@ -64,18 +67,18 @@ test('event rendering includes branded secondary hosts and multiple brands witho
 test('unbranded, nameless-brand and missing-logo profiles render without empty brand labels or changing portraits', async () => {
   for (const brandName of [undefined, null, '', '   ']) {
     const html = await renderEvent({ ...primary, brandName });
-    assert.doesNotMatch(html, /class="event-host__brand"/);
+    assert.doesNotMatch(html, /class="host-brand-eyebrow"/);
     assert.match(html, /<h2>Kofi Bills<\/h2>/);
     assert.match(html, /\/hosts\/kofi-bills.webp/);
   }
   const logoMissing = await renderEvent({ ...primary, brandLogoUrl: null });
-  assert.match(logoMissing, /class="event-host__brand">The Yorke Way<\/span>/);
+  assert.match(logoMissing, /class="host-brand-eyebrow">The Yorke Way<\/p>/);
   assert.doesNotMatch(logoMissing, /src="(?:undefined|null|)"/);
 });
 
 test('events without host relationships render no host branding, including an explicitly empty current host list', async () => {
   for (const html of [await renderEvent(null), await renderEvent(primary, [])]) {
-    assert.doesNotMatch(html, /<section class="event-host"|class="event-host__brand"/);
+    assert.doesNotMatch(html, /<section class="event-host(?: event-host--branded)?"|class="host-brand-eyebrow"/);
     assert.match(html, /<h1 id="event-title">An independently named night<\/h1>/);
   }
 });
