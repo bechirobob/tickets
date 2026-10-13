@@ -12,6 +12,40 @@ async function readyPortrait(page: Page, selector: string) {
   }
 }
 
+async function expectHostButton(host: Locator) {
+  const portrait = await host.locator('.event-host__portrait').boundingBox();
+  const brand = await host.locator('.host-brand-eyebrow').boundingBox();
+  const button = host.getByRole('link', { name: 'View Host', exact: true });
+  const target = await button.boundingBox();
+  expect(portrait!.y).toBeCloseTo(brand!.y, 0);
+  expect(portrait!.width).toBe(80);
+  expect(target!.x).toBeCloseTo(brand!.x, 0);
+  for (const selector of ['h2', '.event-host__meta']) {
+    expect((await host.locator(selector).boundingBox())!.x).toBeCloseTo(brand!.x, 0);
+  }
+  expect((await host.locator('.event-host__meta').boundingBox())!.height).toBe(20);
+  const seal = await host.locator('.host-portrait__seal').boundingBox();
+  expect(seal!.width).toBe(28);
+  expect(brand!.x - seal!.x - seal!.width).toBeGreaterThanOrEqual(12);
+  expect(target!.width).toBeGreaterThanOrEqual(44);
+  expect(target!.height).toBeGreaterThanOrEqual(44);
+  await expect(button).toHaveAttribute('href', '/hosts/kofi-bills');
+  await expect(button).toHaveCSS('text-decoration-line', 'none');
+  await expect(button).toHaveCSS('border-radius', '6px');
+  await button.focus();
+  await button.press('Tab');
+  await host.page().keyboard.press('Shift+Tab');
+  await expect(button).toBeFocused();
+  await expect(button).toHaveCSS('outline-style', 'solid');
+  await expect(button).toHaveCSS('outline-width', '2px');
+  await button.evaluate(element => (element as HTMLElement).blur());
+  const background = await button.evaluate(element => getComputedStyle(element).backgroundColor);
+  expect(background).not.toBe('rgba(0, 0, 0, 0)');
+  await button.hover();
+  await expect(button).not.toHaveCSS('background-color', background);
+  await host.page().mouse.move(0, 0);
+}
+
 async function hostSpacing(host: Locator) {
   return host.evaluate(element => {
     const brand = element.querySelector('.host-brand-eyebrow')!, name = element.querySelector('h2')!, meta = element.querySelector('.event-host__meta')!, link = element.querySelector('a')!, portrait = element.querySelector('.host-portrait')!, seal = element.querySelector('.host-portrait__seal')!;
@@ -38,7 +72,7 @@ async function recordHostSpacing(page: Page, host: Locator, filename: string) {
     .event-host--branded .event-host__portrait { margin-top: 22px; }
     .event-host.event-host--branded .host-brand-eyebrow { margin-bottom: 4px; }
     .event-host--branded h2 { margin: 0 0 6px; line-height: inherit; }
-    .event-host--branded a { display: inline-flex; width: auto; margin-top: 12px; }
+    .event-host--branded a { display: inline-flex; width: auto; margin-top: 12px; padding: 0 0 4px; border: 0; border-bottom: 1px solid #77746d; border-radius: 0; background: transparent; color: inherit; }
   ` }));
   const baseline = await page.addStyleTag({ url: baselineUrl });
   const before = await hostSpacing(host);
@@ -47,11 +81,11 @@ async function recordHostSpacing(page: Page, host: Locator, filename: string) {
   const after = await hostSpacing(host);
   expect(after.hostHeight).toBeLessThan(before.hostHeight - 30);
   expect(after.brandToName).toBeCloseTo(2, 0);
-  expect(after.nameToMeta).toBeCloseTo(2, 0);
-  expect(after.metaToLink).toBeCloseTo(0, 0);
+  expect(after.nameToMeta).toBeCloseTo(4, 0);
+  expect(after.metaToLink).toBeCloseTo(8, 0);
   expect(after.linkHeight).toBeGreaterThanOrEqual(44);
   for (const key of ['nameFontSize', 'brandFontSize', 'metaFontSize', 'portraitWidth', 'portraitHeight', 'sealWidth'] as const) expect(after[key]).toBe(before[key]);
-  await writeFile(test.info().outputPath(filename), JSON.stringify({ sourceSha: process.env.BECORE_RELEASE_SHA ?? null, baselineSourceSha: '7013070856ed3dc9cfb81693b5c70df19005c0e9', method: 'Same candidate DOM; exact prior spacing declarations applied temporarily, then removed before candidate screenshots.', viewport: page.viewportSize(), before, after }, null, 2));
+  await writeFile(test.info().outputPath(filename), JSON.stringify({ sourceSha: process.env.BECORE_RELEASE_SHA ?? null, baselineSourceSha: '7013070856ed3dc9cfb81693b5c70df19005c0e9', method: 'Candidate screenshots captured before comparison; prior spacing applied temporarily to the same DOM, then removed before candidate geometry measurement.', viewport: page.viewportSize(), before, after }, null, 2));
 }
 
 test.beforeEach(async ({ page, request }, info) => {
@@ -98,8 +132,7 @@ test('linked event gives the host a subordinate brand credit without replacing o
   await expect(host.locator('.host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
   await expect(host.locator('.host-portrait__seal img')).toHaveAttribute('src', '/hosts/the-yorke-way.svg');
-  const portrait = await host.locator('.event-host__portrait').boundingBox(), name = await host.locator('h2').boundingBox();
-  expect(portrait!.y).toBeCloseTo(name!.y, 0);
+  await expectHostButton(host);
   await expect(host.locator('.host-brand-eyebrow')).toHaveCSS('text-transform', 'none');
   await expect(host.getByRole('link', { name: 'View Host', exact: true })).toHaveAttribute('href', '/hosts/kofi-bills');
   await expect(page.locator('.event-detail-poster img')).toHaveAttribute('src', /on-the-guest-list/);
@@ -128,6 +161,8 @@ test('the portrait seal and brand hierarchy stay contained on a 320px phone', as
   await expect(page.locator('.event-host .host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
   await expect(page.locator('.event-host .host-portrait__seal')).toBeVisible();
+  await expectHostButton(page.locator('.event-host--branded'));
+  expect((await new AxeBuilder({ page }).include('.event-host').analyze()).violations).toEqual([]);
   await page.locator('.event-detail-story').screenshot({ path: test.info().outputPath('yorke-event-host-narrow.png'), scale: 'css' });
   await recordHostSpacing(page, page.locator('.event-host--branded'), 'yorke-host-spacing-narrow.json');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);

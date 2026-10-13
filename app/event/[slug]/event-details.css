@@ -138,9 +138,11 @@ body:has(.poster-event-page) .customer-dock a[aria-current="page"] { color: var(
 .event-host h2 + span { display: block; }
 .event-host a { min-height: 44px; }
 
-.event-host--branded { padding: 12px 0; align-items: start; grid-template-columns: 64px minmax(0, 1fr); gap: 16px; }
-.event-host--branded .event-host__portrait { align-self: start; margin-top: 20px; }
-.event-host--branded h2 { margin: 0 0 2px; line-height: 1.15; }
+.event-host--branded { padding: 16px 0; align-items: start; grid-template-columns: 80px minmax(0, 1fr); gap: 16px; }
+.event-host--branded .event-host__portrait { width: 80px; align-self: start; margin-top: 0; }
+.event-host--branded h2 { margin: 0 0 4px; line-height: 1.15; }
 .event-host__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); font-size: 13px; line-height: 20px; }
 .event-host__meta > span { display: inline-flex; align-items: center; gap: 5px; }
-.event-host--branded a { display: flex; width: fit-content; margin-top: 0; }
+.event-host--branded a { display: flex; width: fit-content; min-width: 44px; min-height: 44px; margin-top: 8px; padding: 0 14px; border: 1px solid var(--event-ink); border-radius: 6px; background: var(--event-ink); color: var(--event-paper); text-decoration: none; }
+.event-host--branded a:hover { background: color-mix(in srgb, var(--event-ink) 92%, var(--event-paper)); }
+.event-host--branded a:focus-visible { outline: 2px solid var(--event-ink); outline-offset: 3px; }

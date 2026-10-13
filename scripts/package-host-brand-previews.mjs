@@ -55,7 +55,7 @@ export async function packageHostBrandPreviews({ root, output, sourceSha, source
     const before = metrics(data.before), after = metrics(data.after);
     assert.ok(after.linkHeight >= 44 && after.hostHeight < before.hostHeight - 30);
     for (const key of ['nameFontSize', 'brandFontSize', 'metaFontSize', 'portraitWidth', 'portraitHeight', 'sealWidth']) assert.equal(after[key], before[key]);
-    spacingComparisons.push({ browser, viewport: { width, height: 900 }, baselineSourceSha: data.baselineSourceSha, method: 'Same candidate DOM; exact prior spacing declarations applied temporarily, then removed before candidate screenshots.', before, after, sha256: createHash('sha256').update(bytes).digest('hex') });
+    spacingComparisons.push({ browser, viewport: { width, height: 900 }, baselineSourceSha: data.baselineSourceSha, method: 'Candidate screenshots captured before comparison; prior spacing applied temporarily to the same DOM, then removed before candidate geometry measurement.', before, after, sha256: createHash('sha256').update(bytes).digest('hex') });
   }
   await mkdir(output, { recursive: false });
   for (const file of files) await writeFile(path.join(output, file.file), file.content, { flag: 'wx' });
