@@ -1,4 +1,4 @@
-import type { CustomerEventScreen, CustomerEvent } from '../../lib/customer-screen';
+import type { CustomerEventScreen, CustomerEvent, CustomerHost } from '../../lib/customer-screen';
 import type { PublicCatalogue } from '../../lib/public-event';
 import { WEB_ORIGIN, parseCatalogue } from './catalogue.ts';
 
@@ -47,6 +47,15 @@ function https(value: unknown): string | null {
   }
   return result;
 }
+function host(value: unknown): CustomerHost {
+  const h = record(value);
+  return {
+    slug: slug(h.slug), name: text(h.name), role: text(h.role), city: text(h.city), verificationStatus: text(h.verificationStatus),
+    profileImageUrl: h.profileImageUrl == null ? null : https(new URL(text(h.profileImageUrl), WEB_ORIGIN).href),
+    brandName: nullable(h.brandName),
+    brandLogoUrl: h.brandLogoUrl == null ? null : https(new URL(text(h.brandLogoUrl), WEB_ORIGIN).href),
+  };
+}
 function event(value: unknown): CustomerEvent {
   const e = record(value);
   if (!Array.isArray(e.ticketTiers) || e.ticketTiers.length > 100 || e.isTestEvent !== false) throw new Error('Invalid public event');
@@ -81,11 +90,13 @@ export function parseScreenCatalogue(value: unknown): PublicCatalogue & { screen
     const s = record(value), e = event(s.event);
     if (seen.has(e.slug) || !data.events.some(item => item.slug === e.slug && item.title === e.title)) throw new Error('Inconsistent catalogue');
     seen.add(e.slug);
-    const h = s.host === null ? null : record(s.host);
+    const h = s.host === null ? null : host(s.host);
+    if (s.hosts !== undefined && (!Array.isArray(s.hosts) || s.hosts.length > 100)) throw new Error('Invalid hosts');
     const r = s.registration === null ? null : record(s.registration);
     return {
       event: e,
-      host: h ? { slug: slug(h.slug), name: text(h.name), role: text(h.role), city: text(h.city), verificationStatus: text(h.verificationStatus), profileImageUrl: h.profileImageUrl == null ? null : https(new URL(text(h.profileImageUrl), WEB_ORIGIN).href) } : null,
+      host: h,
+      ...(s.hosts === undefined ? {} : { hosts: (s.hosts as unknown[]).map(host) }),
       registration: r ? { mode: choice(r.mode, ['paid', 'rsvp', 'interest']), open: boolean(r.open), maxPartySize: integer(r.maxPartySize), approvalRequired: boolean(r.approvalRequired), deadline: date(r.deadline), ...(r.roomAccess === undefined ? {} : { roomAccess: boolean(r.roomAccess) }) } : null,
     };
   });

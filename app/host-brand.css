@@ -1,0 +1,17 @@
+.host-profile.host-profile--branded .host-brand-eyebrow,
+.event-host.event-host--branded .host-brand-eyebrow {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.host-profile.host-profile--branded .host-brand-eyebrow { color: #f9eee6; }
+.event-host.event-host--branded .host-brand-eyebrow { color: var(--muted); margin-bottom: 2px; font-size: 13px; line-height: 18px; }
+@media (max-width: 600px) {
+  .host-profile.host-profile--branded .host-brand-eyebrow,
+  .event-host.event-host--branded .host-brand-eyebrow { font-size: 13px; line-height: 18px; }
+}

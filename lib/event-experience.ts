@@ -9,6 +9,8 @@ export type PublicHost = {
   verificationStatus: "verified" | "reviewed" | "unverified";
   profileImageUrl: string | null;
   fullName?: string | null;
+  brandName?: string | null;
+  brandLogoUrl?: string | null;
   instagramHandle?: string | null;
   snapchatHandle?: string | null;
   role: string;
@@ -50,7 +52,8 @@ export async function findPrimaryHost(db: D1Database, eventSlug: string): Promis
   const host = await db.prepare(`
     SELECT host.id, host.slug, host.name, host.bio, host.city,
            host.verification_status AS verificationStatus,
-           host.profile_image_url AS profileImageUrl, link.role
+           host.profile_image_url AS profileImageUrl, host.brand_name AS brandName,
+           host.brand_logo_url AS brandLogoUrl, link.role
     FROM event_hosts link
     JOIN hosts host ON host.id = link.host_id
     WHERE link.event_slug = ?
@@ -60,11 +63,27 @@ export async function findPrimaryHost(db: D1Database, eventSlug: string): Promis
   return host ? { ...host, role: host.role ?? "Host" } : null;
 }
 
+/** All actual event-host links, including secondary hosts. Never infer from event copy. */
+export async function findEventHosts(db: D1Database, eventSlug: string): Promise<PublicHost[]> {
+  const rows = await db.prepare(`
+    SELECT host.id, host.slug, host.name, host.bio, host.city,
+           host.verification_status AS verificationStatus,
+           host.profile_image_url AS profileImageUrl, host.brand_name AS brandName,
+           host.brand_logo_url AS brandLogoUrl, link.role
+    FROM event_hosts link
+    JOIN hosts host ON host.id = link.host_id
+    WHERE link.event_slug = ?
+    ORDER BY link.is_primary DESC, host.name
+  `).bind(eventSlug).all<HostRecord>();
+  return rows.results.map(host => ({ ...host, role: host.role ?? "Host" }));
+}
+
 export async function findHostBySlug(db: D1Database, slug: string): Promise<PublicHost | null> {
   if (!/^[a-z0-9-]{1,80}$/u.test(slug)) return null;
   const host = await db.prepare(`
     SELECT id, slug, name, bio, city, verification_status AS verificationStatus,
            profile_image_url AS profileImageUrl, full_name AS fullName,
+           brand_name AS brandName, brand_logo_url AS brandLogoUrl,
            instagram_handle AS instagramHandle, snapchat_handle AS snapchatHandle
     FROM hosts WHERE slug = ? LIMIT 1
   `).bind(slug).first<HostRecord>();
@@ -85,7 +104,8 @@ export async function listEventHosts(db: D1Database, eventSlugs: string[]): Prom
   const rows = await db.prepare(`
     SELECT link.event_slug AS eventSlug, host.id, host.slug, host.name, host.bio, host.city,
            host.verification_status AS verificationStatus,
-           host.profile_image_url AS profileImageUrl, link.role
+           host.profile_image_url AS profileImageUrl, host.brand_name AS brandName,
+           host.brand_logo_url AS brandLogoUrl, link.role
     FROM event_hosts link
     JOIN hosts host ON host.id = link.host_id
     WHERE link.event_slug IN (${placeholders})
