@@ -4741,15 +4741,15 @@ class YorkeSourcePinTests(unittest.TestCase):
     def test_yorke_scope_is_exact_and_separate_from_historical_workspace_pins(self):
         self.assertEqual(release.YORKE_RELEASE_BASELINE, "c2058fb39bb6d9a93ef622aad08b1e9e2d22488f")
         self.assertEqual(release.YORKE_BASE_TREE, "c85475e968e1cecbd6637fe77710b032dee0ecbd")
-        self.assertEqual(release.YORKE_APP_SNAPSHOT, "12a302faa11ec18a63a5d4893ef909b6e6cd7b91")
-        self.assertEqual(release.YORKE_APP_TREE, "ad4718a3df3ec9a7ad4c4e017c07cfb399857de4")
+        self.assertEqual(release.YORKE_APP_SNAPSHOT, "0babbc74b0a8d2b931289441c73aa93b36e1e52c")
+        self.assertEqual(release.YORKE_APP_TREE, "28f678b6a2a7812d2d4c11240b04baace9a1ea48")
         self.assertEqual(release.YORKE_PACKAGE_BLOBS,
                          ("ee7d351bd660b932e9870b6d542da4426386eca5", "e4f736b3204696fceab081989f1cdddfd5b1bc5e"))
         self.assertEqual(release.YORKE_LOCK_BLOB, "47a4eaca5743b768598462d8b66a2ef49a442b4e")
         self.assertEqual(release.YORKE_CONTROL_FILES,
                          {"ops/vps/code-release.py", "ops/vps/test_code_release.py"})
         self.assertEqual(release.YORKE_MIGRATION_FILES, {"drizzle/0067_host_brand_identity.sql"})
-        self.assertEqual(len(release.YORKE_APPLICATION_BLOBS), 26)
+        self.assertEqual(len(release.YORKE_APPLICATION_BLOBS), 27)
         self.assertFalse(set(release.YORKE_APPLICATION_BLOBS)
                          & (release.YORKE_MIGRATION_FILES | release.YORKE_CONTROL_FILES))
         self.assertEqual(release.YORKE_APPLICATION_BLOBS["package.json"], release.YORKE_PACKAGE_BLOBS[1])
