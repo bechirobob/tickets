@@ -13,6 +13,7 @@ async function readyPortrait(page: Page, selector: string) {
 }
 
 async function expectHostButton(host: Locator) {
+  await expect(host.locator('.event-host__meta')).not.toContainText('Accra');
   const portrait = await host.locator('.event-host__portrait').boundingBox();
   const brand = await host.locator('.host-brand-eyebrow').boundingBox();
   const button = host.getByRole('link', { name: 'View Host', exact: true });

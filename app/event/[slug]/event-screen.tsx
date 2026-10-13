@@ -74,7 +74,6 @@ export default function EventScreen({ event, host, hosts, registration, promoter
               <div className="event-host__meta">
                 {host.role !== "Host" ? <span>{host.role}</span> : null}
                 <span><BadgeCheck size={13} aria-hidden="true" /> {host.verificationStatus === "verified" ? "Verified host" : "Reviewed Host"}</span>
-                <span>{host.city}</span>
               </div>
             </> : <><p><BadgeCheck size={13} /> {host.verificationStatus === "verified" ? "Verified host" : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.role} · {host.city}</span></>}
             <Link href={`/hosts/${host.slug}`}>View Host <ArrowUpRight size={14} /></Link>

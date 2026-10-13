@@ -57,6 +57,7 @@ test('event rendering retains the legacy primary-host contract, portrait and per
   assert.match(html, /class="host-portrait__seal"><img src="\/hosts\/the-yorke-way.svg"/);
   assert.match(html, /src="\/events\/on-the-guest-list.webp"/);
   assert.match(html, /href="\/hosts\/kofi-bills"/);
+  assert.doesNotMatch([...html.matchAll(/<div class="event-host__meta">([\s\S]*?)<\/div>/g)].map(match => match[1]).join(), /Accra/);
   assert.equal((html.match(/<section class="event-host(?: event-host--branded)?"/g) ?? []).length, 1);
 });
 
@@ -68,7 +69,7 @@ test('event rendering includes branded secondary hosts and multiple brands witho
   assert.match(html, /class="host-brand-eyebrow">The Yorke Way<\/p>/);
   assert.ok(html.indexOf('The Yorke Way</p>') < html.indexOf('<h2>Kofi Bills</h2>'));
   assert.match(html, /<span>Co-host<\/span>/);
-  assert.match(html, /<span>Accra<\/span>/);
+  assert.doesNotMatch([...html.matchAll(/<div class="event-host__meta">([\s\S]*?)<\/div>/g)].map(match => match[1]).join(), /Accra|Kumasi/);
   assert.match(html, /href="\/hosts\/another-host"/);
   assert.match(html, /href="\/hosts\/kofi-bills"/);
 });
