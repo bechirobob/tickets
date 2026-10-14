@@ -74,3 +74,84 @@ test('the confirmed Pink Edition keeps its host and removes performer details', 
   await expect(page.locator('.rsvp-signup__facts')).toContainText(guestList!.event.fullDate);
   await expect(page.getByText('Special Guest DJ · Cuppy')).toHaveCount(0);
 });
+
+async function holdRegistrationScripts(page: import('@playwright/test').Page) {
+  let release!: () => void;
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/_next/static/**/*.js', async route => {
+    await ready;
+    await route.continue();
+  });
+  return { release, async dispose() { release(); await page.unroute('**/_next/static/**/*.js'); } };
+}
+
+for (const activation of ['pointer', 'keyboard'] as const) test(`registration waits for hydration before ${activation} activation and repeated opening`, async ({ page, catalogue }) => {
+  const screen = catalogue.screens?.find(screen => screen.registration?.open && screen.registration.mode !== 'paid');
+  test.skip(!screen, 'No published registration form is open in this fixture');
+  let submissions = 0;
+  await page.route('**/api/registrations', route => {
+    submissions++;
+    return route.fulfill({ status: 202, json: { message: 'Readiness fixture', canManage: false } });
+  });
+  const scripts = await holdRegistrationScripts(page);
+  try {
+    await page.goto(`/event/${screen!.event.slug}`, { waitUntil: 'commit' });
+    const open = page.getByRole('button', { name: /^(Keep me posted|Request an RSVP|RSVP)$/ });
+    await expect(open).toBeVisible();
+    await expect(open).toBeDisabled();
+    await expect(open).toHaveAttribute('aria-busy', 'true');
+    await open.scrollIntoViewIfNeeded();
+    const box = (await open.boundingBox())!;
+    // A real early pointer activation cannot advertise success or open an inert form.
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.getByLabel('Your name', { exact: true })).toHaveCount(0);
+    expect(submissions).toBe(0);
+    scripts.release();
+    await expect(open).toBeEnabled();
+    await expect(open).toHaveAttribute('aria-busy', 'false');
+    if (activation === 'keyboard') { await open.focus(); await open.press('Enter'); }
+    else await open.dblclick();
+    await expect(page.locator('.registration-form form')).toHaveCount(1);
+    await expect(page.getByLabel('Your name', { exact: true })).toBeEditable();
+    await expect(page.getByRole('checkbox', { name: /I accept the event terms/ })).not.toBeChecked();
+    await expect(page.locator('.registration-consent input[type=checkbox]:not([name=acceptedTerms])')).not.toBeChecked();
+    const close = page.getByRole('button', { name: 'Close form', exact: true });
+    if (activation === 'keyboard') await close.press('Enter'); else await close.click();
+    await expect(open).toBeFocused();
+    if (activation === 'keyboard') await open.press('Space'); else await open.click();
+    await expect(page.locator('.registration-form form')).toHaveCount(1);
+    await expect(page.getByLabel('Your name', { exact: true })).toBeEditable();
+    expect(submissions).toBe(0);
+  } finally { await scripts.dispose(); }
+});
+
+test('direct RSVP fields and consent wait for hydration without submitting', async ({ page, catalogue }) => {
+  const screen = catalogue.screens?.find(screen => screen.registration?.open && screen.registration.mode !== 'paid');
+  test.skip(!screen, 'No published registration form is open in this fixture');
+  let submissions = 0;
+  await page.route('**/api/registrations', route => {
+    submissions++;
+    return route.fulfill({ status: 202, json: { message: 'Readiness fixture', canManage: false } });
+  });
+  const scripts = await holdRegistrationScripts(page);
+  try {
+    await page.goto(`/rsvp/${screen!.event.slug}`, { waitUntil: 'commit' });
+    const name = page.getByLabel('Your name', { exact: true });
+    const email = page.getByLabel('Email address', { exact: true });
+    const consent = page.getByRole('checkbox', { name: /I accept the event terms/ });
+    const submit = page.locator('.registration-form button[type=submit]');
+    await expect(name).toBeVisible();
+    for (const control of [name, email, consent, submit]) await expect(control).toBeDisabled();
+    await expect(consent).not.toBeChecked();
+    expect(submissions).toBe(0);
+    scripts.release();
+    for (const control of [name, email, consent, submit]) await expect(control).toBeEnabled();
+    await expect(consent).not.toBeChecked();
+    await expect(page.locator('.registration-consent input[type=checkbox]:not([name=acceptedTerms])')).not.toBeChecked();
+    await name.fill('Readiness Guest');
+    await email.fill('readiness@example.com');
+    await expect(name).toHaveValue('Readiness Guest');
+    await expect(email).toHaveValue('readiness@example.com');
+    expect(submissions).toBe(0);
+  } finally { await scripts.dispose(); }
+});
