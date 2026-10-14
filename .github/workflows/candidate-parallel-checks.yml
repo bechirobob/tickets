@@ -1,4 +1,5 @@
-# Advisory benchmark only. Existing Candidate/release admission is unchanged.
+# Full-coverage isolated browser evidence; legacy release mode stays the default.
+# Parallel admission requires independently trusted v2 provenance.
 # The branch push trigger gives the executed workflow the exact source SHA;
 # pull_request merge-ref workflow code is deliberately not used for this proof.
 name: Candidate parallel benchmark
