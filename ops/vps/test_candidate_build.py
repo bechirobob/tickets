@@ -72,6 +72,81 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(result,self.manifest)
         self.assertEqual({p.as_posix():p.read_bytes() for p in Path('dist').rglob('*') if p.is_file()},original)
 
+    def assert_config_pack_restore(self, config):
+        config['vars']['RELEASE_SHA'] = self.expected['source_sha']
+        raw = json.dumps(config).encode()
+        Path('dist/server/wrangler.json').write_bytes(raw)
+        manifest = build.package('decimal-package', self.expected)
+        shutil.rmtree('dist')
+        restored = build.restore('decimal-package', self.expected,
+                                 build.digest(Path('decimal-package') / build.ARCHIVE),
+                                 build.digest(Path('decimal-package') / build.MANIFEST))
+        self.assertEqual(restored, manifest)
+        self.assertEqual(Path('dist/server/wrangler.json').read_bytes(), raw)
+        self.assertEqual(build.parse_config(raw), config)
+
+    def test_decimal_configuration_full_pack_restore_in_all_layouts(self):
+        # Self-contained so the real failing decimal is exercised in both the
+        # application checkout and the intentionally narrow staged controls.
+        config = {'name': 'becore-tickets', 'main': './index.js',
+                  'compatibility_date': '2026-08-11',
+                  'compatibility_flags': ['nodejs_compat'], 'vars': {},
+                  'observability': {'enabled': True,
+                                    'logs': {'enabled': True, 'head_sampling_rate': 1},
+                                    'traces': {'enabled': True, 'head_sampling_rate': 0.05}}}
+        self.assert_config_pack_restore(config)
+
+    def test_checked_in_wrangler_config_full_checkout_only(self):
+        path = ROOT / 'wrangler.jsonc'
+        if not path.exists():
+            self.assertFalse((ROOT / 'package.json').exists() or (ROOT / 'app').exists(),
+                             'Full application checkout must include wrangler.jsonc')
+            self.skipTest('Application config is intentionally absent from the staged controls archive')
+        config = json.loads(path.read_bytes())
+        self.assertEqual(config['observability']['traces']['head_sampling_rate'], 0.05)
+        self.assert_config_pack_restore(config)
+
+    def test_config_decimal_mode_never_relaxes_manifest_numbers(self):
+        values = (b'0.05', b'1.0', b'-0.125', b'1.25e-7', b'1e19', b'0.0', b'-0.0')
+        for value in values:
+            raw = b'{"sampling":' + value + b'}'
+            with self.subTest(value=value):
+                self.assertEqual(build.parse_config(raw)['sampling'], float(value))
+                with self.assertRaises(build.BuildError): build.parse(raw)
+        for field in ('archive_bytes', 'expanded_bytes'):
+            manifest = copy.deepcopy(self.manifest)
+            manifest[field] = float(manifest[field])
+            self.rewrite_manifest(manifest)
+            with self.subTest(field=field), self.assertRaises(build.BuildError): self.validate()
+        manifest = copy.deepcopy(self.manifest)
+        manifest['files'][0]['size'] = float(manifest['files'][0]['size'])
+        self.rewrite_manifest(manifest)
+        with self.assertRaises(build.BuildError): self.validate()
+
+    def test_config_numbers_duplicates_and_resource_bounds_fail_closed(self):
+        values = (b'NaN', b'Infinity', b'-Infinity', b'1e309', b'-1e309', b'1e20',
+                  b'-1e20', b'1e-999', b'100000000000000000000', b'0.' + b'0'*128 + b'1')
+        malformed = [b'{"sampling":' + value + b'}' for value in values]
+        malformed.extend((b'{"sampling":0.05,"sampling":0.1}', b'{',
+                          b'['*33 + b'0.05' + b']'*33, b'['*1500 + b']'*1500))
+        for raw in malformed:
+            with self.subTest(raw=raw[:60]), self.assertRaises(build.BuildError): build.parse_config(raw)
+        with patch.object(build, 'MAX_MANIFEST', 1), self.assertRaises(build.BuildError):
+            build.parse_config(b'{}')
+
+    def test_decimal_config_still_requires_exact_embedded_release_identity(self):
+        invalid = ({'vars': {'RELEASE_SHA': 'b'*40}, 'sampling': 0.05},
+                   {'sampling': 0.05}, {'vars': None, 'sampling': 0.05},
+                   {'vars': [], 'sampling': 0.05}, [0.05])
+        for index, config in enumerate(invalid):
+            Path('dist/server/wrangler.json').write_text(json.dumps(config))
+            directory = Path(f'invalid-config-{index}')
+            build.package(directory, self.expected)
+            shutil.rmtree('dist')
+            with self.subTest(config=config), self.assertRaisesRegex(build.BuildError, 'Embedded release identity'):
+                build.restore(directory, self.expected, build.digest(directory / build.ARCHIVE),
+                              build.digest(directory / build.MANIFEST))
+
     def test_realistic_generated_basename_over_100_bytes(self):
         name='dist/server/'+('framework~index~page~'*8)+'.js'
         Path(name).write_text('export default {};')
