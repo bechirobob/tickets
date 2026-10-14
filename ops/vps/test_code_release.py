@@ -94,8 +94,34 @@ def checkout_git(root, *args):
         stderr=subprocess.DEVNULL, env=release.git_environment(), timeout=60)
 
 
+# Advisory benchmark additions are exact test-source pins, not release authority.
+# All-or-none recognition lets the unchanged application-family assertions run
+# against this tooling increment. Deployment admission is deliberately unchanged.
+BENCHMARK_FILE_BLOBS = {'.github/workflows/candidate-parallel-checks.yml': '313182fc21841d8a059be596c7c31e0a0b179a33', 'ops/vps/candidate_build.py': '5820b026f9747961081fc3e8b8e5531bf546621a', 'ops/vps/test_candidate_build.py': '332079c682451af3c3e1ac36feef0129d1975b29', 'scripts/release-timing.py': '27f76adcc0ef2ad71b9e9696eb050ff643232d28', 'tests/test_release_timing.py': '874dc439367e2600fc764ba0d26e8fb3c93b37dd', 'docs/reliability/release-timing.md': '4f2bfabd835257370f55b50fa03bb272127436fa', 'docs/reliability/parallel-candidate-benchmark.md': 'c7706b3ffea9fbd2c73a435cc516e3d8c3bde289', 'tests/test_candidate_parallel_workflow.py': '26f56b2aca434e930718cb75db3a4a9863131411'}
+
+
+def benchmark_checkout_files(root):
+    present = {name for name in BENCHMARK_FILE_BLOBS if os.path.lexists(root / name)}
+    if not present:
+        return set()
+    if present != set(BENCHMARK_FILE_BLOBS):
+        raise ValueError("Incomplete benchmark tooling family")
+    for name, expected in BENCHMARK_FILE_BLOBS.items():
+        path = root / name
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_mode & 0o111
+                or any(parent.is_symlink() for parent in (path, *path.parents))):
+            raise ValueError("Nonregular benchmark tooling")
+        raw = path.read_bytes()
+        actual = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        if actual != expected:
+            raise ValueError("Unreviewed benchmark tooling bytes")
+    return present
+
+
 def exact_application_checkout(root, baseline, tree, controls):
     try:
+        controls = set(controls) | benchmark_checkout_files(root)
         if checkout_git(root, "rev-parse", baseline + "^{tree}").decode().strip() != tree:
             return False
         changes = set(filter(None, checkout_git(root, "diff", "--name-only", "-z", baseline, "--").decode().split("\0")))
@@ -135,7 +161,7 @@ def exact_application_checkout(root, baseline, tree, controls):
                 if release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest().encode() != expected:
                     return False
         return True
-    except (subprocess.CalledProcessError, OSError):
+    except (subprocess.CalledProcessError, OSError, ValueError):
         return False
 
 
