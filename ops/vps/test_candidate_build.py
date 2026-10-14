@@ -27,7 +27,7 @@ class BuildTests(unittest.TestCase):
         self.addCleanup(os.chdir, self.before)
         os.chdir(self.temp.name)
         self.expected = {'repository': 'bechirobob/tickets', 'source_sha': 'a'*40,
-                         'source_tree': 'b'*40, 'workflow_sha': 'a'*40,
+                         'source_tree': 'b'*40, 'workflow_sha': 'a'*40, 'audit_trusted_base': 'd'*40,
                          'run_id': '42', 'run_attempt': '1', 'lock_sha256': 'c'*64,
                          'node': 'v22.13.0', 'browsers': list(build.BROWSERS)}
         Path('dist/client/.vite').mkdir(parents=True)
@@ -167,15 +167,117 @@ class BuildTests(unittest.TestCase):
         p=self.directory/build.MANIFEST;p.rename('real.json');p.symlink_to(Path.cwd()/'real.json')
         with self.assertRaises(build.BuildError):self.validate()
 
+    def test_version_one_and_mismatched_audit_baseline_never_transport(self):
+        for mutate in (lambda value: value.update(schema='tickets-browser-build/v1'),
+                       lambda value: value.pop('audit_trusted_base'),
+                       lambda value: value.update(audit_trusted_base='e'*40)):
+            value = copy.deepcopy(self.manifest)
+            mutate(value)
+            self.rewrite_manifest(value)
+            with self.assertRaises(build.BuildError): self.validate()
+        value = copy.deepcopy(self.manifest)
+        value['schema'] = 'tickets-browser-build/v1'
+        with self.assertRaises(build.BuildError):
+            build.receipt('producer', value, '17', 'd'*64, self.manifest_digest)
+
+    def test_invalid_build_json_numbers_and_types_fail_closed(self):
+        for raw in (b'{', b'{"a":1.0}', b'{"a":NaN}', b'{"a":1,"a":2}', b'['*1500+b']'*1500):
+            with self.subTest(raw=raw[:30]), self.assertRaises(build.BuildError): build.parse(raw)
+        for field in ('run_id', 'run_attempt', 'audit_trusted_base', 'source_sha', 'lock_sha256'):
+            value = copy.deepcopy(self.expected)
+            value[field] = True
+            with self.subTest(field=field), self.assertRaises(build.BuildError): build.validate_identity(value)
+        for digest in ('', True, 'g'*64):
+            with self.assertRaises(build.BuildError):
+                build.receipt('producer', self.manifest, '17', 'd'*64, digest)
+
     def test_receipts_bind_artifact_identity_and_browser(self):
         value=build.receipt('producer',self.manifest,'17','d'*64,self.manifest_digest)
         self.assertEqual(value['run_attempt'],'1');self.assertEqual(value['artifact_id'],'17')
+        self.assertEqual(value['schema'], 'tickets-browser-build/v2')
+        self.assertEqual(value['audit_trusted_base'], self.expected['audit_trusted_base'])
         for browser in build.BROWSERS:
             value=build.receipt('consumer',self.manifest,'17','d'*64,self.manifest_digest,browser)
             self.assertEqual(value['browser'],browser)
+            self.assertEqual(value['audit_trusted_base'], self.expected['audit_trusted_base'])
         for identity in ('','latest','01'):
             with self.assertRaises(build.BuildError):build.receipt('producer',self.manifest,identity,'d'*64,self.manifest_digest)
         with self.assertRaises(build.BuildError):build.receipt('consumer',self.manifest,'17','d'*64,self.manifest_digest,'unknown')
+
+
+class IdentityTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.before = Path.cwd()
+        self.addCleanup(os.chdir, self.before)
+        os.chdir(self.temp.name)
+        def command(*args):
+            return subprocess.check_output(['git', *args], text=True, stderr=subprocess.DEVNULL).strip()
+        self.git = command
+        command('init', '-q')
+        command('config', 'user.name', 'Identity fixture')
+        command('config', 'user.email', 'fixture@example.invalid')
+        Path('package-lock.json').write_text('{}')
+        command('add', 'package-lock.json')
+        command('commit', '-qm', 'independent audit controls')
+        self.baseline = command('rev-parse', 'HEAD')
+        Path('source.txt').write_text('candidate')
+        command('add', 'source.txt')
+        command('commit', '-qm', 'candidate source')
+        self.source = command('rev-parse', 'HEAD')
+        command('update-ref', 'refs/remotes/origin/main', self.source)
+        self.env = {'GITHUB_REPOSITORY': 'bechirobob/tickets', 'BECORE_RELEASE_SHA': self.source,
+                    'GITHUB_WORKFLOW_SHA': self.source, 'BECORE_TRUSTED_BASE': self.baseline,
+                    'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2'}
+        self.original_output = subprocess.check_output
+
+    def identity(self):
+        def output(args, **kwargs):
+            return 'v22.13.0' if args == ['node', '--version'] else self.original_output(args, **kwargs)
+        with patch.dict(os.environ, self.env), patch.object(subprocess, 'check_output', side_effect=output):
+            return build.identity()
+
+    def test_v2_identity_binds_exact_source_tree_and_independent_ancestor(self):
+        result = self.identity()
+        self.assertEqual(result['audit_trusted_base'], self.baseline)
+        self.assertEqual(result['source_sha'], self.source)
+        self.assertEqual(result['source_tree'], self.git('rev-parse', 'HEAD^{tree}'))
+
+    def test_missing_self_or_noncommit_audit_baseline_rejected(self):
+        for value in ('', 'HEAD', self.source, self.git('rev-parse', 'HEAD:source.txt'), '0'*40):
+            self.env['BECORE_TRUSTED_BASE'] = value
+            with self.subTest(value=value), self.assertRaises(build.BuildError): self.identity()
+
+    def test_audit_baseline_must_be_ancestor_of_both_source_and_main(self):
+        self.git('checkout', '--orphan', 'other')
+        self.git('rm', '-qrf', '.')
+        Path('foreign.txt').write_text('unrelated')
+        self.git('add', 'foreign.txt'); self.git('commit', '-qm', 'unrelated history')
+        foreign = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '--detach', self.source)
+        self.env['BECORE_TRUSTED_BASE'] = foreign
+        with self.assertRaises(build.BuildError): self.identity()
+        self.env['BECORE_TRUSTED_BASE'] = self.baseline
+        self.git('update-ref', 'refs/remotes/origin/main', foreign)
+        with self.assertRaises(build.BuildError): self.identity()
+
+    def test_dirty_unstaged_staged_deleted_or_different_head_rejected(self):
+        for mode in ('unstaged', 'staged', 'deleted'):
+            self.git('reset', '--hard', self.source)
+            if mode == 'deleted': Path('source.txt').unlink()
+            else: Path('source.txt').write_text('changed source')
+            if mode == 'staged': self.git('add', 'source.txt')
+            with self.subTest(mode=mode), self.assertRaises(build.BuildError): self.identity()
+        self.git('reset', '--hard', self.source)
+        self.env['BECORE_RELEASE_SHA'] = self.baseline
+        self.env['GITHUB_WORKFLOW_SHA'] = self.baseline
+        with self.assertRaises(build.BuildError): self.identity()
+
+    def test_git_environment_cannot_replace_source_or_enable_lazy_fetch(self):
+        with patch.dict(os.environ, {'GIT_CONFIG_COUNT':'1', 'GIT_CONFIG_KEY_0':'alias.rev-parse',
+                                     'GIT_CONFIG_VALUE_0':'!exit 0', 'GIT_DIR':'/not/a/repository'}):
+            self.assertEqual(self.identity()['source_sha'], self.source)
 
 
 class BenchmarkSourceFamilyTests(unittest.TestCase):
