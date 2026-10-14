@@ -176,7 +176,7 @@ PARALLEL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '8
 
 # The operator can be independently pinned here because neither control file
 # is in the production 13-output manifest. Only this test file self-exempts.
-PARALLEL_OPERATOR_BLOB = '62f07303a64e44d2107c863afc71e544abeefb75'
+PARALLEL_OPERATOR_BLOB = '5562363d304c4b649960d9f2d2ac6abd7eff40fd'
 LEGACY_ORIGINAL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),

@@ -8,6 +8,7 @@ jobs/logs before any release use. JSON/digests alone do not prove provenance.
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -45,6 +46,16 @@ def canonical(value):
 
 
 def parse(raw):
+    """Evidence and manifests deliberately permit integer JSON numbers only."""
+    return _parse_json(raw, config=False)
+
+
+def parse_config(raw):
+    """Wrangler config also permits bounded finite decimals, never evidence."""
+    return _parse_json(raw, config=True)
+
+
+def _parse_json(raw, *, config):
     def pairs(items):
         result = {}
         for key, value in items:
@@ -56,8 +67,20 @@ def parse(raw):
     try:
         def invalid_number(_):
             raise BuildError('Invalid JSON number')
+        def config_number(token):
+            # Generated configuration contains sampling rates such as 0.05.
+            # Bound the token and magnitude; reject overflow and nonzero values
+            # that underflow to zero instead of silently changing configuration.
+            require(len(token) <= 128, 'Config number exceeds bound')
+            number = float(token)
+            require(math.isfinite(number) and abs(number) < 10**20,
+                    'Config number must be finite and bounded')
+            mantissa = token.lower().split('e', 1)[0]
+            require(number != 0 or not any(char in '123456789' for char in mantissa),
+                    'Config number underflows')
+            return number
         value = json.loads(raw, object_pairs_hook=pairs, parse_constant=invalid_number,
-                           parse_float=invalid_number)
+                           parse_float=config_number if config else invalid_number)
         pending, nodes = [(value, 0)], 0
         while pending:
             item, depth = pending.pop()
@@ -299,8 +322,11 @@ def restore(directory, expected, archive_digest, manifest_digest):
                     'Archive changed during extraction')
     require(seen == set(inventory) and digest(Path(directory) / ARCHIVE) == archive_digest,
             'Archive changed during restoration')
-    config = parse(Path('dist/server/wrangler.json').read_bytes())
-    require(config.get('vars', {}).get('RELEASE_SHA') == expected['source_sha'], 'Embedded release identity differs')
+    config_path = Path('dist/server/wrangler.json')
+    regular(config_path, MAX_MANIFEST)
+    config = parse_config(config_path.read_bytes())
+    require(isinstance(config, dict) and isinstance(config.get('vars'), dict)
+            and config['vars'].get('RELEASE_SHA') == expected['source_sha'], 'Embedded release identity differs')
     return manifest
 
 
