@@ -2519,6 +2519,18 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         if exact_application_checkout(self.root, release.WORKSPACE_APP_SNAPSHOT,
                                       release.WORKSPACE_APP_TREE, release.WORKSPACE_CONTROL_FILES):
             pins = {**pins, **release.WORKSPACE_APPLICATION_BLOBS}
+        readiness_live = exact_application_checkout(self.root, release.RSVP_READINESS_LIVE_BASELINE,
+                                                     release.RSVP_READINESS_LIVE_TREE, release.RSVP_READINESS_CONTROL_FILES)
+        readiness_base = exact_application_checkout(self.root, release.RSVP_READINESS_ADVISORY_BASE,
+                                                     release.RSVP_READINESS_ADVISORY_TREE, release.RSVP_READINESS_CONTROL_FILES)
+        readiness_app = exact_application_checkout(self.root, release.RSVP_READINESS_APP_SNAPSHOT,
+                                                    release.RSVP_READINESS_APP_TREE, release.RSVP_READINESS_CONTROL_FILES)
+        if readiness_live or readiness_base or readiness_app:
+            pins = {**pins, **release.WORKSPACE_APPLICATION_BLOBS, **release.YORKE_APPLICATION_BLOBS}
+            if readiness_base or readiness_app:
+                pins = {**pins, **release.RSVP_READINESS_ADVISORY_BLOBS}
+            if readiness_app:
+                pins = {**pins, **release.RSVP_READINESS_APPLICATION_BLOBS}
         if not (self.root / "package.json").exists() and not (self.root / "app").exists():
             # The release operator deliberately archives only ops/vps and these
             # approved control files. Never treat a missing file in a full checkout as
@@ -2551,7 +2563,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             self.assertTrue((self.root / "app").is_dir())
         for name, digest in pins.items():
             if name in release.YORKE_CONTROL_FILES and (
-                    yorke_base or yorke_app or not (self.root / "package.json").exists()):
+                    yorke_base or yorke_app or readiness_live or readiness_base or readiness_app
+                    or not (self.root / "package.json").exists()):
                 # These are the independently evolving controls under test, not
                 # application evidence. Deployment checks their exact C entries.
                 continue
@@ -2568,8 +2581,11 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
                                 (release.WORKSPACE_RELEASE_BASELINE, release.WORKSPACE_BASE_TREE),
                                 (release.WORKSPACE_APP_SNAPSHOT, release.WORKSPACE_APP_TREE),
                                 (release.YORKE_RELEASE_BASELINE, release.YORKE_BASE_TREE),
-                                (release.YORKE_APP_SNAPSHOT, release.YORKE_APP_TREE))),
-                        "Checkout is not a complete reviewed base, workspace or Yorke application family")
+                                (release.YORKE_APP_SNAPSHOT, release.YORKE_APP_TREE),
+                                (release.RSVP_READINESS_LIVE_BASELINE, release.RSVP_READINESS_LIVE_TREE),
+                                (release.RSVP_READINESS_ADVISORY_BASE, release.RSVP_READINESS_ADVISORY_TREE),
+                                (release.RSVP_READINESS_APP_SNAPSHOT, release.RSVP_READINESS_APP_TREE))),
+                        "Checkout is not a complete reviewed base, workspace, Yorke or readiness application family")
 
     def test_candidate_is_one_read_only_job_with_every_browser_gate(self):
         text = (self.root / ".github/workflows/candidate-checks.yml").read_text()
@@ -4788,6 +4804,298 @@ class YorkeSourcePinTests(unittest.TestCase):
                      "ops/vps/runtime_release.py", "package-lock.json", "mobile/package-lock.json"):
             with self.subTest(path=path):
                 self.assertNotIn(path, release.YORKE_APPLICATION_BLOBS)
+
+
+class ReadinessSourceAdmissionTests(unittest.TestCase):
+    """Real Git separates live L, merged advisory A, app S and controls C/P."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git("init", "-q")
+        self.git("config", "user.name", "Readiness source tests")
+        self.git("config", "user.email", "tests@example.invalid")
+        self.write("app/registration-form.tsx", "baseline application\n")
+        self.write("tests/e2e/guest-clarity.spec.ts", "baseline browser test\n")
+        self.write("ops/vps/code-release.py", "baseline operator\n")
+        self.write("ops/vps/test_code_release.py", "baseline tests\n")
+        self.write("scripts/audit-release-manifest.json", "frozen expired exception\n")
+        self.write("package.json", '{"scripts":{"test:ui":"old","start":"same"},"dependencies":{"same":"1"}}\n')
+        self.write("package-lock.json", '{"locked":"unchanged"}\n')
+        self.live = self.commit()
+        self.write("ops/vps/test_code_release.py", "independently merged advisory tests\n")
+        self.write("scripts/advisory.py", "independently merged advisory tooling\n")
+        self.write("docs/advisory.md", "independently merged advisory evidence\n")
+        self.advisory = self.commit()
+        self.advisory_pins = {name: self.git("rev-parse", self.advisory + ":" + name)
+                              for name in ("ops/vps/test_code_release.py", "scripts/advisory.py", "docs/advisory.md")}
+        self.write("app/registration-form.tsx", "reviewed readiness application\n")
+        self.write("tests/e2e/guest-clarity.spec.ts", "reviewed browser test\n")
+        self.write("tests/registration-readiness.test.mjs", "reviewed static test\n")
+        self.write("package.json", '{"scripts":{"test:ui":"new","start":"same"},"dependencies":{"same":"1"}}\n')
+        self.snapshot = self.commit()
+        self.pins = {name: self.git("rev-parse", self.snapshot + ":" + name)
+                     for name in ("app/registration-form.tsx", "tests/e2e/guest-clarity.spec.ts",
+                                  "tests/registration-readiness.test.mjs", "package.json")}
+        self.git("checkout", "-q", self.advisory)
+        self.write("ops/vps/code-release.py", "independently reviewed readiness operator\n")
+        self.write("ops/vps/test_code_release.py", "independently merged advisory tests plus readiness tests\n")
+        self.control = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", self.control)
+        self.copy_snapshot()
+        self.candidate = self.commit()
+        settings = {
+            "RSVP_READINESS_LIVE_BASELINE": self.live,
+            "RSVP_READINESS_LIVE_TREE": self.git("rev-parse", self.live + "^{tree}"),
+            "RSVP_READINESS_ADVISORY_BASE": self.advisory,
+            "RSVP_READINESS_ADVISORY_TREE": self.git("rev-parse", self.advisory + "^{tree}"),
+            "RSVP_READINESS_APP_SNAPSHOT": self.snapshot,
+            "RSVP_READINESS_APP_TREE": self.git("rev-parse", self.snapshot + "^{tree}"),
+            "RSVP_READINESS_ADVISORY_BLOBS": self.advisory_pins,
+            "RSVP_READINESS_APPLICATION_BLOBS": self.pins,
+            "RSVP_READINESS_PACKAGE_BLOBS": tuple(self.git("rev-parse", ref + ":package.json")
+                                                  for ref in (self.live, self.snapshot)),
+            "RSVP_READINESS_LOCK_BLOB": self.git("rev-parse", self.live + ":package-lock.json"),
+            "__file__": str(self.root / "ops/vps/code-release.py"),
+        }
+        for name, value in settings.items():
+            patcher = patch.object(release, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        environment = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(raw)
+        return path
+
+    def commit(self):
+        self.git("add", "-A")
+        self.git("commit", "-qm", "isolated readiness admission")
+        return self.git("rev-parse", "HEAD")
+
+    def copy_snapshot(self):
+        for name in self.pins:
+            self.write(name, self.git("show", self.snapshot + ":" + name) + "\n")
+
+    def verify(self, candidate=None):
+        return release.vetted_changes(self.live, candidate or self.candidate)
+
+    def test_exact_advisory_then_snapshot_copy_onto_independent_controls_is_accepted(self):
+        changes = self.verify()
+        self.assertEqual(set(changes), set(self.pins) | set(self.advisory_pins) | release.RSVP_READINESS_CONTROL_FILES)
+        self.assertEqual(release.migration_plan(changes), [])
+        result = subprocess.run(["git", "merge-base", "--is-ancestor", self.snapshot, self.candidate], capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotEqual(self.advisory_pins["ops/vps/test_code_release.py"],
+                            self.git("rev-parse", self.candidate + ":ops/vps/test_code_release.py"))
+
+    def test_live_advisory_snapshot_trees_and_both_inventories_are_immutable(self):
+        for field, value in (
+                ("RSVP_READINESS_LIVE_TREE", "f" * 40),
+                ("RSVP_READINESS_ADVISORY_TREE", "f" * 40),
+                ("RSVP_READINESS_APP_TREE", "f" * 40),
+                ("RSVP_READINESS_ADVISORY_BLOBS", {"scripts/advisory.py": self.advisory_pins["scripts/advisory.py"]}),
+                ("RSVP_READINESS_APPLICATION_BLOBS", {"package.json": self.pins["package.json"]})):
+            with self.subTest(field=field), patch.object(release, field, value):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_advisory_baseline_must_descend_from_the_live_baseline(self):
+        unrelated = self.git("commit-tree", release.RSVP_READINESS_ADVISORY_TREE, "-m", "unrelated advisory tree")
+        with patch.object(release, "RSVP_READINESS_ADVISORY_BASE", unrelated):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.verify()
+
+    def test_snapshot_must_directly_parent_advisory_not_live_or_controls(self):
+        for parent in (self.live, self.control):
+            wrong = self.git("commit-tree", release.RSVP_READINESS_APP_TREE, "-p", parent, "-m", "wrong snapshot parent")
+            with self.subTest(parent=parent), patch.object(release, "RSVP_READINESS_APP_SNAPSHOT", wrong):
+                with self.assertRaisesRegex(release.ReleaseError, "exact direct child"):
+                    self.verify()
+
+    def test_all_advisory_blobs_are_checked_including_the_original_advisory_tests(self):
+        for path in self.advisory_pins:
+            with self.subTest(path=path), patch.dict(release.RSVP_READINESS_ADVISORY_BLOBS, {path: "f" * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, "advisory baseline differs from reviewed source"):
+                    self.verify()
+
+    def test_all_readiness_outputs_are_individually_byte_pinned(self):
+        for path in self.pins:
+            with self.subTest(path=path), patch.dict(release.RSVP_READINESS_APPLICATION_BLOBS, {path: "f" * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, "differs from reviewed source"):
+                    self.verify()
+
+    def test_candidate_cannot_change_readiness_advisory_audit_or_other_source(self):
+        for name, raw in (
+                ("app/registration-form.tsx", "unreviewed application\n"),
+                ("app/registration-form.tsx", "baseline application\n"),
+                ("scripts/advisory.py", "changed advisory tooling\n"),
+                ("docs/advisory.md", "changed advisory evidence\n"),
+                ("scripts/audit-release-manifest.json", "revived exception\n"),
+                ("tests/unreviewed.test.ts", "unreviewed test\n"),
+                (".github/workflows/deploy.yml", "unreviewed release workflow\n"),
+                ("drizzle/9999_unreviewed.sql", "CREATE TABLE extra(id);\n"),
+                ("package-lock.json", "unreviewed lock\n")):
+            with self.subTest(path=name, raw=raw):
+                self.git("reset", "--hard", self.candidate)
+                self.write(name, raw)
+                with self.assertRaisesRegex(release.ReleaseError, "exact application snapshot"):
+                    self.verify(self.commit())
+
+    def test_candidate_advisory_and_snapshot_cannot_be_trusted_controls(self):
+        for trusted in (self.candidate, self.advisory, self.snapshot):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_control_must_be_merged_and_an_ancestor_of_candidate(self):
+        self.git("update-ref", "refs/remotes/origin/main", self.advisory)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+        self.git("update-ref", "refs/remotes/origin/main", self.control)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify(self.snapshot)
+
+    def test_trusted_controls_must_descend_from_exact_advisory_commit(self):
+        # Identical advisory/application bytes on another ancestry cannot act as C.
+        other_control = self.git("commit-tree", self.git("rev-parse", self.control + "^{tree}"),
+                                 "-p", self.live, "-m", "controls without advisory ancestry")
+        other_candidate = self.git("commit-tree", self.git("rev-parse", self.candidate + "^{tree}"),
+                                   "-p", other_control, "-m", "candidate without advisory ancestry")
+        self.git("update-ref", "refs/remotes/origin/main", other_control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=other_control):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.verify(other_candidate)
+
+    def test_controls_cannot_replace_advisory_or_application_bytes(self):
+        for name in ("scripts/advisory.py", "app/registration-form.tsx"):
+            self.git("reset", "--hard", self.control)
+            self.write(name, "unreviewed controls payload\n")
+            bad_control = self.commit()
+            self.copy_snapshot()
+            candidate = self.commit()
+            self.git("update-ref", "refs/remotes/origin/main", bad_control)
+            with self.subTest(path=name), patch.dict(os.environ, BECORE_TRUSTED_BASE=bad_control):
+                with self.assertRaisesRegex(release.ReleaseError, "two reviewed control files"):
+                    self.verify(candidate)
+
+    def test_candidate_control_bytes_must_equal_the_new_control_not_advisory(self):
+        self.write("ops/vps/test_code_release.py", self.git("show", self.advisory + ":ops/vps/test_code_release.py") + "\n")
+        with self.assertRaisesRegex(release.ReleaseError, "candidate controls differ"):
+            self.verify(self.commit())
+
+    def test_control_cannot_omit_the_test_change(self):
+        self.git("reset", "--hard", self.advisory)
+        self.write("ops/vps/code-release.py", "independently reviewed readiness operator\n")
+        incomplete = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", incomplete)
+        self.copy_snapshot()
+        candidate = self.commit()
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=incomplete):
+            with self.assertRaisesRegex(release.ReleaseError, "two reviewed control files"):
+                self.verify(candidate)
+
+    def test_deletion_symlink_and_mode_changes_remain_rejected(self):
+        for kind in ("delete", "symlink", "executable"):
+            self.git("reset", "--hard", self.candidate)
+            path = self.root / "app/registration-form.tsx"
+            if kind == "executable":
+                path.chmod(0o755)
+            else:
+                path.unlink()
+                if kind == "symlink":
+                    path.symlink_to("../package.json")
+            with self.subTest(kind=kind), self.assertRaises(release.ReleaseError):
+                self.verify(self.commit())
+
+    def test_bad_control_mode_cannot_be_repaired_only_in_candidate(self):
+        self.git("reset", "--hard", self.control)
+        (self.root / "ops/vps/test_code_release.py").chmod(0o755)
+        changed_control = self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", changed_control)
+        (self.root / "ops/vps/test_code_release.py").chmod(0o644)
+        self.copy_snapshot()
+        candidate = self.commit()
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed_control):
+            with self.assertRaisesRegex(release.ReleaseError, "mode changed"):
+                self.verify(candidate)
+
+    def test_package_pair_and_unchanged_lock_are_exact(self):
+        for field, value in (("RSVP_READINESS_PACKAGE_BLOBS", ("f" * 40, release.RSVP_READINESS_PACKAGE_BLOBS[1])),
+                             ("RSVP_READINESS_PACKAGE_BLOBS", (release.RSVP_READINESS_PACKAGE_BLOBS[0], "f" * 40)),
+                             ("RSVP_READINESS_LOCK_BLOB", "f" * 40)):
+            with self.subTest(field=field), patch.object(release, field, value):
+                with self.assertRaisesRegex(release.ReleaseError, "unchanged dependency lock"):
+                    self.verify()
+
+    def test_package_semantics_permit_only_the_test_ui_script(self):
+        original = release.git
+        for before, after in (('"start":"same"', '"start":"changed"'), ('"same":"1"', '"same":"2"')):
+            def other_package_change(*args):
+                raw = original(*args)
+                return raw.replace(before, after) if args == ("show", self.candidate + ":package.json") else raw
+            with self.subTest(change=after), patch.object(release, "git", side_effect=other_package_change):
+                with self.assertRaisesRegex(release.ReleaseError, "not test:ui-only"):
+                    self.verify()
+
+    def test_migration_plan_must_remain_empty(self):
+        with patch.object(release, "migration_plan", return_value=[{"path": "unexpected"}]):
+            with self.assertRaisesRegex(release.ReleaseError, "cannot introduce migrations"):
+                self.verify()
+
+    def test_exact_readiness_cannot_be_admitted_from_another_active_baseline(self):
+        with self.assertRaises(release.ReleaseError):
+            release.vetted_changes(self.advisory, self.candidate)
+
+    def test_git_replacement_cannot_redirect_advisory_or_snapshot(self):
+        self.git("replace", self.advisory, self.candidate)
+        self.git("replace", self.snapshot, self.candidate)
+        self.assertEqual(set(self.verify()), set(self.pins) | set(self.advisory_pins) | release.RSVP_READINESS_CONTROL_FILES)
+
+    def test_complete_readiness_checkout_rejects_hidden_application_changes(self):
+        self.assertTrue(exact_application_checkout(self.root, self.snapshot,
+                                                  release.RSVP_READINESS_APP_TREE, release.RSVP_READINESS_CONTROL_FILES))
+        self.git("update-index", "--assume-unchanged", "app/registration-form.tsx")
+        self.write("app/registration-form.tsx", "hidden application change\n")
+        self.assertFalse(exact_application_checkout(self.root, self.snapshot,
+                                                   release.RSVP_READINESS_APP_TREE, release.RSVP_READINESS_CONTROL_FILES))
+
+
+class ReadinessSourcePinTests(unittest.TestCase):
+    def test_live_advisory_and_app_pins_are_finite_and_distinct(self):
+        self.assertEqual(release.RSVP_READINESS_LIVE_BASELINE, "d257f41b669a542de0eebbe09993e7efa8dd5074")
+        self.assertEqual(release.RSVP_READINESS_LIVE_TREE, "a4446b0a2d2fc6a03e5196fb9b3a2d90f72a5d66")
+        self.assertEqual(release.RSVP_READINESS_ADVISORY_BASE, "0f82e136c8005d910f0aeb44b6f355176fc254f6")
+        self.assertEqual(release.RSVP_READINESS_ADVISORY_TREE, "c805f0626b55e069e45b22e2420e4f0d463c945e")
+        self.assertEqual(release.RSVP_READINESS_APP_SNAPSHOT, "d43243e28d06000465b30175dd947a4a22ce4ba0")
+        self.assertEqual(release.RSVP_READINESS_APP_TREE, "b30272ddb69e5e1a9ee694bb7f8bab4c47eb541a")
+        self.assertEqual(len(release.RSVP_READINESS_ADVISORY_BLOBS), 9)
+        self.assertEqual(set(release.RSVP_READINESS_APPLICATION_BLOBS), {
+            "app/registration-form.tsx", "package.json", "tests/e2e/guest-clarity.spec.ts", "tests/registration-readiness.test.mjs"})
+        self.assertEqual(release.RSVP_READINESS_CONTROL_FILES,
+                         {"ops/vps/code-release.py", "ops/vps/test_code_release.py"})
+        self.assertEqual(set(release.RSVP_READINESS_ADVISORY_BLOBS) & release.RSVP_READINESS_CONTROL_FILES,
+                         {"ops/vps/test_code_release.py"})
+        self.assertFalse(set(release.RSVP_READINESS_ADVISORY_BLOBS) & set(release.RSVP_READINESS_APPLICATION_BLOBS))
+        self.assertEqual(release.RSVP_READINESS_PACKAGE_BLOBS,
+                         ("e4f736b3204696fceab081989f1cdddfd5b1bc5e", "eccb3af63298d7642c1ea974d7e8f18da9563507"))
+        self.assertEqual(release.RSVP_READINESS_LOCK_BLOB, "47a4eaca5743b768598462d8b66a2ef49a442b4e")
+        self.assertEqual(release.migration_plan(set(release.RSVP_READINESS_ADVISORY_BLOBS)
+                                              | set(release.RSVP_READINESS_APPLICATION_BLOBS)), [])
+        self.assertNotIn("scripts/audit-release-manifest.json", release.RSVP_READINESS_ADVISORY_BLOBS)
+        self.assertNotIn("scripts/audit-release-dependencies.py", release.RSVP_READINESS_ADVISORY_BLOBS)
+        self.assertEqual({name: blob for name, blob in release.RSVP_READINESS_ADVISORY_BLOBS.items()
+                          if name not in release.RSVP_READINESS_CONTROL_FILES}, BENCHMARK_FILE_BLOBS)
 
 
 if __name__ == "__main__":
