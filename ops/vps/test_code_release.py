@@ -6,13 +6,17 @@ import fcntl
 import importlib.util
 import io
 import json
+import marshal
 import os
+import re
+import sys
 from pathlib import Path
 import stat
 import subprocess
 import tarfile
 import tempfile
 import textwrap
+import types
 import unittest
 from unittest.mock import call, patch
 
@@ -119,6 +123,234 @@ def benchmark_checkout_files(root):
     return present
 
 
+# Complete staged B inventory, including scripts not used by a particular test.
+# The parallel family replaces exact outputs as a whole; it cannot select an
+# older per-file variant or hide an unexpected staged file.
+PARALLEL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
+ '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
+ '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),
+ '.github/workflows/deploy.yml': ('100644', 'e90f3ab46d499cfe6a03f859452046ca3a026993'),
+ '.github/workflows/tickets-code-release.yml': ('100644', '808e8014f7af281b3370e411be1f6a3808d2e88b'),
+ '.github/workflows/tickets-release-operator-checks.yml': ('100644',
+                                                           'e1674c3407ac586aeaf67a2166a9ad32c7cd5bef'),
+ '.github/workflows/vps-runtime.yml': ('100644', '3041cf9b68ba250429e8f58e5404d10b2f9330a0'),
+ 'ops/vps/audit-readiness.py': ('100644', '69c7dff10fc2b8d1046b84e0a43dbdb4dacb3ecf'),
+ 'ops/vps/backup.mjs': ('100644', 'ca2c1a0fa1aa4cb075fa0b90d9d46218666c7967'),
+ 'ops/vps/becore-tickets-preview.service': ('100644', '889233505917ae749ee276050d7f9060c975ed4a'),
+ 'ops/vps/becore-tickets-retention.service': ('100644', '68f4ab992f05742a086f23af7983f9c5561b1b13'),
+ 'ops/vps/becore-tickets-retention.timer': ('100644', '7d77baf5059b0fc725976e8d4eceeb53a53ed2ff'),
+ 'ops/vps/candidate_build.py': ('100644', '5820b026f9747961081fc3e8b8e5531bf546621a'),
+ 'ops/vps/candidate_evidence.py': ('100644', 'd65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba'),
+ 'ops/vps/code-release.py': ('100644', 'f8ac599c8affb7d3f1781d4903db3f71f20c1600'),
+ 'ops/vps/initialize-preview.mjs': ('100644', '6171616a2d73ed536aad0896d3016d2d41a6ba95'),
+ 'ops/vps/install-preview.py': ('100644', '0fb837d72409234a074b2891c784f0f7605e600f'),
+ 'ops/vps/journal-limits.conf': ('100644', 'bd9c88d6d78144830b5d4ce26dce2d86825b84e5'),
+ 'ops/vps/prepare-origin.py': ('100644', '8939073562dd7e73073f092a09c3c973003c6b63'),
+ 'ops/vps/public_runtime_guard.py': ('100644', '9a9739f1bd88cbd02dc420001efa3de5b85e3538'),
+ 'ops/vps/restore-backup.mjs': ('100644', '0a05f18c17205ef4c2f59e2d50bd06180035b8c6'),
+ 'ops/vps/retention.py': ('100644', '9ab0304f00d2a96fd6fbb8e4c992d96db5eb08a1'),
+ 'ops/vps/runtime_release.py': ('100644', '043e310a41ff28d23adc20383c88566b181232a6'),
+ 'ops/vps/test_audit_readiness.py': ('100644', '086ab0cb48aa88ce934daefb54d60486925d36f8'),
+ 'ops/vps/test_candidate_build.py': ('100644', '332079c682451af3c3e1ac36feef0129d1975b29'),
+ 'ops/vps/test_candidate_evidence.py': ('100644', 'f63544c3ea061f75db1f544c85cddaae109a0f4e'),
+ 'ops/vps/test_code_release.py': ('100644', '179178468f872f7d5958165b78d0731b528379bb'),
+ 'ops/vps/test_pink_edition.py': ('100644', 'be26c898ac1e19f7f737dbe5112c5e40b6e90c68'),
+ 'ops/vps/test_public_runtime_guard.py': ('100644', 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'),
+ 'ops/vps/test_release_approval.py': ('100644', '48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f'),
+ 'ops/vps/test_release_source.py': ('100644', 'ec8a7a5bbbe585941583f50624823b85ec51e586'),
+ 'ops/vps/test_retention.py': ('100644', 'f35d71212ec6ae521e3144c57e708297c513dce0'),
+ 'ops/vps/test_runtime_packaging.py': ('100644', '6f215f441ff1d9b92b3c870a6f438a54e5ccc1a1'),
+ 'ops/vps/test_runtime_release.py': ('100644', '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14'),
+ 'ops/vps/test_runtime_workflow_contract.py': ('100644', 'eef0b25e667f6be123c0ed6c5bca774158d390d8'),
+ 'scripts/audit-checkbox-hotfix.py': ('100644', '5313d8cdc4076b36d434fe8017cc0e7b4824e876'),
+ 'scripts/audit-release-dependencies.py': ('100644', '47c7951e8db95ac666680bd2bf32fde3f1748c8e'),
+ 'scripts/audit-release-manifest.json': ('100644', 'bcb787e744f9fc5fc201e8068d553c1543b35b86'),
+ 'scripts/caption-source-manifest.json': ('100644', '1b178a1a371ae047f8bf26498d249e272c11497d'),
+ 'scripts/verify-audit-release-source.py': ('100644', '129d7bdbd2d631ad385a9edd7be4ea9895f173cf'),
+ 'scripts/verify-caption-source.py': ('100644', 'fa474c5d8cfaad8df53e77004c063e1511ed0b68'),
+ 'tests/test_audit_release_dependencies.py': ('100644', '6983998bf40fc1cb424e6dafbb7ba35e5653336d'),
+ 'tests/test_audit_release_source.py': ('100644', '6516f3f4b8582d3874ceda34e1fc3e3b799fec8d'),
+ 'tests/test_caption_source.py': ('100644', '6871fcc1ab410acaa74d8bd953ac9e0e61f4f670'),
+ 'tests/test_checkbox_hotfix_audit.py': ('100644', '421ec5fd992b1ba258e357ff4a65f6c3a647d2ce')}
+
+
+# The operator can be independently pinned here because neither control file
+# is in the production 13-output manifest. Only this test file self-exempts.
+PARALLEL_OPERATOR_BLOB = '62f07303a64e44d2107c863afc71e544abeefb75'
+LEGACY_ORIGINAL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
+ '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
+ '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),
+ '.github/workflows/deploy.yml': ('100644', 'e90f3ab46d499cfe6a03f859452046ca3a026993'),
+ '.github/workflows/tickets-code-release.yml': ('100644', '808e8014f7af281b3370e411be1f6a3808d2e88b'),
+ '.github/workflows/tickets-release-operator-checks.yml': ('100644',
+                                                           'e1674c3407ac586aeaf67a2166a9ad32c7cd5bef'),
+ '.github/workflows/vps-runtime.yml': ('100644', '06d83690ed40675dae9f5e423cfcc73b3022fc1f'),
+ 'ops/vps/audit-readiness.py': ('100644', '0de0b0f96343bbd6acb3b2f800ec2e2983505d22'),
+ 'ops/vps/backup.mjs': ('100644', 'ca2c1a0fa1aa4cb075fa0b90d9d46218666c7967'),
+ 'ops/vps/becore-tickets-preview.service': ('100644', '889233505917ae749ee276050d7f9060c975ed4a'),
+ 'ops/vps/becore-tickets-retention.service': ('100644', '68f4ab992f05742a086f23af7983f9c5561b1b13'),
+ 'ops/vps/becore-tickets-retention.timer': ('100644', '7d77baf5059b0fc725976e8d4eceeb53a53ed2ff'),
+ 'ops/vps/candidate_evidence.py': ('100644', 'd65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba'),
+ 'ops/vps/code-release.py': ('100644', '26034251d8d3ca0156a434aca5ae4fb790db66e6'),
+ 'ops/vps/initialize-preview.mjs': ('100644', '6171616a2d73ed536aad0896d3016d2d41a6ba95'),
+ 'ops/vps/install-preview.py': ('100644', '0fb837d72409234a074b2891c784f0f7605e600f'),
+ 'ops/vps/journal-limits.conf': ('100644', 'bd9c88d6d78144830b5d4ce26dce2d86825b84e5'),
+ 'ops/vps/prepare-origin.py': ('100644', '8939073562dd7e73073f092a09c3c973003c6b63'),
+ 'ops/vps/public_runtime_guard.py': ('100644', '9a9739f1bd88cbd02dc420001efa3de5b85e3538'),
+ 'ops/vps/restore-backup.mjs': ('100644', '0a05f18c17205ef4c2f59e2d50bd06180035b8c6'),
+ 'ops/vps/retention.py': ('100644', '9ab0304f00d2a96fd6fbb8e4c992d96db5eb08a1'),
+ 'ops/vps/runtime_release.py': ('100644', '043e310a41ff28d23adc20383c88566b181232a6'),
+ 'ops/vps/test_audit_readiness.py': ('100644', '226ab932b1b851a4b2c0eb6ede8bc17e66e5bfa9'),
+ 'ops/vps/test_candidate_evidence.py': ('100644', 'f63544c3ea061f75db1f544c85cddaae109a0f4e'),
+ 'ops/vps/test_code_release.py': ('100644', '3d413b8b530f7eee378f88cb540475c2973b8b22'),
+ 'ops/vps/test_public_runtime_guard.py': ('100644', 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'),
+ 'ops/vps/test_release_approval.py': ('100644', '48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f'),
+ 'ops/vps/test_release_source.py': ('100644', 'ec8a7a5bbbe585941583f50624823b85ec51e586'),
+ 'ops/vps/test_retention.py': ('100644', 'f35d71212ec6ae521e3144c57e708297c513dce0'),
+ 'ops/vps/test_runtime_packaging.py': ('100644', 'c7bb8a5bdb6a17c547a29d1289d15bdce4a57228'),
+ 'ops/vps/test_runtime_release.py': ('100644', '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14'),
+ 'ops/vps/test_runtime_workflow_contract.py': ('100644', 'eef0b25e667f6be123c0ed6c5bca774158d390d8'),
+ 'scripts/audit-checkbox-hotfix.py': ('100644', '5313d8cdc4076b36d434fe8017cc0e7b4824e876'),
+ 'scripts/audit-release-dependencies.py': ('100644', '47c7951e8db95ac666680bd2bf32fde3f1748c8e'),
+ 'scripts/audit-release-manifest.json': ('100644', 'bcb787e744f9fc5fc201e8068d553c1543b35b86'),
+ 'scripts/caption-source-manifest.json': ('100644', '1b178a1a371ae047f8bf26498d249e272c11497d'),
+ 'scripts/verify-audit-release-source.py': ('100644', '129d7bdbd2d631ad385a9edd7be4ea9895f173cf'),
+ 'scripts/verify-caption-source.py': ('100644', 'fa474c5d8cfaad8df53e77004c063e1511ed0b68'),
+ 'tests/test_audit_release_dependencies.py': ('100644', '6983998bf40fc1cb424e6dafbb7ba35e5653336d'),
+ 'tests/test_audit_release_source.py': ('100644', '9d987c3d720d119d1bc3834d04af20a1e8efdc6c'),
+ 'tests/test_caption_source.py': ('100644', '6871fcc1ab410acaa74d8bd953ac9e0e61f4f670'),
+ 'tests/test_checkbox_hotfix_audit.py': ('100644', '421ec5fd992b1ba258e357ff4a65f6c3a647d2ce')}
+
+
+def legacy_staged_manifests():
+    """Whole historical families, never a per-file union of fingerprints."""
+    variants = (release.REVIEWED_CONTROL_BLOBS,
+                {name: release.REVIEWED_APPLICATION_BLOBS[name] for name in release.REVIEWED_CONTROL_BLOBS})
+    prebenchmark = {name: entry for name, entry in PARALLEL_STAGED_BASE.items()
+                    if name not in {"ops/vps/candidate_build.py", "ops/vps/test_candidate_build.py"}}
+    families = []
+    for base in (LEGACY_ORIGINAL_STAGED_BASE, prebenchmark, PARALLEL_STAGED_BASE):
+        for variant in variants:
+            manifest = dict(base)
+            manifest.update({name: ("100644", value) for name, value in variant.items()})
+            manifest["ops/vps/test_code_release.py"] = ("100644", None)
+            families.append((manifest, variant))
+    return families
+
+
+def validate_staged_inventory(root, manifest):
+    """Allow only the complete archive and genuine generated Python caches."""
+    expected = set(manifest)
+    directories = {parent.as_posix() for name in expected for parent in Path(name).parents if parent != Path('.')}
+    python_sources = {name for name in expected if name.endswith('.py')}
+    cache_directories = {str(Path(name).parent / '__pycache__') for name in python_sources}
+    found = set()
+    for path in root.rglob('*'):
+        name = path.relative_to(root).as_posix()
+        info = path.lstat()
+        if stat.S_ISDIR(info.st_mode):
+            if name not in directories and (name not in cache_directories or not any(path.iterdir())):
+                raise AssertionError("Unexpected staged directory")
+            continue
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise AssertionError("Staged family requires regular single-link files")
+        if name in expected:
+            found.add(name)
+            continue
+        if str(Path(name).parent) not in cache_directories or info.st_mode & 0o111 or info.st_size > 16 * 1024**2:
+            raise AssertionError("Unexpected staged file")
+        suffix = '.' + sys.implementation.cache_tag
+        match = re.fullmatch(r'(.+)' + re.escape(suffix) + r'(?:\.opt-([12]))?\.pyc', path.name)
+        source_name = str(Path(name).parent.parent / (match[1] + '.py')) if match else ''
+        if source_name not in python_sources:
+            raise AssertionError("Cache has no pinned Python source")
+        raw = path.read_bytes(); source = root / source_name
+        source_info = source.stat()
+        if (len(raw) < 16 or raw[:4] != importlib.util.MAGIC_NUMBER or raw[4:8] != bytes(4)
+                or int.from_bytes(raw[8:12], 'little') != int(source_info.st_mtime) & 0xffffffff
+                or int.from_bytes(raw[12:16], 'little') != source_info.st_size & 0xffffffff):
+            raise AssertionError("Cache header is not the exact generated source cache")
+        try:
+            stream = io.BytesIO(raw[16:])
+            cached = marshal.load(stream)
+            if stream.read():
+                raise AssertionError("Unexpected trailing cache content")
+            filenames = {str(source), source_name, os.path.relpath(source)}
+            if (not isinstance(cached, types.CodeType) or cached.co_filename not in filenames
+                    or cached != compile(source.read_bytes(), cached.co_filename, 'exec', dont_inherit=True,
+                                         optimize=int(match[2] or 0))):
+                raise AssertionError("Cache code differs from its pinned Python source")
+        except (ValueError, TypeError, EOFError, SyntaxError) as exc:
+            raise AssertionError("Invalid generated Python cache") from exc
+    if found != expected:
+        raise AssertionError("Staged inventory differs from complete source family")
+
+
+def parallel_source_family(root):
+    """Test-only full/staged C/P recognition. This grants no release authority."""
+    root = Path(root)
+    markers = ("ops/vps/parallel_candidate.py", "ops/vps/parallel_candidate_control.py",
+               "ops/vps/test_parallel_candidate.py", "ops/vps/test_parallel_candidate_control.py",
+               "ops/vps/test_parallel_admission.py", release.PARALLEL_PROMOTION_FILE)
+    if not any(os.path.lexists(root / name) for name in markers):
+        return None
+    promoted = os.path.lexists(root / release.PARALLEL_PROMOTION_FILE)
+    outputs = {name: (release.PARALLEL_OUTPUT_MODES[name], blob)
+               for name, blob in release.PARALLEL_OUTPUT_BLOBS.items()
+               if promoted or name != release.PARALLEL_PROMOTION_FILE}
+    full = os.path.lexists(root / "package.json") or os.path.lexists(root / "app")
+    if full:
+        try:
+            actual_tree = checkout_git(root, "rev-parse", release.PARALLEL_RELEASE_BASELINE + "^{tree}").decode().strip()
+            if actual_tree != release.PARALLEL_RELEASE_BASE_TREE:
+                raise AssertionError("Parallel family baseline tree changed")
+            manifest = {}
+            for record in checkout_git(root, "ls-tree", "-rz", "--full-tree", release.PARALLEL_RELEASE_BASELINE).split(b"\0"):
+                if record:
+                    metadata, name = record.split(b"\t", 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != "blob" or mode not in ("100644", "100755"):
+                        raise AssertionError("Parallel baseline contains unsupported entries")
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            tracked = set(filter(None, checkout_git(root, "ls-files", "-z").decode().split("\0")))
+            untracked = set(filter(None, checkout_git(root, "ls-files", "--others", "--exclude-standard", "-z").decode().split("\0")))
+            if (tracked | untracked) != set(manifest) | set(outputs) | release.PARALLEL_CONTROL_FILES:
+                raise AssertionError("Parallel full inventory differs from complete C/P family")
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError("Parallel family requires its independently pinned B tree") from exc
+    else:
+        manifest = dict(PARALLEL_STAGED_BASE)
+        outputs = {name: entry for name, entry in outputs.items()
+                   if name.startswith("ops/vps/") or name.startswith(".github/workflows/")}
+    manifest.update(outputs)
+    # Both controls are authenticated against C by production admission. Here
+    # the operator is separately pinned; only this test file cannot self-pin.
+    manifest["ops/vps/code-release.py"] = ("100644", PARALLEL_OPERATOR_BLOB)
+    manifest["ops/vps/test_code_release.py"] = ("100644", None)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == "100755")
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError("Parallel family requires exact regular file modes")
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError("Parallel family is incomplete") from exc
+        actual = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        if expected is not None and actual != expected:
+            # Preserve the repository's one pinned Windows checkout conversion.
+            if name == "mobile/android/gradlew.bat" and manifest.get("mobile/.gitattributes") == ("100644", "69b47b5ade88fab2dd055b3cfa0858766fb17a47"):
+                raw = raw.replace(b"\r\n", b"\n")
+                actual = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+            if actual != expected:
+                raise AssertionError("Parallel family has unreviewed bytes: " + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def exact_application_checkout(root, baseline, tree, controls):
     try:
         controls = set(controls) | benchmark_checkout_files(root)
@@ -178,22 +410,26 @@ def application_bytes(root, name, *, controls_only=False):
 
 
 def staged_family_pins(root):
-    # Both archived layouts are reviewed, but their three differing files must
-    # come from one complete family. Never accept a per-file union of variants.
-    control = release.REVIEWED_CONTROL_BLOBS
-    application = {name: release.REVIEWED_APPLICATION_BLOBS[name] for name in control}
-    observed = {}
-    for name in control:
-        file = root / name
-        if (not file.is_file() or file.is_symlink()
-                or any(parent.is_symlink() for parent in file.parents if root in parent.parents)):
-            raise AssertionError("Staged operator family requires regular files")
-        raw = file.read_bytes()
-        observed[name] = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
-    for family in (control, application):
-        if observed == family:
-            return family
-    raise AssertionError("Mixed or unknown staged operator source family")
+    # Legacy recognition also validates the whole archive. Removing all parallel
+    # markers cannot downgrade mixed new outputs into a three-file legacy match.
+    failures = []
+    for manifest, selected in legacy_staged_manifests():
+        try:
+            validate_staged_inventory(root, manifest)
+            for name, (mode, expected) in manifest.items():
+                path = root / name; info = path.lstat()
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                        or bool(info.st_mode & 0o111) != (mode == "100755")
+                        or any(parent.is_symlink() for parent in (path, *path.parents))):
+                    raise AssertionError("Staged family requires regular files")
+                raw = path.read_bytes()
+                actual = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+                if expected is not None and actual != expected:
+                    raise AssertionError("Mixed or unknown staged operator source family")
+            return selected
+        except (OSError, AssertionError) as exc:
+            failures.append(str(exc))
+    raise AssertionError("Mixed or unknown staged operator source family; complete regular files required")
 
 
 OLD = "1" * 40
@@ -2467,8 +2703,9 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
     root = Path(__file__).resolve().parents[2]
 
     def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
+        parallel = parallel_source_family(self.root)
         staged = not (self.root / "package.json").exists() and not (self.root / "app").exists()
-        overrides = staged_family_pins(self.root) if staged else {}
+        overrides = parallel if parallel is not None else (staged_family_pins(self.root) if staged else {})
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
                      ".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml",
                      "ops/vps/runtime_release.py", "ops/vps/public_runtime_guard.py",
@@ -2506,6 +2743,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         self.assertNotIn("app/", release.APPLICATION_FILES)
 
     def test_complete_reviewed_application_manifest_matches_candidate_source(self):
+        if parallel_source_family(self.root) is not None:
+            return  # Already checked every file in the complete B-derived C/P family.
         pins = release.REVIEWED_APPLICATION_BLOBS
         controls_only = controls_only_checkout(self.root)
         yorke_base = exact_application_checkout(self.root, release.YORKE_RELEASE_BASELINE,
@@ -2573,6 +2812,8 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             self.assertEqual(actual, digest, name)
 
     def test_workspace_checkout_keeps_one_complete_application_family(self):
+        if parallel_source_family(self.root) is not None:
+            return
         if not (self.root / "package.json").exists() and not (self.root / "app").exists():
             return  # The separate staged-layout test verifies every staged byte.
         self.assertTrue(any(exact_application_checkout(self.root, revision, tree,
@@ -2652,15 +2893,30 @@ class FailedReleaseDiagnosticTests(unittest.TestCase):
         mode = self.workflow.split("      inspect_failed_release:\n", 1)[1].split("      recover_prepared:", 1)[0]
         self.assertIn("default: false", mode)
         self.assertIn("type: boolean", mode)
-        self.assertIn("if: github.ref == 'refs/heads/main' && !inputs.inspect_failed_release", self.job("release"))
-        self.assertIn("if: github.ref == 'refs/heads/main' && inputs.inspect_failed_release", self.job("inspect_failure"))
+        parallel = "      verify_only:\n" in self.workflow
+        if parallel:
+            self.assertIn("if: github.ref == 'refs/heads/main' && (!inputs.inspect_failed_release || inputs.verify_only)", self.job("release"))
+            self.assertIn("if: github.ref == 'refs/heads/main' && inputs.inspect_failed_release && !inputs.verify_only", self.job("inspect_failure"))
+            before_checkout = self.job("release").split("- uses: actions/checkout@", 1)[0]
+            self.assertIn('if [[ "$VERIFY_ONLY" == true ]]; then test "$INSPECT_MODE" = false; fi', before_checkout)
+        else:
+            self.assertIn("if: github.ref == 'refs/heads/main' && !inputs.inspect_failed_release", self.job("release"))
+            self.assertIn("if: github.ref == 'refs/heads/main' && inputs.inspect_failed_release", self.job("inspect_failure"))
         self.assertIn("needs: release", self.job("retired_preview"))
         self.assertNotIn("always()", self.job("retired_preview").split("steps:", 1)[0])
         for main in (False, True):
             for inspect in (False, True):
-                release_runs, inspect_runs = main and not inspect, main and inspect
-                self.assertFalse(release_runs and inspect_runs)
-                self.assertEqual(release_runs or inspect_runs, main)
+                for verify in ((False, True) if parallel else (False,)):
+                    release_runs = main and (not inspect or verify)
+                    inspect_runs = main and inspect and not verify
+                    conflict = main and inspect and verify
+                    self.assertFalse(release_runs and inspect_runs)
+                    self.assertEqual(release_runs or inspect_runs, main)
+                    host_releases = release_runs and not verify and not conflict
+                    self.assertFalse(host_releases and (inspect or verify))
+                    if conflict:
+                        self.assertTrue(release_runs)  # Fails before checkout, rather than silently skipping.
+                        self.assertFalse(inspect_runs)
 
     def test_inspection_hard_pins_failed_inputs_before_existing_identity_connects(self):
         job = self.job("inspect_failure")
@@ -2920,6 +3176,10 @@ class StagedOperatorFamilyTests(unittest.TestCase):
                       for label in ("control fixture: ", "application fixture: ")]
         self.pins = [{name: release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
                       for name, raw in family.items()} for family in self.bytes]
+        families = patch(__name__ + ".legacy_staged_manifests", return_value=[
+            ({name: ("100644", digest) for name, digest in family.items()}, family) for family in self.pins])
+        families.start()
+        self.addCleanup(families.stop)
         for attribute, value in (("REVIEWED_CONTROL_BLOBS", self.pins[0]),
                                  ("REVIEWED_APPLICATION_BLOBS", self.pins[1])):
             replacement = patch.object(release, attribute, value)

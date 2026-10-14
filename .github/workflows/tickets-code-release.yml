@@ -20,6 +20,17 @@ on:
         description: Successful three-browser Candidate verification run ID
         required: true
         type: string
+      verify_only:
+        description: Validate full release evidence without host access, activation or production browser checks
+        required: false
+        default: false
+        type: boolean
+      candidate_mode:
+        description: Explicit browser evidence contract; legacy remains the default
+        required: false
+        default: legacy
+        type: choice
+        options: [legacy, parallel-v1]
       expected_active:
         description: Exact SHA currently serving active VPS traffic
         required: true
@@ -51,7 +62,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main' && !inputs.inspect_failed_release
+    if: github.ref == 'refs/heads/main' && (!inputs.inspect_failed_release || inputs.verify_only)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -62,6 +73,9 @@ jobs:
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
       RUNTIME_RUN: ${{ inputs.runtime_run }}
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
+      CANDIDATE_MODE: ${{ inputs.candidate_mode || 'legacy' }}
+      VERIFY_ONLY: ${{ inputs.verify_only && 'true' || 'false' }}
+      INSPECT_MODE: ${{ inputs.inspect_failed_release && 'true' || 'false' }}
       RECOVER_PREPARED: ${{ inputs.recover_prepared }}
       ENABLE_CRYPTO: ${{ inputs.enable_crypto && 'true' || 'false' }}
     steps:
@@ -70,8 +84,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
+          if [[ "$VERIFY_ONLY" == true ]]; then test "$INSPECT_MODE" = false; fi
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ && "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$CANDIDATE_MODE" = legacy || "$CANDIDATE_MODE" = parallel-v1 ]]
           [[ -z "$RECOVER_PREPARED" || "$RECOVER_PREPARED" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -103,7 +119,7 @@ jobs:
           git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
           operator="$RUNNER_TEMP/tickets-operator"
           mkdir -m 700 "$operator"
-          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$operator"
+          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/candidate-parallel-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$operator"
           printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
       - name: Verify independently trusted operator before any host access
         shell: bash
@@ -134,7 +150,7 @@ jobs:
             --source "$SOURCE_SHA" --run-id "$RUNTIME_RUN" --attempt "$runtime_attempt" --directory "$metadata/artifact"
           python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
             --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
-            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
             --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
       - name: Set up the shipping runtime version for final audit
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -153,6 +169,7 @@ jobs:
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
         run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase postinstall
       - name: Connect existing dedicated Tickets identity
+        if: ${{ !inputs.verify_only }}
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
           oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
@@ -160,6 +177,7 @@ jobs:
           tags: tag:tickets-ci
           ping: hermes
       - name: Inspect loaded credential binding metadata without reading secret values
+        if: ${{ !inputs.verify_only }}
         run: |
           tailscale ssh root@hermes "systemctl show becore-tickets.service --no-pager --property=NeedDaemonReload --property=WorkingDirectory --property=ActiveState && busctl --system --timeout=10 --no-pager --json=short get-property org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/becore_2dtickets_2eservice org.freedesktop.systemd1.Service LoadCredential"
       - name: Reconfirm exact CI attempts immediately before the host transaction
@@ -177,10 +195,11 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
           python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
             --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
-            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --metadata "$metadata" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
             --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json" \
             --audit-directory "$RUNNER_TEMP/tickets-final-audit"
       - name: Apply reversible Tickets-only code transaction
+        if: ${{ !inputs.verify_only }}
         shell: bash
         run: |
           set -euo pipefail
@@ -198,9 +217,13 @@ jobs:
           tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --audit-report '$stage/npm-audit.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --recover-prepared '$RECOVER_PREPARED'"
           # Retain private staging and the verified audit snapshot for this one release.
 
+      - name: Record verification-only result
+        if: ${{ inputs.verify_only }}
+        run: printf 'Verification only; no deployment, host connection or production browser checks were performed.\n' >> "$GITHUB_STEP_SUMMARY"
+
   inspect_failure:
     # This branch is mutually exclusive with release; no application checkout or apply.
-    if: github.ref == 'refs/heads/main' && inputs.inspect_failed_release
+    if: github.ref == 'refs/heads/main' && inputs.inspect_failed_release && !inputs.verify_only
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -486,6 +509,7 @@ jobs:
           PYDIAG
 
   retired_preview:
+    if: ${{ !inputs.verify_only }}
     name: Verify retired checkout preview (${{ matrix.browser }})
     needs: release
     runs-on: ubuntu-latest

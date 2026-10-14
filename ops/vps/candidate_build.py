@@ -17,7 +17,7 @@ import zipfile
 
 import public_runtime_guard as privacy
 
-SCHEMA = 'tickets-browser-build/v1'
+SCHEMA = 'tickets-browser-build/v2'
 PREFIX = 'TICKETS_BROWSER_BUILD_RECEIPT '
 BROWSERS = ('desktop-chromium', 'mobile-chromium', 'mobile-webkit')
 ARCHIVE = 'browser-build.zip'
@@ -51,8 +51,27 @@ def parse(raw):
             require(key not in result, 'Duplicate JSON key')
             result[key] = value
         return result
-    return json.loads(raw, object_pairs_hook=pairs,
-                      parse_constant=lambda _: (_ for _ in ()).throw(BuildError('Invalid JSON number')))
+    require(type(raw) in (str, bytes), 'JSON bytes required')
+    require(len(raw.encode() if isinstance(raw, str) else raw) <= MAX_MANIFEST, 'JSON exceeds bound')
+    try:
+        def invalid_number(_):
+            raise BuildError('Invalid JSON number')
+        value = json.loads(raw, object_pairs_hook=pairs, parse_constant=invalid_number,
+                           parse_float=invalid_number)
+        pending, nodes = [(value, 0)], 0
+        while pending:
+            item, depth = pending.pop()
+            nodes += 1
+            require(depth <= 32 and nodes <= 200000, 'JSON nesting or inventory exceeds bound')
+            if isinstance(item, dict):
+                pending.extend((child, depth + 1) for child in item.values())
+            elif isinstance(item, list):
+                pending.extend((child, depth + 1) for child in item)
+            elif type(item) is int:
+                require(abs(item) < 10**20, 'JSON integer exceeds bound')
+        return value
+    except (ValueError, UnicodeError, TypeError, RecursionError) as error:
+        raise BuildError('Invalid bounded JSON document') from error
 
 
 def digest(path):
@@ -74,8 +93,35 @@ def regular(path, maximum):
 
 def git(*args):
     env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
-    env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null', GIT_NO_REPLACE_OBJECTS='1')
-    return subprocess.check_output(['git', '--no-replace-objects', *args], env=env, timeout=60, text=True).strip()
+    env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null', GIT_NO_REPLACE_OBJECTS='1',
+               GIT_NO_LAZY_FETCH='1', GIT_TERMINAL_PROMPT='0')
+    try:
+        return subprocess.check_output(['git', '--no-replace-objects', *args], env=env, timeout=60,
+                                       text=True, stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.SubprocessError) as error:
+        raise BuildError('Exact checkout or audit ancestry verification failed') from error
+
+
+IDENTITY_KEYS = {'repository', 'source_sha', 'source_tree', 'workflow_sha', 'audit_trusted_base',
+                 'run_id', 'run_attempt', 'lock_sha256', 'node', 'browsers'}
+
+
+def matches(pattern, value):
+    return isinstance(value, str) and pattern.fullmatch(value) is not None
+
+
+def validate_identity(value):
+    require(isinstance(value, dict) and set(value) == IDENTITY_KEYS, 'Invalid build identity schema')
+    require(value['repository'] == 'bechirobob/tickets'
+            and all(matches(SHA, value[key]) for key in
+                    ('source_sha', 'source_tree', 'workflow_sha', 'audit_trusted_base'))
+            and value['workflow_sha'] == value['source_sha']
+            and value['audit_trusted_base'] != value['source_sha']
+            and all(matches(NUMBER, value[key]) for key in ('run_id', 'run_attempt'))
+            and matches(DIGEST, value['lock_sha256'])
+            and isinstance(value['node'], str) and re.fullmatch(r'v22\.[0-9]+\.[0-9]+', value['node'])
+            and value['browsers'] == list(BROWSERS), 'Invalid build identity')
+    return value
 
 
 def identity():
@@ -84,17 +130,23 @@ def identity():
     source, workflow = env.get('BECORE_RELEASE_SHA', ''), env.get('GITHUB_WORKFLOW_SHA', '')
     require(SHA.fullmatch(source) and SHA.fullmatch(workflow), 'Exact source and executed workflow SHA required')
     require(workflow == source, 'Executed workflow must be the exact source commit')
+    baseline = env.get('BECORE_TRUSTED_BASE', '')
+    require(matches(SHA, baseline) and baseline != source, 'Independent audit baseline required')
+    require(git('cat-file', '-t', baseline) == 'commit', 'Audit baseline must be an immutable commit')
     require(git('rev-parse', 'HEAD') == source, 'Source checkout differs')
-    git('diff', '--exit-code', 'HEAD', '--')
-    git('diff', '--cached', '--exit-code', 'HEAD', '--')
+    git('merge-base', '--is-ancestor', baseline, source)
+    git('merge-base', '--is-ancestor', baseline, 'origin/main')
+    git('diff', '--no-ext-diff', '--no-textconv', '--quiet', 'HEAD', '--')
+    git('diff', '--cached', '--no-ext-diff', '--no-textconv', '--quiet', 'HEAD', '--')
     run, attempt = env.get('GITHUB_RUN_ID', ''), env.get('GITHUB_RUN_ATTEMPT', '')
     require(NUMBER.fullmatch(run) and NUMBER.fullmatch(attempt), 'Exact run and attempt required')
     node = subprocess.check_output(['node', '--version'], text=True, timeout=10).strip()
     require(re.fullmatch(r'v22\.[0-9]+\.[0-9]+', node), 'Browser build requires Node 22')
-    return {'repository': env['GITHUB_REPOSITORY'], 'source_sha': source,
+    return validate_identity({'repository': env['GITHUB_REPOSITORY'], 'source_sha': source,
+            'audit_trusted_base': baseline,
             'source_tree': git('rev-parse', 'HEAD^{tree}'), 'workflow_sha': workflow,
             'run_id': run, 'run_attempt': attempt, 'lock_sha256': digest('package-lock.json'),
-            'node': node, 'browsers': list(BROWSERS)}
+            'node': node, 'browsers': list(BROWSERS)})
 
 
 def safe_name(name):
@@ -111,6 +163,7 @@ def safe_name(name):
 
 
 def package(directory, expected):
+    validate_identity(expected)
     directory = Path(directory)
     require(not directory.exists(), 'Package directory already exists')
     entries = []
@@ -153,8 +206,9 @@ def package(directory, expected):
 
 
 def validate(directory, expected, archive_digest, manifest_digest):
+    validate_identity(expected)
     directory = Path(directory)
-    require(DIGEST.fullmatch(archive_digest or '') and DIGEST.fullmatch(manifest_digest or ''),
+    require(matches(DIGEST, archive_digest) and matches(DIGEST, manifest_digest),
             'Independent producer digests required')
     archive, manifest_path = directory / ARCHIVE, directory / MANIFEST
     regular(archive, MAX_ARCHIVE)
@@ -251,11 +305,15 @@ def restore(directory, expected, archive_digest, manifest_digest):
 
 
 def receipt(kind, manifest, artifact_id, artifact_digest, manifest_digest, browser=None):
-    require(NUMBER.fullmatch(artifact_id or '') and DIGEST.fullmatch(artifact_digest or ''), 'Immutable artifact identity required')
+    require(isinstance(manifest, dict) and manifest.get('schema') == SCHEMA, 'Version 2 build manifest required')
+    validate_identity({key: manifest.get(key) for key in IDENTITY_KEYS})
+    require(matches(DIGEST, manifest.get('archive_sha256')) and matches(DIGEST, manifest_digest),
+            'Exact manifest and archive digests required')
+    require(matches(NUMBER, artifact_id) and matches(DIGEST, artifact_digest), 'Immutable artifact identity required')
     require(kind in ('producer', 'consumer') and ((kind == 'producer' and browser is None)
             or (kind == 'consumer' and browser in BROWSERS)), 'Invalid receipt role')
     return {'schema': SCHEMA, 'kind': kind, 'browser': browser,
-            **{key: manifest[key] for key in ('repository', 'source_sha', 'source_tree', 'workflow_sha', 'run_id', 'run_attempt')},
+            **{key: manifest[key] for key in ('repository', 'source_sha', 'source_tree', 'workflow_sha', 'audit_trusted_base', 'run_id', 'run_attempt')},
             'artifact_id': artifact_id, 'artifact_digest': artifact_digest,
             'archive_sha256': manifest['archive_sha256'], 'manifest_sha256': manifest_digest}
 

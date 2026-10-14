@@ -6,8 +6,10 @@ The host transaction runs under the existing deployment lock, keeps private roll
 snapshots, and never edits the private credential bridge or original handover fields.
 """
 import argparse
+import builtins
 import copy
 from contextlib import ExitStack, closing
+from datetime import datetime, timezone
 import fcntl
 import hashlib
 import json
@@ -24,6 +26,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import types
 import urllib.error
 import urllib.request
 
@@ -634,6 +637,33 @@ RSVP_READINESS_APPLICATION_BLOBS = {
     "tests/registration-readiness.test.mjs": "4d26acd0b4acec36e724edc0a0eb7dc793d16552",
 }
 
+# Finite, application-identical parallel-admission rollout: B -> C -> P.
+# C changes the complete 14-path control family. P adds only the reserved test;
+# its 13 non-control outputs are literal reviewed blobs, never candidate claims.
+PARALLEL_RELEASE_BASELINE = "45ae58430aea3bad312a8244432078a4ffde59f8"
+PARALLEL_RELEASE_BASE_TREE = "5c24c7eb3e0b7add6c04226bdbab33fea1b7846f"
+PARALLEL_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
+PARALLEL_PROMOTION_FILE = "ops/vps/test_parallel_source_family.py"
+PARALLEL_OUTPUT_BLOBS = {
+    '.github/workflows/candidate-parallel-checks.yml': '81bad0f7a602c579fc14c961aa8e26e32f75767d',
+    '.github/workflows/tickets-code-release.yml': '9c5ca1129fe7e97215b3d895060a4f01256473bf',
+    '.github/workflows/tickets-release-operator-checks.yml': '019ec9b3ac73bec979d3ab62725a3d1208ca765f',
+    'docs/reliability/parallel-candidate-benchmark.md': 'ae0f6fa386d882a649bfcaa7a6e57349c08f3d0e',
+    'ops/vps/candidate_build.py': '7d22f24b8d2de731541fc6a9b68d2664dd9933fb',
+    'ops/vps/test_candidate_build.py': '2585ddade3b89f96e21f4966c72ccefa6d6a3715',
+    'ops/vps/parallel_candidate.py': '08e44556ad630ee5227463b74bce990f943d939f',
+    'ops/vps/test_parallel_candidate.py': '3af28a1b01a08c19a97155229f6e0b5efc592fc0',
+    'ops/vps/parallel_candidate_control.py': '1000acb20a4e8b3a0d9c5771ea5269db006805a4',
+    'ops/vps/test_parallel_candidate_control.py': '6ddbd74138168c8538406920d9fda7432ce67f49',
+    'ops/vps/test_parallel_admission.py': '35b8fb438193184f8e1654d44981f6c3564d0ca0',
+    'ops/vps/test_parallel_source_family.py': '54ac92e721b51dda03bca69862816fa78d1c0737',
+    'tests/test_candidate_parallel_workflow.py': '7fea55bc9d99e558d3c0cc0099cbc027e9423bb2',
+}
+PARALLEL_OUTPUT_MODES = {name: "100644" for name in PARALLEL_OUTPUT_BLOBS}
+PARALLEL_MODULES = ("public_runtime_guard", "runtime_release", "candidate_build",
+                    "parallel_candidate", "parallel_candidate_control")
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1094,8 +1124,50 @@ def reviewed_readiness_application_blobs(expected, source):
     return pins
 
 
+def reviewed_parallel_application_blobs(expected, source):
+    """Admit one complete B/C/P inventory; no application authority is added."""
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(expected == PARALLEL_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == PARALLEL_RELEASE_BASE_TREE,
+            "Parallel release baseline differs from its exact reviewed tree.")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, source),
+            "Parallel controls require an independent merged baseline.")
+    verify_trusted_operator(source)
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    all_files = set(PARALLEL_OUTPUT_BLOBS) | PARALLEL_CONTROL_FILES
+    control_files = all_files - {PARALLEL_PROMOTION_FILE}
+    require(len(PARALLEL_OUTPUT_BLOBS) == 13 and len(all_files) == 15
+            and set(git("diff", "--name-only", expected, trusted).splitlines()) == control_files,
+            "Parallel trusted controls differ from the complete 14-path inventory.")
+    require(not git("ls-tree", trusted, "--", PARALLEL_PROMOTION_FILE)
+            and set(git("diff", "--name-only", trusted, source).splitlines()) == {PARALLEL_PROMOTION_FILE}
+            and set(git("diff", "--name-only", expected, source).splitlines()) == all_files,
+            "Parallel promotion must add only the reserved test in the complete 15-path inventory.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = dict(PARALLEL_OUTPUT_BLOBS)
+    for name, blob in PARALLEL_OUTPUT_BLOBS.items():
+        entry = PARALLEL_OUTPUT_MODES[name] + " blob " + blob + "\t" + name
+        require(git("ls-tree", source, "--", name) == entry,
+                "Parallel output differs from its reviewed blob or mode: " + name)
+        if name != PARALLEL_PROMOTION_FILE:
+            require(git("ls-tree", trusted, "--", name) == entry,
+                    "Parallel trusted output differs from its reviewed blob or mode: " + name)
+    for name in sorted(PARALLEL_CONTROL_FILES):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Parallel control differs from its independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    require(not migration_plan(all_files), "Parallel rollout cannot introduce migrations.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == PARALLEL_RELEASE_BASELINE:
+        return reviewed_parallel_application_blobs(expected, source)
     if expected == RSVP_READINESS_LIVE_BASELINE:
         return reviewed_readiness_application_blobs(expected, source)
     if expected == YORKE_RELEASE_BASELINE:
@@ -1288,7 +1360,7 @@ def require_steps(job, required):
                 "Required checks were skipped, failed or duplicated: " + name)
 
 
-def verify_jobs(runtime_jobs, candidate_jobs):
+def verify_runtime_jobs(runtime_jobs):
     require(len(runtime_jobs) == 2
             and all(job.get("conclusion") == "success" for job in runtime_jobs),
             "Runtime contains a failed, skipped or unexpected job.")
@@ -1296,6 +1368,8 @@ def verify_jobs(runtime_jobs, candidate_jobs):
             "Runtime verification jobs missing.")
     require_steps(next(job for job in runtime_jobs if job["name"] == "verify"), RUNTIME_VERIFY_STEPS)
     require_steps(next(job for job in runtime_jobs if job["name"] == "handoff"), RUNTIME_HANDOFF_STEPS)
+def verify_jobs(runtime_jobs, candidate_jobs):
+    verify_runtime_jobs(runtime_jobs)
     # Build once, then restore those exact bytes before each isolated browser.
     # No inter-job artifact/cache is a substitute for this same-build contract.
     require(len(candidate_jobs) == 1 and candidate_jobs[0].get("name") == "verify"
@@ -1333,6 +1407,198 @@ def verify_runtime_transport(archive, source, source_tree, runtime):
         raise ReleaseError("Runtime release transport evidence mismatch.") from exc
 
 
+def verify_parallel_run(run, jobs, *, repository):
+    require(type(run) is dict and run.get("status") == "completed" and run.get("conclusion") == "success"
+            and run.get("path") == ".github/workflows/candidate-parallel-checks.yml"
+            and run.get("head_branch") == "improve/release-evidence-parallel-20261013"
+            and run.get("event") in ("push", "workflow_dispatch")
+            and type(run.get("id")) is int and run["id"] > 0
+            and type(run.get("run_attempt")) is int and run["run_attempt"] > 0
+            and isinstance(run.get("head_sha"), str) and SHA.fullmatch(run["head_sha"])
+            and run.get("repository", {}).get("full_name") == repository
+            and run.get("head_repository", {}).get("full_name") == repository,
+            "Parallel candidate run identity differs from the exact branch workflow.")
+    names = {"build", "desktop-chromium", "mobile-chromium", "mobile-webkit", "verify"}
+    require(type(jobs) is list and len(jobs) == 5 and all(type(job) is dict for job in jobs),
+            "Parallel candidate requires exactly five jobs.")
+    identifiers = set()
+    observed = set()
+    for job in jobs:
+        require(type(job.get("id")) is int and job["id"] > 0 and job["id"] not in identifiers
+                and type(job.get("run_id")) is int and job["run_id"] == run["id"]
+                and ("run_attempt" not in job or type(job["run_attempt"]) is int
+                     and job["run_attempt"] == run["run_attempt"])
+                and job.get("head_sha") == run["head_sha"] and job.get("status") == "completed"
+                and job.get("conclusion") == "success" and job.get("name") in names
+                and job["name"] not in observed,
+                "Parallel job does not belong to the exact successful workflow attempt.")
+        identifiers.add(job["id"])
+        observed.add(job["name"])
+
+
+def authenticated_parallel_modules(source):
+    """Compile only independently authenticated source, ignoring imports/pycache.
+
+    Read/authenticate every module before executing any of them. The private
+    import hook resolves their dependencies exclusively to fresh modules; even a
+    same-path forged sys.modules entry or valid timestamp .pyc is irrelevant.
+    """
+    verify_trusted_operator(source)
+    baseline = os.environ["BECORE_TRUSTED_BASE"]
+    directory = Path(__file__).absolute().parent
+    sources = {}
+    for name in PARALLEL_MODULES:
+        path = directory / (name + ".py")
+        relative = "ops/vps/" + path.name
+        info = path.lstat()
+        require(not any(parent.is_symlink() for parent in (path, *path.parents))
+                and stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+                and stat.S_IMODE(info.st_mode) == 0o644,
+                "Parallel verifier must be a regular trusted module: " + relative)
+        entry = git("ls-tree", baseline, "--", relative)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(relative), entry),
+                "Parallel verifier trusted mode is invalid: " + relative)
+        raw = path.read_bytes()
+        expected = subprocess.check_output(["git", "--no-replace-objects", "show", baseline + ":" + relative],
+                                           stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
+        require(raw == expected, "Parallel verifier bytes differ from trusted baseline: " + relative)
+        sources[name] = (path, raw)
+    modules = {}
+    ordinary_import = builtins.__import__
+
+    def trusted_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in PARALLEL_MODULES:
+            require(level == 0 and name in modules, "Parallel module dependency order is invalid.")
+            return modules[name]
+        require(level == 0, "Relative parallel module imports are forbidden.")
+        return ordinary_import(name, globals, locals, fromlist, level)
+
+    for name, (path, raw) in sources.items():
+        module = types.ModuleType(name)
+        module.__file__ = str(path)
+        module.__builtins__ = dict(vars(builtins), __import__=trusted_import)
+        exec(compile(raw, str(path), "exec", dont_inherit=True), module.__dict__)
+        modules[name] = module
+    # Publish only after the entire authenticated dependency graph compiles.
+    # The shared runtime transport guard then imports this fresh verified module,
+    # never a preexisting sys.modules forgery or timestamp-valid bytecode cache.
+    sys.modules.update(modules)
+    return modules
+
+
+def validate_parallel_proof(proof, *, repository, candidate, tree, run_id, attempt, baseline=None):
+    """Standalone host shape/binding gate, never a replacement for collection."""
+    keys = {"schema", "repository", "source_sha", "source_tree", "workflow", "workflow_sha",
+            "workflow_blob", "audit_trusted_base", "run_id", "run_attempt", "event", "head_branch",
+            "artifact", "jobs", "receipts", "metadata_sha256"}
+    require(type(proof) is dict and set(proof) == keys
+            and proof["schema"] == "tickets-parallel-candidate/v2", "Version 2 parallel proof required.")
+
+    def sha(value):
+        return isinstance(value, str) and SHA.fullmatch(value)
+
+    def digest(value):
+        return isinstance(value, str) and DIGEST.fullmatch(value)
+
+    def number(value):
+        return type(value) is int and 1 <= value < 10 ** 20
+
+    require(repository == "bechirobob/tickets" and sha(candidate) and sha(tree)
+            and isinstance(run_id, str) and re.fullmatch(r"[1-9][0-9]{0,19}", run_id)
+            and number(attempt) and sha(proof["audit_trusted_base"])
+            and proof["audit_trusted_base"] != candidate
+            and (baseline is None or proof["audit_trusted_base"] == baseline),
+            "Parallel proof independent identity is invalid.")
+    expected = {"repository": repository, "source_sha": candidate, "source_tree": tree,
+                "workflow": ".github/workflows/candidate-parallel-checks.yml", "workflow_sha": candidate,
+                "run_id": int(run_id), "run_attempt": attempt}
+    require(all(proof[key] == value for key, value in expected.items())
+            and number(proof["run_id"]) and number(proof["run_attempt"]) and sha(proof["workflow_blob"])
+            and proof["event"] in ("push", "workflow_dispatch")
+            and proof["head_branch"] == "improve/release-evidence-parallel-20261013",
+            "Parallel proof does not bind the exact candidate workflow.")
+    artifact = proof["artifact"]
+    require(type(artifact) is dict and set(artifact) == {"id", "name", "size_in_bytes", "digest",
+            "archive_sha256", "manifest_sha256", "created_at", "expires_at"}
+            and number(artifact["id"]) and type(artifact["size_in_bytes"]) is int
+            and 1 <= artifact["size_in_bytes"] <= 272 * 1024 ** 2
+            and artifact["name"] == "browser-build-" + run_id + "-" + str(attempt)
+            and all(digest(artifact[key]) for key in ("digest", "archive_sha256", "manifest_sha256")),
+            "Parallel proof artifact identity is invalid.")
+
+    def timestamp(value):
+        require(isinstance(value, str), "Parallel artifact timestamp is invalid.")
+        match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z", value)
+        require(match is not None, "Parallel artifact timestamp is invalid.")
+        try:
+            date = datetime.strptime(match[1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+            return (date, int((match[2] or "").ljust(9, "0")))
+        except ValueError as exc:
+            raise ReleaseError("Parallel artifact timestamp is invalid.") from exc
+
+    require(timestamp(artifact["created_at"]) < timestamp(artifact["expires_at"]),
+            "Parallel proof artifact lifetime is invalid.")
+    jobs = proof["jobs"]
+    require(type(jobs) is list and len(jobs) == 5, "Parallel proof requires five jobs.")
+    identifiers = set()
+    browsers = ("desktop-chromium", "mobile-chromium", "mobile-webkit")
+    for job, name in zip(jobs, ("build", *browsers, "verify")):
+        require(type(job) is dict and set(job) == {"id", "name", "log_sha256", "steps_sha256"}
+                and number(job["id"]) and job["id"] not in identifiers and job["name"] == name
+                and digest(job["log_sha256"]) and digest(job["steps_sha256"]),
+                "Parallel proof job identity or evidence digest is invalid.")
+        identifiers.add(job["id"])
+    receipts = proof["receipts"]
+    require(type(receipts) is list and len(receipts) == 4, "Parallel proof requires four receipts.")
+    for receipt, browser in zip(receipts, (None, *browsers)):
+        expected_receipt = {
+            "schema": "tickets-browser-build/v2", "kind": "producer" if browser is None else "consumer",
+            "browser": browser, "repository": repository, "source_sha": candidate, "source_tree": tree,
+            "workflow_sha": candidate, "audit_trusted_base": proof["audit_trusted_base"],
+            "run_id": run_id, "run_attempt": str(attempt), "artifact_id": str(artifact["id"]),
+            "artifact_digest": artifact["digest"], "archive_sha256": artifact["archive_sha256"],
+            "manifest_sha256": artifact["manifest_sha256"],
+        }
+        require(type(receipt) is dict and receipt == expected_receipt,
+                "Parallel proof receipt differs from its exact shared artifact.")
+    hashes = proof["metadata_sha256"]
+    require(type(hashes) is dict and set(hashes) == {"run", "jobs", "artifact"}
+            and all(digest(value) for value in hashes.values()), "Parallel proof metadata digests are invalid.")
+    return proof
+
+
+def verify_parallel_candidate(args, candidate, jobs, source_tree):
+    """Authenticated online evidence is required; local receipts are not trust."""
+    try:
+        modules = authenticated_parallel_modules(args.source)
+        previous = None
+        output = Path(args.output)
+        if os.path.lexists(output):
+            require(output.is_file() and not output.is_symlink(), "Previous parallel proof must be regular.")
+            prior = strict_json(output.read_bytes())
+            require(type(prior) is dict and "candidateVerification" in prior,
+                    "Previous provenance has no selected parallel proof.")
+            previous = validate_parallel_proof(prior["candidateVerification"], repository=args.repository,
+                candidate=candidate["head_sha"], tree=source_tree, run_id=args.candidate_run,
+                attempt=candidate["run_attempt"], baseline=os.environ["BECORE_TRUSTED_BASE"])
+        proof = modules["parallel_candidate_control"].collect_or_verify(
+            modules["runtime_release"].GitHub(), Path(args.metadata) / "parallel-evidence",
+            root=Path.cwd(), source=args.source, candidate=candidate["head_sha"],
+            trusted_baseline=os.environ["BECORE_TRUSTED_BASE"], run_id=args.candidate_run,
+            attempt=str(candidate["run_attempt"]), verifier=modules["parallel_candidate"], expected_proof=previous)
+        validate_parallel_proof(proof, repository=args.repository, candidate=candidate["head_sha"],
+                                tree=source_tree, run_id=args.candidate_run,
+                                attempt=candidate["run_attempt"], baseline=os.environ["BECORE_TRUSTED_BASE"])
+        require({job["name"]: job["id"] for job in jobs}
+                == {job["name"]: job["id"] for job in proof["jobs"]},
+                "Parallel collector job IDs differ from selected exact-attempt metadata.")
+        return proof
+    except ReleaseError:
+        raise
+    except Exception as exc:
+        raise ReleaseError("Authenticated parallel candidate verification failed.") from exc
+
+
 def verify_ci(args):
     require(SHA.fullmatch(args.source) and SHA.fullmatch(args.expected), "Exact SHAs required.")
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Dispatch must target main.")
@@ -1345,18 +1611,28 @@ def verify_ci(args):
     runtime = strict_json((metadata / "runtime.json").read_bytes())
     candidate = strict_json((metadata / "candidate.json").read_bytes())
     verify_run(runtime, workflow="vps-runtime.yml", source=args.source, repository=args.repository)
-    verify_run(candidate, workflow="candidate-checks.yml", repository=args.repository)
+    candidate_mode = getattr(args, "candidate_mode", "legacy")
+    require(candidate_mode in ("legacy", "parallel-v1"), "Unknown candidate verification mode.")
+    workflow = "candidate-checks.yml" if candidate_mode == "legacy" else "candidate-parallel-checks.yml"
+    if candidate_mode == "legacy":
+        verify_run(candidate, workflow=workflow, repository=args.repository)
     require(str(runtime.get("id")) == args.runtime_run and str(candidate.get("id")) == args.candidate_run,
             "Workflow run IDs do not match inputs.")
     runtime_jobs = strict_json((metadata / "runtime-jobs.json").read_bytes())
     candidate_jobs = strict_json((metadata / "candidate-jobs.json").read_bytes())
     verify_job_identity(runtime_jobs, runtime)
-    verify_job_identity(candidate_jobs, candidate)
-    verify_jobs(runtime_jobs, candidate_jobs)
+    if candidate_mode == "legacy":
+        verify_job_identity(candidate_jobs, candidate)
+        verify_jobs(runtime_jobs, candidate_jobs)
+    else:
+        verify_runtime_jobs(runtime_jobs)
+        verify_parallel_run(candidate, candidate_jobs, repository=args.repository)
     source_tree = git("rev-parse", args.source + "^{tree}")
     require(source_tree == git("rev-parse", candidate["head_sha"] + "^{tree}"),
             "Candidate browser source tree differs from runtime source tree.")
     changes = vetted_changes(args.expected, args.source)
+    candidate_verification = (verify_parallel_candidate(args, candidate, candidate_jobs, source_tree)
+                              if candidate_mode == "parallel-v1" else None)
     archive = Path(args.archive)
     checksum = (archive.parent / (archive.name + ".sha256")).read_text().strip()
     require(re.fullmatch(r"[a-f0-9]{64}  tickets-vps-runtime\.tar\.gz", checksum),
@@ -1372,6 +1648,8 @@ def verify_ci(args):
                   "releaseTransport": transport,
                   "repository": args.repository, "ancestryVerified": True,
                   "changedFiles": changes, "migrations": migration_plan(changes)}
+    if candidate_verification is not None:
+        provenance["candidateVerification"] = candidate_verification
     if getattr(args, "audit_directory", None):
         audit = verify_dependency_audit(args.audit_directory, args.source)
         provenance["dependencyAudit"] = audit
@@ -2299,6 +2577,12 @@ class Deployment:
                 and SHA.fullmatch(self.proof.get("sourceTree", ""))
                 and self.proof.get("candidateTree") == self.proof["sourceTree"],
                 "Release provenance does not match the transaction.")
+        if "candidateVerification" in self.proof:
+            validate_parallel_proof(self.proof["candidateVerification"], repository=self.proof.get("repository"),
+                                    candidate=self.proof.get("candidateSha"), tree=self.proof["sourceTree"],
+                                    run_id=self.proof.get("candidateRun"), attempt=self.proof.get("candidateAttempt"))
+            require(self.proof["candidateVerification"]["audit_trusted_base"] != self.source,
+                    "Parallel source cannot be its own trusted control baseline.")
         self.audit_raw = self.verify_dependency_audit()
         receipt = self.proof.get("dependencyAudit")
         require(type(receipt) is dict and receipt.get("status") in ("clean", "known-advisory-exception"),
@@ -2883,6 +3167,7 @@ def main():
     for name in ("source", "expected", "repository", "metadata", "runtime-run", "candidate-run", "archive", "output"):
         verify.add_argument("--" + name, required=True)
     verify.add_argument("--audit-directory")
+    verify.add_argument("--candidate-mode", choices=("legacy", "parallel-v1"), default="legacy")
     apply = commands.add_parser("apply")
     for name in ("source", "expected", "run-id", "attempt", "archive", "provenance", "archive-digest", "provenance-digest"):
         apply.add_argument("--" + name, required=True)

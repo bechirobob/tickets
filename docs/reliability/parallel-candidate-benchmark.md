@@ -1,8 +1,9 @@
 # Parallel Candidate benchmark
 
-This is an advisory, read-only CI experiment. It cannot satisfy the existing
-production release operator. The original Candidate workflow and its full
-coverage remain unchanged.
+The legacy Candidate workflow and its full coverage remain the default. Explicit
+parallel-v1 admission requires independently authenticated v2 evidence from the
+reviewed producer, all three isolated browsers and aggregate job. Historical v1
+benchmark results are timing evidence only; they cannot authorize a release.
 
 ## Execution and identity
 
@@ -62,3 +63,47 @@ artifact metadata, exact-attempt consumer receipts and every required named
 step. GitHub artifact metadata alone has no attempt identity. Preserve the
 legacy contract and exact final source-tree checks. Missing, failed, skipped,
 duplicate, mixed-attempt or substituted evidence must remain fatal.
+
+
+## Measured same-head baseline, 13–14 October 2026 UTC
+
+Both successful runs tested head d8b2c75ef79646e9acfdc7faf3b6f08539af8dfa:
+
+- [Sequential 38483973677](https://github.com/bechirobob/tickets/actions/runs/38483973677):
+  execution 48m12s, trigger-to-completion 48m53s, runner occupancy 48m12s.
+- [Parallel 38483969560](https://github.com/bechirobob/tickets/actions/runs/38483969560):
+  execution 25m20s, trigger-to-completion 26m07s, runner occupancy 52m46s.
+- Observed execution reduction: 22m52s (47.44%). Added runner occupancy:
+  4m34s (9.47%). Per-job rounded-minute model: 49 versus 56 minutes.
+- This is one measured pair, not an SLA or billing statement. Earlier superseded
+  setup runs consumed additional runner time and are excluded from this pair.
+
+GitHub exact-attempt job timestamps were retrieved again on 14 October after a
+workspace recovery. The original one-day artifact may expire; timing metadata
+must never be substituted for current release evidence.
+
+## Verification-only rollout
+
+The release workflow accepts verify_only=true to run the complete evidence and
+final dependency-audit checks without Tailscale connection, SSH, host activation
+or production browser checks. It rejects conflicting inspect-failure mode before
+checkout. A verification-only success does not mean anything was deployed.
+
+The finite first rollout starts from the exact live RSVP baseline
+45ae58430aea3bad312a8244432078a4ffde59f8. Independently merge the reviewed control
+revision C first; the final candidate P adds only the genuine reserved source-
+family contract test. Exact C and P inventories are separately validated. Run
+fresh full parallel browser checks with trusted_base=C, obtain exact-main runtime
+evidence for the equivalent candidate tree, and require a successful online
+verification-only run. No application, dependency or migration edit belongs to
+this rollout. All normal release checks still apply to actual activation.
+
+V2 binds the exact independently selected audit baseline and complete audit
+verifier closure, workflow, source/tree, immutable artifact, attempt and job/log
+receipts. No receipt is sufficient on its own. The collector keeps selected log
+evidence immutable and rechecks authenticated job/artifact metadata immediately
+before a host transaction. Missing, expired, altered or mixed evidence fails.
+
+The parallel admission implementation was reconstructed after loss of an
+unpublished workspace snapshot. New module revisions require fresh tests and
+independent review; earlier local test counts are not attributed to them.

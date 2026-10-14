@@ -1,4 +1,4 @@
-"""Advisory workflow contract tests; intentionally outside the legacy host bundle."""
+"""Parallel workflow coverage and explicit opt-in admission contract tests."""
 from pathlib import Path
 import re
 import unittest
@@ -12,14 +12,27 @@ class ParallelWorkflowTests(unittest.TestCase):
         self.old=(ROOT/'.github/workflows/candidate-checks.yml').read_text()
         self.new=(ROOT/'.github/workflows/candidate-parallel-checks.yml').read_text()
 
-    def test_legacy_unmodified_parallel_nonadmissible_exact_branch_or_dispatch(self):
+    def test_legacy_default_parallel_requires_explicit_mode_exact_branch_or_dispatch(self):
         self.assertIn('Single-job candidate verification missing or incomplete.',(ROOT/'ops/vps/code-release.py').read_text())
-        self.assertNotIn('candidate-parallel-checks.yml',(ROOT/'ops/vps/code-release.py').read_text())
+        operator=(ROOT/'ops/vps/code-release.py').read_text()
+        self.assertIn('getattr(args, "candidate_mode", "legacy")',operator)
+        self.assertIn('choices=("legacy", "parallel-v1"), default="legacy"',operator)
+        self.assertIn('candidate_mode in ("legacy", "parallel-v1")',operator)
+        self.assertIn('validate_parallel_proof(proof',operator)
         self.assertNotIn('  pull_request:',self.new)
         self.assertIn('branches: [improve/release-evidence-parallel-20261013]',self.new)
         self.assertIn('BECORE_RELEASE_SHA: ${{ github.sha }}',self.new)
         self.assertEqual(re.findall(r'^  ([a-z_]+):$',self.new.split('jobs:\n',1)[1],re.M),
                          ['build','desktop_chromium','mobile_chromium','mobile_webkit','verify'])
+
+    def test_operator_checks_trigger_for_each_parallel_helper_and_test(self):
+        workflow=(ROOT/'.github/workflows/tickets-release-operator-checks.yml').read_text()
+        paths=workflow.split('    paths:\n',1)[1].split('  workflow_dispatch:',1)[0]
+        for name in ('candidate_build.py','parallel_candidate.py','parallel_candidate_control.py',
+                     'test_candidate_build.py','test_parallel_candidate.py',
+                     'test_parallel_candidate_control.py','test_parallel_admission.py',
+                     'test_parallel_source_family.py'):
+            self.assertIn('      - ops/vps/' + name + '\n', paths)
 
     def test_every_original_browser_command_preserved(self):
         for browser in BROWSERS:
