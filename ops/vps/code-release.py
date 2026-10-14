@@ -603,6 +603,37 @@ YORKE_APPLICATION_BLOBS = {
     "tests/staff-owner-integrity.test.ts": "c4848f22880124500be8627497fc5df223bcb5d2",
 }
 
+# One readiness release from live L, preserving the independently merged
+# advisory base A. Only final S carries the four reviewed readiness outputs;
+# neither A nor S can supply its own new release controls C.
+RSVP_READINESS_LIVE_BASELINE = "d257f41b669a542de0eebbe09993e7efa8dd5074"
+RSVP_READINESS_LIVE_TREE = "a4446b0a2d2fc6a03e5196fb9b3a2d90f72a5d66"
+RSVP_READINESS_ADVISORY_BASE = "0f82e136c8005d910f0aeb44b6f355176fc254f6"
+RSVP_READINESS_ADVISORY_TREE = "c805f0626b55e069e45b22e2420e4f0d463c945e"
+RSVP_READINESS_APP_SNAPSHOT = "d43243e28d06000465b30175dd947a4a22ce4ba0"
+RSVP_READINESS_APP_TREE = "b30272ddb69e5e1a9ee694bb7f8bab4c47eb541a"
+RSVP_READINESS_PACKAGE_BLOBS = ("e4f736b3204696fceab081989f1cdddfd5b1bc5e",
+                                "eccb3af63298d7642c1ea974d7e8f18da9563507")
+RSVP_READINESS_LOCK_BLOB = "47a4eaca5743b768598462d8b66a2ef49a442b4e"
+RSVP_READINESS_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
+RSVP_READINESS_ADVISORY_BLOBS = {
+    ".github/workflows/candidate-parallel-checks.yml": "313182fc21841d8a059be596c7c31e0a0b179a33",
+    "docs/reliability/parallel-candidate-benchmark.md": "c7706b3ffea9fbd2c73a435cc516e3d8c3bde289",
+    "docs/reliability/release-timing.md": "4f2bfabd835257370f55b50fa03bb272127436fa",
+    "ops/vps/candidate_build.py": "5820b026f9747961081fc3e8b8e5531bf546621a",
+    "ops/vps/test_candidate_build.py": "332079c682451af3c3e1ac36feef0129d1975b29",
+    "ops/vps/test_code_release.py": "3a00def2029213f4a54493ebc1b17559a218735e",
+    "scripts/release-timing.py": "27f76adcc0ef2ad71b9e9696eb050ff643232d28",
+    "tests/test_candidate_parallel_workflow.py": "26f56b2aca434e930718cb75db3a4a9863131411",
+    "tests/test_release_timing.py": "874dc439367e2600fc764ba0d26e8fb3c93b37dd",
+}
+RSVP_READINESS_APPLICATION_BLOBS = {
+    "app/registration-form.tsx": "392be6a7594bbc18b5be5f992b29801d21dc20d5",
+    "package.json": "eccb3af63298d7642c1ea974d7e8f18da9563507",
+    "tests/e2e/guest-clarity.spec.ts": "1e370c029f3134b90d8decb11a128e31823b791c",
+    "tests/registration-readiness.test.mjs": "4d26acd0b4acec36e724edc0a0eb7dc793d16552",
+}
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1019,8 +1050,54 @@ def reviewed_yorke_application_blobs(expected, source):
     return pins
 
 
+def reviewed_readiness_application_blobs(expected, source):
+    """Bind live L, exact merged advisory A, snapshot S and independent C/P."""
+    advisory = RSVP_READINESS_ADVISORY_BASE
+    snapshot = RSVP_READINESS_APP_SNAPSHOT
+    require(git("rev-parse", expected + "^{tree}") == RSVP_READINESS_LIVE_TREE
+            and git("rev-parse", advisory + "^{tree}") == RSVP_READINESS_ADVISORY_TREE,
+            "Readiness live or advisory baseline changed.")
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, advisory],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, advisory).splitlines())
+            == set(RSVP_READINESS_ADVISORY_BLOBS),
+            "Readiness advisory baseline differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, advisory)
+    for name, blob in RSVP_READINESS_ADVISORY_BLOBS.items():
+        require(git("rev-parse", advisory + ":" + name) == blob,
+                "Readiness advisory baseline differs from reviewed source: " + name)
+    require(git("rev-parse", snapshot + "^{tree}") == RSVP_READINESS_APP_TREE
+            and git("rev-list", "--parents", "-n", "1", snapshot) == snapshot + " " + advisory,
+            "Readiness snapshot must be the exact direct child of the advisory baseline.")
+    require(set(git("diff", "--name-only", advisory, snapshot).splitlines())
+            == set(RSVP_READINESS_APPLICATION_BLOBS),
+            "Readiness snapshot differs from its complete reviewed inventory.")
+    verify_trusted_operator(source)
+    trusted = os.environ["BECORE_TRUSTED_BASE"]
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", advisory, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", advisory, trusted).splitlines())
+            == RSVP_READINESS_CONTROL_FILES,
+            "Readiness trusted controls must change only the two reviewed control files from advisory baseline.")
+    verify_changed_modes(advisory, trusted)
+    require(set(git("diff", "--name-only", snapshot, source).splitlines())
+            <= RSVP_READINESS_CONTROL_FILES,
+            "Readiness candidate differs from the exact application snapshot.")
+    pins = {**REVIEWED_APPLICATION_BLOBS, **RSVP_READINESS_ADVISORY_BLOBS,
+            **RSVP_READINESS_APPLICATION_BLOBS}
+    for name in sorted(RSVP_READINESS_CONTROL_FILES):
+        require(git("ls-tree", source, "--", name) == git("ls-tree", trusted, "--", name),
+                "Readiness candidate controls differ from the trusted baseline.")
+        # A's test blob is evidence of the independently merged advisory change.
+        # P must instead carry the exact newly reviewed C test/control entries.
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == RSVP_READINESS_LIVE_BASELINE:
+        return reviewed_readiness_application_blobs(expected, source)
     if expected == YORKE_RELEASE_BASELINE:
         return reviewed_yorke_application_blobs(expected, source)
     if expected != WORKSPACE_RELEASE_BASELINE:
@@ -1133,6 +1210,19 @@ def vetted_changes(expected, source):
         after = strict_json(git("show", source + ":package.json"))
         before["scripts"] = after["scripts"]
         require(before == after, "Yorke package change is not scripts-only.")
+        return changed
+    if expected == RSVP_READINESS_LIVE_BASELINE:
+        require({"package.json", "package-lock.json"} & set(changed) == {"package.json"},
+                "Readiness release permits only the reviewed package test:ui change.")
+        for revision, package in zip((expected, source), RSVP_READINESS_PACKAGE_BLOBS):
+            require(git("rev-parse", revision + ":package.json") == package
+                    and git("rev-parse", revision + ":package-lock.json") == RSVP_READINESS_LOCK_BLOB,
+                    "Readiness package script or unchanged dependency lock differs from reviewed source.")
+        before = strict_json(git("show", expected + ":package.json"))
+        after = strict_json(git("show", source + ":package.json"))
+        before["scripts"]["test:ui"] = after["scripts"]["test:ui"]
+        require(before == after, "Readiness package change is not test:ui-only.")
+        require(not migration_plan(changed), "Readiness release cannot introduce migrations.")
         return changed
     # Next 16.3.6 security remediation, including npm's reviewed lock metadata.
     # Pin both complete inputs and outputs: scripts, other dependency versions,
