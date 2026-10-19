@@ -21,6 +21,7 @@ type GateTicket = {
 };
 type Order = {
   orderId: string;
+  roomAccess: boolean;
   reference: string;
   eventSlug: string;
   faceAmountMinor: number;
@@ -55,24 +56,47 @@ export default function TicketWallet() {
   const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
   const recoveryBusy = useRef(false);
 
+  const request = useRef<AbortController | null>(null);
   useEffect(() => {
-    fetch("/api/customer/tickets", { method: "POST", cache: "no-store" })
-      .then(async (response) => {
-        if (response.status === 401) { clearOfflineTickets(); return null; }
+    const load = async () => {
+      if (request.current) return;
+      const controller = new AbortController();
+      request.current = controller;
+      try {
+        const response = await fetch("/api/customer/tickets", { method: "POST", cache: "no-store", signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (response.status === 401) { clearOfflineTickets(); setWallet(null); setError(""); return; }
         const data = await response.json() as Wallet & { error?: string };
+        if (controller.signal.aborted) return;
         if (!response.ok) throw new Error(data.error ?? "Your passes could not be prepared.");
-        reconcileOfflineTickets(data.attendee.attendeeId, data.orders.flatMap((order) => order.tickets.filter((ticket) => ticket.status === "issued" && ticket.qrPayload).map((ticket) => ticket.id)));
-        return data;
-      })
-      .then((data) => { setWallet(data); setLoading(false); })
-      .catch((cause) => { setError(cause instanceof Error ? cause.message : "Your passes could not be prepared."); setLoading(false); });
+        reconcileOfflineTickets(data.attendee.attendeeId, data.orders.flatMap(order => order.tickets.filter(ticket => ticket.status === "issued" && ticket.qrPayload).map(ticket => ticket.id)));
+        setWallet(data); setError("");
+      } catch (cause) {
+        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Your passes could not be prepared.");
+      } finally {
+        if (request.current === controller) request.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    const initial = window.setTimeout(() => void load(), 0);
+    const resume = () => { if (!document.hidden && navigator.onLine) void load(); };
+    window.addEventListener("focus", resume); window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      window.clearTimeout(initial); request.current?.abort(); request.current = null;
+      window.removeEventListener("focus", resume); window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
   }, []);
 
   async function signOut() {
+    const abortRead = () => { request.current?.abort(); request.current = null; };
+    abortRead();
     clearOfflineTickets();
     try {
       const response = await fetch("/api/customer/session", { method: "DELETE" });
       if (!response.ok) throw new Error("Sign-out did not complete. Please try again.");
+      abortRead();
       setWallet(null);
     } catch {
       setError("Offline copies removed. Reconnect and try again to finish signing out.");
@@ -105,7 +129,7 @@ export default function TicketWallet() {
       {wallet?.orders.map((order) => {
         const detail = order.event ?? { title: order.eventSlug.replaceAll("-", " "), date: "Event date confirmed in your order", venue: "See event details", state: "unavailable" };
         return <article className="wallet-order" key={order.orderId}>
-          <header><div><small><BadgeCheck size={12} /> Paid and verified · {order.quantity} {order.quantity === 1 ? "admission" : "admissions"}</small><h2>{detail.title}</h2>{order.bookedFor ? <p>Booked for {order.bookedFor}</p> : null}<p><CalendarDays size={15} /> {detail.date}</p><p><MapPin size={15} /> {detail.venue}</p></div><Link href={`/room/${order.eventSlug}`}><MessageCircle size={16} /> Enter The Room</Link></header>
+          <header><div><small><BadgeCheck size={12} /> Paid and verified · {order.quantity} {order.quantity === 1 ? "admission" : "admissions"}</small><h2>{detail.title}</h2>{order.bookedFor ? <p>Booked for {order.bookedFor}</p> : null}<p><CalendarDays size={15} /> {detail.date}</p><p><MapPin size={15} /> {detail.venue}</p></div>{order.roomAccess ? <Link href={`/room/${order.eventSlug}`}><MessageCircle size={16} /> Enter The Room</Link> : null}</header>
           <div className="wallet-passes">
             {order.tickets.map((ticketItem, index) => <section className={`wallet-pass wallet-pass--${ticketItem.status}`} key={ticketItem.id}>
               <div><span>Pass {index + 1} of {order.tickets.length}</span><b>{ticketItem.ticketType.replaceAll("-", " ")}</b></div>

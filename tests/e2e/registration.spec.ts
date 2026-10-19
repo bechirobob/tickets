@@ -119,3 +119,42 @@ test('My Nights distinguishes waitlisted guests from confirmed passes and suppor
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
   expect((await new AxeBuilder({ page }).include('.my-registrations').analyze()).violations).toEqual([]);
 });
+
+for (const routeName of ['event', 'rsvp']) {
+  test(`${routeName} RSVP shows live approval for its event after submission, resume and reload`, async ({ page }) => {
+    let status: string | null = null;
+    const roomAccess = routeName === 'event' ? 1 : 0;
+    await page.clock.install();
+    await page.route('**/api/customer/registrations?eventSlug=after-dark-osu', route => route.fulfill({ json: { registrations: [
+      ...(status ? [{ id: 'live-rsvp', eventSlug: 'after-dark-osu', title: 'After Dark: Osu', kind: 'rsvp', status, partySize: 1, maxPartySize: 3, mode: 'rsvp', roomAccess }] : []),
+      { id: 'unrelated', eventSlug: 'another-event', title: 'Unrelated private registration', kind: 'rsvp', status: 'confirmed', partySize: 1, maxPartySize: 1, mode: 'rsvp', roomAccess: 1 },
+    ] } }));
+    await page.route('**/api/registrations', route => { status = 'requested'; return route.fulfill({ status: 202, json: { message: 'RSVP received.', canManage: true } }); });
+    await page.goto(`/${routeName}/after-dark-osu`);
+    const form = page.locator('.registration-form');
+    if (routeName === 'event') await form.getByRole('button', { name: 'RSVP', exact: true }).click();
+    await form.getByLabel('Your name').fill('Approval Guest');
+    await form.getByLabel('Email address').fill('approval-fixture@example.com');
+    await form.getByRole('checkbox', { name: /I accept the event terms/ }).check();
+    await form.getByRole('button', { name: 'Send RSVP' }).click();
+    await expect(form.locator('[data-status="requested"]')).toBeVisible();
+    await expect(form.getByText('Unrelated private registration')).toHaveCount(0);
+    await expect(form.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
+    status = 'confirmed';
+    if (routeName === 'event') await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    else await page.clock.runFor(71_000);
+    await expect(form.locator('[data-status="confirmed"]')).toBeVisible();
+    await expect(form.getByRole('heading', { name: 'RSVP received.' })).toHaveCount(0);
+    await expect(form.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
+    await expect(form.getByRole('link', { name: 'The Room', exact: true })).toHaveCount(roomAccess);
+    await page.reload();
+    await expect(form.locator('[data-status="confirmed"]')).toBeVisible();
+    await expect(form.getByLabel('Email address')).toHaveCount(0);
+    status = 'cancelled';
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(form.locator('[data-status="cancelled"]')).toBeVisible();
+    await expect(form.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
+    await expect(form.getByRole('link', { name: 'The Room', exact: true })).toHaveCount(0);
+    await expect(form.getByRole('button', { name: 'Request my RSVP' })).toBeVisible();
+  });
+}

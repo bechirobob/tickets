@@ -218,9 +218,11 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       if (socket?.readyState === WebSocket.OPEN && Date.now() - lastSocketActivityRef.current <= 60_000) return;
       if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) socket.close(4000, "Refreshing connection");
       else if (attendeeIdRef.current) connectRef.current(attendeeIdRef.current);
+      else setAccessAttempt(value => value + 1);
     }
     function onVisibility() { if (document.visibilityState === "visible") reconnectIfNeeded(); }
     window.addEventListener("online", reconnectIfNeeded);
+    window.addEventListener("focus", reconnectIfNeeded);
     window.addEventListener("pageshow", reconnectIfNeeded);
     document.addEventListener("visibilitychange", onVisibility);
     const heartbeat = window.setInterval(() => {
@@ -233,6 +235,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     }, 25_000);
     return () => {
       window.removeEventListener("online", reconnectIfNeeded);
+      window.removeEventListener("focus", reconnectIfNeeded);
       window.removeEventListener("pageshow", reconnectIfNeeded);
       document.removeEventListener("visibilitychange", onVisibility);
       window.clearInterval(heartbeat);
@@ -356,7 +359,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     return <main className="room-gate"><MessageCircle aria-hidden="true" /><p>Finding your people…</p></main>;
   }
   if (status === "denied") {
-    return <main className="room-gate"><ShieldCheck aria-hidden="true" /><h1>This Room is ticket-locked.</h1><p>{notice}</p><Link href="/tickets">Open your ticket wallet</Link></main>;
+    return <main className="room-gate"><ShieldCheck aria-hidden="true" /><h1>This Room is ticket-locked.</h1><p>{notice}</p><button type="button" onClick={() => { setStatus("loading"); setNotice(""); setAccessAttempt(value => value + 1); }}>Check access again</button><Link href="/my-nights?recover=1">Open your passes securely</Link></main>;
   }
   if (status === "offline" && !selfId) {
     return <main className="room-gate"><MessageCircle aria-hidden="true" /><h1>Let’s reconnect.</h1><p>{notice}</p><button type="button" onClick={() => { setStatus("loading"); setNotice(""); setAccessAttempt((value) => value + 1); }}>Try again</button><Link href="/my-nights">Back to My Nights</Link></main>;

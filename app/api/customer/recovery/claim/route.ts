@@ -24,8 +24,8 @@ export async function POST(request: Request) {
   const existing = await env.DB.prepare('SELECT id,display_name AS name,phone,status FROM attendee_profiles WHERE normalized_email=? AND email_verified_at IS NOT NULL LIMIT 1')
     .bind(grant.email).first<{ id: string; name: string; phone: string | null; status: string }>();
   if (existing?.status === 'suspended') return invalid();
-  const tickets = await env.DB.prepare(`SELECT t.id,COALESCE(holder.display_name,o.customer_name) AS name,COALESCE(holder.phone,o.customer_phone) AS phone ${recoverableTickets} ORDER BY t.issued_at DESC,t.id LIMIT 500`)
-    .bind(grant.email, grant.email).all<{ id: string; name: string | null; phone: string | null }>();
+  const tickets = await env.DB.prepare(`SELECT t.id,t.event_slug AS eventSlug,t.status AS ticketStatus,COALESCE(holder.display_name,o.customer_name) AS name,COALESCE(holder.phone,o.customer_phone) AS phone ${recoverableTickets} ORDER BY t.issued_at DESC,t.id LIMIT 500`)
+    .bind(grant.email, grant.email).all<{ id: string; eventSlug: string; ticketStatus: string; name: string | null; phone: string | null }>();
   if (!tickets.results.length) return invalid();
   const attendeeId = existing?.id ?? `member_${(await hashToken(grant.email)).slice(0, 32)}`;
   const displayName = (existing?.name || tickets.results[0].name || grant.email.split('@')[0]?.replace(/[._-]+/gu, ' ') || 'Guest').slice(0, 50);
@@ -63,5 +63,9 @@ export async function POST(request: Request) {
     ...prepareActivatePlatformAnnouncementVerification(env.DB, { grantType: "recovery", grantId: grant.id, attendeeId, sessionId, confirmAnnouncements: choice?.confirmPlatformAnnouncements === true }),
   ]);
   if (claimed.meta.changes !== 1) return invalid();
-  return Response.json({ redirectTo: '/my-nights?recovered=1' }, { headers: { ...headers, 'set-cookie': attendeeCookieHeader(sessionToken) } });
+  const eventSlugs = new Set(tickets.results.map(ticket => ticket.eventSlug));
+  const redirectTo = eventSlugs.size === 1 && tickets.results.some(ticket => ['issued', 'checked_in'].includes(ticket.ticketStatus))
+    ? `/my-nights/${encodeURIComponent(tickets.results[0].eventSlug)}?view=passes&recovered=1`
+    : '/my-nights?recovered=1';
+  return Response.json({ redirectTo }, { headers: { ...headers, 'set-cookie': attendeeCookieHeader(sessionToken) } });
 }

@@ -12,6 +12,7 @@ const compiled = transformSync(source, { loader: 'tsx', jsx: 'automatic', format
 const componentModule = { exports: {} };
 const requireDependency = createRequire(import.meta.url);
 const require = specifier => {
+  if (specifier === './my-registrations') return { __esModule: true, default: () => null };
   if (specifier === './confirmation-notifications') return { __esModule: true, default: () => null };
   if (specifier === 'next/link') return { __esModule: true, default: ({ children, ...props }) => createElement('a', props, children) };
   if (specifier === './action') return { ActionButton: ({ children, ...props }) => { delete props.icon; delete props.variant; return createElement('button', props, children); } };

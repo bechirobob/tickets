@@ -315,3 +315,58 @@ it('emails CINCO confirmed guests with passes and directions even when push succ
   const wallet=await (await passes(req('/api/customer/tickets',{},claimed.cookie))).json() as {orders:Array<{tickets:unknown[]}>};
   expect(wallet.orders[0].tickets).toHaveLength(2);
 });
+
+it('preserves existing approved RSVP passes and Room access through cross-browser inbox recovery', async () => {
+  await configure({approvalRequired:true,roomAccess:true,capacity:200,maxPartySize:1});
+  const input={eventSlug:slug,email:'diagnosis@example.com',guestName:'Diagnostic Guest',phone:'',partySize:1,acceptedTerms:true};
+  const submitted=await signup(req('/api/registrations',input));
+  const cookie=submitted.headers.get('set-cookie')!.split(';')[0];
+  const reg=await env.DB.prepare('SELECT id FROM event_registrations WHERE normalized_email=?').bind(input.email).first<{id:string}>();
+  const {GET:registrationList}=await import('../app/api/customer/registrations/route');
+  const scopedRequest=(query:string,session=cookie)=>new Request(origin+'/api/customer/registrations?eventSlug='+encodeURIComponent(query),{headers:{cookie:session}});
+  const requested=await (await registrationList(scopedRequest(slug))).json() as {registrations:Array<{status:string;eventSlug:string}>};
+  expect(requested.registrations).toEqual([expect.objectContaining({status:'requested',eventSlug:slug})]);
+  expect(await (await registrationList(scopedRequest('unrelated-event'))).json()).toEqual({registrations:[]});
+  expect((await registrationList(scopedRequest(slug,''))).status).toBe(401);
+  expect((await hostAction(req('/api/admin/registrations',{eventSlug:slug,action:'approve',id:reg!.id},await owner()))).status).toBe(200);
+  expect(await (await registrationList(scopedRequest(slug))).json()).toMatchObject({registrations:[{status:'confirmed',eventSlug:slug,roomAccess:1}]});
+  const wallet=await (await passes(req('/api/customer/tickets',{},cookie))).json() as {orders:Array<{roomAccess:boolean;tickets:Array<{qrPayload:string}>}>};
+  expect(wallet.orders[0].roomAccess).toBe(true);
+  expect(wallet.orders[0].tickets[0].qrPayload).toBeTruthy();
+  const {GET:experience}=await import('../app/api/customer/experience/[slug]/route');
+  const {GET:roomAccess}=await import('../app/api/rooms/[slug]/access/route');
+  const get=(path:string)=>new Request(origin+path,{headers:{cookie}});
+  expect((await experience(get('/api/customer/experience/'+slug),{params:Promise.resolve({slug})})).status).toBe(200);
+  const room=await roomAccess(get('/api/rooms/'+slug+'/access'),{params:Promise.resolve({slug})});
+  expect(room.status).toBe(200);
+  expect(await room.json()).toMatchObject({allowed:true,room:{readOnly:false}});
+  const feed=await (await nights(get('/api/customer/my-nights'))).json() as {nights:Array<{eventSlug:string;roomAccess:boolean;ticketCount:number}>};
+  expect(feed.nights.find(n=>n.eventSlug===slug)).toMatchObject({roomAccess:true,ticketCount:1});
+  // The approval link opened without the signup cookie must require inbox proof.
+  expect((await experience(new Request(origin+'/api/customer/experience/'+slug),{params:Promise.resolve({slug})})).status).toBe(401);
+  const original=await env.DB.prepare('SELECT t.id,c.token FROM tickets t JOIN ticket_gate_credentials c ON c.ticket_id=t.id WHERE t.order_id=?').bind(`rsvp_${reg!.id}`).first();
+  expect((await recovery(req('/api/customer/recovery',{email:input.email}))).status).toBe(202);
+  const delivery=await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE recipient=? AND kind='ticket_recovery' ORDER BY created_at DESC LIMIT 1").bind(input.email).first<{payload:string}>();
+  const token=(JSON.parse(delivery!.payload).text as string).match(/claim\?token=([^\s]+)/)![1];
+  const grant=await env.DB.prepare('SELECT created_at AS created,expires_at AS expires FROM attendee_recovery_grants WHERE normalized_email=? ORDER BY created_at DESC LIMIT 1').bind(input.email).first<{created:string;expires:string}>();
+  expect(Date.parse(grant!.expires)-Date.parse(grant!.created)).toBe(20*60*1000);
+  const {POST:claimRecovery}=await import('../app/api/customer/recovery/claim/route');
+  const claimed=await claimRecovery(req('/api/customer/recovery/claim',{token}));
+  expect(claimed.status).toBe(200);
+  expect(await claimed.json()).toEqual({redirectTo:`/my-nights/${slug}?view=passes&recovered=1`});
+  const recoveredCookie=claimed.headers.get('set-cookie')!.split(';')[0];
+  const recoveredWallet=await (await passes(req('/api/customer/tickets',{},recoveredCookie))).json() as {orders:Array<{roomAccess:boolean;tickets:Array<{qrPayload:string}>}>};
+  expect(recoveredWallet.orders[0].tickets[0].qrPayload).toBe(wallet.orders[0].tickets[0].qrPayload);
+  expect(recoveredWallet.orders[0].roomAccess).toBe(true);
+  expect(await env.DB.prepare('SELECT t.id,c.token FROM tickets t JOIN ticket_gate_credentials c ON c.ticket_id=t.id WHERE t.order_id=?').bind(`rsvp_${reg!.id}`).first()).toEqual(original);
+  expect((await roomAccess(new Request(origin+'/api/rooms/'+slug+'/access',{headers:{cookie:recoveredCookie}}),{params:Promise.resolve({slug})})).status).toBe(200);
+  expect((await claimRecovery(req('/api/customer/recovery/claim',{token}))).status).toBe(400);
+  // A voided-only recovery remains on booking history, not the active pass hub.
+  await env.DB.prepare("UPDATE tickets SET status='voided' WHERE order_id=?").bind(`rsvp_${reg!.id}`).run();
+  const {issueRecoveryGrant}=await import('../lib/email-delivery');
+  await issueRecoveryGrant({db:env.DB,normalizedEmail:input.email,origin,kind:'ticket_recovery',deliveryId:'voided-only-recovery-test'});
+  const historyDelivery=await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE id='voided-only-recovery-test'").first<{payload:string}>();
+  const historyToken=(JSON.parse(historyDelivery!.payload).text as string).match(/claim\?token=([^\s]+)/)![1];
+  const historyClaim=await claimRecovery(req('/api/customer/recovery/claim',{token:historyToken,redirectTo:'https://example.invalid/'}));
+  expect(await historyClaim.json()).toEqual({redirectTo:'/my-nights?recovered=1'});
+});

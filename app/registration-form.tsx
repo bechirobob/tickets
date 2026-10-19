@@ -1,5 +1,6 @@
 'use client';
 import ConfirmationNotifications from './confirmation-notifications';
+import MyRegistrations from './my-registrations';
 import { FormEvent, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { ActionButton } from './action';
@@ -24,6 +25,7 @@ function RegistrationFormState({ eventSlug, mode, maxPartySize, approvalRequired
   const draft = typeof window === 'undefined' ? undefined : registrationDrafts.read(eventSlug, mode);
   const [platformOptIn, setPlatformOptIn] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [registrationCount, setRegistrationCount] = useState(0);
   function rememberDraft(event: FormEvent<HTMLFormElement>) {
     const form = new FormData(event.currentTarget);
     registrationDrafts.save(eventSlug, mode, { guestName: String(form.get('guestName') ?? ''), email: String(form.get('email') ?? ''), phone: String(form.get('phone') ?? ''), partySize: String(form.get('partySize') ?? '1') });
@@ -44,6 +46,8 @@ function RegistrationFormState({ eventSlug, mode, maxPartySize, approvalRequired
     finally { setBusy(false); inFlight.current = false; }
   }
   return <section className="registration-form">
+    {mode === 'rsvp' ? <MyRegistrations eventSlug={eventSlug} onCountChange={setRegistrationCount} refreshKey={sent ? 1 : 0} /> : null}
+    {!registrationCount ? <>
     {mode === 'rsvp' && !sent && !open ? <div className="registration-expectations">
       <p>{guidance.beforeRequest}</p>
       {guidance.schedule ? <p>{guidance.schedule}</p> : null}
@@ -57,7 +61,9 @@ function RegistrationFormState({ eventSlug, mode, maxPartySize, approvalRequired
       {sent && mode === 'rsvp' ? <div className="registration-success" role="status"><span aria-hidden="true">✓</span><h2>RSVP received.</h2><p>Outfit planning starts now.</p>{approvalRequired ? <p className="registration-success__detail">Check My Nights for the host’s decision. Your request is not a confirmed spot.</p> : <p className="registration-success__detail">Check My Nights to see whether your spot is confirmed or waitlisted.</p>}</div> : <>{message ? <p role="status">{message}</p> : null}{sent ? <p>Check your inbox and spam folder. The link lasts 20 minutes.</p> : null}</>}
 
     </form>}
+    </> : null}
     {sent && platformOptIn ? <p>Email updates: confirm the link in your inbox if needed. <Link href="/account/privacy">Manage updates</Link></p> : null}
-    {sent && mode === 'rsvp' ? <>{canManage ? <><Link href="/my-nights?view=rsvps">View my RSVP in My Nights</Link><ConfirmationNotifications /></> : <p>Already registered? <Link href="/my-nights">Use your registration email to recover your RSVP.</Link></p>}</> : null}
+    {sent && mode === 'rsvp' && !registrationCount ? <>{canManage ? <Link href="/my-nights?view=rsvps">View my RSVP in My Nights</Link> : <p>Already registered? <Link href="/my-nights">Use your registration email to recover your RSVP.</Link></p>}</> : null}
+    {mode === 'rsvp' && (canManage || registrationCount > 0) ? <ConfirmationNotifications /> : null}
   </section>;
 }
