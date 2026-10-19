@@ -1,5 +1,5 @@
 """Read only the exact Tickets live schema and public host linkage."""
-import fcntl, hashlib, json, os, pathlib, sqlite3, subprocess, urllib.request
+import fcntl, hashlib, json, os, pathlib, sqlite3, subprocess, time, urllib.request
 ACTIVE='45ae58430aea3bad312a8244432078a4ffde59f8'
 TABLES=('party_submissions','curated_event_records','event_registration_settings','event_hosts','hosts','staff_event_assignments','curation_audit_events')
 def main():
@@ -13,6 +13,7 @@ def main():
     path=pathlib.Path('/var/lib/becore-tickets/tickets.sqlite')
     assert path.is_file() and not path.is_symlink()
     db=sqlite3.connect('file:'+str(path)+'?mode=ro',uri=True,timeout=5)
+    deadline=time.monotonic()+15;db.set_progress_handler(lambda:int(time.monotonic()>deadline),1000)
     db.row_factory=sqlite3.Row;db.execute('PRAGMA query_only=ON');db.execute('BEGIN')
     assert db.execute('PRAGMA quick_check').fetchone()[0]=='ok'
     assert not db.execute('PRAGMA foreign_key_check').fetchall()
@@ -33,5 +34,5 @@ def main():
       WHERE h.id='host:kofi-bills' AND e.removed_at IS NULL AND e.archived_at IS NULL"""):
         value=dict(row);value['accountHash']=hashlib.sha256(value.pop('id').encode()).hexdigest();mapping.append(value)
     assert db.total_changes==0
-    print(json.dumps({'readOnly':True,'revision':ACTIVE,'schemaFingerprint':fingerprint,'schema':schemas,'host':host,'hostLinks':links,'organizerMapping':mapping,'existingEventMatches':duplicate,'quickCheck':'ok','foreignKeyViolations':0},sort_keys=True))
+    print(json.dumps({'readOnly':True,'revision':ACTIVE,'schemaFingerprint':fingerprint,'databaseBytes':path.stat().st_size,'publicationTriggers':[dict(r) for r in db.execute("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'curated_events_verify%'")],'schema':schemas,'host':host,'hostLinks':links,'organizerMapping':mapping,'existingEventMatches':duplicate,'quickCheck':'ok','foreignKeyViolations':0},sort_keys=True))
 if __name__=='__main__':main()
