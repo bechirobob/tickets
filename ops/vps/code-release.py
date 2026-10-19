@@ -664,6 +664,16 @@ PARALLEL_MODULES = ("public_runtime_guard", "runtime_release", "candidate_build"
                     "parallel_candidate", "parallel_candidate_control")
 
 
+# Bounded CINCO guest receipt release. Preserve the exact merged operational
+# baseline; only six reviewed application/test files may change after controls.
+CINCO_RELEASE_BASELINE = '45ae58430aea3bad312a8244432078a4ffde59f8'
+CINCO_RELEASE_BASE_TREE = '5c24c7eb3e0b7add6c04226bdbab33fea1b7846f'
+CINCO_ADVISORY_BASE = '8d156f081749bbd2a01d1ac6a7d3510c65ce8e22'
+CINCO_ADVISORY_TREE = '8051670d6fc5cc1468b276e4a19104f4df5a9446'
+CINCO_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
+CINCO_ADVISORY_BLOBS = {'.github/workflows/candidate-parallel-checks.yml': '81bad0f7a602c579fc14c961aa8e26e32f75767d', '.github/workflows/puro-exceso-listing.yml': '8bf87a0ee41e69c44b10b092fd2f7b238b301af0', '.github/workflows/puro-exceso-publish.yml': '285efaf42ccbb5caf50673b08e6751a8733b2117', '.github/workflows/tickets-code-release.yml': '9c5ca1129fe7e97215b3d895060a4f01256473bf', '.github/workflows/tickets-release-operator-checks.yml': '019ec9b3ac73bec979d3ab62725a3d1208ca765f', 'docs/reliability/parallel-candidate-benchmark.md': 'ae0f6fa386d882a649bfcaa7a6e57349c08f3d0e', 'ops/handover/puro_exceso/activate.sha256': 'e378ea429c22d4fe465246f53aa44cdb0f41a9c5', 'ops/handover/puro_exceso/apply.py': 'e4d4f2ddacf5b4ab41aaed934a830af19a74c574', 'ops/handover/puro_exceso/event_insert.py': '25d640e70488bb7ea7be014876c27caf50a7a951', 'ops/handover/puro_exceso/flyer.jpeg.b64': '63563463aa0fd7a62e9490449f44420d48328604', 'ops/handover/puro_exceso/inspect.py': 'da1d66b3a6d833d43d9ad1675dbd3cec16a57af0', 'ops/handover/puro_exceso/test_event_insert.py': 'e7219b9b15312c9e1dbb1cd685156ee691cee050', 'ops/handover/puro_exceso/test_inspect.py': '27ae56c68f2aea1b5020a99cdcda3ee95a8798d5', 'ops/handover/puro_exceso/verify_public.py': 'd3abfefb3bc9e24398c1bc31b7c74b3c89d9f6cb', 'ops/vps/candidate_build.py': '502b3f8cddc2038113498824e430620eb1b55d0f', 'ops/vps/parallel_candidate.py': '08e44556ad630ee5227463b74bce990f943d939f', 'ops/vps/parallel_candidate_control.py': '1000acb20a4e8b3a0d9c5771ea5269db006805a4', 'ops/vps/test_candidate_build.py': 'a9920c4d21804074d4ab176c541247787b46639f', 'ops/vps/test_parallel_admission.py': '35b8fb438193184f8e1654d44981f6c3564d0ca0', 'ops/vps/test_parallel_candidate.py': '3af28a1b01a08c19a97155229f6e0b5efc592fc0', 'ops/vps/test_parallel_candidate_control.py': '6ddbd74138168c8538406920d9fda7432ce67f49', 'ops/vps/test_parallel_source_family.py': '54ac92e721b51dda03bca69862816fa78d1c0737', 'tests/test_candidate_parallel_workflow.py': '7fea55bc9d99e558d3c0cc0099cbc027e9423bb2'}
+CINCO_APPLICATION_BLOBS = {'lib/confirmation-delivery.ts': '02f9381c8bd379a9cce1238c2f985c004bcb482b', 'lib/registrations.ts': 'fda1d288ff3ff29db196c23995926731745d12c0', 'tests/confirmation-delivery.test.ts': 'd8f9770625793d2d09362fc8113ea4e8b990864c', 'tests/registrations.test.ts': '6b7308756973d59a002d956c64da91d7269687f6', 'lib/customer-email.ts': '5a6d69d69cfdb9925ed0b5b669b28d433020d655', 'tests/customer-email-rendering.test.mjs': '1459d87a8769b347e7a9338950b0f9534636b4a5'}
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1164,8 +1174,45 @@ def reviewed_parallel_application_blobs(expected, source):
     return pins
 
 
+def reviewed_cinco_application_blobs(expected, source):
+    """Admit only the exact receipt patch on independently merged controls."""
+    require(expected == CINCO_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == CINCO_RELEASE_BASE_TREE
+            and git("rev-parse", CINCO_ADVISORY_BASE + "^{tree}") == CINCO_ADVISORY_TREE,
+            "CINCO live or advisory baseline changed.")
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, CINCO_ADVISORY_BASE],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, CINCO_ADVISORY_BASE).splitlines())
+            == set(CINCO_ADVISORY_BLOBS) | CINCO_CONTROL_FILES,
+            "CINCO advisory inventory changed.")
+    for name, blob in CINCO_ADVISORY_BLOBS.items():
+        require(git("rev-parse", CINCO_ADVISORY_BASE + ":" + name) == blob,
+                "CINCO advisory blob changed: " + name)
+    verify_trusted_operator(source)
+    trusted = os.environ["BECORE_TRUSTED_BASE"]
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", CINCO_ADVISORY_BASE, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", CINCO_ADVISORY_BASE, trusted).splitlines()) == CINCO_CONTROL_FILES,
+            "CINCO trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(CINCO_APPLICATION_BLOBS),
+            "CINCO candidate differs from the exact six-file application patch.")
+    verify_changed_modes(expected, source)
+    pins = {**CINCO_ADVISORY_BLOBS, **CINCO_APPLICATION_BLOBS}
+    for name, blob in pins.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "CINCO output differs from its reviewed blob or mode: " + name)
+    for name in sorted(CINCO_CONTROL_FILES):
+        require(git("ls-tree", source, "--", name) == git("ls-tree", trusted, "--", name),
+                "CINCO candidate controls differ from the trusted baseline.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    require(not migration_plan(pins), "CINCO receipt release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == CINCO_RELEASE_BASELINE and git("rev-parse", source + ":lib/registrations.ts") == CINCO_APPLICATION_BLOBS["lib/registrations.ts"]:
+        return reviewed_cinco_application_blobs(expected, source)
     if expected == PARALLEL_RELEASE_BASELINE:
         return reviewed_parallel_application_blobs(expected, source)
     if expected == RSVP_READINESS_LIVE_BASELINE:
