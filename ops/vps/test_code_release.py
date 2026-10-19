@@ -176,7 +176,7 @@ PARALLEL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '8
 
 # The operator can be independently pinned here because neither control file
 # is in the production 13-output manifest. Only this test file self-exempts.
-PARALLEL_OPERATOR_BLOB = '01c3100a7d5308cc0d6e151e8b26bb2cc89af6b6'
+PARALLEL_OPERATOR_BLOB = 'd39435b192b4b38dfb097c4111a89b2703ca1148'
 LEGACY_ORIGINAL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),
@@ -352,7 +352,7 @@ def parallel_source_family(root, *, overlay=None):
                    if name.startswith("ops/vps/") or name.startswith(".github/workflows/")}
     manifest.update(outputs)
     manifest.update(overlay)
-    # CINCO's optional four-file application increment is all-or-none and
+    # CINCO's optional six-file application increment is all-or-none and
     # byte-pinned. Control-only CI still checks the unchanged baseline family.
     if full and any(os.path.lexists(root / name) for name in release.CINCO_APPLICATION_BLOBS):
         observed = {}
@@ -5507,7 +5507,8 @@ class CincoSourceAdmissionTests(unittest.TestCase):
         self.git('config', 'user.name', 'CINCO release tests')
         self.git('config', 'user.email', 'tests@example.invalid')
         self.files = ('lib/registrations.ts', 'lib/confirmation-delivery.ts',
-                      'tests/registrations.test.ts', 'tests/confirmation-delivery.test.ts')
+                      'tests/registrations.test.ts', 'tests/confirmation-delivery.test.ts',
+                      'lib/customer-email.ts', 'tests/customer-email-rendering.test.mjs')
         for name in self.files:
             self.write(name, 'baseline\n')
         self.write('ops/vps/code-release.py', 'baseline operator\n')
@@ -5559,7 +5560,7 @@ class CincoSourceAdmissionTests(unittest.TestCase):
     def verify(self):
         return release.vetted_changes(self.live, self.git('rev-parse', 'HEAD'))
 
-    def test_exact_four_file_patch_preserves_all_prior_advisory_bytes(self):
+    def test_exact_six_file_patch_preserves_all_prior_advisory_bytes(self):
         self.assertEqual(set(self.verify()), set(self.files) | release.CINCO_CONTROL_FILES | {'ops/advisory.py'})
         self.assertEqual(release.migration_plan(self.verify()), [])
 
