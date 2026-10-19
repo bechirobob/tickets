@@ -51,8 +51,8 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
-          git merge-base --is-ancestor "$BECORE_RELEASE_SHA" origin/main
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_RELEASE_SHA" refs/remotes/origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
           git diff --exit-code HEAD --
           git diff --cached --exit-code HEAD --
@@ -138,8 +138,8 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
-          git merge-base --is-ancestor "$BECORE_RELEASE_SHA" origin/main
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_RELEASE_SHA" refs/remotes/origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
           git diff --exit-code HEAD --
           git diff --cached --exit-code HEAD --

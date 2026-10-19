@@ -1,17 +1,17 @@
-# Full-coverage isolated browser evidence; legacy release mode stays the default.
+# Full-coverage isolated browser evidence is the default for candidate branches.
 # Parallel admission requires independently trusted v2 provenance.
-# The branch push trigger gives the executed workflow the exact source SHA;
+# Branch push triggers give the executed workflow the exact source SHA;
 # pull_request merge-ref workflow code is deliberately not used for this proof.
-name: Candidate parallel benchmark
+name: Candidate parallel verification
 
 on:
   push:
-    branches: [improve/release-evidence-parallel-20261013]
+    branches: ['**', '!main']
   workflow_dispatch:
     inputs:
       trusted_base:
-        description: Independently selected reviewed controls ancestor on main
-        required: true
+        description: Optional independently reviewed control SHA; omitted selects current main
+        required: false
         type: string
 
 permissions:
@@ -23,7 +23,7 @@ concurrency:
 
 env:
   BECORE_RELEASE_SHA: ${{ github.sha }}
-  BECORE_TRUSTED_BASE: ${{ inputs.trusted_base || 'd257f41b669a542de0eebbe09993e7efa8dd5074' }}
+  BECORE_TRUSTED_BASE: ${{ inputs.trusted_base }}
 
 jobs:
   build:
@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
+      trusted_base: ${{ steps.trust.outputs.trusted_base }}
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
       archive_digest: ${{ steps.build.outputs.archive_digest }}
@@ -43,19 +44,27 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Verify exact source ancestry before executing checkout code
+        id: trust
         shell: bash
         run: |
           set -euo pipefail
           unset "${!GIT_@}"
           export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          # Choose independently from the fetched main ref, never from candidate files.
+          # A stale branch fails ancestry below; do not silently fall back to an old control.
+          if test -z "$BECORE_TRUSTED_BASE"; then
+            BECORE_TRUSTED_BASE=$(git rev-parse --verify refs/remotes/origin/main^{commit})
+          fi
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
           git diff --exit-code HEAD --
           git diff --cached --exit-code HEAD --
           test -z "$(git ls-files --others --exclude-standard)"
+          echo "BECORE_TRUSTED_BASE=$BECORE_TRUSTED_BASE" >> "$GITHUB_ENV"
+          echo "trusted_base=$BECORE_TRUSTED_BASE" >> "$GITHUB_OUTPUT"
       - name: Stage trusted audit verifier
         shell: bash
         run: |
@@ -116,6 +125,7 @@ jobs:
           python3 -m unittest discover -s ops/vps -p 'test_candidate_evidence.py' -v
           python3 -m unittest discover -s ops/vps -p 'test_candidate_build.py' -v
           python3 -m unittest discover -s tests -p 'test_candidate_parallel_workflow.py' -v
+          python3 -m unittest discover -s tests -p 'test_parallel_default.py' -v
       - name: Upload one immutable bounded browser build
         id: upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -142,6 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      BECORE_TRUSTED_BASE: ${{ needs.build.outputs.trusted_base }}
       BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
@@ -162,7 +173,7 @@ jobs:
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
           git diff --exit-code HEAD --
           git diff --cached --exit-code HEAD --
@@ -267,6 +278,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      BECORE_TRUSTED_BASE: ${{ needs.build.outputs.trusted_base }}
       BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
@@ -287,7 +299,7 @@ jobs:
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
           git diff --exit-code HEAD --
           git diff --cached --exit-code HEAD --
@@ -392,6 +404,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      BECORE_TRUSTED_BASE: ${{ needs.build.outputs.trusted_base }}
       BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
@@ -412,7 +425,7 @@ jobs:
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
           git diff --exit-code HEAD --
           git diff --cached --exit-code HEAD --
@@ -529,4 +542,4 @@ jobs:
           test "$DESKTOP" = success
           test "$MOBILE" = success
           test "$WEBKIT" = success
-          echo 'Advisory parallel benchmark only; production admission remains unchanged.'
+          echo 'All full-coverage lanes passed; release still requires authenticated exact-tree evidence.'

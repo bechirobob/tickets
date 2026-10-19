@@ -300,7 +300,144 @@ PURO_EXCESO_TEST_OVERLAY = {'.github/workflows/puro-exceso-listing.yml': ('10064
  'ops/handover/puro_exceso/verify_public.py': ('100644', 'd3abfefb3bc9e24398c1bc31b7c74b3c89d9f6cb')}
 
 
+# Exact B-derived archive inventory for the default-parallel C/P family.
+# Kept separate from every historical family; only the test file self-exempts.
+DEFAULT_PARALLEL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
+ '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
+ '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),
+ '.github/workflows/candidate-parallel-checks.yml': ('100644', '81bad0f7a602c579fc14c961aa8e26e32f75767d'),
+ '.github/workflows/deploy.yml': ('100644', 'e90f3ab46d499cfe6a03f859452046ca3a026993'),
+ '.github/workflows/tickets-code-release.yml': ('100644', '9c5ca1129fe7e97215b3d895060a4f01256473bf'),
+ '.github/workflows/tickets-release-operator-checks.yml': ('100644',
+                                                           '019ec9b3ac73bec979d3ab62725a3d1208ca765f'),
+ '.github/workflows/vps-runtime.yml': ('100644', '3041cf9b68ba250429e8f58e5404d10b2f9330a0'),
+ 'ops/vps/audit-readiness.py': ('100644', '69c7dff10fc2b8d1046b84e0a43dbdb4dacb3ecf'),
+ 'ops/vps/backup.mjs': ('100644', 'ca2c1a0fa1aa4cb075fa0b90d9d46218666c7967'),
+ 'ops/vps/becore-tickets-preview.service': ('100644', '889233505917ae749ee276050d7f9060c975ed4a'),
+ 'ops/vps/becore-tickets-retention.service': ('100644', '68f4ab992f05742a086f23af7983f9c5561b1b13'),
+ 'ops/vps/becore-tickets-retention.timer': ('100644', '7d77baf5059b0fc725976e8d4eceeb53a53ed2ff'),
+ 'ops/vps/candidate_build.py': ('100644', '502b3f8cddc2038113498824e430620eb1b55d0f'),
+ 'ops/vps/candidate_evidence.py': ('100644', 'd65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba'),
+ 'ops/vps/code-release.py': ('100644', 'd39435b192b4b38dfb097c4111a89b2703ca1148'),
+ 'ops/vps/initialize-preview.mjs': ('100644', '6171616a2d73ed536aad0896d3016d2d41a6ba95'),
+ 'ops/vps/install-preview.py': ('100644', '0fb837d72409234a074b2891c784f0f7605e600f'),
+ 'ops/vps/journal-limits.conf': ('100644', 'bd9c88d6d78144830b5d4ce26dce2d86825b84e5'),
+ 'ops/vps/parallel_candidate.py': ('100644', '08e44556ad630ee5227463b74bce990f943d939f'),
+ 'ops/vps/parallel_candidate_control.py': ('100644', '1000acb20a4e8b3a0d9c5771ea5269db006805a4'),
+ 'ops/vps/prepare-origin.py': ('100644', '8939073562dd7e73073f092a09c3c973003c6b63'),
+ 'ops/vps/public_runtime_guard.py': ('100644', '9a9739f1bd88cbd02dc420001efa3de5b85e3538'),
+ 'ops/vps/restore-backup.mjs': ('100644', '0a05f18c17205ef4c2f59e2d50bd06180035b8c6'),
+ 'ops/vps/retention.py': ('100644', '9ab0304f00d2a96fd6fbb8e4c992d96db5eb08a1'),
+ 'ops/vps/runtime_release.py': ('100644', '043e310a41ff28d23adc20383c88566b181232a6'),
+ 'ops/vps/test_audit_readiness.py': ('100644', '086ab0cb48aa88ce934daefb54d60486925d36f8'),
+ 'ops/vps/test_candidate_build.py': ('100644', 'a9920c4d21804074d4ab176c541247787b46639f'),
+ 'ops/vps/test_candidate_evidence.py': ('100644', 'f63544c3ea061f75db1f544c85cddaae109a0f4e'),
+ 'ops/vps/test_code_release.py': ('100644', '78e5b6aa4b9de23652566846f7dc7995a88c9ee7'),
+ 'ops/vps/test_parallel_admission.py': ('100644', '35b8fb438193184f8e1654d44981f6c3564d0ca0'),
+ 'ops/vps/test_parallel_candidate.py': ('100644', '3af28a1b01a08c19a97155229f6e0b5efc592fc0'),
+ 'ops/vps/test_parallel_candidate_control.py': ('100644', '6ddbd74138168c8538406920d9fda7432ce67f49'),
+ 'ops/vps/test_parallel_source_family.py': ('100644', '54ac92e721b51dda03bca69862816fa78d1c0737'),
+ 'ops/vps/test_pink_edition.py': ('100644', 'be26c898ac1e19f7f737dbe5112c5e40b6e90c68'),
+ 'ops/vps/test_public_runtime_guard.py': ('100644', 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'),
+ 'ops/vps/test_release_approval.py': ('100644', '48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f'),
+ 'ops/vps/test_release_source.py': ('100644', 'ec8a7a5bbbe585941583f50624823b85ec51e586'),
+ 'ops/vps/test_retention.py': ('100644', 'f35d71212ec6ae521e3144c57e708297c513dce0'),
+ 'ops/vps/test_runtime_packaging.py': ('100644', '6f215f441ff1d9b92b3c870a6f438a54e5ccc1a1'),
+ 'ops/vps/test_runtime_release.py': ('100644', '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14'),
+ 'ops/vps/test_runtime_workflow_contract.py': ('100644', 'eef0b25e667f6be123c0ed6c5bca774158d390d8'),
+ 'scripts/audit-checkbox-hotfix.py': ('100644', '5313d8cdc4076b36d434fe8017cc0e7b4824e876'),
+ 'scripts/audit-release-dependencies.py': ('100644', '47c7951e8db95ac666680bd2bf32fde3f1748c8e'),
+ 'scripts/audit-release-manifest.json': ('100644', 'bcb787e744f9fc5fc201e8068d553c1543b35b86'),
+ 'scripts/caption-source-manifest.json': ('100644', '1b178a1a371ae047f8bf26498d249e272c11497d'),
+ 'scripts/verify-audit-release-source.py': ('100644', '129d7bdbd2d631ad385a9edd7be4ea9895f173cf'),
+ 'scripts/verify-caption-source.py': ('100644', 'fa474c5d8cfaad8df53e77004c063e1511ed0b68'),
+ 'tests/test_audit_release_dependencies.py': ('100644', '6983998bf40fc1cb424e6dafbb7ba35e5653336d'),
+ 'tests/test_audit_release_source.py': ('100644', '6516f3f4b8582d3874ceda34e1fc3e3b799fec8d'),
+ 'tests/test_caption_source.py': ('100644', '6871fcc1ab410acaa74d8bd953ac9e0e61f4f670'),
+ 'tests/test_checkbox_hotfix_audit.py': ('100644', '421ec5fd992b1ba258e357ff4a65f6c3a647d2ce')}
+DEFAULT_PARALLEL_OPERATOR_BLOB = "832df610a02d24c3b4540093521265f720fd7297"
+
+
+def default_parallel_source_family(root):
+    """Recognize only complete new C/P families, independently of older families."""
+    root = Path(root)
+    if not any(os.path.lexists(root / name) for name in (
+            release.DEFAULT_PARALLEL_ADMISSION_FILE, release.DEFAULT_PARALLEL_PROMOTION_FILE)):
+        return None
+    promoted = os.path.lexists(root / release.DEFAULT_PARALLEL_PROMOTION_FILE)
+    full = os.path.lexists(root / "package.json") or os.path.lexists(root / "app")
+    outputs = {name: (release.DEFAULT_PARALLEL_OUTPUT_MODES[name], blob)
+               for name, blob in release.DEFAULT_PARALLEL_OUTPUT_BLOBS.items()
+               if promoted or name != release.DEFAULT_PARALLEL_PROMOTION_FILE}
+    if full:
+        try:
+            if checkout_git(root, "rev-parse", release.DEFAULT_PARALLEL_MAIN_BASELINE + "^{tree}").decode().strip() != release.DEFAULT_PARALLEL_MAIN_TREE:
+                raise AssertionError("Default parallel family baseline tree changed")
+            manifest = {}
+            for record in checkout_git(root, "ls-tree", "-rz", "--full-tree", release.DEFAULT_PARALLEL_MAIN_BASELINE).split(b"\0"):
+                if record:
+                    metadata, name = record.split(b"\t", 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != "blob" or mode not in ("100644", "100755"):
+                        raise AssertionError("Default parallel baseline contains unsupported entries")
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            tracked = set(filter(None, checkout_git(root, "ls-files", "-z").decode().split("\0")))
+            untracked = set(filter(None, checkout_git(root, "ls-files", "--others", "--exclude-standard", "-z").decode().split("\0")))
+            if (tracked | untracked) != set(manifest) | set(outputs) | release.DEFAULT_PARALLEL_CONTROL_FILES:
+                raise AssertionError("Default parallel full inventory differs from complete C/P family")
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError("Default parallel family requires its independently pinned main tree") from exc
+    else:
+        manifest = dict(DEFAULT_PARALLEL_STAGED_BASE)
+        # This is the exact release archive selection, not every workflow in C.
+        outputs = {name: entry for name, entry in outputs.items()
+                   if name.startswith("ops/vps/") or name in DEFAULT_PARALLEL_STAGED_BASE}
+    manifest.update(outputs)
+    manifest["ops/vps/code-release.py"] = ("100644", DEFAULT_PARALLEL_OPERATOR_BLOB)
+    manifest["ops/vps/test_code_release.py"] = ("100644", None)
+    if full:
+        # A restored worktree must not hide an unreviewed staged change.
+        staged = set(filter(None, checkout_git(root, "diff", "--cached", "--name-only", "-z", "HEAD", "--").decode().split("\0")))
+        entries = {}
+        for record in checkout_git(root, "ls-files", "--stage", "-z").split(b"\0"):
+            if record:
+                metadata, name = record.split(b"\t", 1)
+                mode, blob, stage = metadata.decode().split()
+                if stage != "0":
+                    raise AssertionError("Default parallel family has unmerged index entries")
+                entries[os.fsdecode(name)] = (mode, blob)
+        for name in staged:
+            mode, expected = manifest.get(name, (None, None))
+            entry = entries.get(name)
+            if entry is None or entry[0] != mode or expected is not None and entry[1] != expected:
+                raise AssertionError("Default parallel family has unreviewed staged bytes")
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == "100755")
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError("Default parallel family requires exact regular file modes")
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError("Default parallel family is incomplete") from exc
+        actual = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        if expected is not None and actual != expected:
+            if name == "mobile/android/gradlew.bat" and manifest.get("mobile/.gitattributes") == ("100644", "69b47b5ade88fab2dd055b3cfa0858766fb17a47"):
+                raw = raw.replace(b"\r\n", b"\n")
+                actual = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+            if actual != expected:
+                raise AssertionError("Default parallel family has unreviewed bytes: " + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def checkout_parallel_source_family(root):
+    default = default_parallel_source_family(root)
+    if default is not None:
+        return default
     overlay = PURO_EXCESO_TEST_OVERLAY
     selected = any(os.path.lexists(Path(root) / name) for name in overlay)
     result = parallel_source_family(root, overlay=overlay if selected else None)
@@ -2522,7 +2659,7 @@ class VerifierTests(unittest.TestCase):
             release.verify_trusted_operator(NEW)
         self.assertEqual([entry.args[0] for entry in run.call_args_list], [
             ["git", "--no-replace-objects", "merge-base", "--is-ancestor", OLD, descendant]
-            for descendant in ("origin/main", NEW)])
+            for descendant in ("refs/remotes/origin/main", NEW)])
         for entry in run.call_args_list:
             self.assertEqual(entry.kwargs["env"]["GIT_NO_REPLACE_OBJECTS"], "1")
             self.assertTrue(entry.kwargs["check"])
@@ -2693,7 +2830,7 @@ class VerifierTests(unittest.TestCase):
             archive.write_bytes(b"test archive")
             checksum = root / "tickets-vps-runtime.tar.gz.sha256"
             checksum.write_text(release.digest_file(archive) + "  tickets-vps-runtime.tar.gz\n")
-            args = argparse.Namespace(source=NEW, expected=ORIGINAL, repository="owner/tickets", metadata=str(root),
+            args = argparse.Namespace(candidate_mode="legacy", source=NEW, expected=ORIGINAL, repository="owner/tickets", metadata=str(root),
                                       runtime_run="123", candidate_run="456", archive=str(archive), output=str(root / "proof.json"))
             with patch.dict(os.environ, GITHUB_REF="refs/heads/main"), patch.object(release, "verify_trusted_operator"), patch.object(release.subprocess, "run"), patch("builtins.print"), patch.object(release, "verify_runtime_transport", return_value={"verified": True}) as transport:
                 with patch.object(release, "git", side_effect=[NEW, "", TREE, TREE, "tests/new-test.ts"]):

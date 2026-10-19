@@ -1,9 +1,7 @@
 name: Native app builds
 
 on:
-  pull_request:
-    branches: [main]
-    paths: ['mobile/**', 'styles/**', 'app/**', 'lib/**', '.github/workflows/native-apps.yml', '.github/workflows/android-release.yml', '.github/workflows/ios-release.yml']
+  # Packaged/native app work resumes only after an explicit manual request.
   workflow_dispatch:
 
 permissions:

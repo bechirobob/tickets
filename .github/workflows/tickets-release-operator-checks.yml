@@ -12,6 +12,11 @@ on:
       - ops/vps/candidate_build.py
       - ops/vps/test_candidate_build.py
       - tests/test_candidate_parallel_workflow.py
+      - tests/test_parallel_default.py
+      - ops/vps/test_parallel_default_admission.py
+      - ops/vps/test_parallel_default_source_family.py
+      - .github/workflows/native-apps.yml
+      - .github/workflows/iphone-layouts.yml
       - .github/workflows/candidate-parallel-checks.yml
       - ops/vps/code-release.py
       - ops/vps/test_code_release.py
@@ -68,6 +73,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_candidate_parallel_workflow.py'
+          python3 -m unittest discover -s tests -p 'test_parallel_default.py'
           python3 -m unittest discover -s ops/vps -p 'test_*.py'
           python3 -m py_compile "ops/vps/code-release.py" "ops/vps/test_code_release.py" "ops/vps/runtime_release.py" "ops/vps/public_runtime_guard.py" "ops/vps/candidate_evidence.py"
           git -C "$GITHUB_WORKSPACE" diff --check

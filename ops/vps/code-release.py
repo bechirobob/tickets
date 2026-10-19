@@ -674,6 +674,42 @@ CINCO_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"
 CINCO_ADVISORY_BLOBS = {'.github/workflows/candidate-parallel-checks.yml': '81bad0f7a602c579fc14c961aa8e26e32f75767d', '.github/workflows/puro-exceso-listing.yml': '8bf87a0ee41e69c44b10b092fd2f7b238b301af0', '.github/workflows/puro-exceso-publish.yml': '285efaf42ccbb5caf50673b08e6751a8733b2117', '.github/workflows/tickets-code-release.yml': '9c5ca1129fe7e97215b3d895060a4f01256473bf', '.github/workflows/tickets-release-operator-checks.yml': '019ec9b3ac73bec979d3ab62725a3d1208ca765f', 'docs/reliability/parallel-candidate-benchmark.md': 'ae0f6fa386d882a649bfcaa7a6e57349c08f3d0e', 'ops/handover/puro_exceso/activate.sha256': 'e378ea429c22d4fe465246f53aa44cdb0f41a9c5', 'ops/handover/puro_exceso/apply.py': 'e4d4f2ddacf5b4ab41aaed934a830af19a74c574', 'ops/handover/puro_exceso/event_insert.py': '25d640e70488bb7ea7be014876c27caf50a7a951', 'ops/handover/puro_exceso/flyer.jpeg.b64': '63563463aa0fd7a62e9490449f44420d48328604', 'ops/handover/puro_exceso/inspect.py': 'da1d66b3a6d833d43d9ad1675dbd3cec16a57af0', 'ops/handover/puro_exceso/test_event_insert.py': 'e7219b9b15312c9e1dbb1cd685156ee691cee050', 'ops/handover/puro_exceso/test_inspect.py': '27ae56c68f2aea1b5020a99cdcda3ee95a8798d5', 'ops/handover/puro_exceso/verify_public.py': 'd3abfefb3bc9e24398c1bc31b7c74b3c89d9f6cb', 'ops/vps/candidate_build.py': '502b3f8cddc2038113498824e430620eb1b55d0f', 'ops/vps/parallel_candidate.py': '08e44556ad630ee5227463b74bce990f943d939f', 'ops/vps/parallel_candidate_control.py': '1000acb20a4e8b3a0d9c5771ea5269db006805a4', 'ops/vps/test_candidate_build.py': 'a9920c4d21804074d4ab176c541247787b46639f', 'ops/vps/test_parallel_admission.py': '35b8fb438193184f8e1654d44981f6c3564d0ca0', 'ops/vps/test_parallel_candidate.py': '3af28a1b01a08c19a97155229f6e0b5efc592fc0', 'ops/vps/test_parallel_candidate_control.py': '6ddbd74138168c8538406920d9fda7432ce67f49', 'ops/vps/test_parallel_source_family.py': '54ac92e721b51dda03bca69862816fa78d1c0737', 'tests/test_candidate_parallel_workflow.py': '7fea55bc9d99e558d3c0cc0099cbc027e9423bb2'}
 CINCO_APPLICATION_BLOBS = {'lib/confirmation-delivery.ts': '02f9381c8bd379a9cce1238c2f985c004bcb482b', 'lib/registrations.ts': 'fda1d288ff3ff29db196c23995926731745d12c0', 'tests/confirmation-delivery.test.ts': 'd8f9770625793d2d09362fc8113ea4e8b990864c', 'tests/registrations.test.ts': '6b7308756973d59a002d956c64da91d7269687f6', 'lib/customer-email.ts': '5a6d69d69cfdb9925ed0b5b669b28d433020d655', 'tests/customer-email-rendering.test.mjs': '1459d87a8769b347e7a9338950b0f9534636b4a5'}
 
+# One verification-only, application-identical default-parallel rollout L/B/C/P.
+# L is the active app. B adds the already-completed, exact activation workflow.
+# C contains only this finite reviewed control family; P adds one genuine test.
+# Neither baseline grants authority to change runtime, dependencies or data.
+DEFAULT_PARALLEL_LIVE_BASELINE = "04bbe9691a00ca48cfb974ab0b87b743d9c3aab8"
+DEFAULT_PARALLEL_LIVE_TREE = "2d621ad85ed87045fcfbee99b01dfe3e223cdf65"
+DEFAULT_PARALLEL_MAIN_BASELINE = "b9bfde4fb82320c023016de960519b9d1bb2ae3f"
+DEFAULT_PARALLEL_MAIN_TREE = "eca64f3e20b6acf9f7f2339e51362245a82f1b16"
+DEFAULT_PARALLEL_BASE_BLOBS = {
+    ".github/workflows/cinco-confirmation-release-20261019.yml": "a946f4dbae8b24b375bf0dc58d6d3e72bce127d9",
+}
+DEFAULT_PARALLEL_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"}
+DEFAULT_PARALLEL_ADMISSION_FILE = "ops/vps/test_parallel_default_admission.py"
+DEFAULT_PARALLEL_PROMOTION_FILE = "ops/vps/test_parallel_default_source_family.py"
+DEFAULT_PARALLEL_OUTPUT_BLOBS = {'.github/workflows/candidate-checks.yml': 'a1c8545b86fad92178e574b7c885f3843e09bbe3',
+ '.github/workflows/candidate-parallel-checks.yml': '7e8b0acbe397afa983c7bc03615f848f01b8f0ca',
+ '.github/workflows/iphone-layouts.yml': 'f01dca1a526baa24df6edd6cde05aca530fb9fb4',
+ '.github/workflows/native-apps.yml': '5caa1d7a4cc819a5f4e94e4919e415e75b770c07',
+ '.github/workflows/tickets-code-release.yml': 'ebce57da01e64bafb8d3dd1df95f0ad0609ba233',
+ '.github/workflows/tickets-release-operator-checks.yml': 'f5b091932b72b320a609cb3e9d40d094a8aa0ea0',
+ '.github/workflows/vps-runtime.yml': '1bf68f28547a05ee2a84b39cc38f2e308c4e8539',
+ 'docs/reliability/parallel-candidate-benchmark.md': '783a1c1a869e31fc59dd912878b991b92837a057',
+ 'ops/vps/candidate_build.py': '3da45b373a0eec16388ac9ab22300d03aff3baca',
+ 'ops/vps/parallel_candidate.py': '5bf1030175283d594d730fe623fcb5d2905e74bd',
+ 'ops/vps/parallel_candidate_control.py': '1f377fa2aada4b72ab16d5df22a17752971c763a',
+ 'ops/vps/test_parallel_admission.py': 'b40372dc955fd4ee583c34a96eb65a8474631480',
+ 'ops/vps/test_parallel_candidate.py': 'da6ede1a3edf1c8432067a4d6452213c836a9e36',
+ 'ops/vps/test_parallel_default_admission.py': '7fe999045ba2c568e93668e893f03eaeb2981548',
+ 'ops/vps/test_parallel_default_source_family.py': 'd86af15a1604392f5a66dacfda9dab0e950533d4',
+ 'tests/test_candidate_parallel_workflow.py': '58c949d14447f4f2817baef71d34f208370ce8ee',
+ 'tests/test_caption_source.py': 'b7f9cc8a7a3266cdc014186572710d463fa6fc89',
+ 'tests/test_parallel_default.py': 'b73cdebfbd0c9682c05098fd2c513ecf7d4cb39a'}
+DEFAULT_PARALLEL_OUTPUT_MODES = {name: "100644" for name in DEFAULT_PARALLEL_OUTPUT_BLOBS}
+DEFAULT_PARALLEL_SOURCE_FAMILY = "parallel-default-v1"
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -816,6 +852,15 @@ CANDIDATE_BROWSER_STEPS = {
 
 class ReleaseError(RuntimeError):
     """An intentionally non-secret operational failure."""
+
+
+def eligible_parallel_branch(event, branch):
+    """Exact branch events only; synthetic PR refs and automatic main pushes fail."""
+    return (isinstance(branch, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}", branch)
+            and not branch.startswith(("refs/", "pull/"))
+            and not any(part in ("", ".", "..") for part in branch.split("/"))
+            and (event == "workflow_dispatch" or event == "push" and branch != "main"))
+
 
 
 def require(condition, message):
@@ -970,7 +1015,7 @@ def verify_trusted_operator(source):
         "git", "--no-replace-objects", "show", baseline + ":ops/vps/code-release.py"
     ], stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
     require(operator.read_bytes() == trusted_bytes, "Operator bytes differ from the trusted baseline.")
-    for descendant in ("origin/main", source):
+    for descendant in ("refs/remotes/origin/main", source):
         subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", baseline, descendant],
                        check=True, env=git_environment(), timeout=60)
 
@@ -1209,8 +1254,65 @@ def reviewed_cinco_application_blobs(expected, source):
     return pins
 
 
+def reviewed_default_parallel_application_blobs(expected, source):
+    """Verify one finite L/B/C/P control transition; never authorize activation."""
+    base = DEFAULT_PARALLEL_MAIN_BASELINE
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(expected == DEFAULT_PARALLEL_LIVE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == DEFAULT_PARALLEL_LIVE_TREE
+            and git("rev-parse", base + "^{tree}") == DEFAULT_PARALLEL_MAIN_TREE,
+            "Default parallel live or main baseline changed.")
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, base],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, base).splitlines()) == set(DEFAULT_PARALLEL_BASE_BLOBS),
+            "Default parallel baseline inventory changed.")
+    for name, blob in DEFAULT_PARALLEL_BASE_BLOBS.items():
+        require(git("ls-tree", base, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Default parallel baseline entry changed: " + name)
+    require(SHA.fullmatch(trusted) and trusted not in (expected, base, source),
+            "Default parallel controls require an independent merged baseline.")
+    verify_trusted_operator(source)
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", base, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    all_files = set(DEFAULT_PARALLEL_OUTPUT_BLOBS) | DEFAULT_PARALLEL_CONTROL_FILES
+    control_files = all_files - {DEFAULT_PARALLEL_PROMOTION_FILE}
+    require(DEFAULT_PARALLEL_ADMISSION_FILE in DEFAULT_PARALLEL_OUTPUT_BLOBS
+            and DEFAULT_PARALLEL_PROMOTION_FILE in DEFAULT_PARALLEL_OUTPUT_BLOBS
+            and not (set(DEFAULT_PARALLEL_OUTPUT_BLOBS) & DEFAULT_PARALLEL_CONTROL_FILES)
+            and set(DEFAULT_PARALLEL_OUTPUT_MODES) == set(DEFAULT_PARALLEL_OUTPUT_BLOBS)
+            and set(DEFAULT_PARALLEL_OUTPUT_MODES.values()) == {"100644"}
+            and set(git("diff", "--name-only", base, trusted).splitlines()) == control_files,
+            "Default parallel trusted controls differ from the complete reviewed inventory.")
+    require(not git("ls-tree", trusted, "--", DEFAULT_PARALLEL_PROMOTION_FILE)
+            and set(git("diff", "--name-only", trusted, source).splitlines()) == {DEFAULT_PARALLEL_PROMOTION_FILE}
+            and set(git("diff", "--name-only", base, source).splitlines()) == all_files
+            and set(git("diff", "--name-only", expected, source).splitlines())
+                == all_files | set(DEFAULT_PARALLEL_BASE_BLOBS),
+            "Default parallel promotion must add only the reserved genuine test.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = {**DEFAULT_PARALLEL_BASE_BLOBS, **DEFAULT_PARALLEL_OUTPUT_BLOBS}
+    for name, blob in DEFAULT_PARALLEL_OUTPUT_BLOBS.items():
+        entry = DEFAULT_PARALLEL_OUTPUT_MODES[name] + " blob " + blob + "\t" + name
+        require(git("ls-tree", source, "--", name) == entry,
+                "Default parallel output differs from reviewed blob or mode: " + name)
+        if name != DEFAULT_PARALLEL_PROMOTION_FILE:
+            require(git("ls-tree", trusted, "--", name) == entry,
+                    "Default parallel trusted output differs from reviewed blob or mode: " + name)
+    for name in sorted(DEFAULT_PARALLEL_CONTROL_FILES):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Default parallel controls differ from the independent trusted entries.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    require(not migration_plan(pins), "Default parallel rollout cannot introduce migrations.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == DEFAULT_PARALLEL_LIVE_BASELINE:
+        return reviewed_default_parallel_application_blobs(expected, source)
     if expected == CINCO_RELEASE_BASELINE and git("rev-parse", source + ":lib/registrations.ts") == CINCO_APPLICATION_BLOBS["lib/registrations.ts"]:
         return reviewed_cinco_application_blobs(expected, source)
     if expected == PARALLEL_RELEASE_BASELINE:
@@ -1457,8 +1559,7 @@ def verify_runtime_transport(archive, source, source_tree, runtime):
 def verify_parallel_run(run, jobs, *, repository):
     require(type(run) is dict and run.get("status") == "completed" and run.get("conclusion") == "success"
             and run.get("path") == ".github/workflows/candidate-parallel-checks.yml"
-            and run.get("head_branch") == "improve/release-evidence-parallel-20261013"
-            and run.get("event") in ("push", "workflow_dispatch")
+            and eligible_parallel_branch(run.get("event"), run.get("head_branch"))
             and type(run.get("id")) is int and run["id"] > 0
             and type(run.get("run_attempt")) is int and run["run_attempt"] > 0
             and isinstance(run.get("head_sha"), str) and SHA.fullmatch(run["head_sha"])
@@ -1561,8 +1662,7 @@ def validate_parallel_proof(proof, *, repository, candidate, tree, run_id, attem
                 "run_id": int(run_id), "run_attempt": attempt}
     require(all(proof[key] == value for key, value in expected.items())
             and number(proof["run_id"]) and number(proof["run_attempt"]) and sha(proof["workflow_blob"])
-            and proof["event"] in ("push", "workflow_dispatch")
-            and proof["head_branch"] == "improve/release-evidence-parallel-20261013",
+            and eligible_parallel_branch(proof["event"], proof["head_branch"]),
             "Parallel proof does not bind the exact candidate workflow.")
     artifact = proof["artifact"]
     require(type(artifact) is dict and set(artifact) == {"id", "name", "size_in_bytes", "digest",
@@ -1647,18 +1747,21 @@ def verify_parallel_candidate(args, candidate, jobs, source_tree):
 
 
 def verify_ci(args):
+    if args.expected == DEFAULT_PARALLEL_LIVE_BASELINE:
+        require(os.environ.get("VERIFY_ONLY") == "true",
+                "Default parallel source family is verification-only; VERIFY_ONLY=true is required.")
     require(SHA.fullmatch(args.source) and SHA.fullmatch(args.expected), "Exact SHAs required.")
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Dispatch must target main.")
     require(git("rev-parse", "HEAD") == args.source and not git("status", "--porcelain"),
             "Release checkout must be clean and exact.")
     verify_trusted_operator(args.source)
-    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", args.source, "origin/main"],
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", args.source, "refs/remotes/origin/main"],
                    check=True, env=git_environment(), timeout=60)
     metadata = Path(args.metadata)
     runtime = strict_json((metadata / "runtime.json").read_bytes())
     candidate = strict_json((metadata / "candidate.json").read_bytes())
     verify_run(runtime, workflow="vps-runtime.yml", source=args.source, repository=args.repository)
-    candidate_mode = getattr(args, "candidate_mode", "legacy")
+    candidate_mode = getattr(args, "candidate_mode", "parallel-v1")
     require(candidate_mode in ("legacy", "parallel-v1"), "Unknown candidate verification mode.")
     workflow = "candidate-checks.yml" if candidate_mode == "legacy" else "candidate-parallel-checks.yml"
     if candidate_mode == "legacy":
@@ -1695,6 +1798,8 @@ def verify_ci(args):
                   "releaseTransport": transport,
                   "repository": args.repository, "ancestryVerified": True,
                   "changedFiles": changes, "migrations": migration_plan(changes)}
+    if args.expected == DEFAULT_PARALLEL_LIVE_BASELINE:
+        provenance.update(verificationOnly=True, sourceFamily=DEFAULT_PARALLEL_SOURCE_FAMILY)
     if candidate_verification is not None:
         provenance["candidateVerification"] = candidate_verification
     if getattr(args, "audit_directory", None):
@@ -2608,6 +2713,8 @@ class Deployment:
                 "Manifest does not identify a clean exact release.")
 
     def preflight(self):
+        require(self.expected != DEFAULT_PARALLEL_LIVE_BASELINE,
+                "Default parallel source family is verification-only and cannot activate on the host.")
         for directory in (self.home, self.releases, self.journal.parent, self.override.parent):
             require(directory.is_dir() and not directory.is_symlink(), "Unsafe deployment directory.")
         require((not os.path.lexists(self.release) or self.recover_prepared)
@@ -2617,6 +2724,9 @@ class Deployment:
         require(digest_file(self.archive) == self.archive_digest
                 and digest_file(self.provenance) == self.provenance_digest, "Transferred digest mismatch.")
         self.proof = strict_json(self.file(self.provenance))
+        require(self.proof.get("verificationOnly") is not True
+                and self.proof.get("sourceFamily") != DEFAULT_PARALLEL_SOURCE_FAMILY,
+                "Verification-only provenance cannot activate on the host.")
         require(self.proof.get("version") == 1 and self.proof.get("source") == self.source
                 and self.proof.get("expectedActive") == self.expected
                 and self.proof.get("archiveSha256") == self.archive_digest
@@ -3190,6 +3300,8 @@ class Deployment:
                 "cryptoEnabledRequested": self.enable_crypto}
 
     def apply(self):
+        require(self.expected != DEFAULT_PARALLEL_LIVE_BASELINE,
+                "Default parallel source family is verification-only and cannot activate on the host.")
         require(os.geteuid() == 0, "Root access required.")
         fd = os.open(self.lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "a") as lock:
@@ -3214,7 +3326,7 @@ def main():
     for name in ("source", "expected", "repository", "metadata", "runtime-run", "candidate-run", "archive", "output"):
         verify.add_argument("--" + name, required=True)
     verify.add_argument("--audit-directory")
-    verify.add_argument("--candidate-mode", choices=("legacy", "parallel-v1"), default="legacy")
+    verify.add_argument("--candidate-mode", choices=("legacy", "parallel-v1"), default="parallel-v1")
     apply = commands.add_parser("apply")
     for name in ("source", "expected", "run-id", "attempt", "archive", "provenance", "archive-digest", "provenance-digest"):
         apply.add_argument("--" + name, required=True)

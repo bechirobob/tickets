@@ -38,6 +38,15 @@ class CollectionError(ValueError):
     """An unauthenticated, changed or unsafe input prevents admission."""
 
 
+def eligible_parallel_branch(event, branch):
+    """Exact branch events only; synthetic PR refs and automatic main pushes fail."""
+    return (isinstance(branch, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}", branch)
+            and not branch.startswith(("refs/", "pull/"))
+            and not any(part in ("", ".", "..") for part in branch.split("/"))
+            and (event == "workflow_dispatch" or event == "push" and branch != "main"))
+
+
+
 def require(value, message):
     if not value:
         raise CollectionError(message)
@@ -125,7 +134,7 @@ def authenticate_source(root, *, source, candidate, trusted_baseline):
     source, candidate, baseline = map(full_sha, (source, candidate, trusted_baseline))
     require(baseline not in (source, candidate), "Source or candidate cannot select itself as trusted baseline")
     with Directory(root, private=False):
-        main = git(root, "rev-parse", "--verify", "origin/main^{commit}").strip().decode("ascii")
+        main = git(root, "rev-parse", "--verify", "refs/remotes/origin/main^{commit}").strip().decode("ascii")
         full_sha(main)
         for revision in (baseline, main, source, candidate):
             commit_tree(root, revision)
@@ -281,8 +290,7 @@ def authenticated_inventory(client, *, candidate, run_id, attempt):
     require(type(run) is dict and type(run.get("id")) is int and run["id"] == run_id
             and type(run.get("run_attempt")) is int and run["run_attempt"] == attempt
             and run.get("head_sha") == candidate and run.get("path") == WORKFLOW
-            and (run.get("event") == "workflow_dispatch" or
-                 run.get("event") == "push" and run.get("head_branch") == BRANCH)
+            and eligible_parallel_branch(run.get("event"), run.get("head_branch"))
             and run.get("status") == "completed" and run.get("conclusion") == "success"
             and type(run.get("repository")) is dict and run["repository"].get("full_name") == REPOSITORY
             and type(run["repository"].get("id")) is int and run["repository"]["id"] == repo["id"]

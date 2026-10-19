@@ -73,6 +73,15 @@ class ParallelError(ValueError):
     """Evidence is missing, malformed, stale, incomplete or mismatched."""
 
 
+def eligible_parallel_branch(event, branch):
+    """Exact branch events only; synthetic PR refs and automatic main pushes fail."""
+    return (isinstance(branch, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}", branch)
+            and not branch.startswith(("refs/", "pull/"))
+            and not any(part in ("", ".", "..") for part in branch.split("/"))
+            and (event == "workflow_dispatch" or event == "push" and branch != "main"))
+
+
+
 def require(value, message):
     if not value:
         raise ParallelError(message)
@@ -229,8 +238,7 @@ def verify_run_jobs(run, jobs, workflow_bytes, *, repository, source_sha, source
             and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]*', branch)
             and not any(part in ('', '.', '..') for part in branch.split('/')),
             'Invalid workflow branch; pull-request merge refs are ineligible')
-    require(run.get('event') == 'workflow_dispatch' or
-            (run.get('event') == 'push' and branch == EXPERIMENT_BRANCH), 'Ineligible workflow event or branch')
+    require(eligible_parallel_branch(run.get('event'), branch), 'Ineligible workflow event or branch')
     # Dispatches cannot smuggle a pull-request synthetic merge ref either.
     require(not branch.startswith('pull/'), 'Pull-request refs are ineligible')
     start = timestamp(run.get('run_started_at'))
@@ -414,7 +422,7 @@ def validate_proof(proof, *, repository, source_sha, source_tree, run_id, run_at
             and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,254}', proof['head_branch'])
             and not proof['head_branch'].startswith(('refs/', 'pull/'))
             and not any(part in ('', '.', '..') for part in proof['head_branch'].split('/'))
-            and (proof['event'] != 'push' or proof['head_branch'] == EXPERIMENT_BRANCH), 'Ineligible proof event/ref')
+            and eligible_parallel_branch(proof['event'], proof['head_branch']), 'Ineligible proof event/ref')
     artifact = proof['artifact']
     require(isinstance(artifact, dict) and set(artifact) == ARTIFACT_KEYS and integer(artifact['id'])
             and integer(artifact['size_in_bytes'], 1, MAX_ARTIFACT)
