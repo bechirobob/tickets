@@ -696,6 +696,7 @@ CINCO_RECOVERY_APPLICATION_BLOBS = {'app/api/customer/recovery/claim/route.ts': 
  'app/tickets/ticket-wallet.tsx': '690cdf42d8730fe6206e92f84a9ec8e6ffeac0c6',
  'package.json': '5b9f6d868730b315d471696625ed879fd9a9dd48',
  'tests/e2e/discovery-pass-access.spec.ts': '96c88875c6ec2e99e0b0a6b4aca280ca66851731',
+ 'tests/e2e/operations.spec.ts': 'ec95702c13e6e2e9c3b5c10a4683827ae6b4373e',
  'tests/e2e/registration.spec.ts': 'a5c89bf3d3431f707c6a4d6bd34d96130c98aa77',
  'tests/my-nights-refresh.test.mjs': 'f982df4b48665dac736e72ee381cc368789035af',
  'tests/registration-readiness.test.mjs': '89a30993ff2d2c6004f17c87235af73a261327b1',

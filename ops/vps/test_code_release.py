@@ -301,7 +301,7 @@ PURO_EXCESO_TEST_OVERLAY = {'.github/workflows/puro-exceso-listing.yml': ('10064
 
 
 # Separate exact recovery test family. Existing historical families stay frozen.
-CINCO_RECOVERY_OPERATOR_BLOB = 'e706eba261ea57df5ba67bf59e847d3f5205a243'
+CINCO_RECOVERY_OPERATOR_BLOB = '725f672c2db725727781337187f15aabbeca46e8'
 CINCO_RECOVERY_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),
