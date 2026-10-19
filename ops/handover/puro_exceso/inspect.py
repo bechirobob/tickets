@@ -24,8 +24,7 @@ def main():
     duplicate=db.execute("SELECT count(*) FROM curated_event_records WHERE slug='puro-exceso-20261024' OR lower(title)='puro exceso'").fetchone()[0]
     links=[dict(r) for r in db.execute("SELECT eh.event_slug,eh.role,eh.is_primary,e.organizer_owner_id IS NOT NULL AS has_owner FROM event_hosts eh JOIN curated_event_records e ON e.slug=eh.event_slug WHERE eh.host_id='host:kofi-bills'")]
     mapping=[]
-    for row in db.execute("""SELECT e.slug, s.organizer_name,s.contact_name,h.full_name,
-      a.id,a.display_name,a.role,a.status,e.organizer_owner_id=a.id AS matches_owner,
+    for row in db.execute("""SELECT e.slug, a.id,a.role,a.status,e.organizer_owner_id=a.id AS matches_owner,
       EXISTS(SELECT 1 FROM staff_event_assignments x WHERE x.account_id=a.id AND x.event_slug=e.slug) AS assigned
       FROM event_hosts eh JOIN hosts h ON h.id=eh.host_id
       JOIN curated_event_records e ON e.slug=eh.event_slug
