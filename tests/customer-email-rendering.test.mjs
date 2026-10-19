@@ -435,3 +435,20 @@ test('private confirmations, unconfirmed RSVP and recovery never look up or disc
     for (const message of fixture.deliveries) assert.doesNotMatch(message.html + message.text, /Kofi Bills|is your (?:co-)?host\./u);
   }
 });
+
+
+test('public listing media flyers retain strict origin, identifier and JPEG/PNG boundaries', () => {
+  const { helpers } = createCustomerEmailHarness();
+  const input = { title: 'CINCO PURO EXCESO', isPublic: true, contentType: 'image/jpeg' };
+  const path = '/api/media/listing:puro-exceso-20261024';
+  for (const url of [path, `https://tickets.becoreops.com${path}`]) {
+    assert.match(helpers.emailFlyer({ ...input, url }), /src="https:\/\/tickets\.becoreops\.com\/api\/media\/listing:puro-exceso-20261024"/u);
+  }
+  for (const url of ['/api/media/private:poster', '/api/media/listing:', '/api/media/listing:one:two', '/api/media/listing:../private', '/api/media/listing%3Aposter', `${path}?token=private`, `${path}#private`, `https://external.example.invalid${path}`]) {
+    assert.equal(helpers.emailFlyer({ ...input, url }), '', url);
+  }
+  assert.equal(helpers.emailFlyer({ ...input, url: path, isPublic: false }), '');
+  for (const contentType of [null, 'image/svg+xml', 'image/webp', 'text/html']) {
+    assert.equal(helpers.emailFlyer({ ...input, url: path, contentType }), '', String(contentType));
+  }
+});

@@ -10,13 +10,13 @@ import { recordPolicyConsents } from './policies';
 import { findPrimaryHost } from './event-experience';
 
 export type RegistrationMode = 'paid' | 'rsvp' | 'interest';
-export type RegistrationSettings = { eventSlug: string; title: string; venue?: string; area?: string; imageUrl?: string | null; imageContentType?: string | null; publicArtwork?: number; scheduleLabel?: string | null; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; opensAt?: string | null; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
+export type RegistrationSettings = { eventSlug: string; title: string; venue?: string; venueMapUrl?: string | null; area?: string; imageUrl?: string | null; imageContentType?: string | null; publicArtwork?: number; scheduleLabel?: string | null; mode: RegistrationMode; capacity: number; maxPartySize: number; approvalRequired: number; roomAccess: number; scheduleStatus: string; startsAt: string; endsAt: string; eventState: string; publication: string; accepting?: number; opensAt?: string | null; closesAt?: string | null; notifyHost?: number; allowUndatedRsvp?: number };
 export type Registration = { id: string; eventSlug: string; email: string; guestName: string; phone: string; partySize: number; kind: string; status: string; attendeeId: string | null; orderId: string | null; version: number; eventSignature: string | null };
 const fields = `id, event_slug AS eventSlug, normalized_email AS email, guest_name AS guestName, phone, party_size AS partySize, kind, status, attendee_id AS attendeeId, order_id AS orderId, version, event_signature AS eventSignature`;
 const timestamp = () => new Date().toISOString();
 const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 export async function registrationSettings(db: D1Database, slug: string) {
-  return db.prepare(`SELECT e.slug AS eventSlug, e.title, e.venue, e.area, e.image_url AS imageUrl,
+  return db.prepare(`SELECT e.slug AS eventSlug, e.title, e.venue, e.venue_map_url AS venueMapUrl, e.area, e.image_url AS imageUrl,
     (e.is_test_event=0 AND (e.status='published' OR (e.status='scheduled' AND e.scheduled_publish_at<=?))) AS publicArtwork,
     (SELECT poster_content_type FROM party_submissions WHERE id=e.submission_id) AS imageContentType, e.schedule_label AS scheduleLabel, e.schedule_status AS scheduleStatus, e.starts_at AS startsAt, e.ends_at AS endsAt, e.event_state AS eventState, e.status AS publication,
     COALESCE(s.mode, CASE WHEN e.schedule_status = 'coming_soon' THEN 'interest' ELSE 'paid' END) AS mode,
@@ -270,6 +270,7 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string, 
     const s = await registrationSettings(env.DB, reg.eventSlug);
     if (!s) continue;
     const detail = reg.status === 'interested' ? `${registrationStatusText.interested} ${s.scheduleStatus === 'coming_soon' ? 'The date is still to be announced.' : `The event is scheduled for ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(s.startsAt))}, Accra time.`} ${s.eventState === 'cancelled' ? 'The event has been cancelled.' : s.mode === 'rsvp' ? 'RSVP is now available on the event page.' : 'Check the event page for current booking details.'}` : registrationStatusText[reg.status];
+    const requireEmail = reg.eventSlug === 'puro-exceso-20261024' && reg.kind === 'rsvp' && reg.status === 'confirmed';
     const key = `registration-update/${reg.id}/${reg.version}`;
     const queued = await env.DB.prepare(`SELECT 1 AS found FROM delivery_events WHERE kind = 'registration_update' AND json_extract(payload_json, '$.idempotencyKey') = ? LIMIT 1`).bind(key).first();
     const email = async () => {
@@ -277,6 +278,7 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string, 
       const confirmed = reg.status === 'confirmed';
       const when = registrationStartConfirmed(s) ? `${new Intl.DateTimeFormat('en-GH', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Accra' }).format(new Date(s.startsAt))} (Accra time)` : s.scheduleLabel || 'Date to be announced';
       const venue = [s.venue, s.area].filter(Boolean).join(', ');
+      const venueMapUrl = requireEmail && s.venueMapUrl?.startsWith('https://') ? s.venueMapUrl : null;
       const eventUrl = `${origin}/event/${encodeURIComponent(reg.eventSlug)}`;
       const actionUrl = confirmed ? `${origin}/my-nights/${encodeURIComponent(reg.eventSlug)}?view=passes` : eventUrl;
       const host = confirmed && s.publicArtwork === 1 ? await findPrimaryHost(env.DB, reg.eventSlug) : null;
@@ -286,17 +288,17 @@ export async function processRegistrations(env: Cloudflare.Env, origin: string, 
       const html = customerEmail({
         title: confirmed ? 'You’re on the list.' : 'An update for you.',
         preheader: confirmed ? `${reg.partySize} ${reg.partySize === 1 ? 'place' : 'places'} confirmed for ${s.title}.` : detail,
-        body: emailParagraph(`${emailGreeting(reg.guestName)} ${escape(intro)}`) + emailFlyer({ url: s.imageUrl, title: s.title, isPublic: s.publicArtwork === 1, contentType: s.imageContentType }) + emailEvent({ title: s.title, when, venue }) + (nextStep ? emailParagraph(nextStep) : ''),
+        body: emailParagraph(`${emailGreeting(reg.guestName)} ${escape(intro)}`) + emailFlyer({ url: s.imageUrl, title: s.title, isPublic: s.publicArtwork === 1, contentType: s.imageContentType }) + emailEvent({ title: s.title, when, venue }) + (venueMapUrl ? emailParagraph(`<a href="${escape(venueMapUrl)}" style="color:#301d2c;text-decoration:underline">Get directions</a>`) : '') + (nextStep ? emailParagraph(nextStep) : ''),
         action: { label: confirmed ? 'View your passes' : 'View event details', url: actionUrl },
         note,
       });
-      await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · ${confirmed ? 'RSVP confirmed' : 'Registration update'}`, text: `Hi ${reg.guestName.trim() || 'there'},\n\n${intro}\n\n${s.title}\n${when}\n${venue}\n\n${nextStep}\n\n${actionUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`, html, idempotencyKey: key });
+      await sendEmail({ db: env.DB, kind: 'registration_update', recipient: reg.email, subject: `${s.title} · ${confirmed ? 'RSVP confirmed' : 'Registration update'}`, text: `Hi ${reg.guestName.trim() || 'there'},\n\n${intro}\n\n${s.title}\n${when}\n${venue}${venueMapUrl ? `\nDirections: ${venueMapUrl}` : ''}\n\n${nextStep}\n\n${actionUrl}\n\n${note}\n\nNeed a hand? tickets@becoreops.com`, html, idempotencyKey: key });
     };
     if (reg.kind === 'rsvp') {
       const channel = await deliverConfirmation({ env, id: key, attendeeId: reg.attendeeId,
         payload: { kind: 'registration_update', eventSlug: reg.eventSlug, sourceId: key, tag: `rsvp-${reg.id}`,
           title: reg.status === 'confirmed' ? 'Your RSVP is confirmed' : 'Your RSVP has an update', body: detail,
-          url: reg.status === 'confirmed' ? `/my-nights/${reg.eventSlug}?view=passes` : '/my-nights?view=rsvps' }, email, skipPush: Boolean(queued) });
+          url: reg.status === 'confirmed' ? `/my-nights/${reg.eventSlug}?view=passes` : '/my-nights?view=rsvps' }, email, requireEmail, skipPush: Boolean(queued) });
       if (channel === 'pending') continue;
     } else await email();
     await env.DB.prepare('UPDATE event_registrations SET notified_version = ? WHERE id = ? AND notified_version < ?').bind(reg.version, reg.id, reg.version).run();

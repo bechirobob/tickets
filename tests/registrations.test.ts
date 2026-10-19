@@ -278,3 +278,40 @@ it('rejects a new RSVP when archive wins after its initial settings read', async
     expect(await env.DB.prepare('SELECT 1 FROM event_registrations WHERE event_slug=?').bind(slug).first()).toBeNull();
   } finally { intercepted.mockRestore(); await env.DB.prepare('UPDATE curated_event_records SET archived_at=NULL WHERE slug=?').bind(slug).run(); }
 });
+
+it('emails CINCO confirmed guests with passes and directions even when push succeeds, without approving pending RSVPs',async()=>{
+  const eventSlug='puro-exceso-20261024';
+  const map='https://maps.app.goo.gl/TKsDxu5i1HByJQs86?g_st=ic';
+  const now=new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO curated_event_records(id,submission_id,slug,title,venue,venue_map_url,area,starts_at,ends_at,vibe,price_from_minor,capacity,image_url,curation_note,status,created_at,updated_at)
+    SELECT ?,?,?, 'CINCO PURO EXCESO',venue,?,area,starts_at,ends_at,vibe,0,200,image_url,curation_note,'published',?,? FROM curated_event_records WHERE slug=?`)
+    .bind(crypto.randomUUID(),crypto.randomUUID(),eventSlug,map,now,now,slug).run();
+  await env.DB.prepare("INSERT INTO event_registration_settings(event_slug,mode,capacity,max_party_size,approval_required,updated_at) VALUES(?,'rsvp',200,2,1,?)").bind(eventSlug,now).run();
+  const email='cinco-confirmed@example.com';
+  await requestRegistration(env.DB,{eventSlug,email,guestName:'Cinco Guest',phone:'',partySize:2},origin);
+  const accessEmail=await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE kind='registration_access' AND recipient=? ORDER BY created_at DESC LIMIT 1").bind(email).first<{payload:string}>();
+  const token=(JSON.parse(accessEmail!.payload).text as string).match(/#token=([^\s]+)/)![1];
+  const claimed=await claimRegistration(env.DB,token);
+  const id=claimed.registration!.id;
+  await processRegistrations(env,origin,id);
+  expect((await readRegistration(env.DB,id))?.status).toBe('requested');
+  expect(await env.DB.prepare("SELECT id FROM delivery_events WHERE kind='registration_update' AND recipient=?").bind(email).first()).toBeNull();
+  expect((await hostAction(req('/api/admin/registrations',{eventSlug,action:'approve',id},await owner()))).status).toBe(200);
+  const originalOrder=(await readRegistration(env.DB,id))!.orderId;
+  const notificationModule=await import('../lib/notifications');
+  vi.spyOn(notificationModule,'confirmationNotice').mockResolvedValue(1);
+  await processRegistrations(env,origin,id);
+  await processRegistrations(env,origin,id);
+  const messages=await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE kind='registration_update' AND recipient=?").bind(email).all<{payload:string}>();
+  expect(messages.results).toHaveLength(1);
+  const payload=JSON.parse(messages.results[0].payload);
+  expect(payload.subject).toBe('CINCO PURO EXCESO · RSVP confirmed');
+  expect(payload.text).toContain('We’ve confirmed 2 places for you. No payment required.');
+  expect(payload.text).toContain(`/my-nights/${eventSlug}?view=passes`);
+  expect(payload.text).toContain(`Directions: ${map}`);
+  expect(payload.html).toContain(`href="${map}"`);
+  expect(payload.html).toContain('Get directions');
+  expect((await readRegistration(env.DB,id))!.orderId).toBe(originalOrder);
+  const wallet=await (await passes(req('/api/customer/tickets',{},claimed.cookie))).json() as {orders:Array<{tickets:unknown[]}>};
+  expect(wallet.orders[0].tickets).toHaveLength(2);
+});

@@ -71,3 +71,24 @@ it('uses email after session expiry and refuses confirmation consent without com
   await env.DB.prepare('UPDATE attendee_sessions SET expires_at=? WHERE attendee_id=?').bind(new Date(Date.now()+3600000).toISOString(),attendeeId).run();
   env.VAPID_PRIVATE_KEY=''; expect((await subscribe(request(true))).status).toBe(503);
 });
+
+it('preserves push and also emails when a confirmation requires email, once under concurrent callbacks',async()=>{
+  await subscribe(request(true));
+  const input={...delivery(),requireEmail:true};
+  const results=await Promise.all([deliverConfirmation(input),deliverConfirmation(input)]);
+  expect(results).toContain('email');
+  expect(input.email).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(await deliverConfirmation(input)).toBe('email');
+  expect(input.email).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+it('retries a required email after accepted push when its outbox write fails',async()=>{
+  await subscribe(request(true));
+  const email=vi.fn().mockRejectedValueOnce(new Error('database unavailable')).mockResolvedValue(undefined);
+  const input={...delivery(email),requireEmail:true};
+  await expect(deliverConfirmation(input)).rejects.toThrow('database unavailable');
+  expect(await env.DB.prepare('SELECT status FROM confirmation_deliveries WHERE id=?').bind(input.id).first()).toEqual({status:'pending'});
+  expect(await deliverConfirmation(input)).toBe('email');
+  expect(email).toHaveBeenCalledTimes(2);
+});
