@@ -33,6 +33,20 @@ def main():
       JOIN staff_accounts a ON a.normalized_email=lower(trim(s.contact_email))
       WHERE h.id='host:kofi-bills' AND e.removed_at IS NULL AND e.archived_at IS NULL"""):
         value=dict(row);value['accountHash']=hashlib.sha256(value.pop('id').encode()).hexdigest();mapping.append(value)
+    # Follow only existing explicit access links on this exact host's events.
+    access=[]
+    for row in db.execute("""SELECT e.slug,e.status,e.removed_at IS NOT NULL AS removed,
+      e.archived_at IS NOT NULL AS archived,s.id IS NOT NULL AS has_submission,
+      length(trim(coalesce(s.contact_email,'')))>0 AS has_contact_email,
+      a.id,a.role,a.status AS account_status,e.organizer_owner_id=a.id AS is_owner,
+      EXISTS(SELECT 1 FROM staff_event_assignments x WHERE x.account_id=a.id AND x.event_slug=e.slug) AS assigned,
+      a.normalized_email=lower(trim(s.contact_email)) AS matches_submission
+      FROM event_hosts eh JOIN curated_event_records e ON e.slug=eh.event_slug
+      LEFT JOIN party_submissions s ON s.id=e.submission_id
+      LEFT JOIN staff_accounts a ON a.id=e.organizer_owner_id OR EXISTS(
+        SELECT 1 FROM staff_event_assignments x WHERE x.account_id=a.id AND x.event_slug=e.slug)
+      WHERE eh.host_id='host:kofi-bills'"""):
+        value=dict(row);identity=value.pop('id');value['accountHash']=hashlib.sha256(identity.encode()).hexdigest() if identity else None;access.append(value)
     assert db.total_changes==0
-    print(json.dumps({'readOnly':True,'revision':ACTIVE,'schemaFingerprint':fingerprint,'databaseBytes':path.stat().st_size,'publicationTriggers':[dict(r) for r in db.execute("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'curated_events_verify%'")],'schema':schemas,'host':host,'hostLinks':links,'organizerMapping':mapping,'existingEventMatches':duplicate,'quickCheck':'ok','foreignKeyViolations':0},sort_keys=True))
+    print(json.dumps({'readOnly':True,'revision':ACTIVE,'schemaFingerprint':fingerprint,'databaseBytes':path.stat().st_size,'publicationTriggers':[dict(r) for r in db.execute("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'curated_events_verify%'")],'schema':schemas,'host':host,'hostLinks':links,'organizerMapping':mapping,'existingHostAccess':access,'existingEventMatches':duplicate,'quickCheck':'ok','foreignKeyViolations':0},sort_keys=True))
 if __name__=='__main__':main()
