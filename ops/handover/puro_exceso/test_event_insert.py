@@ -447,3 +447,17 @@ class PlanCopyTests(unittest.TestCase):
         before=event.database_evidence(self.db)
         with self.assertRaises(event.GuardError):event.update_plan_copy(self.db, expected_schema_fingerprint=event.schema_fingerprint(self.db))
         self.assertEqual(before,event.database_evidence(self.db))
+
+class MapAndDiagnosisTests(unittest.TestCase):
+    def test_map_only_and_read_only_aggregate_diagnosis(self):
+        db=migrated_database()
+        event.insert_event(db,FLYER,actor_account_id=OWNER,organizer_account_id=None,now=NOW)
+        event.update_plan_copy(db,expected_schema_fingerprint=event.schema_fingerprint(db))
+        result=event.update_map_link(db,expected_schema_fingerprint=event.schema_fingerprint(db))
+        self.assertEqual(result["updated_map_fields"],2)
+        self.assertEqual(db.execute("SELECT venue_map_url,curation_note FROM curated_event_records WHERE id=?",(event.EVENT_ID,)).fetchone(),(event.MAP_URL,event.PLAN_COPY))
+        before=event.database_evidence(db)
+        self.assertEqual(event.rsvp_diagnosis(db)["registrations"],0)
+        self.assertEqual(event.rsvp_diagnosis(db)["groups"],[])
+        self.assertEqual(event.update_map_link(db,expected_schema_fingerprint=event.schema_fingerprint(db))["status"],"map_already_current")
+        self.assertEqual(before,event.database_evidence(db));db.close()

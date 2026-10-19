@@ -289,15 +289,15 @@ def validate_staged_inventory(root, manifest):
 # Test-only, independently reviewed operational additions. This is not a
 # production release allowlist. Every addition is pinned by path, mode and blob.
 PURO_EXCESO_TEST_OVERLAY = {'.github/workflows/puro-exceso-listing.yml': ('100644', '8bf87a0ee41e69c44b10b092fd2f7b238b301af0'),
- '.github/workflows/puro-exceso-publish.yml': ('100644', '07d687e860dd0d4218c6ea00a7b6aa25bad84838'),
- 'ops/handover/puro_exceso/activate.sha256': ('100644', '6233fc4a8c7df1d211edcf97595f938b8263db41'),
- 'ops/handover/puro_exceso/apply.py': ('100644', 'ce87c3a2096f4aab78685d17981a06d90fb82e91'),
- 'ops/handover/puro_exceso/event_insert.py': ('100644', '729736dae4b25240f64815a4ffaa519f9082a377'),
+ '.github/workflows/puro-exceso-publish.yml': ('100644', '285efaf42ccbb5caf50673b08e6751a8733b2117'),
+ 'ops/handover/puro_exceso/activate.sha256': ('100644', 'e378ea429c22d4fe465246f53aa44cdb0f41a9c5'),
+ 'ops/handover/puro_exceso/apply.py': ('100644', 'e4d4f2ddacf5b4ab41aaed934a830af19a74c574'),
+ 'ops/handover/puro_exceso/event_insert.py': ('100644', '25d640e70488bb7ea7be014876c27caf50a7a951'),
  'ops/handover/puro_exceso/flyer.jpeg.b64': ('100644', '63563463aa0fd7a62e9490449f44420d48328604'),
  'ops/handover/puro_exceso/inspect.py': ('100644', 'da1d66b3a6d833d43d9ad1675dbd3cec16a57af0'),
- 'ops/handover/puro_exceso/test_event_insert.py': ('100644', 'c17ffde69ab4c992a81e913a7f0fb07d2f0fb523'),
+ 'ops/handover/puro_exceso/test_event_insert.py': ('100644', 'e7219b9b15312c9e1dbb1cd685156ee691cee050'),
  'ops/handover/puro_exceso/test_inspect.py': ('100644', '27ae56c68f2aea1b5020a99cdcda3ee95a8798d5'),
- 'ops/handover/puro_exceso/verify_public.py': ('100644', '4f88ce60ac7a02b74cb7a8c0b97e410f539bab3a')}
+ 'ops/handover/puro_exceso/verify_public.py': ('100644', 'd3abfefb3bc9e24398c1bc31b7c74b3c89d9f6cb')}
 
 
 def checkout_parallel_source_family(root):

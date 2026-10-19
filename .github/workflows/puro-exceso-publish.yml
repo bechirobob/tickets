@@ -1,4 +1,4 @@
-name: Update approved Puro Exceso Plan copy
+name: Add approved CINCO map and inspect RSVP delivery
 on:
   push:
     branches: [main]
@@ -21,7 +21,7 @@ jobs:
       - name: Verify exact reviewed operation and flyer
         run: |
           set -euo pipefail
-          echo '30e04fb27eeb4b14b431fe9f51d0a3c39464e2db95738b04ba0004fb21584286  ops/handover/puro_exceso/activate.sha256' | sha256sum --check --strict
+          echo '42e0c85ad7deb44bf3c829923848dcb0463feca723944c4129ab93682ca930a5  ops/handover/puro_exceso/activate.sha256' | sha256sum --check --strict
           base64 --decode ops/handover/puro_exceso/flyer.jpeg.b64 > ops/handover/puro_exceso/flyer.jpeg
           sha256sum --check --strict ops/handover/puro_exceso/activate.sha256
           python3 -m unittest discover -s ops/handover/puro_exceso -p 'test_*.py' -q
@@ -32,7 +32,7 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Back up and update three description fields only
+      - name: Back up, add map only and read delivery counts
         run: |
           set -euo pipefail
           tar -czf - -C ops/handover/puro_exceso apply.py event_insert.py flyer.jpeg | tailscale ssh root@hermes 'set -eu; stage=$(mktemp -d /var/lib/becore-tickets-handover/puro-exceso-stage.XXXXXX); tar -xzf - -C "$stage"; python3 "$stage/apply.py"'

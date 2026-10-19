@@ -329,3 +329,71 @@ def update_plan_copy(db, *, expected_schema_fingerprint):
     except BaseException:
         db.rollback()
         raise
+
+
+MAP_URL = "https://maps.app.goo.gl/TKsDxu5i1HByJQs86?g_st=ic"
+
+def update_map_link(db, *, expected_schema_fingerprint):
+    """Update two map fields only; preserve every other row and value."""
+    if db.in_transaction:
+        raise GuardError("An idle connection is required")
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        if schema_fingerprint(db) != expected_schema_fingerprint:
+            raise GuardError("Schema changed")
+        targets = {"curated_event_records": {"id": EVENT_ID},
+                   "party_submissions": {"id": SUBMISSION_ID}}
+        before = database_evidence(db, exclude=targets)
+        original = {}
+        expected = {}
+        for table, key in targets.items():
+            rows = _rows(db, "SELECT * FROM " + _quote(table) + " WHERE id=?", (key["id"],))
+            if len(rows) != 1:
+                raise GuardError("Expected one existing event and submission")
+            row = rows[0]
+            if (row["title"], row["starts_at"], row["ends_at"], row["capacity"]) != ("PURO EXCESO", START, END, 200):
+                raise GuardError("Event identity or settings changed")
+            fields = ("venue_map_url",)
+            if any(row[field] not in (None, MAP_URL) for field in fields):
+                raise GuardError("Map changed since review")
+            original[table] = row
+            expected[table] = {**row, **{field: MAP_URL for field in fields}}
+        values = [original["curated_event_records"]["venue_map_url"], original["party_submissions"]["venue_map_url"]]
+        if len(set(values)) != 1:
+            raise GuardError("Map values are inconsistent")
+        changed = values[0] != MAP_URL
+        if changed:
+            db.execute("UPDATE curated_event_records SET venue_map_url=? WHERE id=?", (MAP_URL, EVENT_ID))
+            db.execute("UPDATE party_submissions SET venue_map_url=? WHERE id=?", (MAP_URL, SUBMISSION_ID))
+        for table, key in targets.items():
+            if _rows(db, "SELECT * FROM " + _quote(table) + " WHERE id=?", (key["id"],)) != [expected[table]]:
+                raise GuardError("Unexpected target-row change")
+        if before != database_evidence(db, exclude=targets) or schema_fingerprint(db) != expected_schema_fingerprint:
+            raise GuardError("Unexpected database change")
+        if db.execute("PRAGMA quick_check").fetchone() != ("ok",) or db.execute("PRAGMA foreign_key_check").fetchone():
+            raise GuardError("Database integrity failure")
+        db.commit()
+        return {"status": "map_updated" if changed else "map_already_current", "event_slug": SLUG,
+                "updated_map_fields": 2 if changed else 0, "other_data_preserved": True}
+    except BaseException:
+        db.rollback()
+        raise
+
+def rsvp_diagnosis(db):
+    """Read aggregate delivery evidence only; never return recipients or payloads."""
+    regs = _rows(db, "SELECT id,status,version,notified_version,approved_at IS NOT NULL AS approved,verified_at IS NOT NULL AS verified,device_claimed_at IS NOT NULL AS device_claimed,attendee_id IS NOT NULL AS has_attendee,order_id,party_size FROM event_registrations WHERE event_slug=?", (SLUG,))
+    groups = {}
+    for row in regs:
+        key = "registration-update/" + row["id"] + "/" + str(row["version"])
+        confirmation = db.execute("SELECT status FROM confirmation_deliveries WHERE id=?", (key,)).fetchone()
+        deliveries = _rows(db, "SELECT status,provider_id IS NOT NULL AS has_provider,provider_id LIKE 'vps-%' AS is_vps,attempt_count,next_attempt_at IS NOT NULL AS retry_scheduled,CASE WHEN failure_reason IS NULL THEN 'none' WHEN failure_reason LIKE '%not configured%' THEN 'not_configured' WHEN failure_reason LIKE '%quota%' THEN 'quota' WHEN failure_reason LIKE '%expired%' THEN 'expired' ELSE 'other' END AS failure_category FROM delivery_events WHERE kind='registration_update' AND json_extract(payload_json,'$.idempotencyKey')=?", (key,))
+        tickets = _rows(db, "SELECT status,count(*) AS count FROM tickets WHERE order_id=? GROUP BY status", (row["order_id"],)) if row["order_id"] else []
+        order = db.execute("SELECT status FROM orders WHERE id=?", (row["order_id"],)).fetchone() if row["order_id"] else None
+        shape = {k:v for k,v in row.items() if k not in ("id","order_id")}
+        shape.update(has_order=bool(row["order_id"]),order_status=order[0] if order else None,confirmation_channel=confirmation[0] if confirmation else None,email_deliveries=deliveries,tickets=tickets)
+        encoded=json.dumps(shape,sort_keys=True)
+        groups[encoded]=groups.get(encoded,0)+1
+    owner_devices = _rows(db, "SELECT p.revoked_at IS NOT NULL AS revoked,ss.revoked_at IS NOT NULL AS session_revoked,ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AS session_current,s.must_change_password,count(*) AS count FROM organizer_push_subscriptions p JOIN staff_accounts s ON s.id=p.account_id LEFT JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=p.account_id WHERE s.role='owner' AND s.status='active' GROUP BY 1,2,3,4")
+    push = _rows(db, "SELECT d.completed_at IS NOT NULL AS completed,d.outcome,d.attempts,count(*) AS count FROM organizer_rsvp_push_deliveries d JOIN event_registrations r ON r.id=d.registration_id WHERE r.event_slug=? GROUP BY 1,2,3",(SLUG,))
+    owner_routing = db.execute("SELECT count(*) FROM sqlite_master WHERE type='trigger' AND name IN ('organizer_rsvp_push_created','organizer_rsvp_push_verified') AND sql LIKE '%role=''owner''%'").fetchone()[0]
+    return {"ownerDevices":owner_devices,"ownerRoutingTriggers":owner_routing,"hostPushDeliveries":push,"registrations":len(regs),"groups":[{"count":count,**json.loads(shape)} for shape,count in groups.items()]}
