@@ -37,7 +37,7 @@ export function emailFlyer(input: { url?: string | null; title: string; isPublic
     if (url.pathname === '/events/on-the-guest-list.webp') url.pathname = '/events/on-the-guest-list-email.jpg';
     if (url.pathname === '/events/on-the-guest-list-20261025.webp') url.pathname = '/events/on-the-guest-list-20261025-email.jpg';
     const staticFlyer = /^\/events\/[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png)$/u.test(url.pathname);
-    const publicUpload = /^\/api\/media\/[a-zA-Z0-9_-]+$/u.test(url.pathname) && ['image/jpeg', 'image/png'].includes(input.contentType ?? '');
+    const publicUpload = /^\/api\/media\/(?:listing:)?[a-zA-Z0-9_-]+$/u.test(url.pathname) && ['image/jpeg', 'image/png'].includes(input.contentType ?? '');
     if (!staticFlyer && !publicUpload) return '';
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px"><tr><td align="center"><img src="${escapeHtml(url.href)}" alt="${escapeHtml(input.title)} flyer" width="180" style="display:block;width:180px;max-width:100%;height:auto;border:0"></td></tr></table>`;
   } catch { return ''; }

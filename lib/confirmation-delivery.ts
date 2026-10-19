@@ -4,7 +4,7 @@ import { confirmationNotice, type NotificationPayload } from './notifications';
 // lease expiry (the stable tag replaces it); email has its own durable outbox.
 export async function deliverConfirmation(input: {
   env: Cloudflare.Env; id: string; orderId?: string; attendeeId: string | null;
-  payload: NotificationPayload; skipPush?: boolean; email: () => Promise<unknown>;
+  payload: NotificationPayload; skipPush?: boolean; requireEmail?: boolean; email: () => Promise<unknown>;
 }): Promise<'push' | 'email' | 'pending'> {
   const { env, id, attendeeId, payload } = input;
   // Inbox updates remain available even when delivery already completed or the
@@ -28,7 +28,7 @@ export async function deliverConfirmation(input: {
       try { accepted = await confirmationNotice(env, attendeeId, payload); }
       catch { console.error(JSON.stringify({ message: 'Confirmation push unavailable', sourceId: id })); }
     }
-    const channel = accepted > 0 ? 'push' : 'email';
+    const channel = accepted > 0 && !input.requireEmail ? 'push' : 'email';
     if (channel === 'email') await input.email();
     await env.DB.prepare(`UPDATE confirmation_deliveries SET status=?, completed_at=?, lease_token=NULL, lease_until=NULL WHERE id=? AND lease_token=?`)
       .bind(channel, new Date().toISOString(), id, token).run();
