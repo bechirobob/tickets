@@ -674,6 +674,36 @@ CINCO_CONTROL_FILES = {"ops/vps/code-release.py", "ops/vps/test_code_release.py"
 CINCO_ADVISORY_BLOBS = {'.github/workflows/candidate-parallel-checks.yml': '81bad0f7a602c579fc14c961aa8e26e32f75767d', '.github/workflows/puro-exceso-listing.yml': '8bf87a0ee41e69c44b10b092fd2f7b238b301af0', '.github/workflows/puro-exceso-publish.yml': '285efaf42ccbb5caf50673b08e6751a8733b2117', '.github/workflows/tickets-code-release.yml': '9c5ca1129fe7e97215b3d895060a4f01256473bf', '.github/workflows/tickets-release-operator-checks.yml': '019ec9b3ac73bec979d3ab62725a3d1208ca765f', 'docs/reliability/parallel-candidate-benchmark.md': 'ae0f6fa386d882a649bfcaa7a6e57349c08f3d0e', 'ops/handover/puro_exceso/activate.sha256': 'e378ea429c22d4fe465246f53aa44cdb0f41a9c5', 'ops/handover/puro_exceso/apply.py': 'e4d4f2ddacf5b4ab41aaed934a830af19a74c574', 'ops/handover/puro_exceso/event_insert.py': '25d640e70488bb7ea7be014876c27caf50a7a951', 'ops/handover/puro_exceso/flyer.jpeg.b64': '63563463aa0fd7a62e9490449f44420d48328604', 'ops/handover/puro_exceso/inspect.py': 'da1d66b3a6d833d43d9ad1675dbd3cec16a57af0', 'ops/handover/puro_exceso/test_event_insert.py': 'e7219b9b15312c9e1dbb1cd685156ee691cee050', 'ops/handover/puro_exceso/test_inspect.py': '27ae56c68f2aea1b5020a99cdcda3ee95a8798d5', 'ops/handover/puro_exceso/verify_public.py': 'd3abfefb3bc9e24398c1bc31b7c74b3c89d9f6cb', 'ops/vps/candidate_build.py': '502b3f8cddc2038113498824e430620eb1b55d0f', 'ops/vps/parallel_candidate.py': '08e44556ad630ee5227463b74bce990f943d939f', 'ops/vps/parallel_candidate_control.py': '1000acb20a4e8b3a0d9c5771ea5269db006805a4', 'ops/vps/test_candidate_build.py': 'a9920c4d21804074d4ab176c541247787b46639f', 'ops/vps/test_parallel_admission.py': '35b8fb438193184f8e1654d44981f6c3564d0ca0', 'ops/vps/test_parallel_candidate.py': '3af28a1b01a08c19a97155229f6e0b5efc592fc0', 'ops/vps/test_parallel_candidate_control.py': '6ddbd74138168c8538406920d9fda7432ce67f49', 'ops/vps/test_parallel_source_family.py': '54ac92e721b51dda03bca69862816fa78d1c0737', 'tests/test_candidate_parallel_workflow.py': '7fea55bc9d99e558d3c0cc0099cbc027e9423bb2'}
 CINCO_APPLICATION_BLOBS = {'lib/confirmation-delivery.ts': '02f9381c8bd379a9cce1238c2f985c004bcb482b', 'lib/registrations.ts': 'fda1d288ff3ff29db196c23995926731745d12c0', 'tests/confirmation-delivery.test.ts': 'd8f9770625793d2d09362fc8113ea4e8b990864c', 'tests/registrations.test.ts': '6b7308756973d59a002d956c64da91d7269687f6', 'lib/customer-email.ts': '5a6d69d69cfdb9925ed0b5b669b28d433020d655', 'tests/customer-email-rendering.test.mjs': '1459d87a8769b347e7a9338950b0f9534636b4a5'}
 
+# Finite recovery increment from the active receipt release. The operational
+# baseline adds only these two workflows; independently merged controls then
+# admit the complete reviewed application patch, with no runtime/schema drift.
+CINCO_RECOVERY_RELEASE_BASELINE = '04bbe9691a00ca48cfb974ab0b87b743d9c3aab8'
+CINCO_RECOVERY_RELEASE_BASE_TREE = '2d621ad85ed87045fcfbee99b01dfe3e223cdf65'
+CINCO_RECOVERY_ADVISORY_BASE = 'ac54f594c5dd5b965d4431cef54f11e2803d2f4e'
+CINCO_RECOVERY_ADVISORY_TREE = '02a7d3241bf32b3d19dd14ddd640596956fccfc9'
+CINCO_RECOVERY_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+CINCO_RECOVERY_ADVISORY_BLOBS = {
+    '.github/workflows/cinco-confirmation-release-20261019.yml': 'a946f4dbae8b24b375bf0dc58d6d3e72bce127d9',
+    '.github/workflows/puro-approval-readonly-20261019.yml': '7b912b15ab04dd603dee86c0cc8f6d1c1ef754f3',
+}
+CINCO_RECOVERY_APPLICATION_BLOBS = {'app/api/customer/recovery/claim/route.ts': 'b35c99841036995878a60a970792407322b91341',
+ 'app/api/customer/registrations/route.ts': '9833e9fd744e0433f1057a9a5c717fff027f3c18',
+ 'app/my-nights/[slug]/night-hub.tsx': 'd04b3f30ec8fad5671583364728cdbfac18eb2db',
+ 'app/my-nights/my-nights-client.tsx': '3bf1ca4484332cd2c73a1ff525483b10ea368782',
+ 'app/my-registrations.tsx': 'd243098e507fed942f343ede82f5ff74dfc8e741',
+ 'app/registration-form.tsx': 'd2a4ff73c4defa7ef4715584ab423cf48b705dc4',
+ 'app/room/[slug]/room-client.tsx': '71f3cabf44acfc2739ebad29c046c4d565287935',
+ 'app/tickets/ticket-wallet.tsx': '690cdf42d8730fe6206e92f84a9ec8e6ffeac0c6',
+ 'package.json': '5b9f6d868730b315d471696625ed879fd9a9dd48',
+ 'tests/e2e/discovery-pass-access.spec.ts': '96c88875c6ec2e99e0b0a6b4aca280ca66851731',
+ 'tests/e2e/registration.spec.ts': 'a5c89bf3d3431f707c6a4d6bd34d96130c98aa77',
+ 'tests/my-nights-refresh.test.mjs': 'f982df4b48665dac736e72ee381cc368789035af',
+ 'tests/registration-readiness.test.mjs': '89a30993ff2d2c6004f17c87235af73a261327b1',
+ 'tests/registrations.test.ts': 'e8816d7b87218078aeb250a9e523f156edfe722c'}
+CINCO_RECOVERY_PACKAGE_BASE_BLOB = 'eccb3af63298d7642c1ea974d7e8f18da9563507'
+CINCO_RECOVERY_LOCK_BLOB = '47a4eaca5743b768598462d8b66a2ef49a442b4e'
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1209,8 +1239,58 @@ def reviewed_cinco_application_blobs(expected, source):
     return pins
 
 
+def reviewed_cinco_recovery_application_blobs(expected, source):
+    """Admit exactly L -> two workflows -> merged controls -> reviewed patch."""
+    advisory = CINCO_RECOVERY_ADVISORY_BASE
+    controls = CINCO_RECOVERY_CONTROL_FILES
+    require(expected == CINCO_RECOVERY_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == CINCO_RECOVERY_RELEASE_BASE_TREE
+            and git("rev-parse", advisory + "^{tree}") == CINCO_RECOVERY_ADVISORY_TREE,
+            "CINCO recovery live or advisory baseline changed.")
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, advisory],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, advisory).splitlines())
+            == set(CINCO_RECOVERY_ADVISORY_BLOBS),
+            "CINCO recovery advisory inventory changed.")
+    verify_changed_modes(expected, advisory)
+    for name, blob in CINCO_RECOVERY_ADVISORY_BLOBS.items():
+        require(not git("ls-tree", expected, "--", name)
+                and git("ls-tree", advisory, "--", name) == "100644 blob " + blob + "\t" + name,
+                "CINCO recovery advisory addition changed: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, advisory, source),
+            "CINCO recovery requires independent merged controls.")
+    verify_trusted_operator(source)
+    # A same-named local tag must never impersonate the remote main branch.
+    for ancestor, descendant in ((advisory, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", advisory, trusted).splitlines()) == controls,
+            "CINCO recovery trusted controls contain unreviewed changes.")
+    require(CINCO_RECOVERY_APPLICATION_BLOBS
+            and set(git("diff", "--name-only", trusted, source).splitlines())
+            == set(CINCO_RECOVERY_APPLICATION_BLOBS),
+            "CINCO recovery candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(advisory, trusted)
+    verify_changed_modes(trusted, source)
+    pins = {**CINCO_RECOVERY_ADVISORY_BLOBS, **CINCO_RECOVERY_APPLICATION_BLOBS}
+    for name, blob in pins.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "CINCO recovery output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "CINCO recovery controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    require(not migration_plan(pins), "CINCO recovery release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == CINCO_RECOVERY_RELEASE_BASELINE:
+        return reviewed_cinco_recovery_application_blobs(expected, source)
     if expected == CINCO_RELEASE_BASELINE and git("rev-parse", source + ":lib/registrations.ts") == CINCO_APPLICATION_BLOBS["lib/registrations.ts"]:
         return reviewed_cinco_application_blobs(expected, source)
     if expected == PARALLEL_RELEASE_BASELINE:
@@ -1301,6 +1381,20 @@ def vetted_changes(expected, source):
                            resolved="https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
                            integrity="sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==")
             require(before == after, "Only the reviewed mobile brace-expansion lock update may change.")
+    if expected == CINCO_RECOVERY_RELEASE_BASELINE:
+        require({"package.json", "package-lock.json"} & set(changed) == {"package.json"},
+                "CINCO recovery permits only the reviewed package test:ui append.")
+        for revision, package in ((expected, CINCO_RECOVERY_PACKAGE_BASE_BLOB),
+                                  (source, CINCO_RECOVERY_APPLICATION_BLOBS["package.json"])):
+            require(git("rev-parse", revision + ":package.json") == package
+                    and git("rev-parse", revision + ":package-lock.json") == CINCO_RECOVERY_LOCK_BLOB,
+                    "CINCO recovery package or unchanged dependency lock differs from reviewed source.")
+        before = strict_json(git("show", expected + ":package.json"))
+        after = strict_json(git("show", source + ":package.json"))
+        before["scripts"]["test:ui"] += " tests/my-nights-refresh.test.mjs"
+        require(before == after, "CINCO recovery package change is not the exact test:ui append.")
+        require(not migration_plan(changed), "CINCO recovery release cannot introduce migrations.")
+        return changed
     if expected == WORKSPACE_RELEASE_BASELINE:
         # Only the exact test:ui script registration changes. A dependency or lock
         # edit cannot inherit this scripts-only approval or an old audit exception.

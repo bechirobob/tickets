@@ -300,6 +300,149 @@ PURO_EXCESO_TEST_OVERLAY = {'.github/workflows/puro-exceso-listing.yml': ('10064
  'ops/handover/puro_exceso/verify_public.py': ('100644', 'd3abfefb3bc9e24398c1bc31b7c74b3c89d9f6cb')}
 
 
+# Separate exact recovery test family. Existing historical families stay frozen.
+CINCO_RECOVERY_OPERATOR_BLOB = 'e706eba261ea57df5ba67bf59e847d3f5205a243'
+CINCO_RECOVERY_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
+ '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
+ '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),
+ '.github/workflows/candidate-parallel-checks.yml': ('100644', '81bad0f7a602c579fc14c961aa8e26e32f75767d'),
+ '.github/workflows/deploy.yml': ('100644', 'e90f3ab46d499cfe6a03f859452046ca3a026993'),
+ '.github/workflows/tickets-code-release.yml': ('100644', '9c5ca1129fe7e97215b3d895060a4f01256473bf'),
+ '.github/workflows/tickets-release-operator-checks.yml': ('100644',
+                                                           '019ec9b3ac73bec979d3ab62725a3d1208ca765f'),
+ '.github/workflows/vps-runtime.yml': ('100644', '3041cf9b68ba250429e8f58e5404d10b2f9330a0'),
+ 'ops/vps/audit-readiness.py': ('100644', '69c7dff10fc2b8d1046b84e0a43dbdb4dacb3ecf'),
+ 'ops/vps/backup.mjs': ('100644', 'ca2c1a0fa1aa4cb075fa0b90d9d46218666c7967'),
+ 'ops/vps/becore-tickets-preview.service': ('100644', '889233505917ae749ee276050d7f9060c975ed4a'),
+ 'ops/vps/becore-tickets-retention.service': ('100644', '68f4ab992f05742a086f23af7983f9c5561b1b13'),
+ 'ops/vps/becore-tickets-retention.timer': ('100644', '7d77baf5059b0fc725976e8d4eceeb53a53ed2ff'),
+ 'ops/vps/candidate_build.py': ('100644', '502b3f8cddc2038113498824e430620eb1b55d0f'),
+ 'ops/vps/candidate_evidence.py': ('100644', 'd65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba'),
+ 'ops/vps/code-release.py': ('100644', 'd39435b192b4b38dfb097c4111a89b2703ca1148'),
+ 'ops/vps/initialize-preview.mjs': ('100644', '6171616a2d73ed536aad0896d3016d2d41a6ba95'),
+ 'ops/vps/install-preview.py': ('100644', '0fb837d72409234a074b2891c784f0f7605e600f'),
+ 'ops/vps/journal-limits.conf': ('100644', 'bd9c88d6d78144830b5d4ce26dce2d86825b84e5'),
+ 'ops/vps/parallel_candidate.py': ('100644', '08e44556ad630ee5227463b74bce990f943d939f'),
+ 'ops/vps/parallel_candidate_control.py': ('100644', '1000acb20a4e8b3a0d9c5771ea5269db006805a4'),
+ 'ops/vps/prepare-origin.py': ('100644', '8939073562dd7e73073f092a09c3c973003c6b63'),
+ 'ops/vps/public_runtime_guard.py': ('100644', '9a9739f1bd88cbd02dc420001efa3de5b85e3538'),
+ 'ops/vps/restore-backup.mjs': ('100644', '0a05f18c17205ef4c2f59e2d50bd06180035b8c6'),
+ 'ops/vps/retention.py': ('100644', '9ab0304f00d2a96fd6fbb8e4c992d96db5eb08a1'),
+ 'ops/vps/runtime_release.py': ('100644', '043e310a41ff28d23adc20383c88566b181232a6'),
+ 'ops/vps/test_audit_readiness.py': ('100644', '086ab0cb48aa88ce934daefb54d60486925d36f8'),
+ 'ops/vps/test_candidate_build.py': ('100644', 'a9920c4d21804074d4ab176c541247787b46639f'),
+ 'ops/vps/test_candidate_evidence.py': ('100644', 'f63544c3ea061f75db1f544c85cddaae109a0f4e'),
+ 'ops/vps/test_code_release.py': ('100644', '78e5b6aa4b9de23652566846f7dc7995a88c9ee7'),
+ 'ops/vps/test_parallel_admission.py': ('100644', '35b8fb438193184f8e1654d44981f6c3564d0ca0'),
+ 'ops/vps/test_parallel_candidate.py': ('100644', '3af28a1b01a08c19a97155229f6e0b5efc592fc0'),
+ 'ops/vps/test_parallel_candidate_control.py': ('100644', '6ddbd74138168c8538406920d9fda7432ce67f49'),
+ 'ops/vps/test_parallel_source_family.py': ('100644', '54ac92e721b51dda03bca69862816fa78d1c0737'),
+ 'ops/vps/test_pink_edition.py': ('100644', 'be26c898ac1e19f7f737dbe5112c5e40b6e90c68'),
+ 'ops/vps/test_public_runtime_guard.py': ('100644', 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'),
+ 'ops/vps/test_release_approval.py': ('100644', '48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f'),
+ 'ops/vps/test_release_source.py': ('100644', 'ec8a7a5bbbe585941583f50624823b85ec51e586'),
+ 'ops/vps/test_retention.py': ('100644', 'f35d71212ec6ae521e3144c57e708297c513dce0'),
+ 'ops/vps/test_runtime_packaging.py': ('100644', '6f215f441ff1d9b92b3c870a6f438a54e5ccc1a1'),
+ 'ops/vps/test_runtime_release.py': ('100644', '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14'),
+ 'ops/vps/test_runtime_workflow_contract.py': ('100644', 'eef0b25e667f6be123c0ed6c5bca774158d390d8'),
+ 'scripts/audit-checkbox-hotfix.py': ('100644', '5313d8cdc4076b36d434fe8017cc0e7b4824e876'),
+ 'scripts/audit-release-dependencies.py': ('100644', '47c7951e8db95ac666680bd2bf32fde3f1748c8e'),
+ 'scripts/audit-release-manifest.json': ('100644', 'bcb787e744f9fc5fc201e8068d553c1543b35b86'),
+ 'scripts/caption-source-manifest.json': ('100644', '1b178a1a371ae047f8bf26498d249e272c11497d'),
+ 'scripts/verify-audit-release-source.py': ('100644', '129d7bdbd2d631ad385a9edd7be4ea9895f173cf'),
+ 'scripts/verify-caption-source.py': ('100644', 'fa474c5d8cfaad8df53e77004c063e1511ed0b68'),
+ 'tests/test_audit_release_dependencies.py': ('100644', '6983998bf40fc1cb424e6dafbb7ba35e5653336d'),
+ 'tests/test_audit_release_source.py': ('100644', '6516f3f4b8582d3874ceda34e1fc3e3b799fec8d'),
+ 'tests/test_caption_source.py': ('100644', '6871fcc1ab410acaa74d8bd953ac9e0e61f4f670'),
+ 'tests/test_checkbox_hotfix_audit.py': ('100644', '421ec5fd992b1ba258e357ff4a65f6c3a647d2ce')}
+
+
+def cinco_recovery_source_family(root):
+    """Recognize only the complete recovery C/P family for local test execution."""
+    root = Path(root)
+    operator = root / 'ops/vps/code-release.py'
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    selected = any(os.path.lexists(root / name) for name in release.CINCO_RECOVERY_ADVISORY_BLOBS)
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != CINCO_RECOVERY_OPERATOR_BLOB):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            baseline = release.CINCO_RECOVERY_ADVISORY_BASE
+            if (checkout_git(root, 'rev-parse', baseline + '^{tree}').decode().strip()
+                    != release.CINCO_RECOVERY_ADVISORY_TREE):
+                raise AssertionError('Recovery family baseline tree changed')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', baseline).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Recovery baseline contains unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            for name, blob in release.CINCO_RECOVERY_ADVISORY_BLOBS.items():
+                if manifest.get(name) != ('100644', blob):
+                    raise AssertionError('Recovery advisory baseline changed')
+            application = release.CINCO_RECOVERY_APPLICATION_BLOBS
+            observed = {}
+            for name in application:
+                path = root / name
+                observed[name] = digest(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+            if observed == application:
+                manifest.update({name: ('100644', blob) for name, blob in application.items()})
+            elif any(observed[name] != manifest.get(name, (None, None))[1] for name in application):
+                raise AssertionError('Recovery application family has partial or unreviewed bytes')
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked | untracked != set(manifest):
+                raise AssertionError('Recovery full inventory differs from complete C/P family')
+            # A restored worktree cannot conceal staged application changes.
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if not record:
+                    continue
+                metadata, raw_name = record.split(b'\t', 1)
+                mode, blob, stage = metadata.decode().split()
+                name = os.fsdecode(raw_name)
+                if (stage != '0' or name not in manifest
+                        or (name in release.CINCO_RECOVERY_CONTROL_FILES and mode != '100644')
+                        or (name not in release.CINCO_RECOVERY_CONTROL_FILES and manifest[name] != (mode, blob))):
+                    raise AssertionError('Recovery index differs from complete application family')
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError('Recovery family requires its independently pinned baseline') from exc
+    else:
+        manifest = dict(CINCO_RECOVERY_STAGED_BASE)
+    # Only this test file cannot self-pin; production binds both controls to C.
+    manifest['ops/vps/code-release.py'] = ('100644', CINCO_RECOVERY_OPERATOR_BLOB)
+    manifest['ops/vps/test_code_release.py'] = ('100644', None)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Recovery family requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError('Recovery family is incomplete') from exc
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Recovery family has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
+def checkout_source_family(root):
+    recovery = cinco_recovery_source_family(root)
+    return recovery if recovery is not None else checkout_parallel_source_family(root)
+
+
 def checkout_parallel_source_family(root):
     overlay = PURO_EXCESO_TEST_OVERLAY
     selected = any(os.path.lexists(Path(root) / name) for name in overlay)
@@ -2839,7 +2982,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
     root = Path(__file__).resolve().parents[2]
 
     def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
-        parallel = checkout_parallel_source_family(self.root)
+        parallel = checkout_source_family(self.root)
         staged = not (self.root / "package.json").exists() and not (self.root / "app").exists()
         overrides = parallel if parallel is not None else (staged_family_pins(self.root) if staged else {})
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
@@ -2879,7 +3022,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         self.assertNotIn("app/", release.APPLICATION_FILES)
 
     def test_complete_reviewed_application_manifest_matches_candidate_source(self):
-        if checkout_parallel_source_family(self.root) is not None:
+        if checkout_source_family(self.root) is not None:
             return  # Already checked every file in the complete B-derived C/P family.
         pins = release.REVIEWED_APPLICATION_BLOBS
         controls_only = controls_only_checkout(self.root)
@@ -2948,7 +3091,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             self.assertEqual(actual, digest, name)
 
     def test_workspace_checkout_keeps_one_complete_application_family(self):
-        if checkout_parallel_source_family(self.root) is not None:
+        if checkout_source_family(self.root) is not None:
             return
         if not (self.root / "package.json").exists() and not (self.root / "app").exists():
             return  # The separate staged-layout test verifies every staged byte.
@@ -5607,6 +5750,301 @@ class CincoSourceAdmissionTests(unittest.TestCase):
         with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
             with self.assertRaises(release.ReleaseError):
                 self.verify()
+
+
+class CincoRecoverySourceAdmissionTests(unittest.TestCase):
+    """Real Git objects exercise the separate finite recovery trust boundary."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', 'user.name', 'Recovery admission tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.files = tuple(release.CINCO_RECOVERY_APPLICATION_BLOBS)
+        self.assertTrue(self.files, 'The reviewed recovery inventory must be complete')
+        self.advisories = tuple(release.CINCO_RECOVERY_ADVISORY_BLOBS)
+        self.package = {'name': 'fixture', 'scripts': {'test:ui': 'node --test tests/existing.test.mjs'},
+                        'dependencies': {'unchanged': '1.0.0'}}
+        self.write('package.json', json.dumps(self.package))
+        self.write('package-lock.json', 'unchanged dependencies\n')
+        self.write('ops/vps/audit.py', 'unchanged staged utility\n')
+        self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
+        self.added = {'tests/my-nights-refresh.test.mjs'}
+        self.assertTrue(self.added <= set(self.files))
+        for name in (*self.files, *release.CINCO_RECOVERY_CONTROL_FILES):
+            if name != 'package.json' and name not in self.added:
+                self.write(name, 'baseline ' + name + '\n')
+        self.live = self.commit()
+        for name in self.advisories:
+            self.write(name, 'reviewed advisory ' + name + '\n')
+        self.advisory = self.commit()
+        self.operator = b'independent reviewed recovery operator\n'
+        self.write('ops/vps/code-release.py', self.operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed recovery tests\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        for name in self.files:
+            if name == 'package.json':
+                package = copy.deepcopy(self.package)
+                package['scripts']['test:ui'] += ' tests/my-nights-refresh.test.mjs'
+                self.write(name, json.dumps(package))
+            else:
+                self.write(name, 'exact reviewed recovery ' + name + '\n')
+        self.candidate = self.commit()
+        self.pins = {name: self.git('rev-parse', self.candidate + ':' + name) for name in self.files}
+        values = {
+            'CINCO_RECOVERY_RELEASE_BASELINE': self.live,
+            'CINCO_RECOVERY_RELEASE_BASE_TREE': self.git('rev-parse', self.live + '^{tree}'),
+            'CINCO_RECOVERY_ADVISORY_BASE': self.advisory,
+            'CINCO_RECOVERY_ADVISORY_TREE': self.git('rev-parse', self.advisory + '^{tree}'),
+            'CINCO_RECOVERY_ADVISORY_BLOBS': {name: self.git('rev-parse', self.advisory + ':' + name)
+                                           for name in self.advisories},
+            'CINCO_RECOVERY_APPLICATION_BLOBS': self.pins,
+            'CINCO_RECOVERY_PACKAGE_BASE_BLOB': self.git('rev-parse', self.live + ':package.json'),
+            'CINCO_RECOVERY_LOCK_BLOB': self.git('rev-parse', self.live + ':package-lock.json'),
+            '__file__': str(self.root / 'ops/vps/code-release.py'),
+        }
+        for name, value in values.items():
+            self.patch_value(release, name, value)
+        self.patch_value(sys.modules[__name__], 'CINCO_RECOVERY_OPERATOR_BLOB', self.blob(self.operator))
+        staged_names = (*release.CINCO_RECOVERY_CONTROL_FILES, 'ops/vps/audit.py',
+                        '.github/workflows/candidate-checks.yml')
+        self.staged = {name: ('100644', self.git('rev-parse', self.advisory + ':' + name))
+                       for name in staged_names}
+        self.patch_value(sys.modules[__name__], 'CINCO_RECOVERY_STAGED_BASE', self.staged)
+        patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def patch_value(self, target, name, value):
+        patcher = patch.object(target, name, value)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw.encode() if isinstance(raw, str) else raw)
+        path.chmod(0o644)
+        return path
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated recovery source')
+        return self.git('rev-parse', 'HEAD')
+
+    def verify(self, source=None):
+        return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
+
+    def test_complete_patch_and_control_only_full_families_are_recognized(self):
+        self.assertEqual(set(self.verify()), set(self.files) | set(self.advisories)
+                         | release.CINCO_RECOVERY_CONTROL_FILES)
+        self.assertEqual(release.migration_plan(self.verify()), [])
+        for revision in (self.control, self.candidate):
+            with self.subTest(revision=revision):
+                self.git('checkout', '-q', revision)
+                family = checkout_source_family(self.root)
+                self.assertEqual(family['ops/vps/code-release.py'], self.blob(self.operator))
+                for name in self.files:
+                    if revision == self.control and name in self.added:
+                        self.assertNotIn(name, family)
+                    else:
+                        self.assertEqual(family[name], self.git('rev-parse', revision + ':' + name))
+
+    def test_each_application_output_rejects_mutation_and_partial_patch(self):
+        for name in self.files:
+            for mutation in ('bytes', 'missing-change'):
+                with self.subTest(name=name, mutation=mutation):
+                    self.git('checkout', '-q', self.candidate)
+                    if mutation == 'bytes':
+                        self.write(name, 'unreviewed bytes\n')
+                    elif name in self.added:
+                        self.git('rm', name)
+                    else:
+                        self.git('checkout', self.control, '--', name)
+                    self.commit()
+                    with self.assertRaises(release.ReleaseError):
+                        self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
+
+    def test_unrelated_files_dependencies_runtime_schema_and_advisories_are_rejected(self):
+        for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', 'package-lock.json',
+                     'drizzle/9999_extra.sql', *self.advisories):
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed content\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+
+    def test_changed_controls_and_executing_operator_are_rejected(self):
+        for name in release.CINCO_RECOVERY_CONTROL_FILES:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'untrusted control\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+        self.git('checkout', '-q', self.candidate)
+        self.write('ops/vps/code-release.py', 'untrusted executing bytes\n')
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            self.verify()
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+
+    def test_every_application_and_advisory_mode_change_is_rejected(self):
+        for name in (*self.files, *self.advisories, *release.CINCO_RECOVERY_CONTROL_FILES):
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                (self.root / name).chmod(0o755)
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+
+    def test_package_permission_is_only_the_exact_test_ui_append(self):
+        for mutation in ('dependency', 'other-script', 'extra-test', 'other-field'):
+            with self.subTest(mutation=mutation):
+                self.git('checkout', '-q', self.candidate)
+                package = json.loads((self.root / 'package.json').read_text())
+                if mutation == 'dependency': package['dependencies']['unchanged'] = '2.0.0'
+                elif mutation == 'other-script': package['scripts']['deploy'] = 'unreviewed'
+                elif mutation == 'extra-test': package['scripts']['test:ui'] += ' tests/extra.mjs'
+                else: package['name'] = 'unreviewed-name'
+                self.write('package.json', json.dumps(package))
+                changed = self.commit()
+                with patch.dict(release.CINCO_RECOVERY_APPLICATION_BLOBS,
+                                {'package.json': self.git('rev-parse', changed + ':package.json')}):
+                    with self.assertRaisesRegex(release.ReleaseError, 'exact test:ui append'):
+                        self.verify()
+        self.git('checkout', '-q', self.candidate)
+        for name in ('CINCO_RECOVERY_PACKAGE_BASE_BLOB', 'CINCO_RECOVERY_LOCK_BLOB'):
+            with self.subTest(pin=name), patch.object(release, name, 'f' * 40):
+                with self.assertRaisesRegex(release.ReleaseError, 'unchanged dependency lock'):
+                    self.verify()
+
+    def test_wrong_live_or_advisory_tree_is_rejected(self):
+        for name in ('CINCO_RECOVERY_RELEASE_BASE_TREE', 'CINCO_RECOVERY_ADVISORY_TREE'):
+            with self.subTest(name=name), patch.object(release, name, 'f' * 40):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_source_live_and_advisory_cannot_be_trust_anchors(self):
+        for trusted in (self.candidate, self.live, self.advisory):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_unmerged_controls_fail_even_with_hostile_origin_main_tag(self):
+        self.git('update-ref', 'refs/remotes/origin/main', self.advisory)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+        self.git('tag', 'origin/main', self.control)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+
+    def test_snapshot_with_identical_tree_cannot_bypass_control_ancestry(self):
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                            '-p', self.advisory, '-m', 'unmerged snapshot')
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify(snapshot)
+
+    def test_advisory_cannot_hide_control_changes(self):
+        self.git('checkout', '-q', self.advisory)
+        self.write('ops/vps/test_code_release.py', 'unauthorized advisory control edit\n')
+        advisory = self.commit()
+        with patch.object(release, 'CINCO_RECOVERY_ADVISORY_BASE', advisory), \
+             patch.object(release, 'CINCO_RECOVERY_ADVISORY_TREE', self.git('rev-parse', advisory + '^{tree}')):
+            with self.assertRaisesRegex(release.ReleaseError, 'advisory inventory'):
+                self.verify(self.candidate)
+
+    def test_trusted_control_cannot_include_application_changes(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
+            self.git('commit', '--allow-empty', '-qm', 'candidate after bad trust anchor')
+            self.git('update-ref', 'refs/remotes/origin/main', self.candidate)
+            with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                self.verify()
+
+    def test_application_worktree_and_staged_mutations_cannot_hide(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        self.git('update-index', '--assume-unchanged', name)
+        path.write_bytes(b'hidden worktree edit\n')
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+        path.write_bytes(original)
+        self.git('update-index', '--no-assume-unchanged', name)
+        path.write_bytes(b'hidden index edit\n')
+        self.git('add', name)
+        path.write_bytes(original)
+        with self.assertRaisesRegex(AssertionError, 'index differs'):
+            checkout_source_family(self.root)
+
+    def test_full_family_rejects_symlink_hardlink_and_untracked_addition(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        for mutation in ('symlink', 'hardlink'):
+            with self.subTest(mutation=mutation):
+                path.unlink()
+                if mutation == 'symlink':
+                    path.symlink_to(self.root / 'package.json')
+                else:
+                    os.link(self.root / 'package.json', path)
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+                path.unlink()
+                self.write(name, original)
+        self.write('unknown.txt', 'untracked file\n')
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            checkout_source_family(self.root)
+
+    def test_complete_staged_family_rejects_every_mutation_and_extra_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw_files = {name: checkout_git(self.root, 'show', self.control + ':' + name)
+                         for name in self.staged}
+            for name, raw in raw_files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            self.assertEqual(checkout_source_family(root)['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in raw_files:
+                for mutation in ('bytes', 'missing', 'mode'):
+                    # Only the test file is necessarily unable to authenticate itself.
+                    if name == 'ops/vps/test_code_release.py' and mutation == 'bytes':
+                        continue
+                    with self.subTest(name=name, mutation=mutation):
+                        path = root / name
+                        if mutation == 'bytes': path.write_bytes(b'unreviewed staged file\n')
+                        elif mutation == 'missing': path.unlink()
+                        else: path.chmod(0o755)
+                        with self.assertRaises(AssertionError):
+                            family = checkout_source_family(root)
+                            if family is None:
+                                staged_family_pins(root)
+                        path.write_bytes(raw_files[name])
+                        path.chmod(0o644)
+            (root / 'unknown.txt').write_text('unexpected staged addition\n')
+            with self.assertRaisesRegex(AssertionError, 'Unexpected staged'):
+                checkout_source_family(root)
+
 
 
 if __name__ == "__main__":
