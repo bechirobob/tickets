@@ -286,7 +286,30 @@ def validate_staged_inventory(root, manifest):
         raise AssertionError("Staged inventory differs from complete source family")
 
 
-def parallel_source_family(root):
+# Test-only, independently reviewed operational additions. This is not a
+# production release allowlist. Every addition is pinned by path, mode and blob.
+PURO_EXCESO_TEST_OVERLAY = {'.github/workflows/puro-exceso-listing.yml': ('100644', '8bf87a0ee41e69c44b10b092fd2f7b238b301af0'),
+ '.github/workflows/puro-exceso-publish.yml': ('100644', '18e337d5e08785ea22403fc49b9087106317c317'),
+ 'ops/handover/puro_exceso/activate.sha256': ('100644', '295b60b16582acd6f52179db1ff6c87f8ca602b1'),
+ 'ops/handover/puro_exceso/apply.py': ('100644', '891e651bd7ebc0931b98f674ff788f94c3332e14'),
+ 'ops/handover/puro_exceso/event_insert.py': ('100644', '4b67b62a9b3450486cb26299e008a134fa476d9c'),
+ 'ops/handover/puro_exceso/flyer.jpeg.b64': ('100644', '63563463aa0fd7a62e9490449f44420d48328604'),
+ 'ops/handover/puro_exceso/inspect.py': ('100644', 'da1d66b3a6d833d43d9ad1675dbd3cec16a57af0'),
+ 'ops/handover/puro_exceso/test_event_insert.py': ('100644', '54e92f5b7eec37c62528fa5cc96c5deed8513576'),
+ 'ops/handover/puro_exceso/test_inspect.py': ('100644', '27ae56c68f2aea1b5020a99cdcda3ee95a8798d5'),
+ 'ops/handover/puro_exceso/verify_public.py': ('100644', '500c33c332bd420d0cdf6d679711d68dda1f99b2')}
+
+
+def checkout_parallel_source_family(root):
+    overlay = PURO_EXCESO_TEST_OVERLAY
+    selected = any(os.path.lexists(Path(root) / name) for name in overlay)
+    result = parallel_source_family(root, overlay=overlay if selected else None)
+    if selected and result is None:
+        raise AssertionError("Puro overlay requires the complete promoted parallel family")
+    return result
+
+
+def parallel_source_family(root, *, overlay=None):
     """Test-only full/staged C/P recognition. This grants no release authority."""
     root = Path(root)
     markers = ("ops/vps/parallel_candidate.py", "ops/vps/parallel_candidate_control.py",
@@ -299,6 +322,9 @@ def parallel_source_family(root):
                for name, blob in release.PARALLEL_OUTPUT_BLOBS.items()
                if promoted or name != release.PARALLEL_PROMOTION_FILE}
     full = os.path.lexists(root / "package.json") or os.path.lexists(root / "app")
+    overlay = dict(overlay or {})
+    if overlay and (not full or not promoted):
+        raise AssertionError("Puro overlay requires a full promoted parallel family")
     if full:
         try:
             actual_tree = checkout_git(root, "rev-parse", release.PARALLEL_RELEASE_BASELINE + "^{tree}").decode().strip()
@@ -314,7 +340,9 @@ def parallel_source_family(root):
                     manifest[os.fsdecode(name)] = (mode, blob)
             tracked = set(filter(None, checkout_git(root, "ls-files", "-z").decode().split("\0")))
             untracked = set(filter(None, checkout_git(root, "ls-files", "--others", "--exclude-standard", "-z").decode().split("\0")))
-            if (tracked | untracked) != set(manifest) | set(outputs) | release.PARALLEL_CONTROL_FILES:
+            if set(overlay) & (set(manifest) | set(outputs) | release.PARALLEL_CONTROL_FILES):
+                raise AssertionError("Puro overlay cannot replace parallel family entries")
+            if (tracked | untracked) != set(manifest) | set(outputs) | release.PARALLEL_CONTROL_FILES | set(overlay):
                 raise AssertionError("Parallel full inventory differs from complete C/P family")
         except (OSError, subprocess.CalledProcessError) as exc:
             raise AssertionError("Parallel family requires its independently pinned B tree") from exc
@@ -323,6 +351,7 @@ def parallel_source_family(root):
         outputs = {name: entry for name, entry in outputs.items()
                    if name.startswith("ops/vps/") or name.startswith(".github/workflows/")}
     manifest.update(outputs)
+    manifest.update(overlay)
     # Both controls are authenticated against C by production admission. Here
     # the operator is separately pinned; only this test file cannot self-pin.
     manifest["ops/vps/code-release.py"] = ("100644", PARALLEL_OPERATOR_BLOB)
@@ -2699,11 +2728,104 @@ class VerifierTests(unittest.TestCase):
         self.assertNotIn("/my-nights", text)
 
 
+class PuroExcesoOverlayTests(unittest.TestCase):
+    """Operational additions cannot weaken the independently pinned P family."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        def git(*args):
+            return checkout_git(self.root, *args).decode().strip()
+        git('init', '-q')
+        git('config', 'user.name', 'Overlay tests')
+        git('config', 'user.email', 'tests@example.invalid')
+        self.base = {'package.json': b'{}\n', 'README.md': b'baseline\n',
+                     'ops/vps/code-release.py': b'operator\n',
+                     'ops/vps/test_code_release.py': b'control tests\n'}
+        for name, raw in self.base.items():
+            self.write(name, raw)
+        git('add', '-A')
+        git('commit', '-qm', 'isolated baseline')
+        promotion = release.PARALLEL_PROMOTION_FILE
+        self.write(promotion, b'promotion\n')
+        self.overlay = {'ops/handover/puro_exceso/inspect.py': b'inspect\n',
+                        'ops/handover/puro_exceso/test_inspect.py': b'tests\n'}
+        self.pins = {name: ('100644', self.blob(raw)) for name, raw in self.overlay.items()}
+        for target, name, value in (
+                (release, 'PARALLEL_RELEASE_BASELINE', git('rev-parse', 'HEAD')),
+                (release, 'PARALLEL_RELEASE_BASE_TREE', git('rev-parse', 'HEAD^{tree}')),
+                (release, 'PARALLEL_OUTPUT_BLOBS', {promotion: self.blob(b'promotion\n')}),
+                (release, 'PARALLEL_OUTPUT_MODES', {promotion: '100644'}),
+                (sys.modules[__name__], 'PARALLEL_OPERATOR_BLOB', self.blob(b'operator\n')),
+                (sys.modules[__name__], 'PURO_EXCESO_TEST_OVERLAY', self.pins)):
+            patcher = patch.object(target, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        for name, raw in self.overlay.items():
+            self.write(name, raw)
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        path.chmod(0o644)
+        return path
+
+    def test_complete_overlay_is_separate_from_original_parallel_family(self):
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            parallel_source_family(self.root)
+        actual = checkout_parallel_source_family(self.root)
+        for name, (_, digest) in self.pins.items():
+            self.assertEqual(actual[name], digest)
+        for name in self.overlay:
+            (self.root / name).unlink()
+        self.assertIsNotNone(checkout_parallel_source_family(self.root))
+
+    def test_overlay_rejects_mutated_missing_executable_symlink_and_hardlink(self):
+        name = next(iter(self.overlay))
+        path = self.root / name
+        for mutation in ('bytes', 'missing', 'executable', 'symlink', 'hardlink'):
+            with self.subTest(mutation=mutation):
+                if mutation == 'bytes': path.write_bytes(b'unreviewed\n')
+                elif mutation == 'missing': path.unlink()
+                elif mutation == 'executable': path.chmod(0o755)
+                else:
+                    path.unlink()
+                    if mutation == 'symlink': path.symlink_to(self.root / 'README.md')
+                    else: os.link(self.root / 'README.md', path)
+                with self.assertRaises(AssertionError):
+                    checkout_parallel_source_family(self.root)
+                if os.path.lexists(path): path.unlink()
+                self.write(name, self.overlay[name])
+
+    def test_overlay_rejects_unknown_paths_and_changed_baseline(self):
+        extra = self.write('ops/handover/puro_exceso/unreviewed.py', b'extra\n')
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            checkout_parallel_source_family(self.root)
+        extra.unlink()
+        (self.root / 'README.md').write_bytes(b'unreviewed\n')
+        with self.assertRaisesRegex(AssertionError, 'unreviewed bytes'):
+            checkout_parallel_source_family(self.root)
+
+    def test_overlay_requires_promoted_family_and_cannot_override_baseline(self):
+        (self.root / release.PARALLEL_PROMOTION_FILE).unlink()
+        with self.assertRaisesRegex(AssertionError, 'promoted parallel family'):
+            checkout_parallel_source_family(self.root)
+        self.write(release.PARALLEL_PROMOTION_FILE, b'promotion\n')
+        with patch.dict(PURO_EXCESO_TEST_OVERLAY, {'README.md': ('100644', self.blob(b'baseline\n'))}):
+            with self.assertRaisesRegex(AssertionError, 'cannot replace'):
+                checkout_parallel_source_family(self.root)
+
+
 class RuntimeTransportWorkflowTests(unittest.TestCase):
     root = Path(__file__).resolve().parents[2]
 
     def test_reviewed_transport_source_pins_match_the_staged_bytes(self):
-        parallel = parallel_source_family(self.root)
+        parallel = checkout_parallel_source_family(self.root)
         staged = not (self.root / "package.json").exists() and not (self.root / "app").exists()
         overrides = parallel if parallel is not None else (staged_family_pins(self.root) if staged else {})
         for name in (".github/workflows/candidate-checks.yml", ".github/workflows/vps-runtime.yml",
@@ -2743,7 +2865,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         self.assertNotIn("app/", release.APPLICATION_FILES)
 
     def test_complete_reviewed_application_manifest_matches_candidate_source(self):
-        if parallel_source_family(self.root) is not None:
+        if checkout_parallel_source_family(self.root) is not None:
             return  # Already checked every file in the complete B-derived C/P family.
         pins = release.REVIEWED_APPLICATION_BLOBS
         controls_only = controls_only_checkout(self.root)
@@ -2812,7 +2934,7 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
             self.assertEqual(actual, digest, name)
 
     def test_workspace_checkout_keeps_one_complete_application_family(self):
-        if parallel_source_family(self.root) is not None:
+        if checkout_parallel_source_family(self.root) is not None:
             return
         if not (self.root / "package.json").exists() and not (self.root / "app").exists():
             return  # The separate staged-layout test verifies every staged byte.

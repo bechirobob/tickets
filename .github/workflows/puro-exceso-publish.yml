@@ -1,0 +1,40 @@
+name: Publish approved Puro Exceso listing once
+on:
+  push:
+    branches: [main]
+    paths: [ops/handover/puro_exceso/activate.sha256]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify exact reviewed operation and flyer
+        run: |
+          set -euo pipefail
+          echo '490c8da571a114cce2296d829a3c9a4bd89d4ebb30317a71bc99d69c76be8dc5  ops/handover/puro_exceso/activate.sha256' | sha256sum --check --strict
+          base64 --decode ops/handover/puro_exceso/flyer.jpeg.b64 > ops/handover/puro_exceso/flyer.jpeg
+          sha256sum --check --strict ops/handover/puro_exceso/activate.sha256
+          python3 -m unittest discover -s ops/handover/puro_exceso -p 'test_*.py' -q
+      - name: Connect existing Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Back up and apply fixed idempotent listing
+        run: |
+          set -euo pipefail
+          tar -czf - -C ops/handover/puro_exceso apply.py event_insert.py flyer.jpeg | tailscale ssh root@hermes 'set -eu; stage=$(mktemp -d /var/lib/becore-tickets-handover/puro-exceso-stage.XXXXXX); tar -xzf - -C "$stage"; python3 "$stage/apply.py"'
+      - name: Verify public listing and original flyer without a test RSVP
+        run: python3 ops/handover/puro_exceso/verify_public.py
