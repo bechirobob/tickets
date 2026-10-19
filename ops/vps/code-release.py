@@ -686,21 +686,22 @@ CINCO_RECOVERY_ADVISORY_BLOBS = {
     '.github/workflows/cinco-confirmation-release-20261019.yml': 'a946f4dbae8b24b375bf0dc58d6d3e72bce127d9',
     '.github/workflows/puro-approval-readonly-20261019.yml': '7b912b15ab04dd603dee86c0cc8f6d1c1ef754f3',
 }
-CINCO_RECOVERY_APPLICATION_BLOBS = {'app/api/customer/recovery/claim/route.ts': 'b35c99841036995878a60a970792407322b91341',
- 'app/api/customer/registrations/route.ts': '9833e9fd744e0433f1057a9a5c717fff027f3c18',
- 'app/my-nights/[slug]/night-hub.tsx': 'd04b3f30ec8fad5671583364728cdbfac18eb2db',
+CINCO_RECOVERY_APPLICATION_BLOBS = {'app/api/customer/recovery/claim/route.ts': '78688e0fa697e793b523f599d61228aa9070a62b',
+ 'app/api/customer/registrations/route.ts': 'e52ee01e6594afe0a2a29997bda9007402fdb469',
+ 'app/my-nights/[slug]/night-hub.tsx': 'b8382ce3ff8a590c5b95c4a598ef241220ab204a',
  'app/my-nights/my-nights-client.tsx': '3bf1ca4484332cd2c73a1ff525483b10ea368782',
  'app/my-registrations.tsx': 'd243098e507fed942f343ede82f5ff74dfc8e741',
- 'app/registration-form.tsx': 'd2a4ff73c4defa7ef4715584ab423cf48b705dc4',
+ 'app/registration-form.tsx': '3377c892e301dd8c8ab79a1b0b25bd29b148631d',
  'app/room/[slug]/room-client.tsx': '71f3cabf44acfc2739ebad29c046c4d565287935',
  'app/tickets/ticket-wallet.tsx': '690cdf42d8730fe6206e92f84a9ec8e6ffeac0c6',
  'package.json': '5b9f6d868730b315d471696625ed879fd9a9dd48',
  'tests/e2e/discovery-pass-access.spec.ts': '96c88875c6ec2e99e0b0a6b4aca280ca66851731',
  'tests/e2e/operations.spec.ts': 'ec95702c13e6e2e9c3b5c10a4683827ae6b4373e',
  'tests/e2e/registration.spec.ts': 'a5c89bf3d3431f707c6a4d6bd34d96130c98aa77',
- 'tests/my-nights-refresh.test.mjs': 'f982df4b48665dac736e72ee381cc368789035af',
- 'tests/registration-readiness.test.mjs': '89a30993ff2d2c6004f17c87235af73a261327b1',
- 'tests/registrations.test.ts': 'e8816d7b87218078aeb250a9e523f156edfe722c'}
+ 'tests/my-nights-refresh.test.mjs': 'ca13ed25d6fa3758acb359b207b6b70b1dda4093',
+ 'tests/registration-readiness.test.mjs': 'cb932ef4ebdec0504b77ba613f9a81d2de739cd3',
+ 'tests/registrations.test.ts': '0b5bb42566da2ab729bb43311cfd9a67eea5ddb8',
+ 'tests/ticket-recovery.test.ts': '19887989e8eaf6a1f3d4d9b24efecdfdbad263d8'}
 CINCO_RECOVERY_PACKAGE_BASE_BLOB = 'eccb3af63298d7642c1ea974d7e8f18da9563507'
 CINCO_RECOVERY_LOCK_BLOB = '47a4eaca5743b768598462d8b66a2ef49a442b4e'
 
