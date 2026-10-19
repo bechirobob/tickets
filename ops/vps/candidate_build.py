@@ -158,7 +158,7 @@ def identity():
     require(git('cat-file', '-t', baseline) == 'commit', 'Audit baseline must be an immutable commit')
     require(git('rev-parse', 'HEAD') == source, 'Source checkout differs')
     git('merge-base', '--is-ancestor', baseline, source)
-    git('merge-base', '--is-ancestor', baseline, 'origin/main')
+    git('merge-base', '--is-ancestor', baseline, 'refs/remotes/origin/main')
     git('diff', '--no-ext-diff', '--no-textconv', '--quiet', 'HEAD', '--')
     git('diff', '--cached', '--no-ext-diff', '--no-textconv', '--quiet', 'HEAD', '--')
     run, attempt = env.get('GITHUB_RUN_ID', ''), env.get('GITHUB_RUN_ATTEMPT', '')

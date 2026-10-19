@@ -99,6 +99,14 @@ class ParallelTests(unittest.TestCase):
         self.expected['now'] += timedelta(minutes=1)
         self.assertEqual(proof, self.verify(), 'Verification time must not alter immutable proof')
 
+    def test_normal_candidate_branch_push_preserves_authenticated_full_proof(self):
+        self.run['head_branch'] = 'fix/cinco-email'
+        self.artifact['workflow_run']['head_branch'] = 'fix/cinco-email'
+        proof = self.verify()
+        self.assertEqual(proof['head_branch'], 'fix/cinco-email')
+        self.assertEqual(len(proof['jobs']), 5)
+        self.assertEqual(len(proof['receipts']), 4)
+
     def test_dispatch_allowed_and_foreign_push_pr_merge_ref_rejected(self):
         self.run['event'] = 'workflow_dispatch'
         self.run['head_branch'] = 'main'

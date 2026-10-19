@@ -1,8 +1,6 @@
-name: Candidate verification
+name: Candidate verification (legacy recovery)
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       trusted_base:
@@ -43,7 +41,7 @@ jobs:
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
           git diff --exit-code HEAD --
           git diff --cached --exit-code HEAD --

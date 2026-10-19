@@ -279,6 +279,7 @@ class WorkflowTrustBoundaryTests(unittest.TestCase):
         for filename, count in (("candidate-checks.yml", 1), ("deploy.yml", 1), ("vps-runtime.yml", 2)):
             with self.subTest(workflow=filename):
                 text = self.workflow(filename)
+                main_ref = "origin/main" if filename == "deploy.yml" else "refs/remotes/origin/main"
                 blocks = text.split("- name: Verify exact source ancestry before executing checkout code")[1:]
                 self.assertEqual(len(blocks), count)
                 for block in blocks:
@@ -288,7 +289,7 @@ class WorkflowTrustBoundaryTests(unittest.TestCase):
                                     '[[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$',
                                     'test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"',
                                     'test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"',
-                                    'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main',
+                                    f'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" {main_ref}',
                                     'git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"',
                                     'git diff --exit-code HEAD --',
                                     'git diff --cached --exit-code HEAD --',
@@ -298,7 +299,7 @@ class WorkflowTrustBoundaryTests(unittest.TestCase):
                     self.assertNotIn("npm ", block)
                     if filename != "candidate-checks.yml":
                         self.assertIn('test "$GITHUB_REF" = refs/heads/main', block)
-                        self.assertIn('git merge-base --is-ancestor "$BECORE_RELEASE_SHA" origin/main', block)
+                        self.assertIn(f'git merge-base --is-ancestor "$BECORE_RELEASE_SHA" {main_ref}', block)
 
     def test_trust_anchors_remain_independent_of_candidate_parents_and_manifests(self):
         self.assertIn('BECORE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || inputs.trusted_base }}',
@@ -333,7 +334,7 @@ class WorkflowTrustBoundaryTests(unittest.TestCase):
         text = self.workflow("tickets-code-release.yml")
         self.assertIn('OPERATOR_SHA: ${{ inputs.trusted_base }}', text)
         self.assertIn('BECORE_TRUSTED_BASE: ${{ inputs.trusted_base }}', text)
-        ancestry = text.index('git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main')
+        ancestry = text.index('git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main')
         stage = text.index('git archive "$OPERATOR_SHA"')
         guard = text.index('python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator')
         regression = text.index('- name: Verify updater regression suite')

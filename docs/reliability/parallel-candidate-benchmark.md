@@ -1,16 +1,34 @@
 # Parallel Candidate benchmark
 
-The legacy Candidate workflow and its full coverage remain the default. Explicit
-parallel-v1 admission requires independently authenticated v2 evidence from the
-reviewed producer, all three isolated browsers and aggregate job. Historical v1
-benchmark results are timing evidence only; they cannot authorize a release.
+Full-coverage parallel Candidate verification is the default for branch pushes
+and release admission. It still requires independently authenticated v2 evidence
+from the reviewed producer, all three isolated browsers and aggregate job.
+Legacy sequential verification is an explicit workflow-dispatch recovery route;
+release admission must also explicitly select legacy for its evidence. There is
+no automatic fallback. Historical v1 benchmark results are timing evidence only;
+they cannot authorize a release.
 
 ## Execution and identity
 
-The narrowly named experiment branch runs on push, so the workflow revision and
-checked-out source are the same exact commit. Workflow dispatch accepts an
-independently reviewed trusted ancestor on main. Pull-request merge-ref execution
-is not used as provenance. Check for an existing run before dispatching another.
+Non-main branches run on push, so the executed workflow revision and checked-out
+source are the same exact commit. Automatic main pushes are reserved for runtime
+verification; synthetic pull-request refs are never release provenance.
+
+For automatic candidate runs the producer independently resolves the fetched
+origin/main commit as the trusted control baseline. That exact commit must be a
+strict ancestor of the candidate; stale branches fail instead of silently picking
+an older common ancestor. The producer exports its selected SHA once, and every
+browser lane consumes the same SHA. Workflow dispatch can explicitly select a
+reviewed ancestor for controlled recovery. No hard-coded historical SHA is used
+when the input is omitted. Check for an existing push run before dispatching.
+
+A valid branch name alone does not authorize release. The production collector
+still authenticates the exact source/runtime tree and the entire workflow/audit
+control closure against the independently reviewed control baseline. Control
+changes therefore require independent review and a new trusted main revision
+before application candidates can use them. Release inputs must use the same
+baseline recorded in the candidate receipts; never substitute current main after
+a run has selected its baseline.
 
 One build job performs the original static/unit/rendered/build/schema/dry-run
 gates. Three independent Ubuntu runners restore identical build bytes and run
@@ -82,7 +100,7 @@ GitHub exact-attempt job timestamps were retrieved again on 14 October after a
 workspace recovery. The original one-day artifact may expire; timing metadata
 must never be substituted for current release evidence.
 
-## Verification-only rollout
+## Historical first verification-only rollout
 
 The release workflow accepts verify_only=true to run the complete evidence and
 final dependency-audit checks without Tailscale connection, SSH, host activation
@@ -107,3 +125,42 @@ before a host transaction. Missing, expired, altered or mixed evidence fails.
 The parallel admission implementation was reconstructed after loss of an
 unpublished workspace snapshot. New module revisions require fresh tests and
 independent review; earlier local test counts are not attributed to them.
+
+
+## Default-route rollout gate
+
+The default-route rollout is a separate control-only change based on the live
+CINCO revision 04bbe9691a00ca48cfb974ab0b87b743d9c3aab8 and the completed
+activation successor b9bfde4fb82320c023016de960519b9d1bb2ae3f. Preserve the
+application tree and independently review the exact finite control inventory.
+The separately merged control revision C must precede a candidate adding only
+the reserved default-source-family regression suite. This rollout does not
+authorize application, dependency, database or migration edits. Older source
+families remain unchanged; no generic fast-path admission is introduced.
+
+Bootstrap the control change using explicitly selected legacy evidence where the
+previous trusted operator requires it. Then prove an ordinary candidate branch
+gets one automatic full parallel run without manual selection, using the newly
+reviewed main controls. Obtain equivalent-tree runtime evidence and a successful
+online verify-only run with the candidate mode omitted. Test explicit legacy
+recovery separately. Production activation still requires all existing checks.
+
+Required regression coverage includes identical browser commands, current-main
+selection, stale-branch failure, shared baseline exports, normal branch admission,
+synthetic/fork/wrong-attempt rejection, tampered/expired receipts, exact control
+closure, runtime/tree equality, and failure without fallback. No permission,
+credential, provider traffic or paid-capacity changes belong to this rollout.
+
+## Browser-only scope while native work is paused
+
+Ordinary Tickets changes run desktop Chromium, mobile Chromium and mobile WebKit
+web journeys. Packaged-client/native builds and iPhone app-parity screenshots do
+not run automatically. The Native app builds and iPhone layout screenshots
+workflows retain workflow_dispatch for a later explicit request to reopen that
+work; Android release and iPhone release are already manual-only. No native
+workflow is a release prerequisite. Existing dependency security audits remain
+unchanged; they are neither native builds nor native UI checks.
+
+Static workflow contract tests ensure these four workflows remain manual-only.
+Those tests inspect trigger definitions without building or running native apps.
+The parallel candidate retains all existing desktop/mobile web journeys.

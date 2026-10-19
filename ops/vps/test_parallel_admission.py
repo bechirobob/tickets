@@ -447,6 +447,13 @@ class ParallelCiPipelineTests(unittest.TestCase):
         release.vetted_changes.assert_called_once_with(BASELINE, SOURCE)
         self.collector.assert_called_once_with(self.args, self.candidate, self.jobs, TREE)
 
+    def test_omitted_mode_uses_parallel_collector_without_fallback(self):
+        del self.args.candidate_mode
+        self.candidate['head_branch'] = 'fix/ordinary-candidate'
+        (self.root / 'candidate.json').write_text(json.dumps(self.candidate))
+        release.verify_ci(self.args)
+        self.collector.assert_called_once_with(self.args, self.candidate, self.jobs, TREE)
+
     def test_tree_mismatch_rejects_before_any_collector(self):
         release.git.side_effect = [SOURCE, '', TREE, 'f' * 40]
         with self.assertRaisesRegex(release.ReleaseError, 'tree differs'): release.verify_ci(self.args)
@@ -487,19 +494,18 @@ class ParallelCiPipelineTests(unittest.TestCase):
             audit.assert_called_once_with('private-audit', SOURCE)
         self.assertFalse(Path(self.args.output).exists())
 
-    def test_invalid_or_default_legacy_mode_never_calls_parallel_collector(self):
-        for mode in ('invalid', None):
+    def test_invalid_or_explicit_legacy_mode_never_calls_parallel_collector(self):
+        for mode in ('invalid', 'legacy'):
             release.git.side_effect = [SOURCE, '', TREE, TREE]
-            if mode is None: del self.args.candidate_mode
-            else: self.args.candidate_mode = mode
+            self.args.candidate_mode = mode
             with self.subTest(mode=mode), self.assertRaises(release.ReleaseError): release.verify_ci(self.args)
             self.collector.assert_not_called()
 
-    def test_cli_default_is_legacy_and_parallel_is_explicit(self):
+    def test_cli_default_is_parallel_and_legacy_is_explicit(self):
         args = ['code-release.py', 'verify-ci']
         for name in ('source', 'expected', 'repository', 'metadata', 'runtime-run', 'candidate-run', 'archive', 'output'):
             args += ['--' + name, 'fixture']
-        for extra, expected in (([], 'legacy'), (['--candidate-mode', 'parallel-v1'], 'parallel-v1')):
+        for extra, expected in (([], 'parallel-v1'), (['--candidate-mode', 'legacy'], 'legacy')):
             with patch.object(sys, 'argv', args + extra), patch.object(release, 'verify_ci') as verify:
                 self.assertEqual(release.main(), 0); self.assertEqual(verify.call_args.args[0].candidate_mode, expected)
 

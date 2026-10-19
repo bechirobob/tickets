@@ -26,11 +26,11 @@ on:
         default: false
         type: boolean
       candidate_mode:
-        description: Explicit browser evidence contract; legacy remains the default
+        description: Parallel full-coverage evidence by default; legacy is explicit recovery
         required: false
-        default: legacy
+        default: parallel-v1
         type: choice
-        options: [legacy, parallel-v1]
+        options: [parallel-v1, legacy]
       expected_active:
         description: Exact SHA currently serving active VPS traffic
         required: true
@@ -73,7 +73,7 @@ jobs:
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
       RUNTIME_RUN: ${{ inputs.runtime_run }}
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
-      CANDIDATE_MODE: ${{ inputs.candidate_mode || 'legacy' }}
+      CANDIDATE_MODE: ${{ inputs.candidate_mode || 'parallel-v1' }}
       VERIFY_ONLY: ${{ inputs.verify_only && 'true' || 'false' }}
       INSPECT_MODE: ${{ inputs.inspect_failed_release && 'true' || 'false' }}
       RECOVER_PREPARED: ${{ inputs.recover_prepared }}
@@ -103,8 +103,8 @@ jobs:
           export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           test "$BECORE_TRUSTED_BASE" != "$SOURCE_SHA"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
-          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$SOURCE_SHA" refs/remotes/origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$SOURCE_SHA"
           git merge-base --is-ancestor "$EXPECTED_ACTIVE" "$SOURCE_SHA"
       - name: Stage reviewed trusted operator without changing the verified application tree
@@ -116,7 +116,7 @@ jobs:
           [[ "$OPERATOR_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$OPERATOR_SHA" = "$BECORE_TRUSTED_BASE"
           git merge-base --is-ancestor "$OPERATOR_SHA" "$SOURCE_SHA"
-          git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
+          git merge-base --is-ancestor "$OPERATOR_SHA" refs/remotes/origin/main
           operator="$RUNNER_TEMP/tickets-operator"
           mkdir -m 700 "$operator"
           git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/candidate-parallel-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$operator"

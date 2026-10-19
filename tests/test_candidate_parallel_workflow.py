@@ -1,4 +1,4 @@
-"""Parallel workflow coverage and explicit opt-in admission contract tests."""
+"""Parallel workflow coverage and default parallel admission contract tests."""
 from pathlib import Path
 import re
 import unittest
@@ -12,15 +12,19 @@ class ParallelWorkflowTests(unittest.TestCase):
         self.old=(ROOT/'.github/workflows/candidate-checks.yml').read_text()
         self.new=(ROOT/'.github/workflows/candidate-parallel-checks.yml').read_text()
 
-    def test_legacy_default_parallel_requires_explicit_mode_exact_branch_or_dispatch(self):
+    def test_parallel_default_exact_branch_push_or_dispatch_with_explicit_legacy_recovery(self):
         self.assertIn('Single-job candidate verification missing or incomplete.',(ROOT/'ops/vps/code-release.py').read_text())
         operator=(ROOT/'ops/vps/code-release.py').read_text()
-        self.assertIn('getattr(args, "candidate_mode", "legacy")',operator)
-        self.assertIn('choices=("legacy", "parallel-v1"), default="legacy"',operator)
+        self.assertIn('getattr(args, "candidate_mode", "parallel-v1")',operator)
+        self.assertIn('choices=("legacy", "parallel-v1"), default="parallel-v1"',operator)
         self.assertIn('candidate_mode in ("legacy", "parallel-v1")',operator)
         self.assertIn('validate_parallel_proof(proof',operator)
         self.assertNotIn('  pull_request:',self.new)
-        self.assertIn('branches: [improve/release-evidence-parallel-20261013]',self.new)
+        self.assertIn("branches: ['**', '!main']",self.new)
+        self.assertNotIn('  pull_request:', self.old)
+        self.assertIn('  workflow_dispatch:', self.old)
+        self.assertEqual(self.new.count('BECORE_TRUSTED_BASE: ${{ needs.build.outputs.trusted_base }}'), 3)
+        self.assertNotIn('d257f41b669a542de0eebbe09993e7efa8dd5074', self.new)
         self.assertIn('BECORE_RELEASE_SHA: ${{ github.sha }}',self.new)
         self.assertEqual(re.findall(r'^  ([a-z_]+):$',self.new.split('jobs:\n',1)[1],re.M),
                          ['build','desktop_chromium','mobile_chromium','mobile_webkit','verify'])

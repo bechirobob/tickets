@@ -1,19 +1,9 @@
 name: iPhone layout screenshots
 
 on:
+  # App/browser parity screenshots are paused with packaged/native app work.
+  # Desktop and mobile web coverage remains in Candidate parallel verification.
   workflow_dispatch:
-  workflow_run:
-    workflows: [Deploy to Cloudflare]
-    types: [completed]
-    branches: [main]
-  pull_request:
-    paths:
-      - mobile/src/**
-      - styles/**
-      - app/**
-      - lib/**
-      - scripts/capture-iphone-layouts.mjs
-      - .github/workflows/iphone-layouts.yml
 
 permissions:
   contents: read
