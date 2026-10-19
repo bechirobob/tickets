@@ -1,0 +1,275 @@
+name: Release verified CINCO confirmation emails
+
+# Publishing this exact one-file successor activates only the verified CINCO release.
+# One fixed publication only; later pushes and reruns cannot activate this job.
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/cinco-confirmation-release-20261019.yml]
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '04bbe9691a00ca48cfb974ab0b87b743d9c3aab8' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: 04bbe9691a00ca48cfb974ab0b87b743d9c3aab8
+      BECORE_RELEASE_SHA: 04bbe9691a00ca48cfb974ab0b87b743d9c3aab8
+      OPERATOR_SHA: ab99f5913671dd7360e4318ed86c6dc7b5b268fc
+      BECORE_TRUSTED_BASE: ab99f5913671dd7360e4318ed86c6dc7b5b268fc
+      EXPECTED_ACTIVE: 45ae58430aea3bad312a8244432078a4ffde59f8
+      RUNTIME_RUN: 39298748014
+      CANDIDATE_RUN: 39292517949
+      CANDIDATE_MODE: 'legacy'
+      VERIFY_ONLY: 'false'
+      INSPECT_MODE: 'false'
+      RECOVER_PREPARED: ''
+      ENABLE_CRYPTO: 'false'
+    steps:
+      - name: Require main and exact bounded release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(jq -r '.before' "$GITHUB_EVENT_PATH")" = '04bbe9691a00ca48cfb974ab0b87b743d9c3aab8'
+          test "$(jq -r '.after' "$GITHUB_EVENT_PATH")" = "$GITHUB_SHA"
+          if [[ "$VERIFY_ONLY" == true ]]; then test "$INSPECT_MODE" = false; fi
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ && "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$CANDIDATE_MODE" = legacy || "$CANDIDATE_MODE" = parallel-v1 ]]
+          [[ -z "$RECOVER_PREPARED" || "$RECOVER_PREPARED" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 04bbe9691a00ca48cfb974ab0b87b743d9c3aab8
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject unmerged source before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          test "$BECORE_TRUSTED_BASE" != "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          # Only a one-file operational successor of the verified application
+          # may trigger this exact transaction. Candidate bytes remain untouched.
+          git fetch --no-tags origin "$GITHUB_SHA"
+          test "$(git rev-parse "$GITHUB_SHA^1")" = "$SOURCE_SHA"
+          test "$(git diff --name-only "$SOURCE_SHA" "$GITHUB_SHA")" = '.github/workflows/cinco-confirmation-release-20261019.yml'
+          test "$(git ls-tree "$GITHUB_SHA" -- '.github/workflows/cinco-confirmation-release-20261019.yml' | cut -d ' ' -f 1)" = 100644
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$SOURCE_SHA"
+          git merge-base --is-ancestor "$EXPECTED_ACTIVE" "$SOURCE_SHA"
+      - name: Stage reviewed trusted operator without changing the verified application tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$OPERATOR_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$OPERATOR_SHA" = "$BECORE_TRUSTED_BASE"
+          git merge-base --is-ancestor "$OPERATOR_SHA" "$SOURCE_SHA"
+          git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
+          operator="$RUNNER_TEMP/tickets-operator"
+          mkdir -m 700 "$operator"
+          git archive "$OPERATOR_SHA" ops/vps .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/candidate-parallel-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$operator"
+          printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
+      - name: Verify independently trusted operator before any host access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator --source "$SOURCE_SHA"
+      - name: Verify updater regression suite
+        run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
+      - name: Verify exact CI runs, source tree, ancestry and artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          mkdir -m 700 "$metadata"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
+          runtime_attempt=$(jq -er '.run_attempt | select(type == "number" and . > 0 and floor == .)' "$metadata/runtime.json")
+          candidate_attempt=$(jq -er '.run_attempt | select(type == "number" and . > 0 and floor == .)' "$metadata/candidate.json")
+          [[ "$runtime_attempt" =~ ^[1-9][0-9]*$ && "$candidate_attempt" =~ ^[1-9][0-9]*$ ]]
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN/attempts/$runtime_attempt/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/runtime-jobs.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/attempts/$candidate_attempt/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/candidate-jobs.json"
+          candidate_sha=$(jq -r '.head_sha' "$metadata/candidate.json")
+          [[ "$candidate_sha" =~ ^[a-f0-9]{40}$ ]]
+          git fetch --no-tags origin "$candidate_sha"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/runtime_release.py" download \
+            --source "$SOURCE_SHA" --run-id "$RUNTIME_RUN" --attempt "$runtime_attempt" --directory "$metadata/artifact"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
+            --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
+      - name: Set up the shipping runtime version for final audit
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - name: Capture final dependency audit privately
+        id: final_dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase preinstall
+      - name: Install the exact approved dependency lock for final audit
+        run: npm ci --no-audit
+      - name: Verify installed dependencies against the final private audit
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase postinstall
+      - name: Connect existing dedicated Tickets identity
+        if: ${{ true }}
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Inspect loaded credential binding metadata without reading secret values
+        if: ${{ true }}
+        run: |
+          tailscale ssh root@hermes "systemctl show becore-tickets.service --no-pager --property=NeedDaemonReload --property=WorkingDirectory --property=ActiveState && busctl --system --timeout=10 --no-pager --json=short get-property org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/becore_2dtickets_2eservice org.freedesktop.systemd1.Service LoadCredential"
+      - name: Reconfirm exact CI attempts immediately before the host transaction
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          # Keep the previously fetched exact-attempt jobs and transport receipt.
+          # Replacing only the run snapshots makes any newer attempt or changed
+          # source/status fail the verifier; never switch to a newer artifact.
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
+            --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json" \
+            --audit-directory "$RUNNER_TEMP/tickets-final-audit"
+      - name: Apply reversible Tickets-only code transaction
+        if: ${{ true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          stage="/var/tmp/tickets-code-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          digest=$(sha256sum "$metadata/artifact/tickets-vps-runtime.tar.gz" | cut -d ' ' -f 1)
+          proof_digest=$(sha256sum "$metadata/provenance.json" | cut -d ' ' -f 1)
+          script_digest=$(sha256sum "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" | cut -d ' ' -f 1)
+          # Exclusive staging prevents blind retry over an earlier uncertain run.
+          tailscale ssh root@hermes "umask 077; mkdir '$stage'"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/runtime.tar.gz'" < "$metadata/artifact/tickets-vps-runtime.tar.gz"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/npm-audit.json'" < "$RUNNER_TEMP/tickets-final-audit/npm-audit.json"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py"
+          tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --audit-report '$stage/npm-audit.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --recover-prepared '$RECOVER_PREPARED'"
+          # Retain private staging and the verified audit snapshot for this one release.
+
+      - name: Reconcile PURO approvals passes and delivery without sending
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          tailscale ssh root@hermes "EXPECTED_NEW_SHA='$SOURCE_SHA' python3 -" <<'PYRECONCILE'
+          """Fixed-event, read-only post-release reconciliation; aggregate output only."""
+          import fcntl,json,os,pathlib,re,sqlite3,subprocess,sys,time,urllib.request
+          SLUG="puro-exceso-20261024"
+          
+          def _rows(db,sql,values=()):
+              cursor=db.execute(sql,values)
+              names=[column[0] for column in cursor.description]
+              return [dict(zip(names,row)) for row in cursor]
+          
+          def rsvp_diagnosis(db):
+              """Read aggregate delivery evidence only; never return recipients or payloads."""
+              regs = _rows(db, "SELECT id,status,version,notified_version,approved_at IS NOT NULL AS approved,verified_at IS NOT NULL AS verified,device_claimed_at IS NOT NULL AS device_claimed,attendee_id IS NOT NULL AS has_attendee,order_id,party_size FROM event_registrations WHERE event_slug=?", (SLUG,))
+              groups = {}
+              for row in regs:
+                  key = "registration-update/" + row["id"] + "/" + str(row["version"])
+                  confirmation = db.execute("SELECT status FROM confirmation_deliveries WHERE id=?", (key,)).fetchone()
+                  deliveries = _rows(db, "SELECT status,provider_id IS NOT NULL AS has_provider,provider_id LIKE 'vps-%' AS is_vps,attempt_count,next_attempt_at IS NOT NULL AS retry_scheduled,CASE WHEN failure_reason IS NULL THEN 'none' WHEN failure_reason LIKE '%not configured%' THEN 'not_configured' WHEN failure_reason LIKE '%quota%' THEN 'quota' WHEN failure_reason LIKE '%expired%' THEN 'expired' ELSE 'other' END AS failure_category FROM delivery_events WHERE kind='registration_update' AND json_extract(payload_json,'$.idempotencyKey')=?", (key,))
+                  tickets = _rows(db, "SELECT status,count(*) AS count FROM tickets WHERE order_id=? GROUP BY status", (row["order_id"],)) if row["order_id"] else []
+                  order = db.execute("SELECT status FROM orders WHERE id=?", (row["order_id"],)).fetchone() if row["order_id"] else None
+                  shape = {k:v for k,v in row.items() if k not in ("id","order_id")}
+                  shape.update(has_order=bool(row["order_id"]),order_status=order[0] if order else None,confirmation_channel=confirmation[0] if confirmation else None,email_deliveries=deliveries,tickets=tickets)
+                  encoded=json.dumps(shape,sort_keys=True)
+                  groups[encoded]=groups.get(encoded,0)+1
+              owner_devices = _rows(db, "SELECT p.revoked_at IS NOT NULL AS revoked,ss.revoked_at IS NOT NULL AS session_revoked,ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AS session_current,s.must_change_password,count(*) AS count FROM organizer_push_subscriptions p JOIN staff_accounts s ON s.id=p.account_id LEFT JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=p.account_id WHERE s.role='owner' AND s.status='active' GROUP BY 1,2,3,4")
+              push = _rows(db, "SELECT d.completed_at IS NOT NULL AS completed,d.outcome,d.attempts,count(*) AS count FROM organizer_rsvp_push_deliveries d JOIN event_registrations r ON r.id=d.registration_id WHERE r.event_slug=? GROUP BY 1,2,3",(SLUG,))
+              owner_routing = db.execute("SELECT count(*) FROM sqlite_master WHERE type='trigger' AND name IN ('organizer_rsvp_push_created','organizer_rsvp_push_verified') AND sql LIKE '%role=''owner''%'").fetchone()[0]
+              return {"ownerDevices":owner_devices,"ownerRoutingTriggers":owner_routing,"hostPushDeliveries":push,"registrations":len(regs),"groups":[{"count":count,**json.loads(shape)} for shape,count in groups.items()]}
+          
+          def main(expected):
+              assert re.fullmatch(r"[a-f0-9]{40}",expected),"Exact expected active revision required"
+              lock=os.open("/run/lock/becore-tickets-deploy.lock",os.O_RDONLY|os.O_NOFOLLOW)
+              fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+              props=dict(line.split("=",1) for line in subprocess.check_output(["systemctl","show","becore-tickets.service","--property=ActiveState,WorkingDirectory"],text=True).splitlines())
+              assert props=={"ActiveState":"active","WorkingDirectory":"/srv/becore-tickets/releases/"+expected}
+              request=urllib.request.Request("http://127.0.0.1:3119/healthz",headers={"Host":"tickets.becoreops.com"})
+              with urllib.request.urlopen(request,timeout=10) as response:health=json.load(response)
+              assert health.get("revision")==expected and health.get("runtime")=="vps" and health.get("active") is True
+              path=pathlib.Path("/var/lib/becore-tickets/tickets.sqlite")
+              assert path.is_file() and not path.is_symlink()
+              db=sqlite3.connect("file:"+str(path)+"?mode=ro",uri=True,timeout=5)
+              deadline=time.monotonic()+15
+              db.set_progress_handler(lambda:int(time.monotonic()>deadline),1000)
+              db.execute("PRAGMA query_only=ON");db.execute("BEGIN")
+              result=rsvp_diagnosis(db)
+              assert db.total_changes==0
+              db.rollback();db.close()
+              print(json.dumps({"readOnly":True,"eventSlug":SLUG,"activeRevision":expected,"observedAt":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),**result},sort_keys=True))
+          
+          if __name__=="__main__":main(os.environ["EXPECTED_NEW_SHA"])
+          PYRECONCILE
+
+  retired_preview:
+    if: ${{ true }}
+    name: Verify retired checkout preview (${{ matrix.browser }})
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
+    env:
+      E2E_BASE_URL: https://tickets.becoreops.com
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 04bbe9691a00ca48cfb974ab0b87b743d9c3aab8
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
+      - name: Verify only the removed preview page and API
+        run: npx playwright test tests/e2e/checkout-preview-retired.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0
+      # This endpoint-only smoke gate has no distributable build output. Its
+      # assertions and exact-source identity remain in the job logs; it must not
+      # fail after deployment merely because unrelated Actions storage is full.
+      - name: Record preview retirement source
+        run: test "$(git rev-parse HEAD)" = "04bbe9691a00ca48cfb974ab0b87b743d9c3aab8"
