@@ -1,7 +1,7 @@
 """Fixed reviewed listing operation; activation requires approved immutable workflow."""
 import fcntl,hashlib,json,os,pathlib,pwd,sqlite3,subprocess,time,urllib.request,uuid
 from datetime import datetime,timezone
-from event_insert import insert_event,schema_fingerprint
+from event_insert import update_plan_copy,schema_fingerprint
 ACTIVE='45ae58430aea3bad312a8244432078a4ffde59f8'
 SCHEMA='c57e460354c1a1cef34cc605b198d0ef1c223fd1bbaeb3a4a4c4c77db434a3ea'
 OWNER_APPROVAL_AUTHORIZED=True
@@ -41,7 +41,7 @@ def main():
     db.execute('PRAGMA foreign_keys=ON')
     owners=db.execute("SELECT id FROM staff_accounts WHERE role='owner' AND status='active'").fetchall()
     assert len(owners)==1,'Unique active owner required'
-    result=insert_event(db,flyer,actor_account_id=owners[0][0],organizer_account_id=None,expected_schema_fingerprint=SCHEMA)
+    result=update_plan_copy(db,expected_schema_fingerprint=SCHEMA)
     db.close()
     receipt={**result,'activeRevision':ACTIVE,'backup':str(snapshot),'backupSha256':backup_hash,'backupIntegrity':'ok'}
     receipt_path=directory/'receipt.json'

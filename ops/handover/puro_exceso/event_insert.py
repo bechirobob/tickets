@@ -276,3 +276,56 @@ def insert_event(db, flyer_bytes, *, actor_account_id, organizer_account_id,
     except BaseException:
         db.rollback()
         raise
+
+
+PLAN_COPY = ("A quiet Saturday? Wrong plan. PURO EXCESO is for the group chat that always says ‘one more’.\n\n"
+             "Bring your people, find your spot at CINCO and give the dance floor your full attention. "
+             "We’re taking this one into Sunday.")
+
+
+def update_plan_copy(db, *, expected_schema_fingerprint):
+    """Update three description fields only; preserve every other row and value."""
+    if db.in_transaction:
+        raise GuardError("An idle connection is required")
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        if schema_fingerprint(db) != expected_schema_fingerprint:
+            raise GuardError("Schema changed")
+        targets = {"curated_event_records": {"id": EVENT_ID},
+                   "party_submissions": {"id": SUBMISSION_ID}}
+        before = database_evidence(db, exclude=targets)
+        original = {}
+        expected = {}
+        for table, key in targets.items():
+            rows = _rows(db, "SELECT * FROM " + _quote(table) + " WHERE id=?", (key["id"],))
+            if len(rows) != 1:
+                raise GuardError("Expected one existing event and submission")
+            row = rows[0]
+            if (row["title"], row["starts_at"], row["ends_at"], row["capacity"]) != ("PURO EXCESO", START, END, 200):
+                raise GuardError("Event identity or settings changed")
+            fields = ("curation_note", "concept") if table == "party_submissions" else ("curation_note",)
+            if any(row[field] not in (DESCRIPTION, PLAN_COPY) for field in fields):
+                raise GuardError("Description changed since review")
+            original[table] = row
+            expected[table] = {**row, **{field: PLAN_COPY for field in fields}}
+        values = [original["curated_event_records"]["curation_note"],
+                  original["party_submissions"]["curation_note"], original["party_submissions"]["concept"]]
+        if len(set(values)) != 1:
+            raise GuardError("Descriptions are inconsistent")
+        changed = values[0] != PLAN_COPY
+        if changed:
+            db.execute("UPDATE curated_event_records SET curation_note=? WHERE id=?", (PLAN_COPY, EVENT_ID))
+            db.execute("UPDATE party_submissions SET curation_note=?,concept=? WHERE id=?", (PLAN_COPY, PLAN_COPY, SUBMISSION_ID))
+        for table, key in targets.items():
+            if _rows(db, "SELECT * FROM " + _quote(table) + " WHERE id=?", (key["id"],)) != [expected[table]]:
+                raise GuardError("Unexpected target-row change")
+        if before != database_evidence(db, exclude=targets) or schema_fingerprint(db) != expected_schema_fingerprint:
+            raise GuardError("Unexpected database change")
+        if db.execute("PRAGMA quick_check").fetchone() != ("ok",) or db.execute("PRAGMA foreign_key_check").fetchone():
+            raise GuardError("Database integrity failure")
+        db.commit()
+        return {"status": "copy_updated" if changed else "copy_already_current", "event_slug": SLUG,
+                "updated_description_fields": 3 if changed else 0, "other_data_preserved": True}
+    except BaseException:
+        db.rollback()
+        raise

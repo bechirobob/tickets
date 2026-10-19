@@ -420,3 +420,30 @@ class EventInsertTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlanCopyTests(unittest.TestCase):
+    def setUp(self):
+        self.db = migrated_database()
+        event.insert_event(self.db, FLYER, actor_account_id=OWNER, organizer_account_id=None, now=NOW)
+        self.fingerprint = event.schema_fingerprint(self.db)
+    def tearDown(self):
+        self.db.close()
+    def test_updates_only_descriptions_and_reruns_without_change(self):
+        before = event.database_evidence(self.db, exclude={"curated_event_records":{"id":event.EVENT_ID}, "party_submissions":{"id":event.SUBMISSION_ID}})
+        self.assertEqual(event.update_plan_copy(self.db, expected_schema_fingerprint=self.fingerprint)["status"], "copy_updated")
+        self.assertEqual(self.db.execute("SELECT curation_note FROM curated_event_records WHERE id=?", (event.EVENT_ID,)).fetchone()[0], event.PLAN_COPY)
+        self.assertEqual(before, event.database_evidence(self.db, exclude={"curated_event_records":{"id":event.EVENT_ID}, "party_submissions":{"id":event.SUBMISSION_ID}}))
+        complete = event.database_evidence(self.db)
+        self.assertEqual(event.update_plan_copy(self.db, expected_schema_fingerprint=self.fingerprint)["status"], "copy_already_current")
+        self.assertEqual(complete, event.database_evidence(self.db))
+    def test_rejects_unreviewed_description(self):
+        self.db.execute("UPDATE curated_event_records SET curation_note='changed' WHERE id=?", (event.EVENT_ID,));self.db.commit()
+        before=event.database_evidence(self.db)
+        with self.assertRaises(event.GuardError):event.update_plan_copy(self.db, expected_schema_fingerprint=self.fingerprint)
+        self.assertEqual(before,event.database_evidence(self.db))
+    def test_rolls_back_unexpected_trigger_effect(self):
+        self.db.executescript("CREATE TRIGGER unexpected_copy AFTER UPDATE OF curation_note ON curated_event_records BEGIN UPDATE event_registration_settings SET capacity=199; END;")
+        before=event.database_evidence(self.db)
+        with self.assertRaises(event.GuardError):event.update_plan_copy(self.db, expected_schema_fingerprint=event.schema_fingerprint(self.db))
+        self.assertEqual(before,event.database_evidence(self.db))
