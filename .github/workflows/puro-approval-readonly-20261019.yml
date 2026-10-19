@@ -1,0 +1,99 @@
+name: Inspect PURO approved pass and Room linkage
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/puro-approval-readonly-20261019.yml]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event.before == 'b9bfde4fb82320c023016de960519b9d1bb2ae3f' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify one-file exact predecessor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD^1)" = 'b9bfde4fb82320c023016de960519b9d1bb2ae3f'
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/puro-approval-readonly-20261019.yml'
+      - name: Connect existing Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Read exact active PURO linkage without mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          tailscale ssh root@hermes "EXPECTED_NEW_SHA=04bbe9691a00ca48cfb974ab0b87b743d9c3aab8 python3 -" <<'PYREAD'
+          """Fixed-event, read-only post-release reconciliation; aggregate output only."""
+          import fcntl,json,os,pathlib,re,sqlite3,subprocess,sys,time,urllib.request
+          SLUG="puro-exceso-20261024"
+          
+          def _rows(db,sql,values=()):
+              cursor=db.execute(sql,values)
+              names=[column[0] for column in cursor.description]
+              return [dict(zip(names,row)) for row in cursor]
+          
+          def rsvp_diagnosis(db):
+              """Read aggregate delivery evidence only; never return recipients or payloads."""
+              regs = _rows(db, "SELECT id,status,version,notified_version,approved_at IS NOT NULL AS approved,verified_at IS NOT NULL AS verified,device_claimed_at IS NOT NULL AS device_claimed,attendee_id IS NOT NULL AS has_attendee,attendee_id,order_id,party_size FROM event_registrations WHERE event_slug=?", (SLUG,))
+              groups = {}
+              for row in regs:
+                  key = "registration-update/" + row["id"] + "/" + str(row["version"])
+                  confirmation = db.execute("SELECT status FROM confirmation_deliveries WHERE id=?", (key,)).fetchone()
+                  deliveries = _rows(db, "SELECT status,provider_id IS NOT NULL AS has_provider,provider_id LIKE 'vps-%' AS is_vps,attempt_count,next_attempt_at IS NOT NULL AS retry_scheduled,CASE WHEN failure_reason IS NULL THEN 'none' WHEN failure_reason LIKE '%not configured%' THEN 'not_configured' WHEN failure_reason LIKE '%quota%' THEN 'quota' WHEN failure_reason LIKE '%expired%' THEN 'expired' ELSE 'other' END AS failure_category FROM delivery_events WHERE kind='registration_update' AND json_extract(payload_json,'$.idempotencyKey')=?", (key,))
+                  tickets = _rows(db, "SELECT status,count(*) AS count FROM tickets WHERE order_id=? GROUP BY status", (row["order_id"],)) if row["order_id"] else []
+                  order = db.execute("SELECT status FROM orders WHERE id=?", (row["order_id"],)).fetchone() if row["order_id"] else None
+                  shape = {k:v for k,v in row.items() if k not in ("id","order_id","attendee_id")}
+                  assignments = _rows(db,"SELECT a.status,a.attendee_id=? AS matches_registration,count(*) AS count FROM ticket_assignments a JOIN tickets t ON t.id=a.ticket_id WHERE t.order_id=? GROUP BY 1,2",(row["attendee_id"],row["order_id"])) if row["order_id"] else []
+                  sessions = db.execute("SELECT count(*) FROM attendee_sessions WHERE attendee_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')",(row["attendee_id"],)).fetchone()[0] if row["attendee_id"] else 0
+                  credentials = db.execute("SELECT count(*) FROM ticket_gate_credentials g JOIN tickets t ON t.id=g.ticket_id WHERE t.order_id=?",(row["order_id"],)).fetchone()[0] if row["order_id"] else 0
+                  profile = db.execute("SELECT status FROM attendee_profiles WHERE id=?",(row["attendee_id"],)).fetchone() if row["attendee_id"] else None
+                  orphan_assignments=sum(db.execute("SELECT count(*) FROM ticket_assignments a LEFT JOIN tickets t ON t.id=a.ticket_id WHERE a.ticket_id=? AND t.id IS NULL",("rsvp_"+row["id"]+":"+str(i),)).fetchone()[0] for i in range(min(row["party_size"],200)))
+                  shape.update(orphan_assignments=orphan_assignments,gate_credentials=credentials,profile_status=profile[0] if profile else None,assignments=assignments,active_attendee_sessions=sessions,has_order=bool(row["order_id"]),order_status=order[0] if order else None,confirmation_channel=confirmation[0] if confirmation else None,email_deliveries=deliveries,tickets=tickets)
+                  encoded=json.dumps(shape,sort_keys=True)
+                  groups[encoded]=groups.get(encoded,0)+1
+              owner_devices = _rows(db, "SELECT p.revoked_at IS NOT NULL AS revoked,ss.revoked_at IS NOT NULL AS session_revoked,ss.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AS session_current,s.must_change_password,count(*) AS count FROM organizer_push_subscriptions p JOIN staff_accounts s ON s.id=p.account_id LEFT JOIN staff_sessions ss ON ss.id=p.session_id AND ss.account_id=p.account_id WHERE s.role='owner' AND s.status='active' GROUP BY 1,2,3,4")
+              push = _rows(db, "SELECT d.completed_at IS NOT NULL AS completed,d.outcome,d.attempts,count(*) AS count FROM organizer_rsvp_push_deliveries d JOIN event_registrations r ON r.id=d.registration_id WHERE r.event_slug=? GROUP BY 1,2,3",(SLUG,))
+              owner_routing = db.execute("SELECT count(*) FROM sqlite_master WHERE type='trigger' AND name IN ('organizer_rsvp_push_created','organizer_rsvp_push_verified') AND sql LIKE '%role=''owner''%'").fetchone()[0]
+              settings = _rows(db,"SELECT mode,capacity,approval_required,room_access,accepting FROM event_registration_settings WHERE event_slug=?",(SLUG,))
+              event = _rows(db,"SELECT status,event_state,starts_at,ends_at,schedule_status,removed_at IS NOT NULL AS removed,archived_at IS NOT NULL AS archived FROM curated_event_records WHERE slug=?",(SLUG,))
+              return {"eventState":event,"registrationSettings":settings,"ownerDevices":owner_devices,"ownerRoutingTriggers":owner_routing,"hostPushDeliveries":push,"registrations":len(regs),"groups":[{"count":count,**json.loads(shape)} for shape,count in groups.items()]}
+          
+          def main(expected):
+              assert expected=="04bbe9691a00ca48cfb974ab0b87b743d9c3aab8","Exact current revision required"
+              lock=os.open("/run/lock/becore-tickets-deploy.lock",os.O_RDONLY|os.O_NOFOLLOW)
+              fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+              props=dict(line.split("=",1) for line in subprocess.check_output(["systemctl","show","becore-tickets.service","--property=ActiveState,WorkingDirectory"],text=True).splitlines())
+              assert props=={"ActiveState":"active","WorkingDirectory":"/srv/becore-tickets/releases/"+expected}
+              request=urllib.request.Request("http://127.0.0.1:3119/healthz",headers={"Host":"tickets.becoreops.com"})
+              with urllib.request.urlopen(request,timeout=10) as response:health=json.load(response)
+              assert health.get("revision")==expected and health.get("runtime")=="vps" and health.get("active") is True
+              path=pathlib.Path("/var/lib/becore-tickets/tickets.sqlite")
+              assert path.is_file() and not path.is_symlink()
+              db=sqlite3.connect("file:"+str(path)+"?mode=ro",uri=True,timeout=5)
+              deadline=time.monotonic()+15
+              db.set_progress_handler(lambda:int(time.monotonic()>deadline),1000)
+              db.execute("PRAGMA query_only=ON");db.execute("BEGIN")
+              result=rsvp_diagnosis(db)
+              assert db.total_changes==0
+              db.rollback();db.close()
+              print(json.dumps({"readOnly":True,"eventSlug":SLUG,"activeRevision":expected,"observedAt":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),**result},sort_keys=True))
+          
+          if __name__=="__main__":main(os.environ["EXPECTED_NEW_SHA"])
+          
+          PYREAD
