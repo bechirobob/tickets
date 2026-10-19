@@ -1,0 +1,29 @@
+name: Inspect approved Puro Exceso listing
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate inspection syntax
+        run: python3 -m py_compile ops/handover/puro_exceso/inspect.py
+      - name: Connect existing Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Inspect live schema without writes
+        run: tailscale ssh root@hermes 'python3 -' < ops/handover/puro_exceso/inspect.py
