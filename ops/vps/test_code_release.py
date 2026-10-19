@@ -176,7 +176,7 @@ PARALLEL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '8
 
 # The operator can be independently pinned here because neither control file
 # is in the production 13-output manifest. Only this test file self-exempts.
-PARALLEL_OPERATOR_BLOB = '5562363d304c4b649960d9f2d2ac6abd7eff40fd'
+PARALLEL_OPERATOR_BLOB = '01c3100a7d5308cc0d6e151e8b26bb2cc89af6b6'
 LEGACY_ORIGINAL_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'dc127e63338b3ac2f8498a2114fe7a465c64344b'),
@@ -352,6 +352,20 @@ def parallel_source_family(root, *, overlay=None):
                    if name.startswith("ops/vps/") or name.startswith(".github/workflows/")}
     manifest.update(outputs)
     manifest.update(overlay)
+    # CINCO's optional four-file application increment is all-or-none and
+    # byte-pinned. Control-only CI still checks the unchanged baseline family.
+    if full and any(os.path.lexists(root / name) for name in release.CINCO_APPLICATION_BLOBS):
+        observed = {}
+        for name in release.CINCO_APPLICATION_BLOBS:
+            path = root / name
+            if not path.is_file() or path.is_symlink():
+                raise AssertionError("CINCO application family is incomplete")
+            raw = path.read_bytes()
+            observed[name] = release.hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        if observed == release.CINCO_APPLICATION_BLOBS:
+            manifest.update({name: ("100644", blob) for name, blob in observed.items()})
+        elif any(observed[name] != manifest.get(name, (None, None))[1] for name in observed):
+            raise AssertionError("CINCO application family has mixed or unreviewed bytes")
     # Both controls are authenticated against C by production admission. Here
     # the operator is separately pinned; only this test file cannot self-pin.
     manifest["ops/vps/code-release.py"] = ("100644", PARALLEL_OPERATOR_BLOB)
@@ -5478,6 +5492,120 @@ class ReadinessSourcePinTests(unittest.TestCase):
         self.assertNotIn("scripts/audit-release-dependencies.py", release.RSVP_READINESS_ADVISORY_BLOBS)
         self.assertEqual({name: blob for name, blob in release.RSVP_READINESS_ADVISORY_BLOBS.items()
                           if name not in release.RSVP_READINESS_CONTROL_FILES}, BENCHMARK_FILE_BLOBS)
+
+
+class CincoSourceAdmissionTests(unittest.TestCase):
+    """Real Git admission keeps runtime, controls, and customer state bounded."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', 'user.name', 'CINCO release tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.files = ('lib/registrations.ts', 'lib/confirmation-delivery.ts',
+                      'tests/registrations.test.ts', 'tests/confirmation-delivery.test.ts')
+        for name in self.files:
+            self.write(name, 'baseline\n')
+        self.write('ops/vps/code-release.py', 'baseline operator\n')
+        self.write('ops/vps/test_code_release.py', 'baseline tests\n')
+        self.write('package-lock.json', 'unchanged dependency lock\n')
+        self.live = self.commit()
+        self.write('ops/advisory.py', 'reviewed operational baseline\n')
+        self.write('ops/vps/code-release.py', 'merged previous operator\n')
+        self.write('ops/vps/test_code_release.py', 'merged previous tests\n')
+        self.advisory = self.commit()
+        self.write('ops/vps/code-release.py', 'independent reviewed CINCO operator\n')
+        self.write('ops/vps/test_code_release.py', 'independent reviewed CINCO tests\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        for name in self.files:
+            self.write(name, 'exact reviewed ' + name + '\n')
+        self.candidate = self.commit()
+        self.pins = {name: self.git('rev-parse', self.candidate + ':' + name) for name in self.files}
+        values = {
+            'CINCO_RELEASE_BASELINE': self.live,
+            'CINCO_RELEASE_BASE_TREE': self.git('rev-parse', self.live + '^{tree}'),
+            'CINCO_ADVISORY_BASE': self.advisory,
+            'CINCO_ADVISORY_TREE': self.git('rev-parse', self.advisory + '^{tree}'),
+            'CINCO_ADVISORY_BLOBS': {'ops/advisory.py': self.git('rev-parse', self.advisory + ':ops/advisory.py')},
+            'CINCO_APPLICATION_BLOBS': self.pins,
+            '__file__': str(self.root / 'ops/vps/code-release.py'),
+        }
+        for name, value in values.items():
+            patcher = patch.object(release, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(raw)
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated CINCO admission')
+        return self.git('rev-parse', 'HEAD')
+
+    def verify(self):
+        return release.vetted_changes(self.live, self.git('rev-parse', 'HEAD'))
+
+    def test_exact_four_file_patch_preserves_all_prior_advisory_bytes(self):
+        self.assertEqual(set(self.verify()), set(self.files) | release.CINCO_CONTROL_FILES | {'ops/advisory.py'})
+        self.assertEqual(release.migration_plan(self.verify()), [])
+
+    def test_each_application_output_is_byte_pinned(self):
+        for name in self.files:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed bytes\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    release.reviewed_cinco_application_blobs(self.live, self.git('rev-parse', 'HEAD'))
+
+    def test_extra_runtime_dependency_migration_and_advisory_changes_are_rejected(self):
+        for name in ('runtime/vps/worker.mjs', 'package-lock.json', 'drizzle/9999_extra.sql', 'ops/advisory.py'):
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed bytes\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_candidate_cannot_change_its_own_controls(self):
+        for name in release.CINCO_CONTROL_FILES:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'untrusted controls\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_wrong_live_and_advisory_trees_fail_closed(self):
+        for name in ('CINCO_RELEASE_BASE_TREE', 'CINCO_ADVISORY_TREE'):
+            with self.subTest(name=name), patch.object(release, name, 'f' * 40):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_executable_application_file_is_rejected(self):
+        self.git('update-index', '--chmod=+x', 'lib/registrations.ts')
+        self.git('commit', '-qm', 'unreviewed executable mode')
+        with self.assertRaises(release.ReleaseError):
+            self.verify()
+
+    def test_source_cannot_be_its_own_trust_anchor(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
+            with self.assertRaises(release.ReleaseError):
+                self.verify()
 
 
 if __name__ == "__main__":
