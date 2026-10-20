@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '1dbd4aecd90be057972c6d73b293680666f14150' && github.run_attempt == 1
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '430c44a74cac9805d03c75e2e9064e97bdb177bd' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
           test "$GITHUB_RUN_ATTEMPT" = 1
-          test "$(git rev-parse HEAD^1)" = '1dbd4aecd90be057972c6d73b293680666f14150'
+          test "$(git rev-parse HEAD^1)" = '430c44a74cac9805d03c75e2e9064e97bdb177bd'
           test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/puro-delivery-readonly-20261020.yml'
       - name: Connect existing Tickets identity
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
@@ -115,7 +115,7 @@ jobs:
               return value if value in DELIVERY_STATES else 'other'
           
           def delivery_diagnosis(db):
-              registrations=_rows(db,"SELECT id,email,version,order_id FROM event_registrations WHERE event_slug=? AND kind='rsvp' AND status='confirmed' AND approved_at IS NOT NULL",(SLUG,))
+              registrations=_rows(db,"SELECT id,version,order_id FROM event_registrations WHERE event_slug=? AND kind='rsvp' AND status='confirmed' AND approved_at IS NOT NULL",(SLUG,))
               current_shapes=[]
               failures=[]
               coverage=[]
