@@ -406,11 +406,12 @@ test.describe.serial('organiser RSVP and guest journey',()=>{
   await page.getByRole('checkbox',{name:/I accept the event terms/}).check();
   const submitted=page.waitForResponse(r=>r.url().endsWith('/api/registrations')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'Send RSVP'}).click();expect((await submitted).status()).toBe(202);
-  await expect(page.getByRole('status')).toContainText('RSVP received.');
-  await expect(page.getByRole('status')).toContainText('Your request is not a confirmed spot.');
+  await expect(page.locator('.my-registrations [data-status="requested"]')).toBeVisible();
+  await expect(page.locator('.my-registrations')).toContainText('Waiting for the host’s nod');
+  await expect(page.getByLabel('Your name')).toHaveCount(0);
   await expect(page.getByRole('button',{name:/confirmation link/i})).toHaveCount(0);
   await page.screenshot({path:info.outputPath('guest-rsvp-success.png'),fullPage:true});
-  await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.getByLabel('Your name')).toBeVisible();
+  await page.goto('/event/rsvp-browser?register=1#register');await expect(page).toHaveURL(/\/rsvp\/rsvp-browser(?:#register)?$/);await expect(page.locator('.my-registrations [data-status="requested"]')).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
  });
  test('verified signup appears without refreshing the organiser dashboard and joins guest emails',async({page})=>{
   await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=guests');await page.getByRole('button',{name:'RSVP review & setup',exact:true}).click();const manager=page.locator('.registration-manager');

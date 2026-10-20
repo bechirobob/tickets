@@ -192,15 +192,35 @@ export default function NightHub({ event }: { event: EventSummary }) {
       setAnswers(Object.fromEntries(experienceData.questions.map((question) => [question.id, question.answer])));
       setOrders(ticketsData.orders.filter((order) => order.eventSlug === event.slug));
       setWallet(walletData);
+      setLoadError("");
+      setLocked(false);
     }).catch((error) => {
       if (controller.signal.aborted) return;
       if (error instanceof RequestError && [401, 403].includes(error.status ?? 0)) {
         if (error.status === 401) clearOfflineTickets();
+        setExperience(null);
+        setOrders([]);
+        setAnswers({});
+        setOfflineOwnerId("");
+        setSelectedTicket(0);
         setLocked(true);
       } else setLoadError("We couldn't load your night. Check your connection and try again.");
     });
     return () => controller.abort();
   }, [event.slug, retry]);
+
+  useEffect(() => {
+    if (!locked && !loadError) return;
+    const resume = () => {
+      if (!document.hidden && navigator.onLine) { setLoadError(""); setRetry(value => value + 1); }
+    };
+    window.addEventListener("focus", resume); window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      window.removeEventListener("focus", resume); window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, [locked, loadError]);
 
   const tickets = useMemo(
     () => orders.flatMap((order) => order.tickets),
@@ -264,11 +284,12 @@ export default function NightHub({ event }: { event: EventSummary }) {
       <main className="night-hub night-hub--locked">
         <section>
           <LockKeyhole size={30} />
-          <h1>This night needs its ticket.</h1>
+          <h1>Open your passes securely.</h1>
           <p>
-            Use your booking or registration email in My Nights to recover access.
+            Opened this email in a different browser? Use your booking or RSVP email to securely open your existing passes on this device.
           </p>
-          <Link href="/my-nights">Bring back My Nights</Link>
+          <button type="button" onClick={() => setRetry(value => value + 1)}>Check access again</button>
+          <Link href="/my-nights?recover=1">Open my passes securely</Link>
         </section>
       </main>
     );
