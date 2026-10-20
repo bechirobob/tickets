@@ -1,0 +1,93 @@
+name: Recover original PURO WebKit failure evidence
+on:
+  push:
+    branches: [diagnostic/puro-original-log-recovery-20261020]
+    paths: [.github/workflows/puro-original-log-recovery-20261020.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    if: github.repository == 'bechirobob/tickets' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate original identity and recover bounded sanitized assertion evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, secrets, urllib.request, urllib.error
+          from pathlib import Path
+          repo = 'bechirobob/tickets'
+          source = '0615184140ea7ed526e436ccb2e92e4383b75e05'
+          run_id, job_id = 39340324140, 118360351050
+          base = f'https://api.github.com/repos/{repo}'
+          token = os.environ.pop('GH_TOKEN')
+          headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
+          opener = urllib.request.build_opener(NoRedirect)
+          def api(path):
+              with opener.open(urllib.request.Request(base + path, headers=headers), timeout=30) as response:
+                  return json.load(response)
+          run = api(f'/actions/runs/{run_id}')
+          job = api(f'/actions/jobs/{job_id}')
+          assert run['repository']['full_name'] == repo
+          assert run['head_sha'] == source and run['conclusion'] == 'failure'
+          assert job['run_id'] == run_id and job['head_sha'] == source and job['conclusion'] == 'failure'
+          failed = [s for s in job['steps'] if s.get('conclusion') == 'failure']
+          assert len(failed) == 1 and failed[0]['number'] == 51
+          assert failed[0]['name'] == 'Verify owner Operations workflows on desktop and mobile (mobile-webkit)'
+          request = urllib.request.Request(base + f'/actions/jobs/{job_id}/logs', headers=headers)
+          try:
+              with opener.open(request, timeout=30) as response:
+                  raw = response.read(100_000_001)
+          except urllib.error.HTTPError as error:
+              if error.code != 302:
+                  raise RuntimeError('Original log endpoint failed with HTTP ' + str(error.code)) from None
+              location = error.headers.get('Location', '')
+              from urllib.parse import urlparse
+              target = urlparse(location)
+              assert target.scheme == 'https' and target.hostname and target.hostname.endswith('.blob.core.windows.net')
+              # Never forward the GitHub bearer token to the signed download URL.
+              try:
+                  with urllib.request.urlopen(location, timeout=60) as response:
+                      raw = response.read(100_000_001)
+              except Exception:
+                  raise RuntimeError('Signed original log download failed') from None
+          assert len(raw) <= 100_000_000, 'Original log exceeds bounded download size'
+          log = raw.decode('utf-8', errors='replace')
+          start, end = failed[0]['started_at'], failed[0]['completed_at']
+          # Approximate step-time window; explicitly exclude encoded screenshot payload lines.
+          lines = [line for line in log.splitlines() if start[:19] <= line[:19] <= end[:19]]
+          def sanitize(line):
+              line = line.replace(token, '[REDACTED]')
+              line = re.sub(r'https?://\S+', '[URL]', line)
+              line = re.sub(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}', '[EMAIL]', line)
+              line = re.sub(r'[A-Za-z0-9+/=_-]{120,}', '[LONG_VALUE]', line)
+              return line[:1000]
+          cleaned = [sanitize(line) for line in lines if not re.search(r'[A-Za-z0-9+/=_-]{120,}', line) and 'BASE64' not in line.upper() and 'BECORE_CANDIDATE_EVIDENCE_V1' not in line]
+          evidence = '\n'.join(cleaned)[-40000:]
+          assert evidence.strip(), 'No timestamp-matched failure evidence recovered'
+          Path('evidence').mkdir()
+          Path('evidence/original-webkit-failure.txt').write_text(evidence + '\n')
+          identity = {'repository': repo, 'source': source, 'run_id': run_id, 'job_id': job_id, 'failed_step': failed[0], 'original_log_bytes': len(raw), 'selected_lines': len(lines)}
+          Path('evidence/identity.json').write_text(json.dumps(identity, indent=2) + '\n')
+          print(json.dumps(identity))
+          marker = secrets.token_hex(16)
+          print('::stop-commands::' + marker)
+          print(evidence[-24000:])
+          print('::' + marker + '::')
+          PY
+      - name: Preserve sanitized original failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: original-puro-webkit-failure-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 1
