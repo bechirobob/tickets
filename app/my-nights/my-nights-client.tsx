@@ -60,18 +60,47 @@ export default function MyNightsClient() {
   const [recoveryState, setRecoveryState] = useState<"idle" | "sending" | "sent">("idle");
   const [recoveryError, setRecoveryError] = useState("");
   const recoveryBusy = useRef(false);
+  const request = useRef<AbortController | null>(null);
   const recovered = params.get("recovered") === "1";
+  const recovering = params.get("recover") === "1";
   const activeView = locked && registrationCount > 0 && view === "upcoming" && !params.has("view") ? "rsvps" : view;
 
-  const load = useCallback(() => requestJson<Payload>("/api/customer/my-nights", { cache: "no-store" })
-    .then((data) => {
+  const load = useCallback(async () => {
+    // Entitlement changes supersede any older snapshot already in flight.
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      const data = await requestJson<Payload>("/api/customer/my-nights", { cache: "no-store", signal: controller.signal });
+      if (controller.signal.aborted || request.current !== controller) return;
       if (!data.attendee || !Array.isArray(data.nights)) throw new Error("We couldn’t load your nights. Try again.");
       setPayload(data); setLocked(false); setLoadError("");
-    }).catch((error) => {
-      if (error instanceof RequestError && error.status === 401) { setPayload(null); setLocked(true); }
+    } catch (error) {
+      if (controller.signal.aborted || request.current !== controller) return;
+      if (error instanceof RequestError && error.status === 401) { setPayload(null); setLocked(true); setLoadError(""); }
       else setLoadError(requestErrorMessage(error));
-    }).finally(() => setLoading(false)), []);
-  useEffect(() => { void load(); }, [load]);
+    } finally {
+      if (request.current === controller) {
+        request.current = null;
+        if (!controller.signal.aborted) { setLoading(false); }
+      }
+    }
+  }, []);
+  useEffect(() => {
+    const initial = window.setTimeout(() => void load(), 0);
+    const resume = () => {
+      if (!document.hidden && navigator.onLine && !request.current) void load();
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", resume);
+    return () => {
+      window.clearTimeout(initial);
+      request.current?.abort(); request.current = null;
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume); window.removeEventListener("online", resume);
+    };
+  }, [load]);
 
   function chooseView(next: View) {
     setView(next);
@@ -98,7 +127,7 @@ export default function MyNightsClient() {
       return activeView === "past" ? bTime - aTime : aTime - bTime;
     }), [payload, activeView, now, query]);
 
-  if (loading) return <LoadingSkeleton kind="wallet" label="Lining up your nights" />;
+  if (loading && !recovering) return <LoadingSkeleton kind="wallet" label="Lining up your nights" />;
   const member = Boolean(payload) || registrationCount > 0;
   return <main className="my-nights-page my-nights-page--studio">
     <header className="directory-header"><Link href="/events" aria-label="Back to The Drop"><ArrowLeft size={16} /><span className="directory-header__back-label">The Drop</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="my-nights-header-actions"><PublicNavigation /><NotificationBell /></span></header>
@@ -106,9 +135,9 @@ export default function MyNightsClient() {
       <header className="nights-heading"><div><p className="eyebrow">{payload ? `For ${payload.attendee.displayName}` : "BeCore Tickets"}</p><h1>My Nights<span aria-hidden="true">.</span></h1></div><Link className="nights-privacy" href="/account/privacy"><ShieldCheck size={17} /><span>Privacy</span></Link></header>
       {member ? <ConfirmationNotifications /> : null}
       {recovered && payload ? <div className="my-nights-recovered" role="status"><CheckCircle2 size={18} /><span>Your nights are back.</span></div> : null}
-      {member ? <div className="nights-toolbar"><SegmentedControl as="nav" className="my-nights-tabs" aria-label="My Nights views">{views.map(item => <button key={item} type="button" aria-current={activeView === item ? "page" : undefined} onClick={() => chooseView(item)}>{item === "upcoming" ? "Upcoming" : item === "past" ? "Past" : item === "following" ? "Following" : "RSVPs"}<span aria-label={`${counts[item]} ${item === "rsvps" ? "registrations" : "nights"}`}>{counts[item]}</span></button>)}</SegmentedControl>{(payload?.nights.length ?? 0) > 3 && activeView !== "rsvps" ? <label className="nights-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label="Find a night" placeholder="Find a night" value={query} onChange={e => setQuery(e.target.value)} />{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery("")}><X size={16} /></button> : null}</label> : null}</div> : null}
-      <div hidden={activeView !== "rsvps" || !member} className="nights-registration-view"><MyRegistrations onCountChange={setRegistrationCount} /></div>
-      {loadError ? <section className="my-nights-empty"><h2>Your nights are taking a moment.</h2><p role="alert">{loadError}</p><ActionButton onClick={() => { setLoading(true); setLoadError(""); void load(); }}>Try again</ActionButton></section> : !member && locked ? <section className="my-nights-locked"><Ticket size={30} /><h2>Your plans are still here.</h2><p>Use your booking email. We’ll send a link to your tickets and RSVPs.</p><form className="my-nights-recovery" onSubmit={requestRecovery}><label>Booking or registration email<input type="email" required autoComplete="email" value={recoveryEmail} onChange={event => setRecoveryEmail(event.target.value)} placeholder="you@example.com" /></label><ActionButton type="submit" disabled={recoveryState !== "idle"} aria-busy={recoveryState === "sending"} icon={recoveryState === "sending" ? <Loader2 className="spin" size={17} /> : <Mail size={17} />}>{recoveryState === "sending" ? "Sending…" : recoveryState === "sent" ? "Check your email" : "Bring back my Nights"}</ActionButton></form>{recoveryError ? <p className="my-nights-recovery-error" role="alert">{recoveryError}</p> : null}{recoveryState === "sent" ? <div className="nights-recovery-sent" role="status"><p>If that email has tickets or RSVPs, your access link is on its way. Check your inbox and spam folder.</p><button type="button" onClick={() => setRecoveryState("idle")}>Use another email</button></div> : null}<p className="my-nights-recovery-help"><Link href="/help#recover-access">No link, wrong email or locked out?</Link></p><div><Link href="/events">Find my first night <ArrowUpRight size={16} /></Link></div></section> : activeView !== "rsvps" ? <>
+      {member && !recovering ? <div className="nights-toolbar"><SegmentedControl as="nav" className="my-nights-tabs" aria-label="My Nights views">{views.map(item => <button key={item} type="button" aria-current={activeView === item ? "page" : undefined} onClick={() => chooseView(item)}>{item === "upcoming" ? "Upcoming" : item === "past" ? "Past" : item === "following" ? "Following" : "RSVPs"}<span aria-label={`${counts[item]} ${item === "rsvps" ? "registrations" : "nights"}`}>{counts[item]}</span></button>)}</SegmentedControl>{(payload?.nights.length ?? 0) > 3 && activeView !== "rsvps" ? <label className="nights-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label="Find a night" placeholder="Find a night" value={query} onChange={e => setQuery(e.target.value)} />{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery("")}><X size={16} /></button> : null}</label> : null}</div> : null}
+      <div hidden={activeView !== "rsvps" || !member || recovering} className="nights-registration-view"><MyRegistrations onCountChange={setRegistrationCount} onEntitlementsChange={load} /></div>
+      {loadError && !recovering ? <section className="my-nights-empty"><h2>Your nights are taking a moment.</h2><p role="alert">{loadError}</p><ActionButton onClick={() => { setLoading(true); setLoadError(""); void load(); }}>Try again</ActionButton></section> : recovering || (!member && locked) ? <section className="my-nights-locked"><Ticket size={30} /><h2>Your plans are still here.</h2><p>Use your booking email. We’ll send a link to your tickets and RSVPs.</p><form className="my-nights-recovery" onSubmit={requestRecovery}><label>Booking or registration email<input type="email" required autoComplete="email" value={recoveryEmail} onChange={event => setRecoveryEmail(event.target.value)} placeholder="you@example.com" /></label><ActionButton type="submit" disabled={recoveryState !== "idle"} aria-busy={recoveryState === "sending"} icon={recoveryState === "sending" ? <Loader2 className="spin" size={17} /> : <Mail size={17} />}>{recoveryState === "sending" ? "Sending…" : recoveryState === "sent" ? "Check your email" : "Bring back my Nights"}</ActionButton></form>{recoveryError ? <p className="my-nights-recovery-error" role="alert">{recoveryError}</p> : null}{recoveryState === "sent" ? <div className="nights-recovery-sent" role="status"><p>If that email has tickets or RSVPs, your access link is on its way. Check your inbox and spam folder.</p><button type="button" onClick={() => setRecoveryState("idle")}>Use another email</button></div> : null}<p className="my-nights-recovery-help"><Link href="/help#recover-access">No link, wrong email or locked out?</Link></p><div><Link href="/events">Find my first night <ArrowUpRight size={16} /></Link></div></section> : activeView !== "rsvps" ? <>
         {nights.length ? <div className="nights-collection">{nights.map((night, index) => {
           const action = nextAction(night, now); const ActionIcon = action.icon;
           const changed = ["cancelled", "postponed"].includes(night.eventState);

@@ -87,3 +87,113 @@ test("a failed night load can retry without asking an authenticated guest to rec
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(attempts).toBe(2);
 });
+
+test("RSVP approval refreshes an already-open Upcoming feed and survives reload", async ({ page, eventSlug }) => {
+  let status = 'requested', feedReads = 0;
+  const now = Date.now();
+  await page.clock.install();
+  await page.route('**/api/customer/notifications', route => route.fulfill({ json: { notifications: [], unread: 0 } }));
+  await page.route('**/api/customer/registrations', route => route.fulfill({ json: { registrations: [{ id: 'approval-fixture', eventSlug, title: 'Approval fixture', kind: 'rsvp', status, partySize: 1, maxPartySize: 1, mode: 'rsvp', roomAccess: 1 }] } }));
+  await page.route('**/api/customer/my-nights', route => {
+    feedReads++;
+    return route.fulfill({ json: { attendee: { displayName: 'Guest' }, nights: status === 'confirmed' ? [{
+      eventSlug, title: 'Approval fixture', startsAt: new Date(now + 3600000).toISOString(), endsAt: new Date(now + 7200000).toISOString(),
+      venue: 'Fixture venue', area: 'Osu', imageUrl: '/atmospheres/behind-the-night.webp', eventState: 'on_sale', isTestEvent: false,
+      ticketCount: 1, purchased: true, admissionActive: true, registrationMode: 'rsvp', roomAccess: true, keepPosted: false, updateCount: 0,
+    }] : [] } });
+  });
+  await page.goto('/my-nights');
+  await expect(page.getByRole('heading', { name: 'Your next night is out there.' })).toBeVisible();
+  await expect(page.locator('.my-registrations [data-status="requested"]')).toHaveCount(1);
+  expect(feedReads).toBe(1);
+  status = 'confirmed';
+  await page.clock.runFor(71_000);
+  await expect(page.getByRole('link', { name: 'Show my RSVP pass', exact: true })).toHaveAttribute('href', `/my-nights/${eventSlug}?view=passes`);
+  await expect(page.locator('.night-listing__actions').getByRole('link', { name: 'The Room', exact: true })).toHaveAttribute('href', `/room/${eventSlug}`);
+  expect(feedReads).toBe(2);
+  await page.reload();
+  await expect(page.getByRole('link', { name: 'Show my RSVP pass', exact: true })).toBeVisible();
+  status = 'cancelled';
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('link', { name: 'Show my RSVP pass', exact: true })).toHaveCount(0);
+  await expect(page.locator('.night-listing__actions').getByRole('link', { name: 'The Room', exact: true })).toHaveCount(0);
+});
+
+test('explicit recovery can switch email-owner proof without signing out another valid session', async ({ page }) => {
+  let recoveries = 0;
+  await page.route('**/api/customer/my-nights', route => route.fulfill({ json: { attendee: { displayName: 'Another guest' }, nights: [] } }));
+  await page.route('**/api/customer/registrations', route => route.fulfill({ json: { registrations: [] } }));
+  await page.route('**/api/customer/recovery', route => { recoveries++; return route.fulfill({ json: { sent: true } }); });
+  await page.goto('/my-nights?recover=1');
+  await expect(page.getByLabel('Booking or registration email')).toBeVisible();
+  expect(recoveries).toBe(0);
+  await page.getByLabel('Booking or registration email').fill('approved-guest@example.com');
+  await page.getByRole('button', { name: 'Bring back my Nights' }).click();
+  await expect(page.getByRole('button', { name: 'Check your email' })).toBeDisabled();
+  expect(recoveries).toBe(1);
+});
+
+function approvedOrder(eventSlug: string) {
+  return {
+    orderId: 'approval-order', reference: 'BCT-APPROVAL', eventSlug, faceAmountMinor: 0, bookingFeeMinor: 0, totalAmountMinor: 0,
+    currency: 'GHS', quantity: 1, paidAt: new Date().toISOString(), bookedFor: null, canViewPurchase: true, roomAccess: true,
+    tierName: 'RSVP', tierDescription: null, roomBadge: null,
+    event: { title: 'Approved RSVP fixture', date: 'Tonight', venue: 'Fixture venue', state: 'on_sale' },
+    tickets: [{ id: 'approval-pass', ticketType: 'rsvp', status: 'issued', checkedInAt: null, gateCode: 'RSVP-APPROVED', qrPayload: 'isolated-rsvp-pass' }],
+  };
+}
+
+test('a denied Room rechecks access immediately on focus after approval', async ({ page, eventSlug }) => {
+  let approved = false, accessReads = 0;
+  const room = { eventSlug, eventTitle: 'Approved RSVP fixture', readOnly: false, readOnlyAt: new Date(Date.now() + 86400000).toISOString() };
+  await page.route('**/api/**', route => route.fulfill({ status: 401, json: { error: 'Isolated fixture' } }));
+  await page.route(`**/api/rooms/${eventSlug}/access`, route => {
+    accessReads++;
+    return route.fulfill(approved ? { json: { allowed: true, attendee: { id: 'approved-guest' }, room } } : { status: 403, json: { error: 'Your RSVP is awaiting approval.' } });
+  });
+  await page.route(`**/api/rooms/${eventSlug}/flashes`, route => route.fulfill({ json: { flashes: [], expiresAt: room.readOnlyAt } }));
+  await page.routeWebSocket(/\/api\/room\/socket/u, socket => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 })));
+  await page.goto(`/room/${eventSlug}`);
+  await expect(page.getByRole('heading', { name: 'This Room is ticket-locked.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check access again' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open your passes securely' })).toHaveAttribute('href', '/my-nights?recover=1');
+  approved = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('textbox', { name: 'Message The Room' })).toBeVisible();
+  expect(accessReads).toBeGreaterThanOrEqual(2);
+});
+
+test('an already-open legacy wallet shows an approved pass immediately on focus', async ({ page, eventSlug }) => {
+  let approved = false, roomAccess = true;
+  await page.route('**/api/customer/tickets', route => route.fulfill({ json: {
+    attendee: { attendeeId: 'approved-guest', displayName: 'Guest', emailVerified: true }, orders: approved ? [{ ...approvedOrder(eventSlug), roomAccess }] : [],
+  } }));
+  await page.route('**/api/customer/wallet/config', route => route.fulfill({ json: { apple: false, google: false } }));
+  await page.goto('/tickets');
+  await expect(page.getByRole('heading', { name: 'Good to see you, Guest.' })).toBeVisible();
+  await expect(page.locator('.wallet-pass')).toHaveCount(0);
+  approved = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('img', { name: 'Entry QR code for pass 1' })).toBeVisible();
+  await expect(page.getByText('RSVP-APPROVED', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Enter The Room', exact: true })).toBeVisible();
+  roomAccess = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('link', { name: 'Enter The Room', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('img', { name: 'Entry QR code for pass 1' })).toBeVisible();
+});
+
+test('a denied night hub rechecks the same event on focus after approval', async ({ page, eventSlug }) => {
+  let approved = false;
+  await page.route(`**/api/customer/experience/${eventSlug}`, route => route.fulfill(approved ? { json: {
+    attendee: { displayName: 'Guest' }, preference: { attendeeVisible: false, keepPosted: false }, questions: [], updates: [], memories: [], visibleAttendees: 1,
+  } } : { status: 403, json: { error: 'Your RSVP is awaiting approval.' } }));
+  await page.route('**/api/customer/tickets', route => route.fulfill({ json: { attendee: { attendeeId: 'approved-guest' }, orders: approved ? [approvedOrder(eventSlug)] : [] } }));
+  await page.route('**/api/customer/wallet/config', route => route.fulfill({ json: { apple: false, google: false } }));
+  await page.goto(`/my-nights/${eventSlug}?view=passes`);
+  await expect(page.getByRole('heading', { name: 'Open your passes securely.' })).toBeVisible();
+  approved = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('img', { name: 'Entry QR code for ticket 1' })).toBeVisible();
+  await expect(page.getByText('RSVP-APPROVED', { exact: true })).toBeVisible();
+});
