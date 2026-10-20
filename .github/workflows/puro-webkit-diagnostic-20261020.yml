@@ -1,0 +1,118 @@
+name: Diagnose isolated WebKit Operations
+
+# Diagnosis only. This workflow cannot supply release evidence or activate code.
+on:
+  push:
+    branches: [diagnostic/puro-webkit-operations-20261020]
+    paths: [.github/workflows/puro-webkit-diagnostic-20261020.yml]
+permissions:
+  contents: read
+concurrency:
+  group: puro-webkit-diagnostic-20261020
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    if: github.repository == 'bechirobob/tickets' && github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/puro-webkit-operations-20261020' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Diagnostic-only isolation: refuse non-loopback targets and cross-origin traffic.
+      BECORE_ISOLATED_PREVIEW: 'true'
+      BECORE_RELEASE_SHA: 0615184140ea7ed526e436ccb2e92e4383b75e05
+      BECORE_TRUSTED_BASE: 43a8d9b3ac1e6f2be2c39215a076812dcc0392a6
+    steps:
+      - name: Check out the exact failed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 0615184140ea7ed526e436ccb2e92e4383b75e05
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify immutable diagnostic source and trusted ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = 4709ddf84614e2d22dae262320f9a649eca3308a
+          test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" refs/remotes/origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$BECORE_RELEASE_SHA"
+          git cat-file -e "$GITHUB_SHA^{commit}"
+          test "$(git rev-parse "$GITHUB_SHA^1")" = "$BECORE_RELEASE_SHA"
+          test "$(git diff --name-only "$BECORE_RELEASE_SHA" "$GITHUB_SHA")" = .github/workflows/puro-webkit-diagnostic-20261020.yml
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+          test -z "${E2E_BASE_URL:-}"
+      - name: Stage the independently trusted dependency auditor
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          source=scripts/audit-release-dependencies.py
+          target="$RUNNER_TEMP/tickets-approved-audit.py"
+          test "$(git ls-tree "$BECORE_TRUSTED_BASE" -- "$source" | cut -d ' ' -f 1)" = 100644
+          git show "$BECORE_TRUSTED_BASE:$source" > "$target"
+          test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Audit dependencies
+        id: dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-diagnostic
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit
+      - name: Verify installed audited dependencies
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-diagnostic
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
+      - name: Build the exact source without publishing
+        run: |
+          npm run build
+          node scripts/prepare-deploy.mjs
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; assert.equal(JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")).vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
+      - name: Install the original browser engines
+        run: npx playwright install --with-deps chromium webkit
+      - name: Prepare isolated local event database
+        run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Reproduce the original WebKit Operations command without retries
+        id: reproduce
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${E2E_BASE_URL:-}"
+          node scripts/prepare-operations-browser-fixture.mjs
+          npx playwright test --config playwright.operations.config.ts --project mobile-webkit --workers=1 --retries=0 --output test-results/operations 2>&1 | tee "$RUNNER_TEMP/operations-diagnostic.log"
+      - name: Preserve concise assertion evidence even on failure
+        if: always()
+        env:
+          DIAGNOSTIC_OUTCOME: ${{ steps.reproduce.outcome }}
+        run: |
+          python3 - <<'PY'
+          import os,pathlib
+          path=pathlib.Path(os.environ['RUNNER_TEMP'])/'operations-diagnostic.log'
+          text=path.read_text(errors='replace') if path.is_file() else 'The Operations command did not produce a log; inspect preceding setup steps.'
+          print('Diagnostic only; original run 39340324140 remains unresolved. Outcome:',os.environ['DIAGNOSTIC_OUTCOME'])
+          print(text[-24000:])
+          if os.environ['DIAGNOSTIC_OUTCOME']=='failure':
+              message=text[-12000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+              print('::error title=WebKit Operations diagnostic::'+message)
+          PY
+      - name: Preserve synthetic diagnostic traces and screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: puro-webkit-diagnostic-${{ github.run_id }}
+          path: |
+            test-results/operations
+            playwright-report
+            ${{ runner.temp }}/operations-diagnostic.log
+          if-no-files-found: warn
+          retention-days: 1
