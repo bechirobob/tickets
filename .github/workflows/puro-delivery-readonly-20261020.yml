@@ -1,0 +1,205 @@
+name: Inspect PURO delivery failures read-only
+
+# One fixed one-file successor of the completed access diagnostic; no deployment or writes.
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/puro-delivery-readonly-20261020.yml]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '1dbd4aecd90be057972c6d73b293680666f14150' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify one-file exact predecessor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD^1)" = '1dbd4aecd90be057972c6d73b293680666f14150'
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/puro-delivery-readonly-20261020.yml'
+      - name: Connect existing Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Read exact active PURO delivery evidence without mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          tailscale ssh root@hermes "EXPECTED_NEW_SHA=f242907bb73b4f9f157451a9199dd66d237dbaf6 python3 -" <<'PYREAD'
+          """Fixed-event, read-only delivery failure classification; aggregate output only."""
+          import fcntl,json,os,pathlib,re,sqlite3,subprocess,sys,time,urllib.request
+          SLUG="puro-exceso-20261024"
+          
+          def _rows(db,sql,values=()):
+              cursor=db.execute(sql,values)
+              names=[column[0] for column in cursor.description]
+              return [dict(zip(names,row)) for row in cursor]
+          
+          # Fixed labels only. Raw provider details, recipients, keys, and IDs stay in memory.
+          DELIVERY_STATES=frozenset(('queued','sent','delivered','delayed','failed','bounced','complained','suppressed'))
+          EXACT_REASONS={
+              'this recipient previously rejected delivery.':('prior_bad_mailbox_suppression','permanent_address_evidence'),
+              'the recipient mail server rejected delivery.':('recipient_server_rejection_unspecified','unknown'),
+              'the recipient mail server requested a retry.':('remote_temporary_deferral','temporary'),
+              'the recipient server did not accept delivery before expiry.':('remote_delivery_expired','unknown'),
+              'the message expired before handoff.':('prehandoff_expired','unknown'),
+              'delivery handoff needs reconciliation.':('handoff_uncertain','unknown'),
+              'mail accepted; queue receipt requires reconciliation.':('handoff_uncertain','unknown'),
+              'local mail service is temporarily unavailable.':('local_transport_unavailable','temporary'),
+              'transactional email is not configured.':('not_configured','configuration'),
+              'vps email connection is missing.':('not_configured','configuration'),
+              'vps email is awaiting delivery verification.':('provider_paused','configuration'),
+              'the server sending allowance is full; queued messages are safe.':('provider_quota','temporary'),
+              'email provider quota reached.':('provider_quota','temporary'),
+              'that message key belongs to different content.':('idempotency_content_conflict','configuration'),
+              'one valid recipient is required.':('invalid_recipient_format','permanent_address_evidence'),
+              'saved delivery payload is incomplete.':('saved_payload_incomplete','configuration'),
+              'email provider rejected the message.':('provider_rejection_unspecified','unknown'),
+              'email retry was rejected.':('provider_rejection_unspecified','unknown'),
+              'email delivery is pending.':('pending_unspecified','unknown'),
+              'fetch failed':('transport_error_unspecified','unknown'),
+              'the operation was aborted due to timeout':('transport_timeout','temporary'),
+              'the operation was aborted due to timeout.':('transport_timeout','temporary'),
+          }
+          
+          def classify_failure(reason):
+              text=reason if isinstance(reason,str) else ''
+              text=text[:1000]
+              normalized=' '.join(text.lower().split())
+              category,nature=EXACT_REASONS.get(normalized,('unclassified' if text else 'none','unknown' if text else 'none'))
+              # Require protocol context; never harvest arbitrary numbers from an address,
+              # URL, identifier, or access token. Return only bounded numeric status codes.
+              safe=re.sub(r'https?://\S+|\S+@\S+','[redacted]',text,flags=re.I)
+              smtp=sorted(set(re.findall(r'(?:\bSMTP\s*[:=]?\s*|\bsaid:\s*|^\s*)([45][0-9]{2})(?=[\s.)-]|$)',safe,re.I)))[:4]
+              enhanced=sorted(set(re.findall(r'(?:\bdsn\s*=\s*|\b(?:enhanced\s+)?status(?:\s+code)?\s*[:=]\s*|\b[45][0-9]{2}[ -]+)([45]\.[0-7]\.[0-9]{1,3})(?![\w.@/-])',safe,re.I)))[:4]
+              classes={code[0] for code in smtp+enhanced}
+              if len(classes)>1:
+                  category,nature='conflicting_smtp_evidence','unknown'
+              elif classes:
+                  nature='temporary' if '4' in classes else 'permanent_for_current_message'
+                  category='smtp_temporary_failure' if '4' in classes else 'smtp_permanent_failure'
+                  if '5.1.1' in enhanced: category,nature='bad_destination_mailbox','permanent_address_evidence'
+                  elif '5.1.2' in enhanced: category,nature='bad_destination_domain','permanent_address_evidence'
+                  elif '5.1.3' in enhanced: category,nature='invalid_destination_syntax','permanent_address_evidence'
+                  elif any(code.endswith('.2.2') for code in enhanced): category='mailbox_full'
+                  elif '5.2.1' in enhanced: category='mailbox_disabled'
+                  elif any(code.split('.')[1]=='7' for code in enhanced): category='smtp_security_or_policy'
+                  elif any(code.split('.')[1]=='4' for code in enhanced): category='smtp_network_or_routing'
+              elif re.search(r'\b(?:ETIMEDOUT|EAI_AGAIN|ECONNRESET|ECONNREFUSED)\b',safe):
+                  category,nature='transport_connection_failure','temporary_or_unknown'
+              return {'category':category,'failureNature':nature,'smtpCodes':smtp,'enhancedStatusCodes':enhanced}
+          
+          def _aggregate(items):
+              groups={}
+              for shape in items:
+                  encoded=json.dumps(shape,sort_keys=True)
+                  groups[encoded]=groups.get(encoded,0)+1
+              return [{'count':count,**json.loads(shape)} for shape,count in sorted(groups.items())]
+          
+          def _state(value):
+              return value if value in DELIVERY_STATES else 'other'
+          
+          def delivery_diagnosis(db):
+              registrations=_rows(db,"SELECT id,email,version,order_id FROM event_registrations WHERE event_slug=? AND kind='rsvp' AND status='confirmed' AND approved_at IS NOT NULL",(SLUG,))
+              current_shapes=[]
+              failures=[]
+              coverage=[]
+              recovered={'deliveredAfterMultipleSubmitAttempts':0,'acceptedAfterMultipleSubmitAttempts':0,'exceptionsWithLaterSameCurrentApprovalDelivered':0,'exceptionsWithLaterSameOrderPaymentDelivered':0}
+              for registration in registrations:
+                  prefix='registration-update/'+registration['id']+'/'
+                  key=prefix+str(registration['version'])
+                  deliveries=_rows(db,"""SELECT id,recipient,status,failure_reason,attempt_count,provider_id IS NOT NULL AS has_provider,
+                      provider_id LIKE 'vps-%' AS is_vps,json_extract(payload_json,'$.provider') AS saved_provider,
+                      next_attempt_at IS NOT NULL AS retry_scheduled,
+                      next_attempt_at IS NOT NULL AND julianday(next_attempt_at)<=julianday('now') AS retry_due,
+                      created_at,updated_at,provider_event_at
+                      FROM delivery_events WHERE kind='registration_update' AND json_extract(payload_json,'$.idempotencyKey')=?""",(key,))
+                  coverage.append({'currentDeliveryRows':len(deliveries),'delivered':any(d['status']=='delivered' for d in deliveries),'accepted':any(d['status']=='sent' for d in deliveries)})
+                  for delivery in deliveries:
+                      status=_state(delivery['status'])
+                      provider='vps' if delivery['is_vps'] or delivery['saved_provider']=='vps' else 'resend' if delivery['saved_provider']=='resend' else 'unknown'
+                      attempts=delivery['attempt_count']
+                      assert isinstance(attempts,int) and 0<=attempts<=100000,'Invalid attempt count'
+                      shape={'status':status,'provider':provider,'hasProvider':bool(delivery['has_provider']),
+                          'attempts':attempts,'retryScheduled':bool(delivery['retry_scheduled']),'retryDue':bool(delivery['retry_due'])}
+                      current_shapes.append(shape)
+                      if attempts>1 and status=='delivered': recovered['deliveredAfterMultipleSubmitAttempts']+=1
+                      if attempts>1 and status=='sent': recovered['acceptedAfterMultipleSubmitAttempts']+=1
+                      if status not in ('failed','bounced','delayed','complained','suppressed'): continue
+                      # Correlate only the same recipient and event; do not treat an
+                      # unrelated notice or an accepted-but-unconfirmed send as resolution.
+                      failure_at=delivery['provider_event_at'] or delivery['updated_at']
+                      later=_rows(db,"""SELECT newer.kind,newer.status,
+                          newer.kind='registration_update' AND json_extract(newer.payload_json,'$.idempotencyKey')=? AS same_current_approval,
+                          newer.kind='registration_update' AND instr(json_extract(newer.payload_json,'$.idempotencyKey'),?)=1 AS same_registration,
+                          newer.kind='payment_confirmation' AND newer.order_id=? AS same_order,
+                          julianday(newer.created_at)>julianday(?) AS message_created_later,
+                          newer.status='delivered' AND julianday(newer.provider_event_at)>julianday(?) AS delivery_confirmed_after_failure,
+                          count(*) AS count
+                          FROM delivery_events newer
+                          WHERE newer.id<>? AND lower(trim(newer.recipient))=lower(trim(?))
+                            AND newer.status IN ('sent','delivered')
+                            AND (julianday(newer.created_at)>julianday(?) OR
+                              (newer.status='delivered' AND julianday(newer.provider_event_at)>julianday(?)))
+                            AND ((newer.kind='registration_update' AND EXISTS (
+                              SELECT 1 FROM event_registrations related WHERE related.event_slug=?
+                              AND related.kind='rsvp' AND related.status='confirmed' AND related.approved_at IS NOT NULL
+                              AND instr(json_extract(newer.payload_json,'$.idempotencyKey'),'registration-update/'||related.id||'/')=1))
+                              OR (newer.kind='payment_confirmation' AND EXISTS (
+                              SELECT 1 FROM orders paid WHERE paid.id=newer.order_id AND paid.event_slug=? AND paid.status='paid')))
+                          GROUP BY 1,2,3,4,5,6,7""",
+                          (key,prefix,registration['order_id'],failure_at,failure_at,
+                           delivery['id'],delivery['recipient'],failure_at,failure_at,SLUG,SLUG))
+                      evidence=[{'kind':row['kind'],'status':row['status'],'sameCurrentApproval':bool(row['same_current_approval']),
+                          'sameRegistration':bool(row['same_registration']),'sameOrder':bool(row['same_order']),
+                          'messageCreatedLater':bool(row['message_created_later']),
+                          'deliveryConfirmedAfterFailure':bool(row['delivery_confirmed_after_failure']),'count':row['count']} for row in later]
+                      same_approval_delivered=any(item['status']=='delivered' and item['sameCurrentApproval'] for item in evidence)
+                      same_order_delivered=any(item['status']=='delivered' and item['kind']=='payment_confirmation' and item['sameOrder'] for item in evidence)
+                      recovered['exceptionsWithLaterSameCurrentApprovalDelivered']+=int(same_approval_delivered)
+                      recovered['exceptionsWithLaterSameOrderPaymentDelivered']+=int(same_order_delivered)
+                      failures.append({**shape,**classify_failure(delivery['failure_reason']),
+                          'appRetryEligible':status=='failed' and not delivery['has_provider'] and attempts<3 and bool(delivery['retry_scheduled']),
+                          'attemptLimitReached':attempts>=3,'laterSameRecipientEventEvidence':evidence})
+              return {'approvedRegistrations':len(registrations),'currentApprovalDeliveryRows':len(current_shapes),
+                  'registrationCoverageGroups':_aggregate(coverage),'currentApprovalDeliveryGroups':_aggregate(current_shapes),
+                  'currentExceptionRows':len(failures),'exceptionGroups':_aggregate(failures),'subsequentEvidenceCounts':recovered,
+                  'completeAttemptHistoryAvailable':False}
+          
+          def main(expected):
+              assert expected=="f242907bb73b4f9f157451a9199dd66d237dbaf6","Exact current revision required"
+              lock=os.open("/run/lock/becore-tickets-deploy.lock",os.O_RDONLY|os.O_NOFOLLOW)
+              fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+              props=dict(line.split("=",1) for line in subprocess.check_output(["systemctl","show","becore-tickets.service","--property=ActiveState,WorkingDirectory"],text=True).splitlines())
+              assert props=={"ActiveState":"active","WorkingDirectory":"/srv/becore-tickets/releases/"+expected}
+              request=urllib.request.Request("http://127.0.0.1:3119/healthz",headers={"Host":"tickets.becoreops.com"})
+              with urllib.request.urlopen(request,timeout=10) as response:health=json.load(response)
+              assert health.get("revision")==expected and health.get("runtime")=="vps" and health.get("active") is True
+              path=pathlib.Path("/var/lib/becore-tickets/tickets.sqlite")
+              assert path.is_file() and not path.is_symlink()
+              db=sqlite3.connect("file:"+str(path)+"?mode=ro",uri=True,timeout=5)
+              deadline=time.monotonic()+15
+              db.set_progress_handler(lambda:int(time.monotonic()>deadline),1000)
+              db.execute("PRAGMA query_only=ON");db.execute("BEGIN")
+              result=delivery_diagnosis(db)
+              assert db.total_changes==0
+              db.rollback();db.close()
+              print(json.dumps({"readOnly":True,"eventSlug":SLUG,"activeRevision":expected,"observedAt":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),**result},sort_keys=True))
+          
+          if __name__=="__main__":main(os.environ["EXPECTED_NEW_SHA"])
+          PYREAD
