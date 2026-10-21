@@ -1,6 +1,7 @@
 import { test, expect } from './analytics-fixture';
 import AxeBuilder from '@axe-core/playwright';
 import { captureConsentPreview } from './booking-consent';
+import { eventColourSchemes, eventPresentationVariables } from '../../lib/event-palette';
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
 test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{
   await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'The host is putting the date together. RSVPs open soon.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
@@ -156,5 +157,45 @@ for (const routeName of ['event', 'rsvp']) {
     await expect(form.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
     await expect(form.getByRole('link', { name: 'The Room', exact: true })).toHaveCount(0);
     await expect(form.getByRole('button', { name: 'Request my RSVP' })).toBeVisible();
+  });
+}
+
+// The same card appears on light event palettes and dark account/signup pages.
+// Exercise the rendered cascade, including expanded management and confirmation.
+for (const surface of ['event', 'rsvp', 'my-nights']) {
+  test(`${surface} RSVP card keeps readable colours without changing pass access`, async ({ page }, info) => {
+    await page.route('**/api/customer/my-nights', route => route.fulfill({ json: { attendee: { displayName: 'Contrast fixture' }, nights: [] } }));
+    await page.route('**/api/customer/notifications', route => route.fulfill({ json: { notifications: [], unread: 0 } }));
+    await page.route('**/api/customer/registrations**', route => {
+      expect(route.request().method()).toBe('GET');
+      return route.fulfill({ json: { registrations: [{ id: 'contrast-rsvp', eventSlug: 'after-dark-osu', title: 'After Dark: Osu', kind: 'rsvp', status: 'confirmed', partySize: 1, maxPartySize: 3, mode: 'rsvp', roomAccess: 1 }] } });
+    });
+    await page.goto(surface === 'my-nights' ? '/my-nights?view=rsvps' : `/${surface}/after-dark-osu`);
+    const card = page.locator('.my-registrations--studio');
+    await expect(card.getByRole('heading', { name: 'After Dark: Osu' })).toBeVisible();
+    await expect(card.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
+    await expect(card.getByRole('link', { name: 'The Room', exact: true })).toHaveAttribute('href', '/room/after-dark-osu');
+    await card.locator('.registration-manage summary').click();
+    await expect(card.getByRole('button', { name: 'Cancel RSVP', exact: true })).toBeVisible();
+    const palettes = surface === 'event' ? Object.keys(eventColourSchemes) : ['dark'];
+    for (const colourScheme of palettes) {
+      if (surface === 'event') {
+        const variables = eventPresentationVariables({ vibe: 'Late night', colourScheme });
+        await page.locator('.poster-event-page').evaluate((element, values) => {
+          for (const [key, value] of Object.entries(values)) (element as HTMLElement).style.setProperty(key, value);
+        }, variables);
+      }
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        expect((await new AxeBuilder({ page }).include('.my-registrations--studio').withRules(['color-contrast']).analyze()).violations, `${surface}/${colourScheme}/${colorScheme}`).toEqual([]);
+      }
+    }
+    await page.screenshot({ path: info.outputPath(`${surface}-rsvp-colours.png`), fullPage: true });
+    await card.getByRole('button', { name: 'Cancel RSVP', exact: true }).click();
+    await expect(card.getByRole('button', { name: 'Keep it', exact: true })).toBeVisible();
+    expect((await new AxeBuilder({ page }).include('.my-registrations--studio').withRules(['color-contrast']).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await card.getByRole('button', { name: 'Keep it', exact: true }).click();
+    await expect(card.locator('[data-status="confirmed"]')).toBeVisible();
   });
 }

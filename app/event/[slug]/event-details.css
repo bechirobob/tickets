@@ -12,6 +12,9 @@
 .poster-event-page .compact-event-story dl > div { gap: 12px; padding-block: 12px; }
 .poster-event-page .compact-event-story dt { color: var(--muted); }
 .poster-event-page .event-practical-details:not(:has(.event-dress-code)) { grid-template-columns: 1fr; }
+/* Shared RSVP cards use the event surface, not the dark My Nights palette. */
+.poster-event-page .my-registrations--studio :is(.registration-kind, h2 a, p, .registration-manage summary, .registration-manage button) { color: var(--event-ink); }
+.poster-event-page .my-registrations--studio .registration-manage button { border-color: var(--event-ink); }
 /* Artwork and facts flow through the selected event palette. */
 .event-detail-toolbar, .event-detail-layout { width: min(1040px, calc(100% - 80px)); margin-inline: auto; }
 .event-detail-toolbar { padding-block: 12px 20px; }
