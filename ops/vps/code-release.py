@@ -739,8 +739,8 @@ FLASHES_PACKAGE_BASE_BLOBS = {'mobile/package-lock.json': 'ebae7283d0906a9cb42b3
 # reviewed application snapshot P. Dependencies, workflows and schema stay fixed.
 NAVIGATION_RELEASE_BASELINE = '5ddf0bc9186626d8325f72f216f5bf1e730ad189'
 NAVIGATION_RELEASE_BASE_TREE = '5b91ad4592fcf5dcb9882e86e338f0a58f26a4a2'
-NAVIGATION_APP_SNAPSHOT = 'ae2004609ee5fa4bee28929e854649658153f766'
-NAVIGATION_APP_TREE = '2ab6f391388e9b5523006fb3e114e82b324644f2'
+NAVIGATION_APP_SNAPSHOT = 'cbe6041a5359aff8b98cac8f682c9a7cb3f5a501'
+NAVIGATION_APP_TREE = '3cf0a4f71d22b609278cccf74563a5218d450334'
 NAVIGATION_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 NAVIGATION_APPLICATION_INPUTS = {'app/api/customer/room-updates/route.ts': None,
  'app/api/rooms/[slug]/access/route.ts': '86de698f93b4068ebe45e7e2d66966f2e5a58ba2',
@@ -764,6 +764,7 @@ NAVIGATION_APPLICATION_INPUTS = {'app/api/customer/room-updates/route.ts': None,
  'docs/mobile/iphone-interface.md': 'e4fc69981cf054614ec72e7915c67df4a47b4528',
  'lib/attendee-auth.ts': '99a70a6d78fd3c0d8a7d4839de00bafd0bd3dd80',
  'lib/brand-arrival.ts': None,
+ 'lib/room-update-summary.ts': None,
  'lib/room-updates.ts': None,
  'lib/top-panel-position.ts': None,
  'package.json': 'a3db62441e7b0c8676dc1a166b913004af92eedd',
@@ -785,7 +786,7 @@ NAVIGATION_APPLICATION_BLOBS = {'app/api/customer/room-updates/route.ts': 'f2431
  'app/brand-arrival.css': 'f92c1856c052d3357e8f230e806caae426705c92',
  'app/brand-arrival.tsx': '50281d16be1aefe130edc24118957381bafa3611',
  'app/customer-dock.tsx': '28ad0341bf1f15dfbcc7d630475ae18296c971be',
- 'app/iphone-interface.css': 'fc99ce9e3e28146108843e0973fa6dac2a300e39',
+ 'app/iphone-interface.css': '7cf1f56c8429ab4e66d983474b29a49e5b6e40a8',
  'app/layout.tsx': '349f0cbabcd8020bb178bc66ff96c3a271eda1ed',
  'app/mobile-navigation.tsx': '5450c96b389640d6cba47f20557fe991a3a8358b',
  'app/notification-bell.tsx': 'f64fd65812006bd450554709c5ad02158c060862',
@@ -795,25 +796,26 @@ NAVIGATION_APPLICATION_BLOBS = {'app/api/customer/room-updates/route.ts': 'f2431
  'app/room/[slug]/room-client.tsx': '9901bd498c867272f16701a43e32ff5287b4e14a',
  'app/tickets/ticket-wallet.tsx': 'f0cdd0b6e698c79b09704485fc92bd62d0f44be7',
  'app/use-header-panel.ts': '4f63d87e17dc785b18843b8191434331b2a1dbce',
- 'app/use-room-updates.ts': '4bf2e5c2378da970c2e2a3e1640a68aa64fb7777',
+ 'app/use-room-updates.ts': '47f84a50890035f3eaf1dfede9d71a995a563249',
  'app/use-top-panel-position.ts': 'c198f8df3646a1a8191986459d26441ea55c10d9',
  'docs/design/brand-arrival.md': 'f6e4bb364421ad7288c7346f47d596be6b86530a',
  'docs/mobile/iphone-interface.md': '52d28270de3d8125da31dbe70762fd5a38c1fa35',
  'lib/attendee-auth.ts': '00c9e1e869a3b36cca533ba23524a005fe684c9d',
- 'lib/brand-arrival.ts': 'd88ff52c6d31c3def28833e65dfa5f2bc3e6c151',
- 'lib/room-updates.ts': '872fedf0c529ec0058966ab34f83e39fce1f634e',
+ 'lib/brand-arrival.ts': '145955101e3f847d41b25bfb7d9193838e01db14',
+ 'lib/room-update-summary.ts': 'b10912adc58b9b155090c004c130a5ce9d84f4e0',
+ 'lib/room-updates.ts': 'cf4b3fccf25f1d280fef807c8c88fc3c51badbf3',
  'lib/top-panel-position.ts': '240d1ff8a1d212abba2fdbd48ffcafffbabba6df',
  'package.json': '45445fffc86e256cc2d5cd440c0e11c66ab8f645',
- 'tests/brand-arrival.test.mjs': '317e1cbb4b04676ae7a8dad6b16060542e07d3ad',
- 'tests/e2e/brand-arrival.spec.ts': '3a248a8089407305577f1badbb8313520cecf5fb',
+ 'tests/brand-arrival.test.mjs': '451ef141ba4b14bcbc087541aa2a2aeee7c40071',
+ 'tests/e2e/brand-arrival.spec.ts': '69073eea8110e3783e7a5dd51a2986ff8433fecc',
  'tests/e2e/customer-feedback.spec.ts': '6738acad48bac13f9dbaa683c05fecfba44a2210',
- 'tests/e2e/menu-option-a.spec.ts': '9f9a9cab01d4d2f75757675e5134624825e55bb4',
+ 'tests/e2e/menu-option-a.spec.ts': 'bd6d6db6da4be435b73b960d6a664e08dda8144b',
  'tests/e2e/mobile-app-behavior.spec.ts': 'b0b336ee944c09b938815660cb70dc58578b7568',
  'tests/e2e/room-shortcut.spec.ts': 'dce5aece13dc9ef638777f7a05668f02aab9f59b',
  'tests/header-panel-focus.test.mjs': '9a922b8ab93d24fd85324cd773a6aa691d8e7e1e',
- 'tests/menu-option-a.test.mjs': 'b0d3297493e1e986dda7358291780b70dea10d2d',
+ 'tests/menu-option-a.test.mjs': 'd9ea4553aa579a03d4bb401201f773de89db96ac',
  'tests/mobile-ui.test.mjs': '405c23b32bd288b47540194f18ead1fd23e60a3b',
- 'tests/room-update-client.test.mjs': 'dd6380210a79705b0d0a4c470dc40b238ec0bcae',
+ 'tests/room-update-client.test.mjs': 'b999cae000af0d70eccb814b659b57b03872cf15',
  'tests/room-updates.test.ts': 'f189f11b585879ab5195f9dba8d704f26fa16761',
  'tests/top-panel-position.test.ts': '85b1447323e1cea78abf5c321f1314336d1e4553'}
 NAVIGATION_DEPENDENCY_BLOBS = {'package-lock.json': '3fa4bfae990eac872f88c72d30a51c995c35574d',

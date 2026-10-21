@@ -1,11 +1,10 @@
 import { attendeeRoomAdmissionSource, hashToken, readCookie } from "./attendee-auth";
 import { roomPolicyFromRecord, type RoomPolicyRecord } from "./room-policy";
+import type { RoomUpdateSummary } from "./room-update-summary";
 
 const updateKinds = "'room_message', 'host_update'";
 const encoder = new TextEncoder();
 const snapshotLifetime = 10 * 60_000;
-
-export type RoomUpdateSummary = { eventSlug: string; title: string; unread: number; expiresAt: string };
 
 // This projection deliberately never returns notification titles, bodies, senders,
 // ticket details or attendee profiles. Admission is the same as Room entry.

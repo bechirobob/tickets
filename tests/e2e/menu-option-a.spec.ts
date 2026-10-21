@@ -86,13 +86,17 @@ test('Option A wraps enlarged labels and retains navigation on a page without th
   await page.setViewportSize({ width: 320, height: 568 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/organizer/submit');
-  await page.addStyleTag({ content: '.night-mobile-menu__panel a > span { font-size: 28px; }' });
+  // Keep production style-src 'self' enforced while exercising enlarged labels.
+  const enlargedLabelsUrl = new URL('/__e2e__/menu-enlarged-labels.css', page.url()).href;
+  await page.route(enlargedLabelsUrl, route => route.fulfill({ contentType: 'text/css', body: '.night-mobile-menu__panel a > span { font-size: 28px; }' }));
+  await page.addStyleTag({ url: enlargedLabelsUrl });
   const trigger = page.getByRole('button', { name: 'Open navigation', exact: true });
   await trigger.click();
   const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
   const rows = menu.getByRole('link');
   await expect(rows).toHaveCount(7);
   for (let index = 0; index < await rows.count(); index++) {
+    await expect(rows.nth(index).locator(':scope > span')).toHaveCSS('font-size', '28px');
     await page.keyboard.press('Tab');
     await expect(rows.nth(index)).toBeFocused();
     await expect(rows.nth(index)).toBeInViewport({ ratio: 1 });
@@ -100,5 +104,50 @@ test('Option A wraps enlarged labels and retains navigation on a page without th
   await expectVisibleLettering(page, '.night-mobile-menu__panel');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+});
+
+test('Option A keeps native keyboard focus inside the short-landscape scrollport', async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 390 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/events');
+  const trigger = page.getByRole('button', { name: 'Open navigation', exact: true });
+  await expect(trigger).toBeEnabled();
+  await trigger.focus();
+  await trigger.press('Enter');
+  const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
+  const close = menu.getByRole('button', { name: 'Close navigation', exact: true });
+  const rows = menu.getByRole('link');
+  await expect(close).toBeFocused();
+  await expect(rows).toHaveCount(4);
+  await expect(menu).toHaveCSS('scroll-padding-top', '8px');
+  await expect(menu).toHaveCSS('scroll-padding-bottom', '8px');
+  expect(await menu.evaluate(panel => panel.scrollHeight > panel.clientHeight)).toBe(true);
+
+  // Only native Tab changes focus/scrolling. Never repair visibility in the test.
+  for (const direction of ['Tab', 'Shift+Tab']) {
+    const indices = direction === 'Tab' ? [0, 1, 2, 3] : [2, 1, 0];
+    for (const index of indices) {
+      await page.keyboard.press(direction);
+      const row = rows.nth(index);
+      await expect(row).toBeFocused();
+      await expect(row).toBeInViewport({ ratio: 1 });
+      await expect.poll(() => row.evaluate(link => {
+        const panel = link.closest('nav')!;
+        const bounds = panel.getBoundingClientRect();
+        const style = getComputedStyle(panel);
+        const rowBounds = link.getBoundingClientRect();
+        return Math.min(
+          rowBounds.top - bounds.top - parseFloat(style.borderTopWidth),
+          bounds.bottom - parseFloat(style.borderBottomWidth) - rowBounds.bottom,
+        );
+      })).toBeGreaterThan(2);
+    }
+  }
+  await page.keyboard.press('Shift+Tab');
+  await expect(close).toBeFocused();
+  await expect(close).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });

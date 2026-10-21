@@ -31,7 +31,8 @@ function fixture(options = {}) {
       },
       dispatch(type, detail = {}) {
         const event = { type, target: object, defaultPrevented: false, propagationStopped: false,
-          preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.propagationStopped = true; }, ...detail };
+          preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.propagationStopped = true; },
+          stopImmediatePropagation() { this.propagationStopped = true; this.immediatePropagationStopped = true; }, ...detail };
         for (const { fn } of [...(listeners.get(type) ?? [])]) fn(event);
         return event;
       },
@@ -313,9 +314,129 @@ test('pointer dismissal cannot click through, while Skip click and keyboard dism
       : action === 'skip' ? page.root.dispatch('click', { target: page.skip })
       : page.document.dispatch('keydown', { key: 'Escape', target: page.skip });
     if (action !== 'keyboard') { assert.equal(event.defaultPrevented, true); assert.equal(event.propagationStopped, true); }
+    assert.equal(page.root.hidden, true);
+    if (action === 'pointer') {
+      page.window.dispatch('pointerup');
+      page.window.dispatch('click', { detail: 1 });
+    }
     page.assertClosed(); assert.equal(page.entry.phase, 'done');
   }
 });
+
+for (const pointerType of ['mouse', 'touch', 'pen']) {
+  test(`${pointerType} dismissal suppresses its up and synthesized click after the scene hides`, () => {
+    const page = fixture(); page.mount(); page.frame();
+    const down = page.document.dispatch('pointerdown', { target: page.root, pointerId: 7, pointerType });
+    assert.equal(down.defaultPrevented, true); assert.equal(page.root.hidden, true);
+    const up = page.window.dispatch('pointerup', { target: {}, pointerId: 7, pointerType });
+    assert.equal(up.defaultPrevented, true); assert.equal(up.immediatePropagationStopped, true);
+    if (pointerType === 'touch') {
+      const end = page.window.dispatch('touchend', { target: {}, touches: [] });
+      assert.equal(end.defaultPrevented, true); assert.equal(end.immediatePropagationStopped, true);
+      const [listener] = page.window.listeners.get('touchend');
+      assert.equal(listener.capture.capture, true); assert.equal(listener.capture.passive, false);
+    }
+    const click = page.window.dispatch('click', { target: {}, pointerId: 7, pointerType, detail: 1 });
+    assert.equal(click.defaultPrevented, true); assert.equal(click.immediatePropagationStopped, true);
+    page.assertClosed();
+    assert.equal(page.window.dispatch('click', { detail: 1 }).defaultPrevented, false);
+  });
+}
+
+test('a long-held dismissal still owns its legacy touch click after the visual deadline', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7, pointerType: 'touch' });
+  page.advance(3000); assert.equal(page.root.hidden, true);
+  page.window.dispatch('pointerup', { pointerId: 7 });
+  page.window.dispatch('touchend'); page.advance(300);
+  const click = page.window.dispatch('click', { detail: 1 });
+  assert.equal(click.defaultPrevented, true); page.assertClosed();
+});
+
+test('touchend retains the guard through its delayed click even without pointerup', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7, pointerType: 'touch' });
+  assert.equal(page.window.dispatch('touchend', { touches: [] }).defaultPrevented, true);
+  page.advance(300);
+  assert.equal(page.window.dispatch('click', { detail: 1 }).defaultPrevented, true);
+  page.assertClosed();
+});
+
+test('touch cancellation releases the guard without delaying a later tap', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7, pointerType: 'touch' });
+  page.window.dispatch('touchcancel', { touches: [] }); page.assertClosed();
+  assert.equal(page.window.dispatch('click', { pointerId: 8, detail: 1 }).defaultPrevented, false);
+});
+
+test('another touch ending cannot cancel or expire a still-held dismissing gesture', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7, pointerType: 'touch' });
+  assert.equal(page.window.dispatch('touchend', { touches: [{}] }).defaultPrevented, false);
+  page.window.dispatch('touchcancel', { touches: [{}] }); page.advance(3000);
+  page.window.dispatch('pointerup', { pointerId: 7 });
+  assert.equal(page.window.dispatch('click', { detail: 1 }).defaultPrevented, true);
+  page.assertClosed();
+});
+
+test('another pointer cannot end the dismissing gesture guard', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7 });
+  assert.equal(page.window.dispatch('pointerup', { pointerId: 8 }).defaultPrevented, false);
+  page.window.dispatch('pointercancel', { pointerId: 8 }); page.advance(3000);
+  assert.equal(page.window.dispatch('click', { pointerId: 8, detail: 1 }).defaultPrevented, false);
+  page.window.dispatch('pointerup', { pointerId: 7 });
+  assert.equal(page.window.dispatch('click', { pointerId: 7, detail: 1 }).defaultPrevented, true);
+  page.assertClosed();
+});
+
+for (const next of ['pointerdown', 'keydown', 'pointercancel']) {
+  test(`${next} releases the old gesture without swallowing a later intentional action`, () => {
+    const page = fixture(); page.mount(); page.frame();
+    page.document.dispatch('pointerdown', { target: page.root, pointerId: 7 });
+    page.window.dispatch(next, { pointerId: next === 'pointerdown' ? 8 : 7 });
+    page.assertClosed();
+    assert.equal(page.window.dispatch('pointerup', { pointerId: 8 }).defaultPrevented, false);
+    assert.equal(page.window.dispatch('click', { pointerId: 8, detail: 1 }).defaultPrevented, false);
+  });
+}
+
+test('keyboard or assistive clicks are not mistaken for the dismissing pointer click', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7 });
+  assert.equal(page.window.dispatch('click', { detail: 0 }).defaultPrevented, false);
+  page.window.dispatch('pointerup', { pointerId: 7 });
+  assert.equal(page.window.dispatch('click', { pointerId: 7, detail: 1 }).defaultPrevented, true);
+  page.assertClosed();
+});
+
+test('a completed pointer with no click releases the guard after a bounded fallback', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7 });
+  page.window.dispatch('pointerup', { pointerId: 7 });
+  page.advance(500); page.assertClosed();
+  assert.equal(page.window.dispatch('click', { detail: 1 }).defaultPrevented, false);
+});
+
+test('a completed touch with no compatibility click releases every listener', () => {
+  const page = fixture(); page.mount(); page.frame();
+  page.document.dispatch('pointerdown', { target: page.root, pointerId: 7, pointerType: 'touch' });
+  page.window.dispatch('pointerup', { pointerId: 7 });
+  page.window.dispatch('touchend', { touches: [] });
+  page.advance(499); assert.ok(page.listeners > 0);
+  page.advance(1); page.assertClosed();
+});
+
+for (const end of ['unmount', 'pagehide', 'hidden']) {
+  test(`${end} also removes the separate dismissing gesture guard`, () => {
+    const page = fixture(); page.mount(); page.frame();
+    page.document.dispatch('pointerdown', { target: page.root, pointerId: 7 });
+    if (end === 'unmount') page.unmount();
+    else if (end === 'hidden') page.hide();
+    else page.window.dispatch('pagehide');
+    page.assertClosed();
+  });
+}
 
 for (const state of ['pending', 'shown']) {
   for (const reason of ['hidden', 'motion', 'pagehide', 'bfcache', 'popstate', 'hashchange']) {
