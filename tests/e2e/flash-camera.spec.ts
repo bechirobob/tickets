@@ -6,11 +6,13 @@ import { expect, test } from "./catalogue";
 
 test.use({ serviceWorkers: "block" });
 
+type NativeUpload = { bytes: number[]; matchesDisplayedBlob: boolean };
+
 async function cameraFixture(page: Page, eventSlug: string) {
   if (test.info().project.use.baseURL !== "http://127.0.0.1:8788") throw new Error("Synthetic camera fixture refuses non-local origins");
   await page.emulateMedia({ reducedMotion: "reduce" });
   // Synthetic sensor pixels exercise real canvas, JPEG, crop and upload without camera permission or personal photos.
-  await page.addInitScript(() => {
+  await page.addInitScript(({ eventSlug }) => {
     // Observe the exact local objects without fetch(blob:), which production CSP
     // correctly excludes from connect-src. Native URL creation/revocation stays intact.
     const previews = new Map<string, Blob>();
@@ -22,6 +24,31 @@ async function cameraFixture(page: Page, eventSlug: string) {
     URL.revokeObjectURL = url => { previews.delete(url); revoke(url); };
     const sensorState = { captures: 0, streams: [] as MediaStream[] };
     (window as typeof window & { __flashSyntheticSensor: typeof sensorState }).__flashSyntheticSensor = sensorState;
+    // Observe the exact File at the native fetch boundary, without changing the
+    // request. WebKit's inspector may omit Blob parts from reported multipart data.
+    const nativeUploads: Promise<NativeUpload>[] = [];
+    (window as typeof window & { __flashFixtureUploads: typeof nativeUploads }).__flashFixtureUploads = nativeUploads;
+    const nativeFetch = window.fetch;
+    window.fetch = (input, init) => {
+      const target = new URL(input instanceof Request ? input.url : String(input), location.href);
+      if (target.href === `http://127.0.0.1:8788/api/rooms/${encodeURIComponent(eventSlug)}/flashes` && init?.method === "POST") {
+        const body = init.body;
+        const photo = body instanceof FormData ? body.get("photo") : null;
+        const image = document.querySelector<HTMLImageElement>(".flash-capture__preview img");
+        const displayed = image && previews.get(image.currentSrc);
+        if (!(body instanceof FormData) || Array.from(body.keys()).sort().join(",") !== "consent,photo" || body.get("consent") !== "yes"
+          || !(photo instanceof File) || photo.name !== "flash.jpg" || photo.type !== "image/jpeg" || !photo.size || photo.size > 512 * 1024
+          || !image?.complete || !image.naturalWidth || image.src !== image.currentSrc || !displayed || displayed.size > 512 * 1024
+          || sensorState.captures < 1 || sensorState.streams.length < 1 || sensorState.streams.some(stream => stream.getTracks().length !== 0)
+          || nativeUploads.length !== 0) throw new Error("Native upload observation requires the settled synthetic camera fixture");
+        nativeUploads.push(Promise.all([photo.arrayBuffer(), displayed.arrayBuffer()]).then(([file, preview]) => {
+          const bytes = new Uint8Array(file), shown = new Uint8Array(preview);
+          return { bytes: Array.from(bytes), matchesDisplayedBlob: bytes.length === shown.length && bytes.every((byte, index) => byte === shown[index]) };
+        }));
+      }
+      // Forward the exact input/init immediately; no body mutation or re-encoding.
+      return Reflect.apply(nativeFetch, window, [input, init]);
+    };
     Object.defineProperty(HTMLVideoElement.prototype, "videoWidth", { get: () => 1280 });
     Object.defineProperty(HTMLVideoElement.prototype, "videoHeight", { get: () => 720 });
     HTMLMediaElement.prototype.play = async () => {};
@@ -43,10 +70,10 @@ async function cameraFixture(page: Page, eventSlug: string) {
       }
       return Reflect.apply(draw, this, [image, ...coordinates]);
     };
-  });
+  }, { eventSlug });
   const future = new Date(Date.now() + 86_400_000).toISOString();
   const room = { eventSlug, eventTitle: "Camera fixture", readOnly: false, readOnlyAt: future };
-  const uploads: Buffer[] = [];
+  const uploads: { body: Buffer; contentType: string }[] = [];
   let refusedTraffic = false;
   await page.route("**/*", async route => {
     const request = route.request();
@@ -74,7 +101,7 @@ async function cameraFixture(page: Page, eventSlug: string) {
     if (path.endsWith("/access")) return route.fulfill({ json: { allowed: true, attendee: { id: "self" }, room } });
     if (path.endsWith("/flashes")) {
       if (route.request().method() === "POST") {
-        uploads.push(route.request().postDataBuffer()!);
+        uploads.push({ body: route.request().postDataBuffer()!, contentType: route.request().headers()["content-type"] });
         return route.fulfill({ json: { flash: { id: "camera-fixture", attendeeId: "self", mine: true, displayName: "You", width: 500, height: 1000, createdAt: new Date().toISOString(), expiresAt: future, openedAt: null } } });
       }
       return route.fulfill({ json: { flashes: [], expiresAt: future } });
@@ -127,9 +154,16 @@ async function cameraFixture(page: Page, eventSlug: string) {
   return { uploads, screenshot };
 }
 
+async function settledPreview(page: Page) {
+  const image = page.locator(".flash-capture__preview img");
+  // Wait for the native load, not a decode() call racing WebKit's lazy source
+  // selection during a comparison switch, retake or viewport change.
+  await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0 && element.currentSrc === element.src)).toBe(true);
+  return image;
+}
+
 async function previewBytes(page: Page) {
-  return page.locator(".flash-capture__preview img").evaluate(async (element: HTMLImageElement) => {
-    await element.decode();
+  return (await settledPreview(page)).evaluate(async (element: HTMLImageElement) => {
     const blob = (window as typeof window & { __flashFixtureBlobs: Map<string, Blob> }).__flashFixtureBlobs.get(element.currentSrc);
     if (!blob) throw new Error("Expected the displayed, unreleased preview Blob");
     return Array.from(new Uint8Array(await blob.arrayBuffer()));
@@ -137,15 +171,15 @@ async function previewBytes(page: Page) {
 }
 
 async function previewPixels(page: Page) {
-  return page.locator(".flash-capture__preview img").evaluate(async (element: HTMLImageElement) => {
-    await element.decode(); const canvas = document.createElement("canvas"); canvas.width = element.naturalWidth; canvas.height = element.naturalHeight;
+  return (await settledPreview(page)).evaluate((element: HTMLImageElement) => {
+    const canvas = document.createElement("canvas"); canvas.width = element.naturalWidth; canvas.height = element.naturalHeight;
     const context = canvas.getContext("2d")!; context.drawImage(element, 0, 0);
     const pixel = (x: number) => Array.from(context.getImageData(x, Math.floor(canvas.height / 2), 1, 1).data);
     return { width: canvas.width, height: canvas.height, left: pixel(4), right: pixel(canvas.width - 5) };
   });
 }
 
-test("all cinematic looks preview the exact outgoing blob and preserve consent", async ({ page, eventSlug }, info) => {
+test("all cinematic looks preview the exact outgoing blob and preserve consent", async ({ page, eventSlug, browserName }, info) => {
   const { uploads, screenshot } = await cameraFixture(page, eventSlug);
   const bounds = await page.locator("video").boundingBox();
   await page.getByRole("button", { name: "Take Flash photo" }).click();
@@ -159,19 +193,34 @@ test("all cinematic looks preview the exact outgoing blob and preserve consent",
     await dialog.getByRole("button", { name: new RegExp(`^${name}:`, "u") }).click();
     await expect(dialog.locator(".flash-capture__look-label")).toHaveText(name);
     await expect(dialog.getByRole("slider", { name: /Strength/u })).toHaveValue("100");
-    expect(await previewBytes(page)).not.toEqual(original);
+    expect(Buffer.from(await previewBytes(page)).equals(Buffer.from(original))).toBe(false);
   }
   await screenshot(info, "chrome-editor");
-  await dialog.getByRole("button", { name: "Show original" }).click(); expect(await previewBytes(page)).toEqual(original);
+  await dialog.getByRole("button", { name: "Show original" }).click(); expect(Buffer.from(await previewBytes(page)).equals(Buffer.from(original))).toBe(true);
   await dialog.getByRole("button", { name: "Back to look" }).click();
+  await expect(dialog.locator(".flash-capture__look-label")).toHaveText("Chrome");
   const selected = Buffer.from(await previewBytes(page));
   const accessibility = await new AxeBuilder({ page }).include(".flash-capture").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await dialog.getByRole("checkbox").check();
   await dialog.getByRole("button", { name: "Send Flash", exact: true }).click();
-  await expect(dialog).not.toBeVisible(); expect(uploads).toHaveLength(1);
-  expect(uploads[0].includes(selected)).toBe(true);
+  await expect(dialog).not.toBeVisible(); expect(uploads.length).toBe(1);
+  const nativeUploads = await page.evaluate(() => Promise.all((window as typeof window & { __flashFixtureUploads: Promise<NativeUpload>[] }).__flashFixtureUploads));
+  expect(nativeUploads.length).toBe(1);
+  expect(nativeUploads[0].matchesDisplayedBlob).toBe(true);
+  expect(Buffer.from(nativeUploads[0].bytes).equals(selected)).toBe(true);
+  const multipart = await new Response(new Uint8Array(uploads[0].body), { headers: { "content-type": uploads[0].contentType } }).formData();
+  expect(Array.from(multipart.keys()).sort()).toEqual(["consent", "photo"]);
+  expect(multipart.get("consent")).toBe("yes");
+  const part = multipart.get("photo");
+  if (!(part instanceof File)) throw new Error("Expected a multipart photo File");
+  expect(part.name).toBe("flash.jpg"); expect(part.type).toBe("image/jpeg");
+  // Playwright 1.62.1/WebKit 2336 reports headers but flattens away Blob bodies.
+  // Only that exact empty-part shape is allowed; nonempty wrong/truncated bytes fail.
+  // The unchanged File handed to native fetch must still match both previews above.
+  if (browserName === "webkit" && part.size === 0) expect(uploads[0].body.includes(selected)).toBe(false);
+  else { expect(Buffer.from(await part.arrayBuffer()).equals(selected)).toBe(true); expect(uploads[0].body.includes(selected)).toBe(true); }
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __flashFixtureBlobs: Map<string, Blob> }).__flashFixtureBlobs.size)).toBe(0);
 });
 
@@ -202,7 +251,7 @@ test("rapid look changes, strength zero, comparison and retake remain safe", asy
   if (touch) { await touch.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] }); await touch.detach(); }
   else { await preview.dispatchEvent("pointercancel", { pointerType: "mouse", pointerId: 1 }); await page.mouse.up(); }
   await expect(dialog.locator(".flash-capture__look-label")).toHaveText("After Hours");
-  await slider.fill("0"); expect(await previewBytes(page)).toEqual(original);
+  await slider.fill("0"); expect(Buffer.from(await previewBytes(page)).equals(Buffer.from(original))).toBe(true);
   const oldUrls = await page.evaluate(() => Array.from((window as typeof window & { __flashFixtureBlobs: Map<string, Blob> }).__flashFixtureBlobs.keys()));
   await dialog.getByRole("button", { name: "Retake" }).click();
   await expect.poll(() => page.evaluate(urls => urls.every(url => !(window as typeof window & { __flashFixtureBlobs: Map<string, Blob> }).__flashFixtureBlobs.has(url)), oldUrls)).toBe(true);
@@ -210,7 +259,7 @@ test("rapid look changes, strength zero, comparison and retake remain safe", asy
   await expect(dialog.getByRole("checkbox")).not.toBeChecked();
   await expect(dialog.getByRole("button", { name: /^Original:/u })).toHaveAttribute("aria-pressed", "true");
   await screenshot(info, "original-retake");
-  expect(uploads).toHaveLength(0);
+  expect(uploads.length).toBe(0);
 });
 
 test("narrow portrait and rotated landscape keep the saved frame and controls visible", async ({ page, eventSlug }, info) => {
