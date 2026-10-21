@@ -831,6 +831,48 @@ NAVIGATION_TEST_SCRIPT_APPENDS = {
 }
 
 
+# Exact post-navigation maintenance: Menu placement, Room lifecycle and the
+# reviewed browser assertion budget. C changes only two controls; P retains S.
+# No dependency, workflow, schema, audit-policy or permission change is allowed.
+MAINTENANCE_RELEASE_BASELINE = '31cf526ad86b678c5193b405d0ce2420238f9586'
+MAINTENANCE_RELEASE_BASE_TREE = '5fda675b1d23d065ad93dad7a38cca0e5c0ecd5f'
+MAINTENANCE_APP_SNAPSHOT = '488f2a8a231748df6e6dfab6c862967769a6bde8'
+MAINTENANCE_APP_TREE = '2956efaa2d51a547bee8dfd8499abf443b0228fd'
+MAINTENANCE_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+MAINTENANCE_APPLICATION_INPUTS = {'app/customer-dock.tsx': '28ad0341bf1f15dfbcc7d630475ae18296c971be',
+ 'app/iphone-interface.css': '7cf1f56c8429ab4e66d983474b29a49e5b6e40a8',
+ 'app/mobile-navigation.tsx': '5450c96b389640d6cba47f20557fe991a3a8358b',
+ 'app/registration-form.tsx': '3377c892e301dd8c8ab79a1b0b25bd29b148631d',
+ 'app/room/[slug]/room-client.tsx': '9901bd498c867272f16701a43e32ff5287b4e14a',
+ 'app/use-room-updates.ts': '47f84a50890035f3eaf1dfede9d71a995a563249',
+ 'package.json': '53d1f8f8d2a69e12757a854b52cdc1d5cb4a1a46',
+ 'tests/e2e/main-menu-top.spec.ts': None,
+ 'tests/e2e/menu-option-a.spec.ts': 'bd6d6db6da4be435b73b960d6a664e08dda8144b',
+ 'tests/e2e/mobile-app-behavior.spec.ts': 'b0b336ee944c09b938815660cb70dc58578b7568',
+ 'tests/e2e/public-journey.spec.ts': '3a1b562918d91cfd0882684a47d1c8537996c81d',
+ 'tests/e2e/room-shortcut.spec.ts': 'dce5aece13dc9ef638777f7a05668f02aab9f59b',
+ 'tests/menu-option-a.test.mjs': 'd9ea4553aa579a03d4bb401201f773de89db96ac',
+ 'tests/room-lifecycle.test.mjs': None}
+MAINTENANCE_APPLICATION_BLOBS = {'app/customer-dock.tsx': '674b40073b4f21d5621a1719b2f48c668f64e264',
+ 'app/iphone-interface.css': 'f458dbe2e1c8aa338dff3104e37ddb69ca2119d2',
+ 'app/mobile-navigation.tsx': 'f519de5285d36c6d1aeb677b19796e5ee861dc97',
+ 'app/registration-form.tsx': '555271f87033e08e64575a35f0041855d3ad8e41',
+ 'app/room/[slug]/room-client.tsx': '7553467949f07e199c85439dc129e785fdfa4184',
+ 'app/use-room-updates.ts': 'a10c53fc340aafe186132eaefe3968c570b8a08a',
+ 'package.json': '71a9d382e9f7f1a8a6b039e269f7e3eb01cdd88d',
+ 'tests/e2e/main-menu-top.spec.ts': 'e4f2eaed706eff59034c020118efd648303f98a2',
+ 'tests/e2e/menu-option-a.spec.ts': 'ed2d37f2fafe54a38b163c3aa9d7ceef376756b7',
+ 'tests/e2e/mobile-app-behavior.spec.ts': 'ab24eb1f5d3c44dac58ac2b4cd42dac6bc05aca9',
+ 'tests/e2e/public-journey.spec.ts': '36953eca91c0188a7db5d41c2d76f687fab383cf',
+ 'tests/e2e/room-shortcut.spec.ts': '235fb27102327fbb08ea53737e5bb91e75e49452',
+ 'tests/menu-option-a.test.mjs': '40e3b27d316b2065f835f271cfc3364c1c4c763d',
+ 'tests/room-lifecycle.test.mjs': 'b197a89b4907d8e8282f5b984213842295e6bc60'}
+MAINTENANCE_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918'}
+MAINTENANCE_TEST_SCRIPT_APPENDS = {'test:repo': ' tests/room-lifecycle.test.mjs'}
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1465,6 +1507,78 @@ def reviewed_flashes_application_blobs(expected, source):
     return pins
 
 
+def reviewed_maintenance_application_blobs(expected, source):
+    """Bind exact B/S inputs and outputs to independent control C and promotion P."""
+    snapshot = MAINTENANCE_APP_SNAPSHOT
+    controls = MAINTENANCE_CONTROL_FILES
+    application = MAINTENANCE_APPLICATION_BLOBS
+    dependencies = MAINTENANCE_DEPENDENCY_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package-lock.json', 'mobile/package-lock.json', 'mobile/package.json'}
+            and application and set(application) == set(MAINTENANCE_APPLICATION_INPUTS)
+            and not (controls | set(dependencies)) & set(application)
+            and 'package.json' in application
+            and not any(name.startswith(('.github/', 'mobile/', 'runtime/', 'drizzle/'))
+                        for name in application),
+            "Maintenance inventory or scope changed.")
+    require(expected == MAINTENANCE_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == MAINTENANCE_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == MAINTENANCE_APP_TREE,
+            "Maintenance live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            "Maintenance snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in MAINTENANCE_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Maintenance application input differs from reviewed source: " + name)
+    for name, blob in application.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Maintenance snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "Maintenance requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+            "Maintenance trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Maintenance candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = dict(application)
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Maintenance output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Maintenance controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete B/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Maintenance dependencies must remain unchanged: " + name)
+    before = strict_json(git("show", expected + ":package.json"))
+    after = strict_json(git("show", source + ":package.json"))
+    for name, append in MAINTENANCE_TEST_SCRIPT_APPENDS.items():
+        require(isinstance(append, str) and append.startswith(' tests/')
+                and name.startswith('test:') and isinstance(before.get('scripts', {}).get(name), str),
+                "Maintenance test registration schema changed.")
+        before['scripts'][name] += append
+    require(before == after, "Maintenance package change is not the exact test registration append.")
+    require(not migration_plan(pins), "Maintenance release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_navigation_application_blobs(expected, source):
     """Bind B/S to the exact complete patch, with separately merged controls C."""
     snapshot = NAVIGATION_APP_SNAPSHOT
@@ -1536,6 +1650,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == MAINTENANCE_RELEASE_BASELINE:
+        return reviewed_maintenance_application_blobs(expected, source)
     if expected == NAVIGATION_RELEASE_BASELINE:
         return reviewed_navigation_application_blobs(expected, source)
     if expected == FLASHES_RELEASE_BASELINE:
@@ -1613,6 +1729,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == MAINTENANCE_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Maintenance release cannot introduce migrations.")
+        return changed
     if expected == NAVIGATION_RELEASE_BASELINE:
         require((set(NAVIGATION_PREREQUISITE_BLOBS) | set(NAVIGATION_DEPENDENCY_BLOBS))
                 & set(changed) == {'package.json', 'package-lock.json'},
