@@ -707,7 +707,7 @@ CINCO_RECOVERY_LOCK_BLOB = '47a4eaca5743b768598462d8b66a2ef49a442b4e'
 
 
 # Exact Flashes/RSVP increment. C adds only the independently reviewed controls
-# and the pinned Vite security patch; P adds only the six reviewed UI/test files.
+# and the pinned root/mobile Vite security patches; P adds only six UI/test files.
 # No workflow, audit exception, runtime, schema or permission change is admitted.
 FLASHES_RELEASE_BASELINE = 'f242907bb73b4f9f157451a9199dd66d237dbaf6'
 FLASHES_RELEASE_BASE_TREE = '8f8bd4c0bf4b93f51627f172162ff6216388ea60'
@@ -725,9 +725,13 @@ FLASHES_APPLICATION_BLOBS = {'app/event/[slug]/event-details.css': '09936e76a884
  'app/room/[slug]/flashes-panel.tsx': 'ccd28f0222b0ef7161c708d84e513d1d0cd3812e',
  'tests/e2e/registration.spec.ts': '74a408047f4b6c16abe036f14e1758b87140bbe8',
  'tests/e2e/room-features.spec.ts': 'f9e895a6422d1f33ffc4b13094f5f0ed2406a4f0'}
-FLASHES_SECURITY_BLOBS = {'package-lock.json': '3fa4bfae990eac872f88c72d30a51c995c35574d',
+FLASHES_SECURITY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': '3fa4bfae990eac872f88c72d30a51c995c35574d',
  'package.json': 'a3db62441e7b0c8676dc1a166b913004af92eedd'}
-FLASHES_PACKAGE_BASE_BLOBS = {'package-lock.json': '47a4eaca5743b768598462d8b66a2ef49a442b4e',
+FLASHES_PACKAGE_BASE_BLOBS = {'mobile/package-lock.json': 'ebae7283d0906a9cb42b374b78a90986e7fcdcac',
+ 'mobile/package.json': '7cf2bf6a970f54c88c631b0ba39872c8ad4f03e6',
+ 'package-lock.json': '47a4eaca5743b768598462d8b66a2ef49a442b4e',
  'package.json': '5b9f6d868730b315d471696625ed879fd9a9dd48'}
 
 
@@ -1442,6 +1446,24 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == FLASHES_RELEASE_BASELINE:
+        require(set(FLASHES_SECURITY_BLOBS) <= set(changed),
+                "Flashes requires the complete reviewed root/mobile Vite security patches.")
+        for name, blob in FLASHES_PACKAGE_BASE_BLOBS.items():
+            require(git("rev-parse", expected + ":" + name) == blob
+                    and git("rev-parse", FLASHES_ADVISORY_BASE + ":" + name) == blob
+                    and git("rev-parse", source + ":" + name) == FLASHES_SECURITY_BLOBS[name],
+                    "Flashes package or dependency lock differs from reviewed source: " + name)
+        for name in ("package.json", "mobile/package.json"):
+            before = strict_json(git("show", expected + ":" + name))
+            after = strict_json(git("show", source + ":" + name))
+            require(before["devDependencies"]["vite"] == "8.2.1"
+                    and after["devDependencies"]["vite"] == "8.2.4",
+                    "Flashes requires exactly Vite 8.2.1 to 8.2.4: " + name)
+            before["devDependencies"]["vite"] = "8.2.4"
+            require(before == after, "Flashes package change is not the exact Vite security patch: " + name)
+        require(not migration_plan(changed), "Flashes release cannot introduce migrations.")
+        return changed
     if "mobile/package-lock.json" in changed:
         if expected == EMAIL_RELEASE_BASELINE:
             require(git("rev-parse", expected + ":mobile/package-lock.json")
@@ -1461,23 +1483,6 @@ def vetted_changes(expected, source):
                            resolved="https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
                            integrity="sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==")
             require(before == after, "Only the reviewed mobile brace-expansion lock update may change.")
-    if expected == FLASHES_RELEASE_BASELINE:
-        require({"package.json", "package-lock.json"} <= set(changed),
-                "Flashes requires the complete reviewed Vite security patch.")
-        for name, blob in FLASHES_PACKAGE_BASE_BLOBS.items():
-            require(git("rev-parse", expected + ":" + name) == blob
-                    and git("rev-parse", FLASHES_ADVISORY_BASE + ":" + name) == blob
-                    and git("rev-parse", source + ":" + name) == FLASHES_SECURITY_BLOBS[name],
-                    "Flashes package or dependency lock differs from reviewed source: " + name)
-        before = strict_json(git("show", expected + ":package.json"))
-        after = strict_json(git("show", source + ":package.json"))
-        require(before["devDependencies"]["vite"] == "8.2.1"
-                and after["devDependencies"]["vite"] == "8.2.4",
-                "Flashes requires exactly Vite 8.2.1 to 8.2.4.")
-        before["devDependencies"]["vite"] = "8.2.4"
-        require(before == after, "Flashes package change is not the exact Vite security patch.")
-        require(not migration_plan(changed), "Flashes release cannot introduce migrations.")
-        return changed
     if expected == CINCO_RECOVERY_RELEASE_BASELINE:
         require({"package.json", "package-lock.json"} & set(changed) == {"package.json"},
                 "CINCO recovery permits only the reviewed package test:ui append.")
