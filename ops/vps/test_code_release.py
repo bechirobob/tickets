@@ -439,7 +439,7 @@ def cinco_recovery_source_family(root):
 
 
 # Separate exact security-controls/UI test family; historical families stay frozen.
-FLASHES_OPERATOR_BLOB = '8d6ba44256ae1431a728ce6a8169a3776a7deda6'
+FLASHES_OPERATOR_BLOB = '302a5db1025bc8bd0a068a4eee097dbc940aada3'
 FLASHES_STAGED_BASE = dict(CINCO_RECOVERY_STAGED_BASE)
 
 
@@ -6151,10 +6151,12 @@ class FlashesSourceAdmissionTests(unittest.TestCase):
         self.files = tuple(release.FLASHES_APPLICATION_BLOBS)
         self.assertTrue(self.files, 'The reviewed Flashes inventory must be complete')
         self.advisories = tuple(release.FLASHES_ADVISORY_BLOBS)
+        self.security = tuple(release.FLASHES_SECURITY_BLOBS)
         self.package = {'name': 'fixture', 'scripts': {'test:ui': 'node --test tests/existing.test.mjs'},
                         'dependencies': {'unchanged': '1.0.0'}, 'devDependencies': {'vite': '8.2.1'}}
-        self.write('package.json', json.dumps(self.package))
-        self.write('package-lock.json', 'unchanged dependencies\n')
+        for prefix in ('', 'mobile/'):
+            self.write(prefix + 'package.json', json.dumps(self.package))
+            self.write(prefix + 'package-lock.json', 'unchanged dependencies\n')
         self.write('ops/vps/audit.py', 'unchanged staged utility\n')
         self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
         self.added = {'app/room/[slug]/flash-capture-mark.tsx'}
@@ -6171,8 +6173,9 @@ class FlashesSourceAdmissionTests(unittest.TestCase):
         self.write('ops/vps/test_code_release.py', 'independent reviewed Flashes tests\n')
         package = copy.deepcopy(self.package)
         package['devDependencies']['vite'] = '8.2.4'
-        self.write('package.json', json.dumps(package))
-        self.write('package-lock.json', 'exact reviewed Vite security lock\n')
+        for prefix in ('', 'mobile/'):
+            self.write(prefix + 'package.json', json.dumps(package))
+            self.write(prefix + 'package-lock.json', 'exact reviewed Vite security lock\n')
         self.control = self.commit()
         self.git('update-ref', 'refs/remotes/origin/main', self.control)
         for name in self.files:
@@ -6188,9 +6191,9 @@ class FlashesSourceAdmissionTests(unittest.TestCase):
                                            for name in self.advisories},
             'FLASHES_APPLICATION_BLOBS': self.pins,
             'FLASHES_SECURITY_BLOBS': {name: self.git('rev-parse', self.control + ':' + name)
-                                       for name in ('package.json', 'package-lock.json')},
+                                       for name in self.security},
             'FLASHES_PACKAGE_BASE_BLOBS': {name: self.git('rev-parse', self.live + ':' + name)
-                                           for name in ('package.json', 'package-lock.json')},
+                                           for name in self.security},
             '__file__': str(self.root / 'ops/vps/code-release.py'),
         }
         for name, value in values.items():
@@ -6265,7 +6268,7 @@ class FlashesSourceAdmissionTests(unittest.TestCase):
                         checkout_source_family(self.root)
 
     def test_unrelated_files_dependencies_runtime_schema_and_advisories_are_rejected(self):
-        for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', 'package.json', 'package-lock.json',
+        for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', *self.security,
                      'drizzle/9999_extra.sql', *self.advisories):
             with self.subTest(name=name):
                 self.git('checkout', '-q', self.candidate)
@@ -6303,7 +6306,7 @@ class FlashesSourceAdmissionTests(unittest.TestCase):
                     checkout_source_family(self.root)
 
     def test_security_patch_is_exact_in_control_and_candidate(self):
-        for name in ('package.json', 'package-lock.json'):
+        for name in self.security:
             self.git('checkout', '-q', self.candidate)
             self.write(name, 'unreviewed security output\n')
             self.commit()
@@ -6315,29 +6318,51 @@ class FlashesSourceAdmissionTests(unittest.TestCase):
                 with self.assertRaisesRegex(release.ReleaseError, 'package or dependency lock'):
                     self.verify()
 
-    def test_independently_pinned_security_output_cannot_expand_package_semantics(self):
-        for mutation in ('version', 'dependency', 'script', 'field'):
-            with self.subTest(mutation=mutation):
-                self.git('checkout', '-q', self.control)
-                package = copy.deepcopy(self.package)
-                package['devDependencies']['vite'] = '8.2.4'
-                if mutation == 'version': package['devDependencies']['vite'] = '8.2.5'
-                elif mutation == 'dependency': package['dependencies']['unchanged'] = '2.0.0'
-                elif mutation == 'script': package['scripts']['deploy'] = 'unreviewed'
-                else: package['name'] = 'unreviewed'
-                self.write('package.json', json.dumps(package))
-                control = self.commit()
-                self.git('update-ref', 'refs/remotes/origin/main', control)
-                for name in self.files:
-                    self.git('checkout', self.candidate, '--', name)
-                self.commit()
-                pins = {name: self.git('rev-parse', control + ':' + name)
-                        for name in ('package.json', 'package-lock.json')}
-                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
-                     patch.dict(release.FLASHES_SECURITY_BLOBS, pins):
-                    with self.assertRaisesRegex(release.ReleaseError, 'exact(?:ly Vite| Vite security patch)'):
-                        self.verify()
+    def test_each_security_file_must_be_exact_in_independent_controls(self):
+        for name in self.security:
+            for mutation in ('unreviewed', 'missing-change'):
+                with self.subTest(path=name, mutation=mutation):
+                    self.git('checkout', '-q', self.control)
+                    if mutation == 'unreviewed':
+                        self.write(name, 'unreviewed prerequisite dependency output\n')
+                    else:
+                        self.git('checkout', self.advisory, '--', name)
+                    control = self.commit()
+                    self.git('update-ref', 'refs/remotes/origin/main', control)
+                    for application in self.files:
+                        self.git('checkout', self.candidate, '--', application)
+                    self.commit()
+                    with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                        with self.assertRaises(release.ReleaseError):
+                            self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
         self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_independently_pinned_security_output_cannot_expand_package_semantics(self):
+        for name in ('package.json', 'mobile/package.json'):
+            for mutation in ('version', 'dependency', 'script', 'field'):
+                with self.subTest(path=name, mutation=mutation):
+                    self.git('checkout', '-q', self.control)
+                    package = copy.deepcopy(self.package)
+                    package['devDependencies']['vite'] = '8.2.4'
+                    if mutation == 'version': package['devDependencies']['vite'] = '8.2.5'
+                    elif mutation == 'dependency': package['dependencies']['unchanged'] = '2.0.0'
+                    elif mutation == 'script': package['scripts']['deploy'] = 'unreviewed'
+                    else: package['name'] = 'unreviewed'
+                    self.write(name, json.dumps(package))
+                    control = self.commit()
+                    self.git('update-ref', 'refs/remotes/origin/main', control)
+                    for application in self.files:
+                        self.git('checkout', self.candidate, '--', application)
+                    self.commit()
+                    pins = {name: self.git('rev-parse', control + ':' + name)
+                            for name in self.security}
+                    with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+                         patch.dict(release.FLASHES_SECURITY_BLOBS, pins):
+                        with self.assertRaisesRegex(release.ReleaseError, 'exact(?:ly Vite| Vite security patch)'):
+                            self.verify()
+            self.git('update-ref', 'refs/remotes/origin/main', self.control)
 
     def test_wrong_live_or_advisory_tree_is_rejected(self):
         for name in ('FLASHES_RELEASE_BASE_TREE', 'FLASHES_ADVISORY_TREE'):
