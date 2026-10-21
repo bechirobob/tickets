@@ -150,6 +150,13 @@ test("the Flash inbox supports expiry, private reports and owner removal without
   await page.getByRole("button", { name: "Open Flashes; 2 unopened" }).click();
   const inbox = page.getByRole("dialog", { name: "Room Flashes", exact: true });
   await expect(inbox.locator("img")).toHaveCount(0);
+  await expect(inbox.locator(".flash-inbox")).toHaveCSS("background-image", "none");
+  await expect(inbox.locator(".flash-inbox")).toHaveCSS("background-color", "rgb(48, 33, 44)");
+  const capture = inbox.getByRole("button", { name: /Send a Flash/u });
+  await expect(capture).toHaveCSS("border-radius", "0px");
+  await expect(capture.locator(".flash-capture-mark")).toHaveAttribute("aria-hidden", "true");
+  await expect(capture.locator(".flash-capture-mark")).toHaveAttribute("focusable", "false");
+  await expect(capture.locator(".lucide-camera")).toHaveCount(0);
   await accessible(page);
   await page.screenshot({ path: info.outputPath("room-flash-inbox.png") });
   await inbox.getByRole("button", { name: "Open Flash from Yaw", exact: true }).click();

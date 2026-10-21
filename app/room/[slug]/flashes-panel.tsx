@@ -1,12 +1,13 @@
 "use client";
 
-import { Aperture, Camera, Flag, MoreHorizontal, Trash2, X } from "lucide-react";
+import { Aperture, Flag, MoreHorizontal, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import RoomOverlay from "../../room-overlay";
 import { FlashMarker } from "../../room-chat-parts";
 import { requestErrorMessage, requestJson } from "../../../lib/client-request";
 import FlashCamera from "./flash-camera";
 import FlashViewer from "./flash-viewer";
+import FlashCaptureMark from "./flash-capture-mark";
 
 export type RoomFlash = {
   id: string; attendeeId: string; displayName: string; width: number; height: number;
@@ -104,7 +105,7 @@ export default function FlashesPanel({ slug, readOnly, expiresAt, refreshKey, on
     {notice && <div className="room-media-notice" role="status"><span>{notice}</span><button type="button" aria-label="Dismiss Flash notice" onClick={() => setNotice("")}><X aria-hidden="true" size={16} /></button></div>}
     {galleryOpen && !cameraOpen && !active && !managing && <RoomOverlay label="Room Flashes" className="room-overlay--sheet" onClose={onGalleryClose}>{(dismiss) => <section className="room-sheet flash-inbox">
       <header className="room-sheet__header"><div><span className="room-surface-kicker"><Aperture aria-hidden="true" size={17} /> Flashes</span><h2>You had to be there.</h2><p>One look, ten seconds. Catch it while you’re here.</p></div><button type="button" aria-label="Close Flashes" onClick={dismiss}><X aria-hidden="true" size={20} /></button></header>
-      <button type="button" className="flash-inbox__capture" onClick={() => setCameraOpen(true)}><Camera aria-hidden="true" size={22} /><span><b>Send a Flash</b><small>Show the Room what’s happening.</small></span><span aria-hidden="true">↗</span></button>
+      <button type="button" className="flash-inbox__capture" onClick={() => setCameraOpen(true)}><FlashCaptureMark /><span><b>Send a Flash</b><small>Show the Room what’s happening.</small></span><span aria-hidden="true">↗</span></button>
       <nav className="room-surface-tabs" aria-label="Filter Flashes"><button type="button" aria-pressed={filter === "unopened"} onClick={() => setFilter("unopened")}>Unopened <span>{unopened.length}</span></button><button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All Flashes <span>{flashes.length}</span></button></nav>
       {loading ? <p className="room-surface-empty" role="status">Finding the moments…</p> : loadError ? <div className="room-surface-empty"><p role="alert">{loadError}</p><button type="button" onClick={() => void load()}>Try again</button></div> : shown.length ? <ol className="flash-inbox__list">{shown.map((flash) => <li key={flash.id}>
         <button type="button" className="flash-inbox__open" disabled={Boolean(flash.openedAt) && !flash.mine} aria-label={flash.openedAt && !flash.mine ? `Opened Flash from ${flash.displayName}` : `Open Flash from ${flash.mine ? "you" : flash.displayName}`} onClick={() => setViewing(flash)}><span className="flash-inbox__sender"><b>{flash.mine ? "You" : flash.displayName}</b><time dateTime={flash.createdAt}>{new Date(flash.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span><FlashMarker mine={flash.mine} opened={Boolean(flash.openedAt)} /></button>
