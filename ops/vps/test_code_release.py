@@ -526,7 +526,7 @@ def flashes_source_family(root):
 
 
 # Exact navigation C/P test family, independent of historical Flashes fixtures.
-NAVIGATION_OPERATOR_BLOB = 'c7c4e0af84687c7d7af002978ea17caebf246c67'
+NAVIGATION_OPERATOR_BLOB = 'a4bcaa6045f6858179a96a1dbb67b9765e9eb1fd'
 NAVIGATION_STAGED_BASE = dict(FLASHES_STAGED_BASE)
 
 
@@ -556,6 +556,8 @@ def navigation_source_family(root):
                     if kind != 'blob' or mode not in ('100644', '100755'):
                         raise AssertionError('Navigation baseline contains unsupported entries')
                     manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update({name: ('100644', blob)
+                             for name, blob in release.NAVIGATION_PREREQUISITE_BLOBS.items()})
             application = release.NAVIGATION_APPLICATION_BLOBS
             observed = {}
             for name in application:
@@ -6575,12 +6577,17 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
         self.added = {name for name, blob in release.NAVIGATION_APPLICATION_INPUTS.items() if blob is None}
         self.assertTrue(self.added and self.added < set(self.files))
         self.package = {'name': 'fixture', 'scripts': {'test:repo': 'node --test tests/repo.mjs',
-                        'test:ui': 'node --test tests/ui.mjs'}, 'dependencies': {'unchanged': '1.0.0'}}
+                        'test:ui': 'node --test tests/ui.mjs'}, 'dependencies': {'unchanged': '1.0.0'},
+                        'devDependencies': {'vitest': '4.1.11'}}
         for name in (*self.files, *release.NAVIGATION_CONTROL_FILES):
             if name not in self.added:
-                self.write(name, json.dumps(self.package) if name == 'package.json' else 'baseline ' + name + '\n')
+                self.write(name, json.dumps(self.package, indent=2) if name == 'package.json' else 'baseline ' + name + '\n')
         for name in release.NAVIGATION_DEPENDENCY_BLOBS:
             self.write(name, 'unchanged locked dependency input ' + name + '\n')
+        self.write('package-lock.json', 'baseline root dependency lock\n')
+        self.security_package = copy.deepcopy(self.package)
+        self.security_package['devDependencies']['vitest'] = '4.1.12'
+        self.security_lock = 'exact reviewed root Vitest security lock\n'
         self.write('ops/vps/audit.py', 'unchanged staged utility\n')
         self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
         self.live = self.commit()
@@ -6588,12 +6595,13 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
         self.git('commit', '--allow-empty', '-qm', 'feature preparation')
         for name in self.files:
             if name == 'package.json':
-                package = copy.deepcopy(self.package)
+                package = copy.deepcopy(self.security_package)
                 for script, append in release.NAVIGATION_TEST_SCRIPT_APPENDS.items():
                     package['scripts'][script] += append
-                self.write(name, json.dumps(package))
+                self.write(name, json.dumps(package, indent=2))
             else:
                 self.write(name, 'exact reviewed navigation ' + name + '\n')
+        self.write('package-lock.json', self.security_lock)
         self.snapshot = self.commit()
         self.pins = {name: self.git('rev-parse', self.snapshot + ':' + name) for name in self.files}
         self.inputs = {name: None if name in self.added else self.git('rev-parse', self.live + ':' + name)
@@ -6602,6 +6610,8 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
         self.operator = b'independent reviewed navigation operator\n'
         self.write('ops/vps/code-release.py', self.operator)
         self.write('ops/vps/test_code_release.py', 'independent reviewed navigation tests\n')
+        self.write('package.json', json.dumps(self.security_package, indent=2))
+        self.write('package-lock.json', self.security_lock)
         self.control = self.commit()
         self.git('update-ref', 'refs/remotes/origin/main', self.control)
         self.git('merge', '--no-ff', '--no-commit', self.snapshot)
@@ -6613,6 +6623,10 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
             'NAVIGATION_APP_TREE': self.git('rev-parse', self.snapshot + '^{tree}'),
             'NAVIGATION_APPLICATION_INPUTS': self.inputs,
             'NAVIGATION_APPLICATION_BLOBS': self.pins,
+            'NAVIGATION_PREREQUISITE_INPUTS': {name: self.git('rev-parse', self.live + ':' + name)
+                                              for name in release.NAVIGATION_PREREQUISITE_INPUTS},
+            'NAVIGATION_PREREQUISITE_BLOBS': {name: self.git('rev-parse', self.control + ':' + name)
+                                             for name in release.NAVIGATION_PREREQUISITE_BLOBS},
             'NAVIGATION_DEPENDENCY_BLOBS': {name: self.git('rev-parse', self.live + ':' + name)
                                           for name in release.NAVIGATION_DEPENDENCY_BLOBS},
             '__file__': str(self.root / 'ops/vps/code-release.py'),
@@ -6760,13 +6774,13 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
                 checkout_source_family(root)
 
     def test_complete_control_and_promotion_families_are_recognized(self):
-        self.assertEqual(set(self.verify()), set(self.files) | release.NAVIGATION_CONTROL_FILES)
+        self.assertEqual(set(self.verify()), set(self.files) | release.NAVIGATION_CONTROL_FILES | set(release.NAVIGATION_PREREQUISITE_BLOBS))
         self.assertEqual(release.migration_plan(self.verify()), [])
         for revision in (self.control, self.candidate):
             self.git('checkout', '-q', revision)
             family = checkout_source_family(self.root)
             self.assertEqual(family['ops/vps/code-release.py'], self.blob(self.operator))
-            for name in self.files:
+            for name in set(self.files) | set(release.NAVIGATION_PREREQUISITE_BLOBS):
                 if revision == self.control and name in self.added:
                     self.assertNotIn(name, family)
                 else:
@@ -6805,7 +6819,7 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
              patch.object(release, 'NAVIGATION_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
              patch.dict(release.NAVIGATION_APPLICATION_BLOBS, {name: blob}), \
              patch.object(sys.modules[__name__], 'NAVIGATION_OPERATOR_BLOB', self.blob(operator)):
-            self.assertEqual(set(self.verify()), set(self.files) | release.NAVIGATION_CONTROL_FILES)
+            self.assertEqual(set(self.verify()), set(self.files) | release.NAVIGATION_CONTROL_FILES | set(release.NAVIGATION_PREREQUISITE_BLOBS))
             self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'],
                              self.blob(operator))
             self.git('update-ref', 'refs/remotes/origin/main', self.control)
@@ -6822,7 +6836,7 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
                 with self.assertRaises(AssertionError): checkout_source_family(self.root)
 
     def test_every_application_and_control_mode_change_is_rejected(self):
-        for name in (*self.files, *release.NAVIGATION_CONTROL_FILES):
+        for name in {*self.files, *release.NAVIGATION_CONTROL_FILES, *release.NAVIGATION_PREREQUISITE_BLOBS}:
             with self.subTest(path=name):
                 self.git('checkout', '-q', self.candidate)
                 (self.root / name).chmod(0o755)
@@ -6864,7 +6878,7 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
             elif mutation == 'other-script': package['scripts']['deploy'] = 'unreviewed'
             elif mutation == 'extra-test': package['scripts']['test:ui'] += ' tests/unreviewed.mjs'
             else: package['name'] = 'unreviewed'
-            self.write('package.json', json.dumps(package))
+            self.write('package.json', json.dumps(package, indent=2))
             snapshot = self.commit()
             blob = self.git('rev-parse', snapshot + ':package.json')
             self.git('checkout', '-q', self.control)
@@ -6874,6 +6888,117 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
                  patch.object(release, 'NAVIGATION_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
                  patch.dict(release.NAVIGATION_APPLICATION_BLOBS, {'package.json': blob}):
                 with self.assertRaisesRegex(release.ReleaseError, 'exact test registration append'): self.verify()
+
+
+    def test_prerequisite_schema_rejects_missing_extra_and_overlapping_paths(self):
+        for constant in ('NAVIGATION_PREREQUISITE_INPUTS', 'NAVIGATION_PREREQUISITE_BLOBS'):
+            original = getattr(release, constant)
+            for mapping in ({'package.json': original['package.json']},
+                            {**original, 'unreviewed.json': 'f' * 40}):
+                with self.subTest(constant=constant, mapping=mapping), \
+                     patch.object(release, constant, mapping):
+                    with self.assertRaisesRegex(release.ReleaseError, 'prerequisite inventory'):
+                        self.verify()
+        for controls in (release.NAVIGATION_CONTROL_FILES | {'package-lock.json'},
+                         {'ops/vps/code-release.py'}):
+            with patch.object(release, 'NAVIGATION_CONTROL_FILES', controls):
+                with self.assertRaisesRegex(release.ReleaseError, 'prerequisite inventory'):
+                    self.verify()
+        for application in ({**self.pins, 'package-lock.json': 'f' * 40},
+                            {name: blob for name, blob in self.pins.items() if name != 'package.json'},
+                            {**self.pins, 'ops/vps/code-release.py': 'f' * 40}):
+            with patch.object(release, 'NAVIGATION_APPLICATION_BLOBS', application):
+                with self.assertRaisesRegex(release.ReleaseError, 'prerequisite inventory'):
+                    self.verify()
+
+    def test_every_prerequisite_input_and_output_pin_is_required(self):
+        for constant in ('NAVIGATION_PREREQUISITE_INPUTS', 'NAVIGATION_PREREQUISITE_BLOBS'):
+            for name in release.NAVIGATION_PREREQUISITE_BLOBS:
+                with self.subTest(constant=constant, name=name), \
+                     patch.dict(getattr(release, constant), {name: 'f' * 40}):
+                    with self.assertRaises(release.ReleaseError):
+                        self.verify()
+
+    def test_prerequisite_pair_rejects_unpatched_mutated_missing_and_mode_changes(self):
+        for revision in (self.control, self.candidate):
+            for name in release.NAVIGATION_PREREQUISITE_BLOBS:
+                for mutation in ('unpatched', 'bytes', 'missing', 'mode'):
+                    with self.subTest(revision=revision, name=name, mutation=mutation):
+                        self.git('checkout', '-q', revision)
+                        if mutation == 'unpatched':
+                            self.git('checkout', self.live, '--', name)
+                        elif mutation == 'bytes':
+                            self.write(name, 'unreviewed prerequisite bytes\n')
+                        elif mutation == 'missing':
+                            self.git('rm', name)
+                        else:
+                            (self.root / name).chmod(0o755)
+                        changed = self.commit()
+                        with self.assertRaises(AssertionError):
+                            checkout_source_family(self.root)
+                        if revision == self.control:
+                            # Preserve the exact reviewed P tree and all ancestry;
+                            # only the selected, merged prerequisite is malformed.
+                            candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                                 '-p', self.candidate, '-p', changed, '-m', 'bad prerequisite ancestor')
+                            self.git('checkout', '-q', candidate)
+                            self.git('update-ref', 'refs/remotes/origin/main', changed)
+                            with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed):
+                                with self.assertRaises(release.ReleaseError):
+                                    self.verify()
+                            self.git('update-ref', 'refs/remotes/origin/main', self.control)
+                        else:
+                            with self.assertRaises(release.ReleaseError):
+                                self.verify()
+
+    def test_unpatched_merged_controls_cannot_authorize_patched_candidate(self):
+        self.git('checkout', '-q', self.control)
+        for name in release.NAVIGATION_PREREQUISITE_BLOBS:
+            self.git('checkout', self.live, '--', name)
+        old_control = self.commit()
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.candidate, '-p', old_control, '-m', 'unpatched merged control ancestor')
+        self.git('checkout', '-q', candidate)
+        self.git('update-ref', 'refs/remotes/origin/main', old_control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=old_control):
+            with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                self.verify()
+
+    def test_prerequisite_semantics_reject_changes_even_with_matching_blob_pins(self):
+        for mutation in ('version', 'dependency', 'override', 'script', 'extra-test', 'name'):
+            with self.subTest(mutation=mutation):
+                control_package = copy.deepcopy(self.security_package)
+                if mutation == 'version': control_package['devDependencies']['vitest'] = '4.1.13'
+                elif mutation == 'dependency': control_package['dependencies']['unchanged'] = '2.0.0'
+                elif mutation == 'override': control_package['overrides'] = {'vitest': '4.1.12'}
+                elif mutation == 'script': control_package['scripts']['deploy'] = 'unreviewed'
+                elif mutation == 'extra-test': control_package['scripts']['test:ui'] += ' tests/unreviewed.mjs'
+                else: control_package['name'] = 'unreviewed'
+                self.git('checkout', '-q', self.control)
+                self.write('package.json', json.dumps(control_package, indent=2))
+                control = self.commit()
+                control_blob = self.git('rev-parse', control + ':package.json')
+                package = copy.deepcopy(control_package)
+                for name, append in release.NAVIGATION_TEST_SCRIPT_APPENDS.items():
+                    package['scripts'][name] += append
+                self.git('checkout', '-q', self.snapshot)
+                self.write('package.json', json.dumps(package, indent=2))
+                snapshot = self.commit()
+                blob = self.git('rev-parse', snapshot + ':package.json')
+                for name in release.NAVIGATION_CONTROL_FILES:
+                    self.git('checkout', control, '--', name)
+                tree = self.git('write-tree')
+                candidate = self.git('commit-tree', tree, '-p', control, '-p', snapshot,
+                                     '-m', 'matching pins cannot grant arbitrary package semantics')
+                self.git('checkout', '-q', candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+                     patch.object(release, 'NAVIGATION_APP_SNAPSHOT', snapshot), \
+                     patch.object(release, 'NAVIGATION_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+                     patch.dict(release.NAVIGATION_APPLICATION_BLOBS, {'package.json': blob}), \
+                     patch.dict(release.NAVIGATION_PREREQUISITE_BLOBS, {'package.json': control_blob}):
+                    with self.assertRaisesRegex(release.ReleaseError, 'exactly Vitest|exact Vitest security patch'):
+                        self.verify()
 
 
 if __name__ == "__main__":
