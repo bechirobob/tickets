@@ -43,7 +43,7 @@ test("sharing has a usable manual fallback when browser capabilities fail", asyn
   await page.goto(`/event/${eventSlug}`);
   const share = page.getByRole("button", { name: "Share", exact: true });
   await share.click();
-  await expect(page.getByRole("status")).toContainText("Select the link below");
+  await expect(page.locator(".event-share__feedback").getByRole("status")).toContainText("Select the link below");
   const link = page.getByLabel("Event link", { exact: true });
   await expect(link).toHaveValue(new RegExp(`/event/${eventSlug}$`));
   await link.focus();
@@ -68,7 +68,7 @@ test("a cancelled native share stays quiet and clipboard success is accurately l
   await expect(page.locator(".event-share__feedback")).toHaveCount(0);
   await page.evaluate(() => Object.defineProperty(navigator, "share", { configurable: true, value: undefined }));
   await share.click();
-  await expect(page.getByRole("status")).toHaveText("Link copied. Send it to the usual suspects.");
+  await expect(page.locator(".event-share__feedback").getByRole("status")).toHaveText("Link copied. Send it to the usual suspects.");
   await expect(page.getByLabel("Event link", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Got it" }).click();
   await expect(share).toBeFocused();

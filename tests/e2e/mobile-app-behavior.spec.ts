@@ -78,7 +78,7 @@ test('mobile menu is a compact reachable sheet with working drag, focus and outs
   expect(sheetBox!.height).toBeLessThan(340);
   expect(sheetBox!.y).toBeGreaterThan(100);
   expect(sheetBox!.y + sheetBox!.height).toBeLessThanOrEqual(dockBox!.y - 5);
-  for (const destination of ['Hosts', 'Organisers', 'About us', 'Help']) {
+  for (const destination of ['Discover hosts', 'List your event', 'About us', 'Help']) {
     await expect(menu.getByRole('link', { name: destination, exact: true })).toBeInViewport();
   }
   const sheetBacking = await menu.evaluate(element => {

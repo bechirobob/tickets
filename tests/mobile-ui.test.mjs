@@ -1,3 +1,4 @@
+import "./menu-option-a.test.mjs";
 import assert from "node:assert/strict";
 import { readFile as readSource } from "node:fs/promises";
 import test from "node:test";
@@ -364,7 +365,7 @@ test("public navigation belongs to each header on mobile and desktop", async () 
   assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
   assert.match(mobileNavigation, /href: "\/events", label: "The Drop"/u);
   assert.match(mobileNavigation, /href: "\/my-nights", label: "My Nights"/u);
-  assert.match(mobileNavigation, /href: "\/organizer\/submit", label: "Organisers"/u);
+  assert.match(mobileNavigation, /href: "\/organizer\/submit", label: "List your event"/u);
   assert.match(mobileNavigation, /href: "\/about", label: "About us"/u);
   assert.match(mobileNavigation, /href: "\/help", label: "Help"/u);
   assert.match(dock, /href: "\/events", label: "The Drop"/u);
@@ -387,7 +388,7 @@ test("public navigation belongs to each header on mobile and desktop", async () 
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.night-mobile-menu__trigger, \.night-mobile-menu__panel, \.night-mobile-menu__close, \.night-mobile-menu__links\s*\{[^}]*transition:\s*none/su);
   assert.match(mobileNavigation, /const links = \[[\s\S]*?aria-hidden=\{!open\}[\s\S]*?tabIndex=\{open \? undefined : -1\}/su);
   assert.doesNotMatch(mobileNavigation, /night-mobile-menu__group|night-mobile-menu__label/u);
-  assert.match(mobileNavigation, /night-mobile-menu__panel-header[\s\S]*?<span>Menu<\/span>[\s\S]*?night-mobile-menu__close[\s\S]*?<X size=\{19\}/su);
+  assert.match(mobileNavigation, /night-mobile-menu__panel-header[\s\S]*?<span>Menu<\/span>[\s\S]*?night-mobile-menu__close[\s\S]*?<X size=\{18\}/su);
   assert.match(polish, /secondary customer menu[\s\S]*?\.night-mobile-menu__panel a\s*\{[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su);
   assert.match(polish, /\.night-mobile-menu__panel\s*\{[^}]*box-shadow:\s*none/su);
 });

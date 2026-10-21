@@ -20,7 +20,9 @@ export function useHeaderPanel() {
   const focusFrame = useRef<number | null>(null);
   const [phase, setPhase] = useState<"closed" | "open" | "closing">("closed");
   const keyboardOpen = useRef(false);
-  const close = useCallback((restore = false) => {
+  const navigationVersion = useRef(0);
+  useEffect(() => () => { navigationVersion.current++; }, [pathname]);
+  const close = useCallback((restore = false, immediately = false) => {
     if (timer.current) clearTimeout(timer.current);
     // A breakpoint close can precede the opening frame's passive cleanup.
     // Cancel it before restoring focus so it cannot enter the replacement panel.
@@ -30,11 +32,12 @@ export function useHeaderPanel() {
       focusFrame.current = null;
     }
     if (restore) trigger.current?.focus({ preventScroll: true });
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPhase("closed");
+    if (immediately || window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPhase("closed");
     else { setPhase("closing"); timer.current = setTimeout(() => setPhase("closed"), 180); }
   }, []);
   const releaseHistory = useLayerHistory(phase === "open", () => close(true));
   const toggle = (keyboard = false) => {
+    navigationVersion.current++;
     if (phase === "open") { close(true); return; }
     if (timer.current) clearTimeout(timer.current);
     keyboardOpen.current = keyboard;
@@ -44,6 +47,15 @@ export function useHeaderPanel() {
   const [currentPath, setCurrentPath] = useState(pathname);
   if (currentPath !== pathname) { setCurrentPath(pathname); setPhase("closed"); }
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(() => {
+    // Keep listening even after close: a replacement must neither overlap an
+    // exiting panel nor allow its pending destination to hijack the new panel.
+    const other = (event: Event) => {
+      if ((event as CustomEvent).detail !== id) { navigationVersion.current++; close(false, true); }
+    };
+    window.addEventListener("becore:header-panel", other);
+    return () => window.removeEventListener("becore:header-panel", other);
+  }, [close, id]);
   useEffect(() => {
     if (phase !== "open") return;
     if (keyboardOpen.current) {
@@ -69,21 +81,23 @@ export function useHeaderPanel() {
     };
     const focus = (event: FocusEvent) => { if (!contains(event.target) && event.target !== pointerDestination) close(); };
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); close(true); } };
-    const other = (event: Event) => { if ((event as CustomEvent).detail !== id) close(); };
     const navigate = (event: MouseEvent) => {
       if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !(event.target instanceof Element)) return;
       const link = event.target.closest<HTMLAnchorElement>("a[href]");
       if (!link || link.target || link.download || link.origin !== window.location.origin || !window.matchMedia("(max-width: 760px)").matches) return;
       event.preventDefault();
       const href = link.pathname + link.search + link.hash;
+      const previousUrl = window.location.href;
+      const version = ++navigationVersion.current;
       const finished = releaseHistory();
       close();
-      void finished.then(() => router.push(href));
+      void finished.then(() => {
+        if (navigationVersion.current === version && window.location.href === previousUrl) router.push(href);
+      });
     };
     document.addEventListener("pointerdown", pointer);
     document.addEventListener("focusin", focus);
     document.addEventListener("keydown", key);
-    window.addEventListener("becore:header-panel", other);
     document.addEventListener("click", navigate, true);
     return () => {
       if (focusFrame.current !== null) {
@@ -93,7 +107,6 @@ export function useHeaderPanel() {
       document.removeEventListener("pointerdown", pointer);
       document.removeEventListener("focusin", focus);
       document.removeEventListener("keydown", key);
-      window.removeEventListener("becore:header-panel", other);
       document.removeEventListener("click", navigate, true);
     };
   }, [close, id, phase, releaseHistory, router]);
