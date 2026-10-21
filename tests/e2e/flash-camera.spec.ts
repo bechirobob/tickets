@@ -14,9 +14,11 @@ async function cameraFixture(page: Page, eventSlug: string) {
     // Observe the exact local objects without fetch(blob:), which production CSP
     // correctly excludes from connect-src. Native URL creation/revocation stays intact.
     const previews = new Map<string, Blob>();
+    const issued = new Set<string>(); // URL strings only; never retains revoked Blob bytes.
+    (window as typeof window & { __flashFixtureIssuedUrls: Set<string> }).__flashFixtureIssuedUrls = issued;
     (window as typeof window & { __flashFixtureBlobs: Map<string, Blob> }).__flashFixtureBlobs = previews;
     const create = URL.createObjectURL.bind(URL), revoke = URL.revokeObjectURL.bind(URL);
-    URL.createObjectURL = object => { const url = create(object); if (object instanceof Blob) previews.set(url, object); return url; };
+    URL.createObjectURL = object => { const url = create(object); if (object instanceof Blob) { previews.set(url, object); issued.add(url); } return url; };
     URL.revokeObjectURL = url => { previews.delete(url); revoke(url); };
     const sensorState = { captures: 0, streams: [] as MediaStream[] };
     (window as typeof window & { __flashSyntheticSensor: typeof sensorState }).__flashSyntheticSensor = sensorState;
@@ -48,7 +50,17 @@ async function cameraFixture(page: Page, eventSlug: string) {
   let refusedTraffic = false;
   await page.route("**/*", async route => {
     const request = route.request();
-    if (new URL(request.url()).origin !== "http://127.0.0.1:8788" || !["GET", "HEAD"].includes(request.method())) { refusedTraffic = true; return route.abort(); }
+    const url = new URL(request.url());
+    // WebKit routes Blob image loads too. These are not HTTP and cannot redirect.
+    // Only URLs created by this synthetic fixture may use native Blob handling;
+    // a revoked one may finish as a normal cancelled load, without retaining it.
+    if (url.protocol === "blob:") {
+      const known = url.origin === "http://127.0.0.1:8788" && request.method() === "GET"
+        && await page.evaluate(value => (window as typeof window & { __flashFixtureIssuedUrls?: Set<string> }).__flashFixtureIssuedUrls?.has(value) === true, request.url());
+      if (!known) { refusedTraffic = true; return route.abort(); }
+      return route.continue();
+    }
+    if (url.origin !== "http://127.0.0.1:8788" || !["GET", "HEAD"].includes(request.method())) { refusedTraffic = true; return route.abort(); }
     // A route normally sees only the first URL in a redirect chain. Do not let
     // a local fixture response redirect the browser to an unreviewed origin.
     const response = await route.fetch({ maxRedirects: 0 });
