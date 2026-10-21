@@ -114,6 +114,23 @@ export async function readAttendeeRoomSocketAccess(db: D1Database, cookieHeader:
   return readRoomAccessRecord(db, cookieHeader, eventSlug, true, true);
 }
 
+// Shared by Room entry and the count-only shortcut. Binding order is token hash,
+// current time, then three requireRoom flags. Event-scoped callers add their slug.
+export const attendeeRoomAdmissionSource = `
+    FROM attendee_sessions s
+    JOIN attendee_profiles p ON p.id = s.attendee_id
+    JOIN ticket_assignments a ON a.attendee_id = p.id AND a.status = 'active'
+    JOIN tickets t ON t.id = a.ticket_id
+    JOIN orders o ON o.id = t.order_id
+    LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
+    WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
+      AND o.status='paid' AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.removed_at IS NOT NULL)
+      AND (? = 0 OR o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1))
+      AND (? = 0 OR NOT EXISTS (SELECT 1 FROM room_suspensions suspension
+        WHERE suspension.event_slug = t.event_slug AND suspension.attendee_id = p.id AND suspension.restored_at IS NULL))
+      AND (? = 0 OR NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.event_state IN ('cancelled', 'postponed')))
+`;
+
 async function readRoomAccessRecord(db: D1Database, cookieHeader: string | null, eventSlug: string, requireRoom: boolean, includeSocketState: boolean) {
   const token = readCookie(cookieHeader);
   if (!token) return null;
@@ -134,21 +151,11 @@ async function readRoomAccessRecord(db: D1Database, cookieHeader: string | null,
              FROM curated_event_records event LEFT JOIN room_settings setting ON setting.event_slug = event.slug
              WHERE event.slug = t.event_slug AND event.status IN ('published', 'scheduled')
                AND event.schedule_status = 'confirmed' LIMIT 1)` : 'NULL'} AS roomPolicyJson
-    FROM attendee_sessions s
-    JOIN attendee_profiles p ON p.id = s.attendee_id
-    JOIN ticket_assignments a ON a.attendee_id = p.id AND a.status = 'active'
-    JOIN tickets t ON t.id = a.ticket_id
-    JOIN orders o ON o.id = t.order_id
-    LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
-    WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND p.status = 'active'
-      AND o.status='paid' AND t.event_slug = ? AND t.status IN ('issued', 'checked_in') AND NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.removed_at IS NOT NULL)
-      AND (? = 0 OR o.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = o.id AND r.status = 'confirmed' AND rs.room_access = 1))
-      AND (? = 0 OR NOT EXISTS (SELECT 1 FROM room_suspensions suspension
-        WHERE suspension.event_slug = t.event_slug AND suspension.attendee_id = p.id AND suspension.restored_at IS NULL))
-      AND (? = 0 OR NOT EXISTS (SELECT 1 FROM curated_event_records event WHERE event.slug = t.event_slug AND event.event_state IN ('cancelled', 'postponed')))
+    ${attendeeRoomAdmissionSource}
+      AND t.event_slug = ?
     ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
     LIMIT 1
-  `).bind(tokenHash, now, eventSlug, requireRoom ? 1 : 0, requireRoom ? 1 : 0, requireRoom ? 1 : 0).first<AttendeeRoomAccess & { lastSeenAt: string; blockedIdsJson: string | null; roomPolicyJson: string | null }>();
+  `).bind(tokenHash, now, requireRoom ? 1 : 0, requireRoom ? 1 : 0, requireRoom ? 1 : 0, eventSlug).first<AttendeeRoomAccess & { lastSeenAt: string; blockedIdsJson: string | null; roomPolicyJson: string | null }>();
   if (!access) return null;
   await touchAttendeeSession(db, tokenHash, access.lastSeenAt, now);
   const { lastSeenAt: _lastSeenAt, blockedIdsJson, roomPolicyJson, ...profile } = access;

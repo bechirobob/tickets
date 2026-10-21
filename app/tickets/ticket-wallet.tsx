@@ -98,6 +98,7 @@ export default function TicketWallet() {
       if (!response.ok) throw new Error("Sign-out did not complete. Please try again.");
       abortRead();
       setWallet(null);
+      window.dispatchEvent(new Event("bct:attendee-session-changed"));
     } catch {
       setError("Offline copies removed. Reconnect and try again to finish signing out.");
     }

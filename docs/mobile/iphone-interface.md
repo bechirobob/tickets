@@ -66,3 +66,33 @@ claimed. Release and live evidence belong to the implementation PR. Real-device
 keyboard/gestures, store signing and real USDC payment-to-wallet settlement remain
 separate unverified boundaries. No live event date/time or authored name spelling
 was invented during this pass.
+
+## Secondary menu Option A, 21 October 2026
+
+The accepted menu direction uses full-width vertical rows rather than a tile grid.
+“Discover hosts” keeps `/hosts`, and “List your event” keeps `/organizer/submit`,
+including its existing signed-in owner/organizer redirect. About us and Help
+remain secondary rows after a subtle inset divider. No role or access rule changes.
+
+Use the approved plum `#30212c` surface, cream `#f8eee7` primary text, muted
+secondary text, 18px panel corners, 14px quiet title, consistent 19px line icons
+and small right chevrons. The close control is visually unboxed but retains a
+44px target. Primary rows are at least 48px tall; secondary rows at least 44px.
+Labels may wrap and the panel scrolls on short screens.
+
+The same list treatment applies to desktop disclosures. Preserve existing route
+visibility: desktop home already has primary navigation, mobile pages with a
+customer dock hide duplicate primary links, and pages without that dock retain
+them. Keep the existing non-modal navigation semantics, inert closed state,
+focus restoration, Escape, swipe dismissal, mobile Back entry, scroll lock and
+sibling notification switching. This increment does not change the customer dock.
+
+This work is isolated from the release candidate being reviewed. Local typecheck,
+lint (one existing moderation-worker warning), 97 UI tests, 189 repository tests,
+build and five generated-asset/configuration tests passed. The new three-browser
+Playwright cases cover portrait/landscape rows, keyboard traversal, touch targets,
+contrast, route/Back behavior and enlarged labels; execution and rendered
+screenshot review remain pending because Chromium cannot launch in this runtime.
+No browser/device pass, merge or deployment is claimed. The unchanged base uses
+Vite 8.2.1; consume the separately reviewed dependency fix before release rather
+than mixing dependency or release-control edits into this menu increment.

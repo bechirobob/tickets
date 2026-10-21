@@ -1,0 +1,63 @@
+/* Progressive enhancement: the real route is never hidden, inert, or gated. */
+.brand-arrival {
+  --brand-arrival-ready: 1;
+  --brand-arrival-exit-scale: 100;
+  position: fixed; inset: 0; z-index: 1000;
+  visibility: hidden; pointer-events: none;
+  font-family: var(--font-system, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif);
+}
+.brand-arrival[hidden] { display: none !important; }
+.brand-arrival[data-running]:not([hidden]) {
+  display: block; visibility: visible; pointer-events: auto;
+  /* Independent of JS and animationend: even a stalled cleanup cannot trap input. */
+  animation: brand-arrival-lifetime 2s linear forwards;
+}
+.brand-arrival__canvas { position: absolute; inset: 0; display: block; overflow: hidden; pointer-events: none; }
+.brand-arrival__stage { transform: translate(calc(50vw - 195px), calc(50svh - 370px)); }
+.brand-arrival__word, .brand-arrival__tickets { fill: #f8eee7; font-family: inherit; }
+.brand-arrival__word { font-size: 29px; font-weight: 750; letter-spacing: -.035em; }
+.brand-arrival__tickets { font-size: 13px; font-weight: 600; letter-spacing: .08em; }
+.brand-arrival__portal { transform-origin: 274.5px 361.25px; }
+.brand-arrival__portal-hole, .brand-arrival__door { opacity: 0; }
+.brand-arrival__leaf { transform-origin: 257px 385px; }
+.brand-arrival__skip {
+  position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right));
+  min-width: 44px; min-height: 44px; padding: 10px 12px;
+  border: 0; border-radius: 8px; background: transparent; box-shadow: none;
+  color: #cdbcc9; font: 400 14px/1 var(--font-system, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif);
+  cursor: pointer;
+}
+.brand-arrival__skip:focus-visible { outline: 2px solid #f8eee7; outline-offset: 2px; }
+.brand-arrival[data-running] .brand-arrival__word { animation: brand-arrival-word 2s linear both; }
+.brand-arrival[data-running] .brand-arrival__emblem { animation: brand-arrival-emblem 2s linear both; }
+.brand-arrival[data-running] .brand-arrival__lockup { animation: brand-arrival-enter 2s linear both; }
+.brand-arrival[data-running] .brand-arrival__portal { animation: brand-arrival-expand 2s linear both; }
+.brand-arrival[data-running] .brand-arrival__portal-hole { animation: brand-arrival-expand 2s linear both, brand-arrival-hole 2s linear both; }
+.brand-arrival[data-running] .brand-arrival__door { animation: brand-arrival-expand 2s linear both, brand-arrival-frame 2s linear both; }
+.brand-arrival[data-running] .brand-arrival__leaf { animation: brand-arrival-open 2s linear both; }
+.brand-arrival[data-running] .brand-arrival__skip { animation: brand-arrival-skip 2s linear both; }
+@keyframes brand-arrival-lifetime { 0%, 99.999% { visibility: visible; pointer-events: auto; } 100% { visibility: hidden; pointer-events: none; } }
+@keyframes brand-arrival-word {
+  0%, 7.49% { opacity: 0; transform: translateY(-82px); }
+  7.5% { opacity: 1; transform: translateY(-82px); animation-timing-function: cubic-bezier(.55,.05,.8,.55); }
+  19% { opacity: 1; transform: translateY(0); animation-timing-function: ease-out; }
+  23.25% { transform: translateY(-9px); animation-timing-function: ease-in; }
+  27.5%, 100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes brand-arrival-emblem {
+  0%, 28.49% { opacity: 0; transform: translateY(-85px); }
+  28.5% { opacity: 1; transform: translateY(-85px); animation-timing-function: cubic-bezier(.55,.05,.8,.55); }
+  39% { opacity: 1; transform: translateY(0); animation-timing-function: ease-out; }
+  42% { transform: translateY(-7px); animation-timing-function: ease-in; }
+  45%, 100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes brand-arrival-enter { 0%, 61.5% { transform: translateX(0); } 100% { transform: translateX(404.25px); } }
+@keyframes brand-arrival-expand {
+  0%, 80% { transform: translate(0, 0) scale(1); }
+  99%, 100% { transform: translate(-79.5px, 8.75px) scale(var(--brand-arrival-exit-scale)); }
+}
+@keyframes brand-arrival-hole { 0%, 56% { opacity: 0; } 65%, 100% { opacity: 1; } }
+@keyframes brand-arrival-frame { 0%, 47% { opacity: 0; } 52%, 90.5% { opacity: 1; } 98.5%, 100% { opacity: 0; } }
+@keyframes brand-arrival-open { 0%, 54% { transform: scaleX(1); } 63.5%, 100% { transform: scaleX(.0167); } }
+@keyframes brand-arrival-skip { 0%, 85% { opacity: 1; } 93%, 100% { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .brand-arrival { display: none !important; visibility: hidden !important; pointer-events: none !important; } }

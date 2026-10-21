@@ -1,8 +1,9 @@
 "use client";
 
-import { useLayoutEffect, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useId, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import RoomOverlay from "../room-overlay";
+import { useTopPanelPosition } from "../use-top-panel-position";
 
 function keepFocus(event: KeyboardEvent<HTMLElement>) {
   if (event.key !== "Tab") return;
@@ -17,15 +18,13 @@ function keepFocus(event: KeyboardEvent<HTMLElement>) {
 }
 
 export default function NotificationPanel({ anchor, label, onClose, children }: { anchor: RefObject<HTMLButtonElement | null>; label: string; onClose: () => void; children: (dismiss: () => void) => ReactNode }) {
-  const [position, setPosition] = useState({ top: 70, right: 16 });
+  const id = useId();
+  const position = useTopPanelPosition(true, anchor, onClose);
   useLayoutEffect(() => {
-    const place = () => {
-      const rect = anchor.current?.getBoundingClientRect();
-      if (rect) setPosition({ top: Math.max(12, Math.min(rect.bottom + 10, window.innerHeight - 240)), right: Math.max(12, Math.min(window.innerWidth - rect.right, window.innerWidth - Math.min(410, window.innerWidth - 24) - 12)) });
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [anchor]);
-  return createPortal(<RoomOverlay className="room-overlay--notifications" label={label} onClose={onClose} returnFocus={anchor}>{(dismiss) => <section className="notification-panel" onKeyDown={keepFocus} style={{ "--notification-top": `${position.top}px`, "--notification-right": `${position.right}px` } as CSSProperties}>{children(dismiss)}</section>}</RoomOverlay>, document.body);
+    window.dispatchEvent(new CustomEvent("becore:header-panel", { detail: id }));
+    const other = (event: Event) => { if ((event as CustomEvent).detail !== id) onClose(); };
+    window.addEventListener("becore:header-panel", other);
+    return () => window.removeEventListener("becore:header-panel", other);
+  }, [id, onClose]);
+  return createPortal(<RoomOverlay className="room-overlay--notifications" label={label} onClose={onClose} returnFocus={anchor}>{(dismiss) => <section className="notification-panel notification-panel--dropdown" onKeyDown={keepFocus} style={position}>{children(dismiss)}</section>}</RoomOverlay>, document.body);
 }

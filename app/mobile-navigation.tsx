@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CalendarPlus, House, Info, LifeBuoy, Menu, Ticket, UsersRound, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronRight, House, Info, LifeBuoy, Menu, Ticket, UsersRound, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useSyncExternalStore, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
@@ -10,9 +10,9 @@ import { useHeaderPanel } from "./use-header-panel";
 const links = [
   { href: "/", label: "Home", icon: House },
   { href: "/events", label: "The Drop", icon: CalendarDays },
-  { href: "/hosts", label: "Hosts", icon: UsersRound },
+  { href: "/hosts", label: "Discover hosts", icon: UsersRound },
   { href: "/my-nights", label: "My Nights", icon: Ticket },
-  { href: "/organizer/submit", label: "Organisers", icon: CalendarPlus },
+  { href: "/organizer/submit", label: "List your event", icon: CalendarPlus },
   { href: "/about", label: "About us", icon: Info },
   { href: "/help", label: "Help", icon: LifeBuoy },
 ];
@@ -78,13 +78,19 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
         <span>Menu</span>
         <button type="button" className="night-mobile-menu__close" aria-label="Close navigation" tabIndex={open ? undefined : -1} onClick={() => {
           close(true);
-        }}><X size={19} /></button>
+        }}><X size={18} strokeWidth={1.65} aria-hidden="true" /></button>
       </header>
       <div className="night-mobile-menu__links">
         {links.map((link) => {
           const Icon = link.icon;
           const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(`${link.href}/`)) || (link.href === "/events" && pathname.startsWith("/event/")) || (link.href === "/my-nights" && ["/tickets", "/account/", "/notifications"].some((prefix) => pathname.startsWith(prefix)));
-          return <Link className={["/", "/events", "/my-nights"].includes(link.href) ? "menu-primary-route" : link.href === "/hosts" ? "menu-host-route" : undefined} key={link.href} href={link.href} tabIndex={open ? undefined : -1} aria-current={active ? "page" : undefined} onClick={() => close()}><Icon size={16} aria-hidden="true" /><span>{link.label}</span></Link>;
+          const routeClass = ["/", "/events", "/my-nights"].includes(link.href) ? "menu-primary-route" : link.href === "/hosts" ? "menu-host-route" : "";
+          const classes = [routeClass, ["/about", "/help"].includes(link.href) ? "menu-secondary-route" : "", link.href === "/about" ? "menu-section-start" : ""].filter(Boolean).join(" ");
+          return <Link className={classes} key={link.href} href={link.href} tabIndex={open ? undefined : -1} aria-current={active ? "page" : undefined} onClick={() => close()}>
+            <Icon size={19} strokeWidth={1.65} aria-hidden="true" />
+            <span>{link.label}</span>
+            <ChevronRight className="night-mobile-menu__chevron" size={15} strokeWidth={1.65} aria-hidden="true" />
+          </Link>;
         })}
       </div>
     </nav>;
