@@ -735,6 +735,96 @@ FLASHES_PACKAGE_BASE_BLOBS = {'mobile/package-lock.json': 'ebae7283d0906a9cb42b3
  'package.json': '5b9f6d868730b315d471696625ed879fd9a9dd48'}
 
 
+# Exact navigation/arrival increment: independent controls C, then the complete
+# reviewed application snapshot P. Dependencies, workflows and schema stay fixed.
+NAVIGATION_RELEASE_BASELINE = '5ddf0bc9186626d8325f72f216f5bf1e730ad189'
+NAVIGATION_RELEASE_BASE_TREE = '5b91ad4592fcf5dcb9882e86e338f0a58f26a4a2'
+NAVIGATION_APP_SNAPSHOT = 'ae2004609ee5fa4bee28929e854649658153f766'
+NAVIGATION_APP_TREE = '2ab6f391388e9b5523006fb3e114e82b324644f2'
+NAVIGATION_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+NAVIGATION_APPLICATION_INPUTS = {'app/api/customer/room-updates/route.ts': None,
+ 'app/api/rooms/[slug]/access/route.ts': '86de698f93b4068ebe45e7e2d66966f2e5a58ba2',
+ 'app/api/rooms/[slug]/updates/read/route.ts': None,
+ 'app/brand-arrival.css': None,
+ 'app/brand-arrival.tsx': None,
+ 'app/customer-dock.tsx': '18a4264821dd0af9700f88edc046a109ef458ab0',
+ 'app/iphone-interface.css': '3dd3b6b529819123cbc6fa9e71f48a95b193cb1d',
+ 'app/layout.tsx': 'e2b08c91b28ba40311d18723796d9c7e035db2ae',
+ 'app/mobile-navigation.tsx': 'cc9e7844b263a473f590b749de26c9c4d91d0773',
+ 'app/notification-bell.tsx': '103a2e0025719179c6ff292425b0ca9cffde3986',
+ 'app/notifications/notification-panel.tsx': 'a65b1b6d3dc00a1d0cb377c1a9c47e4951887009',
+ 'app/room-overlay.tsx': '97d273e63be52e8154925512524d25062237d69b',
+ 'app/room-shortcut.css': None,
+ 'app/room/[slug]/room-client.tsx': '71f3cabf44acfc2739ebad29c046c4d565287935',
+ 'app/tickets/ticket-wallet.tsx': '690cdf42d8730fe6206e92f84a9ec8e6ffeac0c6',
+ 'app/use-header-panel.ts': '24a3e6e3fb54ed67b28c348d77f1b92e60310448',
+ 'app/use-room-updates.ts': None,
+ 'app/use-top-panel-position.ts': None,
+ 'docs/design/brand-arrival.md': None,
+ 'docs/mobile/iphone-interface.md': 'e4fc69981cf054614ec72e7915c67df4a47b4528',
+ 'lib/attendee-auth.ts': '99a70a6d78fd3c0d8a7d4839de00bafd0bd3dd80',
+ 'lib/brand-arrival.ts': None,
+ 'lib/room-updates.ts': None,
+ 'lib/top-panel-position.ts': None,
+ 'package.json': 'a3db62441e7b0c8676dc1a166b913004af92eedd',
+ 'tests/brand-arrival.test.mjs': None,
+ 'tests/e2e/brand-arrival.spec.ts': None,
+ 'tests/e2e/customer-feedback.spec.ts': '28c355219aa8a55e51b429072bff8b031fc3f62e',
+ 'tests/e2e/menu-option-a.spec.ts': None,
+ 'tests/e2e/mobile-app-behavior.spec.ts': 'adbcc5000de0965671bb529af1835d595b4be1e2',
+ 'tests/e2e/room-shortcut.spec.ts': None,
+ 'tests/header-panel-focus.test.mjs': 'c8b2e33c326812fd6d68574e1f047512de00de51',
+ 'tests/menu-option-a.test.mjs': None,
+ 'tests/mobile-ui.test.mjs': '7be7869649ce4d5880c2cf51be54a5b3ce77a528',
+ 'tests/room-update-client.test.mjs': None,
+ 'tests/room-updates.test.ts': None,
+ 'tests/top-panel-position.test.ts': None}
+NAVIGATION_APPLICATION_BLOBS = {'app/api/customer/room-updates/route.ts': 'f2431a97449c47728f29d7812b094aa9fca705f4',
+ 'app/api/rooms/[slug]/access/route.ts': '122acf520ef0bbd023163792ffdf9aaf2df0858b',
+ 'app/api/rooms/[slug]/updates/read/route.ts': '22bfa3dccd8141ef89e58d5a16ba52eb43c2308c',
+ 'app/brand-arrival.css': 'f92c1856c052d3357e8f230e806caae426705c92',
+ 'app/brand-arrival.tsx': '50281d16be1aefe130edc24118957381bafa3611',
+ 'app/customer-dock.tsx': '28ad0341bf1f15dfbcc7d630475ae18296c971be',
+ 'app/iphone-interface.css': 'fc99ce9e3e28146108843e0973fa6dac2a300e39',
+ 'app/layout.tsx': '349f0cbabcd8020bb178bc66ff96c3a271eda1ed',
+ 'app/mobile-navigation.tsx': '5450c96b389640d6cba47f20557fe991a3a8358b',
+ 'app/notification-bell.tsx': 'f64fd65812006bd450554709c5ad02158c060862',
+ 'app/notifications/notification-panel.tsx': '1263d504e9479e7d9e4ef808751dc538ff5aac7e',
+ 'app/room-overlay.tsx': 'a0885b8e14160eaa95534f43a408b563bd0bada9',
+ 'app/room-shortcut.css': '1973e6455afeae3a70640cff9cc52a6a1fadbff5',
+ 'app/room/[slug]/room-client.tsx': '9901bd498c867272f16701a43e32ff5287b4e14a',
+ 'app/tickets/ticket-wallet.tsx': 'f0cdd0b6e698c79b09704485fc92bd62d0f44be7',
+ 'app/use-header-panel.ts': '4f63d87e17dc785b18843b8191434331b2a1dbce',
+ 'app/use-room-updates.ts': '4bf2e5c2378da970c2e2a3e1640a68aa64fb7777',
+ 'app/use-top-panel-position.ts': 'c198f8df3646a1a8191986459d26441ea55c10d9',
+ 'docs/design/brand-arrival.md': 'f6e4bb364421ad7288c7346f47d596be6b86530a',
+ 'docs/mobile/iphone-interface.md': '52d28270de3d8125da31dbe70762fd5a38c1fa35',
+ 'lib/attendee-auth.ts': '00c9e1e869a3b36cca533ba23524a005fe684c9d',
+ 'lib/brand-arrival.ts': 'd88ff52c6d31c3def28833e65dfa5f2bc3e6c151',
+ 'lib/room-updates.ts': '872fedf0c529ec0058966ab34f83e39fce1f634e',
+ 'lib/top-panel-position.ts': '240d1ff8a1d212abba2fdbd48ffcafffbabba6df',
+ 'package.json': '45445fffc86e256cc2d5cd440c0e11c66ab8f645',
+ 'tests/brand-arrival.test.mjs': '317e1cbb4b04676ae7a8dad6b16060542e07d3ad',
+ 'tests/e2e/brand-arrival.spec.ts': '3a248a8089407305577f1badbb8313520cecf5fb',
+ 'tests/e2e/customer-feedback.spec.ts': '6738acad48bac13f9dbaa683c05fecfba44a2210',
+ 'tests/e2e/menu-option-a.spec.ts': '9f9a9cab01d4d2f75757675e5134624825e55bb4',
+ 'tests/e2e/mobile-app-behavior.spec.ts': 'b0b336ee944c09b938815660cb70dc58578b7568',
+ 'tests/e2e/room-shortcut.spec.ts': 'dce5aece13dc9ef638777f7a05668f02aab9f59b',
+ 'tests/header-panel-focus.test.mjs': '9a922b8ab93d24fd85324cd773a6aa691d8e7e1e',
+ 'tests/menu-option-a.test.mjs': 'b0d3297493e1e986dda7358291780b70dea10d2d',
+ 'tests/mobile-ui.test.mjs': '405c23b32bd288b47540194f18ead1fd23e60a3b',
+ 'tests/room-update-client.test.mjs': 'dd6380210a79705b0d0a4c470dc40b238ec0bcae',
+ 'tests/room-updates.test.ts': 'f189f11b585879ab5195f9dba8d704f26fa16761',
+ 'tests/top-panel-position.test.ts': '85b1447323e1cea78abf5c321f1314336d1e4553'}
+NAVIGATION_DEPENDENCY_BLOBS = {'package-lock.json': '3fa4bfae990eac872f88c72d30a51c995c35574d',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84'}
+NAVIGATION_TEST_SCRIPT_APPENDS = {
+    'test:repo': ' tests/room-update-client.test.mjs',
+    'test:ui': ' tests/header-panel-focus.test.mjs tests/menu-option-a.test.mjs tests/brand-arrival.test.mjs',
+}
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1369,8 +1459,62 @@ def reviewed_flashes_application_blobs(expected, source):
     return pins
 
 
+def reviewed_navigation_application_blobs(expected, source):
+    """Bind B/S to the exact complete patch, with separately merged controls C."""
+    snapshot = NAVIGATION_APP_SNAPSHOT
+    controls = NAVIGATION_CONTROL_FILES
+    application = NAVIGATION_APPLICATION_BLOBS
+    require(expected == NAVIGATION_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == NAVIGATION_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == NAVIGATION_APP_TREE,
+            "Navigation live or snapshot tree changed.")
+    # P retains S in its graph; a release checkout never depends on a side ref.
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(application and set(application) == set(NAVIGATION_APPLICATION_INPUTS)
+            and set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            "Navigation snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in NAVIGATION_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Navigation application input differs from reviewed source: " + name)
+    for name, blob in application.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Navigation snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "Navigation requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+            "Navigation trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Navigation candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = dict(application)
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Navigation output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Navigation controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    require(not migration_plan(pins), "Navigation release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == NAVIGATION_RELEASE_BASELINE:
+        return reviewed_navigation_application_blobs(expected, source)
     if expected == FLASHES_RELEASE_BASELINE:
         return reviewed_flashes_application_blobs(expected, source)
     if expected == CINCO_RECOVERY_RELEASE_BASELINE:
@@ -1446,6 +1590,20 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == NAVIGATION_RELEASE_BASELINE:
+        require({"package.json", *NAVIGATION_DEPENDENCY_BLOBS} & set(changed) == {"package.json"},
+                "Navigation permits only the reviewed package test registrations.")
+        for name, blob in NAVIGATION_DEPENDENCY_BLOBS.items():
+            require(git("rev-parse", expected + ":" + name) == blob
+                    and git("rev-parse", source + ":" + name) == blob,
+                    "Navigation dependencies must remain unchanged: " + name)
+        before = strict_json(git("show", expected + ":package.json"))
+        after = strict_json(git("show", source + ":package.json"))
+        for name, append in NAVIGATION_TEST_SCRIPT_APPENDS.items():
+            before["scripts"][name] += append
+        require(before == after, "Navigation package change is not the exact test registration append.")
+        require(not migration_plan(changed), "Navigation release cannot introduce migrations.")
+        return changed
     if expected == FLASHES_RELEASE_BASELINE:
         require(set(FLASHES_SECURITY_BLOBS) <= set(changed),
                 "Flashes requires the complete reviewed root/mobile Vite security patches.")
