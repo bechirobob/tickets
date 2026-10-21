@@ -526,7 +526,7 @@ def flashes_source_family(root):
 
 
 # Exact navigation C/P test family, independent of historical Flashes fixtures.
-NAVIGATION_OPERATOR_BLOB = 'ada9024455b0e67008656f42c65f2082f9bc0f50'
+NAVIGATION_OPERATOR_BLOB = 'c7c4e0af84687c7d7af002978ea17caebf246c67'
 NAVIGATION_STAGED_BASE = dict(FLASHES_STAGED_BASE)
 
 
@@ -6778,6 +6778,38 @@ class NavigationSourceAdmissionTests(unittest.TestCase):
         copy_only = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
                              '-p', self.control, '-m', 'same bytes without snapshot ancestry')
         with self.assertRaises(subprocess.CalledProcessError): self.verify(copy_only)
+
+    def test_revision_preserves_published_control_candidate_and_snapshot_ancestry(self):
+        self.git('checkout', '-q', self.snapshot)
+        name = self.files[0]
+        self.write(name, 'reviewed source revision\n')
+        snapshot = self.commit()
+        blob = self.git('rev-parse', snapshot + ':' + name)
+        self.git('checkout', '-q', self.control)
+        operator = b'independent reviewed revised navigation operator\n'
+        self.write('ops/vps/code-release.py', operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed revision tests\n')
+        control = self.commit()
+        self.git('checkout', '-q', self.candidate)
+        self.git('merge', '--no-ff', '--no-commit', control, snapshot)
+        candidate = self.commit()
+        self.assertEqual(self.git('show', '-s', '--format=%P', candidate).split(),
+                         [self.candidate, control, snapshot])
+        self.assertEqual(self.git('show', '-s', '--format=%P', control), self.control)
+        self.assertEqual(self.git('show', '-s', '--format=%P', snapshot), self.snapshot)
+        for ancestor in (self.control, self.candidate, self.snapshot, control, snapshot):
+            self.git('merge-base', '--is-ancestor', ancestor, candidate)
+        self.git('update-ref', 'refs/remotes/origin/main', control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+             patch.object(release, 'NAVIGATION_APP_SNAPSHOT', snapshot), \
+             patch.object(release, 'NAVIGATION_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+             patch.dict(release.NAVIGATION_APPLICATION_BLOBS, {name: blob}), \
+             patch.object(sys.modules[__name__], 'NAVIGATION_OPERATOR_BLOB', self.blob(operator)):
+            self.assertEqual(set(self.verify()), set(self.files) | release.NAVIGATION_CONTROL_FILES)
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'],
+                             self.blob(operator))
+            self.git('update-ref', 'refs/remotes/origin/main', self.control)
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
 
     def test_unlisted_files_dependencies_workflows_and_schema_are_rejected(self):
         for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', 'drizzle/9999_extra.sql',
