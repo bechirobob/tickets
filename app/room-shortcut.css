@@ -1,0 +1,21 @@
+@media (max-width: 700px) {
+  body nav.customer-dock--with-room { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  body .customer-dock button.customer-room-link {
+    appearance: none; min-width: 0; min-height: 54px; margin: 0; padding: 5px 2px; gap: 3px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 0; border-radius: 16px; background: transparent; color: #e4d6df;
+    font: inherit; font-size: 12px; line-height: 1.3; font-weight: 500; cursor: pointer; box-shadow: none;
+  }
+  body .customer-dock button.customer-room-link:focus-visible { outline: 2px solid currentColor; outline-offset: -4px; }
+  body .customer-dock .customer-room-symbol { position: relative; display: block; height: 23px; }
+  body .customer-dock .customer-room-badge {
+    position: absolute; top: -6px; left: 16px; min-width: 17px; height: 17px; padding: 0 4px;
+    display: flex; align-items: center; justify-content: center; border-radius: 10px;
+    background: #f8eee7; color: #281b2b; font-size: 10px; line-height: 1; font-weight: 700;
+  }
+}
+.customer-room-chooser ul { list-style: none; padding: 0; margin: 0; }
+.customer-room-chooser li + li { border-top: 1px solid var(--buzz-line); }
+.customer-room-chooser li a { display: flex; align-items: center; gap: 12px; justify-content: space-between; min-height: 48px; padding: 10px 0; color: inherit; text-decoration: none; font-size: 14px; }
+.customer-room-chooser li a span { min-width: 0; overflow-wrap: anywhere; }
+.customer-room-chooser li b { flex: none; }

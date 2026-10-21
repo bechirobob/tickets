@@ -9,15 +9,18 @@ const compiled = transformSync(source, { loader: "ts", format: "cjs" }).code;
 
 // Execute the real hook while controlling the gap between an event and React's
 // passive cleanup. Browser tests retain the real DOM, breakpoint and Back checks.
-function mountPanel(reducedMotion = true) {
+function mountPanel(reducedMotion = true, delayedRelease = false) {
   const slots = [];
   const pendingEffects = new Map();
   const frames = new Map();
   const timers = new Map();
   const window = new EventTarget();
   const document = new EventTarget();
-  const router = { push() {} };
-  const releaseHistory = () => Promise.resolve();
+  const pushes = [], releases = [];
+  const router = { push(href) { pushes.push(href); } };
+  const releaseHistory = () => delayedRelease ? new Promise(resolve => releases.push(resolve)) : Promise.resolve();
+  window.location = { origin: "https://tickets.test", href: "https://tickets.test/events" };
+  class Element { constructor(link) { this.link = link; } closest() { return this.link; } }
   let cursor = 0;
   let nextFrame = 0;
   let nextTimer = 0;
@@ -62,7 +65,7 @@ function mountPanel(reducedMotion = true) {
       if (specifier === "./use-layer-history") return { useLayerHistory: (_open, callback) => { onBack = callback; return releaseHistory; } };
       throw new Error(`Unexpected dependency: ${specifier}`);
     },
-    window, document, CustomEvent,
+    window, document, CustomEvent, Element,
     requestAnimationFrame(callback) { const id = ++nextFrame; frames.set(id, callback); return id; },
     cancelAnimationFrame(id) { frames.delete(id); },
     setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
@@ -94,12 +97,19 @@ function mountPanel(reducedMotion = true) {
   flushEffects();
   return {
     get api() { return api; },
+    pushes,
+    release() { releases.shift()?.(); },
+    clickDestination(path = "/room/test-event") {
+      const event = new Event("click", { cancelable: true });
+      Object.defineProperty(event, "target", { value: new Element({ origin: window.location.origin, pathname: path, search: "", hash: "" }) });
+      document.dispatchEvent(event);
+    },
     get active() { return active; },
     get focusLog() { return focusLog; },
     get pendingFrames() { return frames.size; },
     open() { api.toggle(true); render(); flushEffects(); },
     commit() { render(); flushEffects(); },
-    navigate(nextPath) { pathname = nextPath; render(); flushEffects(); },
+    navigate(nextPath) { pathname = nextPath; window.location.href = window.location.origin + nextPath; render(); flushEffects(); },
     back() { onBack(); },
     escape() { const event = new Event("keydown", { cancelable: true }); event.key = "Escape"; document.dispatchEvent(event); },
     replacePanel() { api.panel.current = makePanel("replacement-panel"); },
@@ -221,5 +231,50 @@ test("a route change cleans up pending focus without restoring the old trigger",
   staleFrame();
   panel.flushFrames();
   assert.equal(panel.active, "outside");
+  panel.unmount();
+});
+
+test("a competing panel ends an animated exit immediately without moving focus", () => {
+  const panel = mountPanel(false);
+  panel.open(); panel.api.close(); panel.commit();
+  assert.equal(panel.api.phase, "closing");
+  panel.moveFocusOutside(); panel.openSibling(); panel.commit();
+  assert.equal(panel.api.phase, "closed");
+  assert.equal(panel.active, "outside");
+  panel.unmount();
+});
+
+
+test("a delayed panel destination cannot overwrite a newer route", async () => {
+  const panel = mountPanel(true, true);
+  panel.open(); panel.clickDestination(); panel.commit();
+  panel.navigate("/help"); panel.release(); await Promise.resolve();
+  assert.deepEqual(panel.pushes, []);
+  panel.unmount();
+});
+
+test("an uninterrupted destination routes once after releasing its layer", async () => {
+  const panel = mountPanel(true, true);
+  panel.open(); panel.clickDestination(); panel.commit();
+  assert.deepEqual(panel.pushes, []);
+  panel.release(); await Promise.resolve();
+  assert.deepEqual(panel.pushes, ["/room/test-event"]);
+  panel.unmount();
+});
+
+test("a reopened disclosure cancels a previous pending destination", async () => {
+  const panel = mountPanel(true, true);
+  panel.open(); panel.clickDestination(); panel.commit(); panel.open();
+  panel.release(); await Promise.resolve();
+  assert.deepEqual(panel.pushes, []);
+  panel.unmount();
+});
+
+
+test("a competing disclosure cancels a closed panel's pending destination", async () => {
+  const panel = mountPanel(true, true);
+  panel.open(); panel.clickDestination(); panel.commit();
+  panel.openSibling(); panel.commit(); panel.release(); await Promise.resolve();
+  assert.deepEqual(panel.pushes, []);
   panel.unmount();
 });

@@ -78,6 +78,36 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
   const leavingRef = useRef(false);
   const lastSocketActivityRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const updateSnapshotRef = useRef<string | null>(null);
+  const roomSnapshotReadyRef = useRef(false);
+  const updateAcknowledgmentBusyRef = useRef(false);
+  const updateSnapshotRecoveryRef = useRef(false);
+
+  const acknowledgeVisibleUpdates = useCallback(async () => {
+    const snapshot = updateSnapshotRef.current;
+    if (!snapshot || !roomSnapshotReadyRef.current || updateAcknowledgmentBusyRef.current || document.visibilityState !== 'visible') return;
+    updateAcknowledgmentBusyRef.current = true;
+    try {
+      await requestJson(`/api/rooms/${encodeURIComponent(slug)}/updates/read`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ snapshot }),
+      });
+      if (updateSnapshotRef.current === snapshot) updateSnapshotRef.current = null;
+      updateSnapshotRecoveryRef.current = false;
+      window.dispatchEvent(new Event('bct:room-updates-read'));
+    } catch (error) {
+      // An expired cursor cannot be replaced against an old rendered snapshot.
+      // Re-authorize and receive a fresh Room snapshot before acknowledging its
+      // new boundary. Only one automatic recovery is allowed per failed cycle.
+      if (error instanceof RequestError && error.status === 400 && !updateSnapshotRecoveryRef.current && updateSnapshotRef.current === snapshot) {
+        updateSnapshotRecoveryRef.current = true;
+        roomSnapshotReadyRef.current = false;
+        updateSnapshotRef.current = null;
+        setAccessAttempt(value => value + 1);
+      }
+      // Other failures preserve unread updates for a later visible retry.
+    }
+    finally { updateAcknowledgmentBusyRef.current = false; }
+  }, [slug]);
 
   const openedAnnouncement = useRef('');
   useEffect(() => {
@@ -100,21 +130,25 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
+    roomSnapshotReadyRef.current = false;
     setStatus("connecting");
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const announcement = new URLSearchParams(window.location.search).get('announcement') ?? '';
     const socket = new WebSocket(`${protocol}//${window.location.host}/api/room/socket?event=${encodeURIComponent(slug)}&announcement=${encodeURIComponent(announcement.slice(0,80))}`);
     socketRef.current = socket;
     socket.onopen = () => {
+      if (socketRef.current !== socket || leavingRef.current) return;
       reconnectAttemptRef.current = 0;
       lastSocketActivityRef.current = Date.now();
       setStatus("connected");
     };
     socket.onmessage = (event) => {
+      if (socketRef.current !== socket || leavingRef.current) return;
       lastSocketActivityRef.current = Date.now();
       let payload: Record<string, unknown>;
       try { payload = JSON.parse(String(event.data)) as Record<string, unknown>; } catch { return; }
       if (payload.type === "snapshot") {
+        roomSnapshotReadyRef.current = true;
         setMessages(payload.messages as Message[]);
         setPolicy(payload.room as Policy);
         setOnline(Number(payload.online) || 0);
@@ -155,7 +189,8 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       }
     };
     socket.onclose = () => {
-      if (socketRef.current === socket) socketRef.current = null;
+      if (socketRef.current !== socket) return;
+      socketRef.current = null;
       if (leavingRef.current) return;
       setStatus((currentStatus) => currentStatus === "denied" ? currentStatus : "offline");
       const attempt = reconnectAttemptRef.current++;
@@ -163,6 +198,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       reconnectTimerRef.current = window.setTimeout(() => connectRef.current(attendeeId), delay);
     };
     socket.onerror = () => {
+      if (socketRef.current !== socket || leavingRef.current) return;
       setStatus("offline");
       socket.close();
     };
@@ -174,7 +210,9 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     let cancelled = false;
     leavingRef.current = false;
     const controller = new AbortController();
-    requestJson<{ allowed?: boolean; attendee?: { id: string; roomBadge?: "VIP" | null }; room?: Policy; error?: string }>(`/api/rooms/${encodeURIComponent(slug)}/access`, { signal: controller.signal })
+    roomSnapshotReadyRef.current = false;
+    updateSnapshotRef.current = null;
+    requestJson<{ allowed?: boolean; attendee?: { id: string; roomBadge?: "VIP" | null }; room?: Policy; updateSnapshot?: string | null; error?: string }>(`/api/rooms/${encodeURIComponent(slug)}/access`, { signal: controller.signal })
       .then((data) => {
         if (cancelled) return;
         if (!data.allowed || !data.attendee) {
@@ -185,6 +223,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
           return;
         }
         attendeeIdRef.current = data.attendee.id;
+        updateSnapshotRef.current = data.updateSnapshot ?? null;
         setSelfId(data.attendee.id);
         setDraft(roomDrafts.get(`${data.attendee.id}:${slug}`) ?? "");
         setSelfRoomBadge(data.attendee.roomBadge ?? null);
@@ -211,6 +250,15 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
       socketRef.current = null;
     };
   }, [accessAttempt, connect, slug]);
+
+  useEffect(() => {
+    // Effects run after the actual Room snapshot has rendered. Neither prefetch,
+    // a homepage count request, a failed connection nor a hidden tab reads it.
+    if (status === 'connected') void acknowledgeVisibleUpdates();
+    const visible = () => { if (document.visibilityState === 'visible' && status === 'connected') void acknowledgeVisibleUpdates(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => document.removeEventListener('visibilitychange', visible);
+  }, [acknowledgeVisibleUpdates, messages, status]);
 
   useEffect(() => {
     function reconnectIfNeeded() {
