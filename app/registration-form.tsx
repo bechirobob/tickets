@@ -39,6 +39,7 @@ function RegistrationFormState({ eventSlug, mode, maxPartySize, approvalRequired
       const response = await fetch('/api/registrations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: attribution.get('source'), ref: attribution.get('ref'), eventSlug, email: form.get('email'), guestName: form.get('guestName'), phone: form.get('phone') ?? '', partySize: Number(form.get('partySize') ?? 1), acceptedTerms: form.get('acceptedTerms') === 'on', announcementsOptIn: mode === 'interest' && form.get('announcementsOptIn') === 'on', platformAnnouncementsOptIn: mode === 'rsvp' && form.get('platformAnnouncementsOptIn') === 'on' }) });
       const data = await response.json() as { error?: string; message: string; canManage?: boolean };
       if (!response.ok) throw new Error(data.error ?? 'Registration could not be saved.');
+      if (mode === 'rsvp' && data.canManage === true) window.dispatchEvent(new Event('bct:attendee-session-changed'));
       setPlatformOptIn(mode === 'rsvp' && form.get('platformAnnouncementsOptIn') === 'on');
       registrationDrafts.clear(eventSlug, mode);
       setMessage(data.message); setCanManage(data.canManage === true); setSent(true);
