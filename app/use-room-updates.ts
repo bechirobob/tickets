@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { requestJson } from '../lib/client-request';
-import type { RoomUpdateSummary } from '../lib/room-updates';
+import type { RoomUpdateSummary } from '../lib/room-update-summary';
 
 export function useRoomUpdates(enabled: boolean, pathname: string) {
   const [result, setResult] = useState<{ pathname: string; rooms: RoomUpdateSummary[] }>({ pathname: '', rooms: [] });

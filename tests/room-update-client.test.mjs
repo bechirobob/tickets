@@ -2,10 +2,26 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { transformSync } from 'esbuild';
+import ts from 'typescript';
 
 const source = await readFile(new URL('../app/use-room-updates.ts', import.meta.url), 'utf8');
 const compiled = transformSync(source, { loader: 'ts', format: 'cjs' }).code;
+
+test('Room update hook typechecks with browser-only types and no server modules', () => {
+  const program = ts.createProgram([fileURLToPath(new URL('../app/use-room-updates.ts', import.meta.url))], {
+    noEmit: true, strict: true, skipLibCheck: true, types: [],
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    lib: ['lib.es2022.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
+  });
+  const backendModules = program.getSourceFiles().filter(file => /\/lib\/(?:room-updates|attendee-auth|room-policy)\.ts$/u.test(file.fileName));
+  assert.deepEqual(backendModules.map(file => file.fileName), [], 'type-only imports must not pull server/database modules into the browser graph');
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.deepEqual(diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), []);
+});
+
 function mountUpdates() {
   const slots = [], effects = new Map(), requests = [];
   const window = new EventTarget(), document = new EventTarget();
