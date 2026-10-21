@@ -706,6 +706,35 @@ CINCO_RECOVERY_PACKAGE_BASE_BLOB = 'eccb3af63298d7642c1ea974d7e8f18da9563507'
 CINCO_RECOVERY_LOCK_BLOB = '47a4eaca5743b768598462d8b66a2ef49a442b4e'
 
 
+# Exact Flashes/RSVP increment. C adds only the independently reviewed controls
+# and the pinned root/mobile Vite security patches; P adds only six UI/test files.
+# No workflow, audit exception, runtime, schema or permission change is admitted.
+FLASHES_RELEASE_BASELINE = 'f242907bb73b4f9f157451a9199dd66d237dbaf6'
+FLASHES_RELEASE_BASE_TREE = '8f8bd4c0bf4b93f51627f172162ff6216388ea60'
+FLASHES_ADVISORY_BASE = '87463bd06d05ea6aa6495582afcdd0ac725c1d53'
+FLASHES_ADVISORY_TREE = '93ab0cf9444c59102fe2d25f90beb56f835dfcec'
+FLASHES_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+FLASHES_ADVISORY_BLOBS = {
+    '.github/workflows/puro-access-readonly-20261020.yml': '34f5a3d5304f4066cbbc65c463c45e6636bb8c05',
+    '.github/workflows/puro-access-release-20261019.yml': '764e866a7abc8f9fc05df3cdc2e4a87e7ffe8075',
+    '.github/workflows/puro-delivery-readonly-20261020.yml': '86a3a28856f4b709fbe4a0d62272f3e13529f245',
+}
+FLASHES_APPLICATION_BLOBS = {'app/event/[slug]/event-details.css': '09936e76a884d9fd0d07a094c837a47ffbd1e36d',
+ 'app/room-features.css': '2b152ff8f704c23113ceab7c80d917e16f64e807',
+ 'app/room/[slug]/flash-capture-mark.tsx': '6b481b22accbdf3cb89d76023efc9523a6dc0e78',
+ 'app/room/[slug]/flashes-panel.tsx': 'ccd28f0222b0ef7161c708d84e513d1d0cd3812e',
+ 'tests/e2e/registration.spec.ts': '74a408047f4b6c16abe036f14e1758b87140bbe8',
+ 'tests/e2e/room-features.spec.ts': 'f9e895a6422d1f33ffc4b13094f5f0ed2406a4f0'}
+FLASHES_SECURITY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': '3fa4bfae990eac872f88c72d30a51c995c35574d',
+ 'package.json': 'a3db62441e7b0c8676dc1a166b913004af92eedd'}
+FLASHES_PACKAGE_BASE_BLOBS = {'mobile/package-lock.json': 'ebae7283d0906a9cb42b374b78a90986e7fcdcac',
+ 'mobile/package.json': '7cf2bf6a970f54c88c631b0ba39872c8ad4f03e6',
+ 'package-lock.json': '47a4eaca5743b768598462d8b66a2ef49a442b4e',
+ 'package.json': '5b9f6d868730b315d471696625ed879fd9a9dd48'}
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1289,8 +1318,61 @@ def reviewed_cinco_recovery_application_blobs(expected, source):
     return pins
 
 
+def reviewed_flashes_application_blobs(expected, source):
+    """Admit exact L/A, independently reviewed security controls C, then UI P."""
+    advisory = FLASHES_ADVISORY_BASE
+    controls = FLASHES_CONTROL_FILES
+    require(expected == FLASHES_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == FLASHES_RELEASE_BASE_TREE
+            and git("rev-parse", advisory + "^{tree}") == FLASHES_ADVISORY_TREE,
+            "Flashes live or advisory baseline changed.")
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", expected, advisory],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, advisory).splitlines())
+            == set(FLASHES_ADVISORY_BLOBS),
+            "Flashes advisory inventory changed.")
+    verify_changed_modes(expected, advisory)
+    for name, blob in FLASHES_ADVISORY_BLOBS.items():
+        require(not git("ls-tree", expected, "--", name)
+                and git("ls-tree", advisory, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Flashes advisory addition changed: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, advisory, source),
+            "Flashes requires independent merged controls.")
+    verify_trusted_operator(source)
+    # A same-named local tag must never impersonate the remote main branch.
+    for ancestor, descendant in ((advisory, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", advisory, trusted).splitlines()) == controls | set(FLASHES_SECURITY_BLOBS),
+            "Flashes trusted controls contain unreviewed changes.")
+    require(FLASHES_APPLICATION_BLOBS
+            and set(git("diff", "--name-only", trusted, source).splitlines())
+            == set(FLASHES_APPLICATION_BLOBS),
+            "Flashes candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(advisory, trusted)
+    verify_changed_modes(trusted, source)
+    pins = {**FLASHES_ADVISORY_BLOBS, **FLASHES_SECURITY_BLOBS, **FLASHES_APPLICATION_BLOBS}
+    for name, blob in FLASHES_SECURITY_BLOBS.items():
+        require(git("ls-tree", trusted, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Flashes trusted security patch differs from reviewed source: " + name)
+    for name, blob in pins.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Flashes output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Flashes controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    require(not migration_plan(pins), "Flashes release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == FLASHES_RELEASE_BASELINE:
+        return reviewed_flashes_application_blobs(expected, source)
     if expected == CINCO_RECOVERY_RELEASE_BASELINE:
         return reviewed_cinco_recovery_application_blobs(expected, source)
     if expected == CINCO_RELEASE_BASELINE and git("rev-parse", source + ":lib/registrations.ts") == CINCO_APPLICATION_BLOBS["lib/registrations.ts"]:
@@ -1364,6 +1446,24 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == FLASHES_RELEASE_BASELINE:
+        require(set(FLASHES_SECURITY_BLOBS) <= set(changed),
+                "Flashes requires the complete reviewed root/mobile Vite security patches.")
+        for name, blob in FLASHES_PACKAGE_BASE_BLOBS.items():
+            require(git("rev-parse", expected + ":" + name) == blob
+                    and git("rev-parse", FLASHES_ADVISORY_BASE + ":" + name) == blob
+                    and git("rev-parse", source + ":" + name) == FLASHES_SECURITY_BLOBS[name],
+                    "Flashes package or dependency lock differs from reviewed source: " + name)
+        for name in ("package.json", "mobile/package.json"):
+            before = strict_json(git("show", expected + ":" + name))
+            after = strict_json(git("show", source + ":" + name))
+            require(before["devDependencies"]["vite"] == "8.2.1"
+                    and after["devDependencies"]["vite"] == "8.2.4",
+                    "Flashes requires exactly Vite 8.2.1 to 8.2.4: " + name)
+            before["devDependencies"]["vite"] = "8.2.4"
+            require(before == after, "Flashes package change is not the exact Vite security patch: " + name)
+        require(not migration_plan(changed), "Flashes release cannot introduce migrations.")
+        return changed
     if "mobile/package-lock.json" in changed:
         if expected == EMAIL_RELEASE_BASELINE:
             require(git("rev-parse", expected + ":mobile/package-lock.json")

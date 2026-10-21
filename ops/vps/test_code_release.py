@@ -438,7 +438,97 @@ def cinco_recovery_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
+# Separate exact security-controls/UI test family; historical families stay frozen.
+FLASHES_OPERATOR_BLOB = '302a5db1025bc8bd0a068a4eee097dbc940aada3'
+FLASHES_STAGED_BASE = dict(CINCO_RECOVERY_STAGED_BASE)
+
+
+def flashes_source_family(root):
+    """Recognize only the complete Flashes C/P family for local test execution."""
+    root = Path(root)
+    operator = root / 'ops/vps/code-release.py'
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    selected = any(os.path.lexists(root / name) for name in release.FLASHES_ADVISORY_BLOBS)
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != FLASHES_OPERATOR_BLOB):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            baseline = release.FLASHES_ADVISORY_BASE
+            if (checkout_git(root, 'rev-parse', baseline + '^{tree}').decode().strip()
+                    != release.FLASHES_ADVISORY_TREE):
+                raise AssertionError('Flashes family baseline tree changed')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', baseline).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Flashes baseline contains unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            for name, blob in release.FLASHES_ADVISORY_BLOBS.items():
+                if manifest.get(name) != ('100644', blob):
+                    raise AssertionError('Flashes advisory baseline changed')
+            manifest.update({name: ('100644', blob) for name, blob in release.FLASHES_SECURITY_BLOBS.items()})
+            application = release.FLASHES_APPLICATION_BLOBS
+            observed = {}
+            for name in application:
+                path = root / name
+                observed[name] = digest(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+            if observed == application:
+                manifest.update({name: ('100644', blob) for name, blob in application.items()})
+            elif any(observed[name] != manifest.get(name, (None, None))[1] for name in application):
+                raise AssertionError('Flashes application family has partial or unreviewed bytes')
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked | untracked != set(manifest):
+                raise AssertionError('Flashes full inventory differs from complete C/P family')
+            # A restored worktree cannot conceal staged application changes.
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if not record:
+                    continue
+                metadata, raw_name = record.split(b'\t', 1)
+                mode, blob, stage = metadata.decode().split()
+                name = os.fsdecode(raw_name)
+                if (stage != '0' or name not in manifest
+                        or (name in release.FLASHES_CONTROL_FILES and mode != '100644')
+                        or (name not in release.FLASHES_CONTROL_FILES and manifest[name] != (mode, blob))):
+                    raise AssertionError('Flashes index differs from complete application family')
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError('Flashes family requires its independently pinned baseline') from exc
+    else:
+        manifest = dict(FLASHES_STAGED_BASE)
+    # Only this test file cannot self-pin; production binds both controls to C.
+    manifest['ops/vps/code-release.py'] = ('100644', FLASHES_OPERATOR_BLOB)
+    manifest['ops/vps/test_code_release.py'] = ('100644', None)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Flashes family requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError('Flashes family is incomplete') from exc
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Flashes family has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def checkout_source_family(root):
+    flashes = flashes_source_family(root)
+    if flashes is not None:
+        return flashes
     recovery = cinco_recovery_source_family(root)
     return recovery if recovery is not None else checkout_parallel_source_family(root)
 
@@ -5970,6 +6060,342 @@ class CincoRecoverySourceAdmissionTests(unittest.TestCase):
         advisory = self.commit()
         with patch.object(release, 'CINCO_RECOVERY_ADVISORY_BASE', advisory), \
              patch.object(release, 'CINCO_RECOVERY_ADVISORY_TREE', self.git('rev-parse', advisory + '^{tree}')):
+            with self.assertRaisesRegex(release.ReleaseError, 'advisory inventory'):
+                self.verify(self.candidate)
+
+    def test_trusted_control_cannot_include_application_changes(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
+            self.git('commit', '--allow-empty', '-qm', 'candidate after bad trust anchor')
+            self.git('update-ref', 'refs/remotes/origin/main', self.candidate)
+            with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                self.verify()
+
+    def test_application_worktree_and_staged_mutations_cannot_hide(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        self.git('update-index', '--assume-unchanged', name)
+        path.write_bytes(b'hidden worktree edit\n')
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+        path.write_bytes(original)
+        self.git('update-index', '--no-assume-unchanged', name)
+        path.write_bytes(b'hidden index edit\n')
+        self.git('add', name)
+        path.write_bytes(original)
+        with self.assertRaisesRegex(AssertionError, 'index differs'):
+            checkout_source_family(self.root)
+
+    def test_full_family_rejects_symlink_hardlink_and_untracked_addition(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        for mutation in ('symlink', 'hardlink'):
+            with self.subTest(mutation=mutation):
+                path.unlink()
+                if mutation == 'symlink':
+                    path.symlink_to(self.root / 'package.json')
+                else:
+                    os.link(self.root / 'package.json', path)
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+                path.unlink()
+                self.write(name, original)
+        self.write('unknown.txt', 'untracked file\n')
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            checkout_source_family(self.root)
+
+    def test_complete_staged_family_rejects_every_mutation_and_extra_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw_files = {name: checkout_git(self.root, 'show', self.control + ':' + name)
+                         for name in self.staged}
+            for name, raw in raw_files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            self.assertEqual(checkout_source_family(root)['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in raw_files:
+                for mutation in ('bytes', 'missing', 'mode'):
+                    # Only the test file is necessarily unable to authenticate itself.
+                    if name == 'ops/vps/test_code_release.py' and mutation == 'bytes':
+                        continue
+                    with self.subTest(name=name, mutation=mutation):
+                        path = root / name
+                        if mutation == 'bytes': path.write_bytes(b'unreviewed staged file\n')
+                        elif mutation == 'missing': path.unlink()
+                        else: path.chmod(0o755)
+                        with self.assertRaises(AssertionError):
+                            family = checkout_source_family(root)
+                            if family is None:
+                                staged_family_pins(root)
+                        path.write_bytes(raw_files[name])
+                        path.chmod(0o644)
+            (root / 'unknown.txt').write_text('unexpected staged addition\n')
+            with self.assertRaisesRegex(AssertionError, 'Unexpected staged'):
+                checkout_source_family(root)
+
+
+class FlashesSourceAdmissionTests(unittest.TestCase):
+    """Real Git objects exercise the separate finite Flashes trust boundary."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', 'user.name', 'Flashes admission tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.files = tuple(release.FLASHES_APPLICATION_BLOBS)
+        self.assertTrue(self.files, 'The reviewed Flashes inventory must be complete')
+        self.advisories = tuple(release.FLASHES_ADVISORY_BLOBS)
+        self.security = tuple(release.FLASHES_SECURITY_BLOBS)
+        self.package = {'name': 'fixture', 'scripts': {'test:ui': 'node --test tests/existing.test.mjs'},
+                        'dependencies': {'unchanged': '1.0.0'}, 'devDependencies': {'vite': '8.2.1'}}
+        for prefix in ('', 'mobile/'):
+            self.write(prefix + 'package.json', json.dumps(self.package))
+            self.write(prefix + 'package-lock.json', 'unchanged dependencies\n')
+        self.write('ops/vps/audit.py', 'unchanged staged utility\n')
+        self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
+        self.added = {'app/room/[slug]/flash-capture-mark.tsx'}
+        self.assertTrue(self.added <= set(self.files))
+        for name in (*self.files, *release.FLASHES_CONTROL_FILES):
+            if name != 'package.json' and name not in self.added:
+                self.write(name, 'baseline ' + name + '\n')
+        self.live = self.commit()
+        for name in self.advisories:
+            self.write(name, 'reviewed advisory ' + name + '\n')
+        self.advisory = self.commit()
+        self.operator = b'independent reviewed Flashes operator\n'
+        self.write('ops/vps/code-release.py', self.operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed Flashes tests\n')
+        package = copy.deepcopy(self.package)
+        package['devDependencies']['vite'] = '8.2.4'
+        for prefix in ('', 'mobile/'):
+            self.write(prefix + 'package.json', json.dumps(package))
+            self.write(prefix + 'package-lock.json', 'exact reviewed Vite security lock\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        for name in self.files:
+            self.write(name, 'exact reviewed Flashes ' + name + '\n')
+        self.candidate = self.commit()
+        self.pins = {name: self.git('rev-parse', self.candidate + ':' + name) for name in self.files}
+        values = {
+            'FLASHES_RELEASE_BASELINE': self.live,
+            'FLASHES_RELEASE_BASE_TREE': self.git('rev-parse', self.live + '^{tree}'),
+            'FLASHES_ADVISORY_BASE': self.advisory,
+            'FLASHES_ADVISORY_TREE': self.git('rev-parse', self.advisory + '^{tree}'),
+            'FLASHES_ADVISORY_BLOBS': {name: self.git('rev-parse', self.advisory + ':' + name)
+                                           for name in self.advisories},
+            'FLASHES_APPLICATION_BLOBS': self.pins,
+            'FLASHES_SECURITY_BLOBS': {name: self.git('rev-parse', self.control + ':' + name)
+                                       for name in self.security},
+            'FLASHES_PACKAGE_BASE_BLOBS': {name: self.git('rev-parse', self.live + ':' + name)
+                                           for name in self.security},
+            '__file__': str(self.root / 'ops/vps/code-release.py'),
+        }
+        for name, value in values.items():
+            self.patch_value(release, name, value)
+        self.patch_value(sys.modules[__name__], 'FLASHES_OPERATOR_BLOB', self.blob(self.operator))
+        staged_names = (*release.FLASHES_CONTROL_FILES, 'ops/vps/audit.py',
+                        '.github/workflows/candidate-checks.yml')
+        self.staged = {name: ('100644', self.git('rev-parse', self.advisory + ':' + name))
+                       for name in staged_names}
+        self.patch_value(sys.modules[__name__], 'FLASHES_STAGED_BASE', self.staged)
+        patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def patch_value(self, target, name, value):
+        patcher = patch.object(target, name, value)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw.encode() if isinstance(raw, str) else raw)
+        path.chmod(0o644)
+        return path
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated Flashes source')
+        return self.git('rev-parse', 'HEAD')
+
+    def verify(self, source=None):
+        return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
+
+    def test_complete_patch_and_control_only_full_families_are_recognized(self):
+        self.assertEqual(set(self.verify()), set(self.files) | set(self.advisories)
+                         | set(release.FLASHES_SECURITY_BLOBS) | release.FLASHES_CONTROL_FILES)
+        self.assertEqual(release.migration_plan(self.verify()), [])
+        for revision in (self.control, self.candidate):
+            with self.subTest(revision=revision):
+                self.git('checkout', '-q', revision)
+                family = checkout_source_family(self.root)
+                self.assertEqual(family['ops/vps/code-release.py'], self.blob(self.operator))
+                for name in self.files:
+                    if revision == self.control and name in self.added:
+                        self.assertNotIn(name, family)
+                    else:
+                        self.assertEqual(family[name], self.git('rev-parse', revision + ':' + name))
+
+    def test_each_application_output_rejects_mutation_and_partial_patch(self):
+        for name in self.files:
+            for mutation in ('bytes', 'missing-change'):
+                with self.subTest(name=name, mutation=mutation):
+                    self.git('checkout', '-q', self.candidate)
+                    if mutation == 'bytes':
+                        self.write(name, 'unreviewed bytes\n')
+                    elif name in self.added:
+                        self.git('rm', name)
+                    else:
+                        self.git('checkout', self.control, '--', name)
+                    self.commit()
+                    with self.assertRaises(release.ReleaseError):
+                        self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
+
+    def test_unrelated_files_dependencies_runtime_schema_and_advisories_are_rejected(self):
+        for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', *self.security,
+                     'drizzle/9999_extra.sql', *self.advisories):
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed content\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+
+    def test_changed_controls_and_executing_operator_are_rejected(self):
+        for name in release.FLASHES_CONTROL_FILES:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'untrusted control\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+        self.git('checkout', '-q', self.candidate)
+        self.write('ops/vps/code-release.py', 'untrusted executing bytes\n')
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            self.verify()
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+
+    def test_every_application_and_advisory_mode_change_is_rejected(self):
+        for name in (*self.files, *self.advisories, *release.FLASHES_SECURITY_BLOBS, *release.FLASHES_CONTROL_FILES):
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                (self.root / name).chmod(0o755)
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+
+    def test_security_patch_is_exact_in_control_and_candidate(self):
+        for name in self.security:
+            self.git('checkout', '-q', self.candidate)
+            self.write(name, 'unreviewed security output\n')
+            self.commit()
+            with self.subTest(path=name), self.assertRaises(release.ReleaseError):
+                self.verify()
+        self.git('checkout', '-q', self.candidate)
+        for name in release.FLASHES_PACKAGE_BASE_BLOBS:
+            with self.subTest(base_pin=name), patch.dict(release.FLASHES_PACKAGE_BASE_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'package or dependency lock'):
+                    self.verify()
+
+    def test_each_security_file_must_be_exact_in_independent_controls(self):
+        for name in self.security:
+            for mutation in ('unreviewed', 'missing-change'):
+                with self.subTest(path=name, mutation=mutation):
+                    self.git('checkout', '-q', self.control)
+                    if mutation == 'unreviewed':
+                        self.write(name, 'unreviewed prerequisite dependency output\n')
+                    else:
+                        self.git('checkout', self.advisory, '--', name)
+                    control = self.commit()
+                    self.git('update-ref', 'refs/remotes/origin/main', control)
+                    for application in self.files:
+                        self.git('checkout', self.candidate, '--', application)
+                    self.commit()
+                    with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                        with self.assertRaises(release.ReleaseError):
+                            self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_independently_pinned_security_output_cannot_expand_package_semantics(self):
+        for name in ('package.json', 'mobile/package.json'):
+            for mutation in ('version', 'dependency', 'script', 'field'):
+                with self.subTest(path=name, mutation=mutation):
+                    self.git('checkout', '-q', self.control)
+                    package = copy.deepcopy(self.package)
+                    package['devDependencies']['vite'] = '8.2.4'
+                    if mutation == 'version': package['devDependencies']['vite'] = '8.2.5'
+                    elif mutation == 'dependency': package['dependencies']['unchanged'] = '2.0.0'
+                    elif mutation == 'script': package['scripts']['deploy'] = 'unreviewed'
+                    else: package['name'] = 'unreviewed'
+                    self.write(name, json.dumps(package))
+                    control = self.commit()
+                    self.git('update-ref', 'refs/remotes/origin/main', control)
+                    for application in self.files:
+                        self.git('checkout', self.candidate, '--', application)
+                    self.commit()
+                    pins = {name: self.git('rev-parse', control + ':' + name)
+                            for name in self.security}
+                    with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+                         patch.dict(release.FLASHES_SECURITY_BLOBS, pins):
+                        with self.assertRaisesRegex(release.ReleaseError, 'exact(?:ly Vite| Vite security patch)'):
+                            self.verify()
+            self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_wrong_live_or_advisory_tree_is_rejected(self):
+        for name in ('FLASHES_RELEASE_BASE_TREE', 'FLASHES_ADVISORY_TREE'):
+            with self.subTest(name=name), patch.object(release, name, 'f' * 40):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_source_live_and_advisory_cannot_be_trust_anchors(self):
+        for trusted in (self.candidate, self.live, self.advisory):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+
+    def test_unmerged_controls_fail_even_with_hostile_origin_main_tag(self):
+        self.git('update-ref', 'refs/remotes/origin/main', self.advisory)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+        self.git('tag', 'origin/main', self.control)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+
+    def test_snapshot_with_identical_tree_cannot_bypass_control_ancestry(self):
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                            '-p', self.advisory, '-m', 'unmerged snapshot')
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify(snapshot)
+
+    def test_advisory_cannot_hide_control_changes(self):
+        self.git('checkout', '-q', self.advisory)
+        self.write('ops/vps/test_code_release.py', 'unauthorized advisory control edit\n')
+        advisory = self.commit()
+        with patch.object(release, 'FLASHES_ADVISORY_BASE', advisory), \
+             patch.object(release, 'FLASHES_ADVISORY_TREE', self.git('rev-parse', advisory + '^{tree}')):
             with self.assertRaisesRegex(release.ReleaseError, 'advisory inventory'):
                 self.verify(self.candidate)
 
