@@ -67,3 +67,8 @@ test('Option A retains the approved quiet list and accessible targets in the sha
   assert.match(css, /a\.menu-secondary-route\s*\{[^}]*min-height:\s*44px/);
   assert.match(css, /a\.menu-section-start::before\s*\{[^}]*left:\s*44px[^}]*height:\s*1px/);
 });
+
+test('Option A reserves interior scroll clearance for native keyboard focus', async () => {
+  const css = await readFile(new URL('../app/iphone-interface.css', import.meta.url), 'utf8');
+  assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel\s*\{[^}]*scroll-padding-block:\s*8px/);
+});

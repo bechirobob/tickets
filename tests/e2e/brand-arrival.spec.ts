@@ -80,6 +80,24 @@ test('native pointer tap dismisses without activating an obscured action', async
   await expect(page.locator('#underlying')).toHaveAttribute('data-clicks', '1');
 });
 
+for (const cancel of [false, true]) {
+  test(`later native taps remain usable after ${cancel ? 'pointer cancellation' : 'touch dismissal'}`, async ({ page, hasTouch }) => {
+    await fixture(page); await page.goto('/'); await expect(arrival(page)).toBeVisible();
+    const box = await page.locator('#underlying').boundingBox();
+    const x = box!.x + box!.width / 2, y = box!.y + box!.height / 2;
+    if (cancel) {
+      await arrival(page).dispatchEvent('pointerdown', { pointerId: 7, pointerType: 'touch', bubbles: true, cancelable: true });
+      await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 7, pointerType: 'touch' })));
+    } else if (hasTouch) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y);
+    await expect(arrival(page)).toHaveAttribute('hidden', '');
+    await expect(page.locator('#underlying')).not.toHaveAttribute('data-clicks', /.+/);
+    for (const count of ['1', '2']) {
+      if (hasTouch) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y);
+      await expect(page.locator('#underlying')).toHaveAttribute('data-clicks', count);
+    }
+  });
+}
+
 for (const time of [1070, 1500]) {
   test(`scene still owns hit testing at ${time}ms and cannot click through`, async ({ page, hasTouch }) => {
     await fixture(page); await stallControllerAfterReveal(page); await page.goto('/');

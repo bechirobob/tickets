@@ -74,6 +74,52 @@ export function captureArrivalDocument(): ArrivalEntry | null {
   } catch { return null; }
 }
 
+/** Hiding the scene at pointerdown can retarget the same touch's click below it. */
+function guardDismissalGesture(pointer: PointerEvent): () => void {
+  const removals: Array<() => void> = [];
+  const options = { capture: true, passive: false };
+  let timer = 0;
+  const release = () => {
+    window.clearTimeout(timer);
+    for (const remove of removals.splice(0)) remove();
+  };
+  const listen = (target: EventTarget, type: string, handler: EventListener) => {
+    target.addEventListener(type, handler, options);
+    removals.push(() => target.removeEventListener(type, handler, options));
+  };
+  const matches = (event: Event) => {
+    const id = (event as PointerEvent).pointerId;
+    return typeof id !== "number" || id === pointer.pointerId;
+  };
+  const suppress = (event: Event) => { event.preventDefault(); event.stopImmediatePropagation(); };
+  const ended = () => {
+    // Keep long presses protected until release, then allow the legacy touch
+    // click delay. A fresh pointer/key action always releases this guard first.
+    window.clearTimeout(timer);
+    timer = window.setTimeout(release, 500);
+  };
+  listen(window, "pointerup", event => {
+    if (matches(event)) { suppress(event); ended(); }
+  });
+  if (pointer.pointerType === "touch") {
+    listen(window, "touchend", event => {
+      if ((event as TouchEvent).touches?.length) return;
+      suppress(event); ended();
+    });
+    listen(window, "touchcancel", event => { if (!(event as TouchEvent).touches?.length) release(); });
+  }
+  listen(window, "click", event => {
+    if ((event as MouseEvent).detail === 0 || !matches(event)) return;
+    suppress(event); release();
+  });
+  listen(window, "pointercancel", event => { if (matches(event)) release(); });
+  listen(window, "pointerdown", release);
+  listen(window, "keydown", release);
+  listen(window, "pagehide", release);
+  listen(document, "visibilitychange", () => { if (document.hidden) release(); });
+  return release;
+}
+
 /** All exits synchronously hide the isolated decoration; page content is never touched. */
 export function mountBrandArrival(root: HTMLElement, entry: ArrivalEntry | null): () => void {
   root.hidden = true;
@@ -81,6 +127,7 @@ export function mountBrandArrival(root: HTMLElement, entry: ArrivalEntry | null)
   if (!entry || entry.phase === "done" || entry.phase === "shown") return () => {};
   const owner = Symbol("brand-arrival");
   let closed = false, shown = false, frame = 0, timer = 0, started = 0;
+  let releaseGesture = () => {};
   let image: HTMLImageElement | undefined;
   const removals: Array<() => void> = [];
   const close = (strictReplay = false) => {
@@ -128,6 +175,7 @@ export function mountBrandArrival(root: HTMLElement, entry: ArrivalEntry | null)
         // Dismiss only, never turn a tap on the obscuring scene into a click on
         // an unseen RSVP/payment/link beneath it.
         event.preventDefault(); event.stopPropagation();
+        releaseGesture = guardDismissalGesture(event as PointerEvent);
       }
       close();
     }, true);
@@ -160,5 +208,5 @@ export function mountBrandArrival(root: HTMLElement, entry: ArrivalEntry | null)
     };
     frame = window.requestAnimationFrame(tick);
   } catch { close(); }
-  return () => close(true);
+  return () => { releaseGesture(); close(true); };
 }
