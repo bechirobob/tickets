@@ -2,10 +2,11 @@
 
 import { CalendarDays, CalendarPlus, ChevronRight, House, Info, LifeBuoy, Menu, Ticket, UsersRound, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useSyncExternalStore, type PointerEvent } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { useHeaderPanel } from "./use-header-panel";
+import { useTopPanelPosition } from "./use-top-panel-position";
 
 const links = [
   { href: "/", label: "Home", icon: House },
@@ -27,54 +28,23 @@ const isMobile = () => window.matchMedia(mobileQuery).matches;
 const serverIsMobile = () => false;
 
 export default function MobileNavigation({ primaryVisible = false }: { primaryVisible?: boolean }) {
-  const { open, phase, ready, trigger, panel, id: panelId, toggle, close } = useHeaderPanel();
+  const { open, mounted, phase, ready, trigger, panel, id: panelId, toggle, close } = useHeaderPanel();
+  const position = useTopPanelPosition(mounted, trigger, () => close(true, true));
   const pathname = usePathname();
 
   const mobile = useSyncExternalStore(subscribeToMobile, isMobile, serverIsMobile);
   const previousMobile = useRef(mobile);
-  const swipe = useRef<{ pointer: number; x: number; y: number; time: number; distance: number } | null>(null);
   useEffect(() => {
     if (previousMobile.current === mobile) return;
     previousMobile.current = mobile;
-    // The portal changes its DOM anchor at this breakpoint. End the current
-    // disclosure so its owned history entry and focus cannot cross layouts.
-    swipe.current = null;
-    panel.current?.style.removeProperty("--menu-drag-y");
-    panel.current?.removeAttribute("data-dragging");
+    // Mobile owns a Back boundary; desktop does not. End the disclosure
+    // so its history entry and focus cannot cross those interaction modes.
     if (open) close(true);
-  }, [close, mobile, open, panel]);
-  const resetSwipe = () => {
-    swipe.current = null;
-    panel.current?.style.removeProperty("--menu-drag-y");
-    panel.current?.removeAttribute("data-dragging");
-  };
-  const startSwipe = (event: PointerEvent<HTMLElement>) => {
-    if (!mobile || !open || !event.isPrimary || event.button !== 0 || (event.target instanceof Element && event.target.closest("button"))) return;
-    swipe.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, time: event.timeStamp, distance: 0 };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const moveSwipe = (event: PointerEvent<HTMLElement>) => {
-    const gesture = swipe.current;
-    if (!gesture || gesture.pointer !== event.pointerId) return;
-    const distance = Math.max(0, event.clientY - gesture.y);
-    if (Math.abs(event.clientX - gesture.x) > Math.max(16, distance)) { resetSwipe(); return; }
-    gesture.distance = Math.min(distance, 220);
-    panel.current?.setAttribute("data-dragging", "true");
-    panel.current?.style.setProperty("--menu-drag-y", `${gesture.distance}px`);
-  };
-  const finishSwipe = (event: PointerEvent<HTMLElement>) => {
-    const gesture = swipe.current;
-    if (!gesture || gesture.pointer !== event.pointerId) return;
-    const velocity = gesture.distance / Math.max(1, event.timeStamp - gesture.time);
-    const dismiss = gesture.distance >= 56 || (gesture.distance > 18 && velocity > .55);
-    resetSwipe();
-    if (dismiss) close(true);
-  };
+  }, [close, mobile, open]);
   const menuClass = `night-mobile-menu${open ? " is-open" : ""}${primaryVisible ? " has-primary-nav" : ""}`;
 
-  const navigation = <nav ref={panel} inert={!open} data-phase={phase} id={panelId} className="night-mobile-menu__panel" aria-label="Main navigation" aria-hidden={!open}>
-      <header className="night-mobile-menu__panel-header" onPointerDown={startSwipe} onPointerMove={moveSwipe} onPointerUp={finishSwipe} onPointerCancel={resetSwipe} onLostPointerCapture={resetSwipe}>
-        {mobile ? <span className="night-mobile-menu__handle" aria-hidden="true" /> : null}
+  const navigation = <nav ref={panel} inert={!open} data-phase={phase} id={panelId} className="night-mobile-menu__panel" style={position} aria-label="Main navigation" aria-hidden={!open}>
+      <header className="night-mobile-menu__panel-header">
         <span>Menu</span>
         <button type="button" className="night-mobile-menu__close" aria-label="Close navigation" tabIndex={open ? undefined : -1} onClick={() => {
           close(true);
@@ -111,8 +81,8 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
     >
       <Menu size={20} aria-hidden="true" /><span className="night-mobile-menu__trigger-label">Menu</span>
     </button>
-    {mobile ? createPortal(<div className={`${menuClass} night-mobile-menu--sheet`} data-phase={phase}>
-      <div className="night-mobile-menu__scrim" aria-hidden="true" onPointerDown={(event) => { event.preventDefault(); close(true); }} />
+    {ready ? createPortal(<div className={`${menuClass} night-mobile-menu--overlay`} data-phase={phase}>
+      {mobile ? <div className="night-mobile-menu__scrim" aria-hidden="true" onPointerDown={(event) => { event.preventDefault(); close(true); }} /> : null}
       {navigation}
     </div>, document.body) : navigation}
   </div>;

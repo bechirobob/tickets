@@ -18,7 +18,8 @@ function renderMenu({ open = true, pathname = '/events', primaryVisible = false 
     require(specifier) {
       if (specifier === 'next/link') return { __esModule: true, default: ({ children, ...props }) => createElement('a', props, children) };
       if (specifier === 'next/navigation') return { usePathname: () => pathname };
-      if (specifier === './use-header-panel') return { useHeaderPanel: () => ({ open, phase: open ? 'open' : 'closed', ready: true, trigger: { current: null }, panel: { current: null }, id: 'menu', toggle() {}, close() {} }) };
+      if (specifier === './use-header-panel') return { useHeaderPanel: () => ({ open, phase: open ? 'open' : 'closed', ready: false, mounted: open, trigger: { current: null }, panel: { current: null }, id: 'menu', toggle() {}, close() {} }) };
+      if (specifier === './use-top-panel-position') return { useTopPanelPosition: () => ({}) };
       return requireDependency(specifier);
     },
   });
@@ -61,7 +62,7 @@ test('Option A retains the approved quiet list and accessible targets in the sha
   const css = await readFile(new URL('../app/iphone-interface.css', import.meta.url), 'utf8');
   assert.match(css, /\.night-mobile-menu \.night-mobile-menu__links\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel\s*\{[^}]*border-radius:\s*18px[^}]*background:\s*#30212c[^}]*box-shadow:\s*none/s);
-  assert.match(css, /span:not\(\.night-mobile-menu__handle\)\s*\{[^}]*font-size:\s*14px/);
+  assert.match(css, /span\s*\{[^}]*font-size:\s*14px/);
   assert.match(css, /\.night-mobile-menu \.night-mobile-menu__close\s*\{[^}]*width:\s*44px[^}]*height:\s*44px[^}]*background:\s*transparent/s);
   assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel a\s*\{[^}]*min-height:\s*48px/);
   assert.match(css, /a\.menu-secondary-route\s*\{[^}]*min-height:\s*44px/);
@@ -71,4 +72,14 @@ test('Option A retains the approved quiet list and accessible targets in the sha
 test('Option A reserves interior scroll clearance for native keyboard focus', async () => {
   const css = await readFile(new URL('../app/iphone-interface.css', import.meta.url), 'utf8');
   assert.match(css, /\.night-mobile-menu \.night-mobile-menu__panel\s*\{[^}]*scroll-padding-block:\s*8px/);
+});
+
+
+test('Option A uses the shared top bounds and has no bottom-sheet drag behavior', async () => {
+  const css = await readFile(new URL('../app/iphone-interface.css', import.meta.url), 'utf8');
+  assert.match(source, /useTopPanelPosition\(mounted, trigger, \(\) => close\(true, true\)\)/);
+  assert.match(source, /className="night-mobile-menu__panel" style=\{position\}/);
+  assert.doesNotMatch(source, /startSwipe|menu-drag-y|night-mobile-menu__handle/);
+  assert.match(css, /\.night-mobile-menu--overlay \.night-mobile-menu__panel\s*\{[^}]*inset: var\(--notification-top\) var\(--notification-right\) auto auto/s);
+  assert.doesNotMatch(css, /mobile-menu-bottom|menu-drag-y|night-mobile-menu__handle/);
 });

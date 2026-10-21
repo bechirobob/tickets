@@ -80,21 +80,41 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const updateSnapshotRef = useRef<string | null>(null);
   const roomSnapshotReadyRef = useRef(false);
-  const updateAcknowledgmentBusyRef = useRef(false);
+  const updateAcknowledgmentRequestRef = useRef<AbortController | null>(null);
+  const updateAcknowledgmentRetryRef = useRef<{ snapshot: string | null; attempts: number; timer: number | null }>({ snapshot: null, attempts: 0, timer: null });
   const updateSnapshotRecoveryRef = useRef(false);
 
-  const acknowledgeVisibleUpdates = useCallback(async () => {
+  const cancelUpdateAcknowledgment = useCallback(() => {
+    const retry = updateAcknowledgmentRetryRef.current;
+    if (retry.timer !== null) window.clearTimeout(retry.timer);
+    retry.timer = null;
+    updateAcknowledgmentRequestRef.current?.abort();
+    updateAcknowledgmentRequestRef.current = null;
+  }, []);
+
+  const acknowledgeVisibleUpdates = useCallback(async function acknowledge() {
     const snapshot = updateSnapshotRef.current;
-    if (!snapshot || !roomSnapshotReadyRef.current || updateAcknowledgmentBusyRef.current || document.visibilityState !== 'visible') return;
-    updateAcknowledgmentBusyRef.current = true;
+    if (!snapshot || !roomSnapshotReadyRef.current || updateAcknowledgmentRequestRef.current || leavingRef.current
+      || socketRef.current?.readyState !== WebSocket.OPEN || document.visibilityState !== 'visible') return;
+    const retry = updateAcknowledgmentRetryRef.current;
+    if (retry.snapshot !== snapshot) {
+      if (retry.timer !== null) window.clearTimeout(retry.timer);
+      retry.snapshot = snapshot; retry.attempts = 0; retry.timer = null;
+    }
+    if (retry.timer !== null || retry.attempts >= 4) return;
+    retry.attempts++;
+    const controller = new AbortController();
+    updateAcknowledgmentRequestRef.current = controller;
     try {
       await requestJson(`/api/rooms/${encodeURIComponent(slug)}/updates/read`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ snapshot }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ snapshot }), signal: controller.signal,
       });
+      if (controller.signal.aborted || leavingRef.current) return;
       if (updateSnapshotRef.current === snapshot) updateSnapshotRef.current = null;
       updateSnapshotRecoveryRef.current = false;
       window.dispatchEvent(new Event('bct:room-updates-read'));
     } catch (error) {
+      if (controller.signal.aborted || leavingRef.current || updateSnapshotRef.current !== snapshot) return;
       // An expired cursor cannot be replaced against an old rendered snapshot.
       // Re-authorize and receive a fresh Room snapshot before acknowledging its
       // new boundary. Only one automatic recovery is allowed per failed cycle.
@@ -104,10 +124,19 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
         updateSnapshotRef.current = null;
         setAccessAttempt(value => value + 1);
       }
-      // Other failures preserve unread updates for a later visible retry.
+      // Retry only transient failures, at most three times for this same viewed
+      // boundary. Never capture newer arrivals merely to clear the old badge.
+      const transient = error instanceof RequestError && (error.status === null || error.status === 408 || error.status === 429 || error.status >= 500);
+      if (!transient) retry.attempts = 4;
+      if (transient && retry.attempts < 4 && document.visibilityState === 'visible' && roomSnapshotReadyRef.current) {
+        const delay = 1_000 * 2 ** (retry.attempts - 1);
+        retry.timer = window.setTimeout(() => { retry.timer = null; void acknowledge(); }, delay);
+      }
     }
-    finally { updateAcknowledgmentBusyRef.current = false; }
+    finally { if (updateAcknowledgmentRequestRef.current === controller) updateAcknowledgmentRequestRef.current = null; }
   }, [slug]);
+
+  useEffect(() => cancelUpdateAcknowledgment, [cancelUpdateAcknowledgment, slug]);
 
   const openedAnnouncement = useRef('');
   useEffect(() => {
@@ -244,21 +273,26 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     return () => {
       cancelled = true;
       controller.abort();
+      cancelUpdateAcknowledgment();
       leavingRef.current = true;
       if (reconnectTimerRef.current !== null) window.clearTimeout(reconnectTimerRef.current);
       socketRef.current?.close(1000, "Leaving Room");
       socketRef.current = null;
     };
-  }, [accessAttempt, connect, slug]);
+  }, [accessAttempt, cancelUpdateAcknowledgment, connect, slug]);
 
   useEffect(() => {
     // Effects run after the actual Room snapshot has rendered. Neither prefetch,
     // a homepage count request, a failed connection nor a hidden tab reads it.
     if (status === 'connected') void acknowledgeVisibleUpdates();
-    const visible = () => { if (document.visibilityState === 'visible' && status === 'connected') void acknowledgeVisibleUpdates(); };
+    else cancelUpdateAcknowledgment();
+    const visible = () => {
+      if (document.visibilityState !== 'visible') cancelUpdateAcknowledgment();
+      else if (status === 'connected') void acknowledgeVisibleUpdates();
+    };
     document.addEventListener('visibilitychange', visible);
     return () => document.removeEventListener('visibilitychange', visible);
-  }, [acknowledgeVisibleUpdates, messages, status]);
+  }, [acknowledgeVisibleUpdates, cancelUpdateAcknowledgment, messages, status]);
 
   useEffect(() => {
     function reconnectIfNeeded() {
