@@ -27,7 +27,7 @@ test('Option A keeps full-width rows, quiet controls and keyboard access in port
     await expect(menu).toHaveCSS('border-radius', '18px');
     await expect(menu).toHaveCSS('box-shadow', 'none');
     await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    await expect(menu.locator('.night-mobile-menu__panel-header > span:not(.night-mobile-menu__handle)')).toHaveCSS('font-size', '14px');
+    await expect(menu.locator('.night-mobile-menu__panel-header > span')).toHaveCSS('font-size', '14px');
     const closeBounds = await close.boundingBox();
     expect(closeBounds!.width).toBeGreaterThanOrEqual(44);
     expect(closeBounds!.height).toBeGreaterThanOrEqual(44);

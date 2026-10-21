@@ -44,7 +44,7 @@ body { font-family: var(--font-system); font-optical-sizing: auto; }
   backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: none;
   transition-timing-function: var(--ui-ease);
 }
-/* Option A: one quiet, full-width list, shared by the sheet and desktop disclosure. */
+/* Option A: one quiet, full-width list, shared by mobile and desktop top disclosures. */
 .night-mobile-menu .night-mobile-menu__panel {
   padding: 0 8px 8px; border: .75px solid #493943; border-radius: 18px;
   background: #30212c; color: #f8eee7; box-shadow: none;
@@ -56,7 +56,7 @@ body { font-family: var(--font-system); font-optical-sizing: auto; }
 .night-mobile-menu .night-mobile-menu__panel-header {
   min-height: 52px; padding: 8px 8px 0 12px; border-bottom: 0;
 }
-.night-mobile-menu .night-mobile-menu__panel-header > span:not(.night-mobile-menu__handle) {
+.night-mobile-menu .night-mobile-menu__panel-header > span {
   font-size: 14px; line-height: 1.3; font-weight: 400; letter-spacing: -.12px; color: #cdbfc7;
 }
 .night-mobile-menu .night-mobile-menu__close {
@@ -161,12 +161,27 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .workspace-return { font-size:12px; gap:10px; }
   .workspace-return span { max-width:160px; }
 }
+/* Share the same viewport/header/dock bounds as The Buzz and Room chooser.
+   Portaling all layouts avoids transformed or translucent header containers. */
+.night-mobile-menu.night-mobile-menu--overlay {
+  position: fixed; inset: 0 0 auto; width: 100%; max-width: none; height: var(--app-viewport-height);
+  margin: 0; justify-self: stretch; align-self: stretch; z-index: 70; pointer-events: none;
+  color: #f8eee7; --focus-ring: #eee;
+}
+.night-mobile-menu--overlay .night-mobile-menu__panel {
+  position: fixed; inset: var(--notification-top) var(--notification-right) auto auto;
+  height: auto; margin: 0; align-content: start; overflow: auto; overscroll-behavior: contain;
+  transform: translateY(-8px); transform-origin: top right;
+  transition: opacity 180ms var(--ui-ease), transform 180ms var(--ui-ease), visibility 0s linear 180ms;
+}
+.night-mobile-menu--overlay.is-open .night-mobile-menu__panel {
+  transform: translateY(0); transition-delay: 0s;
+}
 /* The guest shell has one obvious, reachable mobile navigation system. */
 .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: none; margin: 0; color: inherit; font: inherit; letter-spacing: inherit; }
 @media (max-width: 760px) {
   body {
     --mobile-dock-bottom: max(12px, env(safe-area-inset-bottom));
-    --mobile-menu-bottom: var(--mobile-dock-bottom);
     --mobile-chrome-solid: #281b2b;
     --mobile-chrome-fill: rgb(40 27 43 / .86);
   }
@@ -208,50 +223,21 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   .night-hub__header .night-mobile-menu { color: #f8eee7; }
   .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: inline; }
   .night-mobile-menu .night-mobile-menu__trigger svg { width: 18px; height: 18px; }
-  body:has(.night-mobile-menu--sheet.is-open) { overflow: hidden; }
-  .night-mobile-menu.night-mobile-menu--sheet {
-    /* Reset the inline trigger container's end alignment. Absolute children
-       cannot provide an intrinsic width for this viewport-sized portal. */
-    position: fixed; inset: 0 0 auto; width: 100%; max-width: none; height: var(--app-viewport-height);
-    margin: 0; justify-self: stretch; align-self: stretch; z-index: 70; pointer-events: none;
-    color: #f8eee7; --focus-ring: #eee;
-  }
-  .night-mobile-menu--sheet .night-mobile-menu__scrim {
+  body:has(.night-mobile-menu--overlay.is-open) { overflow: hidden; }
+  .night-mobile-menu--overlay .night-mobile-menu__scrim {
     position: absolute; inset: 0; background: rgb(0 0 0 / .3);
     opacity: 0; visibility: hidden; pointer-events: none; touch-action: none;
     transition: opacity 180ms var(--ui-ease), visibility 0s linear 180ms;
   }
-  .night-mobile-menu--sheet.is-open .night-mobile-menu__scrim {
+  .night-mobile-menu--overlay.is-open .night-mobile-menu__scrim {
     opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s;
   }
-  .night-mobile-menu--sheet .night-mobile-menu__panel {
-    position: absolute; inset: auto max(12px, env(safe-area-inset-right)) var(--mobile-menu-bottom) max(12px, env(safe-area-inset-left));
-    width: auto; max-width: 480px; height: auto; margin-inline: auto; padding: 0 8px 8px;
-    max-height: calc(var(--app-viewport-height) - var(--mobile-menu-bottom) - 72px - env(safe-area-inset-top));
-    align-content: start; border-radius: 18px; border: .75px solid #493943;
-    background: #30212c; color: #f8eee7; box-shadow: none;
-    backdrop-filter: none; -webkit-backdrop-filter: none;
-    transform: translateY(24px); transform-origin: bottom center;
-    transition: opacity 180ms var(--ui-ease), transform 180ms var(--ui-ease), visibility 0s linear 180ms;
-  }
-  .night-mobile-menu--sheet.is-open .night-mobile-menu__panel {
-    transform: translateY(var(--menu-drag-y, 0px)); transition-delay: 0s;
-  }
-  .night-mobile-menu--sheet .night-mobile-menu__panel[data-dragging] { transition: none; }
-  .night-mobile-menu--sheet .night-mobile-menu__panel::before { content: none; }
-  .night-mobile-menu--sheet .night-mobile-menu__panel-header {
-    position: relative; touch-action: none; user-select: none;
-  }
-  .night-mobile-menu--sheet .night-mobile-menu__handle {
-    position: absolute; top: 7px; left: calc(50% - 14px); width: 28px; height: 3px;
-    border-radius: 2px; background: #786974;
-  }
-  .night-mobile-menu--sheet .night-mobile-menu__close { transform: none; }
-  .night-mobile-menu--sheet .night-mobile-menu__links { transform: none; transition: none; }
-  .night-mobile-menu--sheet .night-mobile-menu__panel a {
+  .night-mobile-menu--overlay .night-mobile-menu__close { transform: none; }
+  .night-mobile-menu--overlay .night-mobile-menu__links { transform: none; transition: none; }
+  .night-mobile-menu--overlay .night-mobile-menu__panel a {
     transform: none; transition: color var(--ui-control), background-color var(--ui-control); transition-delay: 0s;
   }
-  .night-mobile-menu--sheet.is-open .night-mobile-menu__panel a:nth-child(n) { transform: none; transition-delay: 0s; }
+  .night-mobile-menu--overlay.is-open .night-mobile-menu__panel a:nth-child(n) { transform: none; transition-delay: 0s; }
   @supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
     body :is(.discovery-home, .discovery-directory, .my-nights-page, .buzz-page, .hosts-page, .host-page, .about-page, .account-privacy) > :is(.night-header, .directory-header),
     body :is(.event-page, .help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) {
@@ -260,7 +246,7 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   }
 }
 @media (max-width: 700px) {
-  body:has(.customer-dock) { padding-bottom: calc(88px + var(--mobile-dock-bottom)); --mobile-menu-bottom: calc(78px + var(--mobile-dock-bottom)); }
+  body:has(.customer-dock) { padding-bottom: calc(88px + var(--mobile-dock-bottom)); }
   body nav.customer-dock {
     inset: auto max(12px, env(safe-area-inset-right)) var(--mobile-dock-bottom) max(12px, env(safe-area-inset-left));
     min-height: 68px; max-width: 480px; margin-inline: auto; padding: 6px; gap: 4px;
@@ -280,7 +266,6 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   body:has(.poster-event-page) nav.customer-dock { background: var(--event-shell-paper); border-color: color-mix(in srgb, var(--event-shell-ink) 20%, transparent); }
   body:has(.poster-event-page) nav.customer-dock a[aria-current=page] { background: var(--event-shell-ink); color: var(--event-shell-paper); }
   html[data-keyboard=open] body .customer-dock { display: none; }
-  html[data-keyboard=open] body { --mobile-menu-bottom: max(12px, env(safe-area-inset-bottom)); }
   @supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
     body nav.customer-dock { background: rgb(40 27 43 / .84); backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px); }
     body:has(.poster-event-page) nav.customer-dock { background: color-mix(in srgb, var(--event-shell-paper) 86%, transparent); }
@@ -311,28 +296,27 @@ body :is(a, button).ticket-action[data-variant="text"] { border-radius: 6px; }
   body :is(.event-page, .help-page, .policy-page, .legal-page) > header:has(.night-mobile-menu) { background: var(--mobile-chrome-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .night-mobile-menu--sheet .night-mobile-menu__panel { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .night-mobile-menu--overlay .night-mobile-menu__panel { background: #30212c; backdrop-filter: none; -webkit-backdrop-filter: none; }
   body nav.customer-dock { background: #281b2b; backdrop-filter: none; -webkit-backdrop-filter: none; }
   body:has(.poster-event-page) nav.customer-dock { background: var(--event-shell-paper); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .night-mobile-menu--sheet .night-mobile-menu__panel,
-  .night-mobile-menu--sheet .night-mobile-menu__scrim,
-  .night-mobile-menu--sheet .night-mobile-menu__panel a,
+  .night-mobile-menu--overlay .night-mobile-menu__panel,
+  .night-mobile-menu--overlay .night-mobile-menu__scrim,
+  .night-mobile-menu--overlay .night-mobile-menu__panel a,
   body .customer-dock a { transition: none; }
-  .night-mobile-menu--sheet.is-open .night-mobile-menu__panel, body .customer-dock a:active { transform: none; }
+  .night-mobile-menu--overlay.is-open .night-mobile-menu__panel, body .customer-dock a:active { transform: none; }
 }
 @media (forced-colors: active) {
-  body nav.customer-dock, .night-mobile-menu--sheet .night-mobile-menu__panel { background: Canvas; color: CanvasText; border-color: CanvasText; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  body nav.customer-dock, .night-mobile-menu--overlay .night-mobile-menu__panel { background: Canvas; color: CanvasText; border-color: CanvasText; backdrop-filter: none; -webkit-backdrop-filter: none; }
   body .customer-dock a[aria-current=page], body:has(.poster-event-page) nav.customer-dock a[aria-current=page] { background: Highlight; color: HighlightText; }
-  .night-mobile-menu--sheet .night-mobile-menu__close { background: ButtonFace; color: ButtonText; }
+  .night-mobile-menu--overlay .night-mobile-menu__close { background: ButtonFace; color: ButtonText; }
   .night-mobile-menu .night-mobile-menu__panel { background: Canvas; color: CanvasText; border-color: CanvasText; }
-  .night-mobile-menu .night-mobile-menu__panel-header > span:not(.night-mobile-menu__handle), .night-mobile-menu .night-mobile-menu__close { color: CanvasText; }
+  .night-mobile-menu .night-mobile-menu__panel-header > span, .night-mobile-menu .night-mobile-menu__close { color: CanvasText; }
   .night-mobile-menu .night-mobile-menu__panel a, .night-mobile-menu .night-mobile-menu__panel a svg,
   .night-mobile-menu .night-mobile-menu__panel a.menu-secondary-route, .night-mobile-menu .night-mobile-menu__panel a.menu-secondary-route > svg:first-child,
   .night-mobile-menu .night-mobile-menu__panel a .night-mobile-menu__chevron { color: LinkText; }
   .night-mobile-menu .night-mobile-menu__panel a[aria-current=page], .night-mobile-menu .night-mobile-menu__panel a[aria-current=page] > svg:first-child { background: Highlight; color: HighlightText; }
   .night-mobile-menu .night-mobile-menu__panel a.menu-section-start::before { background: CanvasText; }
   .night-mobile-menu .night-mobile-menu__panel a:focus-visible, .night-mobile-menu .night-mobile-menu__close:focus-visible { outline-color: Highlight; }
-  .night-mobile-menu--sheet .night-mobile-menu__handle { background: CanvasText; }
 }

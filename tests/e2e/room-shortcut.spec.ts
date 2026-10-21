@@ -14,6 +14,68 @@ test.beforeEach(async ({ page }) => {
 });
 const expiry = () => new Date(Date.now() + 3600_000).toISOString();
 
+test('Room summaries do not poll behind the desktop breakpoint and refresh on mobile re-entry', async ({ page, eventSlug }) => {
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.clock.install();
+  let requests = 0;
+  await page.route('**/api/customer/room-updates', route => {
+    requests++;
+    return route.fulfill({ json: { rooms: [{ eventSlug, title: 'Garden', unread: 2, expiresAt: expiry() }], unread: 2 } });
+  });
+  await page.goto('/');
+  const dock = page.getByRole('navigation', { name: 'Customer navigation', includeHidden: true });
+  await expect(dock).toBeHidden(); await page.clock.fastForward(60_000); expect(requests).toBe(0);
+  await page.setViewportSize({ width: 700, height: 800 });
+  const room = dock.getByRole('link', { name: 'Room, 2 new updates' });
+  await expect(room).toBeVisible(); expect(requests).toBe(1);
+  await page.clock.fastForward(30_000); await expect.poll(() => requests).toBe(2);
+  await page.setViewportSize({ width: 701, height: 800 });
+  await expect(room).toHaveCount(0); await page.clock.fastForward(60_000); expect(requests).toBe(2);
+  await page.setViewportSize({ width: 700, height: 800 });
+  await expect(room).toBeVisible(); expect(requests).toBe(3);
+});
+
+test('a quiet visible Room retries a transient read failure with the same rendered boundary', async ({ page, eventSlug }) => {
+  await page.clock.install();
+  const room = { eventSlug, eventTitle: 'Garden Party', readOnly: false, readOnlyAt: expiry() };
+  let marks = 0, access = 0;
+  await page.route('**/api/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/access')) { access++; return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: 'viewed-boundary' } }); }
+    if (path.endsWith('/updates/read')) {
+      marks++; expect(route.request().postDataJSON()).toEqual({ snapshot: 'viewed-boundary' });
+      return route.fulfill(marks === 1 ? { status: 503, json: { error: 'Try again' } } : { json: { updated: true } });
+    }
+    if (path.endsWith('/flashes')) return route.fulfill({ json: { flashes: [] } });
+    return route.fulfill({ status: 401, json: { error: 'Isolated fixture' } });
+  });
+  await page.routeWebSocket(/\/api\/room\/socket/u, socket => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 })));
+  await page.goto(`/room/${eventSlug}`); await expect(page.locator('.room-stream')).toBeVisible();
+  await expect.poll(() => marks).toBe(1); await page.clock.fastForward(1000); await expect.poll(() => marks).toBe(2);
+  expect(access).toBe(1);
+  await page.clock.fastForward(10_000); expect(marks).toBe(2);
+});
+
+for (const boundary of ['hidden', 'unmounted'] as const) {
+  test(`a ${boundary} Room cancels pending transient acknowledgement retries`, async ({ page, eventSlug }) => {
+    await page.clock.install();
+    const room = { eventSlug, eventTitle: 'Garden Party', readOnly: false, readOnlyAt: expiry() };
+    let marks = 0;
+    await page.route('**/api/**', route => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('/access')) return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: 'viewed-boundary' } });
+      if (path.endsWith('/updates/read')) { marks++; return route.fulfill({ status: 503, json: { error: 'Try again' } }); }
+      if (path.endsWith('/flashes')) return route.fulfill({ json: { flashes: [] } });
+      return route.fulfill({ status: 401, json: { error: 'Isolated fixture' } });
+    });
+    await page.routeWebSocket(/\/api\/room\/socket/u, socket => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 })));
+    await page.goto(`/room/${eventSlug}`); await expect(page.locator('.room-stream')).toBeVisible(); await expect.poll(() => marks).toBe(1);
+    if (boundary === 'hidden') await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    else { await page.getByRole('link', { name: 'Back to My Nights' }).click(); await expect(page).toHaveURL(/\/my-nights$/u); }
+    await page.clock.fastForward(10_000); expect(marks).toBe(1);
+  });
+}
+
 test('the fourth dock item is private, count-only, responsive and directly opens one Room', async ({ page, eventSlug }, info) => {
   test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile dock');
   await page.setViewportSize({ width: 320, height: 740 });
