@@ -117,7 +117,11 @@
 .room-sheet .room-notification-option button { border: 1px solid #a08b96; padding: 8px 12px; background: transparent; border-radius: 24px; }
 .room-sheet .room-notification-option button[aria-checked='true'] { background: #edcfb8; border-color: #edcfb8; color: #34222c; }
 
-.flash-inbox__capture { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 16px 0; margin: 0 0 18px; background: transparent; border: 0; border-block: 1px solid #67505d; }
+/* Flashes use a flat Room surface, not print grain or tinted rounded edges. */
+.room-sheet.flash-inbox { background: #30212c; border-color: rgb(255 240 233 / .2); }
+.flash-inbox__capture { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 16px 0; margin: 0 0 18px; background: transparent; border: 0; border-block: 1px solid rgb(255 240 233 / .2); border-radius: 0; }
+.flash-capture-mark { flex: 0 0 auto; color: #edcfb8; }
+.flash-inbox .room-surface-empty > svg { margin-inline: auto; }
 .flash-inbox__capture > span:first-of-type { flex: 1; display: grid; gap: 5px; }
 .flash-inbox__capture b { font-size: 15px; font-weight: 500; }
 .flash-inbox__capture small { font-size: 12px; color: #dcc6d2; }
@@ -209,7 +213,7 @@
 }
 @media (prefers-reduced-transparency: reduce) { .room-overlay::backdrop { backdrop-filter: none; background: #211820; } }
 @media (forced-colors: active) {
-  .room-sheet, .flash-stage, .room-page .chat-action-tray { background: Canvas; color: CanvasText; }
-  .flash-mark__glyph, .flash-viewer__progress i { color: CanvasText; }
+  .room-sheet, .room-sheet.flash-inbox, .flash-stage, .room-page .chat-action-tray { background: Canvas; color: CanvasText; }
+  .flash-mark__glyph, .flash-capture-mark, .flash-viewer__progress i { color: CanvasText; }
   .room-sheet button, .chat-action-tray button { forced-color-adjust: auto; }
 }
