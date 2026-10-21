@@ -736,11 +736,12 @@ FLASHES_PACKAGE_BASE_BLOBS = {'mobile/package-lock.json': 'ebae7283d0906a9cb42b3
 
 
 # Exact navigation/arrival increment: independent controls C, then the complete
-# reviewed application snapshot P. Dependencies, workflows and schema stay fixed.
+# reviewed application snapshot P. C includes only the pinned root Vitest patch;
+# P adds only the reviewed feature/test changes. Workflows and schema stay fixed.
 NAVIGATION_RELEASE_BASELINE = '5ddf0bc9186626d8325f72f216f5bf1e730ad189'
 NAVIGATION_RELEASE_BASE_TREE = '5b91ad4592fcf5dcb9882e86e338f0a58f26a4a2'
-NAVIGATION_APP_SNAPSHOT = 'cbe6041a5359aff8b98cac8f682c9a7cb3f5a501'
-NAVIGATION_APP_TREE = '3cf0a4f71d22b609278cccf74563a5218d450334'
+NAVIGATION_APP_SNAPSHOT = '616d536ceda4ab1cab88aa178c97f2bb06c432b5'
+NAVIGATION_APP_TREE = '5abd9b8d3dbae73e2d6770552fc1a50c6f10e89f'
 NAVIGATION_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 NAVIGATION_APPLICATION_INPUTS = {'app/api/customer/room-updates/route.ts': None,
  'app/api/rooms/[slug]/access/route.ts': '86de698f93b4068ebe45e7e2d66966f2e5a58ba2',
@@ -805,7 +806,7 @@ NAVIGATION_APPLICATION_BLOBS = {'app/api/customer/room-updates/route.ts': 'f2431
  'lib/room-update-summary.ts': 'b10912adc58b9b155090c004c130a5ce9d84f4e0',
  'lib/room-updates.ts': 'cf4b3fccf25f1d280fef807c8c88fc3c51badbf3',
  'lib/top-panel-position.ts': '240d1ff8a1d212abba2fdbd48ffcafffbabba6df',
- 'package.json': '45445fffc86e256cc2d5cd440c0e11c66ab8f645',
+ 'package.json': '53d1f8f8d2a69e12757a854b52cdc1d5cb4a1a46',
  'tests/brand-arrival.test.mjs': '451ef141ba4b14bcbc087541aa2a2aeee7c40071',
  'tests/e2e/brand-arrival.spec.ts': '69073eea8110e3783e7a5dd51a2986ff8433fecc',
  'tests/e2e/customer-feedback.spec.ts': '6738acad48bac13f9dbaa683c05fecfba44a2210',
@@ -818,9 +819,12 @@ NAVIGATION_APPLICATION_BLOBS = {'app/api/customer/room-updates/route.ts': 'f2431
  'tests/room-update-client.test.mjs': 'b999cae000af0d70eccb814b659b57b03872cf15',
  'tests/room-updates.test.ts': 'f189f11b585879ab5195f9dba8d704f26fa16761',
  'tests/top-panel-position.test.ts': '85b1447323e1cea78abf5c321f1314336d1e4553'}
-NAVIGATION_DEPENDENCY_BLOBS = {'package-lock.json': '3fa4bfae990eac872f88c72d30a51c995c35574d',
- 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
- 'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84'}
+NAVIGATION_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92'}
+NAVIGATION_PREREQUISITE_INPUTS = {'package-lock.json': '3fa4bfae990eac872f88c72d30a51c995c35574d',
+ 'package.json': 'a3db62441e7b0c8676dc1a166b913004af92eedd'}
+NAVIGATION_PREREQUISITE_BLOBS = {'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918',
+ 'package.json': 'd60595d1d10f8e3bb88c3d88fec658dce0a36be1'}
 NAVIGATION_TEST_SCRIPT_APPENDS = {
     'test:repo': ' tests/room-update-client.test.mjs',
     'test:ui': ' tests/header-panel-focus.test.mjs tests/menu-option-a.test.mjs tests/brand-arrival.test.mjs',
@@ -1466,6 +1470,13 @@ def reviewed_navigation_application_blobs(expected, source):
     snapshot = NAVIGATION_APP_SNAPSHOT
     controls = NAVIGATION_CONTROL_FILES
     application = NAVIGATION_APPLICATION_BLOBS
+    prerequisites = NAVIGATION_PREREQUISITE_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(prerequisites) == set(NAVIGATION_PREREQUISITE_INPUTS)
+            == {'package.json', 'package-lock.json'}
+            and not controls & (set(application) | set(prerequisites))
+            and set(application) & set(prerequisites) == {'package.json'},
+            "Navigation prerequisite inventory or scope changed.")
     require(expected == NAVIGATION_RELEASE_BASELINE
             and git("rev-parse", expected + "^{tree}") == NAVIGATION_RELEASE_BASE_TREE
             and git("rev-parse", snapshot + "^{tree}") == NAVIGATION_APP_TREE,
@@ -1475,14 +1486,21 @@ def reviewed_navigation_application_blobs(expected, source):
         subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
                        check=True, env=git_environment(), timeout=60)
     require(application and set(application) == set(NAVIGATION_APPLICATION_INPUTS)
-            and set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            and set(git("diff", "--name-only", expected, snapshot).splitlines())
+            == set(application) | set(prerequisites),
             "Navigation snapshot differs from its complete reviewed inventory.")
     verify_changed_modes(expected, snapshot)
     for name, blob in NAVIGATION_APPLICATION_INPUTS.items():
         entry = git("ls-tree", expected, "--", name)
         require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
                 "Navigation application input differs from reviewed source: " + name)
-    for name, blob in application.items():
+    for name, blob in NAVIGATION_PREREQUISITE_INPUTS.items():
+        require(git("ls-tree", expected, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Navigation prerequisite input differs from reviewed source: " + name)
+    # The application package has the same patch plus the exact test appends.
+    # The lock is shared byte-for-byte by C, S and P.
+    outputs = {**prerequisites, **application}
+    for name, blob in outputs.items():
         require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
                 "Navigation snapshot output differs from reviewed source: " + name)
     trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
@@ -1492,15 +1510,18 @@ def reviewed_navigation_application_blobs(expected, source):
     for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
         subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
                        check=True, env=git_environment(), timeout=60)
-    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls | set(prerequisites),
             "Navigation trusted controls contain unreviewed changes.")
     require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
             and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
             "Navigation candidate differs from the complete reviewed application patch.")
     verify_changed_modes(expected, trusted)
     verify_changed_modes(trusted, source)
-    pins = dict(application)
-    for name, blob in application.items():
+    for name, blob in prerequisites.items():
+        require(git("ls-tree", trusted, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Navigation trusted prerequisite differs from reviewed source: " + name)
+    pins = dict(outputs)
+    for name, blob in outputs.items():
         require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
                 "Navigation output differs from its reviewed blob or mode: " + name)
     for name in sorted(controls):
@@ -1593,17 +1614,24 @@ def vetted_changes(expected, source):
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
     if expected == NAVIGATION_RELEASE_BASELINE:
-        require({"package.json", *NAVIGATION_DEPENDENCY_BLOBS} & set(changed) == {"package.json"},
-                "Navigation permits only the reviewed package test registrations.")
+        require((set(NAVIGATION_PREREQUISITE_BLOBS) | set(NAVIGATION_DEPENDENCY_BLOBS))
+                & set(changed) == {'package.json', 'package-lock.json'},
+                "Navigation permits only the exact root security pair and test registrations.")
         for name, blob in NAVIGATION_DEPENDENCY_BLOBS.items():
             require(git("rev-parse", expected + ":" + name) == blob
                     and git("rev-parse", source + ":" + name) == blob,
                     "Navigation dependencies must remain unchanged: " + name)
         before = strict_json(git("show", expected + ":package.json"))
+        control = strict_json(git("show", os.environ["BECORE_TRUSTED_BASE"] + ":package.json"))
         after = strict_json(git("show", source + ":package.json"))
+        require(before["devDependencies"]["vitest"] == "4.1.11"
+                and control["devDependencies"]["vitest"] == "4.1.12",
+                "Navigation requires exactly Vitest 4.1.11 to 4.1.12.")
+        before["devDependencies"]["vitest"] = "4.1.12"
+        require(before == control, "Navigation prerequisite is not the exact Vitest security patch.")
         for name, append in NAVIGATION_TEST_SCRIPT_APPENDS.items():
-            before["scripts"][name] += append
-        require(before == after, "Navigation package change is not the exact test registration append.")
+            control["scripts"][name] += append
+        require(control == after, "Navigation package change is not the exact test registration append.")
         require(not migration_plan(changed), "Navigation release cannot introduce migrations.")
         return changed
     if expected == FLASHES_RELEASE_BASELINE:
