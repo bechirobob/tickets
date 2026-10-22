@@ -133,6 +133,50 @@ test('explicit recovery can switch email-owner proof without signing out another
   expect(recoveries).toBe(1);
 });
 
+test('recovery is unavailable before hydration and preserves early entry through initial reads', async ({ page }) => {
+  let releaseScripts!: () => void, releaseReads!: () => void;
+  const scriptsReady = new Promise<void>(resolve => { releaseScripts = resolve; });
+  const readsReady = new Promise<void>(resolve => { releaseReads = resolve; });
+  const recoveryBodies: unknown[] = [];
+  await page.route('**/*', async route => {
+    if (route.request().resourceType() === 'script') await scriptsReady;
+    await route.fallback();
+  });
+  await page.route('**/api/customer/my-nights', async route => {
+    await readsReady;
+    await route.fulfill({ json: { attendee: { displayName: 'Another guest' }, nights: [] } });
+  });
+  await page.route('**/api/customer/registrations', async route => {
+    await readsReady;
+    await route.fulfill({ json: { registrations: [] } });
+  });
+  await page.route('**/api/customer/recovery', route => {
+    recoveryBodies.push(route.request().postDataJSON());
+    return route.fulfill({ json: { sent: true } });
+  });
+  try {
+    await page.goto('/my-nights?recover=1', { waitUntil: 'commit' });
+    const email = page.getByLabel('Booking or registration email');
+    const submit = page.getByRole('button', { name: 'Bring back my Nights' });
+    await expect(email).toBeDisabled();
+    await expect(submit).toBeDisabled();
+    await expect(page.getByRole('status').filter({ hasText: 'Getting secure recovery ready' })).toBeVisible();
+    expect(recoveryBodies).toEqual([]);
+    releaseScripts();
+    await email.fill('approved-guest@example.com');
+    await expect(email).toHaveValue('approved-guest@example.com');
+    releaseReads();
+    await expect(page.getByText('For Another guest', { exact: true })).toBeVisible();
+    await expect(email).toHaveValue('approved-guest@example.com');
+    await submit.click();
+    await expect(page.getByRole('button', { name: 'Check your email' })).toBeDisabled();
+    expect(recoveryBodies).toEqual([{ email: 'approved-guest@example.com' }]);
+  } finally {
+    releaseScripts();
+    releaseReads();
+  }
+});
+
 function approvedOrder(eventSlug: string) {
   return {
     orderId: 'approval-order', reference: 'BCT-APPROVAL', eventSlug, faceAmountMinor: 0, bookingFeeMinor: 0, totalAmountMinor: 0,
