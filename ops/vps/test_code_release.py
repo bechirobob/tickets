@@ -612,7 +612,7 @@ def navigation_source_family(root):
 
 
 # Exact filters/Room C/P test family, independent of historical Navigation fixtures.
-FILTERS_ROOM_OPERATOR_BLOB = '2a7ebbc49764b23342f5829a1430b82ff511b2f9'
+FILTERS_ROOM_OPERATOR_BLOB = '87a3f9e0c9c656b4f727735027ea67f5c5786d99'
 FILTERS_ROOM_STAGED_BASE = dict(NAVIGATION_STAGED_BASE)
 
 
@@ -7315,7 +7315,7 @@ class FiltersRoomSourceAdmissionTests(unittest.TestCase):
 
     def test_revision_preserves_published_control_candidate_and_snapshot_ancestry(self):
         self.git('checkout', '-q', self.snapshot)
-        name = self.files[0]
+        name = 'tests/e2e/room-shortcut.spec.ts'
         self.write(name, 'reviewed source revision\n')
         snapshot = self.commit()
         blob = self.git('rev-parse', snapshot + ':' + name)
@@ -7333,13 +7333,24 @@ class FiltersRoomSourceAdmissionTests(unittest.TestCase):
         self.assertEqual(self.git('show', '-s', '--format=%P', snapshot), self.snapshot)
         for ancestor in (self.control, self.candidate, self.snapshot, control, snapshot):
             self.git('merge-base', '--is-ancestor', ancestor, candidate)
+        # The old merged operator cannot authorize new operator bytes.
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            release.verify_trusted_operator(candidate)
         self.git('update-ref', 'refs/remotes/origin/main', control)
         with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
              patch.object(release, 'FILTERS_ROOM_APP_SNAPSHOT', snapshot), \
              patch.object(release, 'FILTERS_ROOM_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
              patch.dict(release.FILTERS_ROOM_APPLICATION_BLOBS, {name: blob}), \
              patch.object(sys.modules[__name__], 'FILTERS_ROOM_OPERATOR_BLOB', self.blob(operator)):
+            self.assertEqual(len(self.files), 19)
+            self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
+                             release.FILTERS_ROOM_CONTROL_FILES)
+            self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
+                             release.FILTERS_ROOM_CONTROL_FILES)
+            self.assertEqual(set(self.git('diff', '--name-only', control, candidate).splitlines()),
+                             set(self.files))
             self.assertEqual(set(self.verify()), set(self.files) | release.FILTERS_ROOM_CONTROL_FILES)
+            self.assertEqual(release.migration_plan(self.verify()), [])
             self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'],
                              self.blob(operator))
             self.git('update-ref', 'refs/remotes/origin/main', self.control)
