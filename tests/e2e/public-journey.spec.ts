@@ -113,12 +113,14 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page,
 });
 
 test("featured motion continues in the Room and resumes after returning to the hero", async ({ page, catalogue }) => {
+  // Keep navigation bounded while reserving time for both real-time rotations.
+  test.setTimeout(60_000);
   const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
   if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date(now));
   const scenes = catalogue.screens!.filter(({ event }) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
   const multiple = scenes.length > 1;
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/");
+  await page.goto("/", { timeout: 30_000 });
   await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
   const experience = page.locator(".active-night-experience");
   const room = page.locator("#the-room");
