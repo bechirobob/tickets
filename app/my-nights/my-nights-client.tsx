@@ -11,10 +11,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ActionButton, ActionLink } from "../action";
 import { ArrowLeft, ArrowUpRight, Bell, CheckCircle2, ChevronRight, Loader2, Mail, MapPin, MessageCircle, QrCode, Search, ShieldCheck, Ticket, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useCurrentTime } from "../use-current-time";
 import LoadingSkeleton from "../loading-skeleton";
 import { requestJson, requestErrorMessage, RequestError } from "../../lib/client-request";
+
+const subscribeToReadiness = () => () => {};
+const clientIsReady = () => true;
+const serverIsReady = () => false;
 
 type Night = {
   admissionActive?: boolean; registrationMode?: string; roomAccess?: boolean; eventSlug: string; title: string; startsAt: string | null; endsAt: string | null; venue: string; area: string; imageUrl: string;
@@ -45,6 +49,7 @@ function datePart(value: string, options: Intl.DateTimeFormatOptions) {
 
 export default function MyNightsClient() {
   const params = useSearchParams();
+  const recoveryReady = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const requestedView = resolveView(params.get("view"));
   const [view, setView] = useState(requestedView);
   const [previousView, setPreviousView] = useState(requestedView);
@@ -110,7 +115,7 @@ export default function MyNightsClient() {
   }
   async function requestRecovery(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (recoveryBusy.current || recoveryState !== "idle") return;
+    if (!recoveryReady || recoveryBusy.current || recoveryState !== "idle") return;
     recoveryBusy.current = true; setRecoveryState("sending"); setRecoveryError("");
     try {
       await requestJson("/api/customer/recovery", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: recoveryEmail }) });
@@ -137,7 +142,7 @@ export default function MyNightsClient() {
       {recovered && payload ? <div className="my-nights-recovered" role="status"><CheckCircle2 size={18} /><span>Your nights are back.</span></div> : null}
       {member && !recovering ? <div className="nights-toolbar"><SegmentedControl as="nav" className="my-nights-tabs" aria-label="My Nights views">{views.map(item => <button key={item} type="button" aria-current={activeView === item ? "page" : undefined} onClick={() => chooseView(item)}>{item === "upcoming" ? "Upcoming" : item === "past" ? "Past" : item === "following" ? "Following" : "RSVPs"}<span aria-label={`${counts[item]} ${item === "rsvps" ? "registrations" : "nights"}`}>{counts[item]}</span></button>)}</SegmentedControl>{(payload?.nights.length ?? 0) > 3 && activeView !== "rsvps" ? <label className="nights-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label="Find a night" placeholder="Find a night" value={query} onChange={e => setQuery(e.target.value)} />{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery("")}><X size={16} /></button> : null}</label> : null}</div> : null}
       <div hidden={activeView !== "rsvps" || !member || recovering} className="nights-registration-view"><MyRegistrations onCountChange={setRegistrationCount} onEntitlementsChange={load} /></div>
-      {loadError && !recovering ? <section className="my-nights-empty"><h2>Your nights are taking a moment.</h2><p role="alert">{loadError}</p><ActionButton onClick={() => { setLoading(true); setLoadError(""); void load(); }}>Try again</ActionButton></section> : recovering || (!member && locked) ? <section className="my-nights-locked"><Ticket size={30} /><h2>Your plans are still here.</h2><p>Use your booking email. We’ll send a link to your tickets and RSVPs.</p><form className="my-nights-recovery" onSubmit={requestRecovery}><label>Booking or registration email<input type="email" required autoComplete="email" value={recoveryEmail} onChange={event => setRecoveryEmail(event.target.value)} placeholder="you@example.com" /></label><ActionButton type="submit" disabled={recoveryState !== "idle"} aria-busy={recoveryState === "sending"} icon={recoveryState === "sending" ? <Loader2 className="spin" size={17} /> : <Mail size={17} />}>{recoveryState === "sending" ? "Sending…" : recoveryState === "sent" ? "Check your email" : "Bring back my Nights"}</ActionButton></form>{recoveryError ? <p className="my-nights-recovery-error" role="alert">{recoveryError}</p> : null}{recoveryState === "sent" ? <div className="nights-recovery-sent" role="status"><p>If that email has tickets or RSVPs, your access link is on its way. Check your inbox and spam folder.</p><button type="button" onClick={() => setRecoveryState("idle")}>Use another email</button></div> : null}<p className="my-nights-recovery-help"><Link href="/help#recover-access">No link, wrong email or locked out?</Link></p><div><Link href="/events">Find my first night <ArrowUpRight size={16} /></Link></div></section> : activeView !== "rsvps" ? <>
+      {loadError && !recovering ? <section className="my-nights-empty"><h2>Your nights are taking a moment.</h2><p role="alert">{loadError}</p><ActionButton onClick={() => { setLoading(true); setLoadError(""); void load(); }}>Try again</ActionButton></section> : recovering || (!member && locked) ? <section className="my-nights-locked"><Ticket size={30} /><h2>Your plans are still here.</h2><p>Use your booking email. We’ll send a link to your tickets and RSVPs.</p><form className="my-nights-recovery" onSubmit={requestRecovery} aria-busy={!recoveryReady || recoveryState === "sending"}><label>Booking or registration email<input type="email" required autoComplete="email" disabled={!recoveryReady} aria-describedby={!recoveryReady ? "my-nights-recovery-readiness" : undefined} value={recoveryEmail} onChange={event => setRecoveryEmail(event.target.value)} placeholder="you@example.com" /></label><ActionButton type="submit" disabled={!recoveryReady || recoveryState !== "idle"} aria-busy={!recoveryReady || recoveryState === "sending"} icon={recoveryState === "sending" ? <Loader2 className="spin" size={17} /> : <Mail size={17} />}>{recoveryState === "sending" ? "Sending…" : recoveryState === "sent" ? "Check your email" : "Bring back my Nights"}</ActionButton></form>{!recoveryReady ? <p id="my-nights-recovery-readiness" role="status">Getting secure recovery ready…</p> : null}{recoveryError ? <p className="my-nights-recovery-error" role="alert">{recoveryError}</p> : null}{recoveryState === "sent" ? <div className="nights-recovery-sent" role="status"><p>If that email has tickets or RSVPs, your access link is on its way. Check your inbox and spam folder.</p><button type="button" onClick={() => setRecoveryState("idle")}>Use another email</button></div> : null}<p className="my-nights-recovery-help"><Link href="/help#recover-access">No link, wrong email or locked out?</Link></p><div><Link href="/events">Find my first night <ArrowUpRight size={16} /></Link></div></section> : activeView !== "rsvps" ? <>
         {nights.length ? <div className="nights-collection">{nights.map((night, index) => {
           const action = nextAction(night, now); const ActionIcon = action.icon;
           const changed = ["cancelled", "postponed"].includes(night.eventState);

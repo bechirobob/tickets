@@ -1,8 +1,45 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
+import { transformSync } from 'esbuild';
 import { excludeAuditAnalytics } from '../scripts/audit-analytics.mjs';
 import { expandEveryVisibleDisclosure } from './e2e/disclosures.mjs';
+
+test('synthetic camera selection skips external audits before fixture setup and retains every local case', async () => {
+  const source = await readFile(new URL('./e2e/flash-camera.spec.ts', import.meta.url), 'utf8');
+  const compiled = transformSync(`${source}\nexport { cameraFixture };`, { loader: 'ts', format: 'cjs' }).code;
+  for (const externalBaseURL of [undefined, 'https://tickets.becoreops.com', 'https://example.invalid', 'http://127.0.0.1:8788']) {
+    for (const event of [undefined, 'pull_request', 'workflow_dispatch']) {
+      let skipped = false;
+      const cases = [];
+      const declare = (title, body) => cases.push({ title, body, skipped });
+      declare.skip = condition => { skipped ||= condition; };
+      declare.use = () => {};
+      declare.info = () => ({ project: { use: { baseURL: externalBaseURL ?? 'http://127.0.0.1:8788' } } });
+      const compiledModule = { exports: {} };
+      const env = { GITHUB_EVENT_NAME: event };
+      if (externalBaseURL !== undefined) env.E2E_BASE_URL = externalBaseURL;
+      runInNewContext(compiled, {
+        module: compiledModule, exports: compiledModule.exports, process: { env },
+        require: id => {
+          if (id === './catalogue') return { test: declare };
+          if (['@axe-core/playwright', 'node:crypto', 'node:buffer'].includes(id)) return {};
+          throw new Error(`Unexpected synthetic camera dependency: ${id}`);
+        },
+      });
+      assert.equal(cases.length, 3, 'All three synthetic camera journeys must remain declared');
+      assert.equal(new Set(cases.map(item => item.title)).size, 3);
+      assert.ok(cases.every(item => item.skipped === Boolean(externalBaseURL)), 'Skip must be declared before any case, independent of workflow event');
+      if (externalBaseURL?.startsWith('https://')) {
+        let pageAccesses = 0;
+        const page = new Proxy({}, { get() { pageAccesses++; throw new Error('Fixture touched the page'); } });
+        await assert.rejects(compiledModule.exports.cameraFixture(page, 'unused'), /Synthetic camera fixture refuses non-local origins/u);
+        assert.equal(pageAccesses, 0, 'The independent fail-closed guard must precede page and network mutation');
+      }
+    }
+  }
+});
 
 test('audit analytics routing matches only the exact configured first-party endpoint', async () => {
   for (const origin of ['https://tickets.becoreops.com', 'http://127.0.0.1:8788', 'https://127.0.0.1:8791']) {

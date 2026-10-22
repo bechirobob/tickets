@@ -4,6 +4,7 @@ import { Buffer as NodeBuffer } from "node:buffer";
 import type { Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./catalogue";
 
+test.skip(Boolean(process.env.E2E_BASE_URL), "Synthetic camera coverage requires the isolated local candidate fixture.");
 test.use({ serviceWorkers: "block" });
 
 type NativeUpload = { bytes: number[]; matchesDisplayedBlob: boolean };

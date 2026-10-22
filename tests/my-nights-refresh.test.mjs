@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { transformSync } from 'esbuild';
@@ -17,7 +20,7 @@ const text = node => Array.isArray(node) ? node.map(text).join(' ') : node && ty
 
 // The real components/effects run together, with deterministic time and requests.
 // In-flight requests can finish after abort to exercise stale-result protection.
-function mountNights({ query = '' } = {}) {
+function mountNights({ query = '', ready = true } = {}) {
   const components = new Map(), timers = new Map(), calls = [];
   const document = new EventTarget(), window = new EventTarget(), navigator = { onLine: true };
   document.hidden = false;
@@ -25,6 +28,7 @@ function mountNights({ query = '' } = {}) {
   let now = Date.parse('2026-10-19T12:00:00Z'), timerId = 0;
   const same = (a, b) => a && b && a.length === b.length && a.every((value, index) => Object.is(value, b[index]));
   const react = {
+    useSyncExternalStore() { return ready; },
     useRef(value) { return current.slots[cursor++] ??= { current: value }; },
     useState(initial) {
       const state = current.slots[cursor++] ??= { value: initial };
@@ -114,6 +118,12 @@ function mountNights({ query = '' } = {}) {
   commit();
   return {
     flush, advance, calls,
+    setReady(value) { ready = value; commit(); },
+    get recoveryInput() { return nodes(tree).find(node => node.type === 'input' && node.props.type === 'email'); },
+    get recoverySubmit() { return nodes(tree).find(node => node.type === 'button' && node.props.type === 'submit'); },
+    get recoveryForm() { return nodes(tree).find(node => node.type === 'form' && node.props.className === 'my-nights-recovery'); },
+    async fillRecovery(value) { this.recoveryInput.props.onChange({ target: { value } }); await flush(); },
+    submitRecovery() { return this.recoveryForm.props.onSubmit({ preventDefault() {} }); },
     get feedCalls() { return calls.filter(call => call.url.endsWith('/my-nights')); },
     get registrationCalls() { return calls.filter(call => call.url.endsWith('/registrations')); },
     get text() { return text(tree); },
@@ -220,6 +230,65 @@ test('explicit recovery remains available with a different valid session and sen
   assert.match(page.text, /Booking or registration email/);
   assert.doesNotMatch(page.text, /Show my RSVP pass/);
   assert.equal(page.calls.filter(call => call.init.method === 'POST').length, 0);
+  page.unmount();
+});
+
+// Use real React server rendering, not the hook harness, to verify the initial
+// HTML that can be interacted with before the client has attached its handlers.
+test('explicit recovery server HTML disables entry and submission with accessible readiness feedback', () => {
+  const componentModule = { exports: {} };
+  const requireDependency = createRequire(import.meta.url);
+  runInNewContext(feedCode, {
+    module: componentModule, exports: componentModule.exports,
+    require(specifier) {
+      if (specifier === 'react' || specifier === 'react/jsx-runtime' || specifier === 'lucide-react') return requireDependency(specifier);
+      if (specifier === 'next/navigation') return { useSearchParams: () => new URLSearchParams('recover=1') };
+      if (specifier === 'next/link') return { __esModule: true, default: ({ children, ...props }) => createElement('a', props, children) };
+      if (specifier.endsWith('/use-current-time')) return { useCurrentTime: () => Date.parse('2026-10-19T12:00:00Z') };
+      if (specifier.endsWith('/action')) return { ActionButton: ({ children, icon, ...props }) => createElement('button', props, children, icon) };
+      return { __esModule: true, default: () => null };
+    },
+  });
+  const html = renderToStaticMarkup(createElement(componentModule.exports.default));
+  const form = html.match(/<form class="my-nights-recovery"[^>]*>[\s\S]*?<\/form>/)?.[0] ?? '';
+  assert.match(form, /<input[^>]*disabled=""/);
+  assert.match(form, /<button[^>]*disabled=""/);
+  assert.match(form, /aria-busy="true"/);
+  assert.match(html, /role="status"[^>]*>Getting secure recovery ready/);
+});
+
+test('recovery becomes interactive only after readiness and does not post during hydration', async () => {
+  const page = mountNights({ query: 'recover=1', ready: false });
+  assert.equal(page.recoveryInput.props.disabled, true);
+  assert.equal(page.recoverySubmit.props.disabled, true);
+  await page.submitRecovery();
+  assert.equal(page.calls.filter(call => call.init.method === 'POST').length, 0);
+  page.setReady(true);
+  assert.equal(page.recoveryInput.props.disabled, false);
+  assert.equal(page.recoverySubmit.props.disabled, false);
+  assert.doesNotMatch(page.text, /Getting secure recovery ready/);
+  page.unmount();
+});
+
+test('early recovery entry survives initial authenticated feed and registration reads and submits once', async () => {
+  const page = mountNights({ query: 'recover=1' });
+  await page.fillRecovery('approved-guest@example.com');
+  await page.initial([], [night]);
+  assert.equal(page.recoveryInput.props.value, 'approved-guest@example.com');
+  assert.equal(page.recoverySubmit.props.disabled, false);
+  const sending = page.submitRecovery();
+  await page.submitRecovery();
+  await page.flush();
+  const posts = page.calls.filter(call => call.init.method === 'POST');
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].url, '/api/customer/recovery');
+  assert.deepEqual(JSON.parse(posts[0].init.body), { email: 'approved-guest@example.com' });
+  assert.equal(page.recoverySubmit.props.disabled, true);
+  posts[0].respond({ sent: true }); await sending; await page.flush();
+  assert.match(page.text, /Check your email/);
+  assert.equal(page.recoveryInput.props.value, 'approved-guest@example.com');
+  assert.equal(page.recoverySubmit.props.disabled, true);
+  assert.ok(page.calls.every(call => ['/api/customer/my-nights', '/api/customer/registrations', '/api/customer/recovery'].includes(call.url)));
   page.unmount();
 });
 
