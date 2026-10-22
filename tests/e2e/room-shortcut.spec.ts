@@ -182,16 +182,50 @@ test('same-page sign-out immediately clears private Room counts and the chooser'
 });
 
 test('an expired read boundary requires fresh access and a new socket snapshot before retry', async ({ page, eventSlug }) => {
+  await page.addInitScript((readPath: string) => {
+    'use strict';
+    const readViews: (string | null)[] = [];
+    Object.assign(window, { roomReadViews: readViews });
+    const fetch = window.fetch;
+    window.fetch = function (this: unknown, ...args) {
+      const input = args[0] instanceof Request ? args[0].url : String(args[0]);
+      if (new URL(input, location.href).pathname === readPath) {
+        readViews.push(document.querySelector('.room-header__activity [aria-label$=" people online"]')?.getAttribute('aria-label') ?? null);
+      }
+      return fetch.apply(this, args);
+    };
+  }, `/api/rooms/${encodeURIComponent(eventSlug)}/updates/read`);
   const room = { eventSlug, eventTitle: 'Garden Party', readOnly: false, readOnlyAt: expiry() };
   let access = 0, marks = 0, connections = 0;
+  let recovering = false, expiredBoundary = '', freshBoundary = '';
+  const issuedBoundaries = new Set<string>();
+  let expireBoundary: (() => Promise<void>) | undefined;
   let freshSnapshot: (() => void) | undefined;
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/access')) return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: ++access === 1 ? 'expired-boundary' : 'fresh-boundary' } });
+    if (path.endsWith('/access')) {
+      const snapshot = `${recovering ? 'fresh' : 'expired'}-boundary-${++access}`;
+      issuedBoundaries.add(snapshot);
+      if (recovering) freshBoundary = snapshot;
+      return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: snapshot } });
+    }
     if (path.endsWith('/updates/read')) {
       marks++;
-      if (marks === 1) return route.fulfill({ status: 400, json: { error: 'Expired boundary' } });
-      expect(route.request().postDataJSON()).toEqual({ snapshot: 'fresh-boundary' });
+      if (marks === 1) {
+        const body = route.request().postDataJSON();
+        expect(body).toEqual({ snapshot: expect.stringMatching(/^expired-boundary-\d+$/u) });
+        expect(issuedBoundaries).toContain(body.snapshot);
+        expiredBoundary = body.snapshot;
+        // Complete initial navigation before deliberately expiring its rendered boundary.
+        return new Promise<void>(resolve => { expireBoundary = async () => {
+          recovering = true;
+          await route.fulfill({ status: 400, json: { error: 'Expired boundary' } });
+          resolve();
+        }; });
+      }
+      expect(freshBoundary).toMatch(/^fresh-boundary-\d+$/u);
+      expect(freshBoundary).not.toBe(expiredBoundary);
+      expect(route.request().postDataJSON()).toEqual({ snapshot: freshBoundary });
       return route.fulfill({ json: { updated: true } });
     }
     if (path.endsWith('/flashes')) return route.fulfill({ json: { flashes: [] } });
@@ -199,13 +233,21 @@ test('an expired read boundary requires fresh access and a new socket snapshot b
   });
   await page.routeWebSocket(/\/api\/room\/socket/u, socket => {
     connections++;
-    const send = () => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 }));
-    if (connections === 1) send(); else freshSnapshot = send;
+    const online = recovering ? 2 : 1;
+    const send = () => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online }));
+    if (!recovering) send(); else freshSnapshot = send;
   });
   await page.goto(`/room/${eventSlug}`);
-  await expect.poll(() => access).toBe(2); await expect.poll(() => connections).toBe(2);
+  await expect(page.locator('.room-stream')).toBeVisible(); await expect.poll(() => marks).toBe(1);
+  const initialAccess = access, initialConnections = connections;
+  expect(initialAccess).toBeGreaterThan(0); expect(initialConnections).toBeGreaterThan(0);
+  await expireBoundary!();
+  await expect.poll(() => access).toBe(initialAccess + 1); await expect.poll(() => connections).toBe(initialConnections + 1);
   expect(marks).toBe(1);
   freshSnapshot!(); await expect.poll(() => marks).toBe(2);
+  expect(access).toBe(initialAccess + 1); expect(connections).toBe(initialConnections + 1);
+  // Observe the rendered snapshot at fetch invocation, not delayed route delivery.
+  expect(await page.evaluate(() => (window as Window & { roomReadViews?: (string | null)[] }).roomReadViews)).toEqual(['1 people online', '2 people online']);
 });
 
 test('top-only Room and notification panels stay clear of the header and dock and replace the menu', async ({ page, eventSlug }, info) => {
