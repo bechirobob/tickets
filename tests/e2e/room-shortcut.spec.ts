@@ -38,22 +38,29 @@ test('Room summaries do not poll behind the desktop breakpoint and refresh on mo
 test('a quiet visible Room retries a transient read failure with the same rendered boundary', async ({ page, eventSlug }) => {
   await page.clock.install();
   const room = { eventSlug, eventTitle: 'Garden Party', readOnly: false, readOnlyAt: expiry() };
-  let marks = 0, access = 0;
+  let marks = 0, access = 0, connections = 0;
+  let accessAtFirstMark = 0, connectionsAtFirstMark = 0;
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/access')) { access++; return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: 'viewed-boundary' } }); }
     if (path.endsWith('/updates/read')) {
-      marks++; expect(route.request().postDataJSON()).toEqual({ snapshot: 'viewed-boundary' });
+      marks++;
+      // Initial page lifecycle events may restart access before a boundary renders.
+      if (marks === 1) { accessAtFirstMark = access; connectionsAtFirstMark = connections; }
+      expect(route.request().postDataJSON()).toEqual({ snapshot: 'viewed-boundary' });
       return route.fulfill(marks === 1 ? { status: 503, json: { error: 'Try again' } } : { json: { updated: true } });
     }
     if (path.endsWith('/flashes')) return route.fulfill({ json: { flashes: [] } });
     return route.fulfill({ status: 401, json: { error: 'Isolated fixture' } });
   });
-  await page.routeWebSocket(/\/api\/room\/socket/u, socket => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 })));
+  await page.routeWebSocket(/\/api\/room\/socket/u, socket => { connections++; socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 })); });
   await page.goto(`/room/${eventSlug}`); await expect(page.locator('.room-stream')).toBeVisible();
-  await expect.poll(() => marks).toBe(1); await page.clock.fastForward(1000); await expect.poll(() => marks).toBe(2);
-  expect(access).toBe(1);
+  await expect.poll(() => marks).toBe(1);
+  expect(accessAtFirstMark).toBeGreaterThan(0); expect(connectionsAtFirstMark).toBeGreaterThan(0);
+  await page.clock.fastForward(1000); await expect.poll(() => marks).toBe(2);
+  expect(access).toBe(accessAtFirstMark); expect(connections).toBe(connectionsAtFirstMark);
   await page.clock.fastForward(10_000); expect(marks).toBe(2);
+  expect(access).toBe(accessAtFirstMark); expect(connections).toBe(connectionsAtFirstMark);
 });
 
 for (const boundary of ['hidden', 'unmounted'] as const) {
