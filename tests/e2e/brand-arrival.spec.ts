@@ -1,6 +1,7 @@
 import { test, expect, type Page } from './analytics-fixture';
 import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 
 test.use({ serviceWorkers: 'block' });
@@ -15,13 +16,15 @@ test.beforeAll(async () => {
   script = result.outputFiles[0].text;
 });
 
-async function fixture(page: Page, options: { noCss?: boolean; brokenLogo?: boolean; delayedScript?: boolean } = {}) {
+async function fixture(page: Page, options: { noCss?: boolean; brokenLogo?: boolean; delayedScript?: boolean; observeClose?: boolean } = {}) {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.route('**/brand/becore-ticket.webp', route => options.brokenLogo ? route.abort() : route.fulfill({ contentType: 'image/webp', body: logo }));
+  const html = `<!doctype html><html${options.observeClose ? ' data-intro-close-fixture="synthetic-skip-v1"' : ''}><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:system-ui;background:#f8eee7;color:#281b2b}main{padding:32px}#underlying{position:fixed;left:40%;top:50%;min-height:44px} ${options.noCss ? '' : css}</style></head><body><div id="root"></div><main><h1>Destination remains mounted</h1><button id="underlying" onclick="this.dataset.clicks=String(Number(this.dataset.clicks||0)+1)">Continue underlying page</button></main><script>${options.delayedScript ? `setTimeout(()=>{${script.replaceAll('</script', '<\\/script')}},1600)` : script.replaceAll('</script', '<\\/script')}</script></body></html>`;
   await page.route(url => !url.pathname.startsWith('/brand/'), route => {
     if (route.request().resourceType() !== 'document') return route.continue();
-    return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:system-ui;background:#f8eee7;color:#281b2b}main{padding:32px}#underlying{position:fixed;left:40%;top:50%;min-height:44px} ${options.noCss ? '' : css}</style></head><body><div id="root"></div><main><h1>Destination remains mounted</h1><button id="underlying" onclick="this.dataset.clicks=String(Number(this.dataset.clicks||0)+1)">Continue underlying page</button></main><script>${options.delayedScript ? `setTimeout(()=>{${script.replaceAll('</script', '<\\/script')}},1600)` : script.replaceAll('</script', '<\\/script')}</script></body></html>` });
+    return route.fulfill({ contentType: 'text/html', body: html });
   });
+  return html;
 }
 const arrival = (page: Page) => page.getByTestId('brand-arrival');
 
@@ -60,13 +63,98 @@ for (const path of ['/my-nights?welcome=1', '/my-nights?recovered=1', '/my-night
   });
 }
 
-test('Skip removes the overlay and does not click through', async ({ page }) => {
-  await fixture(page); await page.goto('/'); await expect(arrival(page)).toBeVisible();
-  await page.getByRole('button', { name: 'Skip opening animation' }).click();
-  await expect(arrival(page)).toHaveAttribute('hidden', '');
-  await expect(page.locator('#underlying')).not.toHaveAttribute('data-clicks', /.+/);
-  await page.locator('#underlying').click();
-  await expect(page.locator('#underlying')).toHaveAttribute('data-clicks', '1');
+// Diagnostic-only observation of this synthetic fixture. It does not change the
+// app, bundle, admission deadlines or assertions, and cannot establish why a
+// historical run failed. Instrumentation itself can perturb timing.
+type CloseRecord = {
+  hidden: boolean; at: number; stack: string; documentHidden: boolean;
+  reducedMotion: boolean; scrolled: boolean; firstInputPresent: boolean;
+};
+type CloseObservation = {
+  installed: boolean; restored: boolean; records: CloseRecord[]; restore: () => void;
+};
+declare global { interface Window { __introCloseObservation?: CloseObservation } }
+
+async function observeFixtureClose(page: Page) {
+  await page.addInitScript(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'hidden');
+    const nativeSet = descriptor?.set, nativeGet = descriptor?.get;
+    const state: CloseObservation = { installed: false, restored: false, records: [], restore() {
+      if (state.installed && !state.restored && descriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'hidden', descriptor);
+        state.restored = true;
+      }
+    } };
+    window.__introCloseObservation = state;
+    if (!descriptor?.configurable || !nativeSet || !nativeGet) return;
+    Object.defineProperty(HTMLElement.prototype, 'hidden', {
+      ...descriptor,
+      set(this: HTMLElement, value: unknown) {
+        // Native semantics, including its return/exception, always take priority.
+        const result = nativeSet.call(this, value);
+        try {
+          if (state.records.length >= 16 || this.ownerDocument !== document
+            || document.documentElement?.getAttribute('data-intro-close-fixture') !== 'synthetic-skip-v1'
+            || this.getAttribute('data-testid') !== 'brand-arrival'
+            || !this.parentElement || this.parentElement !== document.getElementById('root')) return result;
+          const at = performance.now();
+          // Retain only bounded function names and source offsets. No raw URL,
+          // query, fragment, session data or captured controller locals survive.
+          const stack = (new Error().stack ?? '').split('\n').slice(1, 9).flatMap(frame => {
+            const match = frame.match(/^\s*at (?:(.*?) \()?((?:https:\/\/[^ )]+|<anonymous>)):(\d{1,7}):(\d{1,7})\)?$/);
+            if (!match) return [];
+            const [, name, source, line, column] = match;
+            if (source !== '<anonymous>') {
+              const url = new URL(source);
+              if (url.origin !== 'https://tickets.becoreops.com' || url.pathname !== '/') return [];
+            }
+            const label = source === '<anonymous>' ? 'init-script' : 'fixture-document';
+            const fn = (name ?? '(anonymous)').replace(/[^A-Za-z0-9_$.[\] <>-]/g, '').slice(0, 96);
+            return [`${fn} (${label}:${line}:${column})`];
+          }).join('\n').slice(0, 2048);
+          state.records.push({ hidden: Boolean(nativeGet.call(this)), at, stack,
+            documentHidden: document.hidden, reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+            scrolled: window.scrollY > 0, firstInputPresent: performance.getEntriesByType('first-input').length > 0 });
+        } catch { /* Observation must never change the native setter result. */ }
+        return result;
+      },
+    });
+    state.installed = true;
+  });
+}
+
+test('Skip removes the overlay and does not click through', async ({ page }, info) => {
+  const html = await fixture(page, { observeClose: true });
+  const servedBundle = script.replaceAll('</script', '<\\/script');
+  await observeFixtureClose(page);
+  try {
+    await page.goto('/'); await expect(arrival(page)).toBeVisible();
+    await page.evaluate(() => window.__introCloseObservation?.restore());
+    await page.getByRole('button', { name: 'Skip opening animation' }).click();
+    await expect(arrival(page)).toHaveAttribute('hidden', '');
+    await expect(page.locator('#underlying')).not.toHaveAttribute('data-clicks', /.+/);
+    await page.locator('#underlying').click();
+    await expect(page.locator('#underlying')).toHaveAttribute('data-clicks', '1');
+  } finally {
+    const observation = await page.evaluate(() => {
+      const state = window.__introCloseObservation;
+      if (!state) return { installed: false, restored: false, records: [] };
+      state.restore();
+      return { installed: state.installed, restored: state.restored, records: state.records };
+    }).catch(() => ({ installed: false, restored: false, records: [], unavailable: true }));
+    const prefix = html.slice(0, html.indexOf(servedBundle));
+    await info.attach('diagnostic-only-served-bundle.js', { body: servedBundle, contentType: 'text/javascript' });
+    await info.attach('diagnostic-only-close-observation.json', { body: JSON.stringify({
+      diagnosticOnly: true, interpretation: 'A pass means not reproduced, not historical resolution or release eligibility.',
+      limitation: 'Setter instrumentation can perturb timing; capturedAt and loaded are not observed.',
+      diagnosticSha: process.env.GITHUB_SHA ?? null, liveSha: '712fa5d10b353f847533003e09cc64ec9ebba1bb',
+      repeat: info.repeatEachIndex, project: info.project.name,
+      bundleSha256: createHash('sha256').update(servedBundle).digest('hex'),
+      fixtureHtmlSha256: createHash('sha256').update(html).digest('hex'),
+      bundleStartLine: prefix.split('\n').length, bundleStartColumn: prefix.length - prefix.lastIndexOf('\n'),
+      ...observation,
+    }, null, 2), contentType: 'application/json' });
+  }
 });
 
 test('native pointer tap dismisses without activating an obscured action', async ({ page, hasTouch }) => {

@@ -1,45 +1,132 @@
-name: Focused production browser regressions
+name: Diagnostic only - synthetic intro close observation
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - tests/e2e/navigation-audit.spec.ts
-      - tests/e2e/discovery-pass-access.spec.ts
-      - .github/workflows/browser-followup.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  verify:
+  diagnostic-only:
+    if: github.repository == 'bechirobob/tickets' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/intro-close-observation-M'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
       E2E_BASE_URL: https://tickets.becoreops.com
+      EXPECTED_LIVE_SHA: 712fa5d10b353f847533003e09cc64ec9ebba1bb
+      EXPECTED_LIVE_TREE: 192517ff2e9fa612e3c939e54bf5658f46d06584
     steps:
+      - name: Resolve fixed live identity for this diagnostic only
+        id: resolved
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/diagnostic/intro-close-observation-M
+          mkdir -p "$RUNNER_TEMP/intro-close-diagnostic-only"
+          cat > "$RUNNER_TEMP/intro-close-diagnostic-only/verify-live.sh" <<'SH'
+          set -euo pipefail
+          phase="${1:?Missing verification phase}"
+          [[ "$phase" =~ ^(resolved|before|after)$ ]]
+          metadata="$RUNNER_TEMP/intro-close-diagnostic-only"
+          status="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            -H 'Cache-Control: no-cache' -H 'Accept: application/json' \
+            --write-out '%{http_code}' --output "$metadata/health-$phase.json" https://tickets.becoreops.com/healthz)"
+          test "$status" = 200
+          status="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            -H 'Cache-Control: no-cache' -H 'Accept: application/json' \
+            --write-out '%{http_code}' --output "$metadata/version-$phase.json" https://tickets.becoreops.com/api/version)"
+          test "$status" = 200
+          PHASE="$phase" python3 - <<'PYVERIFY'
+          import datetime, json, os, pathlib
+          directory = pathlib.Path(os.environ["RUNNER_TEMP"]) / "intro-close-diagnostic-only"
+          phase = os.environ["PHASE"]
+          health = json.loads((directory / f"health-{phase}.json").read_text())
+          version = json.loads((directory / f"version-{phase}.json").read_text())
+          if not isinstance(health, dict) or not isinstance(version, dict):
+              raise SystemExit("Diagnostic only: identity responses must be objects")
+          expected = os.environ["EXPECTED_LIVE_SHA"]
+          if version.get("service") != "becore-tickets" or health.get("service") != "becore-tickets":
+              raise SystemExit("Diagnostic only: unexpected production service")
+          if health.get("runtime") != "vps" or health.get("active") is not True:
+              raise SystemExit("Diagnostic only: expected active Tickets VPS")
+          if health.get("revision") != expected or version.get("revision") != expected:
+              raise SystemExit("Diagnostic only: live revision changed; this observation is not authorized for another build")
+          evidence = {"diagnosticOnly": True, "liveSha": expected,
+                      "phase": phase, "service": "becore-tickets", "runtime": "vps", "active": True,
+                      "verifiedAt": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          (directory / f"live-{phase}.json").write_text(json.dumps(evidence, indent=2) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Diagnostic only ({phase}): active Tickets VPS remains {expected}. Not a release gate.\n\n")
+          PYVERIFY
+          SH
+          bash "$RUNNER_TEMP/intro-close-diagnostic-only/verify-live.sh" resolved
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: bechirobob/tickets
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact diagnostic source and unchanged product bytes
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/diagnostic/intro-close-observation-M
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          origin="$(git remote get-url origin)"
+          [[ "$origin" = https://github.com/bechirobob/tickets || "$origin" = https://github.com/bechirobob/tickets.git ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_LIVE_SHA"
+          test "$(git rev-parse "$EXPECTED_LIVE_SHA^{tree}")" = "$EXPECTED_LIVE_TREE"
+          git merge-base --is-ancestor "$EXPECTED_LIVE_SHA" refs/remotes/origin/main
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python3 - <<'PYSOURCE'
+          import json, os, pathlib, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          expected = ["M\t.github/workflows/browser-followup.yml", "M\ttests/e2e/brand-arrival.spec.ts"]
+          changes = git("diff", "--no-renames", "--name-status", os.environ["EXPECTED_LIVE_SHA"], "HEAD").splitlines()
+          if changes != expected:
+              raise SystemExit("Diagnostic only: only the manual workflow and synthetic fixture may differ from live M")
+          source = {"diagnosticOnly": True, "diagnosticSha": git("rev-parse", "HEAD"),
+                    "diagnosticTree": git("rev-parse", "HEAD^{tree}"),
+                    "liveSha": os.environ["EXPECTED_LIVE_SHA"], "liveTree": git("rev-parse", os.environ["EXPECTED_LIVE_SHA"] + "^{tree}"),
+                    "liveInMainHistory": True, "allOtherTrackedBytesUnchanged": True, "changes": changes,
+                    "interpretation": "Not a full audit, clean rerun, release candidate or release gate. A pass means not reproduced."}
+          directory = pathlib.Path(os.environ["RUNNER_TEMP"]) / "intro-close-diagnostic-only"
+          (directory / "source.json").write_text(json.dumps(source, indent=2) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Diagnostic source: {source['diagnosticSha']} / tree {source['diagnosticTree']}\n\n")
+              summary.write(f"Unmodified live product: {source['liveSha']} / tree {source['liveTree']}\n\n")
+          PYSOURCE
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # These existing journeys use anonymous reads or intercepted fixture APIs.
-      # No checkout, email, registration or customer-data writes reach production.
-      - name: Repeat the three affected mobile journeys with retries disabled
-        run: npx playwright test navigation-audit.spec.ts member-navigation.spec.ts public-journey.spec.ts --project mobile-chromium --grep 'navigation waits for its handlers|My Nights recovers from a service failure|My Nights exposes secure recovery' --workers=1 --retries=0 --repeat-each=5 --trace=on
-      - name: Verify active-pass loading on desktop without retries
-        run: npx playwright test discovery-pass-access.spec.ts --project desktop-chromium --grep 'an active night leads' --workers=1 --retries=0 --repeat-each=5 --trace=on --output=test-results-pass-access
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - name: Confirm exact live M before the diagnostic window
+        run: bash "$RUNNER_TEMP/intro-close-diagnostic-only/verify-live.sh" before
+      # The document and real logo are fulfilled from the synthetic fixture.
+      # No checkout, registration, email, payment, customer or production writes.
+      - name: Diagnostic only - observe the unchanged Skip assertions five times
+        run: npx playwright test tests/e2e/brand-arrival.spec.ts --project=mobile-chromium --grep 'Skip removes the overlay and does not click through$' --workers=1 --retries=0 --repeat-each=5 --trace=on
+      - name: Confirm exact live M after the diagnostic window
+        if: ${{ always() && steps.resolved.outcome == 'success' }}
+        run: bash "$RUNNER_TEMP/intro-close-diagnostic-only/verify-live.sh" after
+      - name: Preserve diagnostic-only traces, served bundle and bounded observations
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: focused-production-browser-${{ github.run_id }}
+          name: diagnostic-only-intro-close-${{ github.run_id }}
           path: |
             playwright-report
             test-results
-            test-results-pass-access
+            ${{ runner.temp }}/intro-close-diagnostic-only/live-*.json
+            ${{ runner.temp }}/intro-close-diagnostic-only/source.json
           retention-days: 14
+          if-no-files-found: warn
