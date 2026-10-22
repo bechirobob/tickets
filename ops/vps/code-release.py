@@ -884,6 +884,31 @@ FILTERS_ROOM_TEST_SCRIPT_APPENDS = {'test:repo': ' tests/room-lifecycle.test.mjs
  'test:ui': ' tests/flash-photo-filters.test.mjs tests/flash-camera-state.test.mjs'}
 
 
+# Exact M-based recovery readiness and candidate-only synthetic camera audit scope.
+# Independent C changes only the two controls; P retains the published source S.
+# No package, dependency, workflow, runtime, audit-policy or migration change.
+RECOVERY_AUDIT_RELEASE_BASELINE = '712fa5d10b353f847533003e09cc64ec9ebba1bb'
+RECOVERY_AUDIT_RELEASE_BASE_TREE = '192517ff2e9fa612e3c939e54bf5658f46d06584'
+RECOVERY_AUDIT_APP_SNAPSHOT = '81e016eb1f3e54e7e2083574069cf0a43d8f569b'
+RECOVERY_AUDIT_APP_TREE = '4e74fde95272012126f119d5ee9d67f51867335e'
+RECOVERY_AUDIT_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+RECOVERY_AUDIT_APPLICATION_INPUTS = {'app/my-nights/my-nights-client.tsx': '3bf1ca4484332cd2c73a1ff525483b10ea368782',
+ 'tests/browser-audit-harness.test.mjs': 'a422c372910c600870a5f072dc146fe16e553a40',
+ 'tests/e2e/discovery-pass-access.spec.ts': '96c88875c6ec2e99e0b0a6b4aca280ca66851731',
+ 'tests/e2e/flash-camera.spec.ts': '8fccee112fb70d58fc1d5618314bfff05b4d98ca',
+ 'tests/my-nights-refresh.test.mjs': 'ca13ed25d6fa3758acb359b207b6b70b1dda4093'}
+RECOVERY_AUDIT_APPLICATION_BLOBS = {'app/my-nights/my-nights-client.tsx': '34e5f4ab5dcda3ba059cd2fcbd7f6810e00380cd',
+ 'tests/browser-audit-harness.test.mjs': 'bc1e79e0916c2bfc2fd57a98e92aa12c55879304',
+ 'tests/e2e/discovery-pass-access.spec.ts': 'bf34b4773c5acb26d1ed903e1ea014824f305ad8',
+ 'tests/e2e/flash-camera.spec.ts': 'ff86b09b19e6e255ca39cc451e3d0e50dcf5b217',
+ 'tests/my-nights-refresh.test.mjs': 'e80ed4a4bd86c20e996980f7d7d57de55557f957'}
+RECOVERY_AUDIT_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918',
+ 'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36',
+ 'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1518,6 +1543,71 @@ def reviewed_flashes_application_blobs(expected, source):
     return pins
 
 
+def reviewed_recovery_audit_application_blobs(expected, source):
+    """Bind exact M/S inputs and outputs to independent control C and promotion P."""
+    snapshot = RECOVERY_AUDIT_APP_SNAPSHOT
+    controls = RECOVERY_AUDIT_CONTROL_FILES
+    application = RECOVERY_AUDIT_APPLICATION_BLOBS
+    dependencies = RECOVERY_AUDIT_DEPENDENCY_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package.json', 'package-lock.json', 'mobile/package.json',
+                                      'mobile/package-lock.json', 'runtime/vps/package.json'}
+            and set(application) == set(RECOVERY_AUDIT_APPLICATION_INPUTS)
+            == {'app/my-nights/my-nights-client.tsx', 'tests/browser-audit-harness.test.mjs',
+                'tests/e2e/discovery-pass-access.spec.ts', 'tests/e2e/flash-camera.spec.ts',
+                'tests/my-nights-refresh.test.mjs'}
+            and not (controls | set(dependencies)) & set(application),
+            "Recovery/audit inventory or scope changed.")
+    require(expected == RECOVERY_AUDIT_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == RECOVERY_AUDIT_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == RECOVERY_AUDIT_APP_TREE,
+            "Recovery/audit live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            "Recovery/audit snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in RECOVERY_AUDIT_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Recovery/audit application input differs from reviewed source: " + name)
+    for name, blob in application.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Recovery/audit snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "Recovery/audit requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+            "Recovery/audit trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Recovery/audit candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = dict(application)
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Recovery/audit output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Recovery/audit controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete M/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Recovery/audit dependencies must remain unchanged: " + name)
+    require(not migration_plan(pins), "Recovery/audit release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_filters_room_application_blobs(expected, source):
     """Bind exact B/S inputs and outputs to independent control C and promotion P."""
     snapshot = FILTERS_ROOM_APP_SNAPSHOT
@@ -1661,6 +1751,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == RECOVERY_AUDIT_RELEASE_BASELINE:
+        return reviewed_recovery_audit_application_blobs(expected, source)
     if expected == FILTERS_ROOM_RELEASE_BASELINE:
         return reviewed_filters_room_application_blobs(expected, source)
     if expected == NAVIGATION_RELEASE_BASELINE:
@@ -1740,6 +1832,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == RECOVERY_AUDIT_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Recovery/audit release cannot introduce migrations.")
+        return changed
     if expected == FILTERS_ROOM_RELEASE_BASELINE:
         require(not migration_plan(changed), "Filters/Room release cannot introduce migrations.")
         return changed
