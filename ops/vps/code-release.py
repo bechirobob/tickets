@@ -836,8 +836,8 @@ NAVIGATION_TEST_SCRIPT_APPENDS = {
 # No dependency, workflow, schema, audit-policy or permission change is allowed.
 FILTERS_ROOM_RELEASE_BASELINE = '31cf526ad86b678c5193b405d0ce2420238f9586'
 FILTERS_ROOM_RELEASE_BASE_TREE = '5fda675b1d23d065ad93dad7a38cca0e5c0ecd5f'
-FILTERS_ROOM_APP_SNAPSHOT = '5773d5e98279f5d63f6c524524f82b145c823848'
-FILTERS_ROOM_APP_TREE = '230ae5262b8f1433d4c2daa1571081e968223cc8'
+FILTERS_ROOM_APP_SNAPSHOT = '1aeea7662ec5b979463cf21282b70c92190694b8'
+FILTERS_ROOM_APP_TREE = 'dddd0cb54a8b2261f44b6928e3aa6ae8f4e7da43'
 FILTERS_ROOM_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 FILTERS_ROOM_APPLICATION_INPUTS = {'app/customer-dock.tsx': '28ad0341bf1f15dfbcc7d630475ae18296c971be',
  'app/registration-form.tsx': '3377c892e301dd8c8ab79a1b0b25bd29b148631d',
@@ -873,7 +873,7 @@ FILTERS_ROOM_APPLICATION_BLOBS = {'app/customer-dock.tsx': '674b40073b4f21d5621a
  'tests/e2e/flash-camera.spec.ts': '8fccee112fb70d58fc1d5618314bfff05b4d98ca',
  'tests/e2e/public-journey.spec.ts': '36953eca91c0188a7db5d41c2d76f687fab383cf',
  'tests/e2e/room-features.spec.ts': '79c1dc9aefdbf88348beeb476ed258f7dc5b349c',
- 'tests/e2e/room-shortcut.spec.ts': '7ebf84e990665d6e8ea322f219d2a0dd8e764ddd',
+ 'tests/e2e/room-shortcut.spec.ts': '7be29aba38e78c939e10364e010ac342e62e2694',
  'tests/flash-camera-state.test.mjs': '14fe34f80f08e810837facb9406da3b5c6bd66fc',
  'tests/flash-photo-filters.test.mjs': 'c4e4daa843aeaf63f02e5ab72939eeab6f3a541b',
  'tests/room-lifecycle.test.mjs': 'b197a89b4907d8e8282f5b984213842295e6bc60'}
