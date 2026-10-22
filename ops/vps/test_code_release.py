@@ -612,7 +612,7 @@ def navigation_source_family(root):
 
 
 # Exact filters/Room C/P test family, independent of historical Navigation fixtures.
-FILTERS_ROOM_OPERATOR_BLOB = '87a3f9e0c9c656b4f727735027ea67f5c5786d99'
+FILTERS_ROOM_OPERATOR_BLOB = '78707a643af695ab0b2cce81c3d7808e4b15c6fa'
 FILTERS_ROOM_STAGED_BASE = dict(NAVIGATION_STAGED_BASE)
 
 
