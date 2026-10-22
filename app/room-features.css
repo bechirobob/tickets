@@ -217,3 +217,34 @@
   .flash-mark__glyph, .flash-capture-mark, .flash-viewer__progress i { color: CanvasText; }
   .room-sheet button, .chat-action-tray button { forced-color-adjust: auto; }
 }
+
+/* A still-photo editor, not a live camera effect. Keep the whole saved frame visible. */
+.flash-capture--editing { display: grid; grid-template-rows: auto minmax(140px, 1fr) auto; overflow-y: auto; }
+.flash-capture--editing .flash-stage__header, .flash-capture--editing .flash-stage__footer { position: relative; inset: auto; background: #171016; }
+.flash-capture--editing .flash-stage__header { padding-bottom: 12px; }
+.flash-capture--editing .flash-stage__footer { padding-top: 10px; min-width: 0; }
+.flash-capture__preview { position: relative; min-height: 140px; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.flash-capture__look-label { position: absolute; inset: auto auto 8px 50%; transform: translateX(-50%); border-radius: 6px; padding: 5px 9px; background: #171016; color: #fff0e9; font-size: 12px; white-space: nowrap; }
+.flash-looks { min-width: 0; }
+.flash-looks__options { display: flex; gap: 10px; overflow-x: auto; padding: 3px 2px 5px; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+.flash-looks__options > button { display: flex; flex: 0 0 68px; flex-direction: column; align-items: center; gap: 5px; padding: 2px; border: 0; background: transparent; font-size: 12px; white-space: nowrap; scroll-snap-align: start; }
+.flash-looks__thumbnail { display: block; width: 62px; height: 62px; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: #3f2e3b; }
+.flash-looks__thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+.flash-looks__options > button[aria-pressed='true'] .flash-looks__thumbnail { border-color: #fff0e9; }
+.flash-looks__options > button:focus-visible, .flash-looks__compare > button:focus-visible { outline: 2px solid #fff0e9; outline-offset: 2px; }
+.flash-looks__strength { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: 12px; }
+.flash-looks__strength input { min-width: 0; flex: 1; min-height: 44px; margin: 0; accent-color: #edcfb8; }
+.flash-looks__strength output { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.flash-looks__compare { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #e2cdda; font-size: 12px; }
+.flash-looks__compare > button { border: 0; background: transparent; padding: 4px 0 4px 12px; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.flash-capture--editing .flash-consent { padding: 4px 0; font-size: 13px; min-height: 44px; }
+.flash-capture--editing .flash-capture__actions { min-height: 56px; }
+.flash-capture--editing .flash-fine-print { margin-top: 4px; }
+@media (max-height: 520px) and (min-width: 600px) {
+  .flash-capture--editing { max-width: 900px; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: auto minmax(140px, 1fr); }
+  .flash-capture--editing .flash-stage__header { grid-column: 1; grid-row: 1; }
+  .flash-capture__preview { grid-column: 1; grid-row: 2; }
+  .flash-capture--editing .flash-stage__footer { grid-column: 2; grid-row: 1 / 3; }
+}
+
+.flash-capture .room-surface-error > button { display: block; border: 0; background: transparent; text-decoration: underline; padding: 4px 0; }

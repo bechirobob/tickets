@@ -134,6 +134,7 @@ test("Flashes stay minimal until opened, retry the same session, and stay opened
   expect(calls.claims[0]).toEqual(calls.claims[1]);
   await expect(viewer.getByRole("progressbar")).toBeVisible();
   await accessible(page);
+  await expect(page.locator(".flash-viewer img")).toHaveCSS("object-fit", "contain");
   await page.screenshot({ path: info.outputPath("room-flash-viewer.png") });
   await viewer.getByRole("button", { name: "Close Flash", exact: true }).click();
   await expect(viewer).not.toBeVisible();
