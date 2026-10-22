@@ -831,6 +831,59 @@ NAVIGATION_TEST_SCRIPT_APPENDS = {
 }
 
 
+# Exact post-navigation filters and bounded Room/test-budget maintenance.
+# C changes only two controls; P retains the complete independently reviewed S.
+# No dependency, workflow, schema, audit-policy or permission change is allowed.
+FILTERS_ROOM_RELEASE_BASELINE = '31cf526ad86b678c5193b405d0ce2420238f9586'
+FILTERS_ROOM_RELEASE_BASE_TREE = '5fda675b1d23d065ad93dad7a38cca0e5c0ecd5f'
+FILTERS_ROOM_APP_SNAPSHOT = '2d2050e2c435c3b33727af6495505373b4db3bdc'
+FILTERS_ROOM_APP_TREE = '50bd537df78e1bd64ec8befa15fd64a3865c525e'
+FILTERS_ROOM_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+FILTERS_ROOM_APPLICATION_INPUTS = {'app/customer-dock.tsx': '28ad0341bf1f15dfbcc7d630475ae18296c971be',
+ 'app/registration-form.tsx': '3377c892e301dd8c8ab79a1b0b25bd29b148631d',
+ 'app/room-features.css': '2b152ff8f704c23113ceab7c80d917e16f64e807',
+ 'app/room/[slug]/flash-camera.tsx': '4a2d15fd48c0ed3d254c439f3658ad158e3a065f',
+ 'app/room/[slug]/flash-look-picker.tsx': None,
+ 'app/room/[slug]/flash-viewer.tsx': 'f2961ec4eab16d6d182921a50d4a6174141b745a',
+ 'app/room/[slug]/room-client.tsx': '9901bd498c867272f16701a43e32ff5287b4e14a',
+ 'app/use-room-updates.ts': '47f84a50890035f3eaf1dfede9d71a995a563249',
+ 'docs/design/flashes-cinematic-filters.md': None,
+ 'lib/flash-photo-filters.ts': None,
+ 'package.json': '53d1f8f8d2a69e12757a854b52cdc1d5cb4a1a46',
+ 'scripts/preview-flash-filters.mjs': None,
+ 'tests/e2e/flash-camera.spec.ts': None,
+ 'tests/e2e/public-journey.spec.ts': '3a1b562918d91cfd0882684a47d1c8537996c81d',
+ 'tests/e2e/room-features.spec.ts': 'f9e895a6422d1f33ffc4b13094f5f0ed2406a4f0',
+ 'tests/e2e/room-shortcut.spec.ts': 'dce5aece13dc9ef638777f7a05668f02aab9f59b',
+ 'tests/flash-camera-state.test.mjs': None,
+ 'tests/flash-photo-filters.test.mjs': None,
+ 'tests/room-lifecycle.test.mjs': None}
+FILTERS_ROOM_APPLICATION_BLOBS = {'app/customer-dock.tsx': '674b40073b4f21d5621a1719b2f48c668f64e264',
+ 'app/registration-form.tsx': '555271f87033e08e64575a35f0041855d3ad8e41',
+ 'app/room-features.css': '3dcef6b137313e40b0aedbd4237065f21ff92ec1',
+ 'app/room/[slug]/flash-camera.tsx': 'b5a156b3b75674f9cd71eec5ea3ec0c505428b92',
+ 'app/room/[slug]/flash-look-picker.tsx': 'f4ffc8b16b1378b71dc7f09b0265a925a1216139',
+ 'app/room/[slug]/flash-viewer.tsx': 'e140bfc51dfcf2d719c556e4dfcb19d148b8588e',
+ 'app/room/[slug]/room-client.tsx': '7553467949f07e199c85439dc129e785fdfa4184',
+ 'app/use-room-updates.ts': 'a10c53fc340aafe186132eaefe3968c570b8a08a',
+ 'docs/design/flashes-cinematic-filters.md': 'ded1d86ae0aee075341032e9aee3ea269637cb66',
+ 'lib/flash-photo-filters.ts': '8392734c6593ec495f92705f2f8572218093f9e8',
+ 'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36',
+ 'scripts/preview-flash-filters.mjs': '2352b1b4db62637a1323e700958fdb6e44d84a64',
+ 'tests/e2e/flash-camera.spec.ts': '8fccee112fb70d58fc1d5618314bfff05b4d98ca',
+ 'tests/e2e/public-journey.spec.ts': '36953eca91c0188a7db5d41c2d76f687fab383cf',
+ 'tests/e2e/room-features.spec.ts': '79c1dc9aefdbf88348beeb476ed258f7dc5b349c',
+ 'tests/e2e/room-shortcut.spec.ts': '235fb27102327fbb08ea53737e5bb91e75e49452',
+ 'tests/flash-camera-state.test.mjs': '14fe34f80f08e810837facb9406da3b5c6bd66fc',
+ 'tests/flash-photo-filters.test.mjs': 'c4e4daa843aeaf63f02e5ab72939eeab6f3a541b',
+ 'tests/room-lifecycle.test.mjs': 'b197a89b4907d8e8282f5b984213842295e6bc60'}
+FILTERS_ROOM_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918'}
+FILTERS_ROOM_TEST_SCRIPT_APPENDS = {'test:repo': ' tests/room-lifecycle.test.mjs',
+ 'test:ui': ' tests/flash-photo-filters.test.mjs tests/flash-camera-state.test.mjs'}
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1465,6 +1518,78 @@ def reviewed_flashes_application_blobs(expected, source):
     return pins
 
 
+def reviewed_filters_room_application_blobs(expected, source):
+    """Bind exact B/S inputs and outputs to independent control C and promotion P."""
+    snapshot = FILTERS_ROOM_APP_SNAPSHOT
+    controls = FILTERS_ROOM_CONTROL_FILES
+    application = FILTERS_ROOM_APPLICATION_BLOBS
+    dependencies = FILTERS_ROOM_DEPENDENCY_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package-lock.json', 'mobile/package-lock.json', 'mobile/package.json'}
+            and len(application) == 19 and set(application) == set(FILTERS_ROOM_APPLICATION_INPUTS)
+            and not (controls | set(dependencies)) & set(application)
+            and 'package.json' in application
+            and not any(name.startswith(('.github/', 'mobile/', 'runtime/', 'drizzle/'))
+                        for name in application),
+            "Filters/Room inventory or scope changed.")
+    require(expected == FILTERS_ROOM_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == FILTERS_ROOM_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == FILTERS_ROOM_APP_TREE,
+            "Filters/Room live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            "Filters/Room snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in FILTERS_ROOM_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Filters/Room application input differs from reviewed source: " + name)
+    for name, blob in application.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Filters/Room snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "Filters/Room requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+            "Filters/Room trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Filters/Room candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = dict(application)
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Filters/Room output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Filters/Room controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete B/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Filters/Room dependencies must remain unchanged: " + name)
+    before = strict_json(git("show", expected + ":package.json"))
+    after = strict_json(git("show", source + ":package.json"))
+    for name, append in FILTERS_ROOM_TEST_SCRIPT_APPENDS.items():
+        require(isinstance(append, str) and append.startswith(' tests/')
+                and name.startswith('test:') and isinstance(before.get('scripts', {}).get(name), str),
+                "Filters/Room test registration schema changed.")
+        before['scripts'][name] += append
+    require(before == after, "Filters/Room package change is not the exact test registration append.")
+    require(not migration_plan(pins), "Filters/Room release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_navigation_application_blobs(expected, source):
     """Bind B/S to the exact complete patch, with separately merged controls C."""
     snapshot = NAVIGATION_APP_SNAPSHOT
@@ -1536,6 +1661,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == FILTERS_ROOM_RELEASE_BASELINE:
+        return reviewed_filters_room_application_blobs(expected, source)
     if expected == NAVIGATION_RELEASE_BASELINE:
         return reviewed_navigation_application_blobs(expected, source)
     if expected == FLASHES_RELEASE_BASELINE:
@@ -1613,6 +1740,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == FILTERS_ROOM_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Filters/Room release cannot introduce migrations.")
+        return changed
     if expected == NAVIGATION_RELEASE_BASELINE:
         require((set(NAVIGATION_PREREQUISITE_BLOBS) | set(NAVIGATION_DEPENDENCY_BLOBS))
                 & set(changed) == {'package.json', 'package-lock.json'},
