@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { CalendarDays, House, Ticket, X } from "lucide-react";
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname } from "next/navigation";
 import { restorePublicDestination } from "./public-browsing-memory";
@@ -12,11 +12,20 @@ import { useTopPanelPosition } from './use-top-panel-position';
 import './room-shortcut.css';
 
 const hiddenPrefixes = ["/admin", "/checkout", "/organizer", "/payment", "/room", "/scan", "/rsvp/"];
+const dockMediaQuery = '(max-width: 700px)';
+const dockIsVisible = () => window.matchMedia(dockMediaQuery).matches;
+const serverDockIsVisible = () => false;
+const subscribeToDockViewport = (changed: () => void) => {
+  const media = window.matchMedia(dockMediaQuery);
+  media.addEventListener('change', changed);
+  return () => media.removeEventListener('change', changed);
+};
 
 export default function CustomerDock() {
   const pathname = usePathname();
   const hidden = hiddenPrefixes.some((prefix) => pathname.startsWith(prefix));
-  const { rooms, refresh } = useRoomUpdates(!hidden, pathname);
+  const dockVisible = useSyncExternalStore(subscribeToDockViewport, dockIsVisible, serverDockIsVisible);
+  const { rooms, refresh } = useRoomUpdates(!hidden && dockVisible, pathname);
   const { id, trigger, panel, ready, open, mounted, phase, toggle, close } = useHeaderPanel();
   const position = useTopPanelPosition(mounted, trigger, () => close(true, true));
   useEffect(() => {

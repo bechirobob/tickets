@@ -8,7 +8,7 @@ export function useRoomUpdates(enabled: boolean, pathname: string) {
   const [result, setResult] = useState<{ pathname: string; rooms: RoomUpdateSummary[] }>({ pathname: '', rooms: [] });
   // Discard the old path before commit, including a trip through a disabled
   // Room/checkout route followed by a return to the same public page.
-  if (result.pathname !== pathname) setResult({ pathname, rooms: [] });
+  if (result.pathname !== pathname || (!enabled && result.rooms.length > 0)) setResult({ pathname, rooms: [] });
   // A route transition must not flash a previous page's private result.
   const rooms = useMemo(() => enabled && result.pathname === pathname ? result.rooms : [], [enabled, pathname, result]);
   const request = useRef<AbortController | null>(null);

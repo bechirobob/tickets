@@ -14,6 +14,75 @@ test.beforeEach(async ({ page }) => {
 });
 const expiry = () => new Date(Date.now() + 3600_000).toISOString();
 
+test('Room summaries do not poll behind the desktop breakpoint and refresh on mobile re-entry', async ({ page, eventSlug }) => {
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.clock.install();
+  let requests = 0;
+  await page.route('**/api/customer/room-updates', route => {
+    requests++;
+    return route.fulfill({ json: { rooms: [{ eventSlug, title: 'Garden', unread: 2, expiresAt: expiry() }], unread: 2 } });
+  });
+  await page.goto('/');
+  const dock = page.getByRole('navigation', { name: 'Customer navigation', includeHidden: true });
+  await expect(dock).toBeHidden(); await page.clock.fastForward(60_000); expect(requests).toBe(0);
+  await page.setViewportSize({ width: 700, height: 800 });
+  const room = dock.getByRole('link', { name: 'Room, 2 new updates' });
+  await expect(room).toBeVisible(); expect(requests).toBe(1);
+  await page.clock.fastForward(30_000); await expect.poll(() => requests).toBe(2);
+  await page.setViewportSize({ width: 701, height: 800 });
+  await expect(room).toHaveCount(0); await page.clock.fastForward(60_000); expect(requests).toBe(2);
+  await page.setViewportSize({ width: 700, height: 800 });
+  await expect(room).toBeVisible(); expect(requests).toBe(3);
+});
+
+test('a quiet visible Room retries a transient read failure with the same rendered boundary', async ({ page, eventSlug }) => {
+  await page.clock.install();
+  const room = { eventSlug, eventTitle: 'Garden Party', readOnly: false, readOnlyAt: expiry() };
+  let marks = 0, access = 0, connections = 0;
+  let accessAtFirstMark = 0, connectionsAtFirstMark = 0;
+  await page.route('**/api/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/access')) { access++; return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: 'viewed-boundary' } }); }
+    if (path.endsWith('/updates/read')) {
+      marks++;
+      // Initial page lifecycle events may restart access before a boundary renders.
+      if (marks === 1) { accessAtFirstMark = access; connectionsAtFirstMark = connections; }
+      expect(route.request().postDataJSON()).toEqual({ snapshot: 'viewed-boundary' });
+      return route.fulfill(marks === 1 ? { status: 503, json: { error: 'Try again' } } : { json: { updated: true } });
+    }
+    if (path.endsWith('/flashes')) return route.fulfill({ json: { flashes: [] } });
+    return route.fulfill({ status: 401, json: { error: 'Isolated fixture' } });
+  });
+  await page.routeWebSocket(/\/api\/room\/socket/u, socket => { connections++; socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 })); });
+  await page.goto(`/room/${eventSlug}`); await expect(page.locator('.room-stream')).toBeVisible();
+  await expect.poll(() => marks).toBe(1);
+  expect(accessAtFirstMark).toBeGreaterThan(0); expect(connectionsAtFirstMark).toBeGreaterThan(0);
+  await page.clock.fastForward(1000); await expect.poll(() => marks).toBe(2);
+  expect(access).toBe(accessAtFirstMark); expect(connections).toBe(connectionsAtFirstMark);
+  await page.clock.fastForward(10_000); expect(marks).toBe(2);
+  expect(access).toBe(accessAtFirstMark); expect(connections).toBe(connectionsAtFirstMark);
+});
+
+for (const boundary of ['hidden', 'unmounted'] as const) {
+  test(`a ${boundary} Room cancels pending transient acknowledgement retries`, async ({ page, eventSlug }) => {
+    await page.clock.install();
+    const room = { eventSlug, eventTitle: 'Garden Party', readOnly: false, readOnlyAt: expiry() };
+    let marks = 0;
+    await page.route('**/api/**', route => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('/access')) return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: 'viewed-boundary' } });
+      if (path.endsWith('/updates/read')) { marks++; return route.fulfill({ status: 503, json: { error: 'Try again' } }); }
+      if (path.endsWith('/flashes')) return route.fulfill({ json: { flashes: [] } });
+      return route.fulfill({ status: 401, json: { error: 'Isolated fixture' } });
+    });
+    await page.routeWebSocket(/\/api\/room\/socket/u, socket => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 })));
+    await page.goto(`/room/${eventSlug}`); await expect(page.locator('.room-stream')).toBeVisible(); await expect.poll(() => marks).toBe(1);
+    if (boundary === 'hidden') await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    else { await page.getByRole('link', { name: 'Back to My Nights' }).click(); await expect(page).toHaveURL(/\/my-nights$/u); }
+    await page.clock.fastForward(10_000); expect(marks).toBe(1);
+  });
+}
+
 test('the fourth dock item is private, count-only, responsive and directly opens one Room', async ({ page, eventSlug }, info) => {
   test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile dock');
   await page.setViewportSize({ width: 320, height: 740 });
@@ -113,16 +182,50 @@ test('same-page sign-out immediately clears private Room counts and the chooser'
 });
 
 test('an expired read boundary requires fresh access and a new socket snapshot before retry', async ({ page, eventSlug }) => {
+  await page.addInitScript((readPath: string) => {
+    'use strict';
+    const readViews: (string | null)[] = [];
+    Object.assign(window, { roomReadViews: readViews });
+    const fetch = window.fetch;
+    window.fetch = function (this: unknown, ...args) {
+      const input = args[0] instanceof Request ? args[0].url : String(args[0]);
+      if (new URL(input, location.href).pathname === readPath) {
+        readViews.push(document.querySelector('.room-header__activity [aria-label$=" people online"]')?.getAttribute('aria-label') ?? null);
+      }
+      return fetch.apply(this, args);
+    };
+  }, `/api/rooms/${encodeURIComponent(eventSlug)}/updates/read`);
   const room = { eventSlug, eventTitle: 'Garden Party', readOnly: false, readOnlyAt: expiry() };
   let access = 0, marks = 0, connections = 0;
+  let recovering = false, expiredBoundary = '', freshBoundary = '';
+  const issuedBoundaries = new Set<string>();
+  let expireBoundary: (() => Promise<void>) | undefined;
   let freshSnapshot: (() => void) | undefined;
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/access')) return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: ++access === 1 ? 'expired-boundary' : 'fresh-boundary' } });
+    if (path.endsWith('/access')) {
+      const snapshot = `${recovering ? 'fresh' : 'expired'}-boundary-${++access}`;
+      issuedBoundaries.add(snapshot);
+      if (recovering) freshBoundary = snapshot;
+      return route.fulfill({ json: { allowed: true, attendee: { id: 'self' }, room, updateSnapshot: snapshot } });
+    }
     if (path.endsWith('/updates/read')) {
       marks++;
-      if (marks === 1) return route.fulfill({ status: 400, json: { error: 'Expired boundary' } });
-      expect(route.request().postDataJSON()).toEqual({ snapshot: 'fresh-boundary' });
+      if (marks === 1) {
+        const body = route.request().postDataJSON();
+        expect(body).toEqual({ snapshot: expect.stringMatching(/^expired-boundary-\d+$/u) });
+        expect(issuedBoundaries).toContain(body.snapshot);
+        expiredBoundary = body.snapshot;
+        // Complete initial navigation before deliberately expiring its rendered boundary.
+        return new Promise<void>(resolve => { expireBoundary = async () => {
+          recovering = true;
+          await route.fulfill({ status: 400, json: { error: 'Expired boundary' } });
+          resolve();
+        }; });
+      }
+      expect(freshBoundary).toMatch(/^fresh-boundary-\d+$/u);
+      expect(freshBoundary).not.toBe(expiredBoundary);
+      expect(route.request().postDataJSON()).toEqual({ snapshot: freshBoundary });
       return route.fulfill({ json: { updated: true } });
     }
     if (path.endsWith('/flashes')) return route.fulfill({ json: { flashes: [] } });
@@ -130,13 +233,21 @@ test('an expired read boundary requires fresh access and a new socket snapshot b
   });
   await page.routeWebSocket(/\/api\/room\/socket/u, socket => {
     connections++;
-    const send = () => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online: 1 }));
-    if (connections === 1) send(); else freshSnapshot = send;
+    const online = recovering ? 2 : 1;
+    const send = () => socket.send(JSON.stringify({ type: 'snapshot', room, messages: [], online }));
+    if (!recovering) send(); else freshSnapshot = send;
   });
   await page.goto(`/room/${eventSlug}`);
-  await expect.poll(() => access).toBe(2); await expect.poll(() => connections).toBe(2);
+  await expect(page.locator('.room-stream')).toBeVisible(); await expect.poll(() => marks).toBe(1);
+  const initialAccess = access, initialConnections = connections;
+  expect(initialAccess).toBeGreaterThan(0); expect(initialConnections).toBeGreaterThan(0);
+  await expireBoundary!();
+  await expect.poll(() => access).toBe(initialAccess + 1); await expect.poll(() => connections).toBe(initialConnections + 1);
   expect(marks).toBe(1);
   freshSnapshot!(); await expect.poll(() => marks).toBe(2);
+  expect(access).toBe(initialAccess + 1); expect(connections).toBe(initialConnections + 1);
+  // Observe the rendered snapshot at fetch invocation, not delayed route delivery.
+  expect(await page.evaluate(() => (window as Window & { roomReadViews?: (string | null)[] }).roomReadViews)).toEqual(['1 people online', '2 people online']);
 });
 
 test('top-only Room and notification panels stay clear of the header and dock and replace the menu', async ({ page, eventSlug }, info) => {
