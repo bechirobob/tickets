@@ -915,8 +915,8 @@ RECOVERY_AUDIT_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26
 # Other dependencies, workflows, audit policy, access, runtime and migrations stay fixed.
 INTEGRATED_EXPERIENCE_RELEASE_BASELINE = '4c5f395b75837725beb990e27261e3ad367c1314'
 INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE = 'e3c30e6a0cadfac282f6f8e5c793ac18e8a83c08'
-INTEGRATED_EXPERIENCE_APP_SNAPSHOT = '2dd135f5385a678c0a5c032d10a14549e4f03a96'
-INTEGRATED_EXPERIENCE_APP_TREE = 'f54ef831a7147089d647b5b20d0f0931d0cb75e2'
+INTEGRATED_EXPERIENCE_APP_SNAPSHOT = '9a177e0cdefb9b96183923f261387b668de453ce'
+INTEGRATED_EXPERIENCE_APP_TREE = 'e1967fee625331581ed0ddb0840aba3f9bab687a'
 INTEGRATED_EXPERIENCE_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa4c96f073d5b116e474f91d5e4e9a',
  'app/global-error.tsx': None,
@@ -934,7 +934,10 @@ INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa
  'lib/room-viewport.ts': None,
  'lib/website-event-listings.ts': None,
  'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36',
+ 'scripts/capture-iphone-layouts.mjs': '4abbb15794097eed900e009c2af956e06b96c340',
+ 'scripts/iphone-layout-parity.mjs': None,
  'styles/customer.css': 'c6d3cc402fcb37287444c9ac75777424ceeac891',
+ 'tests/e2e/customer-feedback.spec.ts': '6738acad48bac13f9dbaa683c05fecfba44a2210',
  'tests/e2e/discovery-pass-access.spec.ts': 'bf34b4773c5acb26d1ed903e1ea014824f305ad8',
  'tests/e2e/event-details.spec.ts': '76775953efa8ef1a4358e6a25acdf26a53c14736',
  'tests/e2e/host-profile.spec.ts': 'ba099658c2866802b436855819bcefd39f50074b',
@@ -945,9 +948,11 @@ INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa
  'tests/e2e/pwa-resume.spec.ts': None,
  'tests/e2e/website-event-unlisting.spec.ts': None,
  'tests/header-origin-menu.test.mjs': None,
+ 'tests/iphone-layout-parity.test.mjs': None,
  'tests/menu-option-a.test.mjs': 'd9ea4553aa579a03d4bb401201f773de89db96ac',
  'tests/mobile-ui.test.mjs': '405c23b32bd288b47540194f18ead1fd23e60a3b',
  'tests/pwa-resume.test.mjs': None,
+ 'tests/repository-boundaries.test.mjs': 'cf49012d4db8fef0273603b3ffbadd5a422341cd',
  'tests/website-event-listings.test.ts': None}
 INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f381c27339db7ba290bf1f12e835',
  'app/global-error.tsx': 'd1a4b2d25ff1d796ffdc967ba874ad1011cfa328',
@@ -965,20 +970,25 @@ INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f
  'lib/room-viewport.ts': 'ee7f3a7b89cc01686e9398e29964bae6f92d0a0b',
  'lib/website-event-listings.ts': '77a182916880cb4eaeebdc7d87288f84834b8feb',
  'package.json': 'd4dc400662fa9a63435f70da0374f51a87fd3c19',
+ 'scripts/capture-iphone-layouts.mjs': '6bb4390faa95f367e2488607cdbbea4e05381898',
+ 'scripts/iphone-layout-parity.mjs': '89bc6d47d69a31bf40b15790c39c9e471cdd21ca',
  'styles/customer.css': '91c84bbd74df2347bbcb8615fb670e29a59b8462',
+ 'tests/e2e/customer-feedback.spec.ts': '5e9a39d1219a690bbb6cac622012caccb6062559',
  'tests/e2e/discovery-pass-access.spec.ts': 'bfd80a5f2af6d6027e0f1fd98eb8030247b5d56c',
  'tests/e2e/event-details.spec.ts': '53b643a49ae9a38c7f41f9c3f1b854e664fd4351',
  'tests/e2e/host-profile.spec.ts': 'b863f3c3b1a48b1068134cd6b6348ce454568201',
- 'tests/e2e/menu-option-a.spec.ts': '9e5967d162016a520b5520ab866cabad3c2b8645',
+ 'tests/e2e/menu-option-a.spec.ts': '4655f6594d23c6120eec9e1f1c43ece41fc1bd2c',
  'tests/e2e/mobile-app-behavior.spec.ts': '76be65b6ec1748b18fbd28bedeeeaf71f432593a',
  'tests/e2e/public-journey.spec.ts': '6cdf7e9c9fd330f9875ff44bce66b76664dbde71',
  'tests/e2e/published-catalogue.spec.ts': '0b8a0929b7579fb520f4013399321ad97637f421',
  'tests/e2e/pwa-resume.spec.ts': '74f4b68fe56a7536304076df257767e43f4581f3',
- 'tests/e2e/website-event-unlisting.spec.ts': '75fb84bf2cddb3925893926d77201b39e38050a5',
+ 'tests/e2e/website-event-unlisting.spec.ts': 'b7e184c5ef3d48a75917ce88a0fae0c20da4ba49',
  'tests/header-origin-menu.test.mjs': '4178145113c4f712e5d17604f676103475a0cb24',
+ 'tests/iphone-layout-parity.test.mjs': '0bb1922382e905816d1753b98db9c2f6c346d664',
  'tests/menu-option-a.test.mjs': '9f74f310f31efb87debb3d787067bed85b6931ac',
  'tests/mobile-ui.test.mjs': 'f09ae5135a867cc229f787c2fd61214a9006b165',
  'tests/pwa-resume.test.mjs': 'f569c8ee490617bdf16e560c0a58708210826238',
+ 'tests/repository-boundaries.test.mjs': 'fbc88aa7561fd6e748213101a9e11567e64cc85f',
  'tests/website-event-listings.test.ts': 'c83a089e54a58a7461766158fc9ad7f9ac617500'}
 INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
  'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
@@ -1650,7 +1660,10 @@ def reviewed_integrated_experience_application_blobs(expected, source):
              'lib/room-viewport.ts',
              'lib/website-event-listings.ts',
              'package.json',
+             'scripts/capture-iphone-layouts.mjs',
+             'scripts/iphone-layout-parity.mjs',
              'styles/customer.css',
+             'tests/e2e/customer-feedback.spec.ts',
              'tests/e2e/discovery-pass-access.spec.ts',
              'tests/e2e/event-details.spec.ts',
              'tests/e2e/host-profile.spec.ts',
@@ -1661,9 +1674,11 @@ def reviewed_integrated_experience_application_blobs(expected, source):
              'tests/e2e/pwa-resume.spec.ts',
              'tests/e2e/website-event-unlisting.spec.ts',
              'tests/header-origin-menu.test.mjs',
+             'tests/iphone-layout-parity.test.mjs',
              'tests/menu-option-a.test.mjs',
              'tests/mobile-ui.test.mjs',
              'tests/pwa-resume.test.mjs',
+             'tests/repository-boundaries.test.mjs',
              'tests/website-event-listings.test.ts'}
             and set(prerequisites) == set(INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS)
             == {'package.json', 'package-lock.json'}

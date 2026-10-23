@@ -787,7 +787,7 @@ def recovery_audit_source_family(root):
 
 
 # Exact integrated-experience C/P test family; historical families remain independent.
-INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '83fb5adc0316170431105274c73edc7be977dec1'
+INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '4a2a7ae506481ef2eb899983e277075e067d6757'
 INTEGRATED_EXPERIENCE_STAGED_BASE = dict(RECOVERY_AUDIT_STAGED_BASE)
 INTEGRATED_EXPERIENCE_TEST_FILE = Path(__file__).resolve()
 
@@ -8237,12 +8237,14 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
          'lib/mobile-viewport.ts',
          'lib/room-viewport.ts',
          'lib/website-event-listings.ts',
+         'scripts/iphone-layout-parity.mjs',
          'tests/e2e/pwa-resume.spec.ts',
          'tests/e2e/website-event-unlisting.spec.ts',
          'tests/header-origin-menu.test.mjs',
+         'tests/iphone-layout-parity.test.mjs',
          'tests/pwa-resume.test.mjs',
          'tests/website-event-listings.test.ts'})
-        self.assertEqual(len(self.files), 31)
+        self.assertEqual(len(self.files), 36)
         self.package = {'name': 'fixture', 'scripts': {'test:ui': 'node --test tests/header-panel-focus.test.mjs'},
                         'dependencies': {'next': '16.3.8', 'unchanged': '1.0.0'}}
         self.security_package = copy.deepcopy(self.package)
@@ -8583,7 +8585,7 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
              patch.object(release, 'INTEGRATED_EXPERIENCE_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
              patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS, {name: blob}), \
              patch.object(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_OPERATOR_BLOB', self.blob(operator)):
-            self.assertEqual(len(self.files), 31)
+            self.assertEqual(len(self.files), 36)
             self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
                              release.INTEGRATED_EXPERIENCE_CONTROL_FILES | set(release.INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS))
             self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
