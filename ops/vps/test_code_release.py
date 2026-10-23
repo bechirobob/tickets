@@ -787,7 +787,7 @@ def recovery_audit_source_family(root):
 
 
 # Exact integrated-experience C/P test family; historical families remain independent.
-INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '719e66616ec7a690f2570e1c42ec7e4815298ac6'
+INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '613d364b97b59974a3132fad30457ac6a695d3a6'
 INTEGRATED_EXPERIENCE_STAGED_BASE = dict(RECOVERY_AUDIT_STAGED_BASE)
 INTEGRATED_EXPERIENCE_TEST_FILE = Path(__file__).resolve()
 
@@ -8243,9 +8243,11 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
          'tests/header-origin-menu.test.mjs',
          'tests/iphone-layout-parity.test.mjs',
          'tests/pwa-resume.test.mjs',
+         'tests/scanner-browser-lifecycle.test.mjs',
          'tests/website-event-listings.test.ts'})
-        self.assertEqual(len(self.files), 36)
-        self.package = {'name': 'fixture', 'scripts': {'test:ui': 'node --test tests/header-panel-focus.test.mjs'},
+        self.assertEqual(len(self.files), 38)
+        self.package = {'name': 'fixture', 'scripts': {'test:ui': 'node --test tests/header-panel-focus.test.mjs',
+                                                     'test:repo': 'node --test tests/repository-boundaries.test.mjs'},
                         'dependencies': {'next': '16.3.8', 'unchanged': '1.0.0'}}
         self.security_package = copy.deepcopy(self.package)
         self.security_package['dependencies']['next'] = '16.4.1'
@@ -8267,6 +8269,7 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
                 package['scripts']['test:ui'] = package['scripts']['test:ui'].replace(
                     'tests/header-panel-focus.test.mjs', 'tests/header-panel-focus.test.mjs tests/header-origin-menu.test.mjs'
                 ) + ' tests/pwa-resume.test.mjs'
+                package['scripts']['test:repo'] += ' tests/scanner-browser-lifecycle.test.mjs'
                 self.write(name, json.dumps(package, indent=2))
             else:
                 self.write(name, 'exact reviewed integrated_experience ' + name + '\n')
@@ -8413,20 +8416,22 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
                 self.git('update-ref', 'refs/remotes/origin/main', self.control)
 
     def test_promotion_test_script_drift_is_rejected_even_with_revised_snapshot_pins(self):
-        self.git('checkout', '-q', self.snapshot)
-        package = json.loads((self.root / 'package.json').read_text())
-        package['scripts']['test:ui'] += ' tests/unreviewed.mjs'
-        self.write('package.json', json.dumps(package, indent=2))
-        snapshot = self.commit()
-        self.git('checkout', '-q', self.control)
-        self.git('merge', '--no-ff', '--no-commit', snapshot)
-        candidate = self.commit()
-        with patch.object(release, 'INTEGRATED_EXPERIENCE_APP_SNAPSHOT', snapshot), \
-             patch.object(release, 'INTEGRATED_EXPERIENCE_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
-             patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS,
-                        {'package.json': self.git('rev-parse', snapshot + ':package.json')}), \
-             self.assertRaisesRegex(release.ReleaseError, 'exact test registration patch'):
-            self.verify(candidate)
+        for script in ('test:ui', 'test:repo'):
+            with self.subTest(script=script):
+                self.git('checkout', '-q', self.snapshot)
+                package = json.loads((self.root / 'package.json').read_text())
+                package['scripts'][script] += ' tests/unreviewed.mjs'
+                self.write('package.json', json.dumps(package, indent=2))
+                snapshot = self.commit()
+                self.git('checkout', '-q', self.control)
+                self.git('merge', '--no-ff', '--no-commit', snapshot)
+                candidate = self.commit()
+                with patch.object(release, 'INTEGRATED_EXPERIENCE_APP_SNAPSHOT', snapshot), \
+                     patch.object(release, 'INTEGRATED_EXPERIENCE_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+                     patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS,
+                                {'package.json': self.git('rev-parse', snapshot + ':package.json')}), \
+                     self.assertRaisesRegex(release.ReleaseError, 'exact test registration patch'):
+                    self.verify(candidate)
 
     def test_each_application_output_rejects_mutation_and_partial_patch(self):
         for name in self.files:
@@ -8585,7 +8590,7 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
              patch.object(release, 'INTEGRATED_EXPERIENCE_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
              patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS, {name: blob}), \
              patch.object(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_OPERATOR_BLOB', self.blob(operator)):
-            self.assertEqual(len(self.files), 36)
+            self.assertEqual(len(self.files), 38)
             self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
                              release.INTEGRATED_EXPERIENCE_CONTROL_FILES | set(release.INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS))
             self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
