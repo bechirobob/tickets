@@ -786,7 +786,97 @@ def recovery_audit_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
+# Exact integrated-experience C/P test family; historical families remain independent.
+INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '2fcf1081cbee4b31543f6ba6476eea67ceb8a47f'
+INTEGRATED_EXPERIENCE_STAGED_BASE = dict(RECOVERY_AUDIT_STAGED_BASE)
+INTEGRATED_EXPERIENCE_TEST_FILE = Path(__file__).resolve()
+
+
+def integrated_experience_source_family(root):
+    """Recognize only the complete Integrated experience C/P family for local test execution."""
+    root = Path(root)
+    operator = root / 'ops/vps/code-release.py'
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    # The executing new test family cannot downgrade to a historical operator.
+    # Capture its real module path once, independent of historical fixture mocks.
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == INTEGRATED_EXPERIENCE_TEST_FILE
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != INTEGRATED_EXPERIENCE_OPERATOR_BLOB):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            baseline = release.INTEGRATED_EXPERIENCE_RELEASE_BASELINE
+            if (checkout_git(root, 'rev-parse', baseline + '^{tree}').decode().strip()
+                    != release.INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE):
+                raise AssertionError('Integrated experience family baseline tree changed')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', baseline).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Integrated experience baseline contains unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            application = release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS
+            observed = {}
+            for name in application:
+                path = root / name
+                observed[name] = digest(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+            if observed == application:
+                manifest.update({name: ('100644', blob) for name, blob in application.items()})
+            elif any(observed[name] != manifest.get(name, (None, None))[1] for name in application):
+                raise AssertionError('Integrated experience application family has partial or unreviewed bytes')
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Integrated experience full inventory differs from complete tracked C/P family')
+            # A restored worktree cannot conceal staged application changes.
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if not record:
+                    continue
+                metadata, raw_name = record.split(b'\t', 1)
+                mode, blob, stage = metadata.decode().split()
+                name = os.fsdecode(raw_name)
+                if (stage != '0' or name not in manifest
+                        or (name in release.INTEGRATED_EXPERIENCE_CONTROL_FILES
+                            and (mode != '100644' or blob != digest((root / name).read_bytes())))
+                        or (name not in release.INTEGRATED_EXPERIENCE_CONTROL_FILES and manifest[name] != (mode, blob))):
+                    raise AssertionError('Integrated experience index differs from complete application family')
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError('Integrated experience family requires its independently pinned baseline') from exc
+    else:
+        manifest = dict(INTEGRATED_EXPERIENCE_STAGED_BASE)
+    # Only this test file cannot self-pin; production binds both controls to C.
+    manifest['ops/vps/code-release.py'] = ('100644', INTEGRATED_EXPERIENCE_OPERATOR_BLOB)
+    manifest['ops/vps/test_code_release.py'] = ('100644', None)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Integrated experience family requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError('Integrated experience family is incomplete') from exc
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Integrated experience family has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def checkout_source_family(root):
+    integrated_experience = integrated_experience_source_family(root)
+    if integrated_experience is not None:
+        return integrated_experience
     recovery_audit = recovery_audit_source_family(root)
     if recovery_audit is not None:
         return recovery_audit
@@ -8118,6 +8208,487 @@ class RecoveryAuditSourceAdmissionTests(unittest.TestCase):
                               '-m', 'same-tree wrong live identity')
         with self.assertRaisesRegex(release.ReleaseError, 'live or snapshot tree'):
             release.reviewed_recovery_audit_application_blobs(wrong_base, self.candidate)
+        wrong_source = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                                '-p', self.live, '-m', 'same-tree unreviewed source identity')
+        impostor = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                           '-p', self.control, '-p', wrong_source, '-m', 'wrong source ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(impostor)
+
+
+class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
+    """Real Git objects bind the new M/S/C/P family without changing older grants."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', 'user.name', 'Integrated experience admission tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.files = tuple(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS)
+        self.added = {name for name, blob in release.INTEGRATED_EXPERIENCE_APPLICATION_INPUTS.items() if blob is None}
+        self.assertEqual(self.added, {'app/global-error.tsx',
+         'app/header-origin-menu.css',
+         'docs/audits/pwa-resume-2026-10-23.md',
+         'lib/mobile-viewport.ts',
+         'lib/room-viewport.ts',
+         'lib/website-event-listings.ts',
+         'tests/e2e/pwa-resume.spec.ts',
+         'tests/e2e/website-event-unlisting.spec.ts',
+         'tests/header-origin-menu.test.mjs',
+         'tests/pwa-resume.test.mjs',
+         'tests/website-event-listings.test.ts'})
+        self.assertEqual(len(self.files), 32)
+        for name in (*self.files, *release.INTEGRATED_EXPERIENCE_CONTROL_FILES):
+            if name not in self.added:
+                self.write(name, 'baseline ' + name + '\n')
+        for name in release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS:
+            self.write(name, 'unchanged locked dependency input ' + name + '\n')
+        self.write('ops/vps/audit.py', 'unchanged staged utility\n')
+        self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
+        self.live = self.commit()
+        # S may contain several reviewed commits; direct-child ancestry is not assumed.
+        self.git('commit', '--allow-empty', '-qm', 'feature preparation')
+        for name in self.files:
+            self.write(name, 'exact reviewed integrated_experience ' + name + '\n')
+        self.snapshot = self.commit()
+        self.pins = {name: self.git('rev-parse', self.snapshot + ':' + name) for name in self.files}
+        self.inputs = {name: None if name in self.added else self.git('rev-parse', self.live + ':' + name)
+                       for name in self.files}
+        self.git('checkout', '-q', self.live)
+        self.operator = b'independent reviewed integrated_experience operator\n'
+        self.write('ops/vps/code-release.py', self.operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed integrated_experience tests\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+        self.candidate = self.commit()
+        values = {
+            'INTEGRATED_EXPERIENCE_RELEASE_BASELINE': self.live,
+            'INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE': self.git('rev-parse', self.live + '^{tree}'),
+            'INTEGRATED_EXPERIENCE_APP_SNAPSHOT': self.snapshot,
+            'INTEGRATED_EXPERIENCE_APP_TREE': self.git('rev-parse', self.snapshot + '^{tree}'),
+            'INTEGRATED_EXPERIENCE_APPLICATION_INPUTS': self.inputs,
+            'INTEGRATED_EXPERIENCE_APPLICATION_BLOBS': self.pins,
+            'INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS': {name: self.git('rev-parse', self.live + ':' + name)
+                                          for name in release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS},
+            '__file__': str(self.root / 'ops/vps/code-release.py'),
+        }
+        for name, value in values.items():
+            self.patch_value(release, name, value)
+        self.patch_value(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_OPERATOR_BLOB', self.blob(self.operator))
+        staged_names = (*release.INTEGRATED_EXPERIENCE_CONTROL_FILES, 'ops/vps/audit.py',
+                        '.github/workflows/candidate-checks.yml')
+        self.staged = {name: ('100644', self.git('rev-parse', self.live + ':' + name)) for name in staged_names}
+        self.patch_value(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_STAGED_BASE', self.staged)
+        patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def patch_value(self, target, name, value):
+        patcher = patch.object(target, name, value)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw.encode() if isinstance(raw, str) else raw)
+        path.chmod(0o644)
+        return path
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated Integrated experience source')
+        return self.git('rev-parse', 'HEAD')
+
+    def verify(self, source=None):
+        return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
+
+    def test_root_security_pair_is_exact_and_cannot_be_moved_into_frozen_dependencies(self):
+        root_pair = {'package.json', 'package-lock.json'}
+        self.assertTrue(root_pair <= set(self.inputs) & set(self.pins))
+        self.assertTrue(root_pair.isdisjoint(release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS))
+        for name in root_pair:
+            self.assertNotEqual(self.inputs[name], self.pins[name])
+            with self.subTest(path=name), patch.dict(
+                    release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS, {name: self.inputs[name]}):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+
+    def test_each_application_output_rejects_mutation_and_partial_patch(self):
+        for name in self.files:
+            for mutation in ('bytes', 'missing-change'):
+                with self.subTest(name=name, mutation=mutation):
+                    self.git('checkout', '-q', self.candidate)
+                    if mutation == 'bytes':
+                        self.write(name, 'unreviewed bytes\n')
+                    elif name in self.added:
+                        self.git('rm', name)
+                    else:
+                        self.git('checkout', self.control, '--', name)
+                    self.commit()
+                    with self.assertRaises(release.ReleaseError):
+                        self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
+
+    def test_changed_controls_and_executing_operator_are_rejected(self):
+        for name in release.INTEGRATED_EXPERIENCE_CONTROL_FILES:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'untrusted control\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+        self.git('checkout', '-q', self.candidate)
+        self.write('ops/vps/code-release.py', 'untrusted executing bytes\n')
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            self.verify()
+        # Model this test module executing from the candidate checkout. Unknown
+        # external roots may return None, but an executing family cannot downgrade.
+        with patch.object(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_TEST_FILE',
+                          (self.root / 'ops/vps/test_code_release.py').resolve()), \
+             self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+
+    def test_trusted_control_cannot_include_application_changes(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
+            self.git('commit', '--allow-empty', '-qm', 'candidate after bad trust anchor')
+            self.git('update-ref', 'refs/remotes/origin/main', self.candidate)
+            with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                self.verify()
+
+    def test_application_worktree_and_staged_mutations_cannot_hide(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        self.git('update-index', '--assume-unchanged', name)
+        path.write_bytes(b'hidden worktree edit\n')
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+        path.write_bytes(original)
+        self.git('update-index', '--no-assume-unchanged', name)
+        path.write_bytes(b'hidden index edit\n')
+        self.git('add', name)
+        path.write_bytes(original)
+        with self.assertRaisesRegex(AssertionError, 'index differs'):
+            checkout_source_family(self.root)
+
+    def test_full_family_rejects_symlink_hardlink_and_untracked_addition(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        for mutation in ('symlink', 'hardlink'):
+            with self.subTest(mutation=mutation):
+                path.unlink()
+                if mutation == 'symlink':
+                    path.symlink_to(self.root / 'package.json')
+                else:
+                    os.link(self.root / 'package.json', path)
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+                path.unlink()
+                self.write(name, original)
+        self.write('unknown.txt', 'untracked file\n')
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            checkout_source_family(self.root)
+
+    def test_complete_staged_family_rejects_every_mutation_and_extra_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw_files = {name: checkout_git(self.root, 'show', self.control + ':' + name)
+                         for name in self.staged}
+            for name, raw in raw_files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            self.assertEqual(checkout_source_family(root)['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in raw_files:
+                for mutation in ('bytes', 'missing', 'mode'):
+                    # Only the test file is necessarily unable to authenticate itself.
+                    if name == 'ops/vps/test_code_release.py' and mutation == 'bytes':
+                        continue
+                    with self.subTest(name=name, mutation=mutation):
+                        path = root / name
+                        if mutation == 'bytes': path.write_bytes(b'unreviewed staged file\n')
+                        elif mutation == 'missing': path.unlink()
+                        else: path.chmod(0o755)
+                        with self.assertRaises(AssertionError):
+                            family = checkout_source_family(root)
+                            if family is None:
+                                staged_family_pins(root)
+                        path.write_bytes(raw_files[name])
+                        path.chmod(0o644)
+            (root / 'unknown.txt').write_text('unexpected staged addition\n')
+            with self.assertRaisesRegex(AssertionError, 'Unexpected staged'):
+                checkout_source_family(root)
+
+    def test_complete_control_and_promotion_families_are_recognized(self):
+        self.assertEqual(set(self.verify()), set(self.files) | release.INTEGRATED_EXPERIENCE_CONTROL_FILES)
+        self.assertEqual(release.migration_plan(self.verify()), [])
+        for revision in (self.control, self.candidate):
+            self.git('checkout', '-q', revision)
+            family = checkout_source_family(self.root)
+            self.assertEqual(family['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in set(self.files):
+                if revision == self.control and name in self.added:
+                    self.assertNotIn(name, family)
+                else:
+                    self.assertEqual(family[name], self.git('rev-parse', revision + ':' + name))
+
+    def test_promotion_keeps_reviewed_snapshot_reachable_without_side_refs(self):
+        self.git('merge-base', '--is-ancestor', self.snapshot, self.candidate)
+        self.git('merge-base', '--is-ancestor', self.control, self.candidate)
+        copy_only = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-m', 'same bytes without snapshot ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(copy_only)
+
+    def test_revision_preserves_published_control_candidate_and_snapshot_ancestry(self):
+        self.git('checkout', '-q', self.snapshot)
+        name = 'tests/e2e/discovery-pass-access.spec.ts'
+        self.write(name, 'reviewed source revision\n')
+        snapshot = self.commit()
+        blob = self.git('rev-parse', snapshot + ':' + name)
+        self.git('checkout', '-q', self.control)
+        operator = b'independent reviewed revised integrated_experience operator\n'
+        self.write('ops/vps/code-release.py', operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed revision tests\n')
+        control = self.commit()
+        self.git('checkout', '-q', self.candidate)
+        self.git('merge', '--no-ff', '--no-commit', control, snapshot)
+        candidate = self.commit()
+        self.assertEqual(self.git('show', '-s', '--format=%P', candidate).split(),
+                         [self.candidate, control, snapshot])
+        self.assertEqual(self.git('show', '-s', '--format=%P', control), self.control)
+        self.assertEqual(self.git('show', '-s', '--format=%P', snapshot), self.snapshot)
+        for ancestor in (self.control, self.candidate, self.snapshot, control, snapshot):
+            self.git('merge-base', '--is-ancestor', ancestor, candidate)
+        # The old merged operator cannot authorize new operator bytes.
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            release.verify_trusted_operator(candidate)
+        self.git('update-ref', 'refs/remotes/origin/main', control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+             patch.object(release, 'INTEGRATED_EXPERIENCE_APP_SNAPSHOT', snapshot), \
+             patch.object(release, 'INTEGRATED_EXPERIENCE_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+             patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS, {name: blob}), \
+             patch.object(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_OPERATOR_BLOB', self.blob(operator)):
+            self.assertEqual(len(self.files), 32)
+            self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
+                             release.INTEGRATED_EXPERIENCE_CONTROL_FILES)
+            self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
+                             release.INTEGRATED_EXPERIENCE_CONTROL_FILES)
+            self.assertEqual(set(self.git('diff', '--name-only', control, candidate).splitlines()),
+                             set(self.files))
+            self.assertEqual(set(self.verify()), set(self.files) | release.INTEGRATED_EXPERIENCE_CONTROL_FILES)
+            self.assertEqual(release.migration_plan(self.verify()), [])
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'],
+                             self.blob(operator))
+            self.git('update-ref', 'refs/remotes/origin/main', self.control)
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_unlisted_files_dependencies_workflows_and_schema_are_rejected(self):
+        for name in ('tests/unreviewed.test.ts', 'app/events.ts', 'app/api/public/events/route.ts',
+                     'app/mobile-navigation.tsx', 'app/my-nights/my-nights-client.tsx',
+                     'runtime/vps/worker.mjs', 'drizzle/9999_extra.sql',
+                     '.github/workflows/candidate-checks.yml', *release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed bytes\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+    def test_every_application_and_control_mode_change_is_rejected(self):
+        for name in {*self.files, *release.INTEGRATED_EXPERIENCE_CONTROL_FILES}:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                (self.root / name).chmod(0o755)
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+    def test_wrong_baseline_snapshot_or_input_inventory_is_rejected(self):
+        for name in ('INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE', 'INTEGRATED_EXPERIENCE_APP_TREE'):
+            with patch.object(release, name, 'f' * 40), self.assertRaises(release.ReleaseError): self.verify()
+        for name in self.inputs:
+            with self.subTest(path=name), patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_INPUTS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'application input'): self.verify()
+        with patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS, {'tests/extra.mjs': 'f' * 40}):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'): self.verify()
+        for name in release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS:
+            with patch.dict(release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'remain unchanged'): self.verify()
+
+    def test_self_unmerged_and_same_tree_snapshot_controls_are_rejected(self):
+        for trusted in (self.live, self.snapshot, self.candidate):
+            with patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError): self.verify()
+        self.git('update-ref', 'refs/remotes/origin/main', self.live)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', 'origin/main', self.control)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', '-d', 'origin/main')
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                            '-p', self.live, '-m', 'same tree without control ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(snapshot)
+
+    def test_scope_schema_rejects_controls_dependencies_and_forbidden_application_paths(self):
+        for controls in ({'ops/vps/code-release.py'},
+                         release.INTEGRATED_EXPERIENCE_CONTROL_FILES | {'package-lock.json'}):
+            with self.subTest(controls=controls), patch.object(release, 'INTEGRATED_EXPERIENCE_CONTROL_FILES', controls):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for dependencies in ({}, {**release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS, 'other.lock': 'f' * 40}):
+            with self.subTest(dependencies=dependencies), \
+                 patch.object(release, 'INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS', dependencies):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for name in ('mobile/package.json', '.github/workflows/new.yml',
+                     'runtime/vps/package.json', 'drizzle/9999_extra.sql', 'ops/vps/code-release.py'):
+            with self.subTest(path=name), \
+                 patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS, {name: 'f' * 40}), \
+                 patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_INPUTS, {name: None}):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        application = {name: blob for name, blob in self.pins.items() if name != self.files[0]}
+        inputs = {name: blob for name, blob in self.inputs.items() if name != self.files[0]}
+        with patch.object(release, 'INTEGRATED_EXPERIENCE_APPLICATION_BLOBS', application), \
+             patch.object(release, 'INTEGRATED_EXPERIENCE_APPLICATION_INPUTS', inputs):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                self.verify()
+
+    def test_controls_only_baseline_rejects_any_application_dependency_or_workflow_change(self):
+        for name in (self.files[0], *release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS,
+                     '.github/workflows/candidate-checks.yml'):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.write(name, 'unreviewed control-side change\n')
+                control = self.commit()
+                candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                     '-p', self.candidate, '-p', control, '-m', 'retain exact candidate bytes')
+                self.git('checkout', '-q', candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify()
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_both_controls_must_change_and_remain_identical_in_promotion(self):
+        for name in release.INTEGRATED_EXPERIENCE_CONTROL_FILES:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.git('checkout', self.live, '--', name)
+                control = self.commit()
+                self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+                candidate = self.commit()
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify(candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_every_output_pin_is_required_independently_of_the_snapshot_tree(self):
+        for name in self.files:
+            with self.subTest(path=name), \
+                 patch.dict(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'snapshot output'):
+                    self.verify()
+
+    def test_controls_index_edits_cannot_hide_behind_restored_worktree_bytes(self):
+        for revision in (self.control, self.candidate):
+            for name in release.INTEGRATED_EXPERIENCE_CONTROL_FILES:
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    original = (self.root / name).read_bytes()
+                    self.write(name, 'hidden staged control change\n')
+                    self.git('add', name)
+                    self.write(name, original)
+                    with self.assertRaisesRegex(AssertionError, 'index differs'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+    def test_snapshot_with_matching_tree_but_without_baseline_ancestry_is_rejected(self):
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                            '-m', 'unrelated snapshot with matching bytes')
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-p', snapshot, '-m', 'include unrelated source')
+        self.git('checkout', '-q', candidate)
+        with patch.object(release, 'INTEGRATED_EXPERIENCE_APP_SNAPSHOT', snapshot):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.verify()
+
+    def test_family_dispatch_uses_integrated_experience_before_historical_recovery_audit(self):
+        with patch(__name__ + '.recovery_audit_source_family', side_effect=AssertionError('old family selected')):
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'], self.blob(self.operator))
+        with patch.object(release, 'reviewed_recovery_audit_application_blobs',
+                          side_effect=AssertionError('old admission selected')):
+            self.assertEqual(set(self.verify()), set(self.files) | release.INTEGRATED_EXPERIENCE_CONTROL_FILES)
+
+
+    def test_executing_integrated_experience_tests_cannot_fall_back_to_an_older_operator_family(self):
+        self.git('checkout', '-q', self.control)
+        self.write('ops/vps/code-release.py', 'historical operator bytes\n')
+        self.git('add', 'ops/vps/code-release.py')
+        with patch.object(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_TEST_FILE',
+                          (self.root / 'ops/vps/test_code_release.py').resolve()), \
+             patch(__name__ + '.recovery_audit_source_family', return_value={'old': 'accepted'}) as old_family:
+            with self.assertRaisesRegex(AssertionError, 'unreviewed bytes'):
+                checkout_source_family(self.root)
+            old_family.assert_not_called()
+
+
+    def test_staged_deletions_restored_as_untracked_exact_files_are_rejected(self):
+        for revision in (self.control, self.candidate):
+            for name in (self.files[0], *release.INTEGRATED_EXPERIENCE_CONTROL_FILES):
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    self.git('rm', '--cached', name)
+                    with self.assertRaisesRegex(AssertionError, 'full inventory'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+
+    def test_normal_main_merge_accepts_original_control_ancestor(self):
+        merged = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                          '-p', self.live, '-p', self.control, '-m', 'normal merge of reviewed controls')
+        self.git('update-ref', 'refs/remotes/origin/main', merged)
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.control), self.live)
+        self.assertEqual(self.git('show', '-s', '--format=%P', merged).split(), [self.live, self.control])
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.candidate).split(),
+                         [self.control, self.snapshot])
+        self.assertEqual(set(self.verify()), set(self.files) | release.INTEGRATED_EXPERIENCE_CONTROL_FILES)
+        # The branch commit C is the trust anchor, not a newer same-tree main merge
+        # which is deliberately absent from the already-published P ancestry.
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=merged):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_missing_invalid_and_unrelated_same_tree_controls_are_rejected(self):
+        for trusted in ('', 'HEAD', 'a' * 12, 'A' * 40, 'f' * 40):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)):
+                    self.verify()
+        unrelated = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                             '-m', 'unrelated same-tree controls')
+        self.git('update-ref', 'refs/remotes/origin/main', unrelated)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=unrelated):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_same_tree_wrong_baseline_and_source_commit_identities_are_rejected(self):
+        wrong_base = self.git('commit-tree', self.git('rev-parse', self.live + '^{tree}'),
+                              '-m', 'same-tree wrong live identity')
+        with self.assertRaisesRegex(release.ReleaseError, 'live or snapshot tree'):
+            release.reviewed_integrated_experience_application_blobs(wrong_base, self.candidate)
         wrong_source = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
                                 '-p', self.live, '-m', 'same-tree unreviewed source identity')
         impostor = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
