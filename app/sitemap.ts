@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
 import { getPublicEvents } from "./events";
+import { isWebsiteListedEvent } from "../lib/website-event-listings";
 
 const origin = "https://tickets.becoreops.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const events = await getPublicEvents();
+  const events = (await getPublicEvents()).filter(isWebsiteListedEvent);
   const staticRoutes = ["", "/events", "/hosts", "/about", "/help", "/privacy", "/terms", "/organizer/submit"];
   return [
     ...staticRoutes.map((path, index) => ({

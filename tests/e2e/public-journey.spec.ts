@@ -1,3 +1,4 @@
+import { isWebsiteListedEvent } from "../../lib/website-event-listings";
 import { expandEveryVisibleDisclosure } from './disclosures.mjs';
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./catalogue";
@@ -49,7 +50,7 @@ test("public navigation is usable without horizontal overflow", async ({ page })
 test("featured nights keep the hero, Drop and Room synchronized", async ({ page, catalogue }) => {
   const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
   if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date(now));
-  const scenes = catalogue.screens!.filter(({ event }) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
+  const scenes = catalogue.screens!.filter(({ event }) => isWebsiteListedEvent(event) && event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
   const multiple = scenes.length > 1;
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
@@ -117,7 +118,7 @@ test("featured motion continues in the Room and resumes after returning to the h
   test.setTimeout(60_000);
   const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
   if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date(now));
-  const scenes = catalogue.screens!.filter(({ event }) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
+  const scenes = catalogue.screens!.filter(({ event }) => isWebsiteListedEvent(event) && event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
   const multiple = scenes.length > 1;
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/", { timeout: 30_000 });

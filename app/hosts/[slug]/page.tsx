@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowUpRight, BadgeCheck, Instagram, MapPin } from "lucide-r
 import { notFound } from "next/navigation";
 import MemberActions from "../../member-actions";
 import { getPublicEvents } from "../../events";
+import { isWebsiteListedEvent } from "../../../lib/website-event-listings";
 import { eventTiming, findHostBySlug, listHostEventSlugs } from "../../../lib/event-experience";
 import PublicNavigation from "../../mobile-navigation";
 import "../hosts.css";
@@ -33,7 +34,7 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
   const host = await findHostBySlug(env.DB, slug);
   if (!host) notFound();
   const [eventSlugs, allEvents] = await Promise.all([listHostEventSlugs(env.DB, host.id), getPublicEvents()]);
-  const events = allEvents.filter((event) => eventSlugs.includes(event.slug) && eventTiming(event) !== "past");
+  const events = allEvents.filter((event) => isWebsiteListedEvent(event) && eventSlugs.includes(event.slug) && eventTiming(event) !== "past");
   return <main className="host-page">
     <header className="directory-header">
       <Link href="/hosts" aria-label="Back to hosts"><ArrowLeft size={16} /><span className="directory-header__back-label">Hosts</span></Link>
