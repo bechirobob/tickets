@@ -909,6 +909,45 @@ RECOVERY_AUDIT_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26
  'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
 
 
+# Exact temporary website/PWA listing-only exclusion from independently reviewed source S.
+# Separate merged C changes only controls; direct guest routes and all other paths stay fixed.
+# No package, dependency, workflow, runtime, audit-policy, access or migration change.
+WEBSITE_UNLISTING_RELEASE_BASELINE = '4c5f395b75837725beb990e27261e3ad367c1314'
+WEBSITE_UNLISTING_RELEASE_BASE_TREE = 'e3c30e6a0cadfac282f6f8e5c793ac18e8a83c08'
+WEBSITE_UNLISTING_APP_SNAPSHOT = 'de034d8cbe925d7fba0d66094e771dfc778eb082'
+WEBSITE_UNLISTING_APP_TREE = '69644bc355be06d919fdc83a81337d0c93e64f96'
+WEBSITE_UNLISTING_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+WEBSITE_UNLISTING_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa4c96f073d5b116e474f91d5e4e9a',
+ 'app/hosts/[slug]/page.tsx': '4390e2525c64968d22c8e738021293d6fb9e4655',
+ 'app/page.tsx': 'db81c6b2d430006a0d1b323ee7a1be31a4576cf6',
+ 'app/sitemap.ts': 'b7c91ad4ec237f179dccfddfb4af8b1465dce362',
+ 'lib/website-event-listings.ts': None,
+ 'tests/e2e/discovery-pass-access.spec.ts': 'bf34b4773c5acb26d1ed903e1ea014824f305ad8',
+ 'tests/e2e/event-details.spec.ts': '76775953efa8ef1a4358e6a25acdf26a53c14736',
+ 'tests/e2e/host-profile.spec.ts': 'ba099658c2866802b436855819bcefd39f50074b',
+ 'tests/e2e/public-journey.spec.ts': '36953eca91c0188a7db5d41c2d76f687fab383cf',
+ 'tests/e2e/published-catalogue.spec.ts': '7578c37a441e06ce10b0b87fa2cb4c412dee4684',
+ 'tests/e2e/website-event-unlisting.spec.ts': None,
+ 'tests/website-event-listings.test.ts': None}
+WEBSITE_UNLISTING_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f381c27339db7ba290bf1f12e835',
+ 'app/hosts/[slug]/page.tsx': 'cd9a1372f923ff8b9542ea8cda12dae0662206a5',
+ 'app/page.tsx': '483383be20e94ba007b3fd86e694962dab167dc4',
+ 'app/sitemap.ts': '2f6dd2eb4ca539eec380631d26c4d8a94bb75287',
+ 'lib/website-event-listings.ts': '77a182916880cb4eaeebdc7d87288f84834b8feb',
+ 'tests/e2e/discovery-pass-access.spec.ts': 'bfd80a5f2af6d6027e0f1fd98eb8030247b5d56c',
+ 'tests/e2e/event-details.spec.ts': '53b643a49ae9a38c7f41f9c3f1b854e664fd4351',
+ 'tests/e2e/host-profile.spec.ts': 'b863f3c3b1a48b1068134cd6b6348ce454568201',
+ 'tests/e2e/public-journey.spec.ts': '6cdf7e9c9fd330f9875ff44bce66b76664dbde71',
+ 'tests/e2e/published-catalogue.spec.ts': '0b8a0929b7579fb520f4013399321ad97637f421',
+ 'tests/e2e/website-event-unlisting.spec.ts': '75fb84bf2cddb3925893926d77201b39e38050a5',
+ 'tests/website-event-listings.test.ts': 'c83a089e54a58a7461766158fc9ad7f9ac617500'}
+WEBSITE_UNLISTING_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918',
+ 'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36',
+ 'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1543,6 +1582,80 @@ def reviewed_flashes_application_blobs(expected, source):
     return pins
 
 
+def reviewed_website_unlisting_application_blobs(expected, source):
+    """Bind exact F/S inputs and outputs to independent control C and promotion P."""
+    snapshot = WEBSITE_UNLISTING_APP_SNAPSHOT
+    controls = WEBSITE_UNLISTING_CONTROL_FILES
+    application = WEBSITE_UNLISTING_APPLICATION_BLOBS
+    dependencies = WEBSITE_UNLISTING_DEPENDENCY_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package.json', 'package-lock.json', 'mobile/package.json',
+                                      'mobile/package-lock.json', 'runtime/vps/package.json'}
+            and set(application) == set(WEBSITE_UNLISTING_APPLICATION_INPUTS)
+            == {'app/events/page.tsx',
+             'app/hosts/[slug]/page.tsx',
+             'app/page.tsx',
+             'app/sitemap.ts',
+             'lib/website-event-listings.ts',
+             'tests/e2e/discovery-pass-access.spec.ts',
+             'tests/e2e/event-details.spec.ts',
+             'tests/e2e/host-profile.spec.ts',
+             'tests/e2e/public-journey.spec.ts',
+             'tests/e2e/published-catalogue.spec.ts',
+             'tests/e2e/website-event-unlisting.spec.ts',
+             'tests/website-event-listings.test.ts'}
+            and not (controls | set(dependencies)) & set(application),
+            "Website unlisting inventory or scope changed.")
+    require(expected == WEBSITE_UNLISTING_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == WEBSITE_UNLISTING_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == WEBSITE_UNLISTING_APP_TREE,
+            "Website unlisting live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            "Website unlisting snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in WEBSITE_UNLISTING_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Website unlisting application input differs from reviewed source: " + name)
+    for name, blob in application.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Website unlisting snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "Website unlisting requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+            "Website unlisting trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Website unlisting candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = dict(application)
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Website unlisting output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Website unlisting controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete F/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Website unlisting dependencies must remain unchanged: " + name)
+    require(not migration_plan(pins), "Website unlisting release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_recovery_audit_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
     snapshot = RECOVERY_AUDIT_APP_SNAPSHOT
@@ -1751,6 +1864,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == WEBSITE_UNLISTING_RELEASE_BASELINE:
+        return reviewed_website_unlisting_application_blobs(expected, source)
     if expected == RECOVERY_AUDIT_RELEASE_BASELINE:
         return reviewed_recovery_audit_application_blobs(expected, source)
     if expected == FILTERS_ROOM_RELEASE_BASELINE:
@@ -1832,6 +1947,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == WEBSITE_UNLISTING_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Website unlisting release cannot introduce migrations.")
+        return changed
     if expected == RECOVERY_AUDIT_RELEASE_BASELINE:
         require(not migration_plan(changed), "Recovery/audit release cannot introduce migrations.")
         return changed
