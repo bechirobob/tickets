@@ -19,16 +19,20 @@ test('Option A keeps full-width rows, quiet controls and keyboard access in port
     const trigger = page.getByRole('button', { name: 'Open navigation', exact: true });
     await expect(trigger).toBeEnabled();
     await trigger.focus();
+    // The trigger's accessible name becomes Close navigation when opened.
+    const anchor = await trigger.boundingBox();
+    expect(anchor).not.toBeNull();
     await trigger.press('Enter');
     const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
     const close = menu.getByRole('button', { name: 'Close navigation', exact: true });
     await expect(menu).toBeVisible();
+    await expect(page.locator('.night-mobile-menu__trigger')).toHaveAttribute('aria-label', 'Close navigation');
+    await expect(page.locator('.night-mobile-menu__trigger')).toHaveAttribute('aria-expanded', 'true');
     await expect(close).toBeFocused();
     await expect(menu).toHaveCSS('border-radius', '0px');
     await expect(menu.locator('.night-mobile-menu__links')).toHaveCSS('border-top-left-radius', '10px');
     await expect(menu).toHaveCSS('box-shadow', 'none');
     await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    const anchor = await trigger.boundingBox();
     const cap = await menu.locator('.night-mobile-menu__panel-header').boundingBox();
     expect(cap!.x).toBeCloseTo(anchor!.x, 1);
     expect(cap!.y).toBeCloseTo(anchor!.y, 1);
