@@ -376,3 +376,35 @@ test('an open anchored menu keeps one-click notification switching and its short
   await expect(trigger).toHaveAccessibleName('Open navigation');
   await expect(trigger).toBeFocused();
 });
+
+
+test('a fractionally clipped desktop trigger still opens inside the viewport and materially clipped anchors close', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 980, height: 844 });
+  await page.goto('/events');
+  const trigger = page.locator('.night-mobile-menu__trigger');
+  const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
+  await expect(trigger).toBeEnabled();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const initialTop = await trigger.evaluate(element => element.getBoundingClientRect().top);
+  // Scroll positions can be integral; derive a <=1px clip from the rendered
+  // header instead of assuming every engine/font has the same header metrics.
+  const clippedScroll = Math.floor(initialTop) + 1;
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeGreaterThanOrEqual(clippedScroll + 2);
+  await page.evaluate(y => window.scrollTo(0, y), clippedScroll);
+  await expect.poll(() => trigger.evaluate(element => element.getBoundingClientRect().top)).toBeLessThan(0);
+  expect(await trigger.evaluate(element => element.getBoundingClientRect().top)).toBeGreaterThanOrEqual(-1);
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  // Prove Playwright did not make this pass by scrolling the trigger back in.
+  expect(await page.evaluate(() => scrollY)).toBe(clippedScroll);
+  expect(await trigger.evaluate(element => element.getBoundingClientRect().top)).toBeLessThan(0);
+  expect(await trigger.evaluate(element => element.getBoundingClientRect().top)).toBeGreaterThanOrEqual(-1);
+  const bounds = await menu.boundingBox();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844 - 8);
+  await page.evaluate(y => window.scrollTo(0, y), clippedScroll + 2);
+  await expect.poll(() => trigger.evaluate(element => element.getBoundingClientRect().top)).toBeLessThan(-1);
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});

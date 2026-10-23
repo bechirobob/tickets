@@ -1782,8 +1782,8 @@ def reviewed_integrated_experience_application_blobs(expected, source):
 # Exact camera framing and live-look release; prior admissions remain unchanged.
 CAMERA_LOOKS_RELEASE_BASELINE = 'ecdad9c8fedf90b234ee5e9a315b54ed12bad07f'
 CAMERA_LOOKS_RELEASE_BASE_TREE = '0c68f22bde7de5f350c1e1d3400a6be205adb1a2'
-CAMERA_LOOKS_APP_SNAPSHOT = 'dcafe826abfd7f6f624afdac132f12e0668321c3'
-CAMERA_LOOKS_APP_TREE = '4b8435b815ff43698306915b3bb47d1179d94af2'
+CAMERA_LOOKS_APP_SNAPSHOT = '7092e69a42028e475fff89fa2f46a19081a78ab8'
+CAMERA_LOOKS_APP_TREE = '72fef0a8ee6f9929740b4550d7fe27bd2f765885'
 CAMERA_LOOKS_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 CAMERA_LOOKS_APPLICATION_INPUTS = {'tests/browser-audit-harness.test.mjs': 'bc1e79e0916c2bfc2fd57a98e92aa12c55879304',
  'app/room-features.css': '3dcef6b137313e40b0aedbd4237065f21ff92ec1',
@@ -1794,7 +1794,11 @@ CAMERA_LOOKS_APPLICATION_INPUTS = {'tests/browser-audit-harness.test.mjs': 'bc1e
  'lib/flash-photo-filters.ts': '8392734c6593ec495f92705f2f8572218093f9e8',
  'tests/e2e/flash-camera.spec.ts': 'ff86b09b19e6e255ca39cc451e3d0e50dcf5b217',
  'tests/flash-camera-state.test.mjs': '14fe34f80f08e810837facb9406da3b5c6bd66fc',
- 'tests/flash-photo-filters.test.mjs': 'c4e4daa843aeaf63f02e5ab72939eeab6f3a541b'}
+ 'tests/flash-photo-filters.test.mjs': 'c4e4daa843aeaf63f02e5ab72939eeab6f3a541b',
+ 'app/mobile-navigation.tsx': '51fb72c23f0788fdaa7ee46bf11ed034fce31c79',
+ 'tests/e2e/menu-option-a.spec.ts': '4655f6594d23c6120eec9e1f1c43ece41fc1bd2c',
+ 'tests/e2e/mobile-app-behavior.spec.ts': 'bb0d0f3a8374fe3d5ff3dd107dc5d9f28205671c',
+ 'tests/header-origin-menu.test.mjs': '4178145113c4f712e5d17604f676103475a0cb24'}
 CAMERA_LOOKS_APPLICATION_BLOBS = {'tests/browser-audit-harness.test.mjs': 'c4c742c359cab6b227aab5f9ab2cb25bb0227b43',
  'app/room-features.css': '948b795d803710bd75a6ec6b381de6a249ba2c40',
  'app/room/[slug]/flash-camera.tsx': 'a57db414995fb492e440ab22e62b2ba6c20b7867',
@@ -1804,7 +1808,11 @@ CAMERA_LOOKS_APPLICATION_BLOBS = {'tests/browser-audit-harness.test.mjs': 'c4c74
  'lib/flash-photo-filters.ts': '716ceb711cc5d37cc79302ff1c53289285b3a548',
  'tests/e2e/flash-camera.spec.ts': 'c4b10b050e2461b1e28c9a1c07d09dd88056676c',
  'tests/flash-camera-state.test.mjs': 'ed3cf345956556ec141e43977dcd6fff0621b272',
- 'tests/flash-photo-filters.test.mjs': 'ae0c09955f51142a0135d806be9a898f160fd1c8'}
+ 'tests/flash-photo-filters.test.mjs': 'ae0c09955f51142a0135d806be9a898f160fd1c8',
+ 'app/mobile-navigation.tsx': '2a3aed82ae75740af87f3fd71a266c7a8dfc1b17',
+ 'tests/e2e/menu-option-a.spec.ts': '4840df3b1776af5e96e31521e1845c765e6d5ffd',
+ 'tests/e2e/mobile-app-behavior.spec.ts': '8ca75f53148bb85df10d9817e51d2f04adc10a30',
+ 'tests/header-origin-menu.test.mjs': '60544cff98c7bda6f636b357916ed2059a145b90'}
 CAMERA_LOOKS_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
  'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
  'package-lock.json': '57e8fa844c6cc48fbbd8bfd766789970a494635f',
@@ -1829,7 +1837,11 @@ def reviewed_camera_looks_application_blobs(expected, source):
  'lib/flash-photo-filters.ts',
  'tests/e2e/flash-camera.spec.ts',
  'tests/flash-camera-state.test.mjs',
- 'tests/flash-photo-filters.test.mjs'}
+ 'tests/flash-photo-filters.test.mjs',
+ 'app/mobile-navigation.tsx',
+ 'tests/e2e/menu-option-a.spec.ts',
+ 'tests/e2e/mobile-app-behavior.spec.ts',
+ 'tests/header-origin-menu.test.mjs'}
             and not (controls | set(dependencies)) & set(application),
             "Camera looks inventory or scope changed.")
     require(expected == CAMERA_LOOKS_RELEASE_BASELINE

@@ -878,7 +878,7 @@ def integrated_experience_source_family(root):
 
 
 # Exact camera looks C/P test family; historical families remain independent.
-CAMERA_LOOKS_OPERATOR_BLOB = '6ab98cde5ef575570440bd76a26c1420cd25f85f'
+CAMERA_LOOKS_OPERATOR_BLOB = '2c430c5a6fcf5ca6a63e054bb5ffe42210eb0148'
 CAMERA_LOOKS_STAGED_BASE = dict(INTEGRATED_EXPERIENCE_STAGED_BASE)
 CAMERA_LOOKS_TEST_FILE = Path(__file__).resolve()
 
@@ -8995,7 +8995,7 @@ class CameraLooksSourceAdmissionTests(unittest.TestCase):
         self.files = tuple(release.CAMERA_LOOKS_APPLICATION_BLOBS)
         self.added = {name for name, blob in release.CAMERA_LOOKS_APPLICATION_INPUTS.items() if blob is None}
         self.assertEqual(self.added, {'app/room/[slug]/flash-live-preview.tsx'})
-        self.assertEqual(len(self.files), 10)
+        self.assertEqual(len(self.files), 14)
         for name in (*self.files, *release.CAMERA_LOOKS_CONTROL_FILES):
             if name not in self.added:
                 self.write(name, 'baseline ' + name + '\n')
@@ -9222,7 +9222,7 @@ class CameraLooksSourceAdmissionTests(unittest.TestCase):
              patch.object(release, 'CAMERA_LOOKS_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
              patch.dict(release.CAMERA_LOOKS_APPLICATION_BLOBS, {name: blob}), \
              patch.object(sys.modules[__name__], 'CAMERA_LOOKS_OPERATOR_BLOB', self.blob(operator)):
-            self.assertEqual(len(self.files), 10)
+            self.assertEqual(len(self.files), 14)
             self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
                              release.CAMERA_LOOKS_CONTROL_FILES)
             self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
