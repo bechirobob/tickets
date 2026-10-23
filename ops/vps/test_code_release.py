@@ -787,7 +787,7 @@ def recovery_audit_source_family(root):
 
 
 # Exact integrated-experience C/P test family; historical families remain independent.
-INTEGRATED_EXPERIENCE_OPERATOR_BLOB = 'ad3c0b3c3cbb8eca90634114311c3cf40216f4f6'
+INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '83fb5adc0316170431105274c73edc7be977dec1'
 INTEGRATED_EXPERIENCE_STAGED_BASE = dict(RECOVERY_AUDIT_STAGED_BASE)
 INTEGRATED_EXPERIENCE_TEST_FILE = Path(__file__).resolve()
 
