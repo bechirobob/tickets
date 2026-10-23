@@ -1,0 +1,76 @@
+/* Main navigation unfolds from its actual header control. The narrow cap
+   occupies only the trigger; the wider list begins below the logo baseline. */
+.night-mobile-menu[data-phase="closing"] .night-mobile-menu__trigger {
+  opacity: 0; pointer-events: none; transform: none;
+}
+.night-mobile-menu.is-open .night-mobile-menu__trigger { transform: none; }
+.night-mobile-menu.night-mobile-menu--anchored {
+  position: fixed; inset: 0; z-index: 91; pointer-events: none;
+  color: #f8eee7; --focus-ring: #eee;
+}
+.night-mobile-menu--anchored .night-mobile-menu__panel {
+  position: fixed; inset: var(--menu-anchor-top, 8px) var(--menu-anchor-right, 18px) auto auto;
+  width: min(var(--menu-width, 194px), calc(100vw - 24px)); max-height: var(--menu-max-height, calc(100dvh - 80px));
+  padding: 0; gap: 0; border: 0; border-radius: 0; background: transparent;
+  box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+  overflow: visible; grid-template-rows: var(--menu-anchor-height, 44px) minmax(0, 1fr);
+  clip-path: inset(0 0 calc(100% - var(--menu-anchor-height, 44px)) calc(100% - var(--menu-anchor-width, 76px)));
+  transform: translateY(0); transform-origin: top right;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: clip-path 160ms var(--ui-ease), opacity 160ms ease, visibility 0s linear 160ms;
+}
+.night-mobile-menu--anchored.is-open .night-mobile-menu__panel {
+  clip-path: inset(0); opacity: 1; visibility: visible; pointer-events: none;
+  transform: translateY(var(--menu-drag-y, 0px));
+  transition: clip-path 200ms var(--ui-ease), opacity 200ms ease;
+}
+.night-mobile-menu--anchored .night-mobile-menu__panel[data-phase="closing"] { visibility: visible; }
+/* Exiting surfaces still absorb pointers, but cannot navigate or take focus.
+   The transparent upper-left notch never blocks the logo or other controls. */
+.night-mobile-menu--anchored .night-mobile-menu__panel[data-phase="closing"] :is(a, button) { pointer-events: none; }
+.night-mobile-menu--anchored .night-mobile-menu__panel[data-phase="closed"] :is(.night-mobile-menu__panel-header, .night-mobile-menu__links) { pointer-events: none; }
+.night-mobile-menu--anchored .night-mobile-menu__panel[data-dragging] { transition: none; }
+.night-mobile-menu--anchored .night-mobile-menu__panel-header {
+  width: var(--menu-anchor-width, 76px); height: var(--menu-anchor-height, 44px);
+  min-height: 44px; justify-self: end; justify-content: center; padding: 0;
+  border: 0; border-radius: 10px 10px 0 0; background: #30212c;
+  touch-action: none; user-select: none; pointer-events: auto;
+}
+.night-mobile-menu--anchored .night-mobile-menu__close {
+  width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 10px;
+  opacity: 1; transform: none; transition: color 160ms ease; background: transparent;
+}
+.night-mobile-menu--anchored .night-mobile-menu__links {
+  min-height: 0; padding: 6px; pointer-events: auto; overflow: auto; overscroll-behavior: contain; scroll-padding-block: 6px;
+  border-radius: 10px 0 10px 10px; background: #30212c;
+  grid-template-columns: minmax(0, 1fr); gap: 0;
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity 100ms ease, transform 160ms var(--ui-ease);
+}
+.night-mobile-menu--anchored.is-open .night-mobile-menu__links {
+  opacity: 1; transform: translateY(0); transition: opacity 160ms ease 40ms, transform 200ms var(--ui-ease);
+}
+.night-mobile-menu--anchored .night-mobile-menu__panel a,
+.night-mobile-menu--anchored .night-mobile-menu__panel a.menu-secondary-route {
+  min-height: 44px; padding: 8px; gap: 10px; grid-template-columns: 19px minmax(0, 1fr);
+  margin-top: 0; font-size: 16px; font-weight: 400; line-height: 1.3; color: #f8eee7;
+}
+.night-mobile-menu--anchored .night-mobile-menu__panel a span { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.night-mobile-menu--anchored .night-mobile-menu__panel a.menu-section-start::before { content: none; }
+.night-mobile-menu--anchored .night-mobile-menu__chevron { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .night-mobile-menu--anchored .night-mobile-menu__panel,
+  .night-mobile-menu--anchored.is-open .night-mobile-menu__panel,
+  .night-mobile-menu--anchored .night-mobile-menu__links,
+  .night-mobile-menu--anchored.is-open .night-mobile-menu__links { transition: none; transform: none; }
+}
+@media (forced-colors: active) {
+  .night-mobile-menu--anchored .night-mobile-menu__panel { background: transparent; }
+  .night-mobile-menu--anchored .night-mobile-menu__panel-header,
+  .night-mobile-menu--anchored .night-mobile-menu__links { background: Canvas; outline: 1px solid CanvasText; outline-offset: -1px; }
+}
+@media (forced-colors: active) {
+  .night-mobile-menu--anchored .night-mobile-menu__panel a,
+  .night-mobile-menu--anchored .night-mobile-menu__panel a.menu-secondary-route { color: LinkText; }
+  .night-mobile-menu--anchored .night-mobile-menu__panel a[aria-current=page] { background: Highlight; color: HighlightText; }
+}
