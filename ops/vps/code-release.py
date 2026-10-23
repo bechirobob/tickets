@@ -915,8 +915,8 @@ RECOVERY_AUDIT_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26
 # Other dependencies, workflows, audit policy, access, runtime and migrations stay fixed.
 INTEGRATED_EXPERIENCE_RELEASE_BASELINE = '4c5f395b75837725beb990e27261e3ad367c1314'
 INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE = 'e3c30e6a0cadfac282f6f8e5c793ac18e8a83c08'
-INTEGRATED_EXPERIENCE_APP_SNAPSHOT = '83bd2c315b0a5251270f8df7bf79b16eabaa5fc7'
-INTEGRATED_EXPERIENCE_APP_TREE = '83051af42a009880ac36f8544b94c9eaa7d542e7'
+INTEGRATED_EXPERIENCE_APP_SNAPSHOT = 'cd53095f8a6c759db58b0436102b91edf9b3815a'
+INTEGRATED_EXPERIENCE_APP_TREE = '46961e87c19eb014019c2d4891ac8230649541fd'
 INTEGRATED_EXPERIENCE_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa4c96f073d5b116e474f91d5e4e9a',
  'app/global-error.tsx': None,
@@ -943,6 +943,7 @@ INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa
  'tests/e2e/host-profile.spec.ts': 'ba099658c2866802b436855819bcefd39f50074b',
  'tests/e2e/menu-option-a.spec.ts': 'bd6d6db6da4be435b73b960d6a664e08dda8144b',
  'tests/e2e/mobile-app-behavior.spec.ts': 'b0b336ee944c09b938815660cb70dc58578b7568',
+ 'tests/e2e/operations.spec.ts': 'ec95702c13e6e2e9c3b5c10a4683827ae6b4373e',
  'tests/e2e/public-journey.spec.ts': '36953eca91c0188a7db5d41c2d76f687fab383cf',
  'tests/e2e/published-catalogue.spec.ts': '7578c37a441e06ce10b0b87fa2cb4c412dee4684',
  'tests/e2e/pwa-resume.spec.ts': None,
@@ -953,6 +954,7 @@ INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa
  'tests/mobile-ui.test.mjs': '405c23b32bd288b47540194f18ead1fd23e60a3b',
  'tests/pwa-resume.test.mjs': None,
  'tests/repository-boundaries.test.mjs': 'cf49012d4db8fef0273603b3ffbadd5a422341cd',
+ 'tests/scanner-browser-lifecycle.test.mjs': None,
  'tests/website-event-listings.test.ts': None}
 INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f381c27339db7ba290bf1f12e835',
  'app/global-error.tsx': 'd1a4b2d25ff1d796ffdc967ba874ad1011cfa328',
@@ -969,7 +971,7 @@ INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f
  'lib/mobile-viewport.ts': '20a3a8aefd7ee3f8c5f2dd4cd0e7da7575282a43',
  'lib/room-viewport.ts': 'ee7f3a7b89cc01686e9398e29964bae6f92d0a0b',
  'lib/website-event-listings.ts': '77a182916880cb4eaeebdc7d87288f84834b8feb',
- 'package.json': 'd4dc400662fa9a63435f70da0374f51a87fd3c19',
+ 'package.json': '54c30395663fb1535d73cc164460f13534f45672',
  'scripts/capture-iphone-layouts.mjs': '6bb4390faa95f367e2488607cdbbea4e05381898',
  'scripts/iphone-layout-parity.mjs': '89bc6d47d69a31bf40b15790c39c9e471cdd21ca',
  'styles/customer.css': '91c84bbd74df2347bbcb8615fb670e29a59b8462',
@@ -979,6 +981,7 @@ INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f
  'tests/e2e/host-profile.spec.ts': 'b863f3c3b1a48b1068134cd6b6348ce454568201',
  'tests/e2e/menu-option-a.spec.ts': '4655f6594d23c6120eec9e1f1c43ece41fc1bd2c',
  'tests/e2e/mobile-app-behavior.spec.ts': 'bb0d0f3a8374fe3d5ff3dd107dc5d9f28205671c',
+ 'tests/e2e/operations.spec.ts': '50521b165992c13d101766bec8f3f4180b2c93a3',
  'tests/e2e/public-journey.spec.ts': '6cdf7e9c9fd330f9875ff44bce66b76664dbde71',
  'tests/e2e/published-catalogue.spec.ts': '0b8a0929b7579fb520f4013399321ad97637f421',
  'tests/e2e/pwa-resume.spec.ts': '74f4b68fe56a7536304076df257767e43f4581f3',
@@ -989,6 +992,7 @@ INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f
  'tests/mobile-ui.test.mjs': 'f09ae5135a867cc229f787c2fd61214a9006b165',
  'tests/pwa-resume.test.mjs': 'f569c8ee490617bdf16e560c0a58708210826238',
  'tests/repository-boundaries.test.mjs': 'fbc88aa7561fd6e748213101a9e11567e64cc85f',
+ 'tests/scanner-browser-lifecycle.test.mjs': '1e7cd580b87a716a178c5dd1dcbb9fbbc47be25e',
  'tests/website-event-listings.test.ts': 'c83a089e54a58a7461766158fc9ad7f9ac617500'}
 INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
  'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
@@ -1669,6 +1673,7 @@ def reviewed_integrated_experience_application_blobs(expected, source):
              'tests/e2e/host-profile.spec.ts',
              'tests/e2e/menu-option-a.spec.ts',
              'tests/e2e/mobile-app-behavior.spec.ts',
+             'tests/e2e/operations.spec.ts',
              'tests/e2e/public-journey.spec.ts',
              'tests/e2e/published-catalogue.spec.ts',
              'tests/e2e/pwa-resume.spec.ts',
@@ -1679,6 +1684,7 @@ def reviewed_integrated_experience_application_blobs(expected, source):
              'tests/mobile-ui.test.mjs',
              'tests/pwa-resume.test.mjs',
              'tests/repository-boundaries.test.mjs',
+             'tests/scanner-browser-lifecycle.test.mjs',
              'tests/website-event-listings.test.ts'}
             and set(prerequisites) == set(INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS)
             == {'package.json', 'package-lock.json'}
@@ -1750,6 +1756,7 @@ def reviewed_integrated_experience_application_blobs(expected, source):
     control["scripts"]["test:ui"] = control["scripts"]["test:ui"].replace(
         "tests/header-panel-focus.test.mjs", "tests/header-panel-focus.test.mjs tests/header-origin-menu.test.mjs"
     ) + " tests/pwa-resume.test.mjs"
+    control["scripts"]["test:repo"] += " tests/scanner-browser-lifecycle.test.mjs"
     require(control == after, "Integrated experience package change is not the exact test registration patch.")
     require(not migration_plan(pins), "Integrated experience release cannot introduce migrations.")
     return pins
