@@ -14,7 +14,7 @@ test('foreground and BFCache repair viewport without reloading a healthy route',
   await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--app-viewport-height'))).toBe('800px');
   const url = page.url();
   await page.evaluate(() => {
-    const fixture = window as Window & { setResumeFixture: (hidden: boolean, height: number) => void; resumeIdentity?: object };
+    const fixture = window as unknown as Window & { setResumeFixture: (hidden: boolean, height: number) => void; resumeIdentity?: object };
     fixture.resumeIdentity = {};
     fixture.setResumeFixture(true, 0);
     window.visualViewport?.dispatchEvent(new Event('resize'));
@@ -22,7 +22,7 @@ test('foreground and BFCache repair viewport without reloading a healthy route',
   });
   await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--app-viewport-height'))).toBe('800px');
   await page.evaluate(() => {
-    (window as Window & { setResumeFixture: (hidden: boolean, height: number) => void }).setResumeFixture(false, 720);
+    (window as unknown as Window & { setResumeFixture: (hidden: boolean, height: number) => void }).setResumeFixture(false, 720);
     document.dispatchEvent(new Event('visibilitychange'));
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
   });
