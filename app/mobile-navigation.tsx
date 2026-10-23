@@ -2,7 +2,7 @@
 
 import { CalendarDays, CalendarPlus, ChevronRight, House, Info, LifeBuoy, Menu, Ticket, UsersRound, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useSyncExternalStore, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { useHeaderPanel } from "./use-header-panel";
@@ -27,8 +27,53 @@ const isMobile = () => window.matchMedia(mobileQuery).matches;
 const serverIsMobile = () => false;
 
 export default function MobileNavigation({ primaryVisible = false }: { primaryVisible?: boolean }) {
-  const { open, phase, ready, trigger, panel, id: panelId, toggle, close } = useHeaderPanel();
+  const { open, phase, ready, trigger, panel, id: panelId, toggle, close } = useHeaderPanel(160);
   const pathname = usePathname();
+  // Keep the disclosure tied to the real button, including safe-area layouts,
+  // zoom, scrolling headers and resized visual viewports. Never infer its top
+  // from a generic header height (that creates a detached dropdown).
+  useLayoutEffect(() => {
+    if (phase === "closed") return;
+    const place = () => {
+      const anchor = trigger.current?.getBoundingClientRect();
+      const menu = panel.current;
+      if (!anchor || !menu) return;
+      const viewport = window.visualViewport;
+      if (document.visibilityState === "hidden" || (viewport && (viewport.width <= 0 || viewport.height <= 0))) return;
+      if (window.innerWidth <= 0 || window.innerHeight <= 0) return;
+      const top = viewport?.offsetTop ?? 0;
+      const left = viewport?.offsetLeft ?? 0;
+      const availableWidth = Math.min(194, anchor.right - left - 12);
+      const bottom = top + (viewport?.height ?? window.innerHeight);
+      const dock = document.querySelector<HTMLElement>(".customer-dock")?.getBoundingClientRect();
+      const limit = dock && dock.height && dock.top > anchor.bottom ? Math.min(bottom - 8, dock.top - 8) : bottom - 8;
+      if (anchor.top < top || anchor.right > left + (viewport?.width ?? window.innerWidth) || availableWidth < anchor.width || limit - anchor.top < anchor.height + 44) { close(true, true); return; }
+      menu.style.setProperty("--menu-width", `${availableWidth}px`);
+      menu.style.setProperty("--menu-anchor-top", `${anchor.top}px`);
+      menu.style.setProperty("--menu-anchor-right", `${window.innerWidth - anchor.right}px`);
+      menu.style.setProperty("--menu-anchor-width", `${anchor.width}px`);
+      menu.style.setProperty("--menu-anchor-height", `${anchor.height}px`);
+      menu.style.setProperty("--menu-max-height", `${limit - anchor.top}px`);
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    if (trigger.current) observer.observe(trigger.current);
+    window.addEventListener("pageshow", place);
+    document.addEventListener("visibilitychange", place);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    window.visualViewport?.addEventListener("resize", place);
+    window.visualViewport?.addEventListener("scroll", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("pageshow", place);
+      document.removeEventListener("visibilitychange", place);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      window.visualViewport?.removeEventListener("resize", place);
+      window.visualViewport?.removeEventListener("scroll", place);
+    };
+  }, [close, panel, phase, trigger]);
 
   const mobile = useSyncExternalStore(subscribeToMobile, isMobile, serverIsMobile);
   const previousMobile = useRef(mobile);
@@ -36,8 +81,7 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
   useEffect(() => {
     if (previousMobile.current === mobile) return;
     previousMobile.current = mobile;
-    // The portal changes its DOM anchor at this breakpoint. End the current
-    // disclosure so its owned history entry and focus cannot cross layouts.
+    // End the owned mobile history entry when crossing layouts.
     swipe.current = null;
     panel.current?.style.removeProperty("--menu-drag-y");
     panel.current?.removeAttribute("data-dragging");
@@ -49,15 +93,18 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
     panel.current?.removeAttribute("data-dragging");
   };
   const startSwipe = (event: PointerEvent<HTMLElement>) => {
-    if (!mobile || !open || !event.isPrimary || event.button !== 0 || (event.target instanceof Element && event.target.closest("button"))) return;
+    if (!mobile || !open || !event.isPrimary || event.button !== 0) return;
     swipe.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, time: event.timeStamp, distance: 0 };
-    event.currentTarget.setPointerCapture(event.pointerId);
   };
   const moveSwipe = (event: PointerEvent<HTMLElement>) => {
     const gesture = swipe.current;
     if (!gesture || gesture.pointer !== event.pointerId) return;
     const distance = Math.max(0, event.clientY - gesture.y);
     if (Math.abs(event.clientX - gesture.x) > Math.max(16, distance)) { resetSwipe(); return; }
+    if (distance < 6) return;
+    // Capture only after a real drag, preserving ordinary close-button taps
+    // even when the narrow cap is exactly one 44px target wide.
+    event.currentTarget.setPointerCapture(event.pointerId);
     gesture.distance = Math.min(distance, 220);
     panel.current?.setAttribute("data-dragging", "true");
     panel.current?.style.setProperty("--menu-drag-y", `${gesture.distance}px`);
@@ -72,11 +119,9 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
   };
   const menuClass = `night-mobile-menu${open ? " is-open" : ""}${primaryVisible ? " has-primary-nav" : ""}`;
 
-  const navigation = <nav ref={panel} inert={!open} data-phase={phase} id={panelId} className="night-mobile-menu__panel" aria-label="Main navigation" aria-hidden={!open}>
+  const navigation = <nav ref={panel} inert={phase === "closed"} data-phase={phase} id={panelId} className="night-mobile-menu__panel" aria-label="Main navigation" aria-hidden={!open}>
       <header className="night-mobile-menu__panel-header" onPointerDown={startSwipe} onPointerMove={moveSwipe} onPointerUp={finishSwipe} onPointerCancel={resetSwipe} onLostPointerCapture={resetSwipe}>
-        {mobile ? <span className="night-mobile-menu__handle" aria-hidden="true" /> : null}
-        <span>Menu</span>
-        <button type="button" className="night-mobile-menu__close" aria-label="Close navigation" tabIndex={open ? undefined : -1} onClick={() => {
+        <button type="button" className="night-mobile-menu__close" aria-label="Close navigation" disabled={!open} tabIndex={open ? undefined : -1} onClick={() => {
           close(true);
         }}><X size={18} strokeWidth={1.65} aria-hidden="true" /></button>
       </header>
@@ -86,7 +131,7 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
           const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(`${link.href}/`)) || (link.href === "/events" && pathname.startsWith("/event/")) || (link.href === "/my-nights" && ["/tickets", "/account/", "/notifications"].some((prefix) => pathname.startsWith(prefix)));
           const routeClass = ["/", "/events", "/my-nights"].includes(link.href) ? "menu-primary-route" : link.href === "/hosts" ? "menu-host-route" : "";
           const classes = [routeClass, ["/about", "/help"].includes(link.href) ? "menu-secondary-route" : "", link.href === "/about" ? "menu-section-start" : ""].filter(Boolean).join(" ");
-          return <Link className={classes} key={link.href} href={link.href} tabIndex={open ? undefined : -1} aria-current={active ? "page" : undefined} onClick={() => close()}>
+          return <Link className={classes} key={link.href} href={link.href} tabIndex={open ? undefined : -1} aria-current={active ? "page" : undefined} onClick={(event) => { if (!open) event.preventDefault(); else close(); }}>
             <Icon size={19} strokeWidth={1.65} aria-hidden="true" />
             <span>{link.label}</span>
             <ChevronRight className="night-mobile-menu__chevron" size={15} strokeWidth={1.65} aria-hidden="true" />
@@ -95,7 +140,7 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
       </div>
     </nav>;
 
-  return <div className={menuClass}>
+  return <div className={menuClass} data-phase={phase}>
     <button
       ref={trigger}
       type="button"
@@ -111,9 +156,8 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
     >
       <Menu size={20} aria-hidden="true" /><span className="night-mobile-menu__trigger-label">Menu</span>
     </button>
-    {mobile ? createPortal(<div className={`${menuClass} night-mobile-menu--sheet`} data-phase={phase}>
-      <div className="night-mobile-menu__scrim" aria-hidden="true" onPointerDown={(event) => { event.preventDefault(); close(true); }} />
-      {navigation}
-    </div>, document.body) : navigation}
+    {ready && typeof document !== "undefined" ? createPortal(
+      <div className={`${menuClass} night-mobile-menu--anchored`} data-phase={phase}>{navigation}</div>, document.body,
+    ) : navigation}
   </div>;
 }

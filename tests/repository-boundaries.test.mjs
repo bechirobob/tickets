@@ -7,6 +7,7 @@ import { load } from "js-yaml";
 import test from "node:test";
 import { hasRequiredTicketsSpendLimits } from "../scripts/ai-gateway-policy.mjs";
 import './iphone-layout-evidence.test.mjs';
+import './iphone-layout-parity.test.mjs';
 import './support-email-rendering.test.mjs';
 import './browser-audit-harness.test.mjs';
 import './preview-data-inventory.test.mjs';

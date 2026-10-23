@@ -6,6 +6,7 @@ import { eventImageUrl } from "../../event-images";
 import { ArrowDown, ArrowLeft, ArrowUp, BadgeCheck, Camera, ChevronDown, ConciergeBell, Flag, Gem, HandHelping, MessageCircle, Music2, Reply, ShieldCheck, Users, Wine, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import RoomOverlay from "../../room-overlay";
+import { mountRoomViewport } from "../../../lib/room-viewport";
 import { requestJson, requestErrorMessage, RequestError } from "../../../lib/client-request";
 import FlashesPanel, { type RoomFlash } from "./flashes-panel";
 import ConfirmationNotifications from "../../confirmation-notifications";
@@ -339,18 +340,10 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     if (input) { input.style.height = "auto"; input.style.height = `${Math.min(input.scrollHeight, 112)}px`; }
   }, [draft]);
 
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const fitKeyboard = () => {
-      if (viewport.scale !== 1) return;
-      roomRef.current?.style.setProperty("--room-height", `${viewport.height}px`);
-      if (nearBottomRef.current && streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
-    };
-    fitKeyboard();
-    viewport.addEventListener("resize", fitKeyboard);
-    return () => viewport.removeEventListener("resize", fitKeyboard);
-  }, [status]);
+  useEffect(() => mountRoomViewport((height) => {
+    roomRef.current?.style.setProperty("--room-height", `${height}px`);
+    if (nearBottomRef.current && streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
+  }), [status]);
 
   function jumpToLatest() {
     nearBottomRef.current = true;

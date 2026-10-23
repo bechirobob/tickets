@@ -9,7 +9,7 @@ const clientIsReady = () => true;
 const serverIsReady = () => false;
 
 /** One non-modal header disclosure at a time, with a reversible exit. */
-export function useHeaderPanel() {
+export function useHeaderPanel(exitDuration = 180) {
   const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const id = useId();
   const pathname = usePathname();
@@ -33,8 +33,8 @@ export function useHeaderPanel() {
     }
     if (restore) trigger.current?.focus({ preventScroll: true });
     if (immediately || window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPhase("closed");
-    else { setPhase("closing"); timer.current = setTimeout(() => setPhase("closed"), 180); }
-  }, []);
+    else { setPhase("closing"); timer.current = setTimeout(() => setPhase("closed"), exitDuration); }
+  }, [exitDuration]);
   const releaseHistory = useLayerHistory(phase === "open", () => close(true));
   const toggle = (keyboard = false) => {
     navigationVersion.current++;

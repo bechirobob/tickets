@@ -51,47 +51,61 @@ test('mobile chrome supports safe geometry, reduced transparency and active-tab 
   await page.screenshot({ path: info.outputPath('mobile-app-drop.png'), fullPage: true });
 });
 
-test('mobile menu is a compact reachable sheet with working drag, focus and outside dismissal', async ({ page }, info) => {
-  test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile sheet and dock');
+test('mobile menu is a compact header-origin menu with working drag, focus and outside dismissal', async ({ page }, info) => {
+  test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile menu and dock');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/events');
-  const trigger = page.getByRole('button', { name: 'Open navigation', exact: true });
+  const trigger = page.locator('.night-mobile-menu__trigger');
   const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
   const dock = page.getByRole('navigation', { name: 'Customer navigation' });
+  await expect(trigger).toHaveAccessibleName('Open navigation');
   await trigger.click();
+  await expect(trigger).toHaveAccessibleName('Close navigation');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('button', { name: 'Close navigation', exact: true })).toBeFocused();
   await expect(menu).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
-  const layer = page.locator('.night-mobile-menu--sheet');
-  const scrim = page.locator('.night-mobile-menu__scrim');
-  const layerBox = await layer.boundingBox();
-  expect(layerBox!.x).toBe(0);
-  expect(layerBox!.width).toBe(page.viewportSize()!.width);
+  const layer = page.locator('.night-mobile-menu--anchored');
+  await expect(page.locator('.night-mobile-menu__scrim')).toHaveCount(0);
+  // The portal wrapper is not a full-width sheet. Measure its visible cap
+  // and panel against the actual header control, including hit-target size.
+  await expect(layer).toHaveCSS('pointer-events', 'none');
+  const anchorBox = await trigger.boundingBox();
+  const capBox = await menu.locator('.night-mobile-menu__panel-header').boundingBox();
+  expect(anchorBox).not.toBeNull();
+  expect(capBox).not.toBeNull();
+  expect(capBox!.x).toBeCloseTo(anchorBox!.x, 1);
+  expect(capBox!.y).toBeCloseTo(anchorBox!.y, 1);
+  expect(capBox!.width).toBeCloseTo(anchorBox!.width, 1);
+  expect(capBox!.height).toBeCloseTo(anchorBox!.height, 1);
+  expect(capBox!.width).toBeGreaterThanOrEqual(44);
+  expect(capBox!.height).toBeGreaterThanOrEqual(44);
   await expect(menu).toBeInViewport({ ratio: 1 });
-  await expect(scrim).toBeInViewport({ ratio: 1 });
-  const sheetBox = await menu.boundingBox();
+  const panelBox = await menu.boundingBox();
   const dockBox = await dock.boundingBox();
-  expect(sheetBox!.x).toBeGreaterThanOrEqual(12);
-  expect(sheetBox!.x + sheetBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width - 12);
-  expect(sheetBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
   expect(dockBox).not.toBeNull();
-  expect(sheetBox!.height).toBeLessThan(340);
-  expect(sheetBox!.y).toBeGreaterThan(100);
-  expect(sheetBox!.y + sheetBox!.height).toBeLessThanOrEqual(dockBox!.y - 5);
+  expect(panelBox!.x).toBeGreaterThanOrEqual(12);
+  expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width - 12);
+  expect(panelBox!.height).toBeLessThan(340);
+  expect(panelBox!.y).toBeCloseTo(anchorBox!.y, 1);
+  expect(panelBox!.x + panelBox!.width).toBeCloseTo(anchorBox!.x + anchorBox!.width, 1);
+  expect(panelBox!.width).toBeLessThanOrEqual(194);
+  expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(dockBox!.y - 5);
   for (const destination of ['Discover hosts', 'List your event', 'About us', 'Help']) {
     await expect(menu.getByRole('link', { name: destination, exact: true })).toBeInViewport();
   }
-  const sheetBacking = await menu.evaluate(element => {
+  const menuBacking = await menu.locator('.night-mobile-menu__links').evaluate(element => {
     const channels = getComputedStyle(element).backgroundColor.match(/[\d.]+/g)?.map(Number) ?? [];
     return channels.length === 4 ? channels[3] : 1;
   });
-  expect(sheetBacking).toBeGreaterThanOrEqual(.97);
-  expect((await new AxeBuilder({ page }).include('.night-mobile-menu--sheet').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
-  await page.screenshot({ path: info.outputPath('mobile-bottom-menu.png') });
+  expect(menuBacking).toBeGreaterThanOrEqual(.97);
+  expect((await new AxeBuilder({ page }).include('.night-mobile-menu--anchored').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath('mobile-header-origin-menu.png') });
 
   const handle = menu.locator('.night-mobile-menu__panel-header');
   let bounds = await handle.boundingBox();
-  const x = bounds!.x + bounds!.width / 2;
+  const x = bounds!.x + 3;
   const y = bounds!.y + 9;
   await page.mouse.move(x, y);
   await page.mouse.down();
@@ -103,22 +117,24 @@ test('mobile menu is a compact reachable sheet with working drag, focus and outs
   await expect(menu).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
 
   bounds = await handle.boundingBox();
-  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + 9);
+  await page.mouse.move(bounds!.x + 3, bounds!.y + 9);
   await page.mouse.down();
-  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + 90, { steps: 8 });
+  await page.mouse.move(bounds!.x + 3, bounds!.y + 90, { steps: 8 });
   await page.mouse.up();
   await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveAccessibleName('Open navigation');
   await expect(trigger).toBeFocused();
   await expect(page).toHaveURL(/\/events$/);
 
   await trigger.click();
   await expect(menu).toBeVisible();
-  await page.locator('.night-mobile-menu__scrim').click({ position: { x: 25, y: 100 } });
+  await page.mouse.click(8, 200);
   await expect(menu).toHaveCount(0);
-  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveAccessibleName('Open navigation');
   await trigger.click();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveAccessibleName('Open navigation');
   await expect(trigger).toBeFocused();
 });
 
@@ -184,7 +200,7 @@ test('mobile reduced-transparency preference makes navigation opaque', async ({ 
   await page.goto('/events');
   expect(await page.evaluate(() => matchMedia('(prefers-reduced-transparency: reduce)').matches)).toBe(true);
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-  for (const selector of ['.discovery-directory > .directory-header', '.customer-dock', '.night-mobile-menu--sheet .night-mobile-menu__panel']) {
+  for (const selector of ['.discovery-directory > .directory-header', '.customer-dock', '.night-mobile-menu--anchored .night-mobile-menu__links']) {
     const style = await page.locator(selector).evaluate(element => {
       const computed = getComputedStyle(element);
       return { background: computed.backgroundColor, blur: computed.backdropFilter };
@@ -195,7 +211,7 @@ test('mobile reduced-transparency preference makes navigation opaque', async ({ 
   await session.detach();
 });
 
-test('crossing the sheet breakpoint closes the old layout and releases only its owned history', async ({ page }) => {
+test('crossing the mobile breakpoint closes the old layout and releases only its owned history', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 980, height: 844 });
   await page.goto('/');
@@ -308,15 +324,15 @@ test('dense My Nights headers keep the full brand and separate 44px controls at 
   await expect(page.locator('.night-mobile-menu__trigger-label')).toBeVisible();
 });
 
-test('an open mobile sheet keeps one-click notification switching and its short-screen close control reachable', async ({ page }) => {
-  test.skip((page.viewportSize()?.width ?? 1000) > 760, 'Mobile sheet interaction');
+test('an open anchored menu keeps one-click notification switching and its short-screen close control reachable', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1000) > 760, 'Mobile menu interaction');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/**', route => route.fulfill({ status: 401, json: { error: 'Isolated panel interaction' } }));
   await page.route('**/api/customer/notifications', route => route.fulfill({ json: { notifications: [], unread: 0 } }));
   await page.setViewportSize({ width: 390, height: 664 });
   await page.goto('/my-nights');
   const header = page.locator('.my-nights-page > .directory-header');
-  const trigger = header.getByRole('button', { name: 'Open navigation', exact: true });
+  const trigger = header.locator('.night-mobile-menu__trigger');
   const bell = header.getByRole('button', { name: 'Notifications', exact: true });
   const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
   const dialog = page.getByRole('dialog', { name: 'The Buzz', exact: true });
@@ -325,13 +341,16 @@ test('an open mobile sheet keeps one-click notification switching and its short-
     const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     return hit === element || (hit !== null && element.contains(hit));
   };
+  await expect(trigger).toHaveAccessibleName('Open navigation');
   await trigger.click();
+  await expect(trigger).toHaveAccessibleName('Close navigation');
   await expect(menu).toBeInViewport({ ratio: 1 });
   expect(await bell.evaluate(reachableAtCenter)).toBe(true);
-  // The rest of the page still dismisses through the scrim, not click-through.
-  expect(await page.locator('.night-mobile-menu__scrim').evaluate(element => document.elementFromPoint(25, 200) === element)).toBe(true);
+  // No modal scrim competes with the header or destination controls.
+  await expect(page.locator('.night-mobile-menu__scrim')).toHaveCount(0);
   await bell.click();
   await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveAccessibleName('Open navigation');
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Close notifications', exact: true }).click();
   await trigger.click();
@@ -339,11 +358,21 @@ test('an open mobile sheet keeps one-click notification switching and its short-
   await expect(menu).toBeInViewport({ ratio: 1 });
   const close = menu.getByRole('button', { name: 'Close navigation', exact: true });
   await expect(close).toBeInViewport({ ratio: 1 });
-  const headerBounds = await header.boundingBox();
+  const triggerBounds = await trigger.boundingBox();
   const menuBounds = await menu.boundingBox();
-  expect(menuBounds!.y - headerBounds!.y - headerBounds!.height).toBeGreaterThanOrEqual(8);
+  const capBounds = await menu.locator('.night-mobile-menu__panel-header').boundingBox();
+  expect(triggerBounds).not.toBeNull();
+  expect(menuBounds).not.toBeNull();
+  expect(capBounds).not.toBeNull();
+  expect(capBounds!.x).toBeCloseTo(triggerBounds!.x, 1);
+  expect(capBounds!.y).toBeCloseTo(triggerBounds!.y, 1);
+  expect(capBounds!.width).toBeCloseTo(triggerBounds!.width, 1);
+  expect(capBounds!.height).toBeCloseTo(triggerBounds!.height, 1);
+  expect(menuBounds!.x + menuBounds!.width).toBeCloseTo(triggerBounds!.x + triggerBounds!.width, 1);
+  expect(menuBounds!.y).toBeCloseTo(triggerBounds!.y, 1);
   expect(await close.evaluate(reachableAtCenter)).toBe(true);
   await close.click();
   await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveAccessibleName('Open navigation');
   await expect(trigger).toBeFocused();
 });

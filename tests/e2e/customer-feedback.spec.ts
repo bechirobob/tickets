@@ -74,10 +74,20 @@ test("a cancelled native share stays quiet and clipboard success is accurately l
   await expect(share).toBeFocused();
 });
 
-test("filtering keeps search focus and reduced motion leaves posters still", async ({ page }) => {
+test("filtering keeps search focus and reduced motion leaves posters still", async ({ page, catalogue }) => {
+  const localFixture = !process.env.E2E_BASE_URL;
+  if (localFixture) {
+    // Match the existing fixed-launch browser fixture. Braai remains listed,
+    // but has passed in real time; Kempinski must not be relisted for this test.
+    expect(catalogue.events.find(event => event.slug === "the-weekend-braai")).toMatchObject({ startsAt: "2026-09-20T14:00:00.000Z" });
+    await page.clock.setFixedTime(new Date("2026-09-19T12:00:00Z"));
+  }
+  // External audits retain current time and their actual published listings.
   await page.goto("/events");
   const search = page.getByRole("searchbox", { name: "Search events, artists or venues" });
-  const firstCard = page.locator(".drop-card").first();
+  const firstCard = localFixture ? page.locator('.drop-card[data-event-slug="the-weekend-braai"]') : page.locator(".drop-card").first();
+  await expect(firstCard).toBeVisible();
+  await expect(page.locator('.drop-card[data-event-slug="sun-chasers-labadi"]')).toHaveCount(0);
   const title = await firstCard.locator("h3").innerText();
   const quip = await firstCard.locator(".drop-card__quip").innerText();
   await search.fill(title);
@@ -91,7 +101,7 @@ test("filtering keeps search focus and reduced motion leaves posters still", asy
   await expect(search).toBeFocused();
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(search).toHaveValue("");
-  await expect(page.locator(".drop-card").first()).toBeVisible();
+  await expect(firstCard).toBeVisible();
 });
 
 for (const kind of ['recovery','transfer'] as const) test(`${kind} link waits for the guest and stays usable after a failed request`,async({page},info)=>{

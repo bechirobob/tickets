@@ -19,15 +19,33 @@ test('Option A keeps full-width rows, quiet controls and keyboard access in port
     const trigger = page.getByRole('button', { name: 'Open navigation', exact: true });
     await expect(trigger).toBeEnabled();
     await trigger.focus();
+    // The trigger's accessible name becomes Close navigation when opened.
+    const anchor = await trigger.boundingBox();
+    expect(anchor).not.toBeNull();
     await trigger.press('Enter');
     const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
     const close = menu.getByRole('button', { name: 'Close navigation', exact: true });
     await expect(menu).toBeVisible();
+    await expect(page.locator('.night-mobile-menu__trigger')).toHaveAttribute('aria-label', 'Close navigation');
+    await expect(page.locator('.night-mobile-menu__trigger')).toHaveAttribute('aria-expanded', 'true');
     await expect(close).toBeFocused();
-    await expect(menu).toHaveCSS('border-radius', '18px');
+    await expect(menu).toHaveCSS('border-radius', '0px');
+    await expect(menu.locator('.night-mobile-menu__links')).toHaveCSS('border-top-left-radius', '10px');
     await expect(menu).toHaveCSS('box-shadow', 'none');
     await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    await expect(menu.locator('.night-mobile-menu__panel-header > span:not(.night-mobile-menu__handle)')).toHaveCSS('font-size', '14px');
+    const cap = await menu.locator('.night-mobile-menu__panel-header').boundingBox();
+    expect(cap!.x).toBeCloseTo(anchor!.x, 1);
+    expect(cap!.y).toBeCloseTo(anchor!.y, 1);
+    expect(cap!.width).toBeCloseTo(anchor!.width, 1);
+    expect(cap!.height).toBeCloseTo(anchor!.height, 1);
+    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(194);
+    const logo = page.locator('.directory-header .brand').first();
+    if (await logo.count()) {
+      expect(await logo.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+      })).toBe(true);
+    }
     const closeBounds = await close.boundingBox();
     expect(closeBounds!.width).toBeGreaterThanOrEqual(44);
     expect(closeBounds!.height).toBeGreaterThanOrEqual(44);
@@ -45,7 +63,7 @@ test('Option A keeps full-width rows, quiet controls and keyboard access in port
     if (viewport.width <= 700) {
       await expect(rows).toHaveCount(4);
       for (const [name, href] of destinations) await expect(menu.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
-      await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
+      await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
     }
     for (let index = 0; index < await rows.count(); index++) {
       await page.keyboard.press('Tab');
@@ -120,9 +138,13 @@ test('Option A keeps native keyboard focus inside the short-landscape scrollport
   const rows = menu.getByRole('link');
   await expect(close).toBeFocused();
   await expect(rows).toHaveCount(4);
-  await expect(menu).toHaveCSS('scroll-padding-top', '8px');
-  await expect(menu).toHaveCSS('scroll-padding-bottom', '8px');
-  expect(await menu.evaluate(panel => panel.scrollHeight > panel.clientHeight)).toBe(true);
+  const scrollport = menu.locator('.night-mobile-menu__links');
+  await expect(scrollport).toHaveCSS('scroll-padding-top', '6px');
+  await expect(scrollport).toHaveCSS('scroll-padding-bottom', '6px');
+  // Compact rows need not overflow at 390px high; force a shorter viewport to
+  // exercise native keyboard scrolling without changing production row sizes.
+  await page.setViewportSize({ width: 700, height: 300 });
+  expect(await scrollport.evaluate(panel => panel.scrollHeight > panel.clientHeight)).toBe(true);
 
   // Only native Tab changes focus/scrolling. Never repair visibility in the test.
   for (const direction of ['Tab', 'Shift+Tab']) {
@@ -133,7 +155,7 @@ test('Option A keeps native keyboard focus inside the short-landscape scrollport
       await expect(row).toBeFocused();
       await expect(row).toBeInViewport({ ratio: 1 });
       await expect.poll(() => row.evaluate(link => {
-        const panel = link.closest('nav')!;
+        const panel = link.closest('.night-mobile-menu__links')!;
         const bounds = panel.getBoundingClientRect();
         const style = getComputedStyle(panel);
         const rowBounds = link.getBoundingClientRect();
@@ -150,4 +172,43 @@ test('Option A keeps native keyboard focus inside the short-landscape scrollport
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
   await expect(trigger).toBeFocused();
+});
+
+test('header menu retracts into its button and interrupted exits cannot navigate or steal focus', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 664 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/events');
+  const trigger = page.locator('.night-mobile-menu__trigger');
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  const menu = page.locator('.night-mobile-menu--anchored .night-mobile-menu__panel');
+  await expect(menu).toHaveAttribute('data-phase', 'open');
+  await expect(menu).toHaveCSS('clip-path', 'inset(0px)');
+  await page.screenshot({ path: info.outputPath('header-origin-390-open.png') });
+  await menu.evaluate(panel => {
+    const close = panel.querySelector<HTMLButtonElement>('button')!;
+    close.addEventListener('click', () => requestAnimationFrame(() => {
+      const surface = panel.querySelector('.night-mobile-menu__links')!;
+      const bounds = surface.getBoundingClientRect();
+      const hit = document.elementFromPoint(bounds.right - 20, bounds.top + 20);
+      panel.setAttribute('data-exit-probe', JSON.stringify({ phase: panel.getAttribute('data-phase'), covered: hit !== null && panel.contains(hit), inert: (panel as HTMLElement).inert }));
+    }), { once: true });
+  });
+  // A real pointer click, not programmatic activation, exercises cap hit testing.
+  await menu.getByRole('button', { name: 'Close navigation' }).click();
+  await expect(menu).toHaveAttribute('data-exit-probe', /closing/);
+  const closing = JSON.parse((await menu.getAttribute('data-exit-probe'))!);
+  expect(closing.phase).toBe('closing');
+  expect(closing.covered).toBe(true);
+  expect(closing.inert).toBe(false);
+  await expect(trigger).toBeFocused();
+  // Keyboard users can reopen from the restored trigger during its exit.
+  await trigger.press('Enter');
+  await expect(menu).toHaveAttribute('data-phase', 'open');
+  await expect(menu.getByRole('button', { name: 'Close navigation' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveAttribute('data-phase', 'closed');
+  await expect(menu).toHaveAttribute('inert', '');
+  await expect(trigger).toHaveCSS('opacity', '1');
+  await expect(page).toHaveURL(/\/events$/);
 });

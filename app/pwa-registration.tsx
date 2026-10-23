@@ -19,8 +19,10 @@ declare global {
 const DISMISS_KEY = "bct:pwa-install-dismissed-at";
 
 function recentlyDismissed() {
-  const value = Number(window.localStorage.getItem(DISMISS_KEY) ?? 0);
-  return Number.isFinite(value) && Date.now() - value < 14 * 24 * 60 * 60 * 1000;
+  try {
+    const value = Number(window.localStorage.getItem(DISMISS_KEY) ?? 0);
+    return Number.isFinite(value) && Date.now() - value < 14 * 24 * 60 * 60 * 1000;
+  } catch { return true; } // Optional installation UI must never break the app shell.
 }
 
 export default function PwaRegistration() {
@@ -35,7 +37,9 @@ export default function PwaRegistration() {
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    void navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      // Offline/unavailable service workers do not prevent normal browsing.
+    });
   }, []);
 
   useEffect(() => {
@@ -72,7 +76,7 @@ export default function PwaRegistration() {
   }, [eligibleAttendee, installed, isIos, pathname, promptEvent, usefulPath]);
 
   function dismiss() {
-    window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    try { window.localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch { /* Dismiss for this document even if storage is unavailable. */ }
     setVisible(false);
     setIosGuide(false);
   }
