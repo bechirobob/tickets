@@ -85,7 +85,8 @@
       "esbuild": "0.25.12"
     },
     "@next/eslint-plugin-next": "$@next/eslint-plugin-next",
-    "vite-plugin-dynamic-import": "$vite-plugin-dynamic-import"
+    "vite-plugin-dynamic-import": "$vite-plugin-dynamic-import",
+    "zod": "4.6.6"
   },
   "type": "module"
 }
