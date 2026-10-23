@@ -6,6 +6,7 @@ import {spawn} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {captureWebsiteComparison} from './iphone-layout-evidence.mjs';
 import {excludeAuditAnalytics} from './audit-analytics.mjs';
+import {assessLayoutParity, readDiscoveryEvidence, readLayoutSnapshot, websiteDiscoveryCatalogue, websiteDiscoveryContract} from './iphone-layout-parity.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = process.env.LAYOUT_OUTPUT || path.join(tmpdir(), 'becore-iphone-layouts');
@@ -38,6 +39,9 @@ const response = await fetch(websiteOrigin + '/api/public/events', {signal:Abort
 if(!response.ok) throw new Error('Public catalogue unavailable');
 const catalogue = await response.json();
 if(!catalogue.screens || !catalogue.events?.length) throw new Error('No live events available for layout review');
+const originalCatalogue = JSON.stringify(catalogue);
+const discoveryCatalogue = websiteDiscoveryCatalogue(catalogue);
+const excludedEventTitle = catalogue.events.find(event => event.slug === websiteDiscoveryContract.slug).title;
 const server = spawn(process.execPath, [path.join(repo,'mobile/node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', '4174'], {cwd:path.join(repo,'mobile'),stdio:'inherit'});
 for(let i=0;i<50;i++){try{if((await fetch('http://127.0.0.1:4174')).ok)break;}catch{} await new Promise(r=>setTimeout(r,200));}
 const browser = await webkit.launch();
@@ -57,24 +61,28 @@ const page = await context.newPage();
 const origin = 'https://tickets.becoreops.com';
 if (origin !== websiteOrigin) await excludeAuditAnalytics(context, origin);
 await page.route(`${origin}/api/public/events`, route => route.fulfill({json:catalogue,headers:{'access-control-allow-origin':'*'}}));
-if (candidate) {
-  // Native catalogue URLs point to production. During a candidate comparison,
-  // load its host artwork from the real candidate server and preserve headers.
-  // This keeps a not-yet-deployed public-image policy from mixing revisions.
-  await page.route(`${origin}/hosts/*`, async route => {
-    const source = new URL(new URL(route.request().url()).pathname, websiteOrigin).href;
-    const response = await route.fetch({url:source});
-    await route.fulfill({response});
+async function routeNativeArtwork(targetPage) {
+  if (candidate) {
+    // Native catalogue URLs point to production. During a candidate comparison,
+    // load its host artwork from the real candidate server and preserve headers.
+    // This keeps a not-yet-deployed public-image policy from mixing revisions.
+    await targetPage.route(`${origin}/hosts/*`, async route => {
+      const source = new URL(new URL(route.request().url()).pathname, websiteOrigin).href;
+      const response = await route.fetch({url:source});
+      await route.fulfill({response});
+    });
+  }
+
+  await targetPage.route(`${origin}/events/*`, async route => {
+    const name = path.basename(new URL(route.request().url()).pathname);
+    await route.fulfill({body:await readFile(path.join(repo,'public/events',name)),contentType:name.endsWith('.webp')?'image/webp':'image/jpeg'});
   });
 }
-
-await page.route(`${origin}/events/*`, async route => {
-  const name = path.basename(new URL(route.request().url()).pathname);
-  await route.fulfill({body:await readFile(path.join(repo,'public/events',name)),contentType:name.endsWith('.webp')?'image/webp':'image/jpeg'});
-});
+await routeNativeArtwork(page);
 const pages=[];
 const parity=[];
 const appSnapshots=new Map();
+const discoveryReferences=new Map();
 async function capture(title,kind='App screen',single=false) {
   checkWebsiteServer();
   await page.evaluate(async()=>{
@@ -107,20 +115,16 @@ async function capture(title,kind='App screen',single=false) {
   pages.push({title,kind,files,url:page.url()});
   const route = new URL(page.url()).pathname;
   if (['/', '/events', ...catalogue.events.map(event => '/event/' + event.slug)].includes(route)) {
-    const snapshot = await page.evaluate(() => {
-      const selector = '.compact-hero, .compact-hero__image--active, main h1, .drop-card h3, .drop-card__schedule, .event-detail-facts, .event-story-content, .compact-ticket-panel, .event-detail-toolbar, .customer-dock';
-      return [...document.querySelectorAll(selector)].map(element => {
-        const style = getComputedStyle(element);
-        const hero = element.matches('.compact-hero, .compact-hero__image--active');
-        return { tag: element.tagName, text: element.textContent.replace(/\s+/g, ' ').trim(), font: style.fontFamily, size: style.fontSize, color: style.color, ...(hero?{width:style.width,height:style.height,objectFit:style.objectFit,objectPosition:style.objectPosition,portraitCrop:element.getAttribute('data-portrait-crop')}: {}) };
-      });
-    });
+    const snapshot = await readLayoutSnapshot(page);
     if (kind === 'App screen') appSnapshots.set(route, snapshot);
     else if (kind === 'Mobile website' && appSnapshots.has(route)) {
-      const match = JSON.stringify(appSnapshots.get(route)) === JSON.stringify(snapshot);
-      parity.push({ route, match, app: appSnapshots.get(route), website: snapshot });
+      const reference = discoveryReferences.get(route);
+      const assessment = assessLayoutParity({route, app:appSnapshots.get(route), website:snapshot,
+        reference:reference?.snapshot, referenceDiscovery:reference?.discovery,
+        discovery:websiteDiscoveryContract.routes.includes(route) ? await readDiscoveryEvidence(page, excludedEventTitle) : undefined});
+      parity.push(assessment);
       await writeFile(path.join(out, 'parity.json'), JSON.stringify(parity, null, 2));
-      if (!match) throw new Error(`App/browser screen mismatch: ${route}`);
+      if (!assessment.match) throw new Error(`App/browser screen mismatch: ${route}: ${assessment.problems.join('; ')}`);
     }
   }
   await writeFile(path.join(out,'screens.json'),JSON.stringify({capturedAt:new Date().toISOString(),websiteEnvironment:candidate?'candidate':'production',websiteHarness:candidate?'compiled browser-worker public mode':'production',parity,catalogueUpdatedAt:catalogue.updatedAt,sourceCommit:process.env.LAYOUT_SOURCE_SHA||process.env.GITHUB_SHA||null,websiteCommit:webVersion.revision,viewport:page.viewportSize(),engine:'Playwright WebKit on macOS, iPhone 13 viewport',pages},null,2));
@@ -146,6 +150,25 @@ try {
   await page.route(`${origin}/api/public/events`,route=>route.fulfill({json:{...catalogue,events:[],screens:[]},headers:{'access-control-allow-origin':'*'}}));
   await page.reload();await page.getByRole('heading',{name:'The next plan is still cooking.'}).waitFor();
   await capture('No events yet','App state');
+  // Separate native reference, not an app capture: project only the approved
+  // website discovery exclusion. Compare every measured field without skipping
+  // hero/fallback content, unaffected event cards, typography or geometry.
+  const referenceContext = await browser.newContext(device);
+  try {
+    await excludeAuditAnalytics(referenceContext, origin);
+    const referencePage = await referenceContext.newPage();
+    await routeNativeArtwork(referencePage);
+    await referencePage.route(`${origin}/api/public/events`, route => route.fulfill({json:discoveryCatalogue,headers:{'access-control-allow-origin':'*'}}));
+    for (const route of websiteDiscoveryContract.routes) {
+      checkWebsiteServer();
+      await referencePage.goto('http://127.0.0.1:4174' + route);
+      await referencePage.locator('main:not(.catalogue-loading) h1').waitFor();
+      await referencePage.evaluate(() => document.fonts.ready);
+      await referencePage.waitForTimeout(1500);
+      discoveryReferences.set(route, {snapshot:await readLayoutSnapshot(referencePage), discovery:await readDiscoveryEvidence(referencePage, excludedEventTitle)});
+    }
+  } finally { await referenceContext.close(); }
+  if (JSON.stringify(catalogue) !== originalCatalogue) throw new Error('Native catalogue was changed during discovery comparison');
   // Remove the simulated outage/empty response before checking the real website.
   await page.unroute(`${origin}/api/public/events`);
   for(const [title,route] of [['Website home','/'],['Website The Drop','/events'],['Help','/help'],['Privacy','/account/privacy'],['My Nights access','/my-nights'],['The Buzz access','/notifications'],...catalogue.events.map(event=>[event.title+' website', '/event/'+event.slug])]) {
