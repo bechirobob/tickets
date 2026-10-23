@@ -387,6 +387,12 @@ test('a fractionally clipped desktop trigger still opens inside the viewport and
   await expect(trigger).toBeEnabled();
   await page.evaluate(() => window.scrollTo(0, 0));
   const initialTop = await trigger.evaluate(element => element.getBoundingClientRect().top);
+  // The isolated catalogue can be shorter than the live catalogue. Give only
+  // the page surface scroll room; do not move or resize the header/menu itself.
+  await page.locator('main.discovery-directory').evaluate(surface => {
+    (surface as HTMLElement).style.minHeight = `${innerHeight + 80}px`;
+  });
+  expect(await trigger.evaluate(element => element.getBoundingClientRect().top)).toBeCloseTo(initialTop, 5);
   // Scroll positions can be integral; derive a <=1px clip from the rendered
   // header instead of assuming every engine/font has the same header metrics.
   const clippedScroll = Math.floor(initialTop) + 1;
