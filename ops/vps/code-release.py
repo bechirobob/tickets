@@ -1778,6 +1778,108 @@ def reviewed_integrated_experience_application_blobs(expected, source):
     return pins
 
 
+
+# Exact camera framing and live-look release; prior admissions remain unchanged.
+CAMERA_LOOKS_RELEASE_BASELINE = 'ecdad9c8fedf90b234ee5e9a315b54ed12bad07f'
+CAMERA_LOOKS_RELEASE_BASE_TREE = '0c68f22bde7de5f350c1e1d3400a6be205adb1a2'
+CAMERA_LOOKS_APP_SNAPSHOT = '7d3c830859833c5c0cd651e2b9516eb7f7a0fcbe'
+CAMERA_LOOKS_APP_TREE = '384af64fef2c98aa9e070141000c56b9a1a63861'
+CAMERA_LOOKS_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+CAMERA_LOOKS_APPLICATION_INPUTS = {'app/room-features.css': '3dcef6b137313e40b0aedbd4237065f21ff92ec1',
+ 'app/room/[slug]/flash-camera.tsx': 'b5a156b3b75674f9cd71eec5ea3ec0c505428b92',
+ 'app/room/[slug]/flash-live-preview.tsx': None,
+ 'app/room/[slug]/flash-look-picker.tsx': 'f4ffc8b16b1378b71dc7f09b0265a925a1216139',
+ 'docs/design/flashes-cinematic-filters.md': 'ded1d86ae0aee075341032e9aee3ea269637cb66',
+ 'lib/flash-photo-filters.ts': '8392734c6593ec495f92705f2f8572218093f9e8',
+ 'tests/e2e/flash-camera.spec.ts': 'ff86b09b19e6e255ca39cc451e3d0e50dcf5b217',
+ 'tests/flash-camera-state.test.mjs': '14fe34f80f08e810837facb9406da3b5c6bd66fc',
+ 'tests/flash-photo-filters.test.mjs': 'c4e4daa843aeaf63f02e5ab72939eeab6f3a541b'}
+CAMERA_LOOKS_APPLICATION_BLOBS = {'app/room-features.css': '948b795d803710bd75a6ec6b381de6a249ba2c40',
+ 'app/room/[slug]/flash-camera.tsx': 'a57db414995fb492e440ab22e62b2ba6c20b7867',
+ 'app/room/[slug]/flash-live-preview.tsx': '6a4eac08b2d2a4cd0984de6968e5d809fbdcb540',
+ 'app/room/[slug]/flash-look-picker.tsx': 'cb25e9a7ae8b10d304dc57eb74c29b4e3b854fc2',
+ 'docs/design/flashes-cinematic-filters.md': 'd23c2c17ddefe58347f5ef016acddb346ec86817',
+ 'lib/flash-photo-filters.ts': '716ceb711cc5d37cc79302ff1c53289285b3a548',
+ 'tests/e2e/flash-camera.spec.ts': 'c4b10b050e2461b1e28c9a1c07d09dd88056676c',
+ 'tests/flash-camera-state.test.mjs': 'ed3cf345956556ec141e43977dcd6fff0621b272',
+ 'tests/flash-photo-filters.test.mjs': 'ae0c09955f51142a0135d806be9a898f160fd1c8'}
+CAMERA_LOOKS_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': '57e8fa844c6cc48fbbd8bfd766789970a494635f',
+ 'package.json': '543f7f006d606f32f5435c83b519078894ae7b76',
+ 'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+
+def reviewed_camera_looks_application_blobs(expected, source):
+    """Bind exact M/S inputs and outputs to independent control C and promotion P."""
+    snapshot = CAMERA_LOOKS_APP_SNAPSHOT
+    controls = CAMERA_LOOKS_CONTROL_FILES
+    application = CAMERA_LOOKS_APPLICATION_BLOBS
+    dependencies = CAMERA_LOOKS_DEPENDENCY_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package.json', 'package-lock.json', 'mobile/package.json',
+                                      'mobile/package-lock.json', 'runtime/vps/package.json'}
+            and set(application) == set(CAMERA_LOOKS_APPLICATION_INPUTS)
+            == {'app/room-features.css',
+ 'app/room/[slug]/flash-camera.tsx',
+ 'app/room/[slug]/flash-live-preview.tsx',
+ 'app/room/[slug]/flash-look-picker.tsx',
+ 'docs/design/flashes-cinematic-filters.md',
+ 'lib/flash-photo-filters.ts',
+ 'tests/e2e/flash-camera.spec.ts',
+ 'tests/flash-camera-state.test.mjs',
+ 'tests/flash-photo-filters.test.mjs'}
+            and not (controls | set(dependencies)) & set(application),
+            "Camera looks inventory or scope changed.")
+    require(expected == CAMERA_LOOKS_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == CAMERA_LOOKS_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == CAMERA_LOOKS_APP_TREE,
+            "Camera looks live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            "Camera looks snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in CAMERA_LOOKS_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Camera looks application input differs from reviewed source: " + name)
+    for name, blob in application.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Camera looks snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "Camera looks requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+            "Camera looks trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Camera looks candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    pins = dict(application)
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Camera looks output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Camera looks controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete M/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Camera looks dependencies must remain unchanged: " + name)
+    require(not migration_plan(pins), "Camera looks release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_recovery_audit_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
     snapshot = RECOVERY_AUDIT_APP_SNAPSHOT
@@ -1986,6 +2088,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == CAMERA_LOOKS_RELEASE_BASELINE:
+        return reviewed_camera_looks_application_blobs(expected, source)
     if expected == INTEGRATED_EXPERIENCE_RELEASE_BASELINE:
         return reviewed_integrated_experience_application_blobs(expected, source)
     if expected == RECOVERY_AUDIT_RELEASE_BASELINE:
@@ -2069,6 +2173,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == CAMERA_LOOKS_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Camera looks release cannot introduce migrations.")
+        return changed
     if expected == INTEGRATED_EXPERIENCE_RELEASE_BASELINE:
         require(not migration_plan(changed), "Integrated experience release cannot introduce migrations.")
         return changed
