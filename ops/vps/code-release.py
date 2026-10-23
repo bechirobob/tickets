@@ -915,8 +915,8 @@ RECOVERY_AUDIT_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26
 # Other dependencies, workflows, audit policy, access, runtime and migrations stay fixed.
 INTEGRATED_EXPERIENCE_RELEASE_BASELINE = '4c5f395b75837725beb990e27261e3ad367c1314'
 INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE = 'e3c30e6a0cadfac282f6f8e5c793ac18e8a83c08'
-INTEGRATED_EXPERIENCE_APP_SNAPSHOT = '9a177e0cdefb9b96183923f261387b668de453ce'
-INTEGRATED_EXPERIENCE_APP_TREE = 'e1967fee625331581ed0ddb0840aba3f9bab687a'
+INTEGRATED_EXPERIENCE_APP_SNAPSHOT = '83bd2c315b0a5251270f8df7bf79b16eabaa5fc7'
+INTEGRATED_EXPERIENCE_APP_TREE = '83051af42a009880ac36f8544b94c9eaa7d542e7'
 INTEGRATED_EXPERIENCE_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa4c96f073d5b116e474f91d5e4e9a',
  'app/global-error.tsx': None,
@@ -978,7 +978,7 @@ INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f
  'tests/e2e/event-details.spec.ts': '53b643a49ae9a38c7f41f9c3f1b854e664fd4351',
  'tests/e2e/host-profile.spec.ts': 'b863f3c3b1a48b1068134cd6b6348ce454568201',
  'tests/e2e/menu-option-a.spec.ts': '4655f6594d23c6120eec9e1f1c43ece41fc1bd2c',
- 'tests/e2e/mobile-app-behavior.spec.ts': '76be65b6ec1748b18fbd28bedeeeaf71f432593a',
+ 'tests/e2e/mobile-app-behavior.spec.ts': 'bb0d0f3a8374fe3d5ff3dd107dc5d9f28205671c',
  'tests/e2e/public-journey.spec.ts': '6cdf7e9c9fd330f9875ff44bce66b76664dbde71',
  'tests/e2e/published-catalogue.spec.ts': '0b8a0929b7579fb520f4013399321ad97637f421',
  'tests/e2e/pwa-resume.spec.ts': '74f4b68fe56a7536304076df257767e43f4581f3',
