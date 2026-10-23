@@ -998,9 +998,11 @@ INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa86
  'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
  'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
 
-INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS = {'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918',
+INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS = {'.github/workflows/tickets-release-operator-checks.yml': '019ec9b3ac73bec979d3ab62725a3d1208ca765f',
+ 'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918',
  'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36'}
-INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS = {'package-lock.json': '607dce6d28154ac15c8de1abc6083828e6317e12',
+INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS = {'.github/workflows/tickets-release-operator-checks.yml': '33a7e8cc3e38dc6f58f10113dd12f1c7c3042ce1',
+ 'package-lock.json': '607dce6d28154ac15c8de1abc6083828e6317e12',
  'package.json': '29dd9100982f0da8a90e8fd360a48440770c40c2'}
 
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
@@ -1644,6 +1646,7 @@ def reviewed_integrated_experience_application_blobs(expected, source):
     application = INTEGRATED_EXPERIENCE_APPLICATION_BLOBS
     dependencies = INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS
     prerequisites = INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS
+    workflow = ".github/workflows/tickets-release-operator-checks.yml"
     require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
             and set(dependencies) == {'mobile/package.json', 'mobile/package-lock.json',
                                       'runtime/vps/package.json'}
@@ -1687,7 +1690,7 @@ def reviewed_integrated_experience_application_blobs(expected, source):
              'tests/scanner-browser-lifecycle.test.mjs',
              'tests/website-event-listings.test.ts'}
             and set(prerequisites) == set(INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS)
-            == {'package.json', 'package-lock.json'}
+            == {'package.json', 'package-lock.json', workflow}
             and set(application) & set(prerequisites) == {'package.json'}
             and not (controls | set(dependencies)) & (set(application) | set(prerequisites)),
             "Integrated experience inventory or scope changed.")
@@ -1698,7 +1701,7 @@ def reviewed_integrated_experience_application_blobs(expected, source):
     for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
         subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
                        check=True, env=git_environment(), timeout=60)
-    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application) | set(prerequisites),
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application) | (set(prerequisites) - {workflow}),
             "Integrated experience snapshot differs from its complete reviewed inventory.")
     verify_changed_modes(expected, snapshot)
     for name, blob in INTEGRATED_EXPERIENCE_APPLICATION_INPUTS.items():
@@ -1708,9 +1711,14 @@ def reviewed_integrated_experience_application_blobs(expected, source):
     for name, blob in INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS.items():
         require(git("ls-tree", expected, "--", name) == "100644 blob " + blob + "\t" + name,
                 "Integrated experience prerequisite input differs from reviewed source: " + name)
+    # S keeps the original gate; independent C/P add only its exact timeout headroom.
+    require(git("ls-tree", snapshot, "--", workflow) == git("ls-tree", expected, "--", workflow),
+            "Integrated experience snapshot workflow must remain unchanged.")
     # The lock is identical in C, S and P; only S/P add the reviewed test registrations.
     outputs = {**prerequisites, **application}
     for name, blob in outputs.items():
+        if name == workflow:
+            continue
         require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
                 "Integrated experience snapshot output differs from reviewed source: " + name)
     trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
@@ -1723,7 +1731,7 @@ def reviewed_integrated_experience_application_blobs(expected, source):
     require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls | set(prerequisites),
             "Integrated experience trusted controls contain unreviewed changes.")
     require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
-            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls | {workflow},
             "Integrated experience candidate differs from the complete reviewed application patch.")
     verify_changed_modes(expected, trusted)
     verify_changed_modes(trusted, source)
@@ -1740,7 +1748,12 @@ def reviewed_integrated_experience_application_blobs(expected, source):
                 and git("ls-tree", source, "--", name) == entry,
                 "Integrated experience controls differ from their independent trusted entry.")
         pins[name] = git("rev-parse", trusted + ":" + name)
-    # The complete M/S/C/P diffs freeze every other path, including every workflow.
+    # The complete M/S/C/P diffs freeze every other path and every other workflow.
+    original_workflow = git("show", expected + ":" + workflow)
+    require(original_workflow.count("    timeout-minutes: 5\n") == 1
+            and git("show", trusted + ":" + workflow) == original_workflow.replace(
+                "    timeout-minutes: 5\n", "    timeout-minutes: 10\n"),
+            "Integrated experience workflow change is not the exact timeout headroom patch.")
     for name, blob in dependencies.items():
         require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
                     for revision in (expected, snapshot, trusted, source)),

@@ -787,8 +787,10 @@ def recovery_audit_source_family(root):
 
 
 # Exact integrated-experience C/P test family; historical families remain independent.
-INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '613d364b97b59974a3132fad30457ac6a695d3a6'
+INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '339a978956b72dd0514a77ce17b98fc69f82ec32'
 INTEGRATED_EXPERIENCE_STAGED_BASE = dict(RECOVERY_AUDIT_STAGED_BASE)
+INTEGRATED_EXPERIENCE_STAGED_BASE['.github/workflows/tickets-release-operator-checks.yml'] = (
+    '100644', '33a7e8cc3e38dc6f58f10113dd12f1c7c3042ce1')
 INTEGRATED_EXPERIENCE_TEST_FILE = Path(__file__).resolve()
 
 
@@ -8227,6 +8229,9 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
         os.chdir(self.root)
         self.addCleanup(os.chdir, previous)
         self.git('init', '-q')
+        # Keep automatic maintenance enabled, but finish its writers before cleanup.
+        self.git('config', '--local', 'maintenance.autoDetach', 'false')
+        self.git('config', '--local', 'gc.autoDetach', 'false')
         self.git('config', 'user.name', 'Integrated experience admission tests')
         self.git('config', 'user.email', 'tests@example.invalid')
         self.files = tuple(release.INTEGRATED_EXPERIENCE_APPLICATION_BLOBS)
@@ -8260,6 +8265,13 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
             self.write(name, 'unchanged locked dependency input ' + name + '\n')
         self.write('ops/vps/audit.py', 'unchanged staged utility\n')
         self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
+        self.workflow = '.github/workflows/tickets-release-operator-checks.yml'
+        self.workflow_before = ('permissions:\n  contents: read\njobs:\n  verify:\n'
+                                '    timeout-minutes: 5\n    steps:\n'
+                                '      - run: python3 -m unittest discover -s ops/vps\n')
+        self.workflow_after = self.workflow_before.replace('    timeout-minutes: 5\n',
+                                                          '    timeout-minutes: 10\n')
+        self.write(self.workflow, self.workflow_before)
         self.live = self.commit()
         # S may contain several reviewed commits; direct-child ancestry is not assumed.
         self.git('commit', '--allow-empty', '-qm', 'feature preparation')
@@ -8282,6 +8294,7 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
         self.operator = b'independent reviewed integrated_experience operator\n'
         self.write('ops/vps/code-release.py', self.operator)
         self.write('ops/vps/test_code_release.py', 'independent reviewed integrated_experience tests\n')
+        self.write(self.workflow, self.workflow_after)
         self.write('package.json', json.dumps(self.security_package, indent=2))
         self.write('package-lock.json', self.security_lock)
         self.control = self.commit()
@@ -8307,8 +8320,10 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
             self.patch_value(release, name, value)
         self.patch_value(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_OPERATOR_BLOB', self.blob(self.operator))
         staged_names = (*release.INTEGRATED_EXPERIENCE_CONTROL_FILES, 'ops/vps/audit.py',
-                        '.github/workflows/candidate-checks.yml')
-        self.staged = {name: ('100644', self.git('rev-parse', self.live + ':' + name)) for name in staged_names}
+                        '.github/workflows/candidate-checks.yml', self.workflow)
+        self.staged = {name: ('100644', self.git('rev-parse',
+                       (self.control if name == self.workflow else self.live) + ':' + name))
+                       for name in staged_names}
         self.patch_value(sys.modules[__name__], 'INTEGRATED_EXPERIENCE_STAGED_BASE', self.staged)
         patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
         patcher.start()
@@ -8341,10 +8356,73 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
     def verify(self, source=None):
         return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
 
+    def test_fixture_automatic_git_maintenance_finishes_before_cleanup(self):
+        for name in ('maintenance.autoDetach', 'gc.autoDetach'):
+            self.assertEqual(self.git('config', '--local', '--bool', name), 'false')
+        with tempfile.TemporaryDirectory() as directory:
+            trace = Path(directory) / 'git-trace.jsonl'
+            environment = {**release.git_environment(), 'GIT_TRACE2_EVENT': str(trace)}
+            with patch.object(release, 'git_environment', return_value=environment):
+                self.git('commit', '--allow-empty', '-qm', 'foreground fixture maintenance')
+            events = [json.loads(line) for line in trace.read_text().splitlines()]
+            children = [event['argv'] for event in events
+                        if event.get('event') == 'child_start'
+                        and 'maintenance' in event.get('argv', [])]
+            self.assertTrue(children, 'Automatic maintenance must remain enabled')
+            self.assertTrue(all('--no-detach' in argv and '--detach' not in argv for argv in children))
+            self.assertFalse(any(event.get('event') == 'region_enter'
+                                 and event.get('category') == 'maintenance'
+                                 and event.get('label') == 'detach' for event in events))
+            self.assertFalse((self.root / '.git/objects/maintenance.lock').exists())
+
+    def test_workflow_prerequisite_rejects_repinning_any_change_except_timeout(self):
+        mutations = (self.workflow_after.replace('10', '11'),
+                     self.workflow_after.replace('contents: read', 'contents: write'),
+                     self.workflow_after.replace('python3 -m unittest discover -s ops/vps', 'true'),
+                     self.workflow_after + 'unexpected: true\n')
+        for raw in mutations:
+            with self.subTest(workflow=raw):
+                self.git('checkout', '-q', self.control)
+                self.write(self.workflow, raw)
+                control = self.commit()
+                self.git('checkout', '-q', self.candidate)
+                self.write(self.workflow, raw)
+                candidate = self.commit()
+                candidate = self.git('commit-tree', self.git('rev-parse', candidate + '^{tree}'),
+                                     '-p', candidate, '-p', control, '-m', 'revised workflow ancestry')
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+                     patch.dict(release.INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS,
+                                {self.workflow: self.git('rev-parse', control + ':' + self.workflow)}), \
+                     self.assertRaisesRegex(release.ReleaseError, 'exact timeout headroom patch'):
+                    self.verify(candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_workflow_output_is_exact_in_promotion_and_unchanged_in_snapshot(self):
+        for mutation in ('bytes', 'mode', 'missing', 'baseline'):
+            with self.subTest(mutation=mutation):
+                self.git('checkout', '-q', self.candidate)
+                if mutation == 'bytes': self.write(self.workflow, 'unreviewed workflow\n')
+                elif mutation == 'mode': (self.root / self.workflow).chmod(0o755)
+                elif mutation == 'missing': self.git('rm', self.workflow)
+                else: self.write(self.workflow, self.workflow_before)
+                candidate = self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify(candidate)
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+        self.git('checkout', '-q', self.snapshot)
+        self.write(self.workflow, self.workflow_after)
+        snapshot = self.commit()
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.candidate, '-p', snapshot, '-m', 'source workflow mutation')
+        with patch.object(release, 'INTEGRATED_EXPERIENCE_APP_SNAPSHOT', snapshot), \
+             patch.object(release, 'INTEGRATED_EXPERIENCE_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+             self.assertRaisesRegex(release.ReleaseError, 'snapshot differs'):
+            self.verify(candidate)
+
     def test_root_security_pair_is_exact_and_cannot_be_moved_into_frozen_dependencies(self):
         root_pair = {'package.json', 'package-lock.json'}
         self.assertEqual(root_pair & set(self.inputs) & set(self.pins), {'package.json'})
-        self.assertEqual(root_pair, set(release.INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS)
+        self.assertEqual(root_pair | {self.workflow}, set(release.INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS)
                          & set(release.INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS))
         self.assertTrue(root_pair.isdisjoint(release.INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS))
         for name in root_pair:
@@ -8594,7 +8672,7 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
             self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
                              release.INTEGRATED_EXPERIENCE_CONTROL_FILES | set(release.INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS))
             self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
-                             release.INTEGRATED_EXPERIENCE_CONTROL_FILES)
+                             release.INTEGRATED_EXPERIENCE_CONTROL_FILES | {self.workflow})
             self.assertEqual(set(self.git('diff', '--name-only', control, candidate).splitlines()),
                              set(self.files))
             self.assertEqual(set(self.verify()), set(self.files) | release.INTEGRATED_EXPERIENCE_CONTROL_FILES | set(release.INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS))
