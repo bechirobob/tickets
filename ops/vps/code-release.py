@@ -909,6 +909,86 @@ RECOVERY_AUDIT_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26
  'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
 
 
+# Exact website-listing exclusion, header menu, PWA resilience and Next.js patch.
+# Independent C contains only the controls and exact Next.js security prerequisite.
+# Root package/lock inputs and outputs are pinned; test registrations remain S/P-only.
+# Other dependencies, workflows, audit policy, access, runtime and migrations stay fixed.
+INTEGRATED_EXPERIENCE_RELEASE_BASELINE = '4c5f395b75837725beb990e27261e3ad367c1314'
+INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE = 'e3c30e6a0cadfac282f6f8e5c793ac18e8a83c08'
+INTEGRATED_EXPERIENCE_APP_SNAPSHOT = 'e7f382b907629b053cd04311f0d5e44255e31612'
+INTEGRATED_EXPERIENCE_APP_TREE = '63cbf62a157fe997ca267d1274660771070152b0'
+INTEGRATED_EXPERIENCE_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa4c96f073d5b116e474f91d5e4e9a',
+ 'app/global-error.tsx': None,
+ 'app/header-origin-menu.css': None,
+ 'app/hosts/[slug]/page.tsx': '4390e2525c64968d22c8e738021293d6fb9e4655',
+ 'app/mobile-app-frame.tsx': '33559c6475f4b025e821b33c13d55a5b062391e9',
+ 'app/mobile-navigation.tsx': '5450c96b389640d6cba47f20557fe991a3a8358b',
+ 'app/page.tsx': 'db81c6b2d430006a0d1b323ee7a1be31a4576cf6',
+ 'app/pwa-registration.tsx': '13dc55885d8bf4ad4520fe2850c66918621fcbac',
+ 'app/room/[slug]/room-client.tsx': '7553467949f07e199c85439dc129e785fdfa4184',
+ 'app/sitemap.ts': 'b7c91ad4ec237f179dccfddfb4af8b1465dce362',
+ 'app/use-header-panel.ts': '4f63d87e17dc785b18843b8191434331b2a1dbce',
+ 'docs/audits/pwa-resume-2026-10-23.md': None,
+ 'lib/mobile-viewport.ts': None,
+ 'lib/room-viewport.ts': None,
+ 'lib/website-event-listings.ts': None,
+ 'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36',
+ 'styles/customer.css': 'c6d3cc402fcb37287444c9ac75777424ceeac891',
+ 'tests/e2e/discovery-pass-access.spec.ts': 'bf34b4773c5acb26d1ed903e1ea014824f305ad8',
+ 'tests/e2e/event-details.spec.ts': '76775953efa8ef1a4358e6a25acdf26a53c14736',
+ 'tests/e2e/host-profile.spec.ts': 'ba099658c2866802b436855819bcefd39f50074b',
+ 'tests/e2e/menu-option-a.spec.ts': 'bd6d6db6da4be435b73b960d6a664e08dda8144b',
+ 'tests/e2e/mobile-app-behavior.spec.ts': 'b0b336ee944c09b938815660cb70dc58578b7568',
+ 'tests/e2e/public-journey.spec.ts': '36953eca91c0188a7db5d41c2d76f687fab383cf',
+ 'tests/e2e/published-catalogue.spec.ts': '7578c37a441e06ce10b0b87fa2cb4c412dee4684',
+ 'tests/e2e/pwa-resume.spec.ts': None,
+ 'tests/e2e/website-event-unlisting.spec.ts': None,
+ 'tests/header-origin-menu.test.mjs': None,
+ 'tests/menu-option-a.test.mjs': 'd9ea4553aa579a03d4bb401201f773de89db96ac',
+ 'tests/mobile-ui.test.mjs': '405c23b32bd288b47540194f18ead1fd23e60a3b',
+ 'tests/pwa-resume.test.mjs': None,
+ 'tests/website-event-listings.test.ts': None}
+INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f381c27339db7ba290bf1f12e835',
+ 'app/global-error.tsx': 'd1a4b2d25ff1d796ffdc967ba874ad1011cfa328',
+ 'app/header-origin-menu.css': '87b9c852ac8d693de75724cb4f1cca33cb8dbdaa',
+ 'app/hosts/[slug]/page.tsx': 'cd9a1372f923ff8b9542ea8cda12dae0662206a5',
+ 'app/mobile-app-frame.tsx': 'a17c531970c755c6dc646b6791e59328db822fc5',
+ 'app/mobile-navigation.tsx': '51fb72c23f0788fdaa7ee46bf11ed034fce31c79',
+ 'app/page.tsx': '483383be20e94ba007b3fd86e694962dab167dc4',
+ 'app/pwa-registration.tsx': 'd97ac772787aebfd0a59ac2fd752394cd14302d2',
+ 'app/room/[slug]/room-client.tsx': '8ac1b0535e85abdca999598cd30dac01c7d949d7',
+ 'app/sitemap.ts': '2f6dd2eb4ca539eec380631d26c4d8a94bb75287',
+ 'app/use-header-panel.ts': '6052f5c275f5142c40bb06e1c55f94ceae25a9ed',
+ 'docs/audits/pwa-resume-2026-10-23.md': 'd65eab1b2df293a2cb5f69cde7ae802e107cc28c',
+ 'lib/mobile-viewport.ts': '20a3a8aefd7ee3f8c5f2dd4cd0e7da7575282a43',
+ 'lib/room-viewport.ts': 'ee7f3a7b89cc01686e9398e29964bae6f92d0a0b',
+ 'lib/website-event-listings.ts': '77a182916880cb4eaeebdc7d87288f84834b8feb',
+ 'package.json': 'd4dc400662fa9a63435f70da0374f51a87fd3c19',
+ 'styles/customer.css': '91c84bbd74df2347bbcb8615fb670e29a59b8462',
+ 'tests/e2e/discovery-pass-access.spec.ts': 'bfd80a5f2af6d6027e0f1fd98eb8030247b5d56c',
+ 'tests/e2e/event-details.spec.ts': '53b643a49ae9a38c7f41f9c3f1b854e664fd4351',
+ 'tests/e2e/host-profile.spec.ts': 'b863f3c3b1a48b1068134cd6b6348ce454568201',
+ 'tests/e2e/menu-option-a.spec.ts': '9e5967d162016a520b5520ab866cabad3c2b8645',
+ 'tests/e2e/mobile-app-behavior.spec.ts': '76be65b6ec1748b18fbd28bedeeeaf71f432593a',
+ 'tests/e2e/public-journey.spec.ts': '6cdf7e9c9fd330f9875ff44bce66b76664dbde71',
+ 'tests/e2e/published-catalogue.spec.ts': '0b8a0929b7579fb520f4013399321ad97637f421',
+ 'tests/e2e/pwa-resume.spec.ts': '25c637087dda172d89d7130e2fcc669deed02543',
+ 'tests/e2e/website-event-unlisting.spec.ts': '75fb84bf2cddb3925893926d77201b39e38050a5',
+ 'tests/header-origin-menu.test.mjs': '4178145113c4f712e5d17604f676103475a0cb24',
+ 'tests/menu-option-a.test.mjs': '9f74f310f31efb87debb3d787067bed85b6931ac',
+ 'tests/mobile-ui.test.mjs': 'f09ae5135a867cc229f787c2fd61214a9006b165',
+ 'tests/pwa-resume.test.mjs': 'f569c8ee490617bdf16e560c0a58708210826238',
+ 'tests/website-event-listings.test.ts': 'c83a089e54a58a7461766158fc9ad7f9ac617500'}
+INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+
+INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS = {'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918',
+ 'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36'}
+INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS = {'package-lock.json': '607dce6d28154ac15c8de1abc6083828e6317e12',
+ 'package.json': '29dd9100982f0da8a90e8fd360a48440770c40c2'}
+
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
 OWNER_NOTIFICATIONS_PATH = "drizzle/0066_owner_event_notifications.sql"
@@ -1543,6 +1623,123 @@ def reviewed_flashes_application_blobs(expected, source):
     return pins
 
 
+def reviewed_integrated_experience_application_blobs(expected, source):
+    """Bind exact M/S inputs and outputs to independent control C and promotion P."""
+    snapshot = INTEGRATED_EXPERIENCE_APP_SNAPSHOT
+    controls = INTEGRATED_EXPERIENCE_CONTROL_FILES
+    application = INTEGRATED_EXPERIENCE_APPLICATION_BLOBS
+    dependencies = INTEGRATED_EXPERIENCE_DEPENDENCY_BLOBS
+    prerequisites = INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'mobile/package.json', 'mobile/package-lock.json',
+                                      'runtime/vps/package.json'}
+            and set(application) == set(INTEGRATED_EXPERIENCE_APPLICATION_INPUTS)
+            == {'app/events/page.tsx',
+             'app/global-error.tsx',
+             'app/header-origin-menu.css',
+             'app/hosts/[slug]/page.tsx',
+             'app/mobile-app-frame.tsx',
+             'app/mobile-navigation.tsx',
+             'app/page.tsx',
+             'app/pwa-registration.tsx',
+             'app/room/[slug]/room-client.tsx',
+             'app/sitemap.ts',
+             'app/use-header-panel.ts',
+             'docs/audits/pwa-resume-2026-10-23.md',
+             'lib/mobile-viewport.ts',
+             'lib/room-viewport.ts',
+             'lib/website-event-listings.ts',
+             'package.json',
+             'styles/customer.css',
+             'tests/e2e/discovery-pass-access.spec.ts',
+             'tests/e2e/event-details.spec.ts',
+             'tests/e2e/host-profile.spec.ts',
+             'tests/e2e/menu-option-a.spec.ts',
+             'tests/e2e/mobile-app-behavior.spec.ts',
+             'tests/e2e/public-journey.spec.ts',
+             'tests/e2e/published-catalogue.spec.ts',
+             'tests/e2e/pwa-resume.spec.ts',
+             'tests/e2e/website-event-unlisting.spec.ts',
+             'tests/header-origin-menu.test.mjs',
+             'tests/menu-option-a.test.mjs',
+             'tests/mobile-ui.test.mjs',
+             'tests/pwa-resume.test.mjs',
+             'tests/website-event-listings.test.ts'}
+            and set(prerequisites) == set(INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS)
+            == {'package.json', 'package-lock.json'}
+            and set(application) & set(prerequisites) == {'package.json'}
+            and not (controls | set(dependencies)) & (set(application) | set(prerequisites)),
+            "Integrated experience inventory or scope changed.")
+    require(expected == INTEGRATED_EXPERIENCE_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == INTEGRATED_EXPERIENCE_APP_TREE,
+            "Integrated experience live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application) | set(prerequisites),
+            "Integrated experience snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in INTEGRATED_EXPERIENCE_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Integrated experience application input differs from reviewed source: " + name)
+    for name, blob in INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS.items():
+        require(git("ls-tree", expected, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Integrated experience prerequisite input differs from reviewed source: " + name)
+    # The lock is identical in C, S and P; only S/P add the reviewed test registrations.
+    outputs = {**prerequisites, **application}
+    for name, blob in outputs.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Integrated experience snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "Integrated experience requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls | set(prerequisites),
+            "Integrated experience trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Integrated experience candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    for name, blob in prerequisites.items():
+        require(git("ls-tree", trusted, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Integrated experience trusted prerequisite differs from reviewed source: " + name)
+    pins = dict(outputs)
+    for name, blob in outputs.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Integrated experience output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Integrated experience controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete M/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Integrated experience dependencies must remain unchanged: " + name)
+    before = strict_json(git("show", expected + ":package.json"))
+    control = strict_json(git("show", trusted + ":package.json"))
+    after = strict_json(git("show", source + ":package.json"))
+    require(before["dependencies"]["next"] == "16.3.8"
+            and control["dependencies"]["next"] == "16.4.1",
+            "Integrated experience requires exactly Next.js 16.3.8 to 16.4.1.")
+    before["dependencies"]["next"] = "16.4.1"
+    require(before == control, "Integrated experience prerequisite is not the exact Next.js security patch.")
+    control["scripts"]["test:ui"] = control["scripts"]["test:ui"].replace(
+        "tests/header-panel-focus.test.mjs", "tests/header-panel-focus.test.mjs tests/header-origin-menu.test.mjs"
+    ) + " tests/pwa-resume.test.mjs"
+    require(control == after, "Integrated experience package change is not the exact test registration patch.")
+    require(not migration_plan(pins), "Integrated experience release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_recovery_audit_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
     snapshot = RECOVERY_AUDIT_APP_SNAPSHOT
@@ -1751,6 +1948,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == INTEGRATED_EXPERIENCE_RELEASE_BASELINE:
+        return reviewed_integrated_experience_application_blobs(expected, source)
     if expected == RECOVERY_AUDIT_RELEASE_BASELINE:
         return reviewed_recovery_audit_application_blobs(expected, source)
     if expected == FILTERS_ROOM_RELEASE_BASELINE:
@@ -1832,6 +2031,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == INTEGRATED_EXPERIENCE_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Integrated experience release cannot introduce migrations.")
+        return changed
     if expected == RECOVERY_AUDIT_RELEASE_BASELINE:
         require(not migration_plan(changed), "Recovery/audit release cannot introduce migrations.")
         return changed
