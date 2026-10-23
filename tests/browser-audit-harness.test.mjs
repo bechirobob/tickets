@@ -28,8 +28,13 @@ test('synthetic camera selection skips external audits before fixture setup and 
           throw new Error(`Unexpected synthetic camera dependency: ${id}`);
         },
       });
-      assert.equal(cases.length, 3, 'All three synthetic camera journeys must remain declared');
-      assert.equal(new Set(cases.map(item => item.title)).size, 3);
+      assert.deepEqual(cases.map(item => item.title), [
+        'all cinematic looks preview the exact outgoing blob and preserve consent',
+        'rapid look changes, strength zero, comparison and retake remain safe',
+        'narrow portrait and rotated landscape keep the saved frame and controls visible',
+        'live cinematic looks keep full sensor framing before capture',
+      ], 'Retain the original three journeys and the added live-camera journey');
+      assert.equal(new Set(cases.map(item => item.title)).size, 4);
       assert.ok(cases.every(item => item.skipped === Boolean(externalBaseURL)), 'Skip must be declared before any case, independent of workflow event');
       if (externalBaseURL?.startsWith('https://')) {
         let pageAccesses = 0;

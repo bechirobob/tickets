@@ -1782,10 +1782,11 @@ def reviewed_integrated_experience_application_blobs(expected, source):
 # Exact camera framing and live-look release; prior admissions remain unchanged.
 CAMERA_LOOKS_RELEASE_BASELINE = 'ecdad9c8fedf90b234ee5e9a315b54ed12bad07f'
 CAMERA_LOOKS_RELEASE_BASE_TREE = '0c68f22bde7de5f350c1e1d3400a6be205adb1a2'
-CAMERA_LOOKS_APP_SNAPSHOT = '7d3c830859833c5c0cd651e2b9516eb7f7a0fcbe'
-CAMERA_LOOKS_APP_TREE = '384af64fef2c98aa9e070141000c56b9a1a63861'
+CAMERA_LOOKS_APP_SNAPSHOT = 'dcafe826abfd7f6f624afdac132f12e0668321c3'
+CAMERA_LOOKS_APP_TREE = '4b8435b815ff43698306915b3bb47d1179d94af2'
 CAMERA_LOOKS_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
-CAMERA_LOOKS_APPLICATION_INPUTS = {'app/room-features.css': '3dcef6b137313e40b0aedbd4237065f21ff92ec1',
+CAMERA_LOOKS_APPLICATION_INPUTS = {'tests/browser-audit-harness.test.mjs': 'bc1e79e0916c2bfc2fd57a98e92aa12c55879304',
+ 'app/room-features.css': '3dcef6b137313e40b0aedbd4237065f21ff92ec1',
  'app/room/[slug]/flash-camera.tsx': 'b5a156b3b75674f9cd71eec5ea3ec0c505428b92',
  'app/room/[slug]/flash-live-preview.tsx': None,
  'app/room/[slug]/flash-look-picker.tsx': 'f4ffc8b16b1378b71dc7f09b0265a925a1216139',
@@ -1794,7 +1795,8 @@ CAMERA_LOOKS_APPLICATION_INPUTS = {'app/room-features.css': '3dcef6b137313e40b0a
  'tests/e2e/flash-camera.spec.ts': 'ff86b09b19e6e255ca39cc451e3d0e50dcf5b217',
  'tests/flash-camera-state.test.mjs': '14fe34f80f08e810837facb9406da3b5c6bd66fc',
  'tests/flash-photo-filters.test.mjs': 'c4e4daa843aeaf63f02e5ab72939eeab6f3a541b'}
-CAMERA_LOOKS_APPLICATION_BLOBS = {'app/room-features.css': '948b795d803710bd75a6ec6b381de6a249ba2c40',
+CAMERA_LOOKS_APPLICATION_BLOBS = {'tests/browser-audit-harness.test.mjs': 'c4c742c359cab6b227aab5f9ab2cb25bb0227b43',
+ 'app/room-features.css': '948b795d803710bd75a6ec6b381de6a249ba2c40',
  'app/room/[slug]/flash-camera.tsx': 'a57db414995fb492e440ab22e62b2ba6c20b7867',
  'app/room/[slug]/flash-live-preview.tsx': '6a4eac08b2d2a4cd0984de6968e5d809fbdcb540',
  'app/room/[slug]/flash-look-picker.tsx': 'cb25e9a7ae8b10d304dc57eb74c29b4e3b854fc2',
@@ -1819,7 +1821,7 @@ def reviewed_camera_looks_application_blobs(expected, source):
             and set(dependencies) == {'package.json', 'package-lock.json', 'mobile/package.json',
                                       'mobile/package-lock.json', 'runtime/vps/package.json'}
             and set(application) == set(CAMERA_LOOKS_APPLICATION_INPUTS)
-            == {'app/room-features.css',
+            == {'tests/browser-audit-harness.test.mjs', 'app/room-features.css',
  'app/room/[slug]/flash-camera.tsx',
  'app/room/[slug]/flash-live-preview.tsx',
  'app/room/[slug]/flash-look-picker.tsx',
