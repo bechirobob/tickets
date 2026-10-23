@@ -12,7 +12,7 @@ type NativeUpload = { bytes: number[]; matchesDisplayedBlob: boolean };
 async function cameraFixture(page: Page, eventSlug: string) {
   if (test.info().project.use.baseURL !== "http://127.0.0.1:8788") throw new Error("Synthetic camera fixture refuses non-local origins");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  // Synthetic sensor pixels exercise real canvas, JPEG, crop and upload without camera permission or personal photos.
+  // Synthetic sensor pixels exercise real canvas, JPEG, full-frame composition and upload without camera permission or personal photos.
   await page.addInitScript(({ eventSlug }) => {
     // Observe the exact local objects without fetch(blob:), which production CSP
     // correctly excludes from connect-src. Native URL creation/revocation stays intact.
@@ -23,7 +23,7 @@ async function cameraFixture(page: Page, eventSlug: string) {
     const create = URL.createObjectURL.bind(URL), revoke = URL.revokeObjectURL.bind(URL);
     URL.createObjectURL = object => { const url = create(object); if (object instanceof Blob) { previews.set(url, object); issued.add(url); } return url; };
     URL.revokeObjectURL = url => { previews.delete(url); revoke(url); };
-    const sensorState = { captures: 0, streams: [] as MediaStream[] };
+    const sensorState = { captures: 0, streams: [] as MediaStream[], constraints: [] as MediaStreamConstraints[] };
     (window as typeof window & { __flashSyntheticSensor: typeof sensorState }).__flashSyntheticSensor = sensorState;
     // Observe the exact File at the native fetch boundary, without changing the
     // request. WebKit's inspector may omit Blob parts from reported multipart data.
@@ -53,22 +53,20 @@ async function cameraFixture(page: Page, eventSlug: string) {
     Object.defineProperty(HTMLVideoElement.prototype, "videoWidth", { get: () => 1280 });
     Object.defineProperty(HTMLVideoElement.prototype, "videoHeight", { get: () => 720 });
     HTMLMediaElement.prototype.play = async () => {};
-    const mediaDevices = { getUserMedia: async () => { const stream = new MediaStream(); sensorState.streams.push(stream); return stream; } };
+    const mediaDevices = { getUserMedia: async (constraints: MediaStreamConstraints) => { sensorState.constraints.push(constraints); const stream = new MediaStream(); sensorState.streams.push(stream); return stream; } };
     // Match the established Room/gate fixtures: WebKit may omit or replace its
     // native mediaDevices wrapper. Own the whole synthetic sensor boundary.
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, get: () => mediaDevices });
+    const sensor = document.createElement("canvas"); sensor.width = 1280; sensor.height = 720;
+    const context = sensor.getContext("2d")!; const data = context.createImageData(1280, 720);
+    for (let y = 0; y < 720; y++) for (let x = 0; x < 1280; x++) {
+      const i = (y * 1280 + x) * 4;
+      data.data[i] = Math.round(x / 1279 * 255); data.data[i + 1] = Math.round(y / 719 * 255); data.data[i + 2] = 100; data.data[i + 3] = 255;
+    }
+    context.putImageData(data, 0, 0);
     const draw = CanvasRenderingContext2D.prototype.drawImage;
     CanvasRenderingContext2D.prototype.drawImage = function (this: CanvasRenderingContext2D, image: CanvasImageSource, ...coordinates: number[]) {
-      if (image instanceof HTMLVideoElement) {
-        sensorState.captures++;
-        const sensor = document.createElement("canvas"); sensor.width = 1280; sensor.height = 720;
-        const context = sensor.getContext("2d")!; const data = context.createImageData(1280, 720);
-        for (let y = 0; y < 720; y++) for (let x = 0; x < 1280; x++) {
-          const i = (y * 1280 + x) * 4;
-          data.data[i] = Math.round(x / 1279 * 255); data.data[i + 1] = Math.round(y / 719 * 255); data.data[i + 2] = 100; data.data[i + 3] = 255;
-        }
-        context.putImageData(data, 0, 0); image = sensor;
-      }
+      if (image instanceof HTMLVideoElement) { sensorState.captures++; image = sensor; }
       return Reflect.apply(draw, this, [image, ...coordinates]);
     };
   }, { eventSlug });
@@ -121,7 +119,7 @@ async function cameraFixture(page: Page, eventSlug: string) {
   let evidenceBytes = 0;
   // Visual-only, synthetic-fixture evidence. Never reads arbitrary files, changes
   // production CSP, or substitutes for the workflow's release-admission evidence.
-  async function screenshot(info: TestInfo, name: "chrome-editor" | "original-retake" | "editor-320x568" | "editor-844x390") {
+  async function screenshot(info: TestInfo, name: "chrome-editor" | "original-retake" | "editor-320x568" | "editor-844x390" | "amber-live") {
     if (refusedTraffic || new URL(page.url()).origin !== "http://127.0.0.1:8788") throw new Error("Camera evidence refuses unexpected network traffic or non-local origins");
     const synthetic = await page.evaluate(() => {
       const state = (window as typeof window & { __flashSyntheticSensor?: { captures: number; streams: MediaStream[] } }).__flashSyntheticSensor;
@@ -130,13 +128,19 @@ async function cameraFixture(page: Page, eventSlug: string) {
     });
     if (!synthetic) throw new Error("Camera evidence requires the track-free synthetic sensor");
     if (!["desktop-chromium", "mobile-chromium", "mobile-webkit"].includes(info.project.name)) throw new Error("Unexpected camera evidence project");
-    const expected = { "chrome-editor": "all cinematic looks preview the exact outgoing blob and preserve consent", "original-retake": "rapid look changes, strength zero, comparison and retake remain safe", "editor-320x568": "narrow portrait and rotated landscape keep the saved frame and controls visible", "editor-844x390": "narrow portrait and rotated landscape keep the saved frame and controls visible" };
+    const expected = { "amber-live": "live cinematic looks keep full sensor framing before capture", "chrome-editor": "all cinematic looks preview the exact outgoing blob and preserve consent", "original-retake": "rapid look changes, strength zero, comparison and retake remain safe", "editor-320x568": "narrow portrait and rotated landscape keep the saved frame and controls visible", "editor-844x390": "narrow portrait and rotated landscape keep the saved frame and controls visible" };
     if (expected[name] !== info.title) throw new Error("Unexpected camera evidence fixture");
     if (uploads.length !== 0) throw new Error("Camera evidence must precede the mocked fixture upload");
-    await expect(page.locator(".flash-capture__look-label")).toHaveText(name === "original-retake" ? "Original" : "Chrome");
-    await previewBytes(page); // The displayed image must be this fixture's local observed Blob.
+    if (name === "amber-live") {
+      await expect(page.getByRole("button", { name: /^Amber:/u })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.locator(".flash-capture__live-look")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Take Flash photo" })).toBeEnabled();
+    } else {
+      await expect(page.locator(".flash-capture__look-label")).toHaveText(name === "original-retake" ? "Original" : "Chrome");
+      await previewBytes(page); // The displayed image must be this fixture's local observed Blob.
+    }
     // Capture only this fixture's editor, excluding any surrounding page content.
-    const png = NodeBuffer.from(await page.locator(".flash-capture--editing").screenshot({ path: info.outputPath(`flash-${name}.png`), scale: "css" }));
+    const png = NodeBuffer.from(await page.locator(".flash-capture").screenshot({ path: info.outputPath(`flash-${name}.png`), scale: "css" }));
     const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
     evidenceBytes += png.length;
     if (!png.subarray(0, 8).equals(NodeBuffer.from([137, 80, 78, 71, 13, 10, 26, 10])) || png.length > 512 * 1024 || evidenceBytes > 1024 * 1024 || width > 1600 || height > 1600 || width * height > 1_500_000) throw new Error("Camera evidence exceeds PNG bounds");
@@ -182,15 +186,16 @@ async function previewPixels(page: Page) {
 
 test("all cinematic looks preview the exact outgoing blob and preserve consent", async ({ page, eventSlug, browserName }, info) => {
   const { uploads, screenshot } = await cameraFixture(page, eventSlug);
-  const bounds = await page.locator("video").boundingBox();
+  await expect(page.locator("video")).toHaveCSS("object-fit", "contain");
   await page.getByRole("button", { name: "Take Flash photo" }).click();
   const dialog = page.getByRole("dialog", { name: "Share this Flash" });
   await expect(dialog.locator(".flash-capture__preview img")).toHaveCSS("object-fit", "contain");
   const original = await previewBytes(page); const frame = await previewPixels(page);
-  expect(frame.width / frame.height).toBeCloseTo(bounds!.width / bounds!.height, 2);
+  expect(frame.width / frame.height).toBeCloseTo(1280 / 720, 2);
+  expect(frame.left[0]).toBeLessThan(5); expect(frame.right[0]).toBeGreaterThan(250);
   expect(frame.left[0]).toBeLessThan(frame.right[0]);
   await expect(dialog.getByRole("button", { name: "Send Flash", exact: true })).toBeDisabled();
-  for (const name of ["Noir", "35mm", "After Hours", "Chrome"]) {
+  for (const name of ["Noir", "35mm", "After Hours", "Amber", "Dusk", "Coastal", "Velvet", "Silver", "Chrome"]) {
     await dialog.getByRole("button", { name: new RegExp(`^${name}:`, "u") }).click();
     await expect(dialog.locator(".flash-capture__look-label")).toHaveText(name);
     await expect(dialog.getByRole("slider", { name: /Strength/u })).toHaveValue("100");
@@ -258,7 +263,8 @@ test("rapid look changes, strength zero, comparison and retake remain safe", asy
   await expect.poll(() => page.evaluate(urls => urls.every(url => !(window as typeof window & { __flashFixtureBlobs: Map<string, Blob> }).__flashFixtureBlobs.has(url)), oldUrls)).toBe(true);
   await page.getByRole("button", { name: "Take Flash photo" }).click();
   await expect(dialog.getByRole("checkbox")).not.toBeChecked();
-  await expect(dialog.getByRole("button", { name: /^Original:/u })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByRole("button", { name: /^After Hours:/u })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByRole("slider", { name: /Strength/u })).toHaveValue("0");
   await screenshot(info, "original-retake");
   expect(uploads.length).toBe(0);
 });
@@ -268,10 +274,10 @@ test("narrow portrait and rotated landscape keep the saved frame and controls vi
   const { screenshot } = await cameraFixture(page, eventSlug);
   for (const size of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(size);
-    const bounds = (await page.locator("video").boundingBox())!;
+    await expect(page.locator("video")).toHaveCSS("object-fit", "contain");
     await page.getByRole("button", { name: "Take Flash photo" }).click();
     await expect(page.locator(".flash-capture__preview img")).toHaveCSS("object-fit", "contain");
-    const frame = await previewPixels(page); expect(frame.width / frame.height).toBeCloseTo(bounds.width / bounds.height, 2);
+    const frame = await previewPixels(page); expect(frame.width / frame.height).toBeCloseTo(1280 / 720, 2);
     await page.getByRole("button", { name: /^Chrome:/u }).click();
     await expect(page.locator(".flash-capture__look-label")).toHaveText("Chrome");
     await expect(page.getByRole("slider", { name: /Strength/u })).toBeVisible();
@@ -281,4 +287,52 @@ test("narrow portrait and rotated landscape keep the saved frame and controls vi
     await screenshot(info, size.width === 320 ? "editor-320x568" : "editor-844x390");
     await page.getByRole("button", { name: "Retake" }).click();
   }
+});
+
+
+test("live cinematic looks keep full sensor framing before capture", async ({ page, eventSlug }, info) => {
+  const { uploads, screenshot } = await cameraFixture(page, eventSlug);
+  const picker = page.getByRole("group", { name: "Photo look" });
+  await expect(picker.getByRole("button")).toHaveCount(10);
+  await expect(page.locator("video")).toHaveCSS("object-fit", "contain");
+  for (const name of ["Noir", "35mm", "After Hours", "Chrome", "Dusk", "Coastal", "Velvet", "Silver", "Amber"]) {
+    await picker.getByRole("button", { name: new RegExp(`^${name}:`, "u") }).click();
+    await expect(page.locator(".flash-capture__live-look")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Take Flash photo" })).toBeEnabled();
+  }
+  const pixels = await page.locator(".flash-capture__live-look").evaluate((canvas: HTMLCanvasElement) => {
+    const context = canvas.getContext("2d")!;
+    return { width: canvas.width, height: canvas.height, left: context.getImageData(0, canvas.height / 2, 1, 1).data[0], right: context.getImageData(canvas.width - 1, canvas.height / 2, 1, 1).data[0] };
+  });
+  expect(pixels.width).toBe(480); expect(pixels.height).toBe(270);
+  expect(pixels.left).toBeLessThan(20); expect(pixels.right).toBeGreaterThan(240);
+  const framing = await page.locator(".flash-capture").evaluate(element => {
+    const view = element.querySelector(".flash-capture__view")!.getBoundingClientRect();
+    const header = element.querySelector("header")!.getBoundingClientRect();
+    const footer = element.querySelector("footer")!.getBoundingClientRect();
+    const overlap = view.left < footer.right && view.right > footer.left && view.top < footer.bottom && view.bottom > footer.top;
+    return { headerClear: view.top >= header.bottom - 1, footerClear: !overlap, overflow: element.scrollWidth > element.clientWidth + 1 };
+  });
+  expect(framing).toEqual({ headerClear: true, footerClear: true, overflow: false });
+  const accessibility = await new AxeBuilder({ page }).include(".flash-capture").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await screenshot(info, "amber-live");
+  await page.getByRole("slider", { name: /Strength/u }).fill("62");
+  await page.getByRole("button", { name: "Switch camera" }).click();
+  await expect(page.getByRole("button", { name: "Take Flash photo" })).toBeEnabled();
+  await expect.poll(() => page.locator(".flash-capture__live-look").evaluate((canvas: HTMLCanvasElement) => {
+    const context = canvas.getContext("2d")!;
+    return context.getImageData(0, canvas.height / 2, 1, 1).data[0] > context.getImageData(canvas.width - 1, canvas.height / 2, 1, 1).data[0];
+  })).toBe(true);
+  await page.getByRole("button", { name: "Take Flash photo" }).click();
+  await expect(page.locator(".flash-capture__look-label")).toHaveText("Amber");
+  await expect(page.getByRole("slider", { name: /Strength/u })).toHaveValue("62");
+  const frame = await previewPixels(page);
+  expect(frame.width / frame.height).toBeCloseTo(1280 / 720, 2); expect(frame.left[0]).toBeGreaterThan(frame.right[0]);
+  await page.getByRole("button", { name: "Retake" }).click();
+  await expect(page.getByRole("button", { name: /^Amber:/u })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("slider", { name: /Strength/u })).toHaveValue("62");
+  await page.getByRole("button", { name: "Close camera" }).click();
+  await expect(page.getByRole("dialog", { name: "Flash camera" })).not.toBeVisible();
+  expect(uploads).toHaveLength(0);
 });
