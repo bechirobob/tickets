@@ -144,7 +144,17 @@ test('Option A keeps native keyboard focus inside the short-landscape scrollport
   // Compact rows need not overflow at 390px high; force a shorter viewport to
   // exercise native keyboard scrolling without changing production row sizes.
   await page.setViewportSize({ width: 700, height: 300 });
-  expect(await scrollport.evaluate(panel => panel.scrollHeight > panel.clientHeight)).toBe(true);
+  // WebKit may return from setViewportSize before its resize listeners run.
+  // Wait for real placement and overflow, never repair geometry or focus here.
+  await expect.poll(() => scrollport.evaluate(panel => {
+    const menu = panel.closest('.night-mobile-menu__panel')!;
+    const dock = document.querySelector('.customer-dock')!;
+    const bounds = menu.getBoundingClientRect();
+    return panel.scrollHeight > panel.clientHeight
+      && Math.abs(window.visualViewport!.height - 300) <= 1
+      && Math.abs(Number.parseFloat(document.documentElement.style.getPropertyValue('--app-viewport-height')) - 300) <= 1
+      && bounds.bottom <= dock.getBoundingClientRect().top - 7;
+  })).toBe(true);
 
   // Only native Tab changes focus/scrolling. Never repair visibility in the test.
   for (const direction of ['Tab', 'Shift+Tab']) {

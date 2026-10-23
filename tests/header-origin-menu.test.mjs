@@ -119,3 +119,21 @@ test('a 44px cap preserves taps but captures a real downward swipe, including ov
   assert.equal(view.styles.has('--menu-drag-y'), false);
   view.cleanup();
 });
+
+for (const offsetTop of [0, 12]) test(`subpixel anchor clipping clamps placement without crossing the dock at viewport offset ${offsetTop}`, () => {
+  const view = mount();
+  view.window.visualViewport.offsetTop = offsetTop;
+  for (const clipped of [0.25, 0.5, 1]) {
+    view.rect.top = offsetTop - clipped; view.rect.bottom = view.rect.top + 44;
+    view.window.dispatchEvent(new Event('scroll'));
+    assert.deepEqual(view.closes, []);
+    assert.equal(view.styles.get('--menu-anchor-top'), `${offsetTop}px`);
+    assert.equal(Number.parseFloat(view.styles.get('--menu-anchor-top')) + Number.parseFloat(view.styles.get('--menu-max-height')), 566);
+    assert.equal(view.styles.get('--menu-anchor-width'), '76px');
+    assert.equal(view.styles.get('--menu-anchor-height'), '44px');
+  }
+  view.rect.top = offsetTop - 1.25; view.rect.bottom = view.rect.top + 44;
+  view.window.dispatchEvent(new Event('scroll'));
+  assert.deepEqual(view.closes, [[true, true]]);
+  view.cleanup();
+});
