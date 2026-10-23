@@ -43,6 +43,7 @@ function mountCamera() {
       if (id === "lucide-react") return { ArrowUp: "ArrowUp", Camera: "Camera", RefreshCw: "RefreshCw", X: "X" };
       if (id === "../../room-overlay") return "RoomOverlay";
       if (id === "./flash-look-picker") return "FlashLookPicker";
+      if (id === "./flash-live-preview") return "FlashLivePreview";
       if (id.endsWith("flash-photo-filters")) return filters;
       if (id.endsWith("client-request")) return { requestErrorMessage: error => error.message, requestJson: async (url, options) => { sent.push({ url, body: options.body }); return { flash: { id: "sent-flash" } }; } };
       throw new Error(`Unexpected import: ${id}`);
@@ -74,6 +75,7 @@ function mountCamera() {
     settle, button, nodes,
     async capture() { await settle(); await button("Take Flash photo").props.onClick(); await settle(); },
     async click(text) { const node = button(text); assert.ok(!node.props.disabled, `${text} is enabled`); node.props.onClick(); commit(); await settle(); },
+    liveReady() { one(node => node.type === "FlashLivePreview").props.onReady(true); commit(); },
     pick(look) { one(node => node.type === "FlashLookPicker").props.onLook(look); commit(); },
     strength(value) { one(node => node.type === "FlashLookPicker").props.onStrength(value); commit(); },
     consent() { one(node => node.type === "input" && node.props.type === "checkbox").props.onChange({ target: { checked: true } }); commit(); },
@@ -110,8 +112,9 @@ test("rapid changes and retakes cannot send stale jobs, even if a cancelled job 
   old.resolve(new Blob(["stale"])); await app.settle(); assert.ok(app.button("Send Flash").props.disabled);
   app.renders[1].resolve(new Blob(["current"])); await app.settle(); app.load();
   await app.click("Retake"); assert.equal(app.captures[0].width, 0); assert.ok(app.revoked.length >= 2);
-  await app.capture(); app.load(); assert.ok(app.button("Send Flash").props.disabled);
-  app.consent(); await app.click("Send Flash"); assert.equal(await app.sent[0].body.get("photo").text(), "captured-original");
+  app.liveReady(); await app.capture(); app.flushTimers(); app.load(); assert.ok(app.button("Send Flash").props.disabled);
+  assert.equal(app.renders[2].look, "35mm"); app.renders[2].resolve(new Blob(["retake-grade"])); await app.settle();
+  app.consent(); app.load(); await app.click("Send Flash"); assert.equal(await app.sent[0].body.get("photo").text(), "retake-grade");
   app.unmount();
 });
 test("selecting the active look or unchanged strength does not cancel its pending render", async () => {
@@ -139,12 +142,12 @@ test("failed grades are retryable and Original remains available", async () => {
   await app.click("Retry look"); app.flushTimers(); assert.equal(app.renders.length, 2);
   app.pick("original"); app.consent(); app.load(); assert.equal(app.button("Send Flash").props.disabled, false); app.unmount();
 });
-test("front camera crops the visible frame then mirrors once; backgrounding stops camera", async () => {
+test("front camera preserves the entire sensor then mirrors once; backgrounding stops camera", async () => {
   const app = mountCamera(); await app.settle(); await app.click("Switch camera"); await app.capture();
   const capture = app.captures[0]; assert.deepEqual(capture.scaled, [[-1, 1]]);
   assert.deepEqual(capture.translated, [[capture.width, 0]]);
-  assert.ok(capture.drawn[0][1] > 0); assert.equal(capture.drawn[0].length, 9);
-  assert.ok(capture.height <= 1600 && Math.abs(capture.width / capture.height - 390 / 844) < .002);
+  assert.equal(capture.drawn[0][1], 0); assert.equal(capture.drawn[0][2], 0); assert.equal(capture.drawn[0].length, 9);
+  assert.ok(capture.height <= 1600 && Math.abs(capture.width / capture.height - 1920 / 1080) < .002);
   const calls = app.mediaCalls; app.document.visibilityState = "hidden"; app.document.dispatchEvent(new Event("visibilitychange"));
   app.document.visibilityState = "visible"; app.document.dispatchEvent(new Event("visibilitychange")); await app.settle();
   assert.equal(app.mediaCalls, calls, "Captured still does not reopen camera when returning");
@@ -154,4 +157,114 @@ test("closing aborts render and revokes all retained photo URLs", async () => {
   const app = mountCamera(); await app.capture(); app.pick("noir"); app.flushTimers();
   await app.click("Close camera"); assert.ok(app.renders[0].signal.aborted);
   app.unmount(); assert.ok([...app.urls.keys()].every(url => app.revoked.includes(url)));
+});
+
+test("live looks are selectable before shutter and the chosen grade survives capture", async () => {
+  const app = mountCamera(); await app.settle();
+  assert.ok(app.nodes().some(node => node.type === "FlashLookPicker" && !node.props.source));
+  app.pick("amber"); app.strength(61); assert.ok(app.button("Take Flash photo").props.disabled);
+  app.liveReady(); assert.equal(app.button("Take Flash photo").props.disabled, false);
+  await app.capture(); app.flushTimers();
+  assert.equal(app.renders[0].look, "amber"); assert.equal(app.renders[0].strength, 61);
+  app.renders[0].resolve(new Blob(["live-amber"])); await app.settle(); app.load(); app.consent();
+  await app.click("Send Flash"); assert.equal(await app.sent[0].body.get("photo").text(), "live-amber");
+  app.unmount();
+});
+
+const liveSource = await readFile(new URL("../app/room/[slug]/flash-live-preview.tsx", import.meta.url), "utf8");
+const liveCompiled = transformSync(liveSource, { loader: "tsx", jsx: "automatic", format: "cjs" }).code;
+function mountLivePreview({ noContext = false, brokenRead = false, renderCost = 5 } = {}) {
+  const slots = [], effects = new Map(), frames = new Map(), readiness = [], errors = [], draws = [], transforms = [];
+  let cursor = 0, dirty = false, id = 0, tree, output, workTime = 0;
+  const document = { visibilityState: "visible" };
+  const video = { current: { videoWidth: 1920, videoHeight: 1080 } };
+  const context = {
+    setTransform: (...args) => transforms.push(args), resetTransform() {}, drawImage: (...args) => draws.push(args),
+    getImageData: () => { if (brokenRead) throw new Error("Unavailable pixels"); return { data: new Uint8ClampedArray([153, 96, 69, 255]) }; },
+    putImageData: image => { output = image.data; },
+  };
+  const canvas = { width: 0, height: 0, getContext: () => noContext ? null : context };
+  const same = (a, b) => a && b && a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
+  const react = {
+    useRef(value) { const i = cursor++; return slots[i] ??= { current: value }; },
+    useState(value) { const i = cursor++; slots[i] ??= { value }; return [slots[i].value, next => { if (slots[i].value !== next) { slots[i].value = next; dirty = true; } }]; },
+    useEffect(setup, deps) { const i = cursor++; if (!same(slots[i]?.deps, deps)) effects.set(i, { deps, setup }); },
+  };
+  const component = { exports: {} };
+  runInNewContext(liveCompiled, {
+    module: component, exports: component.exports, document,
+    performance: { now: () => { workTime += renderCost; return workTime; } },
+    requestAnimationFrame: callback => { const next = ++id; frames.set(next, callback); return next; }, cancelAnimationFrame: value => frames.delete(value),
+    require: name => {
+      if (name === "react") return react;
+      if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }) };
+      if (name.endsWith("flash-photo-filters")) return filterModule.exports;
+      throw new Error(name);
+    },
+  });
+  let props = { video, look: "amber", strength: 100, mirrored: false, ready: true, onReady: value => readiness.push(value), onError: value => errors.push(value) };
+  function commit() {
+    do {
+      cursor = 0; dirty = false; tree = component.exports.default(props); tree.props.ref.current = canvas;
+      const pending = [...effects]; effects.clear();
+      for (const [i] of pending) slots[i]?.cleanup?.();
+      for (const [i, effect] of pending) { slots[i] = effect; effect.cleanup = effect.setup(); }
+    } while (dirty);
+  }
+  commit();
+  return {
+    canvas, video, document, readiness, errors, draws, transforms, frames,
+    failRead() { brokenRead = true; },
+    get output() { return output; }, get visible() { return tree.props.style.visibility; },
+    update(next) { props = { ...props, ...next }; commit(); },
+    tick(time) { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(time)); if (dirty) commit(); },
+    unmount() { slots.forEach(slot => slot.cleanup?.()); },
+  };
+}
+
+test("live rendering uses the export kernel at bounded full-frame dimensions and throttles work", () => {
+  const live = mountLivePreview(); assert.equal(live.visible, "hidden");
+  live.tick(0); assert.equal(live.visible, "visible");
+  assert.equal(live.canvas.width, 480); assert.equal(live.canvas.height, 270);
+  assert.deepEqual(live.draws[0].slice(1), [0, 0, 480, 270]);
+  const expected = new Uint8ClampedArray([153, 96, 69, 255]); filterModule.exports.gradeFlashPixels(expected, "amber", 100);
+  assert.deepEqual(live.output, expected); assert.deepEqual(live.readiness, [false, true]);
+  live.tick(16); live.tick(32); assert.equal(live.draws.length, 1);
+  live.tick(34); assert.equal(live.draws.length, 2);
+  live.document.visibilityState = "hidden"; live.tick(160); assert.equal(live.draws.length, 2);
+  live.document.visibilityState = "visible"; live.tick(240); assert.equal(live.draws.length, 3);
+  live.unmount(); assert.equal(live.frames.size, 0); assert.equal(live.canvas.width, 0); assert.equal(live.canvas.height, 0);
+});
+test("live changes invalidate the old preview, mirror once, resize and preserve strength", () => {
+  const live = mountLivePreview(); live.tick(0); live.update({ look: "silver", strength: 62, mirrored: true });
+  assert.equal(live.visible, "hidden"); assert.equal(live.readiness.at(-1), false);
+  live.video.current.videoWidth = 1080; live.video.current.videoHeight = 1920;
+  live.tick(80); assert.equal(live.canvas.width, 270); assert.equal(live.canvas.height, 480);
+  assert.deepEqual(live.transforms.at(-1), [-1, 0, 0, 1, 270, 0]);
+  const expected = new Uint8ClampedArray([153, 96, 69, 255]); filterModule.exports.gradeFlashPixels(expected, "silver", 62);
+  assert.deepEqual(live.output, expected);
+  live.update({ look: "original" }); assert.equal(live.visible, "hidden"); assert.equal(live.frames.size, 0);
+  live.update({ look: "amber", strength: 0 }); assert.equal(live.frames.size, 0);
+  live.unmount();
+});
+test("live failures never mark the selected look ready and offer an Original fallback", () => {
+  for (const options of [{ noContext: true }, { brokenRead: true }]) {
+    const live = mountLivePreview(options); live.tick(0);
+    assert.equal(live.frames.size, 0); assert.equal(live.visible, "hidden"); assert.equal(live.readiness.at(-1), false);
+    assert.match(live.errors[0], /Choose Original/u); live.unmount();
+  }
+});
+
+test("a later live frame failure removes a stale visible grade", () => {
+  const live = mountLivePreview(); live.tick(0); assert.equal(live.visible, "visible");
+  live.failRead(); live.tick(80);
+  assert.equal(live.visible, "hidden"); assert.equal(live.readiness.at(-1), false);
+  assert.equal(live.frames.size, 0); assert.match(live.errors[0], /Choose Original/u); live.unmount();
+});
+
+test("expensive live frames adapt their cadence without expanding resolution", () => {
+  const live = mountLivePreview({ renderCost: 45 }); live.tick(0);
+  live.tick(34); live.tick(80); assert.equal(live.draws.length, 1);
+  live.tick(90); assert.equal(live.draws.length, 2);
+  assert.equal(live.canvas.width, 480); assert.equal(live.canvas.height, 270); live.unmount();
 });

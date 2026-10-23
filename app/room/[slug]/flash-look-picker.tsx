@@ -5,16 +5,18 @@ import { useEffect, useState } from "react";
 import { FLASH_LOOKS, renderFlashLook, type FlashLook } from "../../../lib/flash-photo-filters";
 
 export default function FlashLookPicker({ source, look, strength, disabled, onLook, onStrength }: {
-  source: HTMLCanvasElement; look: FlashLook; strength: number; disabled: boolean;
+  source?: HTMLCanvasElement; look: FlashLook; strength: number; disabled: boolean;
   onLook: (look: FlashLook) => void; onStrength: (strength: number) => void;
 }) {
   const [thumbnails, setThumbnails] = useState<Partial<Record<FlashLook, string>>>({});
   useEffect(() => {
+    if (!source) return;
+    const image = source;
     const controller = new AbortController();
     const urls: string[] = [];
     async function prepare() {
       for (const option of FLASH_LOOKS) {
-        const blob = await renderFlashLook(source, option.id, 100, controller.signal, 144);
+        const blob = await renderFlashLook(image, option.id, 100, controller.signal, 144);
         if (controller.signal.aborted) return;
         const url = URL.createObjectURL(blob); urls.push(url);
         setThumbnails(previous => ({ ...previous, [option.id]: url }));
@@ -24,10 +26,10 @@ export default function FlashLookPicker({ source, look, strength, disabled, onLo
     void prepare().catch(() => {});
     return () => { controller.abort(); urls.forEach(url => URL.revokeObjectURL(url)); };
   }, [source]);
-  return <div className="flash-looks">
+  return <div className={`flash-looks${source ? "" : " flash-looks--live"}`}>
     <div className="flash-looks__options" role="group" aria-label="Photo look">
       {FLASH_LOOKS.map(option => <button key={option.id} type="button" aria-pressed={look === option.id} aria-label={`${option.name}: ${option.description}`} disabled={disabled} onClick={() => onLook(option.id)}>
-        <span className="flash-looks__thumbnail" aria-hidden="true">{thumbnails[option.id] && <Image src={thumbnails[option.id]!} alt="" width={72} height={72} unoptimized draggable={false} />}</span>
+        {source && <span className="flash-looks__thumbnail" aria-hidden="true">{thumbnails[option.id] && <Image src={thumbnails[option.id]!} alt="" width={72} height={72} unoptimized draggable={false} />}</span>}
         <span>{option.name}</span>
       </button>)}
     </div>

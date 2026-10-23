@@ -1,10 +1,15 @@
-/** Local, deterministic still-photo grades. No network, face detection or geometry changes. */
+/** Local, deterministic live-preview and still-photo grades. No network, face detection or geometry changes. */
 export const FLASH_LOOKS = [
   { id: "original", name: "Original", description: "Natural colour" },
   { id: "noir", name: "Noir", description: "Crisp black and white" },
   { id: "35mm", name: "35mm", description: "Warm tone, fine grain" },
   { id: "after-hours", name: "After Hours", description: "Cool shadows, warm light" },
   { id: "chrome", name: "Chrome", description: "Muted colour, clean contrast" },
+  { id: "amber", name: "Amber", description: "Golden light, warm skin tones" },
+  { id: "dusk", name: "Dusk", description: "Soft lavender, lifted shadows" },
+  { id: "coastal", name: "Coastal", description: "Airy colour, cool blues" },
+  { id: "velvet", name: "Velvet", description: "Soft contrast, rich colour" },
+  { id: "silver", name: "Silver", description: "Soft black and white" },
 ] as const;
 export type FlashLook = typeof FLASH_LOOKS[number]["id"];
 export const FLASH_MAX_EDGE = 1600;
@@ -14,14 +19,17 @@ export function flashStrength(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
 }
 
-/** Centre crop corresponding to object-fit: cover at the instant of capture. */
-export function flashCaptureFrame(sourceWidth: number, sourceHeight: number, viewWidth: number, viewHeight: number) {
-  if (![sourceWidth, sourceHeight, viewWidth, viewHeight].every(value => Number.isFinite(value) && value > 0)) throw new Error("The camera isn’t ready. Try again.");
-  const ratio = viewWidth / viewHeight;
-  const width = Math.min(sourceWidth, sourceHeight * ratio);
-  const height = width / ratio;
-  const scale = Math.min(1, FLASH_MAX_EDGE / Math.max(width, height));
-  return { x: (sourceWidth - width) / 2, y: (sourceHeight - height) / 2, width, height, outputWidth: Math.max(1, Math.round(width * scale)), outputHeight: Math.max(1, Math.round(height * scale)) };
+/** Preserve the complete sensor frame, independent of screen shape or orientation. */
+export function flashCaptureFrame(sourceWidth: number, sourceHeight: number) {
+  if (![sourceWidth, sourceHeight].every(value => Number.isFinite(value) && value > 0)) throw new Error("The camera isn’t ready. Try again.");
+  const scale = Math.min(1, FLASH_MAX_EDGE / Math.max(sourceWidth, sourceHeight));
+  return { x: 0, y: 0, width: sourceWidth, height: sourceHeight, outputWidth: Math.max(1, Math.round(sourceWidth * scale)), outputHeight: Math.max(1, Math.round(sourceHeight * scale)) };
+}
+
+/** Avoid a portrait resolution request that lets browsers crop a native landscape sensor. */
+export function flashCameraConstraints(facing: "user" | "environment"): MediaStreamConstraints {
+  const video: MediaTrackConstraints & { resizeMode: string } = { facingMode: { ideal: facing }, width: { ideal: 1920 }, resizeMode: "none" };
+  return { audio: false, video };
 }
 
 const clamp = (value: number) => Math.max(0, Math.min(255, value));
@@ -53,6 +61,25 @@ export function gradeFlashPixels(pixels: Uint8ClampedArray, look: FlashLook, str
       red = contrast(r, 1.07) - shadow * 5 + light * 7;
       green = contrast(g, 1.07) + shadow * 2 + light * 2;
       blue = contrast(b, 1.07) + shadow * 9 - light * 6;
+    } else if (look === "amber") {
+      red = contrast(luma + (r - luma) * .94, 1.03) + 9;
+      green = contrast(luma + (g - luma) * .94, 1.01) + 3;
+      blue = contrast(luma + (b - luma) * .94, .98) - 10;
+    } else if (look === "dusk") {
+      const shadow = 1 - luma / 255;
+      red = contrast(luma + (r - luma) * .82, .94) + shadow * 7;
+      green = contrast(luma + (g - luma) * .82, .94) - 3;
+      blue = contrast(luma + (b - luma) * .82, .94) + 7;
+    } else if (look === "coastal") {
+      red = contrast(luma + (r - luma) * .86, .94) - 5;
+      green = contrast(luma + (g - luma) * .86, .94) + 5;
+      blue = contrast(luma + (b - luma) * .86, .94) + 8;
+    } else if (look === "velvet") {
+      red = contrast(luma + (r - luma) * 1.12, .88) + 3;
+      green = contrast(luma + (g - luma) * 1.12, .88);
+      blue = contrast(luma + (b - luma) * 1.12, .88) + 2;
+    } else if (look === "silver") {
+      red = green = blue = contrast(luma, .86) + 4;
     } else if (look === "chrome") {
       red = contrast(luma + (r - luma) * .68, 1.1);
       green = contrast(luma + (g - luma) * .68, 1.1);
