@@ -787,7 +787,7 @@ def recovery_audit_source_family(root):
 
 
 # Exact integrated-experience C/P test family; historical families remain independent.
-INTEGRATED_EXPERIENCE_OPERATOR_BLOB = '339a978956b72dd0514a77ce17b98fc69f82ec32'
+INTEGRATED_EXPERIENCE_OPERATOR_BLOB = 'bb4d5baf326bacd6f4eaa42b496ee96b6f974487'
 INTEGRATED_EXPERIENCE_STAGED_BASE = dict(RECOVERY_AUDIT_STAGED_BASE)
 INTEGRATED_EXPERIENCE_STAGED_BASE['.github/workflows/tickets-release-operator-checks.yml'] = (
     '100644', '33a7e8cc3e38dc6f58f10113dd12f1c7c3042ce1')
@@ -8253,9 +8253,11 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
         self.assertEqual(len(self.files), 38)
         self.package = {'name': 'fixture', 'scripts': {'test:ui': 'node --test tests/header-panel-focus.test.mjs',
                                                      'test:repo': 'node --test tests/repository-boundaries.test.mjs'},
-                        'dependencies': {'next': '16.3.8', 'unchanged': '1.0.0'}}
+                        'dependencies': {'next': '16.3.8', 'unchanged': '1.0.0'},
+                        'overrides': {'unchanged': '1.0.0'}}
         self.security_package = copy.deepcopy(self.package)
         self.security_package['dependencies']['next'] = '16.4.1'
+        self.security_package['overrides']['zod'] = '4.6.6'
         self.security_lock = 'exact reviewed Next.js security lock\n'
         self.write('package-lock.json', 'baseline root lock\n')
         for name in (*self.files, *release.INTEGRATED_EXPERIENCE_CONTROL_FILES):
@@ -8473,12 +8475,15 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
                     self.git('update-ref', 'refs/remotes/origin/main', self.control)
 
     def test_prerequisite_semantics_reject_repinning_scripts_or_other_dependencies(self):
-        for field in ('scripts', 'next', 'other_dependency'):
+        for field in ('scripts', 'next', 'other_dependency', 'zod_missing', 'zod_version', 'other_override'):
             with self.subTest(field=field):
                 self.git('checkout', '-q', self.control)
                 package = copy.deepcopy(self.security_package)
                 if field == 'scripts': package['scripts']['test:ui'] += ' tests/unreviewed.mjs'
                 elif field == 'next': package['dependencies']['next'] = '16.4.2'
+                elif field == 'zod_missing': del package['overrides']['zod']
+                elif field == 'zod_version': package['overrides']['zod'] = '4.6.7'
+                elif field == 'other_override': package['overrides']['unchanged'] = '2.0.0'
                 else: package['dependencies']['unchanged'] = '2.0.0'
                 self.write('package.json', json.dumps(package, indent=2))
                 control = self.commit()

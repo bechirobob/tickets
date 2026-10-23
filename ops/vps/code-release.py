@@ -915,8 +915,8 @@ RECOVERY_AUDIT_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26
 # Other dependencies, workflows, audit policy, access, runtime and migrations stay fixed.
 INTEGRATED_EXPERIENCE_RELEASE_BASELINE = '4c5f395b75837725beb990e27261e3ad367c1314'
 INTEGRATED_EXPERIENCE_RELEASE_BASE_TREE = 'e3c30e6a0cadfac282f6f8e5c793ac18e8a83c08'
-INTEGRATED_EXPERIENCE_APP_SNAPSHOT = 'cd53095f8a6c759db58b0436102b91edf9b3815a'
-INTEGRATED_EXPERIENCE_APP_TREE = '46961e87c19eb014019c2d4891ac8230649541fd'
+INTEGRATED_EXPERIENCE_APP_SNAPSHOT = 'c5e5db52a593cb436a71f9af268e436a968fe615'
+INTEGRATED_EXPERIENCE_APP_TREE = '58dfb1750d7dd6e4488cf4cc39eea056b407a866'
 INTEGRATED_EXPERIENCE_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 INTEGRATED_EXPERIENCE_APPLICATION_INPUTS = {'app/events/page.tsx': '72e2811199aa4c96f073d5b116e474f91d5e4e9a',
  'app/global-error.tsx': None,
@@ -971,7 +971,7 @@ INTEGRATED_EXPERIENCE_APPLICATION_BLOBS = {'app/events/page.tsx': 'fba48076da86f
  'lib/mobile-viewport.ts': '20a3a8aefd7ee3f8c5f2dd4cd0e7da7575282a43',
  'lib/room-viewport.ts': 'ee7f3a7b89cc01686e9398e29964bae6f92d0a0b',
  'lib/website-event-listings.ts': '77a182916880cb4eaeebdc7d87288f84834b8feb',
- 'package.json': '54c30395663fb1535d73cc164460f13534f45672',
+ 'package.json': '543f7f006d606f32f5435c83b519078894ae7b76',
  'scripts/capture-iphone-layouts.mjs': '6bb4390faa95f367e2488607cdbbea4e05381898',
  'scripts/iphone-layout-parity.mjs': '89bc6d47d69a31bf40b15790c39c9e471cdd21ca',
  'styles/customer.css': '91c84bbd74df2347bbcb8615fb670e29a59b8462',
@@ -1002,8 +1002,8 @@ INTEGRATED_EXPERIENCE_PREREQUISITE_INPUTS = {'.github/workflows/tickets-release-
  'package-lock.json': 'bad17d8e69775f8077bda31df27cb27ace0c7918',
  'package.json': '9ecd5cbf859c38a7b4768cfaa0d1ca7c7f33ea36'}
 INTEGRATED_EXPERIENCE_PREREQUISITE_BLOBS = {'.github/workflows/tickets-release-operator-checks.yml': '33a7e8cc3e38dc6f58f10113dd12f1c7c3042ce1',
- 'package-lock.json': '607dce6d28154ac15c8de1abc6083828e6317e12',
- 'package.json': '29dd9100982f0da8a90e8fd360a48440770c40c2'}
+ 'package-lock.json': '57e8fa844c6cc48fbbd8bfd766789970a494635f',
+ 'package.json': '86cd5ca4e37d67db7bc652e0c2fe58cf57e73def'}
 
 HOST_RSVP_PUSH_PATH = "drizzle/0063_host_rsvp_push.sql"
 RECOVERABLE_ARCHIVE_PATH = "drizzle/0065_recoverable_event_archive.sql"
@@ -1765,7 +1765,10 @@ def reviewed_integrated_experience_application_blobs(expected, source):
             and control["dependencies"]["next"] == "16.4.1",
             "Integrated experience requires exactly Next.js 16.3.8 to 16.4.1.")
     before["dependencies"]["next"] = "16.4.1"
-    require(before == control, "Integrated experience prerequisite is not the exact Next.js security patch.")
+    require("zod" not in before["overrides"] and control["overrides"].get("zod") == "4.6.6",
+            "Integrated experience requires exactly the patched Zod 4.6.6 override.")
+    before["overrides"]["zod"] = "4.6.6"
+    require(before == control, "Integrated experience prerequisite is not the exact Next.js and Zod security patch.")
     control["scripts"]["test:ui"] = control["scripts"]["test:ui"].replace(
         "tests/header-panel-focus.test.mjs", "tests/header-panel-focus.test.mjs tests/header-origin-menu.test.mjs"
     ) + " tests/pwa-resume.test.mjs"
