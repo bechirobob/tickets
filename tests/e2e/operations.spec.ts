@@ -838,60 +838,66 @@ for (const newerScanner of [false, true]) test(`scanner rejects old offline acce
     const data = await response.json();
     await route.fulfill({response,json:{...data,issued:1,checkedIn:0,manifest:[ticket]}});
   });
-  await page.goto('/scan?event=rsvp-browser');
-  await expect(page.getByText('Door list saved', {exact:false})).toBeVisible();
-  const previousAccess = await page.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-access:v1')!));
-  await page.evaluate(() => { document.body.dataset.scannerMounted = 'original'; });
-
-  const otherTab = await context.newPage();
-  await otherTab.goto('/admin/login?returnTo=%2Fadmin%2Fhelp');
-  await otherTab.getByLabel('Work email', {exact:true}).fill(fixture.email);
-  await otherTab.getByLabel('Password', {exact:true}).fill(fixture.password);
-  await otherTab.getByRole('button', {name:'Sign in',exact:true}).click();
-  await expect(otherTab).toHaveURL(/\/admin\/help$/);
-  const response = await context.request.get(`${baseURL}/api/admin/check-in?eventSlug=rsvp-browser&manifest=1`);
-  expect(response.ok()).toBe(true);
-  const {access} = await response.json();
-  expect(access.accountId).toBe(previousAccess.accountId);
-  expect(access.sessionId).not.toBe(previousAccess.sessionId);
-  if (newerScanner) {
-    await otherTab.goto('/scan?event=rsvp-browser');
-    await expect(otherTab.getByText('Door list saved', {exact:false})).toBeVisible();
-  }
-  expect(await page.locator('body').getAttribute('data-scanner-mounted')).toBe('original');
-
-  await page.getByRole('button', {name:'Refresh',exact:true}).click();
-  await expect(page.getByText('Gate access changed. Reload and sign in before scanning.', {exact:true})).toBeVisible();
-  if (newerScanner) {
-    await otherTab.getByRole('button', {name:'Refresh',exact:true}).click();
-    await expect(otherTab.getByText('Door list saved', {exact:false})).toBeVisible();
-    expect(await otherTab.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-access:v1')!))).toEqual(access);
-  } else {
-    expect(await page.evaluate(() => localStorage.getItem('bct:gate-access:v1'))).toBeNull();
-    expect(await page.evaluate(() => localStorage.getItem('bct:gate-manifests:v2'))).toBeNull();
-  }
-  await context.setOffline(true);
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await page.getByLabel('Ticket code', {exact:true}).fill(`BCT-${token}`);
-    await page.getByRole('button', {name:'Check',exact:true}).click();
-    await expect(page.locator('.scan-surface--invalid > p', {hasText:/^No usable offline manifest\. Reconnect before admitting this guest\.$/})).toBeVisible();
-    await expect(page.getByRole('heading', {name:'Saved offline',exact:true})).toHaveCount(0);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-queue:v1') ?? '[]'))).toHaveLength(0);
-  }
-
-  // The new-session scanner still works, whether already mounted or reloaded.
-  const activeScanner = newerScanner ? otherTab : page;
-  if (!newerScanner) {
-    await context.setOffline(false); await page.reload();
+  let otherTab: Page | undefined;
+  try {
+    await page.goto('/scan?event=rsvp-browser');
     await expect(page.getByText('Door list saved', {exact:false})).toBeVisible();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-access:v1')!))).toEqual(access);
+    const previousAccess = await page.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-access:v1')!));
+    await page.evaluate(() => { document.body.dataset.scannerMounted = 'original'; });
+
+    otherTab = await context.newPage();
+    await otherTab.goto('/admin/login?returnTo=%2Fadmin%2Fhelp');
+    await otherTab.getByLabel('Work email', {exact:true}).fill(fixture.email);
+    await otherTab.getByLabel('Password', {exact:true}).fill(fixture.password);
+    await otherTab.getByRole('button', {name:'Sign in',exact:true}).click();
+    await expect(otherTab).toHaveURL(/\/admin\/help$/);
+    const response = await context.request.get(`${baseURL}/api/admin/check-in?eventSlug=rsvp-browser&manifest=1`);
+    expect(response.ok()).toBe(true);
+    const {access} = await response.json();
+    expect(access.accountId).toBe(previousAccess.accountId);
+    expect(access.sessionId).not.toBe(previousAccess.sessionId);
+    if (newerScanner) {
+      await otherTab.goto('/scan?event=rsvp-browser');
+      await expect(otherTab.getByText('Door list saved', {exact:false})).toBeVisible();
+    }
+    expect(await page.locator('body').getAttribute('data-scanner-mounted')).toBe('original');
+
+    await page.getByRole('button', {name:'Refresh',exact:true}).click();
+    await expect(page.getByText('Gate access changed. Reload and sign in before scanning.', {exact:true})).toBeVisible();
+    if (newerScanner) {
+      await otherTab.getByRole('button', {name:'Refresh',exact:true}).click();
+      await expect(otherTab.getByText('Door list saved', {exact:false})).toBeVisible();
+      expect(await otherTab.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-access:v1')!))).toEqual(access);
+    } else {
+      expect(await page.evaluate(() => localStorage.getItem('bct:gate-access:v1'))).toBeNull();
+      expect(await page.evaluate(() => localStorage.getItem('bct:gate-manifests:v2'))).toBeNull();
+    }
     await context.setOffline(true);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await page.getByLabel('Ticket code', {exact:true}).fill(`BCT-${token}`);
+      await page.getByRole('button', {name:'Check',exact:true}).click();
+      await expect(page.locator('.scan-surface--invalid > p', {hasText:/^No usable offline manifest\. Reconnect before admitting this guest\.$/})).toBeVisible();
+      await expect(page.getByRole('heading', {name:'Saved offline',exact:true})).toHaveCount(0);
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-queue:v1') ?? '[]'))).toHaveLength(0);
+    }
+
+    // The new-session scanner still works, whether already mounted or reloaded.
+    const activeScanner = newerScanner ? otherTab : page;
+    if (!newerScanner) {
+      await context.setOffline(false); await page.reload();
+      await expect(page.getByText('Door list saved', {exact:false})).toBeVisible();
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-access:v1')!))).toEqual(access);
+      await context.setOffline(true);
+    }
+    await activeScanner.getByLabel('Ticket code', {exact:true}).fill(`BCT-${token}`);
+    await activeScanner.getByRole('button', {name:'Check',exact:true}).click();
+    await expect(activeScanner.getByRole('heading', {name:'Saved offline',exact:true})).toBeVisible();
+    expect(await activeScanner.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-queue:v1') ?? '[]'))).toHaveLength(1);
+  } finally {
+    // Finish intercepted refreshes before page/context teardown disposes their response bodies.
+    await context.unrouteAll({ behavior: 'wait' });
+    await otherTab?.close();
   }
-  await activeScanner.getByLabel('Ticket code', {exact:true}).fill(`BCT-${token}`);
-  await activeScanner.getByRole('button', {name:'Check',exact:true}).click();
-  await expect(activeScanner.getByRole('heading', {name:'Saved offline',exact:true})).toBeVisible();
-  expect(await activeScanner.evaluate(() => JSON.parse(localStorage.getItem('bct:gate-queue:v1') ?? '[]'))).toHaveLength(1);
-  await otherTab.close();
 });
 
 test('scanner preserves mixed offline conflicts and never claims network availability is synchronized',async({page,context,baseURL})=>{
