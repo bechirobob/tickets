@@ -1,0 +1,48 @@
+name: Read-only live menu geometry diagnostic
+on:
+  push:
+    branches: [diagnostic/tickets-menu-geometry-20261023]
+permissions:
+  contents: read
+jobs:
+  geometry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: desktop-chromium
+            engine: chromium
+          - project: mobile-webkit
+            engine: webkit
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify diagnostic-only source delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          git fetch --depth=1 origin ecdad9c8fedf90b234ee5e9a315b54ed12bad07f
+          git diff --name-only ecdad9c8fedf90b234ee5e9a315b54ed12bad07f HEAD > /tmp/diagnostic-files.txt
+          diff -u <(printf '%s\n' '.github/workflows/menu-geometry-diagnostic.yml' 'tests/e2e/live-menu-diagnostic.spec.ts') /tmp/diagnostic-files.txt
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Record bounded public geometry on exact live baseline
+        env:
+          E2E_BASE_URL: https://tickets.becoreops.com
+        run: npx playwright test tests/e2e/live-menu-diagnostic.spec.ts --project=${{ matrix.project }} --workers=1 --retries=0 --trace=on
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: menu-geometry-${{ github.run_id }}-${{ matrix.project }}
+          path: |
+            test-results
+            playwright-report
+          retention-days: 7
