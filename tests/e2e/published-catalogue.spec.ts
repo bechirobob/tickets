@@ -1,3 +1,4 @@
+import { isWebsiteListedEvent } from "../../lib/website-event-listings";
 import AxeBuilder from "@axe-core/playwright";
 import { test, expect } from "./catalogue";
 import { expectVisibleLettering } from "./text-visibility";
@@ -47,7 +48,7 @@ test("published event details agree with the catalogue and remain readable", asy
 });
 
 test("discovery shows the available catalogue with full flyers and aligned rows", async ({ page, catalogue }, info) => {
-  const visible = catalogue.screens!.filter(({ event }) => matchesEventWindow(event, "next", Date.now())).map(({ event }) => event);
+  const visible = catalogue.screens!.filter(({ event }) => isWebsiteListedEvent(event) && matchesEventWindow(event, "next", Date.now())).map(({ event }) => event);
   for (const path of ["/", "/events"]) {
     await page.goto(path);
     await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
