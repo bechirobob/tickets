@@ -73,11 +73,27 @@ test("poster, confirmed event facts and registration availability fit both launc
   expect(Math.abs(posterSizes[0].width - posterSizes[1].width)).toBeLessThanOrEqual(1);
 });
 
-test("event cards share aligned rows and compact poster sizes as copy grows", async ({ page }, testInfo) => {
+test("synthetic two-listed-card fixture preserves aligned rows and compact posters as copy grows", async ({ page }, testInfo) => {
   for (const path of ["/", "/events"]) {
     await page.goto(path);
     const cards = page.locator(".discovery-grid .drop-card");
+    await expect(cards).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
+    // Layout-only fixture: retain multi-card coverage without relisting Kempinski.
+    // Match EventExplorer's existing multiple-result branch; no product CSS changes.
+    await page.locator(".discovery-grid").evaluate((grid) => {
+      const synthetic = grid.querySelector(".drop-card")!.cloneNode(true) as HTMLElement;
+      synthetic.dataset.eventSlug = "synthetic-listed-layout-night";
+      delete synthetic.dataset.featured;
+      synthetic.querySelectorAll("a").forEach(link => { link.href = "/event/synthetic-listed-layout-night"; });
+      synthetic.querySelector("h3 a")!.textContent = "Synthetic Listed Night";
+      synthetic.querySelector(".drop-card__quip")!.textContent = "A second listed night for layout coverage.";
+      (grid as HTMLElement).appendChild(synthetic);
+      grid.classList.remove("discovery-grid--spotlight");
+      (grid as HTMLElement).dataset.count = "2";
+    });
     await expect(cards).toHaveCount(2);
+    await expect(cards.filter({ has: page.locator('a[href="/event/sun-chasers-labadi"]') })).toHaveCount(0);
     const lines = await cards.locator(".drop-card__quip").allTextContents();
     expect(new Set(lines).size).toBe(2);
     expect(lines).not.toContain("Sunset first. Regret nothing.");
@@ -104,11 +120,21 @@ test("event cards share aligned rows and compact poster sizes as copy grows", as
   }
 });
 
-test("full flyers and event lettering stay visible on the two-event Drop", async ({ page }, testInfo) => {
+test("full flyers and event lettering stay visible on the listed Drop", async ({ page }, testInfo) => {
   await page.goto("/");
   const cards = page.locator(".discovery-grid .drop-card");
-  await expect(cards).toHaveCount(2);
-  for (const slug of ["the-weekend-braai", "sun-chasers-labadi"]) {
+  await expect(cards).toHaveCount(1);
+  await expect(page.locator(".discovery-grid--spotlight")).toHaveAttribute("data-count", "1");
+  if (page.viewportSize()!.width > 700) {
+    const card = await cards.boundingBox();
+    const poster = await cards.locator(".drop-card__image").boundingBox();
+    const body = await cards.locator(".drop-card__body").boundingBox();
+    expect(card!.width).toBeLessThanOrEqual(961);
+    expect(poster!.width).toBeLessThanOrEqual(341);
+    expect(poster!.height).toBeLessThanOrEqual(511);
+    expect(body!.x).toBeGreaterThan(poster!.x + poster!.width);
+  }
+  for (const slug of ["the-weekend-braai"]) {
     const card = cards.filter({ has: page.locator(`a[href="/event/${slug}"]`) });
     await expect(card).toBeVisible();
     const poster = card.locator(".drop-card__image img");
@@ -120,10 +146,10 @@ test("full flyers and event lettering stay visible on the two-event Drop", async
     });
     expect(Math.min(...bounds)).toBeGreaterThanOrEqual(-1);
   }
-  await expect(cards.filter({ hasText: "On The Guest List" })).toContainText("25 OCT");
+  await expect(cards.filter({ hasText: "On The Guest List" })).toHaveCount(0);
   await expect(page.locator(".discovery-home .night-drop--compact")).toHaveCSS("background-color", "rgb(48, 32, 51)");
   await expectVisibleLettering(page, ".discovery-grid");
-  await page.screenshot({ path: testInfo.outputPath("two-event-home.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("listed-event-home.png"), fullPage: true });
 });
 
 test("event lettering and colours work on both events and narrow future details", async ({ page }) => {
