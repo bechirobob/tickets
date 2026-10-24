@@ -81,8 +81,10 @@ def select_provider_ids(db, with_evidence=False):
     ids = []; event_times = set()
     for _, contact in cohort:
         rows = db.execute("SELECT provider_id,COALESCE(provider_event_at,updated_at) FROM delivery_events WHERE recipient=? AND status IN ('bounced','complained') ORDER BY COALESCE(provider_event_at,updated_at) DESC,id DESC LIMIT 2", (contact,)).fetchall()
-        if len(rows) != 1 or not isinstance(rows[0][0], str) or not re.fullmatch(r'vps-[a-f0-9]{64}', rows[0][0]):
-            raise ValueError('Historical provider evidence ambiguous')
+        if len(rows) != 1:
+            raise ValueError('Historical provider count differs')
+        if not isinstance(rows[0][0], str) or not re.fullmatch(r'vps-[a-f0-9]{64}', rows[0][0]):
+            raise ValueError('Historical provider format differs')
         if rows[0][1] not in EXPECTED_EVENT_TIMES:
             raise ValueError('Historical event timestamp changed')
         event_times.add(rows[0][1])
@@ -122,8 +124,14 @@ def safe_file(path, owners, max_size=None):
         if not stat.S_ISDIR(item.st_mode) or item.st_mode & 0o022:
             raise ValueError('Unsafe parent path')
     item = path.lstat()
-    if not stat.S_ISREG(item.st_mode) or item.st_uid not in owners or item.st_mode & 0o022 or (max_size is not None and item.st_size > max_size):
-        raise ValueError('Unsafe evidence file')
+    if not stat.S_ISREG(item.st_mode):
+        raise ValueError('Evidence file type differs')
+    if item.st_uid not in owners:
+        raise ValueError('Evidence file owner differs')
+    if item.st_mode & 0o022:
+        raise ValueError('Evidence file mode differs')
+    if max_size is not None and item.st_size > max_size:
+        raise ValueError('Evidence file size exceeds bound')
     return item
 
 
@@ -255,10 +263,46 @@ def service_identity():
     return identity,revision,health,source['source_sha256']
 
 
+VALIDATION_CODES = {
+    'Original receipt ambiguous': 'receipt_mismatch',
+    'Current suppressed cohort differs': 'cohort_count_mismatch',
+    'Historical provider count differs': 'provider_count_mismatch',
+    'Historical provider format differs': 'provider_format_mismatch',
+    'Historical event timestamp changed': 'event_time_mismatch',
+    'Provider evidence overlaps': 'provider_overlap',
+    'Invalid private receipt set': 'provider_set_invalid',
+    'Outbox evidence missing': 'outbox_count_mismatch',
+    'Unexpected outbox evidence': 'outbox_status_time_or_queue_mismatch',
+    'Queue evidence overlaps': 'queue_overlap',
+    'Unsafe parent path': 'parent_metadata_mismatch',
+    'Evidence file type differs': 'file_type_mismatch',
+    'Evidence file owner differs': 'file_owner_mismatch',
+    'Evidence file mode differs': 'file_mode_mismatch',
+    'Evidence file size exceeds bound': 'file_size_exceeded',
+    'Unexpected database path': 'database_path_mismatch',
+    'Database evidence changed identity': 'database_identity_changed',
+}
+
+def diagnostic_failure(error):
+    result=metadata.safe_failure(error)
+    if type(error) is ValueError and len(error.args)==1 and isinstance(error.args[0],str):
+        code=VALIDATION_CODES.get(error.args[0])
+        if code:result['validation_code']=code
+    elif isinstance(error,sqlite3.DatabaseError):
+        result['category']='database_read_error'
+        code=getattr(error,'sqlite_errorcode',None)
+        if isinstance(code,int) and 0<=code<=65535:result['sqlite_code']=code
+    return result
+
+
 def private_linkage(app_uid):
+    metadata.STAGE='app_file'
     with readonly_db(APP_DB,{app_uid}) as app:
+        metadata.STAGE='cohort_provider_query'
         providers,cohort=select_provider_ids(app,with_evidence=True)
+    metadata.STAGE='mail_file'
     with readonly_db(MAIL_DB,{MAIL_UID}) as mail:
+        metadata.STAGE='queue_query'
         queues,receipts=select_queue_ids(mail,providers,with_evidence=True)
     return providers,queues,cohort,receipts
 
@@ -300,5 +344,5 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
-        print(json.dumps(metadata.safe_failure(error),sort_keys=True),file=sys.stderr)
+        print(json.dumps(diagnostic_failure(error),sort_keys=True),file=sys.stderr)
         sys.exit(1)
