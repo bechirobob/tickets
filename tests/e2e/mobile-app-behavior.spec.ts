@@ -400,7 +400,22 @@ test('a fractionally clipped desktop trigger still opens inside the viewport and
   await page.evaluate(y => window.scrollTo(0, y), clippedScroll);
   await expect.poll(() => trigger.evaluate(element => element.getBoundingClientRect().top)).toBeLessThan(0);
   expect(await trigger.evaluate(element => element.getBoundingClientRect().top)).toBeGreaterThanOrEqual(-1);
-  await trigger.click();
+  // Locator clicks scroll partially clipped elements into view in WebKit.
+  // Send a real pointer click at a verified visible point without that repair.
+  const point = await trigger.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const x = bounds.left + bounds.width / 2;
+    const y = bounds.top + bounds.height / 2;
+    return { x, y, left: Math.max(0, bounds.left), right: Math.min(innerWidth, bounds.right),
+      top: Math.max(0, bounds.top), bottom: Math.min(innerHeight, bounds.bottom),
+      receivesPointer: element.contains(document.elementFromPoint(x, y)) };
+  });
+  expect(point.x).toBeGreaterThan(point.left);
+  expect(point.x).toBeLessThan(point.right);
+  expect(point.y).toBeGreaterThan(point.top);
+  expect(point.y).toBeLessThan(point.bottom);
+  expect(point.receivesPointer).toBe(true);
+  await page.mouse.click(point.x, point.y);
   await expect(menu).toBeVisible();
   // Prove Playwright did not make this pass by scrolling the trigger back in.
   expect(await page.evaluate(() => scrollY)).toBe(clippedScroll);
