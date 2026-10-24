@@ -111,3 +111,30 @@ test("real Room toolbar keeps touch quiet and keyboard navigation visible", asyn
   await expect(first).toBeFocused();
   expect(await first.evaluate(el => getComputedStyle(el).outlineStyle)).not.toBe("none");
 });
+
+test("forced-colors keeps hidden-input wrapper cues", async ({ page, browserName }) => {
+  test.skip(browserName === "webkit", "Forced-colors emulation is Chromium-specific.");
+  await page.emulateMedia({ forcedColors: "active" });
+  await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}\n${shared}</style>
+    <label class="payment-method-choice" id="payment"><input type="radio" id="radio">Payment</label>
+    <section class="submission-page"><label class="poster-upload" id="poster"><input type="file" id="file">Poster</label></section>`);
+  await page.addScriptTag({ content: policy + ";inputModality.installInputModality(document);" });
+  for (const [wrapper, control] of [["#payment", "#radio"], ["#poster", "#file"]]) {
+    await page.locator(control).dispatchEvent("pointerdown", { pointerType: "touch" });
+    await page.locator(control).focus();
+    expect(await page.locator(wrapper).evaluate(el => getComputedStyle(el).outlineStyle)).not.toBe("none");
+  }
+});
+
+test("simulated window-blur lifecycle resets stale pointer modality", async ({ page }) => {
+  await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}\n${shared}</style><button>Return target</button>`);
+  await page.addScriptTag({ content: policy + ";inputModality.installInputModality(document);" });
+  const target = page.getByRole("button", { name: "Return target" });
+  await target.dispatchEvent("pointerdown", { pointerType: "touch" });
+  await expect(page.locator("html")).toHaveAttribute("data-input-modality", "pointer");
+  // Real handler with a simulated lifecycle event, not physical browser-chrome coverage.
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  expect(await page.locator("html").getAttribute("data-input-modality")).toBeNull();
+  await target.focus();
+  expect(await target.evaluate(el => getComputedStyle(el).outlineStyle)).not.toBe("none");
+});
