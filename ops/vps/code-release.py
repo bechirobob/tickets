@@ -1782,8 +1782,8 @@ def reviewed_integrated_experience_application_blobs(expected, source):
 # Exact camera framing and live-look release; prior admissions remain unchanged.
 CAMERA_LOOKS_RELEASE_BASELINE = 'ecdad9c8fedf90b234ee5e9a315b54ed12bad07f'
 CAMERA_LOOKS_RELEASE_BASE_TREE = '0c68f22bde7de5f350c1e1d3400a6be205adb1a2'
-CAMERA_LOOKS_APP_SNAPSHOT = '0ef84fb245305456fb58eacc237e51ea1b90d645'
-CAMERA_LOOKS_APP_TREE = 'b09ed15dbc8bec37d30ad7218101ae1ce1eb81a0'
+CAMERA_LOOKS_APP_SNAPSHOT = '1d5b5d0e3f52a231eba8240b77e4f239146f552f'
+CAMERA_LOOKS_APP_TREE = '7ca9d02831e4e0d876a5870bbb9792d749f2b36d'
 CAMERA_LOOKS_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 CAMERA_LOOKS_APPLICATION_INPUTS = {'tests/browser-audit-harness.test.mjs': 'bc1e79e0916c2bfc2fd57a98e92aa12c55879304',
  'app/room-features.css': '3dcef6b137313e40b0aedbd4237065f21ff92ec1',
@@ -1815,9 +1815,12 @@ CAMERA_LOOKS_APPLICATION_BLOBS = {'tests/browser-audit-harness.test.mjs': 'c4c74
  'tests/header-origin-menu.test.mjs': '60544cff98c7bda6f636b357916ed2059a145b90'}
 CAMERA_LOOKS_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
  'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
- 'package-lock.json': '57e8fa844c6cc48fbbd8bfd766789970a494635f',
- 'package.json': '543f7f006d606f32f5435c83b519078894ae7b76',
  'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+
+CAMERA_LOOKS_PREREQUISITE_INPUTS = {'package.json': '543f7f006d606f32f5435c83b519078894ae7b76',
+ 'package-lock.json': '57e8fa844c6cc48fbbd8bfd766789970a494635f'}
+CAMERA_LOOKS_PREREQUISITE_BLOBS = {'package.json': '13eb8bb5069320ed6f9b4f82dd1a7b0fad84cf87',
+ 'package-lock.json': 'b2d43a53b9ad10388b35c0464642959fd94fadc1'}
 
 def reviewed_camera_looks_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
@@ -1825,9 +1828,12 @@ def reviewed_camera_looks_application_blobs(expected, source):
     controls = CAMERA_LOOKS_CONTROL_FILES
     application = CAMERA_LOOKS_APPLICATION_BLOBS
     dependencies = CAMERA_LOOKS_DEPENDENCY_BLOBS
+    prerequisites = CAMERA_LOOKS_PREREQUISITE_BLOBS
     require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
-            and set(dependencies) == {'package.json', 'package-lock.json', 'mobile/package.json',
-                                      'mobile/package-lock.json', 'runtime/vps/package.json'}
+            and set(dependencies) == {'mobile/package.json', 'mobile/package-lock.json',
+                                      'runtime/vps/package.json'}
+            and set(prerequisites) == set(CAMERA_LOOKS_PREREQUISITE_INPUTS)
+            == {'package.json', 'package-lock.json'}
             and set(application) == set(CAMERA_LOOKS_APPLICATION_INPUTS)
             == {'tests/browser-audit-harness.test.mjs', 'app/room-features.css',
  'app/room/[slug]/flash-camera.tsx',
@@ -1842,7 +1848,8 @@ def reviewed_camera_looks_application_blobs(expected, source):
  'tests/e2e/menu-option-a.spec.ts',
  'tests/e2e/mobile-app-behavior.spec.ts',
  'tests/header-origin-menu.test.mjs'}
-            and not (controls | set(dependencies)) & set(application),
+            and not (controls | set(dependencies)) & (set(application) | set(prerequisites))
+            and not set(application) & set(prerequisites),
             "Camera looks inventory or scope changed.")
     require(expected == CAMERA_LOOKS_RELEASE_BASELINE
             and git("rev-parse", expected + "^{tree}") == CAMERA_LOOKS_RELEASE_BASE_TREE
@@ -1851,14 +1858,18 @@ def reviewed_camera_looks_application_blobs(expected, source):
     for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
         subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
                        check=True, env=git_environment(), timeout=60)
-    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application) | set(prerequisites),
             "Camera looks snapshot differs from its complete reviewed inventory.")
     verify_changed_modes(expected, snapshot)
     for name, blob in CAMERA_LOOKS_APPLICATION_INPUTS.items():
         entry = git("ls-tree", expected, "--", name)
         require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
                 "Camera looks application input differs from reviewed source: " + name)
-    for name, blob in application.items():
+    for name, blob in CAMERA_LOOKS_PREREQUISITE_INPUTS.items():
+        require(git("ls-tree", expected, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Camera looks prerequisite input differs from reviewed source: " + name)
+    outputs = {**prerequisites, **application}
+    for name, blob in outputs.items():
         require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
                 "Camera looks snapshot output differs from reviewed source: " + name)
     trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
@@ -1868,15 +1879,18 @@ def reviewed_camera_looks_application_blobs(expected, source):
     for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
         subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
                        check=True, env=git_environment(), timeout=60)
-    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls,
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls | set(prerequisites),
             "Camera looks trusted controls contain unreviewed changes.")
     require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
             and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
             "Camera looks candidate differs from the complete reviewed application patch.")
     verify_changed_modes(expected, trusted)
     verify_changed_modes(trusted, source)
-    pins = dict(application)
-    for name, blob in application.items():
+    for name, blob in prerequisites.items():
+        require(git("ls-tree", trusted, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Camera looks trusted prerequisite differs from reviewed source: " + name)
+    pins = dict(outputs)
+    for name, blob in outputs.items():
         require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
                 "Camera looks output differs from its reviewed blob or mode: " + name)
     for name in sorted(controls):
@@ -1890,6 +1904,14 @@ def reviewed_camera_looks_application_blobs(expected, source):
         require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
                     for revision in (expected, snapshot, trusted, source)),
                 "Camera looks dependencies must remain unchanged: " + name)
+    before = strict_json(git("show", expected + ":package.json"))
+    control = strict_json(git("show", trusted + ":package.json"))
+    require(before["overrides"]["fast-uri"] == "3.1.8"
+            and before["overrides"]["undici"] == "7.29.1",
+            "Camera looks security prerequisite input versions changed.")
+    before["overrides"]["fast-uri"] = "3.1.9"
+    before["overrides"]["undici"] = "7.30.1"
+    require(before == control, "Camera looks prerequisite is not the exact fast-uri and undici security patch.")
     require(not migration_plan(pins), "Camera looks release cannot introduce migrations.")
     return pins
 
