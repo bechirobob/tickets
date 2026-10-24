@@ -65,11 +65,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = 1
-          test "$(git rev-parse HEAD^1)" = d88b016c0288b261c7cdae6e3f2f24030c34db3c
-          printf '%s\n' '.github/workflows/tickets-mail-room-upgrade.yml' 'docs/operations/mail-room-upgrade.md' 'ops/email/mailer.py' 'ops/email/test_mailer.py' 'ops/email/test_numeric_codes.py' 'ops/vps/inspect-mail-service-readonly.py' 'ops/vps/test_mail_upgrade.py' 'ops/vps/upgrade-room-mail.py' > "$RUNNER_TEMP/expected-paths"
+          test "$(git rev-parse HEAD^1)" = 73062fef3ab0f9df1119cf8aeda81c0883e3c589
+          printf '%s\n' '.github/workflows/tickets-mail-room-upgrade.yml' 'ops/vps/test_mail_upgrade.py' 'ops/vps/upgrade-room-mail.py' > "$RUNNER_TEMP/expected-paths"
           git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/actual-paths"
           diff -u "$RUNNER_TEMP/expected-paths" "$RUNNER_TEMP/actual-paths"
-          printf '%s\n' '37ed2a28acda640f73af4e2db90b5cb9f41b434a016a5b85c978ae579d413fc3  ops/email/mailer.py' 'c4bbdf2b8ce01f401c2724f66e1629647f2de4dcbccc63fa2853d5bef6033ca9  ops/vps/upgrade-room-mail.py' '7bc91b1b3b4354d0135cf068126a8f2bdcce5a16017ea514955f1fe5c8008558  ops/vps/inspect-mail-service-readonly.py' | sha256sum -c -
+          printf '%s\n' '37ed2a28acda640f73af4e2db90b5cb9f41b434a016a5b85c978ae579d413fc3  ops/email/mailer.py' 'e09ad5b23e10b4a1e7c6c409f5721120ee5497b1c0b47c12658d84b9c7e94630  ops/vps/upgrade-room-mail.py' '7bc91b1b3b4354d0135cf068126a8f2bdcce5a16017ea514955f1fe5c8008558  ops/vps/inspect-mail-service-readonly.py' | sha256sum -c -
           if [ "$OPERATION" = apply ]; then
             test "$GITHUB_EVENT_NAME" = workflow_dispatch
             test "$CONFIRMATION" = 'UPGRADE ROOM MAIL ONLY'

@@ -28,6 +28,25 @@ def config():
 
 
 class OperatorTests(unittest.TestCase):
+    def test_fixed_read_steps_and_command_categories_never_emit_private_errors(self):
+        for step in ['image_config','container_config','application_identity','application_pid','application_config_pointer','application_private_configs','application_pid_recheck','application_provider','container_source','container_health','private_paths','sending_marker','rollback_name','failed_name','revision_marker','database_metadata','database_identity','database_readonly_count','postfix_spool_count']:
+            with self.subTest(step=step),patch.object(u,'READ_STEP',step):
+                error=u.subprocess.CalledProcessError(1,['private-argument'],stderr=b'template parsing error private@example.com SECRET')
+                result=u.failure_report(error,True)
+                self.assertEqual(result['read_step'],step)
+                self.assertEqual(result['command_category'],'template_parse')
+                self.assertNotIn('SECRET',json.dumps(result));self.assertNotIn('private',json.dumps(result).replace(step,''))
+        with patch.object(u,'READ_STEP','container_config'):
+            result=u.failure_report(u.subprocess.CalledProcessError(1,['secret'],stderr=b'unrecognized sensitive error'),True)
+            self.assertEqual(result['command_category'],'unclassified')
+            self.assertNotIn('sensitive',json.dumps(result))
+
+    def test_each_failed_external_projection_has_a_fixed_read_step(self):
+        for action,step in [(u.image_check,'image_config'),(lambda:u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE),'container_config'),(u.app_check,'application_identity'),(u.provider_check,'application_pid'),(lambda:u.check_source_health(u.OLD_REV,u.OLD_SOURCE,True),'container_source')]:
+            with self.subTest(step=step),patch.object(u,'command',side_effect=u.subprocess.CalledProcessError(1,['secret'])),patch.object(u.metadata,'command',side_effect=u.subprocess.CalledProcessError(1,['secret'])):
+                with self.assertRaises(u.subprocess.CalledProcessError):action()
+                self.assertEqual(u.READ_STEP,step)
+
     def test_exact_projection_rejects_more_access_and_unexpected_environment(self):
         with patch.object(u,'command',return_value=json.dumps(config()).encode()):self.assertEqual(u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE),'b'*64)
         for field,value in [('privileged',True),('cap_add',['SYS_ADMIN']),('env','path;frontend;release;unexpected;'),('networks','bridge;host;'),('labels',1),('sysctls',{'danger':'on'}),('image','sha256:'+'c'*64)]:

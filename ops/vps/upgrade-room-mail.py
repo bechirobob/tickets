@@ -28,6 +28,7 @@ DB=Path('/var/lib/becore-tickets-mail/outbox.sqlite')
 MAIL_UID=10000
 STAGE='preconditions'
 FAILED_STAGE=None
+READ_STEP=None
 # Values are compared inside Docker's template: unexpected env strings/labels
 # are never emitted or passed to the operator. No credentials are inspected.
 ENV_TEMPLATE='{{range .Config.Env}}{{if eq . "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}}path;{{else if eq . "DEBIAN_FRONTEND=noninteractive"}}frontend;{{else if eq . "RELEASE_SHA=REVISION"}}release;{{else}}unexpected;{{end}}{{end}}'
@@ -89,6 +90,13 @@ def failure_report(error,read_only):
     if isinstance(error,CheckFailed):result['check']=error.check
     if isinstance(error,RouteBlocked):result.update(category='route_activation_blocked',provider=error.provider,signing_key_valid=error.key_valid)
     if FAILED_STAGE is not None:result['failed_stage']=FAILED_STAGE
+    if READ_STEP is not None:result['read_step']=READ_STEP
+    if isinstance(error,subprocess.CalledProcessError):
+        raw=error.stderr if isinstance(error.stderr,bytes) else b''
+        # Classify locally; never return stderr, arguments, or template values.
+        for marker,category in [(b'template parsing error','template_parse'),(b'error calling len','template_length'),(b'No such container','container_missing'),(b'No such image','image_missing'),(b'permission denied','permission_denied')]:
+            if marker in raw[:8192]:result['command_category']=category;break
+        else:result['command_category']='unclassified'
     return result
 
 
@@ -135,7 +143,13 @@ def command(args,data=None,timeout=20,limit=1048576):
     return result.stdout
 
 
+def read_step(value):
+    global READ_STEP
+    READ_STEP=value
+
+
 def image_check():
+    read_step('image_config')
     template='{"id":{{json .Id}},"env":"'+ENV_TEMPLATE.replace('REVISION',OLD_REV)+'"}'
     data=json.loads(command(['docker','image','inspect','--format',template,OLD_IMAGE]))
     if data.get('id')!=OLD_IMAGE or sorted(data.get('env','').split(';'))!=['','frontend','path']:
@@ -143,6 +157,7 @@ def image_check():
 
 
 def inspect_config(name,revision,image,running=True):
+    read_step('container_config')
     template='{'+','.join(json.dumps(k)+':{{json '+v+'}}' for k,v in FIELDS.items())
     template+=',"env":"'+ENV_TEMPLATE.replace('REVISION',revision)+'","labels":{{len .Config.Labels}},"networks":"{{range $name, $value := .NetworkSettings.Networks}}{{$name}};{{end}}"}'
     item=json.loads(command(['docker','inspect','--type=container','--format',template,name]))
@@ -160,6 +175,7 @@ def inspect_config(name,revision,image,running=True):
 
 
 def app_check():
+    read_step('application_identity')
     props=dict(line.split('=',1) for line in metadata.command(['systemctl','show','becore-tickets.service','--property=ActiveState,WorkingDirectory'],4096).splitlines())
     if props!={'ActiveState':'active','WorkingDirectory':'/srv/becore-tickets/releases/'+metadata.EXPECTED_APP}:raise ValueError('Application changed')
 
@@ -172,15 +188,19 @@ class RouteBlocked(Exception):
 def provider_check():
     # Existing canonical/effective configuration only. Return enum/boolean;
     # neither key values nor configuration bytes leave this private check.
+    read_step('application_pid')
     pid=metadata.command(['systemctl','show','becore-tickets.service','--property=MainPID','--value'],64).strip()
     if not re.fullmatch('[1-9][0-9]{0,9}',pid):raise ValueError('Service PID invalid')
+    read_step('application_config_pointer')
     raw=(Path('/proc')/pid/'environ').read_bytes()
     if len(raw)>131072:raise ValueError('Effective environment bound')
     selected=[item for item in raw.split(b'\0') if item.startswith(b'TICKETS_CONFIG=')]
     if selected!=[b'TICKETS_CONFIG=/run/becore-tickets-runtime/runtime.json']:raise ValueError('Effective config path differs')
+    read_step('application_private_configs')
     values=[read_private(Path('/etc/becore-tickets/runtime.json'),0),
             read_private(Path('/run/becore-tickets-runtime/runtime.json'),pwd.getpwnam('becore-tickets').pw_uid)]
     if values[0]!=values[1]:raise CheckFailed('app_config_effective')
+    read_step('application_pid_recheck')
     if metadata.command(['systemctl','show','becore-tickets.service','--property=MainPID','--value'],64).strip()!=pid:raise ValueError('Service changed')
     def unique_object(pairs):
         result={}
@@ -188,6 +208,7 @@ def provider_check():
             if key in result:raise ValueError('Duplicate configuration key')
             result[key]=value
         return result
+    read_step('application_provider')
     config=json.loads(values[0],object_pairs_hook=unique_object)
     if not isinstance(config,dict) or not all(isinstance(v,str) for v in config.values()):raise CheckFailed('app_config_shape')
     provider=config.get('TRANSACTIONAL_EMAIL_PROVIDER')
@@ -226,7 +247,9 @@ def wait_ready(revision,source,enabled):
 
 
 def check_source_health(revision,source,enabled):
+    read_step('container_source')
     evidence=metadata.source_evidence(metadata.command(['docker','exec',NAME,'python3','-B','-c',metadata.SOURCE_READ]))
+    read_step('container_health')
     health=metadata.health()
     if evidence['source_sha256']!=source:raise CheckFailed('source_hash')
     if health!={'service':NAME,'revision':revision,'sendingEnabled':enabled}:raise CheckFailed('service_health')
@@ -324,10 +347,13 @@ class Upgrade:
         self.start_uncertain=False
 
     def verify_schema(self):
+        read_step('database_metadata')
         safe_stat(DB,10000)
+        read_step('database_identity')
         identity=mail_identity();identity.__enter__()
         db=None
         try:
+            read_step('database_readonly_count')
             db=sqlite3.connect(DB.as_uri()+'?mode=ro',uri=True,timeout=5)
             db.execute('PRAGMA query_only=ON')
             cols={r[1]:r for r in db.execute('PRAGMA table_info(messages)')}
@@ -365,15 +391,18 @@ class Upgrade:
         self.record('rolled_back')
 
     def check_paths(self):
+        read_step('private_paths')
         for path,uid,check in [(ROOT,0,'root_directory'),(ROOT/'control',0,'control_directory'),(DB.parent,MAIL_UID,'db_directory')]:
             private_ancestry(path,uid)
             try:info=path.lstat()
             except OSError:raise CheckFailed(check) from None
             if not stat.S_ISDIR(info.st_mode) or info.st_uid!=uid or info.st_mode&0o022:raise CheckFailed(check)
         if self.journal.exists() or self.journal.is_symlink() or self.paused.exists() or self.paused.is_symlink():raise CheckFailed('operation_in_progress')
+        read_step('sending_marker')
         try:marker=safe_stat(FLAG,0)
         except OSError:raise CheckFailed('sending_marker') from None
         for name,check in [(self.backup,'rollback_name'),(NAME+'-failed-'+self.revision[:12],'failed_name')]:
+            read_step(check)
             if command(['docker','ps','-a','--filter','name=^/'+name+'$','--format','{{.ID}}']).strip():raise CheckFailed(check)
         return marker
 
@@ -384,6 +413,7 @@ class Upgrade:
         self.check_paths()
         image_check();app_check();provider=provider_check()
         inspect_config(NAME,OLD_REV,OLD_IMAGE);check_source_health(OLD_REV,OLD_SOURCE,True)
+        read_step('revision_marker')
         if metadata.marker()!=OLD_REV:raise ValueError('Mail revision differs')
         safe_stat(DB,10000)
         wal,shm=Path(str(DB)+'-wal'),Path(str(DB)+'-shm')
@@ -399,6 +429,7 @@ class Upgrade:
         finally:
             if db is not None:db.close()
             identity.__exit__(None,None,None)
+        read_step('postfix_spool_count')
         raw=command(['docker','exec',NAME,'postqueue','-j'],timeout=10)
         spool=0
         for line in raw.splitlines():
