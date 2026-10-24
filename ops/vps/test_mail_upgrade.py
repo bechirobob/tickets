@@ -28,6 +28,33 @@ def config():
 
 
 class OperatorTests(unittest.TestCase):
+    def test_all_projection_probes_are_fixed_bounded_and_return_no_values(self):
+        calls=[]
+        def probe(args,**kwargs):
+            calls.append(args);self.assertLessEqual(kwargs['timeout'],2);self.assertEqual(kwargs['limit'],65536)
+            if '.HostConfig.Privileged' in args[-2]:raise u.subprocess.CalledProcessError(1,args,stderr=b'PRIVATE SECRET')
+            return b'PRIVATE VALUE'
+        with patch.object(u,'command',side_effect=probe):report=u.projection_failures(u.NAME,u.OLD_REV)
+        self.assertEqual(report['failed_fields'],['privileged']);self.assertFalse(report['incomplete'])
+        self.assertEqual(report['completed'],len(u.FIELDS)+3);self.assertEqual(len(calls),len(u.FIELDS)+3)
+        self.assertNotIn('PRIVATE',json.dumps(report))
+        with patch.object(u.time,'monotonic',side_effect=[0,16]),patch.object(u,'command') as command:
+            report=u.projection_failures(u.NAME,u.OLD_REV)
+            self.assertTrue(report['incomplete']);self.assertEqual(report['completed'],0);command.assert_not_called()
+
+    def test_projection_error_only_returns_allowlisted_field_not_private_text(self):
+        for field,path in {**u.FIELDS,'labels':'.Config.Labels','environment':'.Config.Env','networks':'.NetworkSettings.Networks'}.items():
+            raw=('template parsing error executing at <'+path+'>: map has no entry for key "'+path.rsplit('.',1)[-1]+'" PRIVATE@example.com SECRET').encode()
+            report=u.failure_report(u.subprocess.CalledProcessError(1,['private'],stderr=raw),True)
+            self.assertEqual(report['projection_field'],field)
+            self.assertEqual(report['command_category'],'template_missing_key')
+            self.assertNotIn('PRIVATE',json.dumps(report));self.assertNotIn('SECRET',json.dumps(report))
+        raw=b'template parsing error executing at <.Private.Password>: private@example.com SECRET'
+        report=u.failure_report(u.subprocess.CalledProcessError(1,['private'],stderr=raw),True)
+        self.assertNotIn('projection_field',report);self.assertNotIn('Password',json.dumps(report))
+        report=u.failure_report(u.subprocess.CalledProcessError(1,['private'],stderr=b'template parsing error error calling len: len of nil pointer'),True)
+        self.assertEqual(report['command_category'],'template_length')
+
     def test_complete_docker_projection_with_real_go_template_engine(self):
         import os,shutil,subprocess
         binary=shutil.which('go')
@@ -78,7 +105,7 @@ func main(){var x struct{Template string; Fixture map[string]any};if e:=json.New
 
     def test_each_failed_external_projection_has_a_fixed_read_step(self):
         for action,step in [(u.image_check,'image_config'),(lambda:u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE),'container_config'),(u.app_check,'application_identity'),(u.provider_check,'application_pid'),(lambda:u.check_source_health(u.OLD_REV,u.OLD_SOURCE,True),'container_source')]:
-            with self.subTest(step=step),patch.object(u,'command',side_effect=u.subprocess.CalledProcessError(1,['secret'])),patch.object(u.metadata,'command',side_effect=u.subprocess.CalledProcessError(1,['secret'])):
+            with self.subTest(step=step),patch.object(u,'projection_failures',return_value={}),patch.object(u,'command',side_effect=u.subprocess.CalledProcessError(1,['secret'])),patch.object(u.metadata,'command',side_effect=u.subprocess.CalledProcessError(1,['secret'])):
                 with self.assertRaises(u.subprocess.CalledProcessError):action()
                 self.assertEqual(u.READ_STEP,step)
 
