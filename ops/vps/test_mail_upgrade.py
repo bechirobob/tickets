@@ -28,6 +28,41 @@ def config():
 
 
 class OperatorTests(unittest.TestCase):
+    def test_complete_docker_projection_with_real_go_template_engine(self):
+        import os,shutil,subprocess
+        binary=shutil.which('go')
+        version=subprocess.run([binary,'version'],capture_output=True,text=True) if binary else None
+        if not version or version.returncode or not version.stdout.startswith('go version '):
+            if os.environ.get('GITHUB_ACTIONS')=='true':self.fail('Hosted Go template engine unavailable')
+            self.skipTest('Go compiler unavailable locally; required on hosted focused job')
+        captures=[]
+        def capture(args,*a,**k):
+            captures.append(args[args.index('--format')+1])
+            return json.dumps(config()).encode()
+        with patch.object(u,'command',side_effect=capture):u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE)
+        fixture={}
+        for key,path in u.FIELDS.items():
+            cursor=fixture;parts=path.lstrip('.').split('.')
+            for part in parts[:-1]:cursor=cursor.setdefault(part,{})
+            cursor[parts[-1]]=config().get(key)
+        fixture['Config']['Env']=['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin','DEBIAN_FRONTEND=noninteractive','RELEASE_SHA='+u.OLD_REV]
+        fixture['NetworkSettings']={'Networks':{'bridge':{}}}
+        program=r'''package main
+import("encoding/json";"os";"text/template";"fmt")
+func main(){var x struct{Template string; Fixture map[string]any};if e:=json.NewDecoder(os.Stdin).Decode(&x);e!=nil{panic(e)};t,e:=template.New("projection").Funcs(template.FuncMap{"json":func(x any)string{v,_:=json.Marshal(x);return string(v)}}).Parse(x.Template);if e!=nil{fmt.Fprintln(os.Stderr,"parse:",e);os.Exit(2)};if e=t.Execute(os.Stdout,x.Fixture);e!=nil{fmt.Fprintln(os.Stderr,"execute:",e);os.Exit(3)}}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/'projection.go';source.write_text(program)
+            for labels in [None,{}, {'unexpected':'synthetic-only'}]:
+                fixture['Config']['Labels']=labels
+                result=subprocess.run([binary,'run',str(source)],input=json.dumps({'Template':captures[0],'Fixture':fixture}),text=True,capture_output=True,timeout=60)
+                self.assertEqual(result.returncode,0,result.stderr)
+                projected=json.loads(result.stdout)
+                with patch.object(u,'command',return_value=result.stdout.encode()):
+                    if labels:
+                        with self.assertRaises(u.CheckFailed):u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE)
+                    else:self.assertEqual(u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE),'b'*64)
+
     def test_fixed_read_steps_and_command_categories_never_emit_private_errors(self):
         for step in ['image_config','container_config','application_identity','application_pid','application_config_pointer','application_private_configs','application_pid_recheck','application_provider','container_source','container_health','private_paths','sending_marker','rollback_name','failed_name','revision_marker','database_metadata','database_identity','database_readonly_count','postfix_spool_count']:
             with self.subTest(step=step),patch.object(u,'READ_STEP',step):
