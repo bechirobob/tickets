@@ -39,7 +39,8 @@ test.afterEach(async ({ page }, info) => {
   const events = await page.evaluate(() => (window as Window & { rsvpPointerGeometry?: unknown[] }).rsvpPointerGeometry ?? []);
   await info.attach('rsvp-pointer-geometry', { body: JSON.stringify(events, null, 2), contentType: 'application/json' });
 });
-test('My Nights distinguishes waitlisted guests from confirmed passes and supports cancellation', async ({ page }) => {
+for (const variant of ['native-touch', 'mouse-auto-scroll'] as const) {
+test(`${variant}: My Nights distinguishes waitlisted guests from confirmed passes and supports cancellation`, async ({ page }) => {
   await recordGeometry(page);
   let status = 'waitlisted';
   await page.route('**/api/customer/my-nights', route => route.fulfill({ json: { attendee: { displayName: 'Ama' }, nights: [] } }));
@@ -54,7 +55,9 @@ test('My Nights distinguishes waitlisted guests from confirmed passes and suppor
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
   status = 'confirmed'; await page.reload();
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
-  await section.locator('summary').click();
+  if (variant === 'mouse-auto-scroll') await page.addStyleTag({content: 'html { scroll-behavior: auto !important; }'});
+  if (variant === 'native-touch') await section.locator('summary').tap();
+  else await section.locator('summary').click();
   await section.getByRole('button', { name: 'Cancel RSVP' }).click();
   await section.getByRole('button', { name: 'Yes, cancel' }).click();
   await expect(section).toContainText('Cancelled');
@@ -63,7 +66,7 @@ test('My Nights distinguishes waitlisted guests from confirmed passes and suppor
 });
 
 for (const routeName of ['event', 'rsvp']) {
-  test(`${routeName} RSVP shows live approval for its event after submission, resume and reload`, async ({ page }) => {
+  test(`${variant}: ${routeName} RSVP shows live approval for its event after submission, resume and reload`, async ({ page }) => {
     let status: string | null = null;
     const roomAccess = routeName === 'event' ? 1 : 0;
     await page.clock.install();
@@ -75,7 +78,11 @@ for (const routeName of ['event', 'rsvp']) {
     await page.route('**/api/registrations', route => { status = 'requested'; return route.fulfill({ status: 202, json: { message: 'RSVP received.', canManage: true } }); });
     await page.goto(`/${routeName}/after-dark-osu`);
     const form = page.locator('.registration-form');
-    if (routeName === 'event') await form.getByRole('button', { name: 'RSVP', exact: true }).click();
+    if (variant === 'mouse-auto-scroll') await page.addStyleTag({content: 'html { scroll-behavior: auto !important; }'});
+    if (routeName === 'event') {
+      const trigger = form.getByRole('button', { name: 'RSVP', exact: true });
+      if (variant === 'native-touch') await trigger.tap(); else await trigger.click();
+    }
     await form.getByLabel('Your name').fill('Approval Guest');
     await form.getByLabel('Email address').fill('approval-fixture@example.com');
     await form.getByRole('checkbox', { name: /I accept the event terms/ }).check();
@@ -102,3 +109,5 @@ for (const routeName of ['event', 'rsvp']) {
   });
 }
 
+
+}
