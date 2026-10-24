@@ -14,7 +14,7 @@ const css = (await Promise.all(["../../styles/customer.css", "../../app/workspac
 const shared = await readFile(new URL("../../styles/input-modality.css", import.meta.url), "utf8");
 
 test("shared pointer focus policy preserves keyboard and editing cues across surfaces", async ({ page }) => {
-  await page.setContent(`<style>${css}\n${shared}</style>
+  await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}\n${shared}</style>
     <main>
       <button id="customer">Customer action</button>
       <section class="workspace-topbar"><button id="staff">Staff action</button></section>
@@ -90,7 +90,7 @@ test("real Room toolbar keeps touch quiet and keyboard navigation visible", asyn
     bundle: true, write: false, format: "iife", platform: "browser", jsx: "automatic",
   }).outputFiles[0].text;
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.setContent(`<style>${css}\n${shared}</style><main class="room-page"><section class="room-stream"><article class="room-message"><div class="room-avatar">T</div><div class="room-message__body"><header>Test guest</header><div id="fixture"></div></div></article></section></main>`);
+  await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}\n${shared}</style><main class="room-page"><section class="room-stream"><article class="room-message"><div class="room-avatar">T</div><div class="room-message__body"><header>Test guest</header><div id="fixture"></div></div></article></section></main>`);
   await page.addScriptTag({ content: policy + ";inputModality.installInputModality(document);" });
   await page.addScriptTag({ content: bundle });
   const trigger = page.getByRole("button", { name: "Actions for Test guest's message" });
