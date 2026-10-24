@@ -2041,6 +2041,171 @@ FIRST_HOST_DEPENDENCY_BLOBS = {'package-lock.json': 'b2d43a53b9ad10388b35c046464
 FIRST_HOST_PREREQUISITE_INPUTS = {'.github/workflows/tickets-code-release.yml': '9c5ca1129fe7e97215b3d895060a4f01256473bf'}
 FIRST_HOST_PREREQUISITE_BLOBS = {'.github/workflows/tickets-code-release.yml': '9326b937cfb42f3056c5187e498563c63720c392'}
 
+
+
+# Exact code-only Room/mail and input-modality release with independently merged operational prerequisites.
+ROOM_MAIL_FOCUS_RELEASE_BASELINE = '8f43707d9f656b5638659acb9e25595e8903797a'
+ROOM_MAIL_FOCUS_RELEASE_BASE_TREE = '25b7f8ea15c6666857bd650722f035625cb27a3c'
+ROOM_MAIL_FOCUS_PREREQUISITE_SNAPSHOT = 'e21ca625111f5490e4e11a80af40785e2d76e5ca'
+ROOM_MAIL_FOCUS_PREREQUISITE_TREE = '08ef61a51af5e756db4c5b6d9bacb1423f27684d'
+ROOM_MAIL_FOCUS_APP_SNAPSHOT = 'c0ad1ea9fe39f112ea4893867aeadef82b10cc3d'
+ROOM_MAIL_FOCUS_APP_TREE = 'a937e2272a76a46c0460b8e84ecb6ecca68dbdb3'
+ROOM_MAIL_FOCUS_CONTROL_FILES = {'ops/vps/test_code_release.py', 'ops/vps/code-release.py'}
+ROOM_MAIL_FOCUS_APPLICATION_INPUTS = {'.github/workflows/input-modality-checks.yml': None,
+ 'app/api/admin/host-pass/route.ts': '2b8b37e324d5f4ce7501da710334072634b99c87',
+ 'app/globals.css': '4ac15d8e4cc0a372123c4309443fd056c74fef92',
+ 'app/input-modality.tsx': None,
+ 'app/layout.tsx': '349f0cbabcd8020bb178bc66ff96c3a271eda1ed',
+ 'app/organizer/organizer.css': '0e93d45ceedbe6b0a9488ac868b937e520e206db',
+ 'app/room-features.css': '948b795d803710bd75a6ec6b381de6a249ba2c40',
+ 'lib/input-modality.ts': None,
+ 'lib/room-host-first-post.ts': '524763d3666280b817d5e91ad5e845208af9919d',
+ 'package.json': '60b73e4d803eb7d36c66378e110c261c7a6a3fb7',
+ 'playwright.input-modality.config.ts': None,
+ 'styles/input-modality.css': None,
+ 'tests/e2e/input-modality.spec.ts': None,
+ 'tests/event-host-pass.test.ts': 'e0561bbec44ce09fc212a4d054622970fb05882e',
+ 'tests/input-modality.test.mjs': None,
+ 'tests/room-host-first-post.test.ts': '840142312b41e01fbbcaa391865e28b516a9316e'}
+ROOM_MAIL_FOCUS_APPLICATION_BLOBS = {'.github/workflows/input-modality-checks.yml': '436482a7dc21b9979685f1f691c96d23454c6bb6',
+ 'app/api/admin/host-pass/route.ts': 'ca712226a7bcfe2a6f904c0b6400fb5f37fc62d2',
+ 'app/globals.css': '0eba995ad99bdd72bbd2571e567649031fb465d8',
+ 'app/input-modality.tsx': '49815a22fe8ab5198587686e1d22bbaa1e03b5e4',
+ 'app/layout.tsx': '701aaa80dd8ddb203af756cd303e79c2f066a5d7',
+ 'app/organizer/organizer.css': 'ddab5de21e25f10a76383afa0d5314ede590cb20',
+ 'app/room-features.css': '5b8ad4dbc0b72e17c589d7cc8b1099bd8ddf3c08',
+ 'lib/input-modality.ts': '7ad5e5a956c3476fd5da13333ca41d48d7282939',
+ 'lib/room-host-first-post.ts': '10916eba03651ad5eabfef5b02169d8a3a9b5759',
+ 'package.json': '8de5a0a9faaa0c93e382844d85b1fc2f7ca7d24a',
+ 'playwright.input-modality.config.ts': 'c70c4c7e6e100050ab21ed9f5d5745537d5d4184',
+ 'styles/input-modality.css': '3aab934a50e219906456f2d376d8439dcc276d6a',
+ 'tests/e2e/input-modality.spec.ts': '5181752e3ca2fd9c21d63c2e506af1fb6b017614',
+ 'tests/event-host-pass.test.ts': 'bdf2143dd473da1f121b81dae978342bb19ce4e7',
+ 'tests/input-modality.test.mjs': 'ca7b5918993b654ad654dbe083aecca471ca3ad4',
+ 'tests/room-host-first-post.test.ts': 'a0be38ae8a2b2a6fbb38e37bb0cd6b3b68e1362d'}
+ROOM_MAIL_FOCUS_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': 'b2d43a53b9ad10388b35c0464642959fd94fadc1',
+ 'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+ROOM_MAIL_FOCUS_PREREQUISITE_INPUTS = {'.github/workflows/puro-first-host-delivery-readonly-20261024.yml': None,
+ '.github/workflows/puro-first-host-recovery-20261024.yml': None,
+ 'ops/vps/recover-puro-first-host-20261024.py': None,
+ 'ops/vps/test_first_host_recovery.py': None}
+ROOM_MAIL_FOCUS_PREREQUISITE_BLOBS = {'.github/workflows/puro-first-host-delivery-readonly-20261024.yml': '5b8f449eeeb823245a54bf741351e9f4124feeee',
+ '.github/workflows/puro-first-host-recovery-20261024.yml': 'd230cc1ffc873202ee5a359df2deebe6c883a447',
+ 'ops/vps/recover-puro-first-host-20261024.py': 'e4d2fecee02ad2b24304beec755f1b161ad6b4b0',
+ 'ops/vps/test_first_host_recovery.py': '66c7234648a239e66df42dfa9093d0b5eab97c13'}
+
+def reviewed_room_mail_focus_application_blobs(expected, source):
+    """Bind exact M/S inputs and outputs to independent control C and promotion P."""
+    snapshot = ROOM_MAIL_FOCUS_APP_SNAPSHOT
+    controls = ROOM_MAIL_FOCUS_CONTROL_FILES
+    application = ROOM_MAIL_FOCUS_APPLICATION_BLOBS
+    dependencies = ROOM_MAIL_FOCUS_DEPENDENCY_BLOBS
+    prerequisites = ROOM_MAIL_FOCUS_PREREQUISITE_BLOBS
+    prerequisite = ROOM_MAIL_FOCUS_PREREQUISITE_SNAPSHOT
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package-lock.json', 'mobile/package.json',
+                                      'mobile/package-lock.json', 'runtime/vps/package.json'}
+            and set(prerequisites) == set(ROOM_MAIL_FOCUS_PREREQUISITE_INPUTS)
+            == {'.github/workflows/puro-first-host-delivery-readonly-20261024.yml',
+ '.github/workflows/puro-first-host-recovery-20261024.yml',
+ 'ops/vps/recover-puro-first-host-20261024.py',
+ 'ops/vps/test_first_host_recovery.py'}
+            and set(application) == set(ROOM_MAIL_FOCUS_APPLICATION_INPUTS)
+            == {'.github/workflows/input-modality-checks.yml',
+ 'app/api/admin/host-pass/route.ts',
+ 'app/globals.css',
+ 'app/input-modality.tsx',
+ 'app/layout.tsx',
+ 'app/organizer/organizer.css',
+ 'app/room-features.css',
+ 'lib/input-modality.ts',
+ 'lib/room-host-first-post.ts',
+ 'package.json',
+ 'playwright.input-modality.config.ts',
+ 'styles/input-modality.css',
+ 'tests/e2e/input-modality.spec.ts',
+ 'tests/event-host-pass.test.ts',
+ 'tests/input-modality.test.mjs',
+ 'tests/room-host-first-post.test.ts'}
+            and not (controls | set(dependencies)) & (set(application) | set(prerequisites))
+            and not set(application) & set(prerequisites),
+            "Room/mail focus inventory or scope changed.")
+    require(expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == ROOM_MAIL_FOCUS_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == ROOM_MAIL_FOCUS_APP_TREE
+            and git("rev-parse", prerequisite + "^{tree}") == ROOM_MAIL_FOCUS_PREREQUISITE_TREE,
+            "Room/mail focus live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, prerequisite), (prerequisite, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application) | set(prerequisites),
+            "Room/mail focus snapshot differs from its complete reviewed inventory.")
+    require(set(git("diff", "--name-only", expected, prerequisite).splitlines()) == set(prerequisites),
+            "Room/mail focus prerequisite differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, prerequisite)
+    verify_changed_modes(expected, snapshot)
+    for name, blob in ROOM_MAIL_FOCUS_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Room/mail focus application input differs from reviewed source: " + name)
+    for name, blob in ROOM_MAIL_FOCUS_PREREQUISITE_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Room/mail focus prerequisite input differs from reviewed source: " + name)
+        require(git("ls-tree", prerequisite, "--", name) == "100644 blob " + prerequisites[name] + "\t" + name,
+                "Room/mail focus prerequisite snapshot output changed: " + name)
+    outputs = {**prerequisites, **application}
+    for name, blob in outputs.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Room/mail focus snapshot output differs from reviewed source: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, prerequisite, snapshot, source),
+            "Room/mail focus requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((prerequisite, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls | set(prerequisites),
+            "Room/mail focus trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Room/mail focus candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    for name, blob in prerequisites.items():
+        require(git("ls-tree", trusted, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Room/mail focus trusted prerequisite differs from reviewed source: " + name)
+    pins = dict(outputs)
+    for name, blob in outputs.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Room/mail focus output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Room/mail focus controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete M/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Room/mail focus dependencies must remain unchanged: " + name)
+    before = strict_json(git("show", expected + ":package.json"))
+    after = strict_json(git("show", source + ":package.json"))
+    require(before == strict_json(git("show", trusted + ":package.json")),
+            "Room/mail focus controls must preserve the entire root package.")
+    registration = "node --test "
+    require(before["scripts"]["test:ui"].startswith(registration),
+            "Room/mail focus baseline test registration changed.")
+    before["scripts"]["test:ui"] = before["scripts"]["test:ui"].replace(
+        registration, registration + "tests/input-modality.test.mjs ", 1)
+    require(before == after, "Room/mail focus package change is not the exact input-modality test registration.")
+    require(not migration_plan(pins), "Room/mail focus release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_first_host_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
     snapshot = FIRST_HOST_APP_SNAPSHOT
@@ -2488,6 +2653,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE:
+        return reviewed_room_mail_focus_application_blobs(expected, source)
     if expected == FIRST_HOST_RELEASE_BASELINE:
         return reviewed_first_host_application_blobs(expected, source)
     if expected == CAMERA_LOOKS_RELEASE_BASELINE:
@@ -2579,6 +2746,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Room/mail focus release cannot introduce migrations.")
+        return changed
     if expected == FIRST_HOST_RELEASE_BASELINE:
         return changed
     if expected == CAMERA_LOOKS_RELEASE_BASELINE:
@@ -4019,6 +4189,9 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
+        if self.expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE:
+            require(not self.enable_crypto and not self.enable_first_host,
+                    "Room/mail focus is code-only and must preserve the current runtime configuration.")
         self.migrations = migration_plan(changes)
         if any(item.get("kind") == "pink-edition-confirmed" for item in self.migrations):
             require(len(self.migrations) == 1,
