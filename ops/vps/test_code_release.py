@@ -966,7 +966,100 @@ def camera_looks_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
+# Exact first-host receipt C/P test family; historical families remain independent.
+FIRST_HOST_OPERATOR_BLOB = '22d216793a884fc3112fd9b14e7aab3af83789a9'
+FIRST_HOST_STAGED_BASE = dict(CAMERA_LOOKS_STAGED_BASE)
+FIRST_HOST_STAGED_BASE[".github/workflows/tickets-code-release.yml"] = ("100644", "9326b937cfb42f3056c5187e498563c63720c392")
+FIRST_HOST_TEST_FILE = Path(__file__).resolve()
+
+
+def first_host_source_family(root):
+    """Recognize only the complete First host C/P family for local test execution."""
+    root = Path(root)
+    operator = root / 'ops/vps/code-release.py'
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    # The executing new test family cannot downgrade to a historical operator.
+    # Capture its real module path once, independent of historical fixture mocks.
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == FIRST_HOST_TEST_FILE
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != FIRST_HOST_OPERATOR_BLOB):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            baseline = release.FIRST_HOST_RELEASE_BASELINE
+            if (checkout_git(root, 'rev-parse', baseline + '^{tree}').decode().strip()
+                    != release.FIRST_HOST_RELEASE_BASE_TREE):
+                raise AssertionError('First host family baseline tree changed')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', baseline).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('First host baseline contains unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update({name: ('100644', blob) for name, blob in release.FIRST_HOST_PREREQUISITE_BLOBS.items()})
+            application = release.FIRST_HOST_APPLICATION_BLOBS
+            observed = {}
+            for name in application:
+                path = root / name
+                observed[name] = digest(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+            if observed == application:
+                manifest.update({name: ('100644', blob) for name, blob in application.items()})
+            elif any(observed[name] != manifest.get(name, (None, None))[1] for name in application):
+                raise AssertionError('First host application family has partial or unreviewed bytes')
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('First host full inventory differs from complete tracked C/P family')
+            # A restored worktree cannot conceal staged application changes.
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if not record:
+                    continue
+                metadata, raw_name = record.split(b'\t', 1)
+                mode, blob, stage = metadata.decode().split()
+                name = os.fsdecode(raw_name)
+                if (stage != '0' or name not in manifest
+                        or (name in release.FIRST_HOST_CONTROL_FILES
+                            and (mode != '100644' or blob != digest((root / name).read_bytes())))
+                        or (name not in release.FIRST_HOST_CONTROL_FILES and manifest[name] != (mode, blob))):
+                    raise AssertionError('First host index differs from complete application family')
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError('First host family requires its independently pinned baseline') from exc
+    else:
+        manifest = dict(FIRST_HOST_STAGED_BASE)
+    # Only this test file cannot self-pin; production binds both controls to C.
+    manifest['ops/vps/code-release.py'] = ('100644', FIRST_HOST_OPERATOR_BLOB)
+    manifest['ops/vps/test_code_release.py'] = ('100644', None)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('First host family requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError('First host family is incomplete') from exc
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('First host family has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def checkout_source_family(root):
+    first_host = first_host_source_family(root)
+    if first_host is not None:
+        return first_host
+
     camera_looks = camera_looks_source_family(root)
     if camera_looks is not None:
         return camera_looks
@@ -3180,7 +3273,10 @@ class VerifierTests(unittest.TestCase):
         for name, specification in release.REVIEWED_MIGRATIONS.items():
             for blob in (specification["blob"], "f" * 40):
                 with patch.object(release, "git", side_effect=[name, blob]), patch.object(release.subprocess, "run"):
-                    if blob == specification["blob"]:
+                    if name in ("drizzle/0068_room_host_first_posts.sql", "drizzle/0069_event_host_pass_invitations.sql"):
+                        with self.assertRaisesRegex(release.ReleaseError, "requires its exact release family"):
+                            release.vetted_changes(OLD, NEW)
+                    elif blob == specification["blob"]:
                         self.assertEqual(release.vetted_changes(OLD, NEW), [name])
                     else:
                         with self.assertRaisesRegex(release.ReleaseError, "reviewed source"):
@@ -9568,6 +9664,1103 @@ class CameraLooksSourceAdmissionTests(unittest.TestCase):
                     with self.assertRaisesRegex(release.ReleaseError, 'exact fast-uri and undici security patch'):
                         self.verify(candidate)
                 self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+
+class FirstHostSourceAdmissionTests(unittest.TestCase):
+    """Real Git objects bind the new M/S/C/P family without changing older grants."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', '--local', 'maintenance.autoDetach', 'false')
+        self.git('config', '--local', 'gc.autoDetach', 'false')
+        self.git('config', 'user.name', 'First host admission tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.prerequisites = tuple(release.FIRST_HOST_PREREQUISITE_BLOBS)
+        self.files = tuple(release.FIRST_HOST_APPLICATION_BLOBS)
+        self.added = {name for name, blob in release.FIRST_HOST_APPLICATION_INPUTS.items() if blob is None}
+        self.assertEqual(self.added, {'tests/event-host-pass.test.ts', 'tests/room-host-first-post.test.ts', 'tests/room-host-email.test.mjs', 'tests/room-host-review.test.ts', 'lib/room-host-email.ts', 'lib/ticket-access-redirect.ts', 'tests/room-host-handover.test.mjs', 'tests/event-host-pass-handover.test.mjs', 'tests/room-host-push-fence.test.ts', 'lib/room-host-first-post.ts', 'app/admin/accounts/event-host-pass.tsx', 'lib/event-host-pass-email.ts', 'scripts/event-host-pass-preview.mjs', 'app/api/customer/host-pass/claim/route.ts', 'drizzle/0068_room_host_first_posts.sql', 'lib/event-host-pass.ts', 'app/api/admin/host-pass/route.ts', 'drizzle/0069_event_host_pass_invitations.sql', 'tests/e2e/event-host-pass-claim.spec.ts'})
+        self.assertEqual(len(self.files), 46)
+        for name in (*self.files, *release.FIRST_HOST_CONTROL_FILES):
+            if name not in self.added:
+                self.write(name, 'baseline ' + name + '\n')
+        for name in release.FIRST_HOST_DEPENDENCY_BLOBS:
+            self.write(name, 'unchanged locked dependency input ' + name + '\n')
+        package = {'scripts': {'test:repo': 'node --test tests/customer-email-rendering.test.mjs'},
+                   'dependencies': {'next': '16.4.1'}, 'devDependencies': {'vitest': '4.1.12'},
+                   'overrides': {'fast-uri': '3.1.9', 'undici': '7.30.1', 'zod': '4.6.6'}}
+        self.write('package.json', json.dumps(package))
+        self.write('package-lock.json', json.dumps({'packages': {
+            'node_modules/fast-uri': {'version': '3.1.9'},
+            'node_modules/undici': {'version': '7.30.1'}}}))
+        self.write('ops/vps/audit.py', 'unchanged staged utility\n')
+        self.write('.github/workflows/tickets-code-release.yml', 'baseline release workflow\n')
+        self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
+        handover = "export const configurationNames = [\n  'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT',\n];\n"
+        self.write('worker/handover.ts', handover)
+        self.live = self.commit()
+        # S may contain several reviewed commits; direct-child ancestry is not assumed.
+        self.git('commit', '--allow-empty', '-qm', 'feature preparation')
+        for name in self.files:
+            self.write(name, 'exact reviewed first_host ' + name + '\n')
+        package['scripts']['test:repo'] += ' tests/room-host-email.test.mjs tests/room-host-handover.test.mjs tests/event-host-pass-handover.test.mjs'
+        self.write('package.json', json.dumps(package))
+        self.write('drizzle/0068_room_host_first_posts.sql', FirstHostMigrationTests.SQL)
+        self.write('drizzle/0069_event_host_pass_invitations.sql', EventHostPassMigrationTests.SQL)
+        self.write('worker/handover.ts', handover.replace("\n];", "\n  'ROOM_HOST_FIRST_POST_ENABLED', 'ROOM_HOST_FIRST_POST_EVENT_SLUG', 'ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID',\n];"))
+        self.snapshot = self.commit()
+        self.pins = {name: self.git('rev-parse', self.snapshot + ':' + name) for name in self.files}
+        self.inputs = {name: None if name in self.added else self.git('rev-parse', self.live + ':' + name)
+                       for name in self.files}
+        self.git('checkout', '-q', self.live)
+        self.operator = b'independent reviewed first_host operator\n'
+        self.write('ops/vps/code-release.py', self.operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed first_host tests\n')
+        self.write('.github/workflows/tickets-code-release.yml', 'exact reviewed activation input workflow\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+        self.candidate = self.commit()
+        values = {
+            'FIRST_HOST_RELEASE_BASELINE': self.live,
+            'FIRST_HOST_RELEASE_BASE_TREE': self.git('rev-parse', self.live + '^{tree}'),
+            'FIRST_HOST_APP_SNAPSHOT': self.snapshot,
+            'FIRST_HOST_APP_TREE': self.git('rev-parse', self.snapshot + '^{tree}'),
+            'FIRST_HOST_PREREQUISITE_INPUTS': {name: self.git('rev-parse', self.live + ':' + name) for name in self.prerequisites},
+            'FIRST_HOST_PREREQUISITE_BLOBS': {name: self.git('rev-parse', self.control + ':' + name) for name in self.prerequisites},
+            'FIRST_HOST_APPLICATION_INPUTS': self.inputs,
+            'FIRST_HOST_APPLICATION_BLOBS': self.pins,
+            'FIRST_HOST_DEPENDENCY_BLOBS': {name: self.git('rev-parse', self.live + ':' + name)
+                                          for name in release.FIRST_HOST_DEPENDENCY_BLOBS},
+            '__file__': str(self.root / 'ops/vps/code-release.py'),
+        }
+        for name, value in values.items():
+            self.patch_value(release, name, value)
+        self.patch_value(sys.modules[__name__], 'FIRST_HOST_OPERATOR_BLOB', self.blob(self.operator))
+        staged_names = (*release.FIRST_HOST_CONTROL_FILES, *self.prerequisites, 'ops/vps/audit.py',
+                        '.github/workflows/candidate-checks.yml')
+        self.staged = {name: ('100644', self.git('rev-parse', self.control + ':' + name)) for name in staged_names}
+        self.patch_value(sys.modules[__name__], 'FIRST_HOST_STAGED_BASE', self.staged)
+        patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def patch_value(self, target, name, value):
+        patcher = patch.object(target, name, value)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw.encode() if isinstance(raw, str) else raw)
+        path.chmod(0o644)
+        return path
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated First host source')
+        return self.git('rev-parse', 'HEAD')
+
+    def verify(self, source=None):
+        return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
+
+    def test_each_application_output_rejects_mutation_and_partial_patch(self):
+        for name in self.files:
+            for mutation in ('bytes', 'missing-change'):
+                with self.subTest(name=name, mutation=mutation):
+                    self.git('checkout', '-q', self.candidate)
+                    if mutation == 'bytes':
+                        self.write(name, 'unreviewed bytes\n')
+                    elif name in self.added:
+                        self.git('rm', name)
+                    else:
+                        self.git('checkout', self.control, '--', name)
+                    self.commit()
+                    with self.assertRaises(release.ReleaseError):
+                        self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
+
+    def test_changed_controls_and_executing_operator_are_rejected(self):
+        for name in release.FIRST_HOST_CONTROL_FILES:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'untrusted control\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+        self.git('checkout', '-q', self.candidate)
+        self.write('ops/vps/code-release.py', 'untrusted executing bytes\n')
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            self.verify()
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+
+    def test_trusted_control_cannot_include_application_changes(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
+            self.git('commit', '--allow-empty', '-qm', 'candidate after bad trust anchor')
+            self.git('update-ref', 'refs/remotes/origin/main', self.candidate)
+            with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                self.verify()
+
+    def test_application_worktree_and_staged_mutations_cannot_hide(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        self.git('update-index', '--assume-unchanged', name)
+        path.write_bytes(b'hidden worktree edit\n')
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+        path.write_bytes(original)
+        self.git('update-index', '--no-assume-unchanged', name)
+        path.write_bytes(b'hidden index edit\n')
+        self.git('add', name)
+        path.write_bytes(original)
+        with self.assertRaisesRegex(AssertionError, 'index differs'):
+            checkout_source_family(self.root)
+
+    def test_full_family_rejects_symlink_hardlink_and_untracked_addition(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        for mutation in ('symlink', 'hardlink'):
+            with self.subTest(mutation=mutation):
+                path.unlink()
+                if mutation == 'symlink':
+                    path.symlink_to(self.root / 'package.json')
+                else:
+                    os.link(self.root / 'package.json', path)
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+                path.unlink()
+                self.write(name, original)
+        self.write('unknown.txt', 'untracked file\n')
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            checkout_source_family(self.root)
+
+    def test_complete_staged_family_rejects_every_mutation_and_extra_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw_files = {name: checkout_git(self.root, 'show', self.control + ':' + name)
+                         for name in self.staged}
+            for name, raw in raw_files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            self.assertEqual(checkout_source_family(root)['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in raw_files:
+                for mutation in ('bytes', 'missing', 'mode'):
+                    # Only the test file is necessarily unable to authenticate itself.
+                    if name == 'ops/vps/test_code_release.py' and mutation == 'bytes':
+                        continue
+                    with self.subTest(name=name, mutation=mutation):
+                        path = root / name
+                        if mutation == 'bytes': path.write_bytes(b'unreviewed staged file\n')
+                        elif mutation == 'missing': path.unlink()
+                        else: path.chmod(0o755)
+                        with self.assertRaises(AssertionError):
+                            family = checkout_source_family(root)
+                            if family is None:
+                                staged_family_pins(root)
+                        path.write_bytes(raw_files[name])
+                        path.chmod(0o644)
+            (root / 'unknown.txt').write_text('unexpected staged addition\n')
+            with self.assertRaisesRegex(AssertionError, 'Unexpected staged'):
+                checkout_source_family(root)
+
+    def test_complete_control_and_promotion_families_are_recognized(self):
+        self.assertEqual(set(self.verify()), set(self.files) | release.FIRST_HOST_CONTROL_FILES | set(self.prerequisites))
+        self.assertEqual(release.migration_plan(self.verify()), release.migration_plan([FirstHostMigrationTests.PATH, EventHostPassMigrationTests.PATH]))
+        for revision in (self.control, self.candidate):
+            self.git('checkout', '-q', revision)
+            family = checkout_source_family(self.root)
+            self.assertEqual(family['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in set(self.files):
+                if revision == self.control and name in self.added:
+                    self.assertNotIn(name, family)
+                else:
+                    self.assertEqual(family[name], self.git('rev-parse', revision + ':' + name))
+
+    def test_promotion_keeps_reviewed_snapshot_reachable_without_side_refs(self):
+        self.git('merge-base', '--is-ancestor', self.snapshot, self.candidate)
+        self.git('merge-base', '--is-ancestor', self.control, self.candidate)
+        copy_only = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-m', 'same bytes without snapshot ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(copy_only)
+
+    def test_revision_preserves_published_control_candidate_and_snapshot_ancestry(self):
+        self.git('checkout', '-q', self.snapshot)
+        name = 'tests/room-host-first-post.test.ts'
+        self.write(name, 'reviewed source revision\n')
+        snapshot = self.commit()
+        blob = self.git('rev-parse', snapshot + ':' + name)
+        self.git('checkout', '-q', self.control)
+        operator = b'independent reviewed revised first_host operator\n'
+        self.write('ops/vps/code-release.py', operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed revision tests\n')
+        control = self.commit()
+        self.git('checkout', '-q', self.candidate)
+        self.git('merge', '--no-ff', '--no-commit', control, snapshot)
+        candidate = self.commit()
+        self.assertEqual(self.git('show', '-s', '--format=%P', candidate).split(),
+                         [self.candidate, control, snapshot])
+        self.assertEqual(self.git('show', '-s', '--format=%P', control), self.control)
+        self.assertEqual(self.git('show', '-s', '--format=%P', snapshot), self.snapshot)
+        for ancestor in (self.control, self.candidate, self.snapshot, control, snapshot):
+            self.git('merge-base', '--is-ancestor', ancestor, candidate)
+        # The old merged operator cannot authorize new operator bytes.
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            release.verify_trusted_operator(candidate)
+        self.git('update-ref', 'refs/remotes/origin/main', control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+             patch.object(release, 'FIRST_HOST_APP_SNAPSHOT', snapshot), \
+             patch.object(release, 'FIRST_HOST_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+             patch.dict(release.FIRST_HOST_APPLICATION_BLOBS, {name: blob}), \
+             patch.object(sys.modules[__name__], 'FIRST_HOST_OPERATOR_BLOB', self.blob(operator)):
+            self.assertEqual(len(self.files), 46)
+            self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
+                             release.FIRST_HOST_CONTROL_FILES | set(self.prerequisites))
+            self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
+                             release.FIRST_HOST_CONTROL_FILES | set(self.prerequisites))
+            self.assertEqual(set(self.git('diff', '--name-only', control, candidate).splitlines()),
+                             set(self.files))
+            self.assertEqual(set(self.verify()), set(self.files) | release.FIRST_HOST_CONTROL_FILES | set(self.prerequisites))
+            self.assertEqual(release.migration_plan(self.verify()), release.migration_plan([FirstHostMigrationTests.PATH, EventHostPassMigrationTests.PATH]))
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'],
+                             self.blob(operator))
+            self.git('update-ref', 'refs/remotes/origin/main', self.control)
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_unlisted_files_dependencies_workflows_and_schema_are_rejected(self):
+        for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', 'drizzle/9999_extra.sql',
+                     '.github/workflows/candidate-checks.yml', *self.prerequisites,
+                     *release.FIRST_HOST_DEPENDENCY_BLOBS):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed bytes\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+    def test_every_application_and_control_mode_change_is_rejected(self):
+        for name in {*self.files, *self.prerequisites, *release.FIRST_HOST_CONTROL_FILES}:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                (self.root / name).chmod(0o755)
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+    def test_wrong_baseline_snapshot_or_input_inventory_is_rejected(self):
+        for name in ('FIRST_HOST_RELEASE_BASE_TREE', 'FIRST_HOST_APP_TREE'):
+            with patch.object(release, name, 'f' * 40), self.assertRaises(release.ReleaseError): self.verify()
+        for name in self.inputs:
+            with self.subTest(path=name), patch.dict(release.FIRST_HOST_APPLICATION_INPUTS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'application input'): self.verify()
+        with patch.dict(release.FIRST_HOST_APPLICATION_BLOBS, {'tests/extra.mjs': 'f' * 40}):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'): self.verify()
+        for name in release.FIRST_HOST_DEPENDENCY_BLOBS:
+            with patch.dict(release.FIRST_HOST_DEPENDENCY_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'remain unchanged'): self.verify()
+
+    def test_self_unmerged_and_same_tree_snapshot_controls_are_rejected(self):
+        for trusted in (self.live, self.snapshot, self.candidate):
+            with patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError): self.verify()
+        self.git('update-ref', 'refs/remotes/origin/main', self.live)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', 'origin/main', self.control)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', '-d', 'origin/main')
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                            '-p', self.live, '-m', 'same tree without control ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(snapshot)
+
+    def test_scope_schema_rejects_controls_dependencies_and_forbidden_application_paths(self):
+        for controls in ({'ops/vps/code-release.py'},
+                         release.FIRST_HOST_CONTROL_FILES | {'package-lock.json'}):
+            with self.subTest(controls=controls), patch.object(release, 'FIRST_HOST_CONTROL_FILES', controls):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for dependencies in ({}, {**release.FIRST_HOST_DEPENDENCY_BLOBS, 'other.lock': 'f' * 40}):
+            with self.subTest(dependencies=dependencies), \
+                 patch.object(release, 'FIRST_HOST_DEPENDENCY_BLOBS', dependencies):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for name in ('package-lock.json', 'mobile/package.json', '.github/workflows/new.yml',
+                     'runtime/vps/package.json', 'drizzle/9999_extra.sql', 'ops/vps/code-release.py'):
+            with self.subTest(path=name), \
+                 patch.dict(release.FIRST_HOST_APPLICATION_BLOBS, {name: 'f' * 40}), \
+                 patch.dict(release.FIRST_HOST_APPLICATION_INPUTS, {name: None}):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        application = {name: blob for name, blob in self.pins.items() if name != self.files[0]}
+        inputs = {name: blob for name, blob in self.inputs.items() if name != self.files[0]}
+        with patch.object(release, 'FIRST_HOST_APPLICATION_BLOBS', application), \
+             patch.object(release, 'FIRST_HOST_APPLICATION_INPUTS', inputs):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                self.verify()
+
+    def test_controls_only_baseline_rejects_any_application_dependency_or_workflow_change(self):
+        for name in (self.files[0], *release.FIRST_HOST_DEPENDENCY_BLOBS,
+                     '.github/workflows/candidate-checks.yml'):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.write(name, 'unreviewed control-side change\n')
+                control = self.commit()
+                candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                     '-p', self.candidate, '-p', control, '-m', 'retain exact candidate bytes')
+                self.git('checkout', '-q', candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify()
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_both_controls_must_change_and_remain_identical_in_promotion(self):
+        for name in release.FIRST_HOST_CONTROL_FILES:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.git('checkout', self.live, '--', name)
+                control = self.commit()
+                self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+                candidate = self.commit()
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify(candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_every_output_pin_is_required_independently_of_the_snapshot_tree(self):
+        for name in self.files:
+            with self.subTest(path=name), \
+                 patch.dict(release.FIRST_HOST_APPLICATION_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'snapshot output'):
+                    self.verify()
+
+    def test_controls_index_edits_cannot_hide_behind_restored_worktree_bytes(self):
+        for revision in (self.control, self.candidate):
+            for name in (*release.FIRST_HOST_CONTROL_FILES, *self.prerequisites):
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    original = (self.root / name).read_bytes()
+                    self.write(name, 'hidden staged control change\n')
+                    self.git('add', name)
+                    self.write(name, original)
+                    with self.assertRaisesRegex(AssertionError, 'index differs'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+    def test_snapshot_with_matching_tree_but_without_baseline_ancestry_is_rejected(self):
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                            '-m', 'unrelated snapshot with matching bytes')
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-p', snapshot, '-m', 'include unrelated source')
+        self.git('checkout', '-q', candidate)
+        with patch.object(release, 'FIRST_HOST_APP_SNAPSHOT', snapshot):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.verify()
+
+    def test_family_dispatch_uses_first_host_before_historical_camera_looks(self):
+        with patch(__name__ + '.camera_looks_source_family', side_effect=AssertionError('old family selected')):
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'], self.blob(self.operator))
+        with patch.object(release, 'reviewed_camera_looks_application_blobs',
+                          side_effect=AssertionError('old admission selected')):
+            self.assertEqual(set(self.verify()), set(self.files) | release.FIRST_HOST_CONTROL_FILES | set(self.prerequisites))
+
+
+    def test_executing_first_host_tests_cannot_fall_back_to_an_older_operator_family(self):
+        self.git('checkout', '-q', self.control)
+        self.write('ops/vps/code-release.py', 'historical operator bytes\n')
+        self.git('add', 'ops/vps/code-release.py')
+        with patch.object(sys.modules[__name__], 'FIRST_HOST_TEST_FILE',
+                          (self.root / 'ops/vps/test_code_release.py').resolve()), \
+             patch(__name__ + '.camera_looks_source_family', return_value={'old': 'accepted'}) as old_family:
+            with self.assertRaisesRegex(AssertionError, 'unreviewed bytes'):
+                checkout_source_family(self.root)
+            old_family.assert_not_called()
+
+
+    def test_staged_deletions_restored_as_untracked_exact_files_are_rejected(self):
+        existing_application = next(name for name in self.files if name not in self.added)
+        for revision in (self.control, self.candidate):
+            for name in (existing_application, *release.FIRST_HOST_CONTROL_FILES):
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    self.git('rm', '--cached', name)
+                    with self.assertRaisesRegex(AssertionError, 'full inventory'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+
+    def test_normal_main_merge_accepts_original_control_ancestor(self):
+        merged = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                          '-p', self.live, '-p', self.control, '-m', 'normal merge of reviewed controls')
+        self.git('update-ref', 'refs/remotes/origin/main', merged)
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.control), self.live)
+        self.assertEqual(self.git('show', '-s', '--format=%P', merged).split(), [self.live, self.control])
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.candidate).split(),
+                         [self.control, self.snapshot])
+        self.assertEqual(set(self.verify()), set(self.files) | release.FIRST_HOST_CONTROL_FILES | set(self.prerequisites))
+        # The branch commit C is the trust anchor, not a newer same-tree main merge
+        # which is deliberately absent from the already-published P ancestry.
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=merged):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_missing_invalid_and_unrelated_same_tree_controls_are_rejected(self):
+        for trusted in ('', 'HEAD', 'a' * 12, 'A' * 40, 'f' * 40):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)):
+                    self.verify()
+        unrelated = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                             '-m', 'unrelated same-tree controls')
+        self.git('update-ref', 'refs/remotes/origin/main', unrelated)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=unrelated):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_same_tree_wrong_baseline_and_source_commit_identities_are_rejected(self):
+        wrong_base = self.git('commit-tree', self.git('rev-parse', self.live + '^{tree}'),
+                              '-m', 'same-tree wrong live identity')
+        with self.assertRaisesRegex(release.ReleaseError, 'live or snapshot tree'):
+            release.reviewed_first_host_application_blobs(wrong_base, self.candidate)
+        wrong_source = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                                '-p', self.live, '-m', 'same-tree unreviewed source identity')
+        impostor = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                           '-p', self.control, '-p', wrong_source, '-m', 'wrong source ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(impostor)
+
+
+
+
+    def test_package_cannot_repin_other_scripts_dependencies_or_overrides(self):
+        for section, key, value in (('scripts', 'test:repo', 'skip tests'),
+                                    ('scripts', 'build', 'skip build'),
+                                    ('dependencies', 'next', '99.0.0'),
+                                    ('devDependencies', 'vitest', '99.0.0'),
+                                    ('overrides', 'undici', '99.0.0')):
+            with self.subTest(section=section, key=key):
+                self.git('checkout', '-q', self.snapshot)
+                package = json.loads((self.root / 'package.json').read_text())
+                package[section][key] = value
+                raw = json.dumps(package)
+                self.write('package.json', raw)
+                snapshot = self.commit()
+                self.git('checkout', '-q', self.control)
+                self.git('merge', '--no-ff', '--no-commit', snapshot)
+                candidate = self.commit()
+                with patch.object(release, 'FIRST_HOST_APP_SNAPSHOT', snapshot), \
+                     patch.object(release, 'FIRST_HOST_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+                     patch.dict(release.FIRST_HOST_APPLICATION_BLOBS, {'package.json': self.blob(raw.encode())}):
+                    with self.assertRaisesRegex(release.ReleaseError, 'exact three test registrations'):
+                        self.verify(candidate)
+
+    def test_new_migration_cannot_inherit_a_historical_application_grant(self):
+        for name in (FirstHostMigrationTests.PATH, EventHostPassMigrationTests.PATH):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.live)
+                self.write(name, FirstHostMigrationTests.SQL if name == FirstHostMigrationTests.PATH else EventHostPassMigrationTests.SQL)
+                candidate = self.commit()
+                with patch.object(release, 'FIRST_HOST_RELEASE_BASELINE', 'f' * 40), \
+                     patch.object(release, 'reviewed_application_blobs', side_effect=AssertionError('historical grant used')):
+                    with self.assertRaisesRegex(release.ReleaseError, 'requires its exact release family'):
+                        self.verify(candidate)
+
+    def test_migration_plan_cannot_drop_or_repin_either_schema(self):
+        for path in (FirstHostMigrationTests.PATH, EventHostPassMigrationTests.PATH):
+            for key, value in (('blob', 'f' * 40), ('sha256', 'f' * 64),
+                               ('schemaSha256', 'f' * 64), ('tables', ['orders'])):
+                forged = dict(release.REVIEWED_MIGRATIONS[path], **{key: value})
+                with self.subTest(path=path, key=key), patch.dict(release.REVIEWED_MIGRATIONS, {path: forged}):
+                    with self.assertRaisesRegex(release.ReleaseError, 'exact additive receipt and invitation migrations'):
+                        self.verify()
+            without = {name: spec for name, spec in release.REVIEWED_MIGRATIONS.items() if name != path}
+            with patch.object(release, 'REVIEWED_MIGRATIONS', without):
+                with self.assertRaisesRegex(release.ReleaseError, 'exact additive receipt and invitation migrations'):
+                    self.verify()
+
+    def test_handover_cannot_repin_extra_names_flag_values_or_unrelated_code(self):
+        for replacement in ("'ROOM_HOST_FIRST_POST_ENABLED', 'UNREVIEWED_SECRET'",
+                            "'ROOM_HOST_FIRST_POST_ENABLED=true'", "'ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID'", None):
+            with self.subTest(replacement=replacement):
+                self.git('checkout', '-q', self.snapshot)
+                raw = (self.root / 'worker/handover.ts').read_text()
+                raw = (raw + "export const FIRST_HOST_ACTIVATED = true;\n" if replacement is None
+                       else raw.replace("'ROOM_HOST_FIRST_POST_ENABLED'", replacement))
+                self.write('worker/handover.ts', raw)
+                snapshot = self.commit()
+                self.git('checkout', '-q', self.control)
+                self.git('merge', '--no-ff', '--no-commit', snapshot)
+                candidate = self.commit()
+                with patch.object(release, 'FIRST_HOST_APP_SNAPSHOT', snapshot), \
+                     patch.object(release, 'FIRST_HOST_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+                     patch.dict(release.FIRST_HOST_APPLICATION_BLOBS, {'worker/handover.ts': self.blob(raw.encode())}):
+                    with self.assertRaisesRegex(release.ReleaseError, 'exact three configuration names'):
+                        self.verify(candidate)
+
+
+    def test_workflow_prerequisite_scope_input_and_output_are_exact(self):
+        for field in ('FIRST_HOST_PREREQUISITE_INPUTS', 'FIRST_HOST_PREREQUISITE_BLOBS'):
+            for values in ({}, {'.github/workflows/other.yml': 'f' * 40}):
+                with self.subTest(field=field, values=values), patch.object(release, field, values):
+                    with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'): self.verify()
+            with patch.dict(getattr(release, field), {self.prerequisites[0]: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'workflow prerequisite'): self.verify()
+
+    def test_workflow_prerequisite_cannot_change_or_disappear_in_control_or_promotion(self):
+        for revision in (self.control, self.candidate):
+            for mutation in ('bytes', 'missing', 'old-version', 'mode'):
+                with self.subTest(revision=revision, mutation=mutation):
+                    self.git('checkout', '-q', revision)
+                    name = self.prerequisites[0]
+                    if mutation == 'bytes': self.write(name, 'unreviewed workflow permissions or steps\n')
+                    elif mutation == 'missing': self.git('rm', name)
+                    elif mutation == 'old-version': self.git('checkout', self.live, '--', name)
+                    else: (self.root / name).chmod(0o755)
+                    changed = self.commit()
+                    with self.assertRaises(AssertionError): checkout_source_family(self.root)
+                    if revision == self.control:
+                        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                             '-p', self.candidate, '-p', changed, '-m', 'include changed workflow')
+                        self.git('checkout', '-q', candidate)
+                        self.git('update-ref', 'refs/remotes/origin/main', changed)
+                    with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed if revision == self.control else self.control):
+                        with self.assertRaises(release.ReleaseError): self.verify()
+                    self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+
+class FirstHostMigrationTests(unittest.TestCase):
+    SQL = b'-- No backfill and no access grants. Activation requires an explicit feature flag.\n-- Receipts are never retention-pruned: deletion/reposting must not re-arm a host.\nCREATE TABLE room_host_first_posts (\n event_slug TEXT NOT NULL,\n host_account_id TEXT NOT NULL,\n message_id TEXT NOT NULL UNIQUE,\n sender_attendee_id TEXT NOT NULL,\n created_at TEXT NOT NULL,\n fanout_at TEXT,\n cancelled_at TEXT,\n PRIMARY KEY (event_slug, host_account_id)\n);\nCREATE INDEX room_host_first_posts_message_idx ON room_host_first_posts(message_id);\n'
+    PATH = 'drizzle/0068_room_host_first_posts.sql'
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.database = self.root / 'tickets.sqlite'
+        self.staging = self.root / 'backup'
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute('CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT NOT NULL)')
+            db.execute("INSERT INTO orders VALUES ('preserved-order', 'paid')")
+        self.database.chmod(0o600)
+        self.spec = release.migration_plan([self.PATH])[0]
+
+    def migrate(self, raw=None):
+        return release.migrate_database(self.database, self.staging,
+                                        [(self.spec, self.SQL if raw is None else raw)])
+
+    def test_exact_existing_grammar_accepts_only_new_receipt_table_and_index(self):
+        self.assertEqual(FirstHostSourceAdmissionTests.blob(self.SQL), self.spec['blob'])
+        statements, rows = release.reviewed_migration(self.SQL, self.spec)
+        self.assertEqual(len(statements), 2)
+        self.assertEqual([(row[0], row[1], row[2]) for row in rows], [
+            ('index', 'room_host_first_posts_message_idx', 'room_host_first_posts'),
+            ('table', 'room_host_first_posts', 'room_host_first_posts')])
+        self.assertNotIn('triggers', self.spec)
+        result = self.migrate()
+        self.assertTrue(result['created'])
+        self.assertTrue(result['tablesPreservedOnRollback'])
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute('SELECT * FROM orders').fetchall(), [('preserved-order', 'paid')])
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM room_host_first_posts').fetchone(), (0,))
+        self.assertEqual(stat.S_IMODE((self.staging / 'before.sqlite').stat().st_mode), 0o600)
+        with release.closing(release.sqlite3.connect(self.staging / 'before.sqlite')) as db:
+            self.assertEqual([row[1] for row in release.schema_rows(db)], ['orders'])
+
+    def test_changed_bytes_target_backfill_or_trigger_fail_before_backup(self):
+        for raw in (self.SQL + b'\n', self.SQL.replace(b'ON room_host_first_posts', b'ON orders'),
+                    self.SQL + b'DELETE FROM orders;', self.SQL + b'UPDATE orders SET status = "free";',
+                    self.SQL + b'CREATE TRIGGER extra AFTER INSERT ON orders BEGIN SELECT 1; END;'):
+            with self.subTest(digest=release.hashlib.sha256(raw).hexdigest()):
+                with self.assertRaises(release.ReleaseError): self.migrate(raw)
+                self.assertFalse(self.staging.exists())
+
+    def test_replay_preserves_completed_and_cancelled_receipts(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute("INSERT INTO room_host_first_posts VALUES ('event', 'host', 'message', 'sender', 'created', 'fanout', 'cancelled')")
+            before = db.execute('SELECT * FROM room_host_first_posts').fetchall()
+        self.staging = self.root / 'second-backup'
+        self.assertFalse(self.migrate()['created'])
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute('SELECT * FROM room_host_first_posts').fetchall(), before)
+
+    def test_partial_receipt_schema_is_rejected_without_rewriting_existing_rows(self):
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute('CREATE TABLE room_host_first_posts (id TEXT)')
+        with self.assertRaisesRegex(release.ReleaseError, 'partial or differs'): self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute('SELECT * FROM orders').fetchall(), [('preserved-order', 'paid')])
+
+    def test_generic_sql_grammar_and_schema_digest_remain_restrictive(self):
+        for raw in (b'ALTER TABLE orders ADD COLUMN extra TEXT;', b'DELETE FROM orders;',
+                    b'CREATE INDEX extra ON orders (id);'):
+            forged = dict(self.spec, sha256=release.hashlib.sha256(raw).hexdigest())
+            with self.assertRaises(release.ReleaseError): release.additive_statements(raw, forged)
+        raw = b'CREATE TRIGGER extra BEFORE INSERT ON orders BEGIN SELECT 1; END;'
+        forged = dict(self.spec, sha256=release.hashlib.sha256(raw).hexdigest(), triggers={'extra': 'orders'})
+        with self.assertRaisesRegex(release.ReleaseError, 'Only the reviewed refund rollback guard'):
+            release.additive_statements(raw, forged)
+        with self.assertRaisesRegex(release.ReleaseError, 'reviewed additive schema'):
+            release.additive_statements(self.SQL, dict(self.spec, schemaSha256='f' * 64))
+
+
+class EventHostPassMigrationTests(unittest.TestCase):
+    SQL = b"-- No backfill, pass, token or email. Owner provision and send are separate actions.\nCREATE TABLE event_host_pass_invitations (\n id TEXT PRIMARY KEY,\n event_slug TEXT NOT NULL,\n host_account_id TEXT NOT NULL,\n recipient_email TEXT NOT NULL,\n ticket_id TEXT NOT NULL,\n provision_nonce TEXT NOT NULL,\n created_by TEXT NOT NULL,\n created_at TEXT NOT NULL,\n reused INTEGER NOT NULL,\n state TEXT NOT NULL DEFAULT 'provisioned',\n token_hash TEXT,\n expires_at TEXT,\n used_at TEXT,\n claimed_session_id TEXT,\n delivery_id TEXT\n);\nCREATE UNIQUE INDEX event_host_pass_scope_unique ON event_host_pass_invitations(event_slug,host_account_id);\nCREATE UNIQUE INDEX event_host_pass_invitations_token_hash_unique ON event_host_pass_invitations(token_hash);\n"
+    PATH = 'drizzle/0069_event_host_pass_invitations.sql'
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.database = self.root / 'tickets.sqlite'
+        self.staging = self.root / 'backup'
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute('CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT NOT NULL)')
+            db.execute("INSERT INTO orders VALUES ('preserved-order', 'paid')")
+        self.database.chmod(0o600)
+        self.spec = release.migration_plan([self.PATH])[0]
+
+    def migrate(self, raw=None):
+        return release.migrate_database(self.database, self.staging,
+                                        [(self.spec, self.SQL if raw is None else raw)])
+
+    def test_exact_table_two_unique_indexes_and_empty_initial_data(self):
+        self.assertEqual(FirstHostSourceAdmissionTests.blob(self.SQL), self.spec['blob'])
+        statements, rows = release.reviewed_migration(self.SQL, self.spec)
+        self.assertEqual(len(statements), 3)
+        self.assertEqual([(row[0], row[1], row[2]) for row in rows], [
+            ('index', 'event_host_pass_invitations_token_hash_unique', 'event_host_pass_invitations'),
+            ('index', 'event_host_pass_scope_unique', 'event_host_pass_invitations'),
+            ('table', 'event_host_pass_invitations', 'event_host_pass_invitations')])
+        self.assertNotIn('triggers', self.spec)
+        result = self.migrate()
+        self.assertTrue(result['created'])
+        self.assertTrue(result['tablesPreservedOnRollback'])
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute('SELECT * FROM orders').fetchall(), [('preserved-order', 'paid')])
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM event_host_pass_invitations').fetchone(), (0,))
+        self.assertEqual(stat.S_IMODE((self.staging / 'before.sqlite').stat().st_mode), 0o600)
+
+    def test_bytes_column_scope_uniqueness_and_backfill_drift_fail_before_backup(self):
+        for raw in (self.SQL + b'\n', self.SQL.replace(b'CREATE UNIQUE INDEX', b'CREATE INDEX'),
+                    self.SQL.replace(b'(event_slug,host_account_id)', b'(host_account_id)'),
+                    self.SQL.replace(b'token_hash TEXT', b'plaintext_token TEXT'),
+                    self.SQL + b'INSERT INTO orders VALUES ("unreviewed", "paid");'):
+            with self.subTest(digest=release.hashlib.sha256(raw).hexdigest()):
+                with self.assertRaises(release.ReleaseError): self.migrate(raw)
+                self.assertFalse(self.staging.exists())
+
+    def test_replay_preserves_used_invitation_and_exact_claim_state(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute("INSERT INTO event_host_pass_invitations VALUES ('invite', 'event', 'host', 'host@example.invalid', 'pass', 'nonce', 'owner', 'created', 0, 'used', 'token-hash', 'expires', 'used', 'session', 'delivery')")
+            before = db.execute('SELECT * FROM event_host_pass_invitations').fetchall()
+        self.staging = self.root / 'second-backup'
+        self.assertFalse(self.migrate()['created'])
+        with release.closing(release.sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute('SELECT * FROM event_host_pass_invitations').fetchall(), before)
+
+    def test_scope_and_token_hash_uniqueness_are_enforced(self):
+        self.migrate()
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            columns = 'id,event_slug,host_account_id,recipient_email,ticket_id,provision_nonce,created_by,created_at,reused,token_hash'
+            statement = 'INSERT INTO event_host_pass_invitations (' + columns + ') VALUES (?,?,?,?,?,?,?,?,?,?)'
+            db.execute(statement, ('one', 'event', 'host', 'host@example.invalid', 'pass', 'nonce', 'owner', 'created', 0, 'hash'))
+            for row in (('two', 'event', 'host', 'other@example.invalid', 'pass2', 'nonce2', 'owner', 'created', 0, None),
+                        ('three', 'event2', 'host2', 'other@example.invalid', 'pass3', 'nonce3', 'owner', 'created', 0, 'hash')):
+                with self.subTest(row=row[:3]), self.assertRaises(release.sqlite3.IntegrityError): db.execute(statement, row)
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM event_host_pass_invitations').fetchone(), (1,))
+
+    def test_partial_schema_or_forged_index_digest_is_rejected(self):
+        statements, _ = release.reviewed_migration(self.SQL, self.spec)
+        with release.closing(release.sqlite3.connect(self.database)) as db, db:
+            db.execute(statements[0])
+        with self.assertRaisesRegex(release.ReleaseError, 'partial or differs'): self.migrate()
+        with self.assertRaisesRegex(release.ReleaseError, 'reviewed additive schema'):
+            release.additive_statements(self.SQL, dict(self.spec, schemaSha256='f' * 64))
+
+
+class FirstHostDeploymentTests(DeploymentFixture):
+    def prepare_receipts(self, tampered=False):
+        state = self.root / 'var/lib/becore-tickets'
+        state.chmod(0o700)
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+            db.execute('CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT NOT NULL)')
+            db.execute("INSERT INTO orders VALUES ('preserved-order', 'paid')")
+        (state / 'tickets.sqlite').chmod(0o600)
+        member = tarfile.TarInfo('migrations/0068_room_host_first_posts.sql')
+        member.mode = 0o644
+        invitation = tarfile.TarInfo('migrations/0069_event_host_pass_invitations.sql')
+        invitation.mode = 0o644
+        self.make_archive(extra=[(member, FirstHostMigrationTests.SQL + (b'\n' if tampered is True else b'')),
+                                 (invitation, EventHostPassMigrationTests.SQL + (b'\n' if tampered == 'invitation' else b''))])
+        self.proof['changedFiles'] = [FirstHostMigrationTests.PATH, EventHostPassMigrationTests.PATH]
+        self.proof['migrations'] = release.migration_plan(self.proof['changedFiles'])
+        self.refresh_digests()
+        return state
+
+    def test_exact_receipt_schema_and_private_backup_are_recorded(self):
+        self.prepare_receipts()
+        self.assertTrue(self.deployment.transact()['dataMigration'])
+        journal = release.strict_json(self.deployment.journal.read_bytes())
+        self.assertEqual(journal['lastCodeRelease']['additiveMigrations'], self.proof['migrations'])
+        self.assertEqual(len(journal['lastCodeRelease']['databaseBackupSha256']), 64)
+
+    def test_tampered_receipt_migration_prevents_any_restart(self):
+        self.prepare_receipts(tampered=True)
+        with self.assertRaises(release.ReleaseError): self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assert_restored()
+
+    def test_tampered_invitation_migration_prevents_any_restart(self):
+        self.prepare_receipts(tampered='invitation')
+        with self.assertRaises(release.ReleaseError): self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assert_restored()
+
+    def test_failed_candidate_preserves_receipts_and_customer_writes_on_code_rollback(self):
+        state = self.prepare_receipts()
+        self.system.fail = 'local'
+        restart = self.system.restart
+        def activated():
+            restart()
+            if self.system.revision == NEW:
+                with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+                    db.execute("INSERT INTO orders VALUES ('new-paid-order', 'paid')")
+                    db.execute("INSERT INTO room_host_first_posts VALUES ('event', 'host', 'message', 'sender', 'created', 'fanout', 'cancelled')")
+                    db.execute("INSERT INTO event_host_pass_invitations VALUES ('invite', 'event', 'host', 'host@example.invalid', 'pass', 'nonce', 'owner', 'created', 0, 'used', 'token-hash', 'expires', 'used', 'session', 'delivery')")
+        self.system.restart = activated
+        with self.assertRaisesRegex(release.ReleaseError, 'previous release restored'):
+            self.deployment.transact()
+        self.assert_restored()
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM orders').fetchone(), (2,))
+            self.assertEqual(db.execute('SELECT * FROM room_host_first_posts').fetchall(),
+                             [('event', 'host', 'message', 'sender', 'created', 'fanout', 'cancelled')])
+            self.assertEqual(db.execute('SELECT * FROM event_host_pass_invitations').fetchall(),
+                             [('invite', 'event', 'host', 'host@example.invalid', 'pass', 'nonce', 'owner', 'created', 0, 'used', 'token-hash', 'expires', 'used', 'session', 'delivery')])
+        with release.closing(release.sqlite3.connect(self.deployment.snapshot / 'database/before.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT * FROM orders').fetchall(), [('preserved-order', 'paid')])
+            self.assertEqual([row[1] for row in release.schema_rows(db)], ['orders'])
+
+    def test_partial_combined_schema_fails_closed_without_rewriting_receipts(self):
+        state = self.prepare_receipts()
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+            db.executescript(FirstHostMigrationTests.SQL.decode())
+            db.execute("INSERT INTO room_host_first_posts VALUES ('event', 'host', 'message', 'sender', 'created', 'fanout', 'cancelled')")
+        with self.assertRaisesRegex(release.ReleaseError, 'Additive migration failed'):
+            self.deployment.transact()
+        self.assertEqual(self.system.restarts, 0)
+        self.assert_restored()
+        failure = release.strict_json((self.deployment.snapshot / 'database/failure.json').read_bytes())
+        self.assertEqual(failure['reason'], 'Existing additive schema is partial or differs from reviewed source.')
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT * FROM room_host_first_posts').fetchall(),
+                             [('event', 'host', 'message', 'sender', 'created', 'fanout', 'cancelled')])
+            self.assertFalse(any(row[1] == 'event_host_pass_invitations' for row in release.schema_rows(db)))
+
+
+class FirstHostTargetTests(unittest.TestCase):
+    ACCOUNT = '11111111-1111-4111-8111-111111111111'
+    OTHER = '22222222-2222-4222-8222-222222222222'
+
+    @classmethod
+    def seed(cls, db):
+        db.executescript("""CREATE TABLE staff_accounts(id TEXT,role TEXT,status TEXT,must_change_password INTEGER,locked_until TEXT);
+            CREATE TABLE staff_event_assignments(account_id TEXT,event_slug TEXT);
+            CREATE TABLE curated_event_records(slug TEXT,status TEXT,schedule_status TEXT,removed_at TEXT,archived_at TEXT,event_state TEXT,starts_at TEXT,ends_at TEXT);
+            CREATE TABLE event_hosts(event_slug TEXT,host_id TEXT);
+            CREATE TABLE hosts(id TEXT,slug TEXT,verification_status TEXT);""")
+        db.execute("INSERT INTO staff_accounts VALUES (?,'organizer','active',0,NULL)", (cls.ACCOUNT,))
+        db.execute("INSERT INTO staff_event_assignments VALUES (?,'puro-exceso-20261024')", (cls.ACCOUNT,))
+        db.execute("INSERT INTO curated_event_records VALUES ('puro-exceso-20261024','published','confirmed',NULL,NULL,'on_sale','2026-10-24T00:00:00Z','2999-10-25T00:00:00Z')")
+        db.execute("INSERT INTO event_hosts VALUES ('puro-exceso-20261024','host:kofi-bills')")
+        db.execute("INSERT INTO hosts VALUES ('host:kofi-bills','kofi-bills','verified')")
+
+    def test_explicit_private_target_does_not_require_an_application_mapping_or_write_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'tickets.sqlite'
+            with release.closing(release.sqlite3.connect(path)) as db, db: self.seed(db)
+            path.chmod(0o600)
+            before = path.read_bytes()
+            release.verify_first_host_target(path, self.ACCOUNT, os.geteuid(), os.getegid())
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_missing_ambiguous_revoked_locked_or_invalid_event_targets_fail_closed(self):
+        for sql in ("DELETE FROM staff_accounts", "UPDATE staff_accounts SET role='owner'",
+                    "UPDATE staff_accounts SET status='disabled'", "UPDATE staff_accounts SET must_change_password=1",
+                    "UPDATE staff_accounts SET locked_until='2999-01-01'", "UPDATE staff_accounts SET locked_until='invalid'",
+                    "DELETE FROM staff_event_assignments", "UPDATE staff_event_assignments SET event_slug='another-event'",
+                    "UPDATE curated_event_records SET status='draft'", "UPDATE curated_event_records SET schedule_status='tentative'",
+                    "UPDATE curated_event_records SET removed_at='removed'", "UPDATE curated_event_records SET archived_at='archived'",
+                    "UPDATE curated_event_records SET event_state='cancelled'", "UPDATE curated_event_records SET ends_at='2000-01-01'",
+                    "UPDATE curated_event_records SET ends_at='invalid'", "UPDATE curated_event_records SET starts_at='3000-01-01'",
+                    "UPDATE hosts SET verification_status='unverified'", "UPDATE hosts SET slug='another-host'",
+                    "UPDATE hosts SET id='another-profile'", "DELETE FROM event_hosts",
+                    "INSERT INTO staff_event_assignments SELECT * FROM staff_event_assignments",
+                    "INSERT INTO event_hosts SELECT * FROM event_hosts"):
+            with self.subTest(sql=sql), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'tickets.sqlite'
+                with release.closing(release.sqlite3.connect(path)) as db, db:
+                    self.seed(db)
+                    db.execute(sql)
+                path.chmod(0o600)
+                before = path.read_bytes()
+                with self.assertRaisesRegex(release.ReleaseError, 'missing, ambiguous, revoked'):
+                    release.verify_first_host_target(path, self.ACCOUNT, os.geteuid(), os.getegid())
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_wrong_explicit_account_and_unsafe_database_cannot_be_substituted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'tickets.sqlite'
+            with release.closing(release.sqlite3.connect(path)) as db, db: self.seed(db)
+            path.chmod(0o600)
+            with self.assertRaises(release.ReleaseError) as rejected:
+                release.verify_first_host_target(path, self.OTHER, os.geteuid(), os.getegid())
+            self.assertNotIn(self.OTHER, str(rejected.exception))
+            path.chmod(0o644)
+            with self.assertRaisesRegex(release.ReleaseError, 'private canonical database'):
+                release.verify_first_host_target(path, self.ACCOUNT, os.geteuid(), os.getegid())
+            path.chmod(0o600)
+            sidecar = Path(str(path) + '-shm')
+            sidecar.write_bytes(b'unsafe sidecar')
+            sidecar.chmod(0o644)
+            with self.assertRaisesRegex(release.ReleaseError, 'unsafe database sidecar'):
+                release.verify_first_host_target(path, self.ACCOUNT, os.geteuid(), os.getegid())
+
+
+class FirstHostConfigurationTests(unittest.TestCase):
+    def test_bounded_stdin_accepts_only_one_canonical_private_uuid(self):
+        account = FirstHostTargetTests.ACCOUNT
+        for raw in (account.encode(), account.encode() + b'\n'):
+            self.assertEqual(release.first_host_account_from_stdin(io.BytesIO(raw)), account)
+        for raw in (b'', b' ', account.upper().encode().replace(b'1', b'A', 1),
+                    b' ' + account.encode(), account.encode() + b'\nsecond', b'x' * 1000,
+                    account.encode() + b'\n\n', b'not-a-uuid', b'\xff'):
+            with self.subTest(length=len(raw)), self.assertRaises(release.ReleaseError):
+                release.first_host_account_from_stdin(io.BytesIO(raw))
+        stream = unittest.mock.Mock()
+        stream.read.return_value = b'x' * 128
+        with self.assertRaises(release.ReleaseError): release.first_host_account_from_stdin(stream)
+        stream.read.assert_called_once_with(128)
+
+    def test_exact_three_keys_preserve_every_other_value_and_byte(self):
+        account = FirstHostTargetTests.ACCOUNT
+        raw = ('{\n "ROOM_HOST_FIRST_POST_EVENT_SLUG" : "puro-exceso-20261024",\n'
+               ' "ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID" : "' + account + '",\n'
+               ' "ROOM_HOST_FIRST_POST_ENABLED" : "0", "unrelated": "keep\\u0031", "SEEV_CRYPTO_ENABLED":"false"\n}\n').encode()
+        expected = raw.replace(b'"ROOM_HOST_FIRST_POST_ENABLED" : "0"', b'"ROOM_HOST_FIRST_POST_ENABLED" : "1"')
+        self.assertEqual(release.enable_first_host_bytes(raw, account), expected)
+        self.assertEqual(release.enable_first_host_bytes(expected, account), expected)
+        empty = release.configuration(release.enable_first_host_bytes(b'{}', account))
+        self.assertEqual(empty, {'ROOM_HOST_FIRST_POST_ENABLED': '1',
+            'ROOM_HOST_FIRST_POST_EVENT_SLUG': 'puro-exceso-20261024', 'ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID': account})
+        raw = b'{ "untouched" : "first", "last":"unchanged" }\n'
+        result = release.enable_first_host_bytes(raw, account)
+        self.assertTrue(result.startswith(raw[:-2]))
+        self.assertTrue(result.endswith(b'}\n'))
+
+    def test_conflicting_scope_malformed_or_duplicate_configuration_is_rejected(self):
+        for raw in (b'{"ROOM_HOST_FIRST_POST_EVENT_SLUG":"other"}',
+                    json.dumps({'ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID': FirstHostTargetTests.OTHER}).encode(),
+                    b'{"ROOM_HOST_FIRST_POST_ENABLED":"unexpected"}', b'{"ROOM_HOST_FIRST_POST_ENABLED":"1"}',
+                    b'{"x":"one","x":"two"}', b'{"x":true}', b'[]', b'{'):
+            with self.subTest(raw=raw), self.assertRaises(release.ReleaseError):
+                release.enable_first_host_bytes(raw, FirstHostTargetTests.ACCOUNT)
+
+    def test_cli_keeps_uuid_out_of_arguments_and_output_and_false_never_reads_stdin(self):
+        args = ['code-release.py', 'apply', '--source', NEW, '--expected', OLD, '--run-id', '123', '--attempt', '1',
+                '--archive', 'archive', '--provenance', 'proof', '--archive-digest', 'a' * 64,
+                '--provenance-digest', 'b' * 64, '--audit-report', 'audit']
+        for enabled in (False, True):
+            stdin = types.SimpleNamespace(buffer=io.BytesIO(FirstHostTargetTests.ACCOUNT.encode()))
+            output = io.StringIO()
+            with patch.object(sys, 'argv', args + ['--enable-first-host', str(enabled).lower()]), \
+                 patch.object(sys, 'stdin', stdin), patch.object(sys, 'stdout', output), \
+                 patch.object(release.signal, 'signal'), patch.object(release, 'Deployment') as deployment:
+                deployment.return_value.apply.return_value = {'active': True}
+                self.assertEqual(release.main(), 0)
+                values = deployment.call_args.kwargs
+                self.assertEqual(values['enable_first_host'], enabled)
+                self.assertEqual(values.get('first_host_account_id'), FirstHostTargetTests.ACCOUNT if enabled else None)
+                self.assertEqual(stdin.buffer.tell(), len(FirstHostTargetTests.ACCOUNT) if enabled else 0)
+                self.assertNotIn(FirstHostTargetTests.ACCOUNT, output.getvalue())
+                self.assertNotIn(FirstHostTargetTests.ACCOUNT, ' '.join(sys.argv))
+        output = io.StringIO()
+        with patch.object(sys, 'argv', args + ['--enable-first-host', 'true']), \
+             patch.object(sys, 'stdin', types.SimpleNamespace(buffer=io.BytesIO(b'invalid-private-value'))), \
+             patch.object(sys, 'stderr', output), patch.object(release, 'Deployment') as deployment:
+            self.assertEqual(release.main(), 1)
+            deployment.assert_not_called()
+            self.assertNotIn('invalid-private-value', output.getvalue())
+        with patch.object(sys, 'argv', args + ['--enable-first-host', 'true', '--enable-crypto', 'true']), \
+             patch.object(sys, 'stderr', io.StringIO()), patch.object(release, 'first_host_account_from_stdin') as private_input, \
+             patch.object(release, 'Deployment') as deployment:
+            self.assertEqual(release.main(), 1)
+            private_input.assert_not_called()
+            deployment.assert_not_called()
+
+    def test_workflow_guards_reject_crypto_combination_and_read_only_activation(self):
+        raw = (Path(__file__).resolve().parents[2] / '.github/workflows/tickets-code-release.yml').read_text()
+        def guard(name):
+            return textwrap.dedent(raw.split('      - name: ' + name + '\n', 1)[1]
+                .split('        run: |\n', 1)[1].split('\n      - ', 1)[0])
+        release_guard = guard('Require main and exact bounded release inputs')
+        inspect_guard = guard('Require exact read-only diagnostic context and failed release pins')
+        values = {'PATH': os.defpath, 'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+            'VERIFY_ONLY': 'false', 'INSPECT_MODE': 'false', 'ENABLE_FIRST_HOST': 'true', 'ENABLE_CRYPTO': 'false',
+            'SOURCE_SHA': NEW, 'EXPECTED_ACTIVE': OLD, 'BECORE_TRUSTED_BASE': '9' * 40,
+            'RUNTIME_RUN': '123', 'CANDIDATE_RUN': '456', 'CANDIDATE_MODE': 'parallel-v1',
+            'RECOVER_PREPARED': '', 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}
+        def check(script, environment, expected):
+            result = subprocess.run(['bash', '-c', script], env=environment, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode == 0, expected)
+            self.assertEqual(result.stdout, b'')
+            self.assertEqual(result.stderr, b'')
+        check(release_guard, values, True)
+        check(release_guard, dict(values, ENABLE_CRYPTO='true'), False)
+        values.update(SOURCE_SHA='ee95b9b43fb99dd0ca9431cf9be4d000cd65abbe',
+            EXPECTED_ACTIVE='45ec44e35f8b0e5099a328ce219df2529374f9ee',
+            RUNTIME_RUN='36804016094', CANDIDATE_RUN='36801064451', ENABLE_FIRST_HOST='false')
+        check(inspect_guard, values, True)
+        check(inspect_guard, dict(values, ENABLE_FIRST_HOST='true'), False)
+        check(inspect_guard, dict(values, ENABLE_CRYPTO='true'), False)
+
+    def test_workflow_activation_is_default_off_step_local_stdin_only(self):
+        family = checkout_source_family(Path(__file__).resolve().parents[2])
+        self.assertEqual(family['.github/workflows/tickets-code-release.yml'],
+                         release.FIRST_HOST_PREREQUISITE_BLOBS['.github/workflows/tickets-code-release.yml'])
+        raw = (Path(__file__).resolve().parents[2] / '.github/workflows/tickets-code-release.yml').read_text()
+        self.assertIn("enable_first_host:\n        description:", raw)
+        self.assertRegex(raw, r'enable_first_host:[\s\S]+?default: false\n        type: boolean')
+        self.assertEqual(raw.count('secrets.TICKETS_FIRST_HOST_ACCOUNT_ID'), 1)
+        self.assertIn("FIRST_HOST_ACCOUNT_ID: ${{ inputs.enable_first_host && secrets.TICKETS_FIRST_HOST_ACCOUNT_ID || '' }}", raw)
+        self.assertIn("printf '%s' \"$FIRST_HOST_ACCOUNT_ID\" | tailscale ssh", raw)
+        self.assertNotIn('--first-host-account', raw)
+        self.assertIn('test "$ENABLE_FIRST_HOST" = false', raw)
+        self.assertIn('if [[ "$ENABLE_FIRST_HOST" == true ]]; then test "$ENABLE_CRYPTO" = false; fi', raw)
+
+
+class FirstHostActivationTests(DeploymentFixture):
+    def setUp(self):
+        super().setUp()
+        FirstHostDeploymentTests.prepare_receipts(self)
+        state = self.root / 'var/lib/becore-tickets'
+        with release.closing(release.sqlite3.connect(state / 'tickets.sqlite')) as db, db:
+            FirstHostTargetTests.seed(db)
+        self.proof['changedFiles'] = sorted(set(release.FIRST_HOST_APPLICATION_BLOBS) | release.FIRST_HOST_CONTROL_FILES
+                                            | set(release.FIRST_HOST_PREREQUISITE_BLOBS))
+        self.refresh_digests()
+        baseline = patch.object(release, 'FIRST_HOST_RELEASE_BASELINE', OLD)
+        baseline.start()
+        self.addCleanup(baseline.stop)
+        self.deployment = self.new_deployment(enable_first_host=True, first_host_account_id=FirstHostTargetTests.ACCOUNT)
+
+    def test_success_sets_only_first_host_scope_and_retains_private_rollback_bytes(self):
+        result = self.deployment.transact()
+        expected = release.enable_first_host_bytes(self.config_before, FirstHostTargetTests.ACCOUNT)
+        self.assertEqual(self.deployment.config.read_bytes(), expected)
+        self.assertEqual((self.deployment.snapshot / 'config.before').read_bytes(), self.config_before)
+        self.assertTrue(result['firstHostEnabledRequested'])
+        self.assertFalse(result['cryptoEnabledRequested'])
+        self.assertNotIn(FirstHostTargetTests.ACCOUNT, json.dumps(result))
+        self.assertNotIn(FirstHostTargetTests.ACCOUNT, (self.deployment.snapshot / 'result.json').read_text())
+        self.assertNotIn(FirstHostTargetTests.ACCOUNT, self.deployment.journal.read_text())
+        self.assertNotIn('firstHostScopeSha256', json.dumps(result))
+        self.assertNotIn('firstHostScopeSha256', self.deployment.journal.read_text())
+        self.assertIn('firstHostScopeSha256', (self.deployment.snapshot / 'result.json').read_text())
+        self.assertEqual(stat.S_IMODE(self.deployment.config.stat().st_mode), 0o600)
+
+    def test_default_false_leaves_configuration_exact_and_never_checks_a_target(self):
+        self.deployment = self.new_deployment()
+        with patch.object(release, 'verify_first_host_target', side_effect=AssertionError('target checked while disabled')):
+            result = self.deployment.transact()
+        self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
+        self.assertNotIn('firstHostEnabledRequested', result)
+
+    def test_absent_malformed_extra_account_or_crypto_combination_is_rejected(self):
+        for values in ({'enable_first_host': True}, {'enable_first_host': 'true'},
+                       {'enable_first_host': True, 'first_host_account_id': 'invalid'},
+                       {'first_host_account_id': FirstHostTargetTests.ACCOUNT},
+                       {'enable_first_host': True, 'first_host_account_id': FirstHostTargetTests.ACCOUNT, 'enable_crypto': True}):
+            with self.subTest(keys=tuple(values)), self.assertRaises(release.ReleaseError): self.new_deployment(**values)
+
+    def test_wrong_release_family_or_changed_inventory_cannot_activate(self):
+        with patch.object(release, 'FIRST_HOST_RELEASE_BASELINE', 'f' * 40):
+            with self.assertRaisesRegex(release.ReleaseError, 'exact reviewed first-host release family'):
+                self.deployment.preflight()
+        self.proof['changedFiles'].append('tests/unreviewed-file.ts')
+        self.refresh_digests()
+        self.deployment = self.new_deployment(enable_first_host=True, first_host_account_id=FirstHostTargetTests.ACCOUNT)
+        with self.assertRaisesRegex(release.ReleaseError, 'exact reviewed first-host release family'):
+            self.deployment.preflight()
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
+
+    def test_conflicting_existing_scope_or_revoked_preflight_target_never_writes_configuration(self):
+        altered = b'{"ENVIRONMENT":"production","ROOM_HOST_FIRST_POST_EVENT_SLUG":"other"}'
+        release.atomic_write(self.deployment.config, altered)
+        with self.assertRaisesRegex(release.ReleaseError, 'conflicts'): self.deployment.preflight()
+        self.assertEqual(self.deployment.config.read_bytes(), altered)
+        release.atomic_write(self.deployment.config, self.config_before)
+        with release.closing(release.sqlite3.connect(self.root / 'var/lib/becore-tickets/tickets.sqlite')) as db, db:
+            db.execute("UPDATE staff_accounts SET status='disabled'")
+        with self.assertRaisesRegex(release.ReleaseError, 'missing, ambiguous, revoked'): self.deployment.preflight()
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
+        self.assertEqual(self.system.restarts, 0)
+
+    def test_target_is_rechecked_after_migration_before_atomic_activation(self):
+        migrate = self.deployment.migrate
+        def revoked_after_migration():
+            migrate()
+            with release.closing(release.sqlite3.connect(self.root / 'var/lib/becore-tickets/tickets.sqlite')) as db, db:
+                db.execute("DELETE FROM staff_event_assignments")
+        self.deployment.migrate = revoked_after_migration
+        with self.assertRaisesRegex(release.ReleaseError, 'previous release restored'): self.deployment.transact()
+        self.assert_restored()
+        self.assertEqual(self.system.revision, OLD)
+        self.assertEqual(self.system.restarts, 1)  # Only the preserved old runtime restarts during verified rollback.
+
+    def test_failed_candidate_restores_exact_configuration_and_keeps_new_rows(self):
+        self.system.fail = 'local'
+        restart = self.system.restart
+        def activated():
+            restart()
+            if self.system.revision == NEW:
+                with release.closing(release.sqlite3.connect(self.root / 'var/lib/becore-tickets/tickets.sqlite')) as db, db:
+                    db.execute("INSERT INTO room_host_first_posts VALUES ('event','host','message','sender','created','fanout','cancelled')")
+                    db.execute("INSERT INTO event_host_pass_invitations VALUES ('invite','event','host','synthetic@example.invalid','pass','nonce','owner','created',0,'used','hash','expiry','used','session','delivery')")
+        self.system.restart = activated
+        with self.assertRaisesRegex(release.ReleaseError, 'previous release restored'): self.deployment.transact()
+        self.assert_restored()
+        with release.closing(release.sqlite3.connect(self.root / 'var/lib/becore-tickets/tickets.sqlite')) as db:
+            self.assertEqual(db.execute('SELECT message_id,cancelled_at FROM room_host_first_posts').fetchall(), [('message','cancelled')])
+            self.assertEqual(db.execute('SELECT state,used_at,claimed_session_id FROM event_host_pass_invitations').fetchall(), [('used','used','session')])
+
+    def test_prepared_recovery_cannot_change_the_private_target(self):
+        failed = self.prepared_failure()
+        with release.closing(release.sqlite3.connect(self.root / 'var/lib/becore-tickets/tickets.sqlite')) as db, db:
+            db.execute("INSERT INTO staff_accounts VALUES (?,'organizer','active',0,NULL)", (FirstHostTargetTests.OTHER,))
+            db.execute("INSERT INTO staff_event_assignments VALUES (?,'puro-exceso-20261024')", (FirstHostTargetTests.OTHER,))
+        self.deployment = self.new_deployment(run_id='456', recover_prepared=failed.identity,
+            enable_first_host=True, first_host_account_id=FirstHostTargetTests.OTHER)
+        with self.assertRaisesRegex(release.ReleaseError, 'does not match this exact failed transaction'):
+            self.deployment.preflight()
+        self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
 
 
 if __name__ == "__main__":
