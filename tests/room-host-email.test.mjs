@@ -129,3 +129,19 @@ test('hosted first-host preview uses exact production HTML with no recipients or
   assert.equal(preview.name, 'first-host-post');
   assert.equal(preview.recipient, undefined);
 });
+
+
+test('Host pass preview is exact production HTML with only a nonworking sample link', async () => {
+  const { createCustomerEmailHarness, renderHostPassEmailPreview } = await import('../scripts/customer-email-previews.mjs');
+  const harness = createCustomerEmailHarness();
+  const preview = renderHostPassEmailPreview();
+  const expected = harness.hostPass.eventHostPassEmail({ eventTitle: 'PURO EXCESO', hostName: 'Kofi Bills',
+    claimUrl: 'https://tickets.becoreops.com/my-nights/access?kind=host#token=SAMPLE-NOT-ACTIVE' });
+  for (const field of ['html', 'text', 'subject']) assert.equal(preview[field], expected[field]);
+  assert.equal(preview.recipient, undefined);
+  assert.equal(preview.actionLabel, 'Accept pass & enter the Room');
+  assert.equal(harness.networkCalls, 0);
+  assert.equal(harness.grants.length, 0);
+  assert.equal(harness.deliveries.length, 0);
+  assert.doesNotMatch('SAMPLE-NOT-ACTIVE', /^[A-Za-z0-9_-]{40,128}$/u);
+});

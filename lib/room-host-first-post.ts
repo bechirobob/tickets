@@ -4,12 +4,20 @@ import { sendTransactional, transactionalConfigured, validTransactionalId } from
 
 export type FirstHostPost = { eventSlug: string; hostAccountId: string; senderAttendeeId: string; messageId: string; createdAt: string };
 
+// Presentation only for the already allowlisted PURO host. The account/event
+// authorization below and at the callers remains independent of this public alias.
+// Do not expose a staff login name or guess another event's primary host.
+export const firstHostPublicName = `COALESCE((SELECT CASE WHEN COUNT(*)=1 THEN MAX(NULLIF(TRIM(host.name),'')) END
+  FROM event_hosts public_link JOIN hosts host ON host.id=public_link.host_id
+  WHERE public_link.event_slug=host_assignment.event_slug AND public_link.event_slug='puro-exceso-20261024'
+    AND host.id='host:kofi-bills' AND host.slug='kofi-bills' AND host.verification_status='verified'),'Host')`;
+
 // This is display/notification identity, never a new Room admission entitlement.
 // A verified attendee address alone is insufficient without a current assignment.
 export async function readCurrentRoomHost(db: D1Database, attendeeId: string, eventSlug: string) {
-  return db.prepare(`SELECT s.id AS accountId, s.display_name AS displayName
+  return db.prepare(`SELECT s.id AS accountId, ${firstHostPublicName} AS displayName
     FROM attendee_profiles p JOIN staff_accounts s ON s.normalized_email=p.normalized_email
-    JOIN staff_event_assignments a ON a.account_id=s.id AND a.event_slug=?
+    JOIN staff_event_assignments host_assignment ON host_assignment.account_id=s.id AND host_assignment.event_slug=?
     WHERE p.id=? AND p.status='active' AND p.email_verified_at IS NOT NULL
       AND s.status='active' AND s.role='organizer' AND s.must_change_password=0
       AND (s.locked_until IS NULL OR s.locked_until<=?) LIMIT 1`)

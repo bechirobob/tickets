@@ -6,8 +6,8 @@ import { GET as inbox } from '../app/api/customer/notifications/route';
 import { deliverHostAnnouncement } from '../lib/notifications';
 import { retryFailedDeliveries } from '../lib/email-delivery';
 
-async function fixture() {
- const id=crypto.randomUUID(),slug=`first-host-${id}`,now=new Date().toISOString(),future=new Date(Date.now()+86400000).toISOString();
+async function fixture(eventSlug?:string) {
+ const id=crypto.randomUUID(),slug=eventSlug??`first-host-${id}`,now=new Date().toISOString(),future=new Date(Date.now()+86400000).toISOString();
  const host=`host-${id}`,guest=`guest-${id}`,account=`account-${id}`;
  await env.DB.batch([
   env.DB.prepare(`INSERT INTO curated_event_records(id,submission_id,slug,title,venue,area,starts_at,ends_at,vibe,price_from_minor,capacity,event_state,image_url,curation_note,status,published_at,created_at,updated_at)
@@ -49,6 +49,29 @@ describe('first host post fanout',()=>{
   expect(await readCurrentRoomHost(env.DB,f.host,'other-event')).toBeNull();
   await env.DB.prepare('UPDATE attendee_profiles SET email_verified_at=NULL WHERE id=?').bind(f.host).run();
   expect(await readCurrentRoomHost(env.DB,f.host,f.slug)).toBeNull();await queueFirstHostPost(enabled(f),f.post);expect((await counts(f)).notices).toEqual({n:0});
+ });
+ it('uses only the verified linked PURO public alias without exposing staff or attendee names',async()=>{
+  const f=await fixture('puro-exceso-20261024');
+  await env.DB.prepare("INSERT INTO event_hosts(event_slug,host_id,role,is_primary,created_at) VALUES(?,'host:kofi-bills','Host',1,?)").bind(f.slug,f.now).run();
+  expect(await readCurrentRoomHost(env.DB,f.host,f.slug)).toEqual({accountId:f.account,displayName:'Kofi Bills'});
+  const c=await connectHost(f);
+  try {
+   c.socket.send(JSON.stringify({type:'message',content:'Public host greeting',displayName:'Client impersonation'}));
+   await expect.poll(async()=>(await counts(f)).emails).toEqual({n:1});
+   const posted=await runInDurableObject(c.room,async(_instance,state)=>state.storage.sql.exec<{display_name:string;role:string}>("SELECT display_name,role FROM messages WHERE kind='message'").toArray());
+   expect(posted).toEqual([{display_name:'Kofi Bills',role:'organizer'}]);
+   const mail=await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE kind='room_host_post' AND json_extract(payload_json,'$.eventSlug')=?").bind(f.slug).first<{payload:string}>();
+   expect(mail?.payload).toContain('Kofi Bills');expect(mail?.payload).not.toMatch(/Synthetic Host|Synthetic guest|Client impersonation/);
+  }finally{c.socket.close(1000);}
+  expect(await env.DB.prepare('SELECT display_name AS name FROM staff_accounts WHERE id=?').bind(f.account).first()).toEqual({name:'Synthetic Host'});
+  await env.DB.prepare('DELETE FROM event_hosts WHERE event_slug=?').bind(f.slug).run();
+  expect(await readCurrentRoomHost(env.DB,f.host,f.slug)).toEqual({accountId:f.account,displayName:'Host'});
+  await env.DB.prepare("INSERT INTO hosts(id,slug,name,bio,city,verification_status,created_at,updated_at) VALUES(?,?,'Unrelated public host','','Accra','verified',?,?)").bind(f.id,f.id,f.now,f.now).run();
+  await env.DB.prepare("INSERT INTO event_hosts(event_slug,host_id,role,is_primary,created_at) VALUES(?,?,'Host',1,?)").bind(f.slug,f.id,f.now).run();
+  expect(await readCurrentRoomHost(env.DB,f.host,f.slug)).toEqual({accountId:f.account,displayName:'Host'});
+  const other=await fixture();
+  await env.DB.prepare("INSERT INTO event_hosts(event_slug,host_id,role,is_primary,created_at) VALUES(?,'host:kofi-bills','Host',1,?)").bind(other.slug,other.now).run();
+  expect(await readCurrentRoomHost(env.DB,other.host,other.slug)).toEqual({accountId:other.account,displayName:'Host'});
  });
  it('requires the exact approved host and event scope, not a global rollout',async()=>{
   const f=await fixture();await queueFirstHostPost(enabled(f,{ROOM_HOST_FIRST_POST_EVENT_SLUG:'other-event'}),f.post);
@@ -158,19 +181,22 @@ describe('normal chat first-host trigger',()=>{
    const ledger=await runInDurableObject(a.room,async(_instance,state)=>state.storage.sql.exec<{message_id:string;completed_at:string}>('SELECT message_id,completed_at FROM room_host_posts').toArray());
    expect(ledger).toHaveLength(1);expect(ledger[0].completed_at).not.toBeNull();
    const normal=await runInDurableObject(a.room,async(_instance,state)=>state.storage.sql.exec<{role:string;display_name:string}>("SELECT role,display_name FROM messages WHERE kind='message'").toArray());
-   expect(normal).toHaveLength(2);expect(normal.every(row=>row.role==='organizer' && row.display_name==='Synthetic Host')).toBe(true);
+   expect(normal).toHaveLength(2);expect(normal.every(row=>row.role==='organizer' && row.display_name==='Host')).toBe(true);
    await a.room.removeMessage(ledger[0].message_id);
    const c=await connectHost(f);try{c.socket.send(JSON.stringify({type:'message',content:'A fresh post after deletion'}));await expect.poll(()=>c.messages.some(row=>row.type==='message')).toBe(true);}finally{c.socket.close(1000);}
    expect((await counts(f)).emails).toEqual({n:1});
    expect(await runInDurableObject(a.room,async(_instance,state)=>state.storage.sql.exec<{n:number}>('SELECT COUNT(*) AS n FROM room_host_posts').one())).toEqual({n:1});
   } finally {a.socket.close(1000);b.socket.close(1000);}
  });
- it.each(['unassigned','unverified','disabled','feature-off','guest-spoof'])('does not grant Host from %s identity',async reason=>{
+ it.each(['unassigned','unverified','disabled','feature-off','guest-spoof','wrong-account','wrong-event'])('does not grant Host from %s identity',async reason=>{
   const f=await fixture();
   if(reason==='unassigned')await env.DB.prepare('DELETE FROM staff_event_assignments WHERE account_id=?').bind(f.account).run();
   if(reason==='unverified')await env.DB.prepare('UPDATE attendee_profiles SET email_verified_at=NULL WHERE id=?').bind(f.host).run();
   if(reason==='disabled')await env.DB.prepare("UPDATE staff_accounts SET status='disabled' WHERE id=?").bind(f.account).run();
   const c=await connectHost(f,reason!=='feature-off',reason==='guest-spoof'?f.guest:f.host);
+  if(reason==='wrong-account'||reason==='wrong-event')await runInDurableObject(c.room,async instance=>{
+   Object.assign((instance as unknown as {env:Cloudflare.Env}).env,reason==='wrong-account'?{ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID:'other-account'}:{ROOM_HOST_FIRST_POST_EVENT_SLUG:'other-event'});
+  });
   try{
    c.socket.send(JSON.stringify({type:'message',content:'Hello',role:'organizer',hostAccountId:f.account}));
    await expect.poll(()=>c.messages.some(row=>row.type==='message')).toBe(true);

@@ -6,7 +6,7 @@ import { writerGuardStatements, transitionWriterSql } from "../ops/handover/writ
 import { encryptedRoomSnapshot } from "./room-handover";
 import { DurableObject } from "cloudflare:workers";
 import { purgeExpiredFlashes, type FlashRecord } from "../lib/flashes";
-import { queueFirstHostPost, type FirstHostPost } from '../lib/room-host-first-post';
+import { firstHostPublicName, queueFirstHostPost, type FirstHostPost } from '../lib/room-host-first-post';
 import { notifyRoomMessage } from "../lib/notifications";
 
 type RoomRole = "attendee" | "organizer" | "moderator";
@@ -779,7 +779,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   private async currentRoomIdentity(attendeeId: string, sessionId: string | null = null) {
     const row=await this.env.DB.prepare(`
       SELECT tier.room_badge AS roomBadge,
-        (SELECT json_object('accountId',staff.id,'displayName',staff.display_name) FROM staff_accounts staff JOIN staff_event_assignments host_assignment ON host_assignment.account_id=staff.id
+        (SELECT json_object('accountId',staff.id,'displayName',${firstHostPublicName}) FROM staff_accounts staff JOIN staff_event_assignments host_assignment ON host_assignment.account_id=staff.id
           WHERE ?='1' AND ticket.event_slug=? AND staff.id=? AND profile.email_verified_at IS NOT NULL AND staff.normalized_email=profile.normalized_email
             AND staff.status='active' AND staff.role='organizer' AND staff.must_change_password=0
             AND (staff.locked_until IS NULL OR staff.locked_until<=?) AND host_assignment.event_slug=ticket.event_slug LIMIT 1) AS hostJson
