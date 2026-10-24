@@ -188,7 +188,10 @@ def projection_failures(name,revision):
 
 def inspect_config(name,revision,image,running=True):
     read_step('container_config')
-    template='{'+','.join(json.dumps(k)+':{{json '+v+'}}' for k,v in FIELDS.items())
+    # These Docker API pointer/map fields are explicitly omitempty. Preserve
+    # omitted as null, never a guessed boolean or security default.
+    optional={'init':'(index .HostConfig \"Init\")','sysctls':'(index .HostConfig \"Sysctls\")'}
+    template='{'+','.join(json.dumps(k)+':{{json '+optional.get(k,v)+'}}' for k,v in FIELDS.items())
     template+=',"env":"'+ENV_TEMPLATE.replace('REVISION',revision)+'","labels":{{if .Config.Labels}}{{len .Config.Labels}}{{else}}0{{end}},"networks":"{{range $name, $value := .NetworkSettings.Networks}}{{$name}};{{end}}"}'
     try:item=json.loads(command(['docker','inspect','--type=container','--format',template,name]))
     except subprocess.CalledProcessError as error:

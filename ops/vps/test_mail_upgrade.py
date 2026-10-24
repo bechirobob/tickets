@@ -76,19 +76,29 @@ class OperatorTests(unittest.TestCase):
         fixture['NetworkSettings']={'Networks':{'bridge':{}}}
         program=r'''package main
 import("encoding/json";"os";"text/template";"fmt")
-func main(){var x struct{Template string; Fixture map[string]any};if e:=json.NewDecoder(os.Stdin).Decode(&x);e!=nil{panic(e)};t,e:=template.New("projection").Funcs(template.FuncMap{"json":func(x any)string{v,_:=json.Marshal(x);return string(v)}}).Parse(x.Template);if e!=nil{fmt.Fprintln(os.Stderr,"parse:",e);os.Exit(2)};if e=t.Execute(os.Stdout,x.Fixture);e!=nil{fmt.Fprintln(os.Stderr,"execute:",e);os.Exit(3)}}
+func main(){var x struct{Template string; Fixture map[string]any};if e:=json.NewDecoder(os.Stdin).Decode(&x);e!=nil{panic(e)};t,e:=template.New("projection").Option("missingkey=error").Funcs(template.FuncMap{"json":func(x any)string{v,_:=json.Marshal(x);return string(v)}}).Parse(x.Template);if e!=nil{fmt.Fprintln(os.Stderr,"parse:",e);os.Exit(2)};if e=t.Execute(os.Stdout,x.Fixture);e!=nil{fmt.Fprintln(os.Stderr,"execute:",e);os.Exit(3)}}
 '''
         with tempfile.TemporaryDirectory() as tmp:
             source=Path(tmp)/'projection.go';source.write_text(program)
-            for labels in [None,{}, {'unexpected':'synthetic-only'}]:
-                fixture['Config']['Labels']=labels
-                result=subprocess.run([binary,'run',str(source)],input=json.dumps({'Template':captures[0],'Fixture':fixture}),text=True,capture_output=True,timeout=60)
-                self.assertEqual(result.returncode,0,result.stderr)
-                projected=json.loads(result.stdout)
-                with patch.object(u,'command',return_value=result.stdout.encode()):
-                    if labels:
-                        with self.assertRaises(u.CheckFailed):u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE)
-                    else:self.assertEqual(u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE),'b'*64)
+            for optional in ['absent','null','init_true','init_false','sysctls_nonempty']:
+                fixture['HostConfig'].update(Init=None,Sysctls=None)
+                if optional=='absent':
+                    del fixture['HostConfig']['Init'];del fixture['HostConfig']['Sysctls']
+                elif optional=='init_true':fixture['HostConfig']['Init']=True
+                elif optional=='init_false':fixture['HostConfig']['Init']=False
+                elif optional=='sysctls_nonempty':fixture['HostConfig']['Sysctls']={'net.ipv4.ip_forward':'1'}
+                for labels in [None,{}, {'unexpected':'synthetic-only'}]:
+                    with self.subTest(optional=optional,labels=labels):
+                        fixture['Config']['Labels']=labels
+                        result=subprocess.run([binary,'run',str(source)],input=json.dumps({'Template':captures[0],'Fixture':fixture}),text=True,capture_output=True,timeout=60)
+                        self.assertEqual(result.returncode,0,result.stderr)
+                        projected=json.loads(result.stdout)
+                        with patch.object(u,'command',return_value=result.stdout.encode()):
+                            if labels or optional not in ('absent','null'):
+                                with self.assertRaises(u.CheckFailed):u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE)
+                            else:
+                                self.assertIsNone(projected['init']);self.assertIsNone(projected['sysctls'])
+                                self.assertEqual(u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE),'b'*64)
 
     def test_fixed_read_steps_and_command_categories_never_emit_private_errors(self):
         for step in ['image_config','container_config','application_identity','application_pid','application_config_pointer','application_private_configs','application_pid_recheck','application_provider','container_source','container_health','private_paths','sending_marker','rollback_name','failed_name','revision_marker','database_metadata','database_identity','database_readonly_count','postfix_spool_count']:
