@@ -8,6 +8,8 @@ import AnalyticsBeacon from "./analytics-beacon";
 import MobileAppFrame from "./mobile-app-frame";
 import BrandArrival from "./brand-arrival";
 import "./brand-arrival.css";
+import InputModality from "./input-modality";
+import "../styles/input-modality.css";
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", interactiveWidget: "resizes-content", themeColor: "#281b2b" };
 
@@ -56,7 +58,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
-      <body><BrandArrival /><MobileAppFrame /><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
+      <body><InputModality /><BrandArrival /><MobileAppFrame /><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
     </html>
   );
 }

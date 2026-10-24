@@ -129,12 +129,12 @@ it('does not replace a revoked assignment during provisioning',async()=>{
 import { createStaffSession } from '../lib/admin-session';
 it('owner control requires the existing owner session and its required MFA, not organizer credentials',async()=>{
  const f=await fixture(),token=await createStaffSession(env.DB,{id:f.account});
- const request=()=>new Request(`https://tickets.becoreops.com/api/admin/host-pass?accountId=${f.account}&email=${encodeURIComponent(f.email)}`,{headers:{cookie:`bct_staff=${token}`}});
+ const request=()=>new Request(`https://tickets.becoreops.com/api/admin/host-pass?accountId=${f.account}&email=${encodeURIComponent(f.email)}&deliveryIssues=first-host`,{headers:{cookie:`bct_staff=${token}`}});
  expect((await ownerRead(request())).status).toBe(403);
  await env.DB.prepare("UPDATE staff_accounts SET role='owner',mfa_required=1 WHERE id=?").bind(f.account).run();
  expect((await ownerRead(request())).status).toBe(403);
  await env.DB.prepare('UPDATE staff_sessions SET mfa_verified_at=? WHERE account_id=?').bind(f.now,f.account).run();
- expect((await ownerRead(request())).status).toBe(200);
+ const allowed=await ownerRead(request());expect(allowed.status).toBe(200);expect(allowed.headers.get('cache-control')).toBe('no-store, private');
  await env.DB.prepare('UPDATE staff_accounts SET must_change_password=1 WHERE id=?').bind(f.account).run();
  expect((await ownerRead(request())).status).toBe(403);
 });

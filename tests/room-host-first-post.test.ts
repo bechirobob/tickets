@@ -1,7 +1,9 @@
 import { env, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hashToken } from '../lib/attendee-auth';
-import { deliverFirstHostEmail, queueFirstHostPost, readCurrentRoomHost, retryFirstHostEmails, type FirstHostPost } from '../lib/room-host-first-post';
+import { createStaffSession } from '../lib/admin-session';
+import { GET as ownerDeliveryRead } from '../app/api/admin/host-pass/route';
+import { firstHostDeliveryIssues, deliverFirstHostEmail, queueFirstHostPost, readCurrentRoomHost, retryFirstHostEmails, type FirstHostPost } from '../lib/room-host-first-post';
 import { GET as inbox } from '../app/api/customer/notifications/route';
 import { deliverHostAnnouncement } from '../lib/notifications';
 import { retryFailedDeliveries } from '../lib/email-delivery';
@@ -41,7 +43,100 @@ async function counts(f:Awaited<ReturnType<typeof fixture>>) {
 const emailId=(f:Awaited<ReturnType<typeof fixture>>)=>`room-first-email/${f.post.messageId}/${f.guest}`;
 afterEach(()=>vi.restoreAllMocks());
 
+async function subscribe(f:Awaited<ReturnType<typeof fixture>>,options:{revoked?:boolean;hostUpdates?:number;attendee?:string}={}) {
+ const id=crypto.randomUUID();
+ await env.DB.prepare(`INSERT INTO push_subscriptions(id,attendee_id,endpoint,p256dh,auth,created_at,updated_at,revoked_at,host_updates)
+   VALUES(?,?,?,'synthetic-key','synthetic-auth',?,?,?,?)`)
+   .bind(id,options.attendee??f.guest,`https://push.example.com/${id}`,f.now,f.now,options.revoked?f.now:null,options.hostUpdates??1).run();
+}
+
+async function rsvpContact(f:Awaited<ReturnType<typeof fixture>>) {
+ await env.DB.batch([
+  env.DB.prepare("UPDATE orders SET payment_provider='rsvp' WHERE id=?").bind(f.guest),
+  env.DB.prepare("UPDATE attendee_profiles SET email_verified_at=NULL WHERE id=?").bind(f.guest),
+  env.DB.prepare("INSERT INTO event_registration_settings(event_slug,mode,capacity,room_access,updated_at) VALUES(?,'rsvp',100,1,?)").bind(f.slug,f.now),
+  env.DB.prepare(`INSERT INTO event_registrations(id,event_slug,normalized_email,guest_name,kind,status,attendee_id,order_id,device_claimed_at,created_at,updated_at)
+    VALUES(?,?,?,'Synthetic RSVP','rsvp','confirmed',?,?,?,?,?)`).bind(f.id,f.slug,`${f.guest}@example.com`,f.guest,f.guest,f.now,f.now,f.now),
+ ]);
+}
+
 describe('first host post fanout',()=>{
+ it('reports only original scoped bad booking contacts without IDs, bodies or new send attempts',async()=>{
+  const f=await fixture('puro-exceso-20261024');await rsvpContact(f);
+  await env.DB.prepare("INSERT INTO delivery_events(id,kind,recipient,status,failure_reason,created_at,updated_at) VALUES(?,'registration_update',?,'bounced','Mailbox does not exist',?,?)").bind(f.id,`${f.guest}@example.com`,f.now,f.now).run();
+  await queueFirstHostPost(enabled(f),f.post);
+  expect(await firstHostDeliveryIssues(enabled(f))).toEqual([{address:`${f.guest}@example.com`,status:'bounced',reason:'Mailbox does not exist',timestamp:f.now,category:'suppressed'}]);
+  expect((await counts(f)).emails).toEqual({n:0});
+  const owner=await fixture();await env.DB.prepare("UPDATE staff_accounts SET role='owner' WHERE id=?").bind(owner.account).run();
+  const token=await createStaffSession(env.DB,{id:owner.account});
+  const original={ROOM_HOST_FIRST_POST_ENABLED:env.ROOM_HOST_FIRST_POST_ENABLED,ROOM_HOST_FIRST_POST_EVENT_SLUG:env.ROOM_HOST_FIRST_POST_EVENT_SLUG,ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID:env.ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID};
+  Object.assign(env,{ROOM_HOST_FIRST_POST_ENABLED:'1',ROOM_HOST_FIRST_POST_EVENT_SLUG:f.slug,ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID:f.account});
+  try {
+   const response=await ownerDeliveryRead(new Request(`https://tickets.becoreops.com/api/admin/host-pass?accountId=${f.account}&email=${f.host}@example.com&deliveryIssues=first-host`,{headers:{cookie:`bct_staff=${token}`}}));
+   expect(response.headers.get('cache-control')).toBe('no-store, private');
+   expect(await response.json()).toMatchObject({available:true,deliveryIssues:[{address:`${f.guest}@example.com`,status:'bounced',reason:'Mailbox does not exist'}]});
+  }finally{Object.assign(env,original);}
+  const additional=[];
+  for(let i=0;i<4;i++){
+   const g=await fixture();additional.push(g.guest);
+   await env.DB.batch([
+    env.DB.prepare("UPDATE orders SET event_slug=?,payment_provider='rsvp' WHERE id=?").bind(f.slug,g.guest),
+    env.DB.prepare('UPDATE tickets SET event_slug=? WHERE id=?').bind(f.slug,g.guest),
+    env.DB.prepare(`INSERT INTO event_registrations(id,event_slug,normalized_email,guest_name,kind,status,attendee_id,order_id,device_claimed_at,created_at,updated_at) VALUES(?,?,?,'Synthetic','rsvp','confirmed',?,?,?,?,?)`).bind(g.id,f.slug,`${g.guest}@example.com`,g.guest,g.guest,f.now,f.now,f.now),
+    env.DB.prepare(`INSERT INTO attendee_notifications(id,attendee_id,event_slug,kind,title,body,url,source_id,created_at) SELECT ?,?,event_slug,kind,title,body,url,source_id,created_at FROM attendee_notifications WHERE attendee_id=? AND source_id=?`).bind(g.id,g.guest,f.guest,f.post.messageId),
+    env.DB.prepare("INSERT INTO delivery_events(id,kind,recipient,status,created_at,updated_at) VALUES(?,'registration_update',?,'complained',?,?)").bind(g.id,`${g.guest}@example.com`,f.now,f.now),
+   ]);
+  }
+  await expect(firstHostDeliveryIssues(enabled(f))).rejects.toThrow('Suppressed cohort changed');
+  for(const id of additional)await env.DB.prepare("UPDATE ticket_assignments SET status='revoked' WHERE attendee_id=?").bind(id).run();
+  await expect(firstHostDeliveryIssues(enabled(f,{ROOM_HOST_FIRST_POST_EVENT_SLUG:'other'}))).rejects.toThrow();
+  expect(await firstHostDeliveryIssues(enabled(f,{ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID:'other'}))).toEqual([]);
+  await env.DB.prepare("INSERT INTO delivery_events(id,kind,recipient,status,attempt_count,payload_json,failure_reason,created_at,updated_at) VALUES(?,'room_host_post',?,'uncertain',1,?,'Provider outcome unknown',?,?)").bind(emailId(f),`${f.guest}@example.com`,JSON.stringify({eventSlug:f.slug,messageId:f.post.messageId,attendeeId:f.guest}),f.now,f.now).run();
+  expect(await firstHostDeliveryIssues(enabled(f))).toEqual([{address:`${f.guest}@example.com`,status:'uncertain',reason:'Provider outcome unknown',timestamp:f.now,category:'uncertain'}]);
+  await env.DB.prepare("UPDATE ticket_assignments SET status='revoked' WHERE attendee_id=?").bind(f.guest).run();
+  expect(await firstHostDeliveryIssues(enabled(f))).toEqual([]);
+  await env.DB.prepare("UPDATE ticket_assignments SET status='revoked' WHERE attendee_id IN (?,?)").bind(f.host,f.guest).run();
+  await env.DB.prepare('DELETE FROM delivery_events WHERE id=?').bind(emailId(f)).run();
+  await env.DB.prepare('DELETE FROM curated_event_records WHERE id=?').bind(f.id).run();
+ });
+ it('uses the confirmed RSVP contact without upgrading account verification or trusting an edited profile address',async()=>{
+  const f=await fixture();await rsvpContact(f);await source(f);
+  await env.DB.prepare("UPDATE attendee_profiles SET normalized_email='edited-profile@example.com' WHERE id=?").bind(f.guest).run();
+  const send=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({id:crypto.randomUUID()}),{status:200}));
+  await queueFirstHostPost(enabled(f),f.post);
+  expect(await env.DB.prepare('SELECT recipient FROM delivery_events WHERE id=?').bind(emailId(f)).first()).toEqual({recipient:`${f.guest}@example.com`});
+  await deliverFirstHostEmail(enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',RESEND_API_KEY:'synthetic-key'}),emailId(f));expect(send).toHaveBeenCalledTimes(1);
+  expect(await env.DB.prepare('SELECT email_verified_at FROM attendee_profiles WHERE id=?').bind(f.guest).first()).toEqual({email_verified_at:null});
+ });
+ it.each(['transferred','mismatched-order-email','no-submission-proof','booking-optout','booking-event-optout','booking-bounce','booking-complaint','push'])('does not route RSVP email when %s',async reason=>{
+  const f=await fixture();await rsvpContact(f);
+  if(reason.startsWith('booking-'))await env.DB.prepare("UPDATE attendee_profiles SET normalized_email='edited-profile@example.com' WHERE id=?").bind(f.guest).run();
+  if(reason==='transferred')await env.DB.prepare('UPDATE event_registrations SET attendee_id=? WHERE id=?').bind(f.host,f.id).run();
+  if(reason==='mismatched-order-email')await env.DB.prepare("UPDATE orders SET customer_email='other@example.com' WHERE id=?").bind(f.guest).run();
+  if(reason==='no-submission-proof')await env.DB.prepare('UPDATE event_registrations SET device_claimed_at=NULL WHERE id=?').bind(f.id).run();
+  if(reason==='booking-optout')await env.DB.prepare('INSERT INTO marketing_contacts(email,unsubscribed,updated_at) VALUES(?,1,?)').bind(`${f.guest}@example.com`,f.now).run();
+  if(reason==='booking-event-optout')await env.DB.prepare("INSERT INTO event_audience_contacts(id,event_slug,email,guest_name,source,unsubscribed_at,unsubscribe_token,confirmed_at) VALUES(?,?,?,'Synthetic','rsvp',?,'synthetic',?)").bind(f.id,f.slug,`${f.guest}@example.com`,f.now,f.now).run();
+  if(reason==='booking-bounce'||reason==='booking-complaint')await env.DB.prepare("INSERT INTO delivery_events(id,kind,recipient,status,created_at,updated_at) VALUES(?,'registration_update',?,?,?,?)").bind(f.id,`${f.guest}@example.com`,reason==='booking-bounce'?'bounced':'complained',f.now,f.now).run();
+  if(reason==='push')await subscribe(f);
+  await queueFirstHostPost(enabled(f),f.post);expect((await counts(f)).emails).toEqual({n:0});
+ });
+ it('suppresses queued RSVP mail after booking contact changes and does not resend a delivered job',async()=>{
+  const f=await fixture();await rsvpContact(f);await source(f);await queueFirstHostPost(enabled(f),f.post);
+  await env.DB.prepare("UPDATE event_registrations SET normalized_email='changed@example.com' WHERE id=?").bind(f.id).run();
+  const send=vi.spyOn(globalThis,'fetch');await deliverFirstHostEmail(enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',RESEND_API_KEY:'synthetic-key'}),emailId(f));expect(send).not.toHaveBeenCalled();
+  expect(await env.DB.prepare('SELECT status FROM delivery_events WHERE id=?').bind(emailId(f)).first()).toEqual({status:'suppressed'});
+  await env.DB.prepare("UPDATE delivery_events SET status='delivered',attempt_count=1 WHERE id=?").bind(emailId(f)).run();
+  await deliverFirstHostEmail(enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',RESEND_API_KEY:'synthetic-key'}),emailId(f));expect(send).not.toHaveBeenCalled();
+ });
+ it.each(['active','revoked','host-updates-off','other-attendee'])('uses the %s push preference without altering inbox or essential email jobs',async state=>{
+  const f=await fixture();
+  await subscribe(f,{revoked:state==='revoked',hostUpdates:state==='host-updates-off'?0:1,attendee:state==='other-attendee'?f.host:f.guest});
+  await env.DB.prepare("INSERT INTO delivery_events(id,kind,recipient,status,attempt_count,created_at,updated_at) VALUES(?,'payment_confirmation',?,'queued',0,?,?)").bind(f.id,`${f.guest}@example.com`,f.now,f.now).run();
+  await queueFirstHostPost(enabled(f),f.post);
+  expect(await counts(f)).toEqual({notices:{n:1},emails:{n:state==='active'?0:1},pushes:{n:1}});
+  expect(await env.DB.prepare('SELECT status,attempt_count FROM delivery_events WHERE id=?').bind(f.id).first()).toEqual({status:'queued',attempt_count:0});
+ });
+
  it('is off by default and requires verified event-assigned active host identity',async()=>{
   const f=await fixture();await queueFirstHostPost({...env,ROOM_HOST_FIRST_POST_ENABLED:undefined},f.post);expect((await counts(f)).emails).toEqual({n:0});
   expect(await readCurrentRoomHost(env.DB,f.host,f.slug)).toMatchObject({accountId:f.account});
@@ -121,6 +216,38 @@ describe('first host post fanout',()=>{
 });
 
 describe('first host email delivery safety',()=>{
+ it('suppresses an already queued Room email when push is enabled before handoff',async()=>{
+  const f=await fixture();await source(f);await queueFirstHostPost(enabled(f),f.post);await subscribe(f);
+  const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response('{}'));
+  await deliverFirstHostEmail(enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',RESEND_API_KEY:'synthetic-key'}),emailId(f));
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(await env.DB.prepare('SELECT status,attempt_count FROM delivery_events WHERE id=?').bind(emailId(f)).first()).toEqual({status:'suppressed',attempt_count:0});
+  await env.DB.prepare('UPDATE push_subscriptions SET revoked_at=? WHERE attendee_id=?').bind(f.now,f.guest).run();
+  await deliverFirstHostEmail(enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',RESEND_API_KEY:'synthetic-key'}),emailId(f));
+  expect(fetcher).not.toHaveBeenCalled();
+ });
+ it('rechecks a push subscription created between eligibility and the atomic email claim',async()=>{
+  const f=await fixture();await source(f);await queueFirstHostPost(enabled(f),f.post);let intercepted=false;
+  const db=new Proxy(env.DB,{get(target,key){
+   if(key==='prepare')return (sql:string)=>{
+    const statement=target.prepare(sql);
+    if(!sql.startsWith("UPDATE delivery_events SET status='sending'"))return statement;
+    return new Proxy(statement,{get(st,k){
+     if(k==='bind')return (...args:unknown[])=>{const bound=st.bind(...args);return new Proxy(bound,{get(b,prop){
+      if(prop==='run')return async()=>{intercepted=true;await subscribe(f);return b.run();};
+      const value=Reflect.get(b,prop);return typeof value==='function'?value.bind(b):value;
+     }});};
+     const value=Reflect.get(st,k);return typeof value==='function'?value.bind(st):value;
+    }});
+   };
+   const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+  }});
+  const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response('{}'));
+  await deliverFirstHostEmail(enabled(f,{DB:db,EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',RESEND_API_KEY:'synthetic-key'}),emailId(f));
+  expect(intercepted).toBe(true);expect(fetcher).not.toHaveBeenCalled();
+  expect(await env.DB.prepare('SELECT status,attempt_count FROM delivery_events WHERE id=?').bind(emailId(f)).first()).toEqual({status:'queued',attempt_count:0});
+ });
+
  const mailEnv=(f:Awaited<ReturnType<typeof fixture>>)=>enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',RESEND_API_KEY:'synthetic-key'});
  it('sends one isolated generic email and never resends a duplicate job',async()=>{
   const f=await fixture();await source(f);await queueFirstHostPost(enabled(f),f.post);

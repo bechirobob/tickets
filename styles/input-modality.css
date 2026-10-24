@@ -1,0 +1,14 @@
+/* Pointer-opened popovers/dialogs can inherit a keyboard :focus-visible ring.
+ * Focus is retained. Only the focused non-editing target loses its pointer ring.
+ * The narrow !important defeats route-specific rules regardless of load order.
+ * Keyboard/unknown input and editing controls keep their existing focus cues.
+ */
+/* Forced-colors outlines can also encode selection; retain those system cues. */
+@media (forced-colors: none) {
+  /* Non-editing control wrappers share this policy, including hidden inputs. */
+  html[data-input-modality="pointer"] { --non-editing-focus-outline: none; }
+  html[data-input-modality="pointer"] :focus:not(input, textarea, select, [contenteditable]:not([contenteditable="false"])),
+  html[data-input-modality="pointer"] input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="image"]):focus {
+    outline: none !important;
+  }
+}
