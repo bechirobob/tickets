@@ -443,3 +443,34 @@ describe('first host cancellation races',()=>{
   expect(await env.DB.prepare('SELECT status FROM room_announcement_deliveries WHERE id=?').bind(`${f.post.messageId}/${f.guest}`).first()).toEqual({status:'complete'});
  });
 });
+
+it.each([true,false])('pins first-host email to VPS across configuration rollback and validates receipt (%s)',async valid=>{
+ const f=await fixture();await source(f);
+ const runtime=enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',TRANSACTIONAL_EMAIL_PROVIDER:'vps',VPS_EMAIL_SIGNING_KEY:'a'.repeat(64),RESEND_API_KEY:undefined});
+ await queueFirstHostPost(runtime,f.post);
+ const payload=await env.DB.prepare('SELECT payload_json FROM delivery_events WHERE id=?').bind(emailId(f)).first<{payload_json:string}>();
+ expect(JSON.parse(payload!.payload_json).provider).toBe('vps');
+ const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(Response.json({id:valid?`vps-${'a'.repeat(64)}`:'resend-shaped-id'}));
+ await deliverFirstHostEmail({...runtime,TRANSACTIONAL_EMAIL_PROVIDER:'resend'},emailId(f));await deliverFirstHostEmail(runtime,emailId(f));
+ expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0][0]).toBe('https://mail.becoreops.com/v1/emails');
+ const sent=JSON.parse(String(fetcher.mock.calls[0][1]?.body)),queued=JSON.parse(payload!.payload_json);
+ expect(sent).toMatchObject({kind:'room_host_post',to:`${f.guest}@example.com`,html:queued.html,text:queued.text,subject:queued.subject});
+ expect(await env.DB.prepare('SELECT status FROM delivery_events WHERE id=?').bind(emailId(f)).first()).toEqual({status:valid?'sent':'uncertain'});
+});
+it('never switches a queued Resend first-host email to VPS',async()=>{
+ const f=await fixture();await source(f);await queueFirstHostPost(enabled(f),f.post);
+ const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(Response.json({id:'resend-receipt'}));
+ await deliverFirstHostEmail(enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',TRANSACTIONAL_EMAIL_PROVIDER:'vps',VPS_EMAIL_SIGNING_KEY:'a'.repeat(64),RESEND_API_KEY:'fixture'}),emailId(f));
+ expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0][0]).toBe('https://api.resend.com/emails');
+});
+
+it.each([undefined,'unknown-provider',null])('preserves legacy provider fallback and rejects invalid pinned providers (%s)',async provider=>{
+ const f=await fixture();await source(f);await queueFirstHostPost(enabled(f),f.post);
+ const stored=await env.DB.prepare('SELECT payload_json FROM delivery_events WHERE id=?').bind(emailId(f)).first<{payload_json:string}>();
+ const payload=JSON.parse(stored!.payload_json);if(provider===undefined)delete payload.provider;else payload.provider=provider;
+ await env.DB.prepare('UPDATE delivery_events SET payload_json=? WHERE id=?').bind(JSON.stringify(payload),emailId(f)).run();
+ const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(Response.json({id:'resend-receipt'}));
+ await deliverFirstHostEmail(enabled(f,{EMAIL_FROM:'BeCore Tickets <tickets@becoreops.com>',TRANSACTIONAL_EMAIL_PROVIDER:'vps',VPS_EMAIL_SIGNING_KEY:'a'.repeat(64),RESEND_API_KEY:'fixture'}),emailId(f));
+ if(provider===undefined){expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0][0]).toBe('https://api.resend.com/emails');}
+ else{expect(fetcher).not.toHaveBeenCalled();expect(await env.DB.prepare('SELECT status,attempt_count AS attempts FROM delivery_events WHERE id=?').bind(emailId(f)).first()).toEqual({status:'queued',attempts:0});}
+});

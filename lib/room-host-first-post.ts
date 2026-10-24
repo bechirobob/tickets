@@ -1,6 +1,6 @@
 import { hostAudience, type NotificationPayload } from './notifications';
 import { roomHostEmail } from './room-host-email';
-import { sendTransactional, transactionalConfigured, validTransactionalId } from './transactional-email';
+import { sendTransactional, transactionalConfigured, transactionalProvider, validTransactionalId } from './transactional-email';
 
 export type FirstHostPost = { eventSlug: string; hostAccountId: string; senderAttendeeId: string; messageId: string; createdAt: string };
 
@@ -71,7 +71,7 @@ export async function queueFirstHostPost(env: Cloudflare.Env, post: FirstHostPos
     url:`/room/${encodeURIComponent(post.eventSlug)}?from=host-first-post&message=${encodeURIComponent(post.messageId)}`,
     sourceId:post.messageId,tag:`first-host-${post.messageId.replace(/[^A-Za-z0-9_-]/gu,'').slice(-20)}` };
   const mail=roomHostEmail({eventTitle:event.title,hostName:host.displayName,eventSlug:post.eventSlug,messageId:post.messageId});
-  const mailPayload=JSON.stringify({...mail,provider:'resend',eventSlug:post.eventSlug,messageId:post.messageId,
+  const mailPayload=JSON.stringify({...mail,provider:transactionalProvider(env,'room_host_post'),eventSlug:post.eventSlug,messageId:post.messageId,
     senderAttendeeId:post.senderAttendeeId,hostAccountId:post.hostAccountId});
   const audience=`${hostAudience} AND ${firstHostPreference}
     AND EXISTS (SELECT 1 FROM room_host_first_posts receipt WHERE receipt.event_slug=t.event_slug
@@ -101,14 +101,18 @@ export async function queueFirstHostPost(env: Cloudflare.Env, post: FirstHostPos
   }
 }
 
-type HostMailPayload = FirstHostPost & { attendeeId:string; subject:string; html:string; text:string; idempotencyKey:string; provider:'resend' };
+type HostMailPayload = FirstHostPost & { attendeeId:string; subject:string; html:string; text:string; idempotencyKey:string; provider?:'resend'|'vps' };
 export async function deliverFirstHostEmail(env:Cloudflare.Env,id:string):Promise<void> {
   if(env.ROOM_HOST_FIRST_POST_ENABLED!=='1')return;
-  if(env.EMAIL_FROM!=='BeCore Tickets <tickets@becoreops.com>' || !transactionalConfigured(env,'resend'))return;
+  if(env.EMAIL_FROM!=='BeCore Tickets <tickets@becoreops.com>')return;
   const item=await env.DB.prepare(`SELECT recipient,payload_json AS payload,created_at AS createdAt FROM delivery_events
     WHERE id=? AND kind='room_host_post' AND status='queued' AND attempt_count=0`).bind(id).first<{recipient:string;payload:string;createdAt:string}>();
   if(!item)return;
   const payload=JSON.parse(item.payload) as HostMailPayload;
+  // Legacy jobs remain on Resend even after the configured default changes.
+  if(payload.provider!==undefined && payload.provider!=='resend' && payload.provider!=='vps')return;
+  const provider=payload.provider??'resend';
+  if(!transactionalConfigured(env,provider))return;
   if(env.ROOM_HOST_FIRST_POST_EVENT_SLUG!==payload.eventSlug || env.ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID!==payload.hostAccountId)return;
   const now=new Date().toISOString();
   const host=await readCurrentRoomHost(env.DB,payload.senderAttendeeId,payload.eventSlug);
@@ -132,10 +136,10 @@ export async function deliverFirstHostEmail(env:Cloudflare.Env,id:string):Promis
       payload.hostAccountId,payload.senderAttendeeId,payload.eventSlug,now).run();
   if(!claimed.meta.changes)return;
   try {
-    const response=await sendTransactional(env,'resend',{recipient:item.recipient,kind:'room_host_post',subject:payload.subject,
+    const response=await sendTransactional(env,provider,{recipient:item.recipient,kind:'room_host_post',subject:payload.subject,
       html:payload.html,text:payload.text,idempotencyKey:payload.idempotencyKey,replyTo:'tickets@becoreops.com'});
     const result=await response.json().catch(()=>null) as {id?:string}|null;
-    if(!response.ok || !validTransactionalId('resend',result?.id))throw new Error('First host email outcome needs review.');
+    if(!response.ok || !validTransactionalId(provider,result?.id))throw new Error('First host email outcome needs review.');
     await env.DB.prepare("UPDATE delivery_events SET status='sent',provider_id=?,failure_reason=NULL,updated_at=? WHERE id=? AND status='sending'")
       .bind(result.id,new Date().toISOString(),id).run();
   } catch {
