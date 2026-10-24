@@ -159,6 +159,15 @@ class RunnableWrapper(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError):m.service_identity()
 
+    def test_validation_codes_never_export_dynamic_error_text(self):
+        for message,code in m.VALIDATION_CODES.items():
+            result=m.diagnostic_failure(ValueError(message))
+            self.assertEqual(result['validation_code'],code)
+        for error in [ValueError('private@example.com'),ValueError('secret-key'),RuntimeError('private payload')]:
+            result=m.diagnostic_failure(error)
+            self.assertNotIn('validation_code',result)
+            self.assertNotIn('private',json.dumps(result));self.assertNotIn('secret',json.dumps(result))
+
     def test_pairing_evidence_preserves_private_member_and_queue_links(self):
         d=cohort();ids,evidence=m.select_provider_ids(d,with_evidence=True)
         self.assertEqual(ids,IDS);self.assertEqual(len(evidence),4);self.assertEqual(evidence[0][0],'guest')
