@@ -227,7 +227,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .payment-method-choice input { width: 17px; height: 17px; margin: 0; accent-color: var(--ink); }
 .payment-method-choice > span { font-size: 15px; font-weight: 750; }
 .payment-method-choice small { margin-top: 3px; display: block; color: var(--muted); font-size: 12px; font-weight: 450; }
-.payment-method-choice:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+html:not([data-input-modality="pointer"]) .payment-method-choice:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
 .payment-method-detail { padding: 0 0 17px 39px; }
 .payment-method-detail .network-list { margin: 0; }
 .supported-momo-networks { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 0; padding: 0; list-style: none; }
