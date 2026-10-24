@@ -26,3 +26,6 @@
 .room-page .event-alert-nudge__row,.room-page .event-alert-nudge > details > summary { padding:0 .75rem; }
 .room-page .event-alert-nudge__message,.room-page .event-alert-nudge .confirmation-notifications { margin-left:.75rem; margin-right:.75rem; }
 .room-page .event-alert-nudge .confirmation-notifications { --ink:#fff0e4; --surface:#30212c; --line:#796271; }
+
+/* A first-host deep link offers setup once, without obscuring the chat. */
+.event-alert-nudge > button[aria-label="Dismiss notification suggestion"] { float:right; min-width:44px; min-height:44px; border:0; background:transparent; color:inherit; cursor:pointer; }

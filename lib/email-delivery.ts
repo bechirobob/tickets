@@ -135,7 +135,7 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
   const due = await env.DB.prepare(`
     SELECT id, kind, recovery_grant_id AS grantId, recipient, payload_json AS payloadJson, attempt_count AS attemptCount
     FROM delivery_events
-    WHERE provider_id IS NULL AND (${scopeSql}) AND ((status='failed' AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (status='queued' AND julianday(updated_at) < julianday('now','-5 minutes')))
+    WHERE provider_id IS NULL AND kind NOT IN ('room_host_post','event_host_pass') AND (${scopeSql}) AND ((status='failed' AND attempt_count < 3 AND next_attempt_at IS NOT NULL AND julianday(next_attempt_at) <= julianday(?)) OR (status='queued' AND julianday(updated_at) < julianday('now','-5 minutes')))
     ORDER BY next_attempt_at LIMIT ?
   `).bind(new Date().toISOString(), limit).all<{ id: string; kind: DeliveryKind; grantId: string | null; recipient: string; payloadJson: string | null; attemptCount: number }>();
   let delivered = 0;

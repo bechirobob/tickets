@@ -5,13 +5,16 @@ export type RoomReturn = {
   sequences: { name: string; seq: number }[];
   alarm: number | null;
 };
-const names = ['room_config', 'messages', 'reactions'];
+const baseNames = ['room_config', 'messages', 'reactions'];
 const quote = (value: string) => '"' + value.replaceAll('"', '""') + '"';
 
 // The target remains frozen throughout the externally visible operation.
 // All row replacement and the sequence high-water mark commit atomically.
 export function restoreFrozenRoom(storage: DurableObjectStorage, transferId: string, snapshot: RoomReturn): void {
   requireTransfer(transferId);
+  const names = snapshot?.tables?.room_host_posts ? [...baseNames, 'room_host_posts'] : baseNames;
+  const hasReceipts=storage.sql.exec<{name:string}>("SELECT name FROM sqlite_master WHERE type='table' AND name='room_host_posts'").toArray().length;
+  if(!snapshot?.tables?.room_host_posts && hasReceipts && storage.sql.exec<{n:number}>('SELECT COUNT(*) AS n FROM room_host_posts').one().n) throw new Error('Legacy Room return cannot discard host receipts.');
   if (!snapshot || !snapshot.tables || Object.keys(snapshot.tables).sort().join(',') !== [...names].sort().join(',') || !Array.isArray(snapshot.sequences)) throw new Error('Invalid Room return.');
   if (snapshot.alarm !== null && (!Number.isSafeInteger(snapshot.alarm) || snapshot.alarm < 0)) throw new Error('Invalid Room alarm.');
   if (snapshot.sequences.length > 1 || snapshot.sequences.some(row => row.name !== 'messages' || !Number.isSafeInteger(row.seq) || row.seq < 0)) throw new Error('Invalid sequence state.');
@@ -28,8 +31,19 @@ export function restoreFrozenRoom(storage: DurableObjectStorage, transferId: str
   storage.transactionSync(() => {
     const state = storage.sql.exec<{ frozen: number; transfer_id: string }>('SELECT frozen,transfer_id FROM _bct_handover_state WHERE id=1').one();
     if (state.frozen !== 1 || state.transfer_id !== transferId) throw new Error('Room return requires its own frozen target.');
+    // Receipt identity is monotonic across a return, including empty snapshots.
+    // Completion may change when the destination has a pending cancellation.
+    if (hasReceipts) {
+      const incoming = snapshot.tables.room_host_posts ?? [];
+      for (const receipt of storage.sql.exec<Record<string, SqlStorageValue>>('SELECT * FROM room_host_posts').toArray()) {
+        const preserved = incoming.find(row => row.host_account_id === receipt.host_account_id);
+        if (!preserved || ['host_account_id', 'message_id', 'sender_attendee_id', 'created_at'].some(key => preserved[key] !== receipt[key])) {
+          throw new Error('Room return cannot discard or replace host receipts.');
+        }
+      }
+    }
     storage.sql.exec('UPDATE _bct_handover_state SET frozen=0 WHERE id=1');
-    for (const name of ['reactions', 'messages', 'room_config']) storage.sql.exec(`DELETE FROM ${quote(name)}`);
+    for (const name of [...names].reverse()) storage.sql.exec(`DELETE FROM ${quote(name)}`);
     for (const name of names) {
       const columns = storage.sql.exec<{ name: string }>(`PRAGMA table_info(${quote(name)})`).toArray().map(row => row.name);
       for (const row of snapshot.tables[name]) storage.sql.exec(`INSERT INTO ${quote(name)} (${columns.map(quote).join(',')}) VALUES (${columns.map(() => '?').join(',')})`, ...columns.map(column => row[column]));

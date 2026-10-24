@@ -720,10 +720,10 @@ export const deliveryEvents = sqliteTable("delivery_events", {
   id: text("id").primaryKey(),
   orderId: text("order_id"),
   recoveryGrantId: text("recovery_grant_id"),
-  kind: text("kind", { enum: ["organizer_signup", "registration_access", "registration_update", "event_announcement", "payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update", "operational_alert"] }).notNull(),
+  kind: text("kind", { enum: ["organizer_signup", "registration_access", "registration_update", "event_announcement", "room_host_post", "payment_confirmation", "ticket_recovery", "ticket_transfer", "waitlist_offer", "payment_recovery", "support_update", "operational_alert"] }).notNull(),
   recipient: text("recipient").notNull(),
   providerId: text("provider_id"),
-  status: text("status", { enum: ["queued", "sent", "delivered", "delayed", "failed", "bounced", "complained", "suppressed"] }).notNull(),
+  status: text("status", { enum: ["queued", "sent", "delivered", "delayed", "failed", "bounced", "complained", "suppressed", "sending", "uncertain"] }).notNull(),
   failureReason: text("failure_reason"),
   attemptCount: integer("attempt_count").notNull().default(0),
   nextAttemptAt: text("next_attempt_at"),
@@ -1336,3 +1336,15 @@ export const organizerPurchasePushDeliveries = sqliteTable('organizer_purchase_p
   uniqueIndex('organizer_purchase_push_device').on(table.orderId, table.subscriptionId),
   index('organizer_purchase_push_pending').on(table.completedAt, table.leaseUntil, table.createdAt),
 ]);
+
+export const roomHostFirstPosts = sqliteTable("room_host_first_posts", {
+  eventSlug:text("event_slug").notNull(), hostAccountId:text("host_account_id").notNull(), messageId:text("message_id").notNull().unique(),
+  senderAttendeeId:text("sender_attendee_id").notNull(), createdAt:text("created_at").notNull(), fanoutAt:text("fanout_at"), cancelledAt:text("cancelled_at"),
+}, t=>[primaryKey({columns:[t.eventSlug,t.hostAccountId]}), index("room_host_first_posts_message_idx").on(t.messageId)]);
+
+export const eventHostPassInvitations = sqliteTable('event_host_pass_invitations', {
+ id:text('id').primaryKey(),eventSlug:text('event_slug').notNull(),hostAccountId:text('host_account_id').notNull(),
+ recipientEmail:text('recipient_email').notNull(),ticketId:text('ticket_id').notNull(),provisionNonce:text('provision_nonce').notNull(),
+ createdBy:text('created_by').notNull(),createdAt:text('created_at').notNull(),reused:integer('reused').notNull(),state:text('state').notNull().default('provisioned'),
+ tokenHash:text('token_hash').unique(),expiresAt:text('expires_at'),usedAt:text('used_at'),claimedSessionId:text('claimed_session_id'),deliveryId:text('delivery_id'),
+},t=>[uniqueIndex('event_host_pass_scope_unique').on(t.eventSlug,t.hostAccountId)]);

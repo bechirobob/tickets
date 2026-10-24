@@ -120,7 +120,27 @@ export function createCustomerEmailHarness(overrides = {}) {
     runInNewContext(compiledModules.get(path), { ...sandbox, module: compiledModule, exports: compiledModule.exports, require: dependency => load(dependency, dirname(path)) }, { filename: path });
     return compiledModule.exports;
   }
-  return { data, db, env, deliveries, calls, grants, verifications, delivery: load('./email-delivery'), registrations: load('./registrations'), helpers: load('./customer-email'), get networkCalls() { return networkCalls; } };
+  return { data, db, env, deliveries, calls, grants, verifications, delivery: load('./email-delivery'), registrations: load('./registrations'), helpers: load('./customer-email'), roomHost: load('./room-host-email'), hostPass: load('./event-host-pass-email'), get networkCalls() { return networkCalls; } };
+}
+
+// Pure first-host content from the exact production renderer. No recipient,
+// grant, database or provider dispatch exists in this synthetic preview.
+export function renderFirstHostEmailPreview() {
+  const fixture = createCustomerEmailHarness();
+  const message = fixture.roomHost.roomHostEmail({ eventTitle: 'Accra After Hours', hostName: 'The After Hours Team',
+    eventSlug: 'accra-after-hours', messageId: 'preview-host-post-001' });
+  assert.equal(fixture.networkCalls, 0);
+  return { name: 'first-host-post', actionLabel: 'Open The Room', kind: 'room_host_post', ...message };
+}
+
+// A deliberately invalid SAMPLE token keeps this exact production invitation
+// preview nonworking. No pass, credential, recipient or outbox row is created.
+export function renderHostPassEmailPreview() {
+  const fixture = createCustomerEmailHarness();
+  const message = fixture.hostPass.eventHostPassEmail({ eventTitle: 'PURO EXCESO', hostName: 'Kofi Bills',
+    claimUrl: 'https://tickets.becoreops.com/my-nights/access?kind=host#token=SAMPLE-NOT-ACTIVE' });
+  assert.equal(fixture.networkCalls, 0);
+  return { name: 'host-pass-invitation', actionLabel: 'Accept pass & enter the Room', kind: 'host_pass_invitation', ...message };
 }
 
 export async function renderCustomerEmailPreviews(overrides = {}) {
@@ -152,13 +172,13 @@ export async function renderCustomerEmailPreviews(overrides = {}) {
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const output = resolve(process.argv[2] ?? resolve(root, 'outputs/customer-emails'));
-  const previews = await renderCustomerEmailPreviews();
+  const previews = [...await renderCustomerEmailPreviews(), renderFirstHostEmailPreview(), renderHostPassEmailPreview()];
   await mkdir(output, { recursive: true });
   for (const { name, html, text } of previews) {
     await writeFile(resolve(output, `${name}.html`), html);
     await writeFile(resolve(output, `${name}.txt`), text);
   }
   await writeFile(resolve(output, 'manifest.json'), JSON.stringify({ synthetic: true, outboundEmail: false, source: 'Production delivery payloads captured before provider dispatch; public event identity, fictional customer and transaction scenarios', previews: previews.map(({ name, subject, kind, actionLabel, idempotencyKey }) => ({ name, subject, kind, actionLabel, idempotencyKey })) }, null, 2));
-  await writeFile(resolve(output, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer email previews</title><body style="font:16px system-ui;padding:24px"><h1>Customer email previews</h1><p>Exact production HTML with the public On The Guest List identity and flyer. Customer, payment and registration scenarios are fictional, not current event availability or prices. No emails sent; action links use inert preview addresses.</p><ul>${previews.map(({ name }) => `<li><a href="${name}.html">${name}</a> · <a href="${name}.txt">plain text</a></li>`).join('')}</ul></body></html>`);
+  await writeFile(resolve(output, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer email previews</title><body style="font:16px system-ui;padding:24px"><h1>Customer email previews</h1><p>Exact production HTML with the public On The Guest List identity and flyer. Customer, payment and registration scenarios are fictional, not current event availability or prices. No emails sent. Existing receipt actions use inert preview addresses; the first-host example retains its exact production Room URL with fictional event and message identifiers. The Host invitation uses public PURO/Kofi names and an invalid SAMPLE token, not a real access grant. Do not submit any action.</p><ul>${previews.map(({ name }) => `<li><a href="${name}.html">${name}</a> · <a href="${name}.txt">plain text</a></li>`).join('')}</ul></body></html>`);
   console.log(`Saved ${previews.length} synthetic customer email previews to ${output}. No email was sent.`);
 }

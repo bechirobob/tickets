@@ -32,6 +32,12 @@ export default function RoomNotifications({ slug, onNotice }: { slug: string; on
   const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('notifications') !== 'settings') return;
+    const timer=window.setTimeout(() => setOpen(true),0);
+    return () => window.clearTimeout(timer);
+  }, [slug]);
+
+  useEffect(() => {
     let cancelled = false;
     const preference = requestJson<{ roomMessages?: boolean; hostUpdates?: boolean; mutedUntil?: string | null }>(`/api/customer/notifications/preferences/${encodeURIComponent(slug)}`);
     const device = supported ? readyRegistration().then(async registration => {

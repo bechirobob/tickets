@@ -1167,7 +1167,7 @@ test("Host announcements share the conversation bubbles without changing authori
   assert.match(room, /const name = announcement \? "Host"/u);
   assert.match(room, /className="room-host-badge" role="img" aria-label="Event host"/u);
   assert.match(room, /className="room-vip-badge" role="img" aria-label="VIP ticket holder"/u);
-  assert.match(room, /data-announcement=\{announcement \? message\.id : undefined\}/u);
+  assert.match(room, /data-announcement=\{host \? message\.id : undefined\}/u);
   assert.match(room, /announcement \? <div className="room-bubble">/u);
   assert.match(room, /if \(target instanceof HTMLDetailsElement\) target\.open = true/u);
   assert.doesNotMatch(features, /\.room-host-update/u);
