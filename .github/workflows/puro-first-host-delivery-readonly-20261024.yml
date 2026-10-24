@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '6305b87274b0f0f6c4664c3d2bdeca752a1b236b' && github.run_attempt == 1
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '7727e460f85dd1b70df6fa5bcc1e15c2141152aa' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
           test "$GITHUB_RUN_ATTEMPT" = 1
-          test "$(git rev-parse HEAD^1)" = '6305b87274b0f0f6c4664c3d2bdeca752a1b236b'
+          test "$(git rev-parse HEAD^1)" = '7727e460f85dd1b70df6fa5bcc1e15c2141152aa'
           test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/puro-first-host-delivery-readonly-20261024.yml'
       - name: Connect existing Tickets identity
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
@@ -70,8 +70,34 @@ jobs:
                 WHERE n.event_slug=? AND n.kind='host_first_post' AND n.source_id=? AND NOT EXISTS
                 (SELECT 1 FROM delivery_events d WHERE d.kind='room_host_post' AND json_extract(d.payload_json,'$.messageId')=n.source_id AND json_extract(d.payload_json,'$.attendeeId')=n.attendee_id)
                 GROUP BY 1,2,3,4,5""",args)
+              booking=rows(db,"""WITH missing AS (
+                SELECT n.attendee_id,n.event_slug,p.normalized_email FROM attendee_notifications n
+                JOIN attendee_profiles p ON p.id=n.attendee_id AND p.status='active'
+                WHERE n.event_slug=? AND n.kind='host_first_post' AND n.source_id=?
+                AND NOT EXISTS(SELECT 1 FROM delivery_events d WHERE d.kind='room_host_post'
+                  AND json_extract(d.payload_json,'$.messageId')=n.source_id AND json_extract(d.payload_json,'$.attendeeId')=n.attendee_id)
+              ), contacts AS (
+                SELECT m.attendee_id,m.event_slug,m.normalized_email,MAX(r.normalized_email) AS booking_email,MAX(r.id) AS registration_id,COUNT(DISTINCT r.id) AS booking_count
+                FROM missing m LEFT JOIN ticket_assignments a ON a.attendee_id=m.attendee_id AND a.status='active'
+                LEFT JOIN tickets t ON t.id=a.ticket_id AND t.event_slug=m.event_slug AND t.status IN ('issued','checked_in')
+                LEFT JOIN orders o ON o.id=t.order_id AND o.status='paid' AND o.payment_provider='rsvp'
+                LEFT JOIN event_registrations r ON r.order_id=o.id AND r.event_slug=m.event_slug AND r.attendee_id=m.attendee_id
+                  AND r.kind='rsvp' AND r.status='confirmed' AND (r.device_claimed_at IS NOT NULL OR r.verified_at IS NOT NULL)
+                  AND r.normalized_email=o.customer_email
+                GROUP BY m.attendee_id,m.event_slug,m.normalized_email
+              ) SELECT booking_count=1 AS linkedConfirmedRsvp,
+                booking_email=normalized_email AS matchesProfileAddress,
+                EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.attendee_id=c.attendee_id AND s.revoked_at IS NULL AND s.host_updates=1) AS currentPushSubscription,
+                EXISTS(SELECT 1 FROM delivery_events d WHERE d.recipient=c.booking_email AND d.status IN ('bounced','complained')) AS priorBadMailbox,
+                EXISTS(SELECT 1 FROM marketing_contacts m WHERE m.email=c.booking_email AND m.unsubscribed=1) AS globalEmailOptOut,
+                EXISTS(SELECT 1 FROM event_audience_contacts e WHERE e.event_slug=c.event_slug AND e.email=c.booking_email AND e.unsubscribed_at IS NOT NULL AND e.unsubscribed_at>=COALESCE(e.consented_at,'')) AS eventEmailOptOut,
+                EXISTS(SELECT 1 FROM delivery_events d WHERE d.kind='registration_update' AND d.recipient=c.booking_email
+                  AND json_extract(d.payload_json,'$.idempotencyKey') LIKE 'registration-update/'||c.registration_id||'/%' AND d.status='delivered') AS priorRsvpEmailDelivered,
+                EXISTS(SELECT 1 FROM delivery_events d WHERE d.kind='registration_update' AND d.recipient=c.booking_email
+                  AND json_extract(d.payload_json,'$.idempotencyKey') LIKE 'registration-update/'||c.registration_id||'/%' AND d.status IN ('sent','delivered')) AS priorRsvpEmailAccepted,
+                COUNT(DISTINCT attendee_id) AS count FROM contacts c GROUP BY 1,2,3,4,5,6,7,8""",args)
               health=rows(db,"SELECT job_key,started_at,finished_at,last_success_at,last_failure_at,failure_count FROM background_job_health WHERE job_key IN ('scheduled:minute','scheduled:five-minute','delivery-loop')")
-              return {"receiptCount":1,"createdAt":receipt['created_at'],"fanoutAt":receipt['fanout_at'],"cancelled":receipt['cancelled_at'] is not None,"inboxRecipients":inbox,"emailGroups":groups,"emailRecipientsWithoutCurrentPushSubscription":no_push,"emailFailureGroups":reasons,"inboxRecipientsWithoutEmailJob":missing,"currentEmailExclusionGroups":exclusions,"exclusionsAreCurrentSnapshot":True,"pushJobGroups":push,"pushCompleteDoesNotProveDeviceDelivery":True,"currentSubscriptionDoesNotProvePushDelivery":True,"backgroundHealth":health}
+              return {"receiptCount":1,"createdAt":receipt['created_at'],"fanoutAt":receipt['fanout_at'],"cancelled":receipt['cancelled_at'] is not None,"inboxRecipients":inbox,"emailGroups":groups,"emailRecipientsWithoutCurrentPushSubscription":no_push,"emailFailureGroups":reasons,"inboxRecipientsWithoutEmailJob":missing,"currentEmailExclusionGroups":exclusions,"currentBookingContactGroups":booking,"exclusionsAreCurrentSnapshot":True,"pushJobGroups":push,"pushCompleteDoesNotProveDeviceDelivery":True,"currentSubscriptionDoesNotProvePushDelivery":True,"backgroundHealth":health}
           def main():
               lock=os.open('/run/lock/becore-tickets-deploy.lock',os.O_RDONLY|os.O_NOFOLLOW)
               fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
