@@ -1782,8 +1782,8 @@ def reviewed_integrated_experience_application_blobs(expected, source):
 # Exact camera framing and live-look release; prior admissions remain unchanged.
 CAMERA_LOOKS_RELEASE_BASELINE = 'ecdad9c8fedf90b234ee5e9a315b54ed12bad07f'
 CAMERA_LOOKS_RELEASE_BASE_TREE = '0c68f22bde7de5f350c1e1d3400a6be205adb1a2'
-CAMERA_LOOKS_APP_SNAPSHOT = '1d5b5d0e3f52a231eba8240b77e4f239146f552f'
-CAMERA_LOOKS_APP_TREE = '7ca9d02831e4e0d876a5870bbb9792d749f2b36d'
+CAMERA_LOOKS_APP_SNAPSHOT = 'bb09336e15778dc86cc18722a3e7f8406069f15c'
+CAMERA_LOOKS_APP_TREE = '06bd7601ff467a54f763d5ba1bc265f176b4fef9'
 CAMERA_LOOKS_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
 CAMERA_LOOKS_APPLICATION_INPUTS = {'tests/browser-audit-harness.test.mjs': 'bc1e79e0916c2bfc2fd57a98e92aa12c55879304',
  'app/room-features.css': '3dcef6b137313e40b0aedbd4237065f21ff92ec1',
@@ -1811,7 +1811,7 @@ CAMERA_LOOKS_APPLICATION_BLOBS = {'tests/browser-audit-harness.test.mjs': 'c4c74
  'tests/flash-photo-filters.test.mjs': 'ae0c09955f51142a0135d806be9a898f160fd1c8',
  'app/mobile-navigation.tsx': '2a3aed82ae75740af87f3fd71a266c7a8dfc1b17',
  'tests/e2e/menu-option-a.spec.ts': '4840df3b1776af5e96e31521e1845c765e6d5ffd',
- 'tests/e2e/mobile-app-behavior.spec.ts': 'bc523e14fc835fd2a2a590a219f53605644e2006',
+ 'tests/e2e/mobile-app-behavior.spec.ts': '5f0e9582ca6468847f2fff9a88e23c33dc2a2953',
  'tests/header-origin-menu.test.mjs': '60544cff98c7bda6f636b357916ed2059a145b90'}
 CAMERA_LOOKS_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
  'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',

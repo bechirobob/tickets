@@ -878,7 +878,7 @@ def integrated_experience_source_family(root):
 
 
 # Exact camera looks C/P test family; historical families remain independent.
-CAMERA_LOOKS_OPERATOR_BLOB = 'd8da88a388a56cb33b9bc12c6ef90c43a3d1d56f'
+CAMERA_LOOKS_OPERATOR_BLOB = '04fbca9db63458859cf3b49bb4504e916cbda58e'
 CAMERA_LOOKS_STAGED_BASE = dict(INTEGRATED_EXPERIENCE_STAGED_BASE)
 CAMERA_LOOKS_TEST_FILE = Path(__file__).resolve()
 
