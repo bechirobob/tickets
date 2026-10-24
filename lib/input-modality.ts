@@ -10,11 +10,14 @@ export function installInputModality(document: Document) {
   };
   const reset = () => { delete root.dataset.inputModality; };
   const visibility = () => { if (document.hidden) reset(); };
+  // Browser chrome and another window can receive keys the document never sees.
+  document.defaultView?.addEventListener("blur", reset);
   document.addEventListener("pointerdown", pointer, capture);
   document.addEventListener("keydown", keyboard, capture);
   document.addEventListener("visibilitychange", visibility);
   document.addEventListener("click", assistiveClick, capture);
   return () => {
+    document.defaultView?.removeEventListener("blur", reset);
     document.removeEventListener("pointerdown", pointer, capture);
     document.removeEventListener("keydown", keyboard, capture);
     document.removeEventListener("visibilitychange", visibility);
