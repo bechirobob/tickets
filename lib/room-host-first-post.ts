@@ -35,11 +35,26 @@ export const firstHostInboxVisibility = `EXISTS (SELECT 1 ${hostAudience
   AND a.attendee_id=notification.attendee_id AND ${firstHostPreference}
   AND EXISTS (SELECT 1 FROM room_host_first_posts receipt WHERE receipt.message_id=notification.source_id AND receipt.cancelled_at IS NULL))`;
 
-const emailAllowed = `p.email_verified_at IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM marketing_contacts mc WHERE mc.email=p.normalized_email AND mc.unsubscribed=1)
-  AND NOT EXISTS (SELECT 1 FROM event_audience_contacts contact WHERE contact.event_slug=t.event_slug AND contact.email=p.normalized_email
+// Booking contact is notification routing, not mailbox ownership or login proof.
+// Only the confirmed RSVP attached to this attendee's current pass may supply an
+// unverified address. Transferred passes cannot reuse the original buyer's RSVP.
+const emailRecipient = `COALESCE((SELECT NULLIF(TRIM(r.normalized_email),'') FROM event_registrations r
+  WHERE r.order_id=o.id AND r.event_slug=t.event_slug AND r.attendee_id=a.attendee_id
+    AND r.kind='rsvp' AND r.status='confirmed' AND o.payment_provider='rsvp'
+    AND (r.device_claimed_at IS NOT NULL OR r.verified_at IS NOT NULL)
+    AND r.normalized_email=o.customer_email LIMIT 1),
+  CASE WHEN p.email_verified_at IS NOT NULL THEN p.normalized_email END)`;
+
+// A saved, non-revoked host-update push subscription chooses push over Room
+// email. It is not proof that a particular notification reached the device.
+// Reused in fanout, delivery eligibility and the atomic dispatch claim.
+const emailAllowed = `${emailRecipient} IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM push_subscriptions push WHERE push.attendee_id=a.attendee_id
+    AND push.revoked_at IS NULL AND push.host_updates=1)
+  AND NOT EXISTS (SELECT 1 FROM marketing_contacts mc WHERE mc.email=${emailRecipient} AND mc.unsubscribed=1)
+  AND NOT EXISTS (SELECT 1 FROM event_audience_contacts contact WHERE contact.event_slug=t.event_slug AND contact.email=${emailRecipient}
     AND contact.unsubscribed_at IS NOT NULL AND contact.unsubscribed_at>=COALESCE(contact.consented_at,''))
-  AND NOT EXISTS (SELECT 1 FROM delivery_events prior WHERE prior.recipient=p.normalized_email AND prior.status IN ('bounced','complained'))`;
+  AND NOT EXISTS (SELECT 1 FROM delivery_events prior WHERE prior.recipient=${emailRecipient} AND prior.status IN ('bounced','complained'))`;
 
 // D1 batch commits receipt, inbox, push jobs and email jobs together. A retry
 // cannot add late passholders, recreate pruned jobs, or send a second campaign.
@@ -72,7 +87,7 @@ export async function queueFirstHostPost(env: Cloudflare.Env, post: FirstHostPos
       SELECT DISTINCT ?||'/'||a.attendee_id,a.attendee_id,?,?,?,?,?,? ${audience}`)
       .bind(post.messageId,post.eventSlug,post.senderAttendeeId,JSON.stringify(payload),now,now,now,...audienceArgs),
     env.DB.prepare(`INSERT OR IGNORE INTO delivery_events(id,kind,recipient,status,attempt_count,payload_json,created_at,updated_at)
-      SELECT DISTINCT 'room-first-email/'||?||'/'||a.attendee_id,'room_host_post',p.normalized_email,'queued',0,
+      SELECT DISTINCT 'room-first-email/'||?||'/'||a.attendee_id,'room_host_post',${emailRecipient},'queued',0,
         json_set(?,'$.attendeeId',a.attendee_id,'$.idempotencyKey','room-first-email/'||?||'/'||a.attendee_id),?,?
         ${audience} AND ${emailAllowed}`)
       .bind(post.messageId,mailPayload,post.messageId,now,now,...audienceArgs),
@@ -100,7 +115,7 @@ export async function deliverFirstHostEmail(env:Cloudflare.Env,id:string):Promis
   const source=await env.THE_ROOM.getByName(payload.eventSlug).getMessage(payload.messageId);
   const allowed=host?.accountId===payload.hostAccountId && source && !source.deletedAt
     && Date.now()-Date.parse(item.createdAt)<86400000 && await env.DB.prepare(`SELECT 1 ${hostAudience}
-      AND a.attendee_id=? AND p.normalized_email=? AND ${firstHostPreference} AND ${emailAllowed} LIMIT 1`)
+      AND a.attendee_id=? AND ${emailRecipient}=? AND ${firstHostPreference} AND ${emailAllowed} LIMIT 1`)
       .bind(payload.eventSlug,payload.senderAttendeeId,payload.senderAttendeeId,payload.attendeeId,item.recipient,now).first();
   if(!allowed){await env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,updated_at=? WHERE id=? AND status='queued' AND attempt_count=0").bind(now,id).run();return;}
   // No lease takeover: a process crash or timeout after this point is uncertain,
@@ -108,7 +123,7 @@ export async function deliverFirstHostEmail(env:Cloudflare.Env,id:string):Promis
   const claimed=await env.DB.prepare(`UPDATE delivery_events SET status='sending',attempt_count=1,next_attempt_at=NULL,updated_at=?
     WHERE id=? AND kind='room_host_post' AND status='queued' AND attempt_count=0
       AND EXISTS (SELECT 1 FROM room_host_first_posts receipt WHERE receipt.message_id=json_extract(delivery_events.payload_json,'$.messageId') AND receipt.cancelled_at IS NULL)
-      AND EXISTS (SELECT 1 ${hostAudience} AND a.attendee_id=? AND p.normalized_email=? AND ${firstHostPreference} AND ${emailAllowed})
+      AND EXISTS (SELECT 1 ${hostAudience} AND a.attendee_id=? AND ${emailRecipient}=? AND ${firstHostPreference} AND ${emailAllowed})
       AND EXISTS (SELECT 1 FROM staff_accounts host JOIN staff_event_assignments assigned ON assigned.account_id=host.id
         JOIN attendee_profiles sender ON sender.normalized_email=host.normalized_email AND sender.status='active' AND sender.email_verified_at IS NOT NULL
         WHERE host.id=? AND sender.id=? AND assigned.event_slug=? AND host.status='active' AND host.role='organizer'
@@ -137,4 +152,34 @@ export async function retryFirstHostEmails(env:Cloudflare.Env):Promise<void> {
     .bind(new Date(Date.now()-86400000).toISOString()).run();
   const due=await env.DB.prepare("SELECT id FROM delivery_events WHERE kind='room_host_post' AND status='queued' AND attempt_count=0 ORDER BY created_at LIMIT 50").all<{id:string}>();
   if(env.EMAIL_DELIVERY_QUEUE && due.results.length)await env.EMAIL_DELIVERY_QUEUE.sendBatch(due.results.map(row=>({body:{deliveryId:`host-first-email:${row.id}`}})));
+}
+
+// Private, read-only owner diagnostic for the original PURO suppressions and one unresolved recovery attempt.
+// Call only after the existing owner/MFA and configured host identity checks.
+export async function firstHostDeliveryIssues(env:Cloudflare.Env) {
+  if(env.ROOM_HOST_FIRST_POST_ENABLED!=='1' || env.ROOM_HOST_FIRST_POST_EVENT_SLUG!=='puro-exceso-20261024' || !env.ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID)throw new Error('Unavailable');
+  const receipt=await env.DB.prepare(`SELECT message_id AS messageId,sender_attendee_id AS senderId FROM room_host_first_posts
+    WHERE event_slug=? AND host_account_id=? AND cancelled_at IS NULL`).bind(env.ROOM_HOST_FIRST_POST_EVENT_SLUG,env.ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID).first<{messageId:string;senderId:string}>();
+  if(!receipt)return [];
+  const rows=await env.DB.prepare(`WITH contacts AS (SELECT DISTINCT ${emailRecipient} AS email ${hostAudience}
+    AND EXISTS(SELECT 1 FROM attendee_notifications n WHERE n.attendee_id=a.attendee_id AND n.event_slug=t.event_slug AND n.kind='host_first_post' AND n.source_id=?)
+    AND NOT EXISTS(SELECT 1 FROM delivery_events sent WHERE sent.kind='room_host_post' AND json_extract(sent.payload_json,'$.messageId')=? AND json_extract(sent.payload_json,'$.attendeeId')=a.attendee_id)),
+    failures AS (SELECT d.recipient AS address,d.status,SUBSTR(d.failure_reason,1,500) AS reason,
+      COALESCE(d.provider_event_at,d.updated_at) AS timestamp,
+      ROW_NUMBER() OVER(PARTITION BY d.recipient ORDER BY COALESCE(d.provider_event_at,d.updated_at) DESC,d.id DESC) AS position
+      FROM delivery_events d WHERE d.recipient IN(SELECT email FROM contacts) AND d.status IN('bounced','complained'))
+    SELECT address,status,reason,timestamp FROM failures WHERE position=1 ORDER BY address LIMIT 5`)
+    .bind(env.ROOM_HOST_FIRST_POST_EVENT_SLUG,receipt.senderId,receipt.senderId,receipt.messageId,receipt.messageId)
+    .all<{address:string;status:string;reason:string|null;timestamp:string}>();
+  if(rows.results.length>4)throw new Error('Suppressed cohort changed');
+  const uncertain=await env.DB.prepare(`SELECT d.recipient AS address,d.status,SUBSTR(d.failure_reason,1,500) AS reason,
+      COALESCE(d.provider_event_at,d.updated_at) AS timestamp FROM delivery_events d
+    WHERE d.kind='room_host_post' AND d.status='uncertain' AND json_extract(d.payload_json,'$.eventSlug')=?
+      AND json_extract(d.payload_json,'$.messageId')=?
+      AND EXISTS(SELECT 1 ${hostAudience} AND a.attendee_id=json_extract(d.payload_json,'$.attendeeId') AND ${emailRecipient}=d.recipient
+        AND EXISTS(SELECT 1 FROM attendee_notifications n WHERE n.attendee_id=a.attendee_id AND n.event_slug=t.event_slug AND n.kind='host_first_post' AND n.source_id=?))
+    ORDER BY d.created_at LIMIT 2`).bind(env.ROOM_HOST_FIRST_POST_EVENT_SLUG,receipt.messageId,env.ROOM_HOST_FIRST_POST_EVENT_SLUG,receipt.senderId,receipt.senderId,receipt.messageId)
+    .all<{address:string;status:string;reason:string|null;timestamp:string}>();
+  if(uncertain.results.length>1)throw new Error('Uncertain cohort changed');
+  return [...rows.results.map(row=>({...row,category:'suppressed' as const})),...uncertain.results.map(row=>({...row,category:'uncertain' as const}))];
 }
