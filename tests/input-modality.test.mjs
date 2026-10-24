@@ -10,6 +10,7 @@ function fixture() {
   const document = new EventTarget();
   document.documentElement = { dataset: {} };
   document.hidden = false;
+  document.defaultView = new EventTarget();
   const compiledModule = { exports: {} };
   runInNewContext(compiled, { module: compiledModule, exports: compiledModule.exports });
   const cleanup = compiledModule.exports.installInputModality(document);
@@ -48,4 +49,13 @@ test("shared root installs policy without removing editing or keyboard focus", a
   assert.doesNotMatch(source, /\.blur\(|\.focus\(|preventDefault/);
   const room = await readFile(new URL("../app/room-features.css", import.meta.url), "utf8");
   assert.doesNotMatch(room, /\.chat-message-anchor\.is-active[^}]*outline:/);
+});
+
+test("leaving page focus forgets pointer mode before keyboard return from browser chrome", () => {
+  const f = fixture();
+  f.document.dispatchEvent(new Event("pointerdown"));
+  f.key("l", { ctrlKey: true }); assert.equal(f.mode(), "pointer");
+  f.document.defaultView.dispatchEvent(new Event("blur"));
+  assert.equal(f.mode(), undefined);
+  f.cleanup();
 });
