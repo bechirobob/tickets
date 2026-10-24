@@ -2,14 +2,13 @@ import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { buildSync, transformSync } from "esbuild";
 import { fileURLToPath } from "node:url";
+import postcss from "postcss";
+import tailwindcss from "@tailwindcss/postcss";
 
 const policy = transformSync(await readFile(new URL("../../lib/input-modality.ts", import.meta.url), "utf8"), { loader: "ts", format: "iife", globalName: "inputModality" }).code;
 async function readCss(url: URL): Promise<string> {
-  let text = await readFile(url, "utf8");
-  for (const match of [...text.matchAll(/@import "([^"]+)";/g)]) {
-    text = text.replace(match[0], await readCss(new URL(match[1], url)));
-  }
-  return text;
+  const source = await readFile(url, "utf8");
+  return (await postcss([tailwindcss()]).process(source, { from: fileURLToPath(url) })).css;
 }
 const css = (await Promise.all(["../../styles/customer.css", "../../app/workspace.css", "../../app/organizer/organizer.css"].map(path => readCss(new URL(path, import.meta.url))))).join("\n");
 const shared = await readFile(new URL("../../styles/input-modality.css", import.meta.url), "utf8");
