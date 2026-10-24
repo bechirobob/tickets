@@ -2096,6 +2096,253 @@ ROOM_MAIL_FOCUS_PREREQUISITE_BLOBS = {'.github/workflows/puro-first-host-deliver
  'ops/vps/recover-puro-first-host-20261024.py': 'e4d2fecee02ad2b24304beec755f1b161ad6b4b0',
  'ops/vps/test_first_host_recovery.py': '66c7234648a239e66df42dfa9093d0b5eab97c13'}
 
+
+
+# Exact Room-only VPS mail application update; operational service changes remain separate prerequisites.
+ROOM_MAIL_VPS_RELEASE_BASELINE = '885bd1b2d97ff687fe884c86314ae9b368d4abff'
+ROOM_MAIL_VPS_RELEASE_BASE_TREE = '187c9e53e052cc70062065ed7388f7786a17b9ca'
+ROOM_MAIL_VPS_PREREQUISITE_SNAPSHOT = 'ddf24949e2a42c2f00ca0502a75cdc52a4352324'
+ROOM_MAIL_VPS_PREREQUISITE_TREE = 'bbe9db0217d2266d169db9fff8864fc52fb2c886'
+ROOM_MAIL_VPS_APP_ORIGIN = 'c88e7ca47aa3e27bf5b22babaf6b76623780cb4a'
+ROOM_MAIL_VPS_APP_ORIGIN_TREE = '3ad03c1afb6b3f2f102b3c70c0879d5915213d8f'
+ROOM_MAIL_VPS_APP_ORIGIN_PREREQUISITES = {'.github/workflows/tickets-bounce-codes-readonly-20261024.yml',
+ '.github/workflows/tickets-mail-service-readonly-20261024.yml',
+ 'docs/operations/historical-bounce-code-inspection.md',
+ 'docs/operations/mail-service-readonly-inspection.md',
+ 'ops/vps/inspect-bounce-codes-readonly.py',
+ 'ops/vps/inspect-mail-service-readonly.py',
+ 'ops/vps/test_bounce_codes_readonly.py',
+ 'ops/vps/test_mail_service_readonly.py'}
+ROOM_MAIL_VPS_APP_SNAPSHOT = '8a027e8b48ccf8a1b7bd71e63af1c7e06d041eee'
+ROOM_MAIL_VPS_APP_TREE = 'dc123cc7f57a242f6ebdd5abe29130ada0ac5073'
+ROOM_MAIL_VPS_CONTROL_FILES = {'ops/vps/test_code_release.py', 'ops/vps/code-release.py'}
+ROOM_MAIL_VPS_APPLICATION_INPUTS = {'lib/room-host-first-post.ts': '10916eba03651ad5eabfef5b02169d8a3a9b5759',
+ 'lib/transactional-email.ts': '5e8a293e880418fd6d9f7a94e2d96b9b5744836b',
+ 'tests/e2e/registration.spec.ts': '74a408047f4b6c16abe036f14e1758b87140bbe8',
+ 'tests/room-host-first-post.test.ts': 'a0be38ae8a2b2a6fbb38e37bb0cd6b3b68e1362d',
+ 'tests/transactional-email.test.ts': '79369a882ef13d0964c058a01839781e5a81c4e8'}
+ROOM_MAIL_VPS_APPLICATION_BLOBS = {'lib/room-host-first-post.ts': '624cbddd142f398e944ef3124c985a3aab39254c',
+ 'lib/transactional-email.ts': 'b91fda83ce45b4fe69fccb0e85e55efa9e453e9c',
+ 'tests/e2e/registration.spec.ts': 'b86043ad9f0d6f6199ff0ea434376f1853c8525f',
+ 'tests/room-host-first-post.test.ts': '62ceea7d6eb94f9a115d50d557d844a2a6110ffa',
+ 'tests/transactional-email.test.ts': '9cbf4eff2f0c903bcc46ba4e132bbae1a3f7ba7a'}
+ROOM_MAIL_VPS_DEPENDENCY_BLOBS = {'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'package-lock.json': 'b2d43a53b9ad10388b35c0464642959fd94fadc1',
+ 'package.json': '8de5a0a9faaa0c93e382844d85b1fc2f7ca7d24a',
+ 'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+ROOM_MAIL_VPS_PREREQUISITE_INPUTS = {'.github/workflows/tickets-bounce-codes-readonly-20261024.yml': None,
+ '.github/workflows/tickets-mail-room-upgrade.yml': None,
+ '.github/workflows/tickets-mail-service-readonly-20261024.yml': None,
+ 'docs/operations/historical-bounce-code-inspection.md': None,
+ 'docs/operations/mail-room-upgrade.md': None,
+ 'docs/operations/mail-service-readonly-inspection.md': None,
+ 'ops/email/mailer.py': None,
+ 'ops/email/test_mailer.py': None,
+ 'ops/email/test_numeric_codes.py': None,
+ 'ops/vps/inspect-bounce-codes-readonly.py': None,
+ 'ops/vps/inspect-mail-service-readonly.py': None,
+ 'ops/vps/test_bounce_codes_readonly.py': None,
+ 'ops/vps/test_mail_service_readonly.py': None,
+ 'ops/vps/test_mail_upgrade.py': None,
+ 'ops/vps/upgrade-room-mail.py': None}
+ROOM_MAIL_VPS_PREREQUISITE_BLOBS = {'.github/workflows/tickets-bounce-codes-readonly-20261024.yml': 'f62e3b42883ae1198a64f79c553aa4cce85b2804',
+ '.github/workflows/tickets-mail-room-upgrade.yml': 'f95c0c613f628ea6d76eab2c18bb2aa5ac2ab2ec',
+ '.github/workflows/tickets-mail-service-readonly-20261024.yml': 'b8112da0ae8b1908fc72ed60c49ef637184edcad',
+ 'docs/operations/historical-bounce-code-inspection.md': '7edb04d82fe0ae6e9e6f2b6ee1615699f4cbbe58',
+ 'docs/operations/mail-room-upgrade.md': 'f22d5f61e627e7b089716363bc3474a650f83b68',
+ 'docs/operations/mail-service-readonly-inspection.md': 'ec1b22e7db7589507b1a77de54d80eab6743af07',
+ 'ops/email/mailer.py': 'fc99c522457e487837e276d5acdd31b2cce2fcd0',
+ 'ops/email/test_mailer.py': 'c42c260643788fcb701b22f5242e133146205e76',
+ 'ops/email/test_numeric_codes.py': 'c75dc6014faa93d20ff53c17c7998f19e7552eb1',
+ 'ops/vps/inspect-bounce-codes-readonly.py': '6e344e7047c9897047c9dffda27e0f699d25e893',
+ 'ops/vps/inspect-mail-service-readonly.py': '819baa97ef82c687c52ed288daf49db6486f0a21',
+ 'ops/vps/test_bounce_codes_readonly.py': '6d105f85df2362711ab5b128592d3d3a18342d02',
+ 'ops/vps/test_mail_service_readonly.py': 'f02a6d1e30d0dfe464af9d3d4ade87726e67eb94',
+ 'ops/vps/test_mail_upgrade.py': '56067f377765b39d5ec7b6029e42fc9ec3bd146e',
+ 'ops/vps/upgrade-room-mail.py': '0f8b77d5bf2ed3df86a17475923cd1ea5a0d1358'}
+ROOM_MAIL_VPS_MAIL_REVISION = 'ddf24949e2a42c2f00ca0502a75cdc52a4352324'
+ROOM_MAIL_VPS_MAIL_SOURCE_SHA256 = '37ed2a28acda640f73af4e2db90b5cb9f41b434a016a5b85c978ae579d413fc3'
+
+ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS = {'.github/workflows/tickets-release-operator-checks.yml': '33a7e8cc3e38dc6f58f10113dd12f1c7c3042ce1', '.github/workflows/tickets-code-release.yml': '9326b937cfb42f3056c5187e498563c63720c392'}
+ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS = {'.github/workflows/tickets-release-operator-checks.yml': '099d2c6b7745296955f7b2c4e8fce3bf56507351', '.github/workflows/tickets-code-release.yml': '8e516ab2b92cf9c9fdb59cf3ef802f23fc2b5879'}
+
+def load_room_mail_vps_inspector():
+    """Load only the exact reviewed read-only helper, never an import cache."""
+    name = "ops/vps/inspect-mail-service-readonly.py"
+    path = Path(__file__).with_name("inspect-mail-service-readonly.py")
+    try:
+        info = path.lstat()
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+                and stat.S_IMODE(info.st_mode) == 0o644 and info.st_size <= 262144
+                and not any(parent.is_symlink() for parent in (path, *path.parents)),
+                "Room VPS mail inspection helper is not the exact trusted regular file.")
+        raw = path.read_bytes()
+        blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        require(blob == ROOM_MAIL_VPS_PREREQUISITE_BLOBS[name],
+                "Room VPS mail inspection helper differs from its reviewed source.")
+        module = types.ModuleType("room_mail_vps_metadata")
+        module.__file__ = str(path)
+        exec(compile(raw, str(path), "exec", dont_inherit=True), module.__dict__)
+        return module
+    except Exception:
+        raise ReleaseError("Room VPS mail inspection helper could not be verified.") from None
+
+
+def verify_room_mail_vps_service():
+    """Read-only prerequisite under the shared deployment lock; never sends or upgrades."""
+    try:
+        metadata = load_room_mail_vps_inspector()
+        before = metadata.identity()
+        revision = metadata.marker()
+        expected = {"service": "becore-tickets-mail", "revision": ROOM_MAIL_VPS_MAIL_REVISION,
+                    "sendingEnabled": True}
+        require(revision == ROOM_MAIL_VPS_MAIL_REVISION and metadata.health() == expected,
+                "Room VPS mail prerequisite is not the exact healthy sending-enabled release.")
+        evidence = metadata.source_evidence(metadata.command(
+            ["docker", "exec", metadata.CONTAINER, "python3", "-B", "-c", metadata.SOURCE_READ]))
+        require(evidence["source_sha256"] == ROOM_MAIL_VPS_MAIL_SOURCE_SHA256
+                and evidence["room_host_post_supported"] is True
+                and evidence["event_host_pass_supported"] is False
+                and evidence["unknown_kind_count"] == 0,
+                "Room VPS mail source or Room-only scope changed.")
+        require(metadata.health() == expected and metadata.marker() == revision
+                and metadata.identity() == before,
+                "Room VPS mail prerequisite changed during inspection.")
+    except Exception:
+        raise ReleaseError("Exact Room VPS mail prerequisite is unavailable; no application activation is permitted.") from None
+
+
+def reviewed_room_mail_vps_application_blobs(expected, source):
+    """Bind exact M/S inputs and outputs to independent control C and promotion P."""
+    snapshot = ROOM_MAIL_VPS_APP_SNAPSHOT
+    controls = ROOM_MAIL_VPS_CONTROL_FILES
+    application = ROOM_MAIL_VPS_APPLICATION_BLOBS
+    dependencies = ROOM_MAIL_VPS_DEPENDENCY_BLOBS
+    prerequisites = ROOM_MAIL_VPS_PREREQUISITE_BLOBS
+    prerequisite = ROOM_MAIL_VPS_PREREQUISITE_SNAPSHOT
+    origin = ROOM_MAIL_VPS_APP_ORIGIN
+    control_prerequisites = ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package.json', 'package-lock.json', 'mobile/package.json',
+                                      'mobile/package-lock.json', 'runtime/vps/package.json'}
+            and set(prerequisites) == set(ROOM_MAIL_VPS_PREREQUISITE_INPUTS)
+            == {'.github/workflows/tickets-bounce-codes-readonly-20261024.yml',
+ '.github/workflows/tickets-mail-room-upgrade.yml',
+ '.github/workflows/tickets-mail-service-readonly-20261024.yml',
+ 'docs/operations/historical-bounce-code-inspection.md',
+ 'docs/operations/mail-room-upgrade.md',
+ 'docs/operations/mail-service-readonly-inspection.md',
+ 'ops/email/mailer.py',
+ 'ops/email/test_mailer.py',
+ 'ops/email/test_numeric_codes.py',
+ 'ops/vps/inspect-bounce-codes-readonly.py',
+ 'ops/vps/inspect-mail-service-readonly.py',
+ 'ops/vps/test_bounce_codes_readonly.py',
+ 'ops/vps/test_mail_service_readonly.py',
+ 'ops/vps/test_mail_upgrade.py',
+ 'ops/vps/upgrade-room-mail.py'}
+            and set(application) == set(ROOM_MAIL_VPS_APPLICATION_INPUTS)
+            == {'lib/room-host-first-post.ts',
+ 'lib/transactional-email.ts',
+ 'tests/e2e/registration.spec.ts',
+ 'tests/room-host-first-post.test.ts',
+ 'tests/transactional-email.test.ts'}
+            and ROOM_MAIL_VPS_APP_ORIGIN_PREREQUISITES == {'.github/workflows/tickets-bounce-codes-readonly-20261024.yml',
+ '.github/workflows/tickets-mail-service-readonly-20261024.yml',
+ 'docs/operations/historical-bounce-code-inspection.md',
+ 'docs/operations/mail-service-readonly-inspection.md',
+ 'ops/vps/inspect-bounce-codes-readonly.py',
+ 'ops/vps/inspect-mail-service-readonly.py',
+ 'ops/vps/test_bounce_codes_readonly.py',
+ 'ops/vps/test_mail_service_readonly.py'}
+            and set(control_prerequisites) == set(ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS)
+            == {".github/workflows/tickets-release-operator-checks.yml", ".github/workflows/tickets-code-release.yml"}
+            and not set(control_prerequisites) & (controls | set(dependencies) | set(application) | set(prerequisites))
+            and not (controls | set(dependencies)) & (set(application) | set(prerequisites))
+            and not set(application) & set(prerequisites),
+            "Room VPS mail inventory or scope changed.")
+    require(expected == ROOM_MAIL_VPS_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == ROOM_MAIL_VPS_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == ROOM_MAIL_VPS_APP_TREE
+            and git("rev-parse", prerequisite + "^{tree}") == ROOM_MAIL_VPS_PREREQUISITE_TREE
+            and git("rev-parse", origin + "^{tree}") == ROOM_MAIL_VPS_APP_ORIGIN_TREE,
+            "Room VPS mail live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, prerequisite), (expected, origin), (origin, snapshot),
+                                 (prerequisite, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application) | set(prerequisites),
+            "Room VPS mail snapshot differs from its complete reviewed inventory.")
+    require(set(git("diff", "--name-only", expected, prerequisite).splitlines()) == set(prerequisites),
+            "Room VPS mail prerequisite differs from its complete reviewed inventory.")
+    require(set(git("diff", "--name-only", expected, origin).splitlines())
+            == set(application) | ROOM_MAIL_VPS_APP_ORIGIN_PREREQUISITES,
+            "Room VPS mail original application source inventory changed.")
+    verify_changed_modes(expected, origin)
+    for name, blob in application.items():
+        require(git("ls-tree", origin, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Room VPS mail application differs from its original reviewed source: " + name)
+    verify_changed_modes(expected, prerequisite)
+    verify_changed_modes(expected, snapshot)
+    for name, blob in ROOM_MAIL_VPS_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Room VPS mail application input differs from reviewed source: " + name)
+    for name, blob in ROOM_MAIL_VPS_PREREQUISITE_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "Room VPS mail prerequisite input differs from reviewed source: " + name)
+        require(git("ls-tree", prerequisite, "--", name) == "100644 blob " + prerequisites[name] + "\t" + name,
+                "Room VPS mail prerequisite snapshot output changed: " + name)
+    outputs = {**prerequisites, **application}
+    for name, blob in outputs.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Room VPS mail snapshot output differs from reviewed source: " + name)
+    for name, blob in ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, prerequisite, origin, snapshot)),
+                "Room VPS mail archive workflow input changed: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, prerequisite, origin, snapshot, source),
+            "Room VPS mail requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((prerequisite, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls | set(prerequisites) | set(control_prerequisites),
+            "Room VPS mail trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls | set(control_prerequisites),
+            "Room VPS mail candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    for name, blob in prerequisites.items():
+        require(git("ls-tree", trusted, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Room VPS mail trusted prerequisite differs from reviewed source: " + name)
+    for name, blob in control_prerequisites.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (trusted, source)),
+                "Room VPS mail archive workflow output changed: " + name)
+    pins = {**outputs, **control_prerequisites}
+    for name, blob in outputs.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Room VPS mail output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Room VPS mail controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete M/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "Room VPS mail dependencies must remain unchanged: " + name)
+    require(not migration_plan(pins), "Room VPS mail release cannot introduce migrations.")
+    return pins
+
+
 def reviewed_room_mail_focus_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
     snapshot = ROOM_MAIL_FOCUS_APP_SNAPSHOT
@@ -2653,6 +2900,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
+        return reviewed_room_mail_vps_application_blobs(expected, source)
     if expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE:
         return reviewed_room_mail_focus_application_blobs(expected, source)
     if expected == FIRST_HOST_RELEASE_BASELINE:
@@ -2746,6 +2995,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
+        require(not migration_plan(changed), "Room VPS mail release cannot introduce migrations.")
+        return changed
     if expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE:
         require(not migration_plan(changed), "Room/mail focus release cannot introduce migrations.")
         return changed
@@ -4189,6 +4441,9 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
+        if self.expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
+            require(not self.enable_crypto and not self.enable_first_host,
+                    "Room VPS mail is code-only and must preserve the current runtime configuration.")
         if self.expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE:
             require(not self.enable_crypto and not self.enable_first_host,
                     "Room/mail focus is code-only and must preserve the current runtime configuration.")
@@ -4260,6 +4515,8 @@ class Deployment:
                                      self.system.application_uid(), self.system.application_gid())
         health(self.system, self.expected)
         health(self.system, self.expected, public=True)
+        if self.expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
+            verify_room_mail_vps_service()
         if self.recover_prepared:
             self.check_prepared_recovery()
 
@@ -4641,6 +4898,8 @@ class Deployment:
             if self.approval is not None:
                 self.approval.check_window()
             self.retention_safe()
+            if self.expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
+                verify_room_mail_vps_service()
             if self.enable_first_host:
                 self.system.verify_database_binding()
                 verify_first_host_target(self.root / "var/lib/becore-tickets/tickets.sqlite", self.first_host_account_id,
