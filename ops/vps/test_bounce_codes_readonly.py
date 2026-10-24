@@ -55,6 +55,24 @@ class BounceCodes(unittest.TestCase):
             with self.assertRaises(ValueError):m.select_provider_ids(d)
             d.close()
 
+    def test_older_history_does_not_obscure_exact_latest_event(self):
+        d=cohort()
+        d.execute("INSERT INTO delivery_events(id,recipient,status,provider_id,provider_event_at) VALUES('older','booking@example.com','bounced',?,'2026-10-18T00:00:00Z')",('vps-'+'9'*64,))
+        self.assertEqual(m.select_provider_ids(d),IDS)
+        d.close()
+
+    def test_newer_tied_missing_or_overlapping_event_stops_lookup(self):
+        mutations=[
+            "INSERT INTO delivery_events(id,recipient,status,provider_id,provider_event_at) VALUES('newer','booking@example.com','bounced','vps-"+'9'*64+"','2026-10-20T00:00:00Z')",
+            "UPDATE delivery_events SET provider_id=(SELECT provider_id FROM delivery_events WHERE id='bounce1') WHERE id='bounce0'",
+            "DELETE FROM delivery_events WHERE id='bounce0'",
+            "UPDATE delivery_events SET status='complained' WHERE id='bounce0'",
+        ]
+        for sql in mutations:
+            d=cohort();d.execute(sql)
+            with self.assertRaises(ValueError):m.select_provider_ids(d)
+            d.close()
+
     def test_pins_provider_event_time_not_creation_and_checks_all_four(self):
         d=cohort()
         d.execute("UPDATE delivery_events SET created_at='2020-01-01T00:00:00Z'")

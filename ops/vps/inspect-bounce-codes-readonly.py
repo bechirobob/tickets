@@ -81,8 +81,12 @@ def select_provider_ids(db, with_evidence=False):
     ids = []; event_times = set()
     for _, contact in cohort:
         rows = db.execute("SELECT provider_id,COALESCE(provider_event_at,updated_at) FROM delivery_events WHERE recipient=? AND status IN ('bounced','complained') ORDER BY COALESCE(provider_event_at,updated_at) DESC,id DESC LIMIT 2", (contact,)).fetchall()
-        if len(rows) != 1:
+        if not rows:
             raise ValueError('Historical provider count differs')
+        # The private owner report identified the latest event, not the contact's
+        # entire failure history. Older records do not make that event ambiguous.
+        if len(rows)>1 and rows[0][1]==rows[1][1]:
+            raise ValueError('Historical latest event tied')
         if not isinstance(rows[0][0], str) or not re.fullmatch(r'vps-[a-f0-9]{64}', rows[0][0]):
             raise ValueError('Historical provider format differs')
         if rows[0][1] not in EXPECTED_EVENT_TIMES:
@@ -267,6 +271,7 @@ VALIDATION_CODES = {
     'Original receipt ambiguous': 'receipt_mismatch',
     'Current suppressed cohort differs': 'cohort_count_mismatch',
     'Historical provider count differs': 'provider_count_mismatch',
+    'Historical latest event tied': 'latest_event_tied',
     'Historical provider format differs': 'provider_format_mismatch',
     'Historical event timestamp changed': 'event_time_mismatch',
     'Provider evidence overlaps': 'provider_overlap',
