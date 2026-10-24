@@ -3,12 +3,12 @@ import datetime, fcntl, hashlib, json, os, pathlib, pwd, sqlite3, subprocess, ti
 SLUG = 'puro-exceso-20261024'
 REVISION = '8f43707d9f656b5638659acb9e25595e8903797a'
 CREATED = '2026-10-24T11:24:04.728Z'
-LIMIT = 65
+LIMIT = 1
 # Set only from the independently observed existing provider dashboard.
-QUOTA_CHECKED_AT = '2026-10-24T12:26:49Z'
-QUOTA_DAILY_USED = 15
+QUOTA_CHECKED_AT = '2026-10-24T12:40:54Z'
+QUOTA_DAILY_USED = 80
 QUOTA_DAILY_LIMIT = 100
-QUOTA_MONTHLY_USED = 20
+QUOTA_MONTHLY_USED = 85
 QUOTA_MONTHLY_LIMIT = 3000
 FROM = 'BeCore Tickets <tickets@becoreops.com>'
 
@@ -114,7 +114,8 @@ try {
   for await (const chunk of process.stdin) { raw+=chunk; if(raw.length>2097152) throw new Error(); }
   const input=JSON.parse(raw);
   if(typeof input.key!=='string'||!input.key||typeof input.idempotencyKey!=='string'||!input.message)throw new Error();
-  const body=JSON.stringify(input.message);
+  const body=input.rawBody??JSON.stringify(input.message);
+  if(typeof body!=='string'||JSON.stringify(JSON.parse(body))!==JSON.stringify(input.message))throw new Error();
   started=true;phase='request';
   const response=await fetch('https://api.resend.com/emails',{
     method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),
@@ -139,17 +140,21 @@ try {
 }
 """
 
-def request_packet(api_key,recipient,payload):
+def request_packet(api_key,recipient,payload,raw_body=None):
     assert isinstance(api_key,str) and api_key
     assert isinstance(recipient,str) and 3<=len(recipient)<=254 and '@' in recipient
     assert all(isinstance(payload.get(k),str) and payload[k] for k in ('subject','html','text','idempotencyKey'))
     message={'from':FROM,'to':[recipient],'subject':payload['subject'],'html':payload['html'],'text':payload['text'],'reply_to':'tickets@becoreops.com'}
-    packet=json.dumps({'key':api_key,'idempotencyKey':payload['idempotencyKey'],'message':message})
+    value={'key':api_key,'idempotencyKey':payload['idempotencyKey'],'message':message}
+    if raw_body is not None:
+        assert json.loads(raw_body)==message
+        value['rawBody']=raw_body
+    packet=json.dumps(value)
     assert len(packet.encode())<=2097152
     return packet
 
-def send_node(executable,api_key,recipient,payload):
-    try:packet=request_packet(api_key,recipient,payload)
+def send_node(executable,api_key,recipient,payload,raw_body=None):
+    try:packet=request_packet(api_key,recipient,payload,raw_body)
     except Exception:raise ProviderFailure('local_input_invalid',False) from None
     try:
         result=subprocess.run([str(executable),'--input-type=module','-e',NODE_REQUEST],input=packet,text=True,capture_output=True,timeout=15,check=False)
@@ -166,6 +171,50 @@ def send_node(executable,api_key,recipient,payload):
     import re
     if isinstance(metadata.get('requestId'),str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}',metadata['requestId']):safe['requestId']=metadata['requestId']
     raise ProviderFailure(category,response.get('handedOff') is not False,safe,response.get('rejected') is True)
+
+def legacy_body(recipient,payload):
+    # Exact original public operator c2ceac8 serializer: key order, separators,
+    # ensure_ascii default and UTF-8 bytes are intentionally unchanged.
+    return json.dumps({'from':FROM,'to':[recipient],'subject':payload['subject'],'html':payload['html'],'text':payload['text'],'reply_to':'tickets@becoreops.com'})
+
+def reconcile_one(db,room,receipt,template,sender):
+    rows=db.execute("""SELECT * FROM delivery_events WHERE kind='room_host_post' AND status='uncertain'
+      AND provider_id IS NULL AND attempt_count=1 AND created_at>='2026-10-24T12:17:54.000Z' AND created_at<'2026-10-24T12:17:55.000Z'
+      AND json_extract(payload_json,'$.eventSlug')=? AND json_extract(payload_json,'$.messageId')=?""",(SLUG,receipt['message_id'])).fetchall()
+    assert len(rows)==1,'Expected exact original uncertain attempt'
+    row=rows[0];payload=json.loads(row['payload_json']);attendee=payload['attendeeId']
+    assert row['id']==payload['idempotencyKey']==f"room-first-email/{receipt['message_id']}/{attendee}"
+    assert {k:v for k,v in payload.items() if k not in ('attendeeId','idempotencyKey')}==template
+    elapsed=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(row['created_at'].replace('Z','+00:00'))).total_seconds()
+    assert 0<=elapsed<3600, 'Reconciliation must remain well inside provider 24-hour retention'
+    assert receipt['created_at']==CREATED and receipt['cancelled_at'] is None and visible(room,receipt)
+    current=eligible(db,receipt,attendee)
+    if len(current)!=1 or current[0]['recipient']!=row['recipient']:return {'reconciled':0,'eligibilityChanged':1}
+    raw=legacy_body(row['recipient'],payload)
+    # Manual, exact-row reconciliation only. Normal queue recovery still never
+    # retries uncertain jobs. Same key/body makes provider replay duplicate-safe.
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        current=eligible(db,receipt,attendee)
+        assert len(current)==1 and current[0]['recipient']==row['recipient'] and visible(room,receipt)
+        changed=db.execute("UPDATE delivery_events SET status='sending',attempt_count=2,updated_at=? WHERE id=? AND status='uncertain' AND attempt_count=1 AND provider_id IS NULL AND payload_json=?",(now(),row['id'],row['payload_json'])).rowcount
+        assert changed==1
+        db.commit()
+    except Exception:db.rollback();raise
+    current=eligible(db,receipt,attendee)
+    if len(current)!=1 or current[0]['recipient']!=row['recipient'] or not visible(room,receipt):
+        db.execute("UPDATE delivery_events SET status='uncertain',updated_at=? WHERE id=? AND status='sending'",(now(),row['id']));db.commit();return {'reconciled':0,'eligibilityChanged':1}
+    try:
+        provider_id=sender(row['recipient'],payload,raw)
+        assert isinstance(provider_id,str) and 0<len(provider_id)<=256
+        db.execute("UPDATE delivery_events SET status='sent',provider_id=?,failure_reason=NULL,updated_at=? WHERE id=? AND status='sending' AND attempt_count=2",(provider_id,now(),row['id']));db.commit()
+        return {'reconciled':1,'providerAcceptedOrCached':1,'otherJobsTouched':0}
+    except Exception as error:
+        metadata=error.metadata if isinstance(error,ProviderFailure) else {'phase':'request','category':'provider_outcome_uncertain'}
+        # A conflict, explicit rejection or any other failure cannot prove the
+        # first attempt absent. Keep this row uncertain; never change its key.
+        db.execute("UPDATE delivery_events SET status='uncertain',failure_reason=?,updated_at=? WHERE id=? AND status='sending'",(json.dumps(metadata,sort_keys=True),now(),row['id']));db.commit()
+        return {'reconciled':0,'uncertain':1,'failure':{k:v for k,v in metadata.items() if k!='requestId'}}
 
 def main():
     os.umask(0o077)
@@ -194,7 +243,7 @@ def main():
     rows=db.execute('SELECT * FROM room_host_first_posts WHERE event_slug=?',(SLUG,)).fetchall();assert len(rows)==1
     receipt=rows[0];assert receipt['host_account_id']==values.get('ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID')
     samples=db.execute("SELECT payload_json FROM delivery_events WHERE kind='room_host_post' AND status='delivered' AND json_extract(payload_json,'$.eventSlug')=? AND json_extract(payload_json,'$.messageId')=?",(SLUG,receipt['message_id'])).fetchall()
-    assert len(samples)==11, 'Original delivered cohort changed'
+    assert len(samples)==76, 'Verified delivered cohort changed'
     templates=[]
     for row in samples:
         payload=json.loads(row['payload_json']);payload.pop('attendeeId',None);payload.pop('idempotencyKey',None);templates.append(payload)
@@ -204,20 +253,20 @@ def main():
     assert template['subject']=='PURO EXCESO · Your host has posted'
     executable=pathlib.Path(props['WorkingDirectory'])/'bin/node'
     assert executable.is_file() and os.access(executable,os.X_OK)
-    def send(recipient,payload):
-        provider_id=send_node(executable,values['RESEND_API_KEY'],recipient,payload)
+    def send(recipient,payload,raw):
+        provider_id=send_node(executable,values['RESEND_API_KEY'],recipient,payload,raw_body=raw)
         time.sleep(0.6)
         return provider_id
     # Private same-host recoverable snapshot before any outbox change. Never
     # overwrite an earlier recovery snapshot or upload it to CI artifacts.
-    backup_path=database.parent/'first-host-recovery65-20261024.sqlite'
+    backup_path=database.parent/'first-host-reconcile-one-20261024.sqlite'
     fd=os.open(backup_path,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600);os.close(fd)
     backup=sqlite3.connect(backup_path);db.backup(backup)
     assert backup.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
     backup.close()
-    result=recover(db,room,receipt,template,send)
+    result=reconcile_one(db,room,receipt,template,send)
     room.close();db.close()
-    print(json.dumps({'eventSlug':SLUG,'activeRevision':REVISION,'observedAt':now(),'accountVerificationChanges':0,'existingJobsRetried':0,**result},sort_keys=True))
+    print(json.dumps({'eventSlug':SLUG,'activeRevision':REVISION,'observedAt':now(),'accountVerificationChanges':0,'manualExactIdempotentReconciliation':True,**result},sort_keys=True))
 
 if __name__=='__main__':
     try:main()

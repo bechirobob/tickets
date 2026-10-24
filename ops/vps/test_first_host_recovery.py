@@ -1,4 +1,5 @@
-import importlib.util,json,pathlib,sqlite3,unittest,shutil
+import importlib.util,json,pathlib,sqlite3,unittest,shutil,datetime
+from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('recovery',pathlib.Path(__file__).with_name('recover-puro-first-host-20261024.py'))
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
@@ -124,5 +125,51 @@ class Recovery(unittest.TestCase):
   self.assertEqual(m.recover(d,r,p,t,send)['knownUnsentFailures'],1)
   self.assertEqual(d.execute('SELECT status FROM delivery_events').fetchone()[0],'failed')
   self.assertEqual(m.recover(d,r,p,t,lambda *_:self.fail('No automatic retry'))['eligibleAtStart'],0)
+
+class Reconciliation(unittest.TestCase):
+ def setup_one(self):
+  d,r,p,t=fixture();t.update(eventSlug=m.SLUG,messageId='message',hostAccountId='account',senderAttendeeId='host')
+  payload={**t,'attendeeId':'guest','idempotencyKey':'room-first-email/message/guest'}
+  d.execute("INSERT INTO delivery_events(id,kind,recipient,status,attempt_count,payload_json,created_at,updated_at) VALUES(?,'room_host_post','booking@example.com','uncertain',1,?,'2026-10-24T12:17:54.800Z','2026-10-24T12:17:54.900Z')",(payload['idempotencyKey'],json.dumps(payload)));d.commit()
+  return d,r,p,t,payload
+ def clock(self):
+  class Fixed(datetime.datetime):
+   @classmethod
+   def now(cls,tz=None):return cls(2026,10,24,12,40,tzinfo=datetime.timezone.utc)
+  return patch.object(m.datetime,'datetime',Fixed)
+ def test_cached_or_first_request_has_one_provider_send_and_same_bytes(self):
+  for cached in (False,True):
+   with self.subTest(cached=cached),self.clock():
+    d,r,p,t,payload=self.setup_one();body=m.legacy_body('booking@example.com',payload);receipts={payload['idempotencyKey']:(body,'receipt')} if cached else {};sends=[]
+    def sender(recipient,value,raw):
+     self.assertEqual(recipient,'booking@example.com');self.assertEqual(raw,body);self.assertEqual(value['idempotencyKey'],payload['idempotencyKey'])
+     key=value['idempotencyKey']
+     if key in receipts:self.assertEqual(receipts[key][0],raw);return receipts[key][1]
+     receipts[key]=(raw,'receipt');sends.append(key);return 'receipt'
+    self.assertEqual(m.reconcile_one(d,r,p,t,sender)['reconciled'],1)
+    self.assertEqual(len(sends),0 if cached else 1)
+    self.assertEqual(d.execute('SELECT status,attempt_count,provider_id FROM delivery_events').fetchone()[:],('sent',2,'receipt'))
+    with self.assertRaises(AssertionError):m.reconcile_one(d,r,p,t,sender)
+ def test_conflict_stays_uncertain_and_never_changes_key(self):
+  with self.clock():
+   d,r,p,t,payload=self.setup_one()
+   def sender(*args):raise m.ProviderFailure('provider_http_error',True,{'phase':'response','status':409,'code':'invalid_idempotent_request'})
+   result=m.reconcile_one(d,r,p,t,sender);self.assertEqual(result['uncertain'],1)
+   row=d.execute('SELECT id,status,attempt_count FROM delivery_events').fetchone();self.assertEqual(row[:],(payload['idempotencyKey'],'uncertain',2))
+   with self.assertRaises(AssertionError):m.reconcile_one(d,r,p,t,sender)
+ def test_push_or_expired_window_blocks_reconciliation(self):
+  with self.clock():
+   d,r,p,t,payload=self.setup_one();d.execute("INSERT INTO push_subscriptions VALUES('guest',NULL,1)");d.commit()
+   self.assertEqual(m.reconcile_one(d,r,p,t,lambda *_:self.fail('Push recipient'))['eligibilityChanged'],1)
+   self.assertEqual(d.execute('SELECT attempt_count FROM delivery_events').fetchone()[0],1)
+   d,r,p,t,payload=self.setup_one();d.execute("UPDATE delivery_events SET created_at='2026-10-23T12:17:54.800Z'");d.commit()
+   with self.assertRaises(AssertionError):m.reconcile_one(d,r,p,t,lambda *_:self.fail('Expired'))
+ def test_raw_legacy_serialization_survives_node_transport(self):
+  payload={'subject':'Host · posted','html':'<p>It’s ready</p>','text':'Hello','idempotencyKey':'normal/key'}
+  expected=json.dumps({'from':m.FROM,'to':['synthetic@example.com'],'subject':payload['subject'],'html':payload['html'],'text':'Hello','reply_to':'tickets@becoreops.com'})
+  self.assertIn('\\u00b7',expected);self.assertIn('\\u2019',expected)
+  original=m.NODE_REQUEST;m.NODE_REQUEST="import assert from 'node:assert/strict';globalThis.fetch=async(url,options)=>{assert.equal(options.body,"+json.dumps(expected)+");return new Response(JSON.stringify({id:'cached'}),{status:200});};"+original
+  try:self.assertEqual(m.send_node(shutil.which('node'),'synthetic-key','synthetic@example.com',payload,raw_body=m.legacy_body('synthetic@example.com',payload)),'cached')
+  finally:m.NODE_REQUEST=original
 
 if __name__=='__main__':unittest.main()

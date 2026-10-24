@@ -1,4 +1,4 @@
-name: Recover the approved missed PURO first-host emails
+name: Reconcile the single original PURO email outcome
 
 # One fixed original-receipt recovery, not an application deployment or general mailing tool.
 on:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == 'f781f3331d5103abd9845bf09e4e7b44f39e2077' && github.run_attempt == 1
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == 'fa54028a5b12ae0aa6206748d46b20ff42613155' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
           test "$GITHUB_RUN_ATTEMPT" = 1
-          test "$(git rev-parse HEAD^1)" = 'f781f3331d5103abd9845bf09e4e7b44f39e2077'
+          test "$(git rev-parse HEAD^1)" = 'fa54028a5b12ae0aa6206748d46b20ff42613155'
           test "$(git diff --name-only HEAD^1 HEAD)" = "$(printf '%s\n' '.github/workflows/puro-first-host-recovery-20261024.yml' 'ops/vps/recover-puro-first-host-20261024.py' 'ops/vps/test_first_host_recovery.py')"
           python3 ops/vps/test_first_host_recovery.py
       - name: Connect existing Tickets identity
@@ -37,7 +37,7 @@ jobs:
           audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
           tags: tag:tickets-ci
           ping: hermes
-      - name: Recover only the approved original missing cohort
+      - name: Reconcile only the original uncertain attempt with its unchanged key
         shell: bash
         run: |
           set -euo pipefail
