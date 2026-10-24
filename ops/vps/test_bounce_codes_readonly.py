@@ -148,7 +148,7 @@ class RunnableWrapper(unittest.TestCase):
              patch.object(m,'app_identity'),patch.object(m.pwd,'getpwnam',return_value=type('P',(),{'pw_uid':456})()), \
              patch.object(m,'service_identity',side_effect=[ident,('changed',*ident[1:]) if changed_service else ident]), \
              patch.object(m,'private_linkage',side_effect=[linkage,second]), \
-             patch.object(m,'scan_logs',return_value={'cohort_count':4,'unknown_messages':4},side_effect=ValueError('private log text') if log_failure else None), \
+             patch.object(m,'scan_mounted_logs',return_value={'cohort_count':4,'unknown_messages':4},side_effect=ValueError('private log text') if log_failure else None), \
              contextlib.redirect_stdout(io.StringIO()) as output:
             try:
                 m.main()
@@ -197,6 +197,47 @@ class RunnableWrapper(unittest.TestCase):
             self.assertEqual(m.diagnostic_failure(ValueError('Unsafe parent path'))['log_path_metadata'],result)
         with patch.object(Path,'lstat',side_effect=FileNotFoundError('private')):
             self.assertTrue(all(not row['exists'] for row in m.fixed_log_metadata()))
+
+    def test_mounted_reader_uses_private_stdin_and_rejects_changed_mount(self):
+        result={'cohort_count':4,'messages_with_numeric_evidence':0,'ambiguous_messages':0,'unknown_messages':4,'numeric_code_groups':[],
+                'available_log_files':1,'missing_log_files':1,'scan_incomplete':False,'legacy_timestamps_not_trusted':True,'resends':0,'unsuppressions':0,'database_changes':0}
+        response=type('R',(),{'stdout':json.dumps(result).encode(),'returncode':0})()
+        with patch.object(m,'mounted_log_identity',return_value=(1,2)),patch.dict(m.__dict__,{'DIAGNOSTIC_SOURCE':'# reviewed fixture'}),patch.object(m.subprocess,'run',return_value=response) as command:
+            self.assertEqual(m.scan_mounted_logs(QUEUES),result)
+            self.assertEqual(command.call_args.args[0][:4],['docker','exec','-i',m.metadata.CONTAINER])
+            self.assertNotIn('ABCDE',repr(command.call_args.args))
+            self.assertEqual(set(json.loads(command.call_args.kwargs['input'])['queues']),QUEUES)
+        with patch.object(m,'mounted_log_identity',side_effect=[(1,2),(1,3)]),patch.dict(m.__dict__,{'DIAGNOSTIC_SOURCE':'# reviewed fixture'}),patch.object(m.subprocess,'run',return_value=response):
+            with self.assertRaises(ValueError):m.scan_mounted_logs(QUEUES)
+        result['numeric_code_groups']=[{'dsn':'private@example.com','smtp':'550','category':'unknown','count':1}]
+        response.stdout=json.dumps(result).encode()
+        with patch.object(m,'mounted_log_identity',return_value=(1,2)),patch.dict(m.__dict__,{'DIAGNOSTIC_SOURCE':'# reviewed fixture'}),patch.object(m.subprocess,'run',return_value=response):
+            with self.assertRaises(ValueError):m.scan_mounted_logs(QUEUES)
+        compile(m.CONTAINER_LOG_READER,'<reader>','exec')
+
+    def test_container_failure_stage_is_safe_and_actionable(self):
+        import contextlib,hashlib,io,sys
+        raw={'source':'# fixture','source_sha256':hashlib.sha256(b'# fixture').hexdigest(),'queues':list(QUEUES),'directory_identity':[1,2]}
+        for packet,stage in [({},'input'),(raw,'directory_identity')]:
+            output=io.StringIO();stdin=type('I',(),{'buffer':io.BytesIO(json.dumps(packet).encode())})()
+            with patch.object(sys,'stdin',stdin),patch('os.lstat',side_effect=PermissionError('secret path')),contextlib.redirect_stdout(output):
+                with self.assertRaises(SystemExit):exec(m.CONTAINER_LOG_READER,{})
+            result=json.loads(output.getvalue());self.assertEqual(result['reader_error']['stage'],stage)
+            self.assertNotIn('secret',output.getvalue())
+        error=ValueError('Mounted log reader stopped');error.safe_reader={'stage':'log_read','category':'validation_failed'}
+        self.assertEqual(m.diagnostic_failure(error)['container_reader'],error.safe_reader)
+        error.safe_reader={'stage':'private@example.com','category':'secret'}
+        self.assertNotIn('container_reader',m.diagnostic_failure(error))
+
+    def test_mount_source_destination_and_root_directory_are_exact(self):
+        import os
+        good={'Type':'bind','Source':'/var/log/becore-tickets-mail','Destination':'/mail-log','RW':True}
+        info=os.stat_result((0o40750,2,1,1,0,10000,0,0,0,0))
+        for changes in [{},{'Source':'/other'},{'Destination':'/other'},{'Type':'volume'},{'RW':False}]:
+            with patch.object(m.metadata,'command',return_value=json.dumps({**good,**changes})),patch.object(Path,'lstat',return_value=info):
+                if changes:
+                    with self.assertRaises(ValueError):m.mounted_log_identity()
+                else:self.assertEqual(m.mounted_log_identity(),(1,2))
 
     def test_pairing_evidence_preserves_private_member_and_queue_links(self):
         d=cohort();ids,evidence=m.select_provider_ids(d,with_evidence=True)

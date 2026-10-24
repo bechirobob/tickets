@@ -55,9 +55,16 @@ lock/revision gate and keep private database snapshots open only as needed.
 
 ## Log discipline
 
-Only two explicit uncompressed paths are proposed:
-- /var/log/becore-tickets-mail/mail.log
-- /var/log/becore-tickets-mail/mail.log.1
+Only two explicit uncompressed files in the existing container mount are read:
+- /mail-log/mail.log
+- /mail-log/mail.log.1
+
+The existing mount must be bind-backed by /var/log/becore-tickets-mail, with
+exact destination /mail-log. The root-owned 0750 directory device/inode must
+match on host and inside the verified container before and after. This avoids
+the observed group-writable host /var/log ancestor without relaxing its policy.
+The same reviewed reader runs in memory in that container, with private queue
+IDs passed over stdin, no command-line identities and no remote files written.
 
 No directory listing, glob, journal dump, compressed/archive exploration or other
 host log. Total 16 MiB and 15 seconds; lines capped at 16 KiB. Oversized files are
@@ -89,6 +96,8 @@ mail source hash/container/revision/health before and after, opens fresh private
 read-only snapshots after the scan, and compares attendee/contact/provider pairs
 and exact provider/queue/status/timestamp rows before printing aggregate output.
 Any change withholds all results and emits only fixed stage/category metadata.
+Container-reader failures retain a fixed internal stage/category, never raw errors.
+Numeric aggregate output is independently bounded and validated before export.
 
 Historical Dockerfile fixes tickets-mail UID/GID 10000. Historical start.sh owns
 /data (host /var/lib/becore-tickets-mail) as 10000:10000 mode 0700, log directory as
