@@ -23,7 +23,7 @@ jobs:
       - run: npm ci --no-audit
       - run: npm run build && node scripts/prepare-deploy.mjs
       - run: npx playwright install --with-deps webkit
-      - run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state && node scripts/prepare-registration-browser-fixture.mjs
+      - run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state && node scripts/prepare-seev-browser-fixture.mjs ordinary && node scripts/prepare-registration-browser-fixture.mjs
       - run: npx playwright test --config playwright.focus-rsvp-diagnostic.config.ts --project mobile-webkit --workers=1 --retries=0 --repeat-each=5 --grep="My Nights distinguishes|event RSVP shows live approval" --output test-results/focus-rsvp
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
