@@ -5,8 +5,8 @@ import { requireHandover, sealHandover, type HandoverSettings } from './handover
 export async function encryptedRoomSnapshot(storage: DurableObjectStorage, settings: HandoverSettings, sourceRevision: string | undefined, objectId: string) {
   requireHandover(settings);
   if (!/^[a-f0-9]{64}$/.test(objectId)) throw new Error("Invalid Room identity.");
-  const names = ['room_config', 'messages', 'reactions'];
-  const schema = storage.sql.exec<{ sql: string }>("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND (type='table' OR type='index') AND tbl_name IN ('room_config','messages','reactions') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END, name").toArray().map(row => row.sql);
+  const names = ['room_config', 'messages', 'reactions', 'room_host_posts'];
+  const schema = storage.sql.exec<{ sql: string }>("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND (type='table' OR type='index') AND tbl_name IN ('room_config','messages','reactions','room_host_posts') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END, name").toArray().map(row => row.sql);
   const tables: Record<string, Record<string, SqlStorageValue>[]> = {};
   for (const name of names) {
     const { count } = storage.sql.exec<{ count: number }>(`SELECT COUNT(*) AS count FROM ${name}`).one();

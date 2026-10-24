@@ -1,8 +1,9 @@
+import { firstHostInboxVisibility } from "./room-host-first-post";
 import { attendeeRoomAdmissionSource, hashToken, readCookie } from "./attendee-auth";
 import { roomPolicyFromRecord, type RoomPolicyRecord } from "./room-policy";
 import type { RoomUpdateSummary } from "./room-update-summary";
 
-const updateKinds = "'room_message', 'host_update'";
+const updateKinds = "'room_message', 'host_update', 'host_first_post'";
 const encoder = new TextEncoder();
 const snapshotLifetime = 10 * 60_000;
 
@@ -23,13 +24,14 @@ export async function readRoomUpdateSummaries(db: D1Database, cookie: string | n
       COALESCE(setting.slow_mode_seconds, 0) AS slowModeSeconds, setting.archived_at AS archivedAt,
       (SELECT COUNT(*) FROM attendee_notifications notice
         WHERE notice.attendee_id = admission.attendeeId AND notice.event_slug = admission.eventSlug
-          AND notice.read_at IS NULL AND notice.kind IN (${updateKinds})) AS unread
+          AND notice.read_at IS NULL AND notice.kind IN (${updateKinds})
+          AND (notice.kind<>'host_first_post' OR ${firstHostInboxVisibility.replaceAll('notification.', 'notice.')})) AS unread
     FROM admission JOIN curated_event_records event ON event.slug = admission.eventSlug
     LEFT JOIN room_settings setting ON setting.event_slug = event.slug
     WHERE event.archived_at IS NULL AND event.schedule_status = 'confirmed'
       AND (event.status = 'published' OR (event.status = 'scheduled' AND event.scheduled_publish_at <= ?))
     ORDER BY event.starts_at, event.slug
-  `).bind(await hashToken(token), now, 1, 1, 1, now).all<RoomPolicyRecord & { eventSlug: string; unread: number; sessionExpiresAt: string }>();
+  `).bind(await hashToken(token), now, 1, 1, 1, now, now).all<RoomPolicyRecord & { eventSlug: string; unread: number; sessionExpiresAt: string }>();
   return rows.results.flatMap(row => {
     const policy = roomPolicyFromRecord(row.eventSlug, row);
     if (policy.archived) return [];

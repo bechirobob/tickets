@@ -6,6 +6,7 @@ import { writerGuardStatements, transitionWriterSql } from "../ops/handover/writ
 import { encryptedRoomSnapshot } from "./room-handover";
 import { DurableObject } from "cloudflare:workers";
 import { purgeExpiredFlashes, type FlashRecord } from "../lib/flashes";
+import { queueFirstHostPost, type FirstHostPost } from '../lib/room-host-first-post';
 import { notifyRoomMessage } from "../lib/notifications";
 
 type RoomRole = "attendee" | "organizer" | "moderator";
@@ -77,6 +78,7 @@ function requiredHeader(request: Request, name: string): string {
 }
 
 export class TheRoom extends DurableObject<Cloudflare.Env> {
+  private firstHostDrain: Promise<void> | null = null;
   private presencePending = false;
   private identityBudgets = new Map<string, IdentityBudget>();
   private lastBudgetPrune = 0;
@@ -121,6 +123,13 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         );
         CREATE INDEX IF NOT EXISTS messages_created_idx ON messages(created_at);
         CREATE INDEX IF NOT EXISTS messages_pinned_idx ON messages(pinned, created_at);
+        CREATE TABLE IF NOT EXISTS room_host_posts (
+          host_account_id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL UNIQUE,
+          sender_attendee_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          completed_at TEXT
+        );
         CREATE TABLE IF NOT EXISTS reactions (
           message_id TEXT NOT NULL,
           attendee_id TEXT NOT NULL,
@@ -133,6 +142,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       const writerStateExists = this.ctx.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name='_bct_handover_state'").toArray().length;
       this.writerFrozen = Boolean(writerStateExists && this.ctx.storage.sql.exec<{ frozen: number }>('SELECT frozen FROM _bct_handover_state WHERE id=1').one().frozen);
       const messageColumns = this.ctx.storage.sql.exec<{ name: string }>("PRAGMA table_info(messages)").toArray();
+      if (!this.writerFrozen && this.env.ROOM_HOST_FIRST_POST_ENABLED === '1' && this.pendingFirstHostPosts().length) {
+        const current = await this.ctx.storage.getAlarm();
+        if (current === null || current > Date.now() + 1000) await this.ctx.storage.setAlarm(Date.now() + 1000);
+      }
       if (!messageColumns.some((column) => column.name === "room_badge")) {
         this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN room_badge TEXT");
       }
@@ -215,7 +228,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     if (admission?.transfer_id !== transferId || (operations.length !== 0 && !await isLegacyInventory(operations))) throw new Error('Source has not drained.');
     const alarm = this.writerFrozen ? undefined : (await this.ctx.storage.getAlarm()) ?? (this.alarmRunning ? Date.now() : null);
     this.ctx.storage.transactionSync(() => {
-      for (const sql of writerGuardStatements(['room_config', 'messages', 'reactions'])) this.ctx.storage.sql.exec(sql);
+      for (const sql of writerGuardStatements(['room_config', 'messages', 'reactions', 'room_host_posts'])) this.ctx.storage.sql.exec(sql);
       this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS _bct_handover_alarm(id INTEGER PRIMARY KEY CHECK(id=1),due INTEGER)');
       if (alarm !== undefined) this.ctx.storage.sql.exec('INSERT OR REPLACE INTO _bct_handover_alarm VALUES(1,?)', alarm);
       const command = transitionWriterSql(transferId, true);
@@ -323,7 +336,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     server.send(JSON.stringify({
       type: "snapshot",
       room: policy,
-      messages: this.readMessages(attachment, new URL(request.url).searchParams.get("announcement")?.slice(0,80) ?? ""),
+      messages: this.readMessages(attachment, (new URL(request.url).searchParams.get("announcement") ?? new URL(request.url).searchParams.get("message"))?.slice(0,80) ?? ""),
       online: this.ctx.getWebSockets().length,
     }));
     this.schedulePresence();
@@ -352,6 +365,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     }
 
     let currentBadge: "VIP" | null = null;
+    let currentHost: {accountId:string;displayName:string} | null = null;
     if (input.type === "message" || input.type === "reaction") {
       const peers = this.ctx.getWebSockets().filter(peer => peer.readyState === WebSocket.OPEN
         && (peer.deserializeAttachment() as ConnectionState | null)?.attendeeId === state.attendeeId);
@@ -365,10 +379,10 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         socket.send(JSON.stringify({ type: "error", error: "Slow down for a moment before posting again." }));
         return;
       }
-      const session=state.sessionId && await this.env.DB.prepare("SELECT 1 FROM attendee_sessions WHERE id=? AND attendee_id=? AND revoked_at IS NULL AND expires_at>?").bind(state.sessionId,state.attendeeId,new Date().toISOString()).first();
-      const badge = session ? await this.currentRoomBadge(state.attendeeId) : undefined;
-      if (badge === undefined) {socket.close(4003,"Room access changed");return;}
-      currentBadge = badge;
+      const access=state.sessionId ? await this.currentRoomIdentity(state.attendeeId,state.sessionId) : null;
+      if (!access) {socket.close(4003,"Room access changed");return;}
+      currentBadge = access.roomBadge === 'VIP' ? 'VIP' : null;
+      currentHost = access.hostIdentity;
     }
     if (input.type === "message") {
       if (readOnly) {
@@ -386,7 +400,8 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         socket.send(JSON.stringify({ type: "error", error: "That reply target is no longer available." }));
         return;
       }
-      // Reuse this action's fresh admission result, with no intervening await.
+      // Admission, session and host assignment share one fresh database snapshot.
+      // No await separates that result and Room persistence.
       const previousMessage = this.identityBudgets.get(state.attendeeId)?.lastMessageAt ?? state.lastMessageAt;
       if (state.slowModeSeconds > 0 && now - previousMessage < state.slowModeSeconds * 1000) {
         const wait = Math.ceil((state.slowModeSeconds * 1000 - (now - previousMessage)) / 1000);
@@ -394,15 +409,25 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         return;
       }
       state.roomBadge = currentBadge;
-      const message = this.insertMessage({
+      state.role = currentHost ? 'organizer' : 'attendee';
+      let firstHostPost = false;
+      const message = this.ctx.storage.transactionSync(() => {
+        const inserted = this.insertMessage({
         attendeeId: state.attendeeId,
-        displayName: state.displayName,
+        displayName: currentHost?.displayName ?? state.displayName,
         role: state.role,
         roomBadge: state.roomBadge,
         kind: "message",
         content,
         parentId,
         pinned: false,
+        });
+        if (currentHost) {
+          firstHostPost = this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO room_host_posts
+            (host_account_id,message_id,sender_attendee_id,created_at) VALUES(?,?,?,?)`,
+            currentHost.accountId,inserted.id,state.attendeeId,inserted.createdAt).rowsWritten > 0;
+        }
+        return inserted;
       });
       state.lastMessageAt = now;
       socket.serializeAttachment(state);
@@ -411,7 +436,11 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       this.syncIdentityBudget(this.ctx.getWebSockets().filter(peer => peer.readyState === WebSocket.OPEN
         && (peer.deserializeAttachment() as ConnectionState | null)?.attendeeId === state.attendeeId), budget);
       this.broadcast({ type: "message", message });
-      this.defer(notifyRoomMessage(this.env, {
+      if (currentHost) {
+        this.defer(this.drainFirstHostPosts());
+        this.defer(this.scheduleFirstHostRetry());
+      }
+      if (!firstHostPost) this.defer(notifyRoomMessage(this.env, {
         eventSlug: this.eventSlug(),
         messageId: message.id,
         senderAttendeeId: state.attendeeId,
@@ -538,6 +567,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   private async removeEventContentUntracked(): Promise<void> {
     this.recentMessages = null;
     for (const socket of this.ctx.getWebSockets()) socket.close(1008, "Event removed");
+    this.ctx.storage.sql.exec('UPDATE room_host_posts SET completed_at=COALESCE(completed_at,?)',new Date().toISOString());
     this.ctx.storage.sql.exec("DELETE FROM reactions; DELETE FROM messages; DELETE FROM room_config;");
     await this.ctx.storage.deleteAlarm();
   }
@@ -556,15 +586,38 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
 
   private async removeMessageUntracked(messageId: string): Promise<boolean> {
     const found = this.messageExists(messageId);
-    if (!found) return false;
+    const firstPost = this.ctx.storage.sql.exec('SELECT 1 FROM room_host_posts WHERE message_id=?', messageId).toArray().length > 0;
+    if (!found && !firstPost) return false;
     this.recentMessages = null;
-    this.ctx.storage.sql.exec("UPDATE messages SET deleted_at = ? WHERE id = ?", new Date().toISOString(), messageId);
-    this.broadcast({ type: "message_removed", messageId });
-    await this.env.DB.batch([
-      this.env.DB.prepare("UPDATE room_announcement_deliveries SET status='complete',lease_token=NULL,lease_until=NULL,updated_at=? WHERE event_slug=? AND json_extract(payload_json,'$.sourceId')=?").bind(new Date().toISOString(),this.eventSlug(),messageId),
-      this.env.DB.prepare("UPDATE attendee_notifications SET body='This host announcement was removed.',title='Host announcement removed' WHERE event_slug=? AND kind='host_update' AND source_id=?").bind(this.eventSlug(),messageId),
-    ]);
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec("UPDATE messages SET deleted_at = COALESCE(deleted_at,?) WHERE id = ?", new Date().toISOString(), messageId);
+      // A deleted source plus an incomplete durable receipt is a cancellation
+      // obligation. Never acknowledge it locally before the D1 batch commits.
+      this.ctx.storage.sql.exec('UPDATE room_host_posts SET completed_at=NULL WHERE message_id=?', messageId);
+    });
+    if (found) this.broadcast({ type: "message_removed", messageId });
+    try {
+      await this.cancelMessageNotifications(messageId);
+      this.ctx.storage.sql.exec('UPDATE room_host_posts SET completed_at=? WHERE message_id=?', new Date().toISOString(), messageId);
+    } catch (error) {
+      await this.scheduleFirstHostRetry();
+      throw error;
+    }
     return true;
+  }
+
+  private async cancelMessageNotifications(messageId: string): Promise<void> {
+    const firstPost = this.ctx.storage.sql.exec<{hostId:string;senderId:string;createdAt:string}>('SELECT host_account_id AS hostId,sender_attendee_id AS senderId,created_at AS createdAt FROM room_host_posts WHERE message_id=?',messageId).toArray()[0];
+    const now = new Date().toISOString();
+    await this.env.DB.batch([
+      ...(firstPost ? [this.env.DB.prepare(`INSERT INTO room_host_first_posts(event_slug,host_account_id,message_id,sender_attendee_id,created_at,fanout_at,cancelled_at)
+        VALUES(?,?,?,?,?,?,?) ON CONFLICT(event_slug,host_account_id) DO UPDATE SET cancelled_at=excluded.cancelled_at,
+        fanout_at=COALESCE(room_host_first_posts.fanout_at,excluded.fanout_at) WHERE room_host_first_posts.message_id=excluded.message_id`)
+        .bind(this.eventSlug(),firstPost.hostId,messageId,firstPost.senderId,firstPost.createdAt,now,now)] : []),
+      this.env.DB.prepare("UPDATE room_announcement_deliveries SET status='complete',lease_token=NULL,lease_until=NULL,updated_at=? WHERE event_slug=? AND json_extract(payload_json,'$.sourceId')=?").bind(new Date().toISOString(),this.eventSlug(),messageId),
+      this.env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,updated_at=? WHERE kind='room_host_post' AND status='queued' AND json_extract(payload_json,'$.eventSlug')=? AND json_extract(payload_json,'$.messageId')=?").bind(new Date().toISOString(),this.eventSlug(),messageId),
+      this.env.DB.prepare("UPDATE attendee_notifications SET body='This host announcement was removed.',title='Host announcement removed' WHERE event_slug=? AND kind IN ('host_update','host_first_post') AND source_id=?").bind(this.eventSlug(),messageId),
+    ]);
   }
 
   updatePolicy(policy: RoomPolicyInput): void {
@@ -613,7 +666,40 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
     const expiry = Date.parse(policy.readOnlyAt);
     if (!Number.isFinite(expiry)) return;
     const current = await this.ctx.storage.getAlarm();
-    if (current === null || current !== expiry) await this.ctx.storage.setAlarm(expiry);
+    const next = this.env.ROOM_HOST_FIRST_POST_ENABLED === '1' && this.pendingFirstHostPosts().length ? Math.min(expiry, Date.now() + 60_000) : expiry;
+    if (current === null || current > next) await this.ctx.storage.setAlarm(next);
+  }
+
+  private pendingFirstHostPosts(): FirstHostPost[] {
+    return this.ctx.storage.sql.exec<Omit<FirstHostPost,'eventSlug'>>(`SELECT host_account_id AS hostAccountId,message_id AS messageId,
+      sender_attendee_id AS senderAttendeeId,created_at AS createdAt FROM room_host_posts WHERE completed_at IS NULL ORDER BY created_at LIMIT 25`)
+      .toArray().map(row=>({...row,eventSlug:this.eventSlug()}));
+  }
+
+  private async scheduleFirstHostRetry(): Promise<void> {
+    if(this.env.ROOM_HOST_FIRST_POST_ENABLED !== '1' || !this.pendingFirstHostPosts().length)return;
+    const next=Date.now()+60_000, current=await this.ctx.storage.getAlarm();
+    if(current===null || current>next)await this.ctx.storage.setAlarm(next);
+  }
+
+  private drainFirstHostPosts(): Promise<void> {
+    if(this.firstHostDrain)return this.firstHostDrain;
+    this.firstHostDrain=this.flushFirstHostPosts().finally(()=>{this.firstHostDrain=null;});
+    return this.firstHostDrain;
+  }
+
+  private async flushFirstHostPosts(): Promise<void> {
+    if(this.env.ROOM_HOST_FIRST_POST_ENABLED !== '1')return;
+    for(const post of this.pendingFirstHostPosts()) {
+      try {
+        if(this.messageExists(post.messageId))await queueFirstHostPost(this.env,post);
+        // Deletion may interleave while D1 fanout is awaited. Recheck before
+        // acknowledging the outbox, so a failed cancellation remains retryable.
+        if(!this.messageExists(post.messageId))await this.cancelMessageNotifications(post.messageId);
+        this.ctx.storage.sql.exec('UPDATE room_host_posts SET completed_at=? WHERE host_account_id=? AND message_id=?',new Date().toISOString(),post.hostAccountId,post.messageId);
+      } catch { console.error('First host notification remains queued for retry.'); }
+    }
+    await this.scheduleFirstHostRetry();
   }
 
   private async alarmUntracked(): Promise<void> {
@@ -621,8 +707,16 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       "SELECT event_slug AS eventSlug FROM room_config WHERE id = 1 LIMIT 1",
     ).toArray()[0];
     if (!configured) return;
-    await purgeExpiredFlashes(this.env.DB, configured.eventSlug);
-    this.broadcast({ type: "room_closed" });
+    await this.drainFirstHostPosts();
+    const closing=this.ctx.storage.sql.exec<{at:string}>('SELECT read_only_at AS at FROM room_config WHERE id=1').one().at;
+    const expiry=Date.parse(closing);
+    if(Date.now()>=expiry) {
+      await purgeExpiredFlashes(this.env.DB, configured.eventSlug);
+      this.broadcast({ type: "room_closed" });
+    } else {
+      const current=await this.ctx.storage.getAlarm();
+      if(current===null || current>expiry)await this.ctx.storage.setAlarm(expiry);
+    }
   }
 
   hasMessage(messageId: string): boolean {
@@ -678,8 +772,17 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
   }
 
   private async currentRoomBadge(attendeeId: string): Promise<"VIP" | null | undefined> {
-    const row = await this.env.DB.prepare(`
-      SELECT tier.room_badge AS roomBadge
+    const row=await this.currentRoomIdentity(attendeeId);
+    return row ? row.roomBadge==='VIP' ? 'VIP' : null : undefined;
+  }
+
+  private async currentRoomIdentity(attendeeId: string, sessionId: string | null = null) {
+    const row=await this.env.DB.prepare(`
+      SELECT tier.room_badge AS roomBadge,
+        (SELECT json_object('accountId',staff.id,'displayName',staff.display_name) FROM staff_accounts staff JOIN staff_event_assignments host_assignment ON host_assignment.account_id=staff.id
+          WHERE ?='1' AND ticket.event_slug=? AND staff.id=? AND profile.email_verified_at IS NOT NULL AND staff.normalized_email=profile.normalized_email
+            AND staff.status='active' AND staff.role='organizer' AND staff.must_change_password=0
+            AND (staff.locked_until IS NULL OR staff.locked_until<=?) AND host_assignment.event_slug=ticket.event_slug LIMIT 1) AS hostJson
       FROM ticket_assignments assignment
       JOIN tickets ticket ON ticket.id = assignment.ticket_id
       JOIN orders orders ON orders.id = ticket.order_id
@@ -689,12 +792,14 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
         AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug=ticket.event_slug AND (e.removed_at IS NOT NULL OR e.event_state IN ('cancelled','postponed')))
         AND NOT EXISTS (SELECT 1 FROM room_suspensions r WHERE r.attendee_id=assignment.attendee_id AND r.event_slug=ticket.event_slug AND r.restored_at IS NULL)
         AND ticket.event_slug = ? AND ticket.status IN ('issued', 'checked_in')
+        AND (? IS NULL OR EXISTS (SELECT 1 FROM attendee_sessions session WHERE session.id=? AND session.attendee_id=profile.id
+          AND session.revoked_at IS NULL AND session.expires_at>?))
         AND (orders.payment_provider <> 'rsvp' OR EXISTS (SELECT 1 FROM event_registrations r JOIN event_registration_settings rs ON rs.event_slug = r.event_slug WHERE r.order_id = orders.id AND r.status = 'confirmed' AND rs.room_access = 1))
       ORDER BY CASE WHEN tier.room_badge = 'VIP' THEN 1 ELSE 0 END DESC, tier.sort_order DESC
       LIMIT 1
-    `).bind(attendeeId, this.eventSlug()).first<{ roomBadge: string | null }>();
-    if (!row) return undefined;
-    return row.roomBadge === "VIP" ? "VIP" : null;
+    `).bind(this.env.ROOM_HOST_FIRST_POST_ENABLED ?? '',this.env.ROOM_HOST_FIRST_POST_EVENT_SLUG ?? '',this.env.ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID ?? '',new Date().toISOString(),attendeeId,this.eventSlug(),sessionId,sessionId,new Date().toISOString())
+      .first<{roomBadge:string|null;hostJson:string|null}>();
+    return row ? {roomBadge:row.roomBadge,hostIdentity:row.hostJson ? JSON.parse(row.hostJson) as {accountId:string;displayName:string} : null} : null;
   }
 
   private insertMessage(input: Omit<RoomMessage, "id" | "sequence" | "createdAt" | "deletedAt" | "reactions">, id: string = crypto.randomUUID()): RoomMessage {
@@ -715,7 +820,7 @@ export class TheRoom extends DurableObject<Cloudflare.Env> {
       SELECT id, sequence, attendee_id AS attendeeId, display_name AS displayName, role, room_badge AS roomBadge, kind,
              content, parent_id AS parentId, pinned, created_at AS createdAt, deleted_at AS deletedAt
       FROM messages WHERE sequence IN (SELECT sequence FROM messages ORDER BY sequence DESC LIMIT 100)
-        OR (id = ? AND kind = 'announcement' AND deleted_at IS NULL)
+        OR (id = ? AND (kind = 'announcement' OR (kind = 'message' AND role = 'organizer')) AND deleted_at IS NULL)
       ORDER BY sequence DESC
     `, announcementId).toArray().reverse();
     if (!announcementId) this.recentMessages = rows;

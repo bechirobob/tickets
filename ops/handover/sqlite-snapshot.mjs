@@ -31,13 +31,14 @@ export function restoreSqlSnapshot(sql, destination) {
   } finally { db.close(); }
 }
 export function roomSnapshot(db) {
-  return Object.fromEntries(['room_config', 'messages', 'reactions'].map(name => [name, db.prepare(`SELECT * FROM ${quote(name)} ORDER BY rowid`).all().map(row => ({ ...row }))]));
+  return Object.fromEntries(['room_config', 'messages', 'reactions', ...(tables(db).includes('room_host_posts') ? ['room_host_posts'] : [])].map(name => [name, db.prepare(`SELECT * FROM ${quote(name)} ORDER BY rowid`).all().map(row => ({ ...row }))]));
 }
 export function restoreRoomSnapshot(db, snapshot) {
-  if (!snapshot || Object.keys(snapshot).sort().join(',') !== 'messages,reactions,room_config') throw new Error('Invalid Room snapshot.');
+  const names=['room_config','messages','reactions',...(snapshot?.room_host_posts ? ['room_host_posts'] : [])];
+  if (!snapshot || Object.keys(snapshot).sort().join(',') !== [...names].sort().join(',')) throw new Error('Invalid Room snapshot.');
   db.exec('BEGIN IMMEDIATE');
   try {
-    for (const name of ['room_config', 'messages', 'reactions']) {
+    for (const name of names) {
       if (db.prepare(`SELECT COUNT(*) AS n FROM ${quote(name)}`).get().n) throw new Error('Room restore target must be empty.');
       const columns = db.prepare(`PRAGMA table_info(${quote(name)})`).all().map(row => row.name);
       const rows = snapshot[name];
@@ -64,7 +65,7 @@ export function restoreRoomEnvelope(snapshot, destination, transferId) {
       if (typeof sql !== 'string' || !/^CREATE (?:UNIQUE )?(?:TABLE|INDEX)\b/i.test(sql)) throw new Error('Invalid Room schema.');
       db.exec(sql);
     }
-    if (tables(db).join(',') !== 'messages,reactions,room_config') throw new Error('Unexpected Room tables.');
+    if (!['messages,reactions,room_config','messages,reactions,room_config,room_host_posts'].includes(tables(db).join(','))) throw new Error('Unexpected Room tables.');
     restoreRoomSnapshot(db, snapshot.tables);
     for (const row of snapshot.sequences) {
       if (row.name !== 'messages' || !Number.isSafeInteger(row.seq) || row.seq < 0) throw new Error('Invalid Room sequence.');

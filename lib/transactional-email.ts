@@ -1,5 +1,5 @@
 type Provider = 'resend' | 'vps';
-type Message = { recipient: string; subject: string; html: string; text: string; idempotencyKey: string; kind: string };
+type Message = { recipient: string; subject: string; html: string; text: string; idempotencyKey: string; kind: string; replyTo?: string };
 const VPS_ORIGIN = 'https://mail.becoreops.com';
 // Match the installed mail service protocol, revision dc835509. New kinds stay
 // on Resend until support is verified in that service; campaigns never use it.
@@ -39,7 +39,7 @@ export function sendTransactional(env: Cloudflare.Env, provider: Provider, messa
   return fetch('https://api.resend.com/emails', {
     method: 'POST', signal: AbortSignal.timeout(10_000),
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json', 'idempotency-key': message.idempotencyKey.slice(0, 256) },
-    body: JSON.stringify({ from: env.EMAIL_FROM, to: [message.recipient], subject: message.subject, html: message.html, text: message.text }),
+    body: JSON.stringify({ from: env.EMAIL_FROM, to: [message.recipient], subject: message.subject, html: message.html, text: message.text, ...(message.replyTo ? { reply_to: message.replyTo } : {}) }),
   });
 }
 

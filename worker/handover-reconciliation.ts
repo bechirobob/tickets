@@ -36,7 +36,7 @@ export const durableWorkChecks = {
   payouts: "SELECT COUNT(*) AS n FROM payout_transfers WHERE status IN ('queued','otp','pending')",
   refundBatches: "SELECT COUNT(*) AS n FROM refund_batches WHERE status IN ('queued','processing')",
   approvals: "SELECT COUNT(*) AS n FROM approval_requests WHERE status='executing'",
-  deliveries: "SELECT COUNT(*) AS n FROM delivery_events WHERE status IN ('queued','sent','delayed')",
+  deliveries: "SELECT COUNT(*) AS n FROM delivery_events WHERE status IN ('queued','sent','delayed') OR (kind='room_host_post' AND status IN ('sending','uncertain'))",
   confirmations: "SELECT COUNT(*) AS n FROM confirmation_deliveries WHERE status IN ('pending','processing') OR lease_token IS NOT NULL",
   announcements: "SELECT COUNT(*) AS n FROM event_announcement_recipients WHERE status='sending' OR claimed_at IS NOT NULL",
   roomAnnouncements: "SELECT COUNT(*) AS n FROM room_announcement_deliveries WHERE status='processing' OR lease_token IS NOT NULL",

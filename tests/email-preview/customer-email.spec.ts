@@ -1,13 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { previewData, renderCustomerEmailPreviews } from '../../scripts/customer-email-previews.mjs';
+import { previewData, renderCustomerEmailPreviews, renderFirstHostEmailPreview } from '../../scripts/customer-email-previews.mjs';
 import { expectVisibleLettering } from '../e2e/text-visibility';
 
-const names = ['purchase-confirmation', 'rsvp-confirmed', 'email-verification', 'ticket-recovery', 'ticket-transfer', 'waitlist-offer', 'abandoned-checkout', 'support-update', 'purchase-announcement-verification', 'rsvp-announcement-verification'];
+const names = ['purchase-confirmation', 'rsvp-confirmed', 'email-verification', 'ticket-recovery', 'ticket-transfer', 'waitlist-offer', 'abandoned-checkout', 'support-update', 'purchase-announcement-verification', 'rsvp-announcement-verification', 'first-host-post'];
 let previews: Awaited<ReturnType<typeof renderCustomerEmailPreviews>>;
 
-test.beforeAll(async () => { previews = await renderCustomerEmailPreviews(); });
+test.beforeAll(async () => { previews = [...await renderCustomerEmailPreviews(), renderFirstHostEmailPreview()]; });
 
 async function expectReadableEmail(page: Page) {
   await expectVisibleLettering(page, 'body');
@@ -85,7 +85,10 @@ for (const name of names) {
       }
       const action = page.getByRole('link', { name: preview.actionLabel, exact: true });
       await expect(action).toBeVisible();
-      await expect(action).toHaveAttribute('href', /^https:\/\/tickets\.example\.invalid\//);
+      if (name === 'first-host-post') {
+        await expect(action).toHaveAttribute('href', 'https://tickets.becoreops.com/room/accra-after-hours?from=host-first-post&message=preview-host-post-001');
+        await expect(page.getByRole('link', { name: 'Manage this event’s notifications' })).toHaveAttribute('href', 'https://tickets.becoreops.com/room/accra-after-hours?notifications=settings');
+      } else await expect(action).toHaveAttribute('href', /^https:\/\/tickets\.example\.invalid\//);
       expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       expect(await page.locator('img').evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
       const artwork = page.locator('img[src="https://tickets.becoreops.com/events/on-the-guest-list-email.jpg"]');

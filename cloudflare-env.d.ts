@@ -2,6 +2,10 @@
 
 declare namespace Cloudflare {
   interface Env {
+    // Disabled unless explicitly enabled after recipient/template review.
+    ROOM_HOST_FIRST_POST_ENABLED?: string;
+    ROOM_HOST_FIRST_POST_EVENT_SLUG?: string;
+    ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID?: string;
     HANDOVER_TRACKING?: string;
     HANDOVER_RECIPIENT_SPKI?: string;
     HANDOVER_EXPIRES_AT?: string;

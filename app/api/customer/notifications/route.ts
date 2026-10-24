@@ -1,3 +1,4 @@
+import { firstHostInboxVisibility } from '../../../../lib/room-host-first-post';
 import { limitRequestBody } from '../../../../lib/request-body';
 import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 import { mutationHasValidOrigin } from "../../../../lib/admin-session";
@@ -13,8 +14,9 @@ export async function GET(request: Request) {
     FROM attendee_notifications AS notification
     LEFT JOIN curated_event_records AS event ON event.slug = notification.event_slug
     WHERE notification.attendee_id = ?
+      AND (notification.kind<>'host_first_post' OR ${firstHostInboxVisibility})
     ORDER BY notification.created_at DESC LIMIT 100
-  `).bind(identity.attendeeId).all();
+  `).bind(identity.attendeeId,new Date().toISOString()).all();
   const unread = rows.results.filter((item) => !item.readAt).length;
   return Response.json({ notifications: rows.results, unread }, { headers: { "cache-control": "no-store" } });
 }

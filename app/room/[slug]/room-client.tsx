@@ -141,7 +141,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
 
   const openedAnnouncement = useRef('');
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('announcement');
+    const requested = new URLSearchParams(window.location.search).get('announcement') ?? new URLSearchParams(window.location.search).get('message');
     if (!requested || openedAnnouncement.current === requested) return;
     const target = [...(roomRef.current?.querySelectorAll<HTMLElement>('[data-announcement]') ?? [])].find(element => element.dataset.announcement === requested);
     if (target) {
@@ -163,7 +163,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
     roomSnapshotReadyRef.current = false;
     setStatus("connecting");
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const announcement = new URLSearchParams(window.location.search).get('announcement') ?? '';
+    const announcement = new URLSearchParams(window.location.search).get('announcement') ?? new URLSearchParams(window.location.search).get('message') ?? '';
     const socket = new WebSocket(`${protocol}//${window.location.host}/api/room/socket?event=${encodeURIComponent(slug)}&announcement=${encodeURIComponent(announcement.slice(0,80))}`);
     socketRef.current = socket;
     socket.onopen = () => {
@@ -454,7 +454,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
         <div className="room-header__activity"><span aria-label={`${online} people online`} title={`${online} people online`}><Users aria-hidden="true" size={16} /><b>{online}</b></span><button type="button" className="room-flash-toggle" aria-label={`Open Flashes; ${flashCount} unopened`} title={`Flashes · ${flashCount}`} onClick={() => setGalleryOpen(true)} disabled={Boolean(policy?.readOnly)}><Camera aria-hidden="true" size={17} /><b>{flashCount}</b></button><RoomNotifications slug={slug} onNotice={setNotice} /></div>
       </header>
       <section className="room-trust"><BadgeCheck aria-hidden="true" size={16} /><b>Ticket holders only</b><span>{policy?.emergencyReadOnly ? "Host pause active" : policy?.slowModeSeconds ? `Slow mode · ${policy.slowModeSeconds}s` : "Your Night, together"}</span><i className={status === "connected" ? "live" : ""}>{status === "connected" ? "Live" : "Reconnecting…"}</i></section>
-      {selfId ? <ConfirmationNotifications compact onEnabled={() => setNotice("Event alerts are on. Booking confirmations and host announcements can reach this device.")} /> : null}
+      {selfId ? <ConfirmationNotifications compact eventSlug={slug} dismissalKey={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'host-first-post' ? `room-host-offer:${selfId}:${slug}` : undefined} onEnabled={() => setNotice("Event alerts are on. Booking confirmations and host announcements can reach this device.")} /> : null}
       {pinned && <details className="room-pinned" data-announcement={pinned.id} key={pinned.id}><summary><BadgeCheck aria-hidden="true" size={16} /><b>Host</b><span>{pinned.content}</span><ChevronDown aria-hidden="true" size={15} /></summary><p>{pinned.content}</p></details>}
       {notice && <div className="room-notice" role="status"><span>{notice}</span><button aria-label="Dismiss notice" onClick={() => setNotice("")}><X aria-hidden="true" size={16} /></button></div>}
       <section ref={streamRef} className="room-stream" aria-label="Room conversation" onScroll={(event) => { const stream = event.currentTarget; nearBottomRef.current = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80; if (nearBottomRef.current) setHasUnread(false); }}>
@@ -481,7 +481,7 @@ export default function RoomClient({ slug, fallbackTitle, fallbackDate, eventIma
           const prior = timeline[index - 1];
           const sameDay = prior && new Date(prior.createdAt).toDateString() === new Date(message.createdAt).toDateString();
           const grouped = sameDay && prior?.type === "message" && prior.value.attendeeId === message.attendeeId && prior.value.kind === "message" && message.kind === "message" && !prior.value.deletedAt && !message.deletedAt && Date.parse(message.createdAt) - Date.parse(prior.createdAt) < 180_000;
-          return <Fragment key={message.id}>{!sameDay && <p className="room-day"><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}</time></p>}<article className={`room-message ${own ? "own" : ""} ${grouped ? "grouped" : ""} ${host ? "room-message--host" : ""}`} data-announcement={announcement ? message.id : undefined} aria-label={`${name}, ${new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}>
+          return <Fragment key={message.id}>{!sameDay && <p className="room-day"><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}</time></p>}<article className={`room-message ${own ? "own" : ""} ${grouped ? "grouped" : ""} ${host ? "room-message--host" : ""}`} data-announcement={host ? message.id : undefined} aria-label={`${name}, ${new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}>
             {!own && <div className="room-avatar" aria-hidden="true">{announcement ? "H" : message.displayName.slice(0, 1).toUpperCase()}</div>}
             <div className="room-message__body">
               <header><b>{name}</b>{host ? <span className="room-host-badge" role="img" aria-label="Event host" title="Event host"><BadgeCheck aria-hidden="true" size={12} />{!announcement && "Host"}</span> : message.role === "moderator" ? <span><BadgeCheck aria-hidden="true" size={12} /> Moderator</span> : message.roomBadge === "VIP" ? <span className="room-vip-badge" role="img" aria-label="VIP ticket holder" title="VIP ticket holder"><Gem size={11} aria-hidden="true" /></span> : null}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></header>
