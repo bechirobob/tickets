@@ -1145,7 +1145,109 @@ def room_mail_focus_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
+
+
+ROOM_MAIL_VPS_OPERATOR_BLOB = '3ce9952c547073a76b5bfb43a8996d1c9c65af1e'
+ROOM_MAIL_VPS_STAGED_BASE = dict(ROOM_MAIL_FOCUS_STAGED_BASE)
+ROOM_MAIL_VPS_STAGED_BASE['ops/email/mailer.py'] = ("100644", 'fc99c522457e487837e276d5acdd31b2cce2fcd0')
+ROOM_MAIL_VPS_STAGED_BASE['ops/vps/inspect-bounce-codes-readonly.py'] = ("100644", '6e344e7047c9897047c9dffda27e0f699d25e893')
+ROOM_MAIL_VPS_STAGED_BASE['ops/vps/inspect-mail-service-readonly.py'] = ("100644", '819baa97ef82c687c52ed288daf49db6486f0a21')
+ROOM_MAIL_VPS_STAGED_BASE['ops/vps/test_bounce_codes_readonly.py'] = ("100644", '6d105f85df2362711ab5b128592d3d3a18342d02')
+ROOM_MAIL_VPS_STAGED_BASE['ops/vps/test_mail_service_readonly.py'] = ("100644", 'f02a6d1e30d0dfe464af9d3d4ade87726e67eb94')
+ROOM_MAIL_VPS_STAGED_BASE['ops/vps/test_mail_upgrade.py'] = ("100644", '56067f377765b39d5ec7b6029e42fc9ec3bd146e')
+ROOM_MAIL_VPS_STAGED_BASE['ops/vps/upgrade-room-mail.py'] = ("100644", '0f8b77d5bf2ed3df86a17475923cd1ea5a0d1358')
+ROOM_MAIL_VPS_STAGED_BASE['.github/workflows/tickets-release-operator-checks.yml'] = ('100644', 'a0099e4403e2f7f84e1ee5651899cdbe1823866b')
+ROOM_MAIL_VPS_STAGED_BASE['.github/workflows/tickets-code-release.yml'] = ('100644', '8e516ab2b92cf9c9fdb59cf3ef802f23fc2b5879')
+ROOM_MAIL_VPS_TEST_FILE = Path(__file__).resolve()
+
+def room_mail_vps_source_family(root):
+    """Recognize only the complete Room VPS mail C/P family for local test execution."""
+    root = Path(root)
+    operator = root / 'ops/vps/code-release.py'
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    # The executing new test family cannot downgrade to a historical operator.
+    # Capture its real module path once, independent of historical fixture mocks.
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == ROOM_MAIL_VPS_TEST_FILE
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != ROOM_MAIL_VPS_OPERATOR_BLOB):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            baseline = release.ROOM_MAIL_VPS_RELEASE_BASELINE
+            if (checkout_git(root, 'rev-parse', baseline + '^{tree}').decode().strip()
+                    != release.ROOM_MAIL_VPS_RELEASE_BASE_TREE):
+                raise AssertionError('Room VPS mail family baseline tree changed')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', baseline).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Room VPS mail baseline contains unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update({name: ('100644', blob) for name, blob in release.ROOM_MAIL_VPS_PREREQUISITE_BLOBS.items()})
+            manifest.update({name: ('100644', blob) for name, blob in release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS.items()})
+            application = release.ROOM_MAIL_VPS_APPLICATION_BLOBS
+            observed = {}
+            for name in application:
+                path = root / name
+                observed[name] = digest(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+            if observed == application:
+                manifest.update({name: ('100644', blob) for name, blob in application.items()})
+            elif any(observed[name] != manifest.get(name, (None, None))[1] for name in application):
+                raise AssertionError('Room VPS mail application family has partial or unreviewed bytes')
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Room VPS mail full inventory differs from complete tracked C/P family')
+            # A restored worktree cannot conceal staged application changes.
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if not record:
+                    continue
+                metadata, raw_name = record.split(b'\t', 1)
+                mode, blob, stage = metadata.decode().split()
+                name = os.fsdecode(raw_name)
+                if (stage != '0' or name not in manifest
+                        or (name in release.ROOM_MAIL_VPS_CONTROL_FILES
+                            and (mode != '100644' or blob != digest((root / name).read_bytes())))
+                        or (name not in release.ROOM_MAIL_VPS_CONTROL_FILES and manifest[name] != (mode, blob))):
+                    raise AssertionError('Room VPS mail index differs from complete application family')
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError('Room VPS mail family requires its independently pinned baseline') from exc
+    else:
+        manifest = dict(ROOM_MAIL_VPS_STAGED_BASE)
+    # Only this test file cannot self-pin; production binds both controls to C.
+    manifest['ops/vps/code-release.py'] = ('100644', ROOM_MAIL_VPS_OPERATOR_BLOB)
+    manifest['ops/vps/test_code_release.py'] = ('100644', None)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Room VPS mail family requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError('Room VPS mail family is incomplete') from exc
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Room VPS mail family has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def checkout_source_family(root):
+    room_mail_vps = room_mail_vps_source_family(root)
+    if room_mail_vps is not None:
+        return room_mail_vps
+
     room_mail_focus = room_mail_focus_source_family(root)
     if room_mail_focus is not None:
         return room_mail_focus
@@ -9760,6 +9862,8 @@ class CameraLooksSourceAdmissionTests(unittest.TestCase):
                 self.git('update-ref', 'refs/remotes/origin/main', self.control)
 
 
+
+
 class RoomMailFocusSourceAdmissionTests(unittest.TestCase):
     """Real Git binds exact main prerequisites, independent controls and application source."""
     def setUp(self):
@@ -10351,6 +10455,10 @@ class RoomMailFocusSourceAdmissionTests(unittest.TestCase):
             self.commit()
             with self.assertRaises(release.ReleaseError): self.verify()
             with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+
+
+
 
 
 class RoomMailFocusDeploymentTests(DeploymentFixture):
@@ -11374,6 +11482,18 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
+        if family.get('ops/vps/code-release.py') == ROOM_MAIL_VPS_OPERATOR_BLOB:
+            # Only the exact new family may add this public archive dependency.
+            # Reconstruct the original bytes before keeping its historical pin.
+            name = '.github/workflows/tickets-code-release.yml'
+            data = (Path(__file__).resolve().parents[2] / name).read_bytes()
+            digest = lambda raw: release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+            self.assertEqual(digest(data), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name])
+            self.assertEqual(family[name], digest(data))
+            archive = b'git archive "$OPERATOR_SHA" ops/vps ops/email/mailer.py '
+            self.assertEqual(data.count(archive), 1)
+            historical = data.replace(archive, b'git archive "$OPERATOR_SHA" ops/vps ', 1)
+            family = {**family, name: digest(historical)}
         self.assertEqual(family['.github/workflows/tickets-code-release.yml'],
                          release.FIRST_HOST_PREREQUISITE_BLOBS['.github/workflows/tickets-code-release.yml'])
         raw = (Path(__file__).resolve().parents[2] / '.github/workflows/tickets-code-release.yml').read_text()
@@ -11494,6 +11614,792 @@ class FirstHostActivationTests(DeploymentFixture):
         with self.assertRaisesRegex(release.ReleaseError, 'does not match this exact failed transaction'):
             self.deployment.preflight()
         self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
+
+
+class RoomMailVpsSourceAdmissionTests(unittest.TestCase):
+    """Bind original reviewed application ancestry and exact independent operational controls."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', '--local', 'maintenance.autoDetach', 'false')
+        self.git('config', '--local', 'gc.autoDetach', 'false')
+        self.git('config', 'user.name', 'Room VPS mail admission tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.prerequisites = tuple(release.ROOM_MAIL_VPS_PREREQUISITE_BLOBS)
+        self.files = tuple(release.ROOM_MAIL_VPS_APPLICATION_BLOBS)
+        self.control_prerequisites = tuple(release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS)
+        self.added = set()
+        self.assertTrue(all(release.ROOM_MAIL_VPS_APPLICATION_INPUTS.values()))
+        self.assertEqual(len(self.files), 5)
+        self.assertEqual(len(self.prerequisites), 15)
+        for name in (*self.files, *release.ROOM_MAIL_VPS_CONTROL_FILES):
+            if name not in self.added:
+                self.write(name, 'baseline ' + name + '\n')
+        for name in release.ROOM_MAIL_VPS_DEPENDENCY_BLOBS:
+            self.write(name, 'unchanged locked dependency input ' + name + '\n')
+        package = {'scripts': {'test:ui': 'node --test tests/mobile-ui.test.mjs'},
+                   'dependencies': {'next': '16.4.1'}, 'devDependencies': {'vitest': '4.1.12'},
+                   'overrides': {'fast-uri': '3.1.9', 'undici': '7.30.1', 'zod': '4.6.6'}}
+        self.write('package.json', json.dumps(package))
+        self.write('ops/vps/audit.py', 'unchanged staged utility\n')
+        self.write('.github/workflows/tickets-code-release.yml', 'unchanged release workflow\n')
+        self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
+        self.write('worker/handover.ts', 'unchanged handover configuration names\n')
+        for name in self.control_prerequisites:
+            self.write(name, 'baseline exact archive workflow\n')
+        self.live = self.commit()
+        for name in release.ROOM_MAIL_VPS_APP_ORIGIN_PREREQUISITES:
+            self.write(name, 'exact reviewed operational prerequisite ' + name + '\n')
+        operational = self.commit()
+        for name in self.files:
+            self.write(name, 'exact reviewed room VPS mail ' + name + '\n')
+        self.origin = self.commit()
+        self.git('checkout', '-q', operational)
+        for name in self.prerequisites:
+            self.write(name, 'exact reviewed operational prerequisite ' + name + '\n')
+        self.prerequisite = self.commit()
+        self.git('merge', '--no-ff', '--no-commit', self.origin)
+        self.snapshot = self.commit()
+        self.pins = {name: self.git('rev-parse', self.snapshot + ':' + name) for name in self.files}
+        self.inputs = {name: None if name in self.added else self.git('rev-parse', self.live + ':' + name)
+                       for name in self.files}
+        self.git('checkout', '-q', self.prerequisite)
+        self.operator = b'independent reviewed room_mail_vps operator\n'
+        self.write('ops/vps/code-release.py', self.operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed room_mail_vps tests\n')
+        for name in self.control_prerequisites:
+            self.write(name, 'exact archive plus pinned mailer source\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+        self.candidate = self.commit()
+        values = {
+            'ROOM_MAIL_VPS_RELEASE_BASELINE': self.live,
+            'ROOM_MAIL_VPS_RELEASE_BASE_TREE': self.git('rev-parse', self.live + '^{tree}'),
+            'ROOM_MAIL_VPS_PREREQUISITE_SNAPSHOT': self.prerequisite,
+            'ROOM_MAIL_VPS_PREREQUISITE_TREE': self.git('rev-parse', self.prerequisite + '^{tree}'),
+            'ROOM_MAIL_VPS_APP_ORIGIN': self.origin,
+            'ROOM_MAIL_VPS_APP_ORIGIN_TREE': self.git('rev-parse', self.origin + '^{tree}'),
+            'ROOM_MAIL_VPS_APP_SNAPSHOT': self.snapshot,
+            'ROOM_MAIL_VPS_APP_TREE': self.git('rev-parse', self.snapshot + '^{tree}'),
+            'ROOM_MAIL_VPS_PREREQUISITE_INPUTS': {name: None for name in self.prerequisites},
+            'ROOM_MAIL_VPS_PREREQUISITE_BLOBS': {name: self.git('rev-parse', self.prerequisite + ':' + name)
+                                                for name in self.prerequisites},
+            'ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS': {name: self.git('rev-parse', self.live + ':' + name) for name in self.control_prerequisites},
+            'ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS': {name: self.git('rev-parse', self.control + ':' + name) for name in self.control_prerequisites},
+            'ROOM_MAIL_VPS_APPLICATION_INPUTS': self.inputs,
+            'ROOM_MAIL_VPS_APPLICATION_BLOBS': self.pins,
+            'ROOM_MAIL_VPS_DEPENDENCY_BLOBS': {name: self.git('rev-parse', self.live + ':' + name)
+                                              for name in release.ROOM_MAIL_VPS_DEPENDENCY_BLOBS},
+            '__file__': str(self.root / 'ops/vps/code-release.py'),
+        }
+        for name, value in values.items():
+            self.patch_value(release, name, value)
+        self.patch_value(sys.modules[__name__], 'ROOM_MAIL_VPS_OPERATOR_BLOB', self.blob(self.operator))
+        staged_names = (*release.ROOM_MAIL_VPS_CONTROL_FILES,
+                        *(name for name in self.prerequisites if name.startswith('ops/vps/') or name == 'ops/email/mailer.py'),
+                        *self.control_prerequisites,
+                        'ops/vps/audit.py', '.github/workflows/tickets-code-release.yml',
+                        '.github/workflows/candidate-checks.yml')
+        self.staged = {name: ('100644', self.git('rev-parse', self.control + ':' + name)) for name in staged_names}
+        self.patch_value(sys.modules[__name__], 'ROOM_MAIL_VPS_STAGED_BASE', self.staged)
+        patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
+    def patch_value(self, target, name, value):
+        patcher = patch.object(target, name, value)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw.encode() if isinstance(raw, str) else raw)
+        path.chmod(0o644)
+        return path
+
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated Room VPS mail source')
+        return self.git('rev-parse', 'HEAD')
+
+
+    def verify(self, source=None):
+        return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
+
+
+    def test_each_application_output_rejects_mutation_and_partial_patch(self):
+        for name in self.files:
+            for mutation in ('bytes', 'missing-change'):
+                with self.subTest(name=name, mutation=mutation):
+                    self.git('checkout', '-q', self.candidate)
+                    if mutation == 'bytes':
+                        self.write(name, 'unreviewed bytes\n')
+                    elif name in self.added:
+                        self.git('rm', name)
+                    else:
+                        self.git('checkout', self.control, '--', name)
+                    self.commit()
+                    with self.assertRaises(release.ReleaseError):
+                        self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
+
+
+    def test_changed_controls_and_executing_operator_are_rejected(self):
+        for name in release.ROOM_MAIL_VPS_CONTROL_FILES:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'untrusted control\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+        self.git('checkout', '-q', self.candidate)
+        self.write('ops/vps/code-release.py', 'untrusted executing bytes\n')
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            self.verify()
+        with patch.object(sys.modules[__name__], 'ROOM_MAIL_VPS_TEST_FILE',
+                          (self.root / 'ops/vps/test_code_release.py').resolve()), \
+             self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+
+
+    def test_trusted_control_cannot_include_application_changes(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
+            self.git('commit', '--allow-empty', '-qm', 'candidate after bad trust anchor')
+            self.git('update-ref', 'refs/remotes/origin/main', self.candidate)
+            with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                self.verify()
+
+
+    def test_application_worktree_and_staged_mutations_cannot_hide(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        self.git('update-index', '--assume-unchanged', name)
+        path.write_bytes(b'hidden worktree edit\n')
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+        path.write_bytes(original)
+        self.git('update-index', '--no-assume-unchanged', name)
+        path.write_bytes(b'hidden index edit\n')
+        self.git('add', name)
+        path.write_bytes(original)
+        with self.assertRaisesRegex(AssertionError, 'index differs'):
+            checkout_source_family(self.root)
+
+
+    def test_full_family_rejects_symlink_hardlink_and_untracked_addition(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        for mutation in ('symlink', 'hardlink'):
+            with self.subTest(mutation=mutation):
+                path.unlink()
+                if mutation == 'symlink':
+                    path.symlink_to(self.root / 'package.json')
+                else:
+                    os.link(self.root / 'package.json', path)
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+                path.unlink()
+                self.write(name, original)
+        self.write('unknown.txt', 'untracked file\n')
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            checkout_source_family(self.root)
+
+
+    def test_complete_staged_family_rejects_every_mutation_and_extra_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw_files = {name: checkout_git(self.root, 'show', self.control + ':' + name)
+                         for name in self.staged}
+            for name, raw in raw_files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            self.assertEqual(checkout_source_family(root)['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in raw_files:
+                for mutation in ('bytes', 'missing', 'mode'):
+                    # Only the test file is necessarily unable to authenticate itself.
+                    if name == 'ops/vps/test_code_release.py' and mutation == 'bytes':
+                        continue
+                    with self.subTest(name=name, mutation=mutation):
+                        path = root / name
+                        if mutation == 'bytes': path.write_bytes(b'unreviewed staged file\n')
+                        elif mutation == 'missing': path.unlink()
+                        else: path.chmod(0o755)
+                        with self.assertRaises(AssertionError):
+                            family = checkout_source_family(root)
+                            if family is None:
+                                staged_family_pins(root)
+                        path.write_bytes(raw_files[name])
+                        path.chmod(0o644)
+            (root / 'unknown.txt').write_text('unexpected staged addition\n')
+            with self.assertRaisesRegex(AssertionError, 'Unexpected staged'):
+                checkout_source_family(root)
+
+
+    def test_complete_control_and_promotion_families_are_recognized(self):
+        self.assertEqual(set(self.verify()), set(self.files) | release.ROOM_MAIL_VPS_CONTROL_FILES | set(self.prerequisites) | set(self.control_prerequisites))
+        self.assertEqual(release.migration_plan(self.verify()), [])
+        for revision in (self.control, self.candidate):
+            self.git('checkout', '-q', revision)
+            family = checkout_source_family(self.root)
+            self.assertEqual(family['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in set(self.files):
+                if revision == self.control and name in self.added:
+                    self.assertNotIn(name, family)
+                else:
+                    self.assertEqual(family[name], self.git('rev-parse', revision + ':' + name))
+
+
+    def test_promotion_keeps_reviewed_snapshot_reachable_without_side_refs(self):
+        self.git('merge-base', '--is-ancestor', self.snapshot, self.candidate)
+        self.git('merge-base', '--is-ancestor', self.control, self.candidate)
+        copy_only = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-m', 'same bytes without snapshot ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(copy_only)
+
+
+    def test_unlisted_files_dependencies_workflows_and_schema_are_rejected(self):
+        for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', 'drizzle/9999_extra.sql',
+                     '.github/workflows/candidate-checks.yml', *self.prerequisites, *self.control_prerequisites,
+                     *release.ROOM_MAIL_VPS_DEPENDENCY_BLOBS):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed bytes\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+
+    def test_every_application_and_control_mode_change_is_rejected(self):
+        for name in {*self.files, *self.prerequisites, *self.control_prerequisites, *release.ROOM_MAIL_VPS_CONTROL_FILES}:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                (self.root / name).chmod(0o755)
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+
+    def test_wrong_baseline_snapshot_or_input_inventory_is_rejected(self):
+        for name in ('ROOM_MAIL_VPS_RELEASE_BASE_TREE', 'ROOM_MAIL_VPS_APP_TREE', 'ROOM_MAIL_VPS_PREREQUISITE_TREE', 'ROOM_MAIL_VPS_APP_ORIGIN_TREE'):
+            with patch.object(release, name, 'f' * 40), self.assertRaises(release.ReleaseError): self.verify()
+        for name in self.inputs:
+            with self.subTest(path=name), patch.dict(release.ROOM_MAIL_VPS_APPLICATION_INPUTS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'application input'): self.verify()
+        with patch.dict(release.ROOM_MAIL_VPS_APPLICATION_BLOBS, {'tests/extra.mjs': 'f' * 40}):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'): self.verify()
+        for name in release.ROOM_MAIL_VPS_DEPENDENCY_BLOBS:
+            with patch.dict(release.ROOM_MAIL_VPS_DEPENDENCY_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'remain unchanged'): self.verify()
+
+
+    def test_self_unmerged_and_same_tree_snapshot_controls_are_rejected(self):
+        for trusted in (self.live, self.prerequisite, self.origin, self.snapshot, self.candidate):
+            with patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError): self.verify()
+        self.git('update-ref', 'refs/remotes/origin/main', self.live)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', 'origin/main', self.control)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', '-d', 'origin/main')
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                            '-p', self.live, '-m', 'same tree without control ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(snapshot)
+
+
+    def test_scope_schema_rejects_controls_dependencies_and_forbidden_application_paths(self):
+        for controls in ({'ops/vps/code-release.py'},
+                         release.ROOM_MAIL_VPS_CONTROL_FILES | {'package-lock.json'}):
+            with self.subTest(controls=controls), patch.object(release, 'ROOM_MAIL_VPS_CONTROL_FILES', controls):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for dependencies in ({}, {**release.ROOM_MAIL_VPS_DEPENDENCY_BLOBS, 'other.lock': 'f' * 40}):
+            with self.subTest(dependencies=dependencies), \
+                 patch.object(release, 'ROOM_MAIL_VPS_DEPENDENCY_BLOBS', dependencies):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for name in ('package-lock.json', 'mobile/package.json', '.github/workflows/new.yml',
+                     'runtime/vps/package.json', 'drizzle/9999_extra.sql', 'ops/vps/code-release.py'):
+            with self.subTest(path=name), \
+                 patch.dict(release.ROOM_MAIL_VPS_APPLICATION_BLOBS, {name: 'f' * 40}), \
+                 patch.dict(release.ROOM_MAIL_VPS_APPLICATION_INPUTS, {name: None}):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        application = {name: blob for name, blob in self.pins.items() if name != self.files[0]}
+        inputs = {name: blob for name, blob in self.inputs.items() if name != self.files[0]}
+        with patch.object(release, 'ROOM_MAIL_VPS_APPLICATION_BLOBS', application), \
+             patch.object(release, 'ROOM_MAIL_VPS_APPLICATION_INPUTS', inputs):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                self.verify()
+
+
+    def test_controls_only_baseline_rejects_any_application_dependency_or_workflow_change(self):
+        for name in (self.files[0], *release.ROOM_MAIL_VPS_DEPENDENCY_BLOBS,
+                     '.github/workflows/candidate-checks.yml'):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.write(name, 'unreviewed control-side change\n')
+                control = self.commit()
+                candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                     '-p', self.candidate, '-p', control, '-m', 'retain exact candidate bytes')
+                self.git('checkout', '-q', candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify()
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+
+    def test_both_controls_must_change_and_remain_identical_in_promotion(self):
+        for name in release.ROOM_MAIL_VPS_CONTROL_FILES:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.git('checkout', self.live, '--', name)
+                control = self.commit()
+                self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+                candidate = self.commit()
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify(candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+
+    def test_every_output_pin_is_required_independently_of_the_snapshot_tree(self):
+        for name in self.files:
+            with self.subTest(path=name), \
+                 patch.dict(release.ROOM_MAIL_VPS_APPLICATION_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'original reviewed source'):
+                    self.verify()
+
+
+    def test_controls_index_edits_cannot_hide_behind_restored_worktree_bytes(self):
+        for revision in (self.control, self.candidate):
+            for name in (*release.ROOM_MAIL_VPS_CONTROL_FILES, *self.prerequisites, *self.control_prerequisites):
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    original = (self.root / name).read_bytes()
+                    self.write(name, 'hidden staged control change\n')
+                    self.git('add', name)
+                    self.write(name, original)
+                    with self.assertRaisesRegex(AssertionError, 'index differs'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+
+    def test_snapshot_with_matching_tree_but_without_baseline_ancestry_is_rejected(self):
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                            '-m', 'unrelated snapshot with matching bytes')
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-p', snapshot, '-m', 'include unrelated source')
+        self.git('checkout', '-q', candidate)
+        with patch.object(release, 'ROOM_MAIL_VPS_APP_SNAPSHOT', snapshot):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.verify()
+
+
+    def test_family_dispatch_uses_room_mail_vps_before_historical_room_mail_focus(self):
+        with patch(__name__ + '.room_mail_focus_source_family', side_effect=AssertionError('old family selected')):
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'], self.blob(self.operator))
+        with patch.object(release, 'reviewed_room_mail_focus_application_blobs',
+                          side_effect=AssertionError('old admission selected')):
+            self.assertEqual(set(self.verify()), set(self.files) | release.ROOM_MAIL_VPS_CONTROL_FILES | set(self.prerequisites) | set(self.control_prerequisites))
+
+
+    def test_executing_room_mail_vps_tests_cannot_fall_back_to_an_older_operator_family(self):
+        self.git('checkout', '-q', self.control)
+        self.write('ops/vps/code-release.py', 'historical operator bytes\n')
+        self.git('add', 'ops/vps/code-release.py')
+        with patch.object(sys.modules[__name__], 'ROOM_MAIL_VPS_TEST_FILE',
+                          (self.root / 'ops/vps/test_code_release.py').resolve()), \
+             patch(__name__ + '.room_mail_focus_source_family', return_value={'old': 'accepted'}) as old_family:
+            with self.assertRaisesRegex(AssertionError, 'unreviewed bytes'):
+                checkout_source_family(self.root)
+            old_family.assert_not_called()
+
+
+    def test_staged_deletions_restored_as_untracked_exact_files_are_rejected(self):
+        existing_application = next(name for name in self.files if name not in self.added)
+        for revision in (self.control, self.candidate):
+            for name in (existing_application, *release.ROOM_MAIL_VPS_CONTROL_FILES):
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    self.git('rm', '--cached', name)
+                    with self.assertRaisesRegex(AssertionError, 'full inventory'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+
+    def test_normal_main_merge_accepts_original_control_ancestor(self):
+        merged = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                          '-p', self.prerequisite, '-p', self.control, '-m', 'normal merge of reviewed controls')
+        self.git('update-ref', 'refs/remotes/origin/main', merged)
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.control), self.prerequisite)
+        self.assertEqual(self.git('show', '-s', '--format=%P', merged).split(), [self.prerequisite, self.control])
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.candidate).split(),
+                         [self.control, self.snapshot])
+        self.assertEqual(set(self.verify()), set(self.files) | release.ROOM_MAIL_VPS_CONTROL_FILES | set(self.prerequisites) | set(self.control_prerequisites))
+        # The branch commit C is the trust anchor, not a newer same-tree main merge
+        # which is deliberately absent from the already-published P ancestry.
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=merged):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+
+    def test_missing_invalid_and_unrelated_same_tree_controls_are_rejected(self):
+        for trusted in ('', 'HEAD', 'a' * 12, 'A' * 40, 'f' * 40):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)):
+                    self.verify()
+        unrelated = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                             '-m', 'unrelated same-tree controls')
+        self.git('update-ref', 'refs/remotes/origin/main', unrelated)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=unrelated):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+
+    def test_same_tree_wrong_baseline_and_source_commit_identities_are_rejected(self):
+        wrong_base = self.git('commit-tree', self.git('rev-parse', self.live + '^{tree}'),
+                              '-m', 'same-tree wrong live identity')
+        with self.assertRaisesRegex(release.ReleaseError, 'live or snapshot tree'):
+            release.reviewed_room_mail_vps_application_blobs(wrong_base, self.candidate)
+        wrong_source = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                                '-p', self.live, '-m', 'same-tree unreviewed source identity')
+        impostor = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                           '-p', self.control, '-p', wrong_source, '-m', 'wrong source ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(impostor)
+
+
+    def test_operational_prerequisite_scope_input_and_output_are_exact(self):
+        for field in ('ROOM_MAIL_VPS_PREREQUISITE_INPUTS', 'ROOM_MAIL_VPS_PREREQUISITE_BLOBS'):
+            for values in ({}, {'.github/workflows/other.yml': 'f' * 40}):
+                with self.subTest(field=field, values=values), patch.object(release, field, values):
+                    with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'): self.verify()
+            with patch.dict(getattr(release, field), {self.prerequisites[0]: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'prerequisite'): self.verify()
+
+
+    def test_each_operational_prerequisite_rejects_missing_drift_mode_and_partial_control(self):
+        for revision in (self.control, self.candidate):
+            for name in self.prerequisites:
+                for mutation in ('bytes', 'missing', 'mode'):
+                    with self.subTest(revision=revision, path=name, mutation=mutation):
+                        self.git('checkout', '-q', revision)
+                        if mutation == 'bytes': self.write(name, 'unreviewed operational bytes\n')
+                        elif mutation == 'missing': self.git('rm', name)
+                        else: (self.root / name).chmod(0o755)
+                        changed = self.commit()
+                        with self.assertRaises(AssertionError): checkout_source_family(self.root)
+                        if revision == self.control:
+                            candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                                 '-p', self.candidate, '-p', changed, '-m', 'unreviewed operational controls')
+                            self.git('checkout', '-q', candidate)
+                            self.git('update-ref', 'refs/remotes/origin/main', changed)
+                        with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed if revision == self.control else self.control):
+                            with self.assertRaises(release.ReleaseError): self.verify()
+                        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+
+    def test_same_tree_prerequisite_without_reviewed_identity_or_ancestry_is_rejected(self):
+        unrelated = self.git('commit-tree', self.git('rev-parse', self.prerequisite + '^{tree}'),
+                             '-p', self.live, '-m', 'unreviewed same-tree operational identity')
+        with patch.object(release, 'ROOM_MAIL_VPS_PREREQUISITE_SNAPSHOT', unrelated):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        control = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                           '-p', self.live, '-m', 'copied controls without operational ancestry')
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', control, '-p', self.snapshot, '-m', 'source ancestry cannot authorize copied controls')
+        self.git('checkout', '-q', candidate)
+        self.git('update-ref', 'refs/remotes/origin/main', control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+
+    def test_release_workflow_activation_and_handover_names_remain_frozen(self):
+        for name in ('.github/workflows/tickets-code-release.yml', 'worker/handover.ts',
+                     'db/schema.ts', 'drizzle/0068_room_host_first_posts.sql',
+                     'drizzle/0069_event_host_pass_invitations.sql'):
+            self.git('checkout', '-q', self.candidate)
+            self.write(name, 'unreviewed activation or schema change\n')
+            self.commit()
+            with self.assertRaises(release.ReleaseError): self.verify()
+            with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+
+    def test_original_reviewed_application_ancestry_cannot_be_replaced_by_matching_bytes(self):
+        copy_only = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                             '-p', self.prerequisite, '-m', 'source without original reviewed app ancestry')
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-p', copy_only, '-m', 'copy-only application promotion')
+        with patch.object(release, 'ROOM_MAIL_VPS_APP_SNAPSHOT', copy_only):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify(candidate)
+        unrelated = self.git('commit-tree', self.git('rev-parse', self.origin + '^{tree}'),
+                             '-p', self.live, '-m', 'wrong original application identity')
+        with patch.object(release, 'ROOM_MAIL_VPS_APP_ORIGIN', unrelated):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_archive_workflow_input_output_and_scope_are_exact(self):
+        for field in ('ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS', 'ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS'):
+            for values in ({}, {'.github/workflows/unreviewed.yml': 'f' * 40}):
+                with patch.object(release, field, values), self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+            for name in self.control_prerequisites:
+                with patch.dict(getattr(release, field), {name: 'f' * 40}), self.assertRaisesRegex(release.ReleaseError, 'archive workflow'):
+                    self.verify()
+
+    def test_archive_workflow_is_required_unchanged_in_both_controls_and_promotion(self):
+        for revision, name in ((revision, name) for revision in (self.control, self.candidate)
+                               for name in self.control_prerequisites):
+            for mutation in ('missing', 'bytes', 'mode', 'old-version'):
+                with self.subTest(revision=revision, mutation=mutation):
+                    self.git('checkout', '-q', revision)
+                    if mutation == 'missing': self.git('rm', name)
+                    elif mutation == 'bytes': self.write(name, 'unreviewed workflow permissions\n')
+                    elif mutation == 'mode': (self.root / name).chmod(0o755)
+                    else: self.git('checkout', self.live, '--', name)
+                    changed = self.commit()
+                    with self.assertRaises(AssertionError): checkout_source_family(self.root)
+                    if revision == self.control:
+                        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                             '-p', self.candidate, '-p', changed, '-m', 'unreviewed workflow controls')
+                        self.git('checkout', '-q', candidate)
+                        self.git('update-ref', 'refs/remotes/origin/main', changed)
+                    with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed if revision == self.control else self.control):
+                        with self.assertRaises(release.ReleaseError): self.verify()
+                    self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+
+class RoomMailVpsDeploymentTests(DeploymentFixture):
+    def setUp(self):
+        super().setUp()
+        baseline = patch.object(release, 'ROOM_MAIL_VPS_RELEASE_BASELINE', OLD)
+        baseline.start()
+        self.addCleanup(baseline.stop)
+        self.proof['changedFiles'] = sorted(set(release.ROOM_MAIL_VPS_APPLICATION_BLOBS)
+            | release.ROOM_MAIL_VPS_CONTROL_FILES | set(release.ROOM_MAIL_VPS_PREREQUISITE_BLOBS)
+            | set(release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS))
+        self.refresh_digests()
+        self.deployment = self.new_deployment()
+        mail = patch.object(release, 'verify_room_mail_vps_service')
+        self.mail = mail.start()
+        self.addCleanup(mail.stop)
+
+    def test_code_only_preserves_active_private_configuration_exactly(self):
+        raw = self.config_before.rstrip()[:-1] + b', "ROOM_HOST_FIRST_POST_ENABLED" : "1", "ROOM_HOST_FIRST_POST_EVENT_SLUG":"puro-exceso-20261024", "ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID":"11111111-1111-4111-8111-111111111111"}\n'
+        release.atomic_write(self.deployment.config, raw)
+        # The existing active journal binds the current private runtime bytes.
+        journal = json.loads(self.deployment.journal.read_bytes())
+        journal['configurationHash'] = release.hashlib.sha256(raw).hexdigest()
+        release.write_json(self.deployment.journal, journal)
+        with patch.object(release, 'verify_first_host_target', side_effect=AssertionError('activation target read')):
+            result = self.deployment.transact()
+        self.assertEqual(self.deployment.config.read_bytes(), raw)
+        self.assertEqual((self.deployment.snapshot / 'config.before').read_bytes(), raw)
+        self.assertNotIn('firstHostEnabledRequested', result)
+        self.assertFalse(result['cryptoEnabledRequested'])
+        self.assertEqual(self.deployment.migrations, [])
+        self.assertEqual(self.mail.call_count, 2)
+
+    def test_activation_or_crypto_request_is_rejected_before_mutation(self):
+        for flags in ({'enable_crypto': True}, {'enable_first_host': True,
+                      'first_host_account_id': '11111111-1111-4111-8111-111111111111'}):
+            with self.subTest(flags=tuple(flags)):
+                deployment = self.new_deployment(**flags)
+                with self.assertRaisesRegex(release.ReleaseError, 'code-only'):
+                    deployment.preflight()
+                self.assertEqual(deployment.config.read_bytes(), self.config_before)
+                self.assertFalse(deployment.snapshot.exists())
+                self.assertEqual(self.system.restarts, 0)
+
+    def test_failed_code_only_release_restores_exact_configuration(self):
+        self.system.fail = 'public'
+        with self.assertRaisesRegex(release.ReleaseError, 'previous release restored'):
+            self.deployment.transact()
+        self.assert_restored()
+        self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
+        self.assertEqual(self.deployment.migrations, [])
+        self.assertEqual(self.mail.call_count, 2)
+
+
+    def test_mail_prerequisite_failure_refuses_before_snapshot_or_service_mutation(self):
+        self.mail.side_effect = release.ReleaseError('Exact mail prerequisite unavailable')
+        with self.assertRaisesRegex(release.ReleaseError, 'mail prerequisite'): self.deployment.preflight()
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertFalse(self.deployment.release.exists())
+        self.assertEqual(self.system.restarts, 0)
+        self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
+
+    def test_mail_is_rechecked_immediately_before_application_activation(self):
+        self.mail.side_effect = [None, release.ReleaseError('Exact mail prerequisite unavailable')]
+        with self.assertRaisesRegex(release.ReleaseError, 'previous release restored'):
+            self.deployment.transact()
+        self.assert_restored()
+        self.assertEqual(self.mail.call_count, 2)
+        self.assertEqual(self.system.restarts, 1)
+        self.assertEqual(self.system.revision, OLD)
+        self.assertEqual(self.deployment.config.read_bytes(), self.config_before)
+
+
+class RoomMailVpsPrerequisiteTests(unittest.TestCase):
+    def test_exact_helper_load_ignores_import_cache_and_never_runs_its_main(self):
+        with patch.dict(sys.modules, {'room_mail_vps_metadata': object()}):
+            metadata = release.load_room_mail_vps_inspector()
+        self.assertEqual(metadata.CONTAINER, 'becore-tickets-mail')
+        self.assertEqual(metadata.STAGE, 'preconditions')
+        self.assertTrue(callable(metadata.health))
+
+    def test_helper_bytes_mode_links_missing_and_import_error_fail_closed_without_private_errors(self):
+        source = Path(release.__file__).with_name('inspect-mail-service-readonly.py').read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory);helper = root / 'inspect-mail-service-readonly.py'
+            for mutation in ('bytes', 'mode', 'symlink', 'hardlink', 'missing'):
+                with self.subTest(mutation=mutation):
+                    if helper.exists() or helper.is_symlink(): helper.unlink()
+                    helper.write_bytes(source);helper.chmod(0o644)
+                    if mutation == 'bytes': helper.write_bytes(b'raise ValueError("PRIVATE_SENTINEL")')
+                    elif mutation == 'mode': helper.chmod(0o755)
+                    elif mutation == 'symlink':
+                        helper.unlink();helper.symlink_to(root / 'absent-private-file')
+                    elif mutation == 'hardlink':
+                        other = root / 'linked-copy';other.write_bytes(source);helper.unlink();os.link(other, helper)
+                    else: helper.unlink()
+                    with patch.object(release, '__file__', str(root / 'code-release.py')):
+                        with self.assertRaises(release.ReleaseError) as failure: release.load_room_mail_vps_inspector()
+                    self.assertNotIn('PRIVATE_SENTINEL', str(failure.exception))
+                    self.assertNotIn(directory, str(failure.exception))
+
+    def inspect(self, *, health=None, marker=None, identity=None, evidence=None, failure=None):
+        expected = {'service': 'becore-tickets-mail', 'revision': release.ROOM_MAIL_VPS_MAIL_REVISION,
+                    'sendingEnabled': True}
+        ident = ['a' * 64, 'sha256:' + 'b' * 64, True, '2026-10-24T17:01:12Z']
+        source = {'source_sha256': release.ROOM_MAIL_VPS_MAIL_SOURCE_SHA256,
+                  'room_host_post_supported': True, 'event_host_pass_supported': False, 'unknown_kind_count': 0}
+        module = types.SimpleNamespace(CONTAINER='becore-tickets-mail', SOURCE_READ='fixed reviewed source read')
+        calls = []
+        def sequence(name, values):
+            iterator = iter(values)
+            def call_once(*args):
+                calls.append(name)
+                if failure == name: raise ValueError('PRIVATE_SENTINEL address@example.invalid')
+                return next(iterator)
+            return call_once
+        module.health = sequence('health', health if health is not None else [expected, expected])
+        module.marker = sequence('marker', marker if marker is not None else [release.ROOM_MAIL_VPS_MAIL_REVISION] * 2)
+        module.identity = sequence('identity', identity if identity is not None else [ident, ident])
+        def command(args):
+            calls.append('source')
+            self.assertEqual(args, ['docker', 'exec', 'becore-tickets-mail', 'python3', '-B', '-c', module.SOURCE_READ])
+            if failure == 'source': raise subprocess.TimeoutExpired(['private command'], 15, output=b'PRIVATE_SENTINEL')
+            return 'reviewed public source'
+        module.command = command
+        module.source_evidence = lambda raw: source if evidence is None else evidence
+        with patch.object(release, 'load_room_mail_vps_inspector', return_value=module), \
+             patch.object(release.subprocess, 'run', side_effect=AssertionError('unexpected process')), \
+             patch.object(release.urllib.request, 'urlopen', side_effect=AssertionError('unexpected network')):
+            release.verify_room_mail_vps_service()
+        return calls
+
+    def test_exact_service_is_checked_twice_with_fixed_read_only_source_command(self):
+        self.assertEqual(self.inspect(), ['identity', 'marker', 'health', 'source', 'health', 'marker', 'identity'])
+
+    def test_wrong_health_revision_or_paused_sending_is_rejected_at_either_boundary(self):
+        good = {'service': 'becore-tickets-mail', 'revision': release.ROOM_MAIL_VPS_MAIL_REVISION, 'sendingEnabled': True}
+        for value in ({**good, 'sendingEnabled': False}, {**good, 'revision': 'f' * 40},
+                      {**good, 'service': 'other'}, {}, None):
+            for index in (0, 1):
+                health = [good, good];health[index] = value
+                with self.subTest(value=value, index=index), self.assertRaises(release.ReleaseError):
+                    self.inspect(health=health)
+
+    def test_exact_source_room_only_allowlist_and_unknown_kind_count_are_required(self):
+        good = {'source_sha256': release.ROOM_MAIL_VPS_MAIL_SOURCE_SHA256,
+                'room_host_post_supported': True, 'event_host_pass_supported': False, 'unknown_kind_count': 0}
+        for value in ({**good, 'source_sha256': 'f' * 64}, {**good, 'room_host_post_supported': False},
+                      {**good, 'event_host_pass_supported': True}, {**good, 'unknown_kind_count': 1}, {}):
+            with self.subTest(value=value), self.assertRaises(release.ReleaseError): self.inspect(evidence=value)
+
+    def test_revision_marker_and_container_replacement_are_rejected(self):
+        for marker in (['f' * 40, 'f' * 40], [release.ROOM_MAIL_VPS_MAIL_REVISION, 'f' * 40]):
+            with self.assertRaises(release.ReleaseError): self.inspect(marker=marker)
+        good = ['a' * 64, 'sha256:' + 'b' * 64, True, '2026-10-24T17:01:12Z']
+        for index, value in ((0, 'c' * 64), (1, 'sha256:' + 'd' * 64), (2, False), (3, '2026-10-24T17:02:00Z')):
+            changed = list(good);changed[index] = value
+            with self.assertRaises(release.ReleaseError): self.inspect(identity=[good, changed])
+
+    def test_errors_have_no_source_identity_private_output_or_command_details(self):
+        for stage in ('identity', 'marker', 'health', 'source'):
+            with self.subTest(stage=stage), self.assertRaises(release.ReleaseError) as failure:
+                self.inspect(failure=stage)
+            for private in ('PRIVATE_SENTINEL', 'address@', 'private command'):
+                self.assertNotIn(private, str(failure.exception))
+            self.assertTrue(failure.exception.__suppress_context__)
+
+    def test_historical_activation_compatibility_rejects_permission_command_and_family_drift(self):
+        name = '.github/workflows/tickets-code-release.yml'
+        original = (Path(__file__).resolve().parents[2] / name).read_bytes()
+        family = {'ops/vps/code-release.py': ROOM_MAIL_VPS_OPERATOR_BLOB,
+                  name: release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name]}
+        mutations = (original.replace(b'contents: read', b'contents: write', 1),
+                     original.replace(b'tar -x', b'tar --wildcards -x', 1),
+                     original.replace(b'ops/vps ops/email/mailer.py ', b'ops/vps ', 1),
+                     original.replace(b'ops/vps ops/email/mailer.py ', b'ops/vps ops/email/mailer.py extra ', 1))
+        self.assertEqual(len(set(mutations)), 4)
+        self.assertNotIn(original, mutations)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory);path = root / name;path.parent.mkdir(parents=True)
+            for raw in (original, *mutations):
+                path.write_bytes(raw)
+                with patch(__name__ + '.checkout_source_family', return_value=family), \
+                     patch.object(sys.modules[__name__], '__file__', str(root / 'ops/vps/test_code_release.py')):
+                    case = FirstHostConfigurationTests('test_workflow_activation_is_default_off_step_local_stdin_only')
+                    if raw == original:
+                        case.test_workflow_activation_is_default_off_step_local_stdin_only()
+                    else:
+                        with self.assertRaises(AssertionError):
+                            case.test_workflow_activation_is_default_off_step_local_stdin_only()
+            path.write_bytes(original)
+            with patch(__name__ + '.checkout_source_family', return_value={**family, 'ops/vps/code-release.py': 'f' * 40}), \
+                 patch.object(sys.modules[__name__], '__file__', str(root / 'ops/vps/test_code_release.py')):
+                with self.assertRaises(AssertionError):
+                    FirstHostConfigurationTests().test_workflow_activation_is_default_off_step_local_stdin_only()
+
+    def test_workflow_only_adds_required_mailer_archive_and_bounded_test_budget(self):
+        root = Path(__file__).resolve().parents[2]
+        for name, revision in (('.github/workflows/tickets-release-operator-checks.yml', 'HEAD'),
+                               ('.github/workflows/tickets-code-release.yml', '"$OPERATOR_SHA"')):
+            raw = (root / name).read_bytes()
+            anchor = ('git archive ' + revision + ' ops/vps ops/email/mailer.py ').encode()
+            self.assertEqual(raw.count(anchor), 1)
+            before = raw.replace(anchor, ('git archive ' + revision + ' ops/vps ').encode(), 1)
+            if name == '.github/workflows/tickets-release-operator-checks.yml':
+                self.assertEqual(before.count(b'    timeout-minutes: 20\n'), 1)
+                before = before.replace(b'    timeout-minutes: 20\n', b'    timeout-minutes: 10\n', 1)
+            digest = lambda data: release.hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+            self.assertEqual(digest(raw), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name])
+            self.assertEqual(digest(before), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS[name])
+
 
 
 if __name__ == "__main__":
