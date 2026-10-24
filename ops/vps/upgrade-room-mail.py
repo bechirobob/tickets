@@ -108,6 +108,8 @@ def failure_report(error,read_only):
             leaf=path.rsplit('.',1)[-1].encode()
             if ('<'+path+'>').encode() in raw[:8192] or b'field '+leaf+b' in type ' in raw[:8192] or b'key "'+leaf+b'"' in raw[:8192]:
                 result['projection_field']=key;break
+    config_diagnostic=getattr(error,'config_diagnostic',None)
+    if config_diagnostic is not None:result['config_diagnostic']=config_diagnostic
     diagnostic=getattr(error,'projection_diagnostic',None)
     if diagnostic is not None:result['projection_diagnostic']=diagnostic
     return result
@@ -186,6 +188,17 @@ def projection_failures(name,revision):
     return {'failed_fields':failed,'completed':completed,'expected':len(probes),'incomplete':completed!=len(probes)}
 
 
+def safe_config_observation(key,value):
+    if value is None or type(value) is bool:return value
+    if type(value) is int and -1<=value<=2**63-1:return value
+    enums={'network':{'default','bridge','host','none'},'cgroupns':{'private','host'},
+           'ipc_mode':{'private','host','shareable','none'},'pid_mode':{'','host'},
+           'runtime':{'runc'},'userns':{'','host'}}
+    if isinstance(value,str) and value in enums.get(key,set()):return value
+    if isinstance(value,(list,dict)):return {'type':'list' if isinstance(value,list) else 'object','count':min(len(value),10000)}
+    return {'type':'other'}
+
+
 def inspect_config(name,revision,image,running=True):
     read_step('container_config')
     # These Docker API pointer/map fields are explicitly omitempty. Preserve
@@ -197,16 +210,25 @@ def inspect_config(name,revision,image,running=True):
     except subprocess.CalledProcessError as error:
         error.projection_diagnostic=projection_failures(name,revision)
         raise
-    if item['image']!=image or item['running'] is not running or not re.fullmatch('[a-f0-9]{64}',item['id']):raise CheckFailed('config_identity')
-    if item['hostname']!=item['id'][:12] or item['networks']!='bridge;':raise CheckFailed('config_network_identity')
+    mismatches=[]
+    if item['image']!=image or item['running'] is not running or not re.fullmatch('[a-f0-9]{64}',item['id']):mismatches.append('config_identity')
+    network_identity=item['hostname']==item['id'][:12] and item['networks']=='bridge;'
+    if not network_identity:mismatches.append('config_network_identity')
+    observations={}
     for key,value in EXPECTED.items():
-        if item[key]!=value:raise CheckFailed('config_'+key)
-    if sorted(item['env'].split(';'))!=['','frontend','path','release'] or item['labels']!=0:raise CheckFailed('config_env')
-    mounts=item['mounts']
-    if len(mounts)!=len(MOUNTS):raise CheckFailed('config_mounts')
+        if item[key]!=value:
+            mismatches.append('config_'+key);observations[key]=safe_config_observation(key,item[key])
+    if sorted(item['env'].split(';'))!=['','frontend','path','release'] or item['labels']!=0:mismatches.append('config_env')
+    mounts=item['mounts'];mounts_match=len(mounts)==len(MOUNTS)
     for mount in mounts:
         actual=(mount.get('Type'),mount.get('Name') if mount.get('Type')=='volume' else mount.get('Source'),mount.get('RW'))
-        if MOUNTS.get(mount.get('Destination'))!=actual or mount.get('Propagation','') not in ('','rprivate'):raise CheckFailed('config_mounts')
+        if MOUNTS.get(mount.get('Destination'))!=actual or mount.get('Propagation','') not in ('','rprivate'):mounts_match=False
+    if not mounts_match:mismatches.append('config_mounts')
+    if mismatches:
+        error=CheckFailed(mismatches[0])
+        error.config_diagnostic={'mismatches':mismatches,'observations':observations,
+                                 'bridge_network_identity_match':network_identity,'exact_mounts_match':mounts_match}
+        raise error
     return item['id']
 
 

@@ -28,6 +28,19 @@ def config():
 
 
 class OperatorTests(unittest.TestCase):
+    def test_all_configuration_mismatches_reported_without_paths_or_unknown_values(self):
+        data=config();data.update(network='bridge',memory=123,privileged=True,workdir='/private/secret',security=['SECRET'],env='private-key',labels=2)
+        data['mounts'][0]['Source']='/private/credential'
+        with patch.object(u,'command',return_value=json.dumps(data).encode()):
+            with self.assertRaises(u.CheckFailed) as failure:u.inspect_config(u.NAME,u.OLD_REV,u.OLD_IMAGE)
+        report=u.failure_report(failure.exception,True)['config_diagnostic']
+        self.assertEqual(set(report['mismatches']),{'config_network','config_memory','config_privileged','config_workdir','config_security','config_env','config_mounts'})
+        self.assertEqual(report['observations']['network'],'bridge');self.assertEqual(report['observations']['memory'],123)
+        self.assertTrue(report['bridge_network_identity_match']);self.assertFalse(report['exact_mounts_match'])
+        for private in ['/private','SECRET','private-key','credential']:self.assertNotIn(private,json.dumps(report))
+        for value in ['custom-private-network',2**80,object()]:self.assertEqual(u.safe_config_observation('network',value),{'type':'other'})
+        self.assertIsNone(u.safe_config_observation('init',None));self.assertIs(u.safe_config_observation('privileged',True),True)
+
     def test_all_projection_probes_are_fixed_bounded_and_return_no_values(self):
         calls=[]
         def probe(args,**kwargs):
