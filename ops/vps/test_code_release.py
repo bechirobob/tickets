@@ -877,7 +877,100 @@ def integrated_experience_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
+# Exact camera looks C/P test family; historical families remain independent.
+CAMERA_LOOKS_OPERATOR_BLOB = '04fbca9db63458859cf3b49bb4504e916cbda58e'
+CAMERA_LOOKS_STAGED_BASE = dict(INTEGRATED_EXPERIENCE_STAGED_BASE)
+CAMERA_LOOKS_TEST_FILE = Path(__file__).resolve()
+
+
+def camera_looks_source_family(root):
+    """Recognize only the complete Camera looks C/P family for local test execution."""
+    root = Path(root)
+    operator = root / 'ops/vps/code-release.py'
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    # The executing new test family cannot downgrade to a historical operator.
+    # Capture its real module path once, independent of historical fixture mocks.
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == CAMERA_LOOKS_TEST_FILE
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != CAMERA_LOOKS_OPERATOR_BLOB):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            baseline = release.CAMERA_LOOKS_RELEASE_BASELINE
+            if (checkout_git(root, 'rev-parse', baseline + '^{tree}').decode().strip()
+                    != release.CAMERA_LOOKS_RELEASE_BASE_TREE):
+                raise AssertionError('Camera looks family baseline tree changed')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', baseline).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Camera looks baseline contains unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update({name: ('100644', blob)
+                             for name, blob in release.CAMERA_LOOKS_PREREQUISITE_BLOBS.items()})
+            application = release.CAMERA_LOOKS_APPLICATION_BLOBS
+            observed = {}
+            for name in application:
+                path = root / name
+                observed[name] = digest(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+            if observed == application:
+                manifest.update({name: ('100644', blob) for name, blob in application.items()})
+            elif any(observed[name] != manifest.get(name, (None, None))[1] for name in application):
+                raise AssertionError('Camera looks application family has partial or unreviewed bytes')
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Camera looks full inventory differs from complete tracked C/P family')
+            # A restored worktree cannot conceal staged application changes.
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if not record:
+                    continue
+                metadata, raw_name = record.split(b'\t', 1)
+                mode, blob, stage = metadata.decode().split()
+                name = os.fsdecode(raw_name)
+                if (stage != '0' or name not in manifest
+                        or (name in release.CAMERA_LOOKS_CONTROL_FILES
+                            and (mode != '100644' or blob != digest((root / name).read_bytes())))
+                        or (name not in release.CAMERA_LOOKS_CONTROL_FILES and manifest[name] != (mode, blob))):
+                    raise AssertionError('Camera looks index differs from complete application family')
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError('Camera looks family requires its independently pinned baseline') from exc
+    else:
+        manifest = dict(CAMERA_LOOKS_STAGED_BASE)
+    # Only this test file cannot self-pin; production binds both controls to C.
+    manifest['ops/vps/code-release.py'] = ('100644', CAMERA_LOOKS_OPERATOR_BLOB)
+    manifest['ops/vps/test_code_release.py'] = ('100644', None)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Camera looks family requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError('Camera looks family is incomplete') from exc
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Camera looks family has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def checkout_source_family(root):
+    camera_looks = camera_looks_source_family(root)
+    if camera_looks is not None:
+        return camera_looks
+
     integrated_experience = integrated_experience_source_family(root)
     if integrated_experience is not None:
         return integrated_experience
@@ -8885,6 +8978,596 @@ class IntegratedExperienceSourceAdmissionTests(unittest.TestCase):
         impostor = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
                            '-p', self.control, '-p', wrong_source, '-m', 'wrong source ancestry')
         with self.assertRaises(subprocess.CalledProcessError): self.verify(impostor)
+
+
+class CameraLooksSourceAdmissionTests(unittest.TestCase):
+    """Real Git objects bind the new M/S/C/P family without changing older grants."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', '--local', 'maintenance.autoDetach', 'false')
+        self.git('config', '--local', 'gc.autoDetach', 'false')
+        self.git('config', 'user.name', 'Camera looks admission tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.files = tuple(release.CAMERA_LOOKS_APPLICATION_BLOBS)
+        self.added = {name for name, blob in release.CAMERA_LOOKS_APPLICATION_INPUTS.items() if blob is None}
+        self.assertEqual(self.added, {'app/room/[slug]/flash-live-preview.tsx'})
+        self.assertEqual(len(self.files), 14)
+        self.prerequisites = tuple(release.CAMERA_LOOKS_PREREQUISITE_BLOBS)
+        for name in (*self.files, *release.CAMERA_LOOKS_CONTROL_FILES):
+            if name not in self.added:
+                self.write(name, 'baseline ' + name + '\n')
+        for name in release.CAMERA_LOOKS_DEPENDENCY_BLOBS:
+            self.write(name, 'unchanged locked dependency input ' + name + '\n')
+        package = {'scripts': {'test:repo': 'node --test tests/example.mjs'},
+                   'dependencies': {'next': '16.4.1'}, 'devDependencies': {'vitest': '4.1.12'},
+                   'overrides': {'fast-uri': '3.1.8', 'undici': '7.29.1', 'zod': '4.6.6'}}
+        self.write('package.json', json.dumps(package))
+        self.write('package-lock.json', json.dumps({'packages': {
+            'node_modules/fast-uri': {'version': '3.1.8'},
+            'node_modules/undici': {'version': '7.29.1'}}}))
+        self.write('ops/vps/audit.py', 'unchanged staged utility\n')
+        self.write('.github/workflows/candidate-checks.yml', 'unchanged gates\n')
+        self.live = self.commit()
+        # S may contain several reviewed commits; direct-child ancestry is not assumed.
+        self.git('commit', '--allow-empty', '-qm', 'feature preparation')
+        for name in self.files:
+            self.write(name, 'exact reviewed camera_looks ' + name + '\n')
+        package['overrides'].update({'fast-uri': '3.1.9', 'undici': '7.30.1'})
+        self.write('package.json', json.dumps(package))
+        self.write('package-lock.json', json.dumps({'packages': {
+            'node_modules/fast-uri': {'version': '3.1.9'},
+            'node_modules/undici': {'version': '7.30.1'}}}))
+        self.snapshot = self.commit()
+        self.pins = {name: self.git('rev-parse', self.snapshot + ':' + name) for name in self.files}
+        self.inputs = {name: None if name in self.added else self.git('rev-parse', self.live + ':' + name)
+                       for name in self.files}
+        self.git('checkout', '-q', self.live)
+        self.operator = b'independent reviewed camera_looks operator\n'
+        self.write('ops/vps/code-release.py', self.operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed camera_looks tests\n')
+        self.git('checkout', self.snapshot, '--', *self.prerequisites)
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+        self.candidate = self.commit()
+        values = {
+            'CAMERA_LOOKS_RELEASE_BASELINE': self.live,
+            'CAMERA_LOOKS_RELEASE_BASE_TREE': self.git('rev-parse', self.live + '^{tree}'),
+            'CAMERA_LOOKS_APP_SNAPSHOT': self.snapshot,
+            'CAMERA_LOOKS_APP_TREE': self.git('rev-parse', self.snapshot + '^{tree}'),
+            'CAMERA_LOOKS_PREREQUISITE_INPUTS': {name: self.git('rev-parse', self.live + ':' + name)
+                                                 for name in self.prerequisites},
+            'CAMERA_LOOKS_PREREQUISITE_BLOBS': {name: self.git('rev-parse', self.snapshot + ':' + name)
+                                                for name in self.prerequisites},
+            'CAMERA_LOOKS_APPLICATION_INPUTS': self.inputs,
+            'CAMERA_LOOKS_APPLICATION_BLOBS': self.pins,
+            'CAMERA_LOOKS_DEPENDENCY_BLOBS': {name: self.git('rev-parse', self.live + ':' + name)
+                                          for name in release.CAMERA_LOOKS_DEPENDENCY_BLOBS},
+            '__file__': str(self.root / 'ops/vps/code-release.py'),
+        }
+        for name, value in values.items():
+            self.patch_value(release, name, value)
+        self.patch_value(sys.modules[__name__], 'CAMERA_LOOKS_OPERATOR_BLOB', self.blob(self.operator))
+        staged_names = (*release.CAMERA_LOOKS_CONTROL_FILES, 'ops/vps/audit.py',
+                        '.github/workflows/candidate-checks.yml')
+        self.staged = {name: ('100644', self.git('rev-parse', self.live + ':' + name)) for name in staged_names}
+        self.patch_value(sys.modules[__name__], 'CAMERA_LOOKS_STAGED_BASE', self.staged)
+        patcher = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def patch_value(self, target, name, value):
+        patcher = patch.object(target, name, value)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+    def write(self, name, raw):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw.encode() if isinstance(raw, str) else raw)
+        path.chmod(0o644)
+        return path
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated Camera looks source')
+        return self.git('rev-parse', 'HEAD')
+
+    def verify(self, source=None):
+        return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
+
+    def test_each_application_output_rejects_mutation_and_partial_patch(self):
+        for name in self.files:
+            for mutation in ('bytes', 'missing-change'):
+                with self.subTest(name=name, mutation=mutation):
+                    self.git('checkout', '-q', self.candidate)
+                    if mutation == 'bytes':
+                        self.write(name, 'unreviewed bytes\n')
+                    elif name in self.added:
+                        self.git('rm', name)
+                    else:
+                        self.git('checkout', self.control, '--', name)
+                    self.commit()
+                    with self.assertRaises(release.ReleaseError):
+                        self.verify()
+                    with self.assertRaises(AssertionError):
+                        checkout_source_family(self.root)
+
+    def test_changed_controls_and_executing_operator_are_rejected(self):
+        for name in release.CAMERA_LOOKS_CONTROL_FILES:
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'untrusted control\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+        self.git('checkout', '-q', self.candidate)
+        self.write('ops/vps/code-release.py', 'untrusted executing bytes\n')
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            self.verify()
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+
+    def test_trusted_control_cannot_include_application_changes(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.candidate):
+            self.git('commit', '--allow-empty', '-qm', 'candidate after bad trust anchor')
+            self.git('update-ref', 'refs/remotes/origin/main', self.candidate)
+            with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                self.verify()
+
+    def test_application_worktree_and_staged_mutations_cannot_hide(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        self.git('update-index', '--assume-unchanged', name)
+        path.write_bytes(b'hidden worktree edit\n')
+        with self.assertRaises(AssertionError):
+            checkout_source_family(self.root)
+        path.write_bytes(original)
+        self.git('update-index', '--no-assume-unchanged', name)
+        path.write_bytes(b'hidden index edit\n')
+        self.git('add', name)
+        path.write_bytes(original)
+        with self.assertRaisesRegex(AssertionError, 'index differs'):
+            checkout_source_family(self.root)
+
+    def test_full_family_rejects_symlink_hardlink_and_untracked_addition(self):
+        name = self.files[0]
+        path = self.root / name
+        original = path.read_bytes()
+        for mutation in ('symlink', 'hardlink'):
+            with self.subTest(mutation=mutation):
+                path.unlink()
+                if mutation == 'symlink':
+                    path.symlink_to(self.root / 'package.json')
+                else:
+                    os.link(self.root / 'package.json', path)
+                with self.assertRaises(AssertionError):
+                    checkout_source_family(self.root)
+                path.unlink()
+                self.write(name, original)
+        self.write('unknown.txt', 'untracked file\n')
+        with self.assertRaisesRegex(AssertionError, 'full inventory'):
+            checkout_source_family(self.root)
+
+    def test_complete_staged_family_rejects_every_mutation_and_extra_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw_files = {name: checkout_git(self.root, 'show', self.control + ':' + name)
+                         for name in self.staged}
+            for name, raw in raw_files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            self.assertEqual(checkout_source_family(root)['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in raw_files:
+                for mutation in ('bytes', 'missing', 'mode'):
+                    # Only the test file is necessarily unable to authenticate itself.
+                    if name == 'ops/vps/test_code_release.py' and mutation == 'bytes':
+                        continue
+                    with self.subTest(name=name, mutation=mutation):
+                        path = root / name
+                        if mutation == 'bytes': path.write_bytes(b'unreviewed staged file\n')
+                        elif mutation == 'missing': path.unlink()
+                        else: path.chmod(0o755)
+                        with self.assertRaises(AssertionError):
+                            family = checkout_source_family(root)
+                            if family is None:
+                                staged_family_pins(root)
+                        path.write_bytes(raw_files[name])
+                        path.chmod(0o644)
+            (root / 'unknown.txt').write_text('unexpected staged addition\n')
+            with self.assertRaisesRegex(AssertionError, 'Unexpected staged'):
+                checkout_source_family(root)
+
+    def test_complete_control_and_promotion_families_are_recognized(self):
+        self.assertEqual(set(self.verify()), set(self.files) | set(self.prerequisites) | release.CAMERA_LOOKS_CONTROL_FILES)
+        self.assertEqual(release.migration_plan(self.verify()), [])
+        for revision in (self.control, self.candidate):
+            self.git('checkout', '-q', revision)
+            family = checkout_source_family(self.root)
+            self.assertEqual(family['ops/vps/code-release.py'], self.blob(self.operator))
+            for name in set(self.files):
+                if revision == self.control and name in self.added:
+                    self.assertNotIn(name, family)
+                else:
+                    self.assertEqual(family[name], self.git('rev-parse', revision + ':' + name))
+
+    def test_promotion_keeps_reviewed_snapshot_reachable_without_side_refs(self):
+        self.git('merge-base', '--is-ancestor', self.snapshot, self.candidate)
+        self.git('merge-base', '--is-ancestor', self.control, self.candidate)
+        copy_only = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-m', 'same bytes without snapshot ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(copy_only)
+
+    def test_revision_preserves_published_control_candidate_and_snapshot_ancestry(self):
+        self.git('checkout', '-q', self.snapshot)
+        name = 'tests/e2e/flash-camera.spec.ts'
+        self.write(name, 'reviewed source revision\n')
+        snapshot = self.commit()
+        blob = self.git('rev-parse', snapshot + ':' + name)
+        self.git('checkout', '-q', self.control)
+        operator = b'independent reviewed revised camera_looks operator\n'
+        self.write('ops/vps/code-release.py', operator)
+        self.write('ops/vps/test_code_release.py', 'independent reviewed revision tests\n')
+        control = self.commit()
+        self.git('checkout', '-q', self.candidate)
+        self.git('merge', '--no-ff', '--no-commit', control, snapshot)
+        candidate = self.commit()
+        self.assertEqual(self.git('show', '-s', '--format=%P', candidate).split(),
+                         [self.candidate, control, snapshot])
+        self.assertEqual(self.git('show', '-s', '--format=%P', control), self.control)
+        self.assertEqual(self.git('show', '-s', '--format=%P', snapshot), self.snapshot)
+        for ancestor in (self.control, self.candidate, self.snapshot, control, snapshot):
+            self.git('merge-base', '--is-ancestor', ancestor, candidate)
+        # The old merged operator cannot authorize new operator bytes.
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            release.verify_trusted_operator(candidate)
+        self.git('update-ref', 'refs/remotes/origin/main', control)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+             patch.object(release, 'CAMERA_LOOKS_APP_SNAPSHOT', snapshot), \
+             patch.object(release, 'CAMERA_LOOKS_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+             patch.dict(release.CAMERA_LOOKS_APPLICATION_BLOBS, {name: blob}), \
+             patch.object(sys.modules[__name__], 'CAMERA_LOOKS_OPERATOR_BLOB', self.blob(operator)):
+            self.assertEqual(len(self.files), 14)
+            self.assertEqual(set(self.git('diff', '--name-only', self.live, control).splitlines()),
+                             release.CAMERA_LOOKS_CONTROL_FILES | set(self.prerequisites))
+            self.assertEqual(set(self.git('diff', '--name-only', snapshot, candidate).splitlines()),
+                             release.CAMERA_LOOKS_CONTROL_FILES)
+            self.assertEqual(set(self.git('diff', '--name-only', control, candidate).splitlines()),
+                             set(self.files))
+            self.assertEqual(set(self.verify()), set(self.files) | set(self.prerequisites) | release.CAMERA_LOOKS_CONTROL_FILES)
+            self.assertEqual(release.migration_plan(self.verify()), [])
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'],
+                             self.blob(operator))
+            self.git('update-ref', 'refs/remotes/origin/main', self.control)
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_unlisted_files_dependencies_workflows_and_schema_are_rejected(self):
+        for name in ('tests/unreviewed.test.ts', 'runtime/vps/worker.mjs', 'drizzle/9999_extra.sql',
+                     '.github/workflows/candidate-checks.yml', *self.prerequisites,
+                     *release.CAMERA_LOOKS_DEPENDENCY_BLOBS):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                self.write(name, 'unreviewed bytes\n')
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+    def test_every_application_and_control_mode_change_is_rejected(self):
+        for name in {*self.files, *self.prerequisites, *release.CAMERA_LOOKS_CONTROL_FILES}:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.candidate)
+                (self.root / name).chmod(0o755)
+                self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+                with self.assertRaises(AssertionError): checkout_source_family(self.root)
+
+    def test_wrong_baseline_snapshot_or_input_inventory_is_rejected(self):
+        for name in ('CAMERA_LOOKS_RELEASE_BASE_TREE', 'CAMERA_LOOKS_APP_TREE'):
+            with patch.object(release, name, 'f' * 40), self.assertRaises(release.ReleaseError): self.verify()
+        for name in self.inputs:
+            with self.subTest(path=name), patch.dict(release.CAMERA_LOOKS_APPLICATION_INPUTS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'application input'): self.verify()
+        with patch.dict(release.CAMERA_LOOKS_APPLICATION_BLOBS, {'tests/extra.mjs': 'f' * 40}):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'): self.verify()
+        for name in release.CAMERA_LOOKS_DEPENDENCY_BLOBS:
+            with patch.dict(release.CAMERA_LOOKS_DEPENDENCY_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'remain unchanged'): self.verify()
+
+    def test_self_unmerged_and_same_tree_snapshot_controls_are_rejected(self):
+        for trusted in (self.live, self.snapshot, self.candidate):
+            with patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError): self.verify()
+        self.git('update-ref', 'refs/remotes/origin/main', self.live)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', 'origin/main', self.control)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+        self.git('tag', '-d', 'origin/main')
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                            '-p', self.live, '-m', 'same tree without control ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(snapshot)
+
+    def test_scope_schema_rejects_controls_dependencies_and_forbidden_application_paths(self):
+        for controls in ({'ops/vps/code-release.py'},
+                         release.CAMERA_LOOKS_CONTROL_FILES | {'package-lock.json'}):
+            with self.subTest(controls=controls), patch.object(release, 'CAMERA_LOOKS_CONTROL_FILES', controls):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for dependencies in ({}, {**release.CAMERA_LOOKS_DEPENDENCY_BLOBS, 'other.lock': 'f' * 40}):
+            with self.subTest(dependencies=dependencies), \
+                 patch.object(release, 'CAMERA_LOOKS_DEPENDENCY_BLOBS', dependencies):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        for name in ('package-lock.json', 'mobile/package.json', '.github/workflows/new.yml',
+                     'runtime/vps/package.json', 'drizzle/9999_extra.sql', 'ops/vps/code-release.py'):
+            with self.subTest(path=name), \
+                 patch.dict(release.CAMERA_LOOKS_APPLICATION_BLOBS, {name: 'f' * 40}), \
+                 patch.dict(release.CAMERA_LOOKS_APPLICATION_INPUTS, {name: None}):
+                with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                    self.verify()
+        application = {name: blob for name, blob in self.pins.items() if name != self.files[0]}
+        inputs = {name: blob for name, blob in self.inputs.items() if name != self.files[0]}
+        with patch.object(release, 'CAMERA_LOOKS_APPLICATION_BLOBS', application), \
+             patch.object(release, 'CAMERA_LOOKS_APPLICATION_INPUTS', inputs):
+            with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                self.verify()
+
+    def test_controls_only_baseline_rejects_any_application_dependency_or_workflow_change(self):
+        for name in (self.files[0], *release.CAMERA_LOOKS_DEPENDENCY_BLOBS,
+                     '.github/workflows/candidate-checks.yml'):
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.write(name, 'unreviewed control-side change\n')
+                control = self.commit()
+                candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                     '-p', self.candidate, '-p', control, '-m', 'retain exact candidate bytes')
+                self.git('checkout', '-q', candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify()
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_both_controls_must_change_and_remain_identical_in_promotion(self):
+        for name in release.CAMERA_LOOKS_CONTROL_FILES:
+            with self.subTest(path=name):
+                self.git('checkout', '-q', self.control)
+                self.git('checkout', self.live, '--', name)
+                control = self.commit()
+                self.git('merge', '--no-ff', '--no-commit', self.snapshot)
+                candidate = self.commit()
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control):
+                    with self.assertRaisesRegex(release.ReleaseError, 'trusted controls'):
+                        self.verify(candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_every_output_pin_is_required_independently_of_the_snapshot_tree(self):
+        for name in self.files:
+            with self.subTest(path=name), \
+                 patch.dict(release.CAMERA_LOOKS_APPLICATION_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'snapshot output'):
+                    self.verify()
+
+    def test_controls_index_edits_cannot_hide_behind_restored_worktree_bytes(self):
+        for revision in (self.control, self.candidate):
+            for name in (*release.CAMERA_LOOKS_CONTROL_FILES, *self.prerequisites):
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    original = (self.root / name).read_bytes()
+                    self.write(name, 'hidden staged control change\n')
+                    self.git('add', name)
+                    self.write(name, original)
+                    with self.assertRaisesRegex(AssertionError, 'index differs'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+    def test_snapshot_with_matching_tree_but_without_baseline_ancestry_is_rejected(self):
+        snapshot = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                            '-m', 'unrelated snapshot with matching bytes')
+        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                             '-p', self.control, '-p', snapshot, '-m', 'include unrelated source')
+        self.git('checkout', '-q', candidate)
+        with patch.object(release, 'CAMERA_LOOKS_APP_SNAPSHOT', snapshot):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.verify()
+
+    def test_family_dispatch_uses_camera_looks_before_historical_integrated_experience(self):
+        with patch(__name__ + '.integrated_experience_source_family', side_effect=AssertionError('old family selected')):
+            self.assertEqual(checkout_source_family(self.root)['ops/vps/code-release.py'], self.blob(self.operator))
+        with patch.object(release, 'reviewed_integrated_experience_application_blobs',
+                          side_effect=AssertionError('old admission selected')):
+            self.assertEqual(set(self.verify()), set(self.files) | set(self.prerequisites) | release.CAMERA_LOOKS_CONTROL_FILES)
+
+
+    def test_executing_camera_looks_tests_cannot_fall_back_to_an_older_operator_family(self):
+        self.git('checkout', '-q', self.control)
+        self.write('ops/vps/code-release.py', 'historical operator bytes\n')
+        self.git('add', 'ops/vps/code-release.py')
+        with patch.object(sys.modules[__name__], 'CAMERA_LOOKS_TEST_FILE',
+                          (self.root / 'ops/vps/test_code_release.py').resolve()), \
+             patch(__name__ + '.integrated_experience_source_family', return_value={'old': 'accepted'}) as old_family:
+            with self.assertRaisesRegex(AssertionError, 'unreviewed bytes'):
+                checkout_source_family(self.root)
+            old_family.assert_not_called()
+
+
+    def test_staged_deletions_restored_as_untracked_exact_files_are_rejected(self):
+        for revision in (self.control, self.candidate):
+            for name in (self.files[0], *self.prerequisites, *release.CAMERA_LOOKS_CONTROL_FILES):
+                with self.subTest(revision=revision, path=name):
+                    self.git('checkout', '-q', revision)
+                    self.git('rm', '--cached', name)
+                    with self.assertRaisesRegex(AssertionError, 'full inventory'):
+                        checkout_source_family(self.root)
+                    self.git('reset', '--hard', revision)
+
+
+    def test_normal_main_merge_accepts_original_control_ancestor(self):
+        merged = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                          '-p', self.live, '-p', self.control, '-m', 'normal merge of reviewed controls')
+        self.git('update-ref', 'refs/remotes/origin/main', merged)
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.control), self.live)
+        self.assertEqual(self.git('show', '-s', '--format=%P', merged).split(), [self.live, self.control])
+        self.assertEqual(self.git('show', '-s', '--format=%P', self.candidate).split(),
+                         [self.control, self.snapshot])
+        self.assertEqual(set(self.verify()), set(self.files) | set(self.prerequisites) | release.CAMERA_LOOKS_CONTROL_FILES)
+        # The branch commit C is the trust anchor, not a newer same-tree main merge
+        # which is deliberately absent from the already-published P ancestry.
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=merged):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_missing_invalid_and_unrelated_same_tree_controls_are_rejected(self):
+        for trusted in ('', 'HEAD', 'a' * 12, 'A' * 40, 'f' * 40):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)):
+                    self.verify()
+        unrelated = self.git('commit-tree', self.git('rev-parse', self.control + '^{tree}'),
+                             '-m', 'unrelated same-tree controls')
+        self.git('update-ref', 'refs/remotes/origin/main', unrelated)
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=unrelated):
+            with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_same_tree_wrong_baseline_and_source_commit_identities_are_rejected(self):
+        wrong_base = self.git('commit-tree', self.git('rev-parse', self.live + '^{tree}'),
+                              '-m', 'same-tree wrong live identity')
+        with self.assertRaisesRegex(release.ReleaseError, 'live or snapshot tree'):
+            release.reviewed_camera_looks_application_blobs(wrong_base, self.candidate)
+        wrong_source = self.git('commit-tree', self.git('rev-parse', self.snapshot + '^{tree}'),
+                                '-p', self.live, '-m', 'same-tree unreviewed source identity')
+        impostor = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                           '-p', self.control, '-p', wrong_source, '-m', 'wrong source ancestry')
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(impostor)
+
+
+    def test_security_pair_rejects_links_and_hidden_worktree_changes(self):
+        for revision in (self.control, self.candidate):
+            for name in self.prerequisites:
+                for mutation in ('symlink', 'hardlink', 'assume-unchanged'):
+                    with self.subTest(revision=revision, path=name, mutation=mutation), \
+                         tempfile.TemporaryDirectory() as directory:
+                        self.git('checkout', '-q', revision)
+                        path = self.root / name
+                        raw = path.read_bytes()
+                        backup = Path(directory) / 'exact-original'
+                        backup.write_bytes(raw)
+                        if mutation == 'assume-unchanged':
+                            self.git('update-index', '--assume-unchanged', name)
+                            path.write_bytes(b'hidden dependency drift\n')
+                        else:
+                            path.unlink()
+                            if mutation == 'symlink': path.symlink_to(backup)
+                            else: os.link(backup, path)
+                        with self.assertRaises(AssertionError): checkout_source_family(self.root)
+                        path.unlink()
+                        self.write(name, raw)
+                        self.git('update-index', '--no-assume-unchanged', name)
+
+
+    def test_security_prerequisite_input_output_and_scope_pins_are_required(self):
+        for name in self.prerequisites:
+            with self.subTest(path=name, pin='input'), \
+                 patch.dict(release.CAMERA_LOOKS_PREREQUISITE_INPUTS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'prerequisite input'):
+                    self.verify()
+            with self.subTest(path=name, pin='output'), \
+                 patch.dict(release.CAMERA_LOOKS_PREREQUISITE_BLOBS, {name: 'f' * 40}):
+                with self.assertRaisesRegex(release.ReleaseError, 'snapshot output'):
+                    self.verify()
+        for name in ('CAMERA_LOOKS_PREREQUISITE_INPUTS', 'CAMERA_LOOKS_PREREQUISITE_BLOBS'):
+            for pins in ({}, {'package.json': 'f' * 40},
+                         {**getattr(release, name), 'other.lock': 'f' * 40}):
+                with self.subTest(pin=name, paths=tuple(pins)), patch.object(release, name, pins):
+                    with self.assertRaisesRegex(release.ReleaseError, 'inventory or scope'):
+                        self.verify()
+
+    def test_security_pair_cannot_be_missing_mixed_or_modified_in_control_or_promotion(self):
+        for revision in (self.control, self.candidate):
+            for name in self.prerequisites:
+                for mutation in ('old-version', 'missing', 'bytes', 'mode'):
+                    with self.subTest(revision=revision, path=name, mutation=mutation):
+                        self.git('checkout', '-q', revision)
+                        if mutation == 'old-version': self.git('checkout', self.live, '--', name)
+                        elif mutation == 'missing': self.git('rm', name)
+                        elif mutation == 'bytes': self.write(name, 'unreviewed security bytes\n')
+                        else: (self.root / name).chmod(0o755)
+                        changed = self.commit()
+                        if revision == self.control:
+                            candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                                 '-p', self.candidate, '-p', changed, '-m', 'include changed control')
+                            self.git('checkout', '-q', candidate)
+                            self.git('update-ref', 'refs/remotes/origin/main', changed)
+                        else:
+                            candidate = changed
+                        with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed if revision == self.control else self.control):
+                            with self.assertRaises(release.ReleaseError): self.verify(candidate)
+                        self.git('checkout', '-q', changed)
+                        with self.assertRaises(AssertionError): checkout_source_family(self.root)
+                        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_security_lock_graph_metadata_drift_is_rejected(self):
+        for revision in (self.control, self.candidate):
+            for field in ('version', 'resolved', 'integrity', 'dependencies'):
+                with self.subTest(revision=revision, field=field):
+                    self.git('checkout', '-q', revision)
+                    lock = json.loads((self.root / 'package-lock.json').read_text())
+                    lock['packages']['node_modules/fast-uri'][field] = {'unexpected': '1.0.0'} if field == 'dependencies' else 'unreviewed'
+                    self.write('package-lock.json', json.dumps(lock))
+                    changed = self.commit()
+                    with self.assertRaises(AssertionError): checkout_source_family(self.root)
+                    if revision == self.control:
+                        candidate = self.git('commit-tree', self.git('rev-parse', self.candidate + '^{tree}'),
+                                             '-p', self.candidate, '-p', changed, '-m', 'include changed graph')
+                        self.git('checkout', '-q', candidate)
+                        self.git('update-ref', 'refs/remotes/origin/main', changed)
+                    with patch.dict(os.environ, BECORE_TRUSTED_BASE=changed if revision == self.control else self.control):
+                        with self.assertRaises(release.ReleaseError): self.verify()
+                    self.git('update-ref', 'refs/remotes/origin/main', self.control)
+
+    def test_security_package_cannot_repin_scripts_dependencies_or_other_overrides(self):
+        for section, key, value in (('scripts', 'test:repo', 'skip tests'),
+                                    ('dependencies', 'next', '99.0.0'),
+                                    ('devDependencies', 'vitest', '99.0.0'),
+                                    ('overrides', 'zod', '99.0.0'),
+                                    ('overrides', 'fast-uri', '3.1.10'),
+                                    ('overrides', 'undici', '7.30.2'),
+                                    ('overrides', 'fast-uri', None)):
+            with self.subTest(section=section, key=key):
+                self.git('checkout', '-q', self.snapshot)
+                package = json.loads((self.root / 'package.json').read_text())
+                if value is None: package[section].pop(key)
+                else: package[section][key] = value
+                raw = json.dumps(package)
+                self.write('package.json', raw)
+                snapshot = self.commit()
+                self.git('checkout', '-q', self.control)
+                self.write('package.json', raw)
+                control = self.commit()
+                self.git('merge', '--no-ff', '--no-commit', snapshot)
+                candidate = self.commit()
+                self.git('update-ref', 'refs/remotes/origin/main', control)
+                with patch.dict(os.environ, BECORE_TRUSTED_BASE=control), \
+                     patch.object(release, 'CAMERA_LOOKS_APP_SNAPSHOT', snapshot), \
+                     patch.object(release, 'CAMERA_LOOKS_APP_TREE', self.git('rev-parse', snapshot + '^{tree}')), \
+                     patch.dict(release.CAMERA_LOOKS_PREREQUISITE_BLOBS, {'package.json': self.blob(raw.encode())}):
+                    with self.assertRaisesRegex(release.ReleaseError, 'exact fast-uri and undici security patch'):
+                        self.verify(candidate)
+                self.git('update-ref', 'refs/remotes/origin/main', self.control)
 
 
 if __name__ == "__main__":
