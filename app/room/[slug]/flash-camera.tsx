@@ -8,7 +8,8 @@ import RoomOverlay from "../../room-overlay";
 import { requestErrorMessage, requestJson } from "../../../lib/client-request";
 import type { RoomFlash } from "./flashes-panel";
 import FlashLookPicker from "./flash-look-picker";
-import { FLASH_LOOKS, flashCaptureFrame, renderFlashLook, type FlashLook } from "../../../lib/flash-photo-filters";
+import FlashLivePreview from "./flash-live-preview";
+import { FLASH_LOOKS, flashCameraConstraints, flashCaptureFrame, renderFlashLook, type FlashLook } from "../../../lib/flash-photo-filters";
 
 type CapturedPhoto = { canvas: HTMLCanvasElement; file: File; previewUrl: string };
 type PreparedPhoto = { source: CapturedPhoto; look: FlashLook; strength: number; file: File; previewUrl: string };
@@ -17,6 +18,7 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [attempt, setAttempt] = useState(0);
   const [ready, setReady] = useState(false);
+  const [liveReady, setLiveReady] = useState(false);
   const [captured, setCaptured] = useState<CapturedPhoto | null>(null);
   const [prepared, setPrepared] = useState<PreparedPhoto | null>(null);
   const [look, setLook] = useState<FlashLook>("original");
@@ -39,7 +41,7 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
   const comparing = compare || holding;
   const previewUrl = captured && (comparing ? captured.previewUrl : photo?.previewUrl ?? captured.previewUrl);
   const canSend = Boolean(photo && displayedUrl === photo.previewUrl && !comparing);
-  const lookName = FLASH_LOOKS.find(option => option.id === look)?.name ?? "Original";
+  const lookName = original ? "Original" : FLASH_LOOKS.find(option => option.id === look)?.name ?? "Original";
   const stopCamera = useCallback(() => {
     generation.current++;
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -57,7 +59,7 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
         return;
       }
       try {
-        const next = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 1920 } } });
+        const next = await navigator.mediaDevices.getUserMedia(flashCameraConstraints(facing));
         if (cancelled || current !== generation.current) { next.getTracks().forEach((track) => track.stop()); return; }
         stream.current = next;
         if (video.current) { video.current.srcObject = next; await video.current.play(); }
@@ -97,14 +99,13 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
 
   async function capturePhoto() {
     const element = video.current;
-    if (!ready || pending.current || !element?.videoWidth || !element.videoHeight) return;
+    if (!ready || (!original && !liveReady) || pending.current || !element?.videoWidth || !element.videoHeight) return;
     pending.current = true; setTaking(true);
     const current = generation.current;
     const canvas = document.createElement("canvas");
     let retained = false;
     try {
-      const bounds = element.getBoundingClientRect();
-      const frame = flashCaptureFrame(element.videoWidth, element.videoHeight, bounds.width, bounds.height);
+      const frame = flashCaptureFrame(element.videoWidth, element.videoHeight);
       canvas.width = frame.outputWidth; canvas.height = frame.outputHeight;
       const context = canvas.getContext("2d", { colorSpace: "srgb" });
       if (!context) throw new Error("The camera missed that one. Try again.");
@@ -114,7 +115,7 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
       if (current !== generation.current) return;
       if (!blob) throw new Error("The camera missed that one. Try again.");
       stopCamera(); setReady(false); setConsent(false); setError("");
-      setLook("original"); setStrength(100); setCompare(false); setHolding(false); setDisplayedUrl("");
+      setCompare(false); setHolding(false); setDisplayedUrl("");
       retained = true;
       setCaptured({ canvas, file: new File([blob], "flash.jpg", { type: "image/jpeg" }), previewUrl: URL.createObjectURL(blob) });
     } catch (cause) { if (current === generation.current) setError(requestErrorMessage(cause)); }
@@ -144,8 +145,11 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
     setLook(value); setCompare(false); setHolding(false); setError("");
   }
   return <RoomOverlay label={captured ? "Share this Flash" : "Flash camera"} className="room-overlay--immersive" onClose={onClose} beforeClose={() => { stopCamera(); renderController.current?.abort(); }} busy={busy}>{(dismiss) => <section className={`flash-stage flash-capture${captured ? " flash-capture--editing" : ""}`}>
-    {!captured && <video ref={video} className={`flash-stage__image${facing === "user" ? " is-mirrored" : ""}`} autoPlay playsInline muted aria-label="Live camera preview" />}
-    <header className="flash-stage__header"><span><b>{captured ? "Worth a Flash?" : "Catch the moment."}</b><small>{captured ? "One look for everyone else." : "No camera roll. Just right now."}</small></span><button type="button" aria-label="Close camera" disabled={busy} onClick={dismiss}><X aria-hidden="true" size={22} /></button></header>
+    {!captured && <div className="flash-capture__view">
+      <video ref={video} className={`flash-stage__image${facing === "user" ? " is-mirrored" : ""}`} autoPlay playsInline muted aria-label="Live camera preview" />
+      <FlashLivePreview video={video} look={look} strength={strength} mirrored={facing === "user"} ready={ready} onReady={setLiveReady} onError={setError} />
+    </div>}
+    <header className="flash-stage__header"><span><b>{captured ? "Worth a Flash?" : "Catch the moment."}</b><small>{captured ? "One look for everyone else." : "Choose your look. Then catch it."}</small></span><button type="button" aria-label="Close camera" disabled={busy} onClick={dismiss}><X aria-hidden="true" size={22} /></button></header>
     {captured && previewUrl && <div className="flash-capture__preview"
       onPointerDown={event => { if (busy || original || event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); setHolding(true); }}
       onPointerUp={() => setHolding(false)} onPointerCancel={() => setHolding(false)} onLostPointerCapture={() => setHolding(false)} onContextMenu={event => event.preventDefault()}>
@@ -155,12 +159,13 @@ export default function FlashCamera({ slug, onClose, onSent }: { slug: string; o
     {!captured && !ready && !error && <p className="flash-stage__waiting" role="status"><Camera aria-hidden="true" size={28} />Opening your camera…</p>}
     <footer className="flash-stage__footer">
       {error && <p className="room-surface-error" role="alert">{error}{captured && !photo && <button type="button" onClick={() => { setError(""); setRenderAttempt(value => value + 1); }}>Retry look</button>}</p>}
+      {!captured && <FlashLookPicker look={look} strength={strength} disabled={!ready || taking} onLook={selectLook} onStrength={value => { setStrength(value); setError(""); }} />}
       {captured ? <>
-        <FlashLookPicker source={captured.canvas} look={look} strength={strength} disabled={busy} onLook={selectLook} onStrength={value => { if (value === strength) return; renderController.current?.abort(); setStrength(value); setCompare(false); setHolding(false); setError(""); }} />
+        <FlashLookPicker source={captured.canvas} look={look} strength={strength} disabled={busy || taking} onLook={selectLook} onStrength={value => { if (value === strength) return; renderController.current?.abort(); setStrength(value); setCompare(false); setHolding(false); setError(""); }} />
         <div className="flash-looks__compare"><span>Hold photo to compare.</span><button type="button" aria-pressed={compare} disabled={busy || original || !photo} onClick={() => setCompare(value => !value)}>{compare ? "Back to look" : "Show original"}</button></div>
         <label className="flash-consent"><input type="checkbox" checked={consent} disabled={busy} onChange={(event) => setConsent(event.target.checked)} /><span>Everyone pictured is happy to be in this Room.</span></label>
         <div className="flash-capture__actions"><button type="button" disabled={busy} onClick={resetPhoto}>Retake</button><button type="button" className="room-surface-send" disabled={busy || !consent || !canSend} onClick={() => void upload()}>{busy ? "Sending…" : "Send Flash"}<ArrowUp aria-hidden="true" size={19} /></button></div>
-      </> : <div className="flash-capture__actions"><span />{error ? <button type="button" className="room-surface-send" onClick={() => setAttempt((value) => value + 1)}>Try camera again</button> : <button className="flash-shutter" type="button" disabled={!ready || taking} aria-label="Take Flash photo" onClick={() => void capturePhoto()}><span /></button>}<button type="button" aria-label="Switch camera" disabled={taking} onClick={() => setFacing((value) => value === "user" ? "environment" : "user")}><RefreshCw aria-hidden="true" size={22} /></button></div>}
+      </> : <div className="flash-capture__actions"><span />{error && !ready ? <button type="button" className="room-surface-send" onClick={() => setAttempt((value) => value + 1)}>Try camera again</button> : <button className="flash-shutter" type="button" disabled={!ready || taking || (!original && !liveReady)} aria-label="Take Flash photo" onClick={() => void capturePhoto()}><span /></button>}<button type="button" aria-label="Switch camera" disabled={taking} onClick={() => setFacing((value) => value === "user" ? "environment" : "user")}><RefreshCw aria-hidden="true" size={22} /></button></div>}
       <small className="flash-fine-print">Ten seconds to view. Screenshots are still possible.</small>
     </footer>
   </section>}</RoomOverlay>;

@@ -47,13 +47,16 @@ export default function MobileNavigation({ primaryVisible = false }: { primaryVi
       const bottom = top + (viewport?.height ?? window.innerHeight);
       const dock = document.querySelector<HTMLElement>(".customer-dock")?.getBoundingClientRect();
       const limit = dock && dock.height && dock.top > anchor.bottom ? Math.min(bottom - 8, dock.top - 8) : bottom - 8;
-      if (anchor.top < top || anchor.right > left + (viewport?.width ?? window.innerWidth) || availableWidth < anchor.width || limit - anchor.top < anchor.height + 44) { close(true, true); return; }
+      // Fractional scroll rounding can clip less than one CSS pixel of an
+      // otherwise usable trigger. Keep its panel inside the visible viewport.
+      const anchorTop = Math.max(top, anchor.top);
+      if (anchor.top < top - 1 || anchor.right > left + (viewport?.width ?? window.innerWidth) || availableWidth < anchor.width || limit - anchorTop < anchor.height + 44) { close(true, true); return; }
       menu.style.setProperty("--menu-width", `${availableWidth}px`);
-      menu.style.setProperty("--menu-anchor-top", `${anchor.top}px`);
+      menu.style.setProperty("--menu-anchor-top", `${anchorTop}px`);
       menu.style.setProperty("--menu-anchor-right", `${window.innerWidth - anchor.right}px`);
       menu.style.setProperty("--menu-anchor-width", `${anchor.width}px`);
       menu.style.setProperty("--menu-anchor-height", `${anchor.height}px`);
-      menu.style.setProperty("--menu-max-height", `${limit - anchor.top}px`);
+      menu.style.setProperty("--menu-max-height", `${limit - anchorTop}px`);
     };
     place();
     const observer = new ResizeObserver(place);

@@ -11,7 +11,7 @@ function load(extras = {}) {
   runInNewContext(compiled, { module: compiledModule, exports: compiledModule.exports, Uint8ClampedArray, Math, setTimeout, ...extras });
   return compiledModule.exports;
 }
-const { FLASH_LOOKS, flashStrength, flashCaptureFrame, gradeFlashPixels } = await import(`data:text/javascript;base64,${Buffer.from(transformSync(source, { loader: "ts", format: "esm" }).code).toString("base64")}`);
+const { FLASH_LOOKS, flashStrength, flashCaptureFrame, flashCameraConstraints, gradeFlashPixels } = await import(`data:text/javascript;base64,${Buffer.from(transformSync(source, { loader: "ts", format: "esm" }).code).toString("base64")}`);
 const fixture = () => new Uint8ClampedArray([0, 0, 0, 0, 255, 255, 255, 255, 153, 96, 69, 123, 84, 52, 38, 255, 30, 90, 200, 255, 240, 130, 45, 255]);
 
 test("Original and zero strength preserve every byte, including alpha", () => {
@@ -59,18 +59,32 @@ test("grain is independent of chunk boundaries, subtle and repeatable", () => {
   const reds = [...pixels.filter((_, i) => i % 4 === 0)];
   assert.ok(Math.max(...reds.slice(0, 1000)) - Math.min(...reds.slice(0, 1000)) <= 6);
 });
-test("capture matches cover framing for portrait, landscape and rotated viewports without upscaling", () => {
-  for (const [sw, sh, vw, vh] of [[1920, 1080, 390, 844], [1080, 1920, 390, 844], [1080, 1920, 844, 390], [4032, 3024, 390, 844], [480, 640, 390, 844]]) {
-    const frame = flashCaptureFrame(sw, sh, vw, vh);
-    assert.ok(frame.x >= 0 && frame.y >= 0);
-    assert.ok(frame.x + frame.width <= sw + 1e-8 && frame.y + frame.height <= sh + 1e-8);
-    assert.ok(Math.abs(frame.width / frame.height - vw / vh) < 1e-8);
+test("capture preserves the entire sensor in either orientation without upscaling", () => {
+  for (const [sw, sh] of [[1920, 1080], [1080, 1920], [4032, 3024], [3024, 4032], [480, 640]]) {
+    const frame = flashCaptureFrame(sw, sh);
+    assert.equal(frame.x, 0); assert.equal(frame.y, 0);
+    assert.equal(frame.width, sw); assert.equal(frame.height, sh);
+    assert.ok(Math.abs(frame.outputWidth / frame.outputHeight - sw / sh) < .002);
     assert.ok(frame.outputWidth <= 1600 && frame.outputHeight <= 1600);
-    assert.ok(frame.outputWidth <= Math.ceil(frame.width) && frame.outputHeight <= Math.ceil(frame.height));
-    assert.ok(Math.abs(frame.x * 2 + frame.width - sw) < 1e-8);
-    assert.ok(Math.abs(frame.y * 2 + frame.height - sh) < 1e-8);
+    assert.ok(frame.outputWidth <= sw && frame.outputHeight <= sh);
   }
-  for (const bad of [0, -1, NaN, Infinity]) assert.throws(() => flashCaptureFrame(bad, 100, 100, 100));
+  for (const bad of [0, -1, NaN, Infinity]) assert.throws(() => flashCaptureFrame(bad, 100));
+});
+test("camera constraints never request a portrait crop, microphone or digital zoom", () => {
+  for (const facing of ["user", "environment"]) {
+    const constraints = flashCameraConstraints(facing);
+    assert.equal(constraints.audio, false);
+    assert.equal(constraints.video.facingMode.ideal, facing);
+    assert.equal(constraints.video.resizeMode, "none");
+    assert.equal(constraints.video.height, undefined);
+    assert.equal(constraints.video.aspectRatio, undefined);
+    assert.equal(constraints.video.zoom, undefined);
+  }
+});
+test("the ten looks remain distinct rather than duplicate colour presets", () => {
+  assert.equal(FLASH_LOOKS.length, 10);
+  const grades = FLASH_LOOKS.map(({ id }) => { const pixels = fixture(); gradeFlashPixels(pixels, id, 100); return [...pixels].join(","); });
+  assert.equal(new Set(grades).size, 10);
 });
 
 function canvasFixture({ onYield, noContext = false, noBlob = false } = {}) {
