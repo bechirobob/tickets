@@ -2,6 +2,8 @@
 import contextlib
 import fcntl
 import importlib.util
+import hashlib
+import subprocess
 import datetime
 import json
 import os
@@ -250,6 +252,87 @@ def scan_logs(queues, owners):
             'legacy_timestamps_not_trusted':True,'resends':0,'unsuppressions':0,'database_changes':0}
 
 
+MOUNT_FORMAT = '{{range .Mounts}}{{if eq .Destination "/mail-log"}}{{json .}}{{end}}{{end}}'
+CONTAINER_LOG_READER = r"""
+import hashlib,json,os,stat,sys,types
+stage='input'
+try:
+ raw=sys.stdin.buffer.read(262145)
+ assert len(raw)<=262144
+ packet=json.loads(raw)
+ assert hashlib.sha256(packet['source'].encode()).hexdigest()==packet['source_sha256']
+ stage='directory_identity'
+ before=os.lstat('/mail-log')
+ assert stat.S_ISDIR(before.st_mode) and before.st_uid==0 and before.st_gid==10000 and stat.S_IMODE(before.st_mode)==0o750
+ assert [before.st_dev,before.st_ino]==packet['directory_identity']
+ sys.modules['tickets_mail_metadata']=types.ModuleType('tickets_mail_metadata')
+ namespace={'__name__':'tickets_bounce_container'}
+ stage='source_load'
+ exec(compile(packet['source'],'<reviewed-bounce-reader>','exec'),namespace)
+ namespace['LOG_PATHS']=(namespace['Path']('/mail-log/mail.log'),namespace['Path']('/mail-log/mail.log.1'))
+ stage='log_read'
+ result=namespace['scan_logs'](set(packet['queues']),{0})
+ stage='directory_recheck'
+ after=os.lstat('/mail-log')
+ assert (before.st_dev,before.st_ino,before.st_mode,before.st_uid,before.st_gid)==(after.st_dev,after.st_ino,after.st_mode,after.st_uid,after.st_gid)
+ print(json.dumps(result,sort_keys=True))
+except Exception as error:
+ category='not_found' if isinstance(error,FileNotFoundError) else 'permission_denied' if isinstance(error,PermissionError) else 'timeout' if isinstance(error,TimeoutError) else 'validation_failed'
+ print(json.dumps({'reader_error':{'stage':stage,'category':category}},sort_keys=True))
+ sys.exit(1)
+"""
+
+def mounted_log_identity():
+    mount=json.loads(metadata.command(['docker','inspect','--type=container','--format',MOUNT_FORMAT,metadata.CONTAINER],4096))
+    if (mount.get('Type'),mount.get('Source'),mount.get('Destination'),mount.get('RW'))!=('bind','/var/log/becore-tickets-mail','/mail-log',True):
+        raise ValueError('Mail log mount differs')
+    info=Path('/var/log/becore-tickets-mail').lstat()
+    if not stat.S_ISDIR(info.st_mode) or (info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))!=(0,10000,0o750):
+        raise ValueError('Mail log mount directory differs')
+    return info.st_dev,info.st_ino
+
+def scan_mounted_logs(queues):
+    before=mounted_log_identity()
+    source=globals().get('DIAGNOSTIC_SOURCE')
+    if not isinstance(source,str) or len(source.encode())>131072:
+        raise ValueError('Reviewed reader source missing')
+    packet={'source':source,'source_sha256':hashlib.sha256(source.encode()).hexdigest(),
+            'queues':sorted(queues),'directory_identity':list(before)}
+    response=subprocess.run(['docker','exec','-i',metadata.CONTAINER,'python3','-B','-c',CONTAINER_LOG_READER],
+            input=json.dumps(packet).encode(),capture_output=True,timeout=20,check=False)
+    if len(response.stdout)>8192 or before!=mounted_log_identity():
+        raise ValueError('Mounted log evidence changed')
+    try:result=json.loads(response.stdout)
+    except (ValueError,UnicodeDecodeError):
+        if response.returncode!=0:raise subprocess.CalledProcessError(response.returncode,response.args) from None
+        raise ValueError('Invalid mounted reader output') from None
+    if response.returncode!=0:
+        error=ValueError('Mounted log reader stopped')
+        if isinstance(result,dict) and set(result)=={'reader_error'}:
+            error.safe_reader=result['reader_error']
+        raise error
+    expected={'cohort_count','messages_with_numeric_evidence','ambiguous_messages','unknown_messages','numeric_code_groups',
+              'available_log_files','missing_log_files','scan_incomplete','legacy_timestamps_not_trusted','resends','unsuppressions','database_changes'}
+    if not isinstance(result,dict) or set(result)!=expected or result['cohort_count']!=4 or any(result[k]!=0 for k in ('resends','unsuppressions','database_changes')):
+        raise ValueError('Invalid mounted log result')
+    for key in ('messages_with_numeric_evidence','ambiguous_messages','unknown_messages'):
+        if type(result[key]) is not int or not 0<=result[key]<=4:raise ValueError('Invalid aggregate count')
+    if result['messages_with_numeric_evidence']+result['unknown_messages']!=4 or result['ambiguous_messages']>result['unknown_messages']:
+        raise ValueError('Invalid aggregate totals')
+    if any(type(result[k]) is not int or not 0<=result[k]<=2 for k in ('available_log_files','missing_log_files')) or type(result['scan_incomplete']) is not bool or result['legacy_timestamps_not_trusted'] is not True:
+        raise ValueError('Invalid aggregate metadata')
+    groups=result['numeric_code_groups']
+    if not isinstance(groups,list) or len(groups)>4:raise ValueError('Invalid numeric groups')
+    for group in groups:
+        if (not isinstance(group,dict) or set(group)!={'dsn','smtp','category','count'}
+            or not isinstance(group['dsn'],str) or not re.fullmatch(r'unknown|[245]\.[0-9]{1,3}\.[0-9]{1,3}',group['dsn'])
+            or not isinstance(group['smtp'],str) or not re.fullmatch(r'unknown|[245][0-9]{2}',group['smtp'])
+            or group['category']!=code_category(group['dsn']) or type(group['count']) is not int or not 1<=group['count']<=4):
+            raise ValueError('Invalid numeric group')
+    if sum(g['count'] for g in groups)!=result['messages_with_numeric_evidence']:raise ValueError('Invalid numeric group total')
+    return result
+
+
 def app_identity():
     props=dict(line.split('=',1) for line in metadata.command(['systemctl','show','becore-tickets.service',
           '--property=ActiveState,WorkingDirectory'],4096).splitlines())
@@ -318,6 +401,9 @@ def diagnostic_failure(error):
         result['category']='database_read_error'
         code=getattr(error,'sqlite_errorcode',None)
         if isinstance(code,int) and 0<=code<=65535:result['sqlite_code']=code
+    reader=getattr(error,'safe_reader',None)
+    if isinstance(reader,dict) and set(reader)=={'stage','category'} and reader['stage'] in {'input','directory_identity','source_load','log_read','directory_recheck'} and reader['category'] in {'not_found','permission_denied','timeout','validation_failed'}:
+        result['container_reader']=reader
     if metadata.STAGE=='bounded_logs' and result.get('validation_code') in {'parent_metadata_mismatch','file_type_mismatch','file_owner_mismatch','file_mode_mismatch'}:
         try:result['log_path_metadata']=fixed_log_metadata()
         except Exception:result['metadata_inspection_failed']=True
@@ -354,7 +440,7 @@ def main():
         linkage=private_linkage(app_uid)
         queues=linkage[1]
         metadata.STAGE='bounded_logs'
-        result=scan_logs(queues,{0})
+        result=scan_mounted_logs(queues)
         metadata.STAGE='cohort_recheck'
         # Fresh read-only snapshots: never claim a long-lived snapshot proves
         # eligibility remained unchanged while bounded log parsing ran.
