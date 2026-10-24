@@ -5,6 +5,8 @@
  */
 /* Forced-colors outlines can also encode selection; retain those system cues. */
 @media (forced-colors: none) {
+  /* Non-editing control wrappers share this policy, including hidden inputs. */
+  html[data-input-modality="pointer"] { --non-editing-focus-outline: none; }
   html[data-input-modality="pointer"] :focus:not(input, textarea, select, [contenteditable]:not([contenteditable="false"])),
   html[data-input-modality="pointer"] input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="image"]):focus {
     outline: none !important;
