@@ -186,6 +186,18 @@ class RunnableWrapper(unittest.TestCase):
             self.assertNotIn('validation_code',result)
             self.assertNotIn('private',json.dumps(result));self.assertNotIn('secret',json.dumps(result))
 
+    def test_log_metadata_reports_all_fixed_paths_without_content(self):
+        import os
+        info=os.stat_result((0o40775,0,0,1,0,4,0,0,0,0))
+        with patch.object(Path,'lstat',return_value=info) as read:
+            result=m.fixed_log_metadata()
+        self.assertEqual(len(result),6);self.assertEqual(read.call_count,6)
+        self.assertEqual(result[2],{'label':'var_log','exists':True,'type':'directory','mode':'0775','uid':0,'gid':4})
+        with patch.object(m.metadata,'STAGE','bounded_logs'),patch.object(m,'fixed_log_metadata',return_value=result):
+            self.assertEqual(m.diagnostic_failure(ValueError('Unsafe parent path'))['log_path_metadata'],result)
+        with patch.object(Path,'lstat',side_effect=FileNotFoundError('private')):
+            self.assertTrue(all(not row['exists'] for row in m.fixed_log_metadata()))
+
     def test_pairing_evidence_preserves_private_member_and_queue_links(self):
         d=cohort();ids,evidence=m.select_provider_ids(d,with_evidence=True)
         self.assertEqual(ids,IDS);self.assertEqual(len(evidence),4);self.assertEqual(evidence[0][0],'guest')

@@ -288,6 +288,27 @@ VALIDATION_CODES = {
     'Database evidence changed identity': 'database_identity_changed',
 }
 
+LOG_METADATA_PATHS = (
+    ('root',Path('/')),('var',Path('/var')),('var_log',Path('/var/log')),
+    ('mail_log_directory',Path('/var/log/becore-tickets-mail')),
+    ('mail_log',Path('/var/log/becore-tickets-mail/mail.log')),
+    ('mail_log_previous',Path('/var/log/becore-tickets-mail/mail.log.1')),
+)
+
+def fixed_log_metadata():
+    result=[]
+    for label,path in LOG_METADATA_PATHS:
+        try:info=path.lstat()
+        except FileNotFoundError:
+            result.append({'label':label,'exists':False});continue
+        mode=stat.S_IMODE(info.st_mode)
+        if any(type(v) is not int or not 0<=v<=4294967295 for v in (info.st_uid,info.st_gid)):
+            raise ValueError('Invalid numeric ownership')
+        kind='directory' if stat.S_ISDIR(info.st_mode) else 'regular' if stat.S_ISREG(info.st_mode) else 'symlink' if stat.S_ISLNK(info.st_mode) else 'other'
+        result.append({'label':label,'exists':True,'type':kind,'mode':format(mode,'04o'),'uid':info.st_uid,'gid':info.st_gid})
+    return result
+
+
 def diagnostic_failure(error):
     result=metadata.safe_failure(error)
     if type(error) is ValueError and len(error.args)==1 and isinstance(error.args[0],str):
@@ -297,6 +318,9 @@ def diagnostic_failure(error):
         result['category']='database_read_error'
         code=getattr(error,'sqlite_errorcode',None)
         if isinstance(code,int) and 0<=code<=65535:result['sqlite_code']=code
+    if metadata.STAGE=='bounded_logs' and result.get('validation_code') in {'parent_metadata_mismatch','file_type_mismatch','file_owner_mismatch','file_mode_mismatch'}:
+        try:result['log_path_metadata']=fixed_log_metadata()
+        except Exception:result['metadata_inspection_failed']=True
     return result
 
 

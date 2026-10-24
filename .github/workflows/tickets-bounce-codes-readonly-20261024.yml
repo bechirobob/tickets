@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '769e40cb3a2d27830630d8f2f17ba8dfa7c1b69f' && github.run_attempt == 1
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '03d532dc74dd46dbb6e058af523cb9248c3a311a' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -19,14 +19,14 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
-      - name: Verify exact predecessor and four-path diagnostic scope
+      - name: Verify exact predecessor and three-path diagnostic scope
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
           test "$GITHUB_RUN_ATTEMPT" = 1
-          test "$(git rev-parse HEAD^1)" = '769e40cb3a2d27830630d8f2f17ba8dfa7c1b69f'
-          printf '%s\n' '.github/workflows/tickets-bounce-codes-readonly-20261024.yml' 'docs/operations/historical-bounce-code-inspection.md' 'ops/vps/inspect-bounce-codes-readonly.py' 'ops/vps/test_bounce_codes_readonly.py' > "$RUNNER_TEMP/expected-paths"
+          test "$(git rev-parse HEAD^1)" = '03d532dc74dd46dbb6e058af523cb9248c3a311a'
+          printf '%s\n' '.github/workflows/tickets-bounce-codes-readonly-20261024.yml' 'ops/vps/inspect-bounce-codes-readonly.py' 'ops/vps/test_bounce_codes_readonly.py' > "$RUNNER_TEMP/expected-paths"
           git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/actual-paths"
           diff -u "$RUNNER_TEMP/expected-paths" "$RUNNER_TEMP/actual-paths"
           python3 -B -m unittest discover -s ops/vps -p test_bounce_codes_readonly.py
