@@ -1,7 +1,7 @@
 import { generateRequestDetails, type PushSubscription } from "web-push-neo";
 import { validPushEndpoint } from './push-subscription';
 
-type NotificationKind = "room_message" | "host_update" | "ticket_transfer" | "gate_update" | "event_reminder" | "test" | "waitlist_offer" | "payment_recovery" | "event_status" | "support_update" | "purchase_confirmation" | "registration_update";
+type NotificationKind = "room_message" | "host_update" | "host_first_post" | "ticket_transfer" | "gate_update" | "event_reminder" | "test" | "waitlist_offer" | "payment_recovery" | "event_status" | "support_update" | "purchase_confirmation" | "registration_update";
 
 type PushRow = {
   attendeeId: string;
@@ -27,7 +27,7 @@ function chunks<T>(items: T[], size: number): T[][] {
   return result;
 }
 
-async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: NotificationPayload): Promise<boolean> {
+async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: NotificationPayload, authorizeDispatch?: () => Promise<boolean>): Promise<boolean> {
   if (!row.subscriptionId || !row.endpoint || !row.p256dh || !row.auth) return false;
   if (!validPushEndpoint(row.endpoint)) return false;
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return false;
@@ -47,6 +47,7 @@ async function deliverPush(env: Cloudflare.Env, row: PushRow, payload: Notificat
       topic: (payload.tag ?? `bct-${payload.kind}`).replace(/[^A-Za-z0-9_-]/gu, "-").slice(0, 32),
       signal: AbortSignal.timeout(7_000),
     });
+    if (authorizeDispatch && !await authorizeDispatch()) return false;
     const response = await fetch(details.endpoint, { method: details.method, headers: details.headers, body: details.body, redirect: 'error', signal: AbortSignal.timeout(7_000) });
     if (!response.ok) throw Object.assign(new Error('Push delivery failed'), { statusCode: response.status });
     await env.DB.prepare("UPDATE push_subscriptions SET last_success_at = ?, failure_count = 0, updated_at = ? WHERE id = ?")
@@ -190,7 +191,7 @@ export async function confirmationNotice(env: Cloudflare.Env, attendeeId: string
 
 // Host notices are delivered per guest so a full event cannot exhaust one
 // Worker's push subrequests or D1 query allowance. The inbox is durable first.
-const hostAudience = `FROM ticket_assignments a JOIN tickets t ON t.id=a.ticket_id
+export const hostAudience = `FROM ticket_assignments a JOIN tickets t ON t.id=a.ticket_id
   JOIN orders o ON o.id=t.order_id AND o.status='paid'
   JOIN attendee_profiles p ON p.id=a.attendee_id AND p.status='active'
   JOIN curated_event_records e ON e.slug=t.event_slug AND e.removed_at IS NULL AND e.status IN ('published','scheduled') AND e.schedule_status='confirmed'
@@ -200,6 +201,38 @@ const hostAudience = `FROM ticket_assignments a JOIN tickets t ON t.id=a.ticket_
     AND a.attendee_id<>?
     AND NOT EXISTS (SELECT 1 FROM room_suspensions s WHERE s.event_slug=t.event_slug AND s.attendee_id=a.attendee_id AND s.restored_at IS NULL)
     AND NOT EXISTS (SELECT 1 FROM room_blocks b WHERE b.event_slug=t.event_slug AND b.blocker_attendee_id=a.attendee_id AND b.blocked_attendee_id=?)`;
+
+async function claimFirstHostPushDispatch(env: Cloudflare.Env, id: string, lease: string,
+  job: { eventSlug: string; attendeeId: string; senderId: string }, device: PushRow, sourceId: string) {
+  // Run after subscription discovery and encryption, not just before either await.
+  const source = await env.THE_ROOM.getByName(job.eventSlug).getMessage(sourceId);
+  if (!source || source.deletedAt || source.attendeeId !== job.senderId) return false;
+  const now = new Date().toISOString();
+  // This conditional write is the dispatch authorization linearization point.
+  // Cancellation/lease loss committed before it prevents handoff. A cancellation
+  // after this point cannot recall a provider request already authorized to start.
+  const claim = await env.DB.prepare(`UPDATE room_announcement_deliveries SET updated_at=?
+    WHERE id=? AND status='processing' AND lease_token=? AND lease_until>?
+      AND event_slug=? AND attendee_id=? AND sender_id=? AND created_at>?
+      AND json_extract(payload_json,'$.kind')='host_first_post' AND json_extract(payload_json,'$.sourceId')=? AND ?='1'
+      AND EXISTS (SELECT 1 FROM room_host_first_posts receipt
+        JOIN attendee_profiles sender ON sender.id=receipt.sender_attendee_id AND sender.status='active' AND sender.email_verified_at IS NOT NULL
+        JOIN staff_accounts host ON host.id=receipt.host_account_id AND host.normalized_email=sender.normalized_email
+          AND host.status='active' AND host.role='organizer' AND host.must_change_password=0
+        JOIN staff_event_assignments assigned ON assigned.account_id=host.id AND assigned.event_slug=receipt.event_slug
+        WHERE receipt.message_id=? AND receipt.event_slug=room_announcement_deliveries.event_slug
+          AND receipt.sender_attendee_id=room_announcement_deliveries.sender_id AND receipt.cancelled_at IS NULL
+          AND receipt.event_slug=? AND receipt.host_account_id=? AND (host.locked_until IS NULL OR host.locked_until<=?))
+      AND EXISTS (SELECT 1 ${hostAudience} AND a.attendee_id=?
+        AND NOT EXISTS (SELECT 1 FROM notification_preferences n WHERE n.attendee_id=a.attendee_id AND n.event_slug=t.event_slug
+          AND (n.host_updates=0 OR n.muted_until>?)))
+      AND EXISTS (SELECT 1 FROM push_subscriptions device WHERE device.id=? AND device.attendee_id=?
+        AND device.revoked_at IS NULL AND device.host_updates=1 AND device.endpoint=? AND device.p256dh=? AND device.auth=?)`)
+    .bind(now,id,lease,now,job.eventSlug,job.attendeeId,job.senderId,new Date(Date.now()-86400000).toISOString(),sourceId,
+      env.ROOM_HOST_FIRST_POST_ENABLED ?? '',sourceId,env.ROOM_HOST_FIRST_POST_EVENT_SLUG ?? '',env.ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID ?? '',now,
+      job.eventSlug,job.senderId,job.senderId,job.attendeeId,now,device.subscriptionId,job.attendeeId,device.endpoint,device.p256dh,device.auth).run();
+  return Boolean(claim.meta.changes);
+}
 
 async function queueHostAnnouncement(env: Cloudflare.Env, input: {eventSlug:string;messageId:string;senderAttendeeId:string;content:string}) {
   const audience = await env.DB.prepare(`SELECT DISTINCT a.attendee_id AS attendeeId, e.title AS eventTitle ${hostAudience}`)
@@ -229,16 +262,27 @@ async function queueHostAnnouncement(env: Cloudflare.Env, input: {eventSlug:stri
 export async function deliverHostAnnouncement(env:Cloudflare.Env,id:string) {
   const now=new Date().toISOString(),lease=crypto.randomUUID();
   const row=await env.DB.prepare(`UPDATE room_announcement_deliveries SET status='processing',lease_token=?,lease_until=?,attempts=attempts+1,updated_at=?
-    WHERE id=? AND ((status='pending' AND next_attempt_at<=?) OR (status='processing' AND lease_until<=?))
+    WHERE id=? AND (json_extract(payload_json,'$.kind') <> 'host_first_post' OR ? = '1') AND ((status='pending' AND next_attempt_at<=?) OR (status='processing' AND lease_until<=?))
     RETURNING attendee_id AS attendeeId,event_slug AS eventSlug,sender_id AS senderId,payload_json AS payload,attempts,created_at AS createdAt`)
-    .bind(lease,new Date(Date.now()+120000).toISOString(),now,id,now,now).first<{attendeeId:string;eventSlug:string;senderId:string;payload:string;attempts:number;createdAt:string}>();
+    .bind(lease,new Date(Date.now()+120000).toISOString(),now,id,env.ROOM_HOST_FIRST_POST_ENABLED ?? '',now,now).first<{attendeeId:string;eventSlug:string;senderId:string;payload:string;attempts:number;createdAt:string}>();
   if(!row)return;
-  const eligible=Date.now()-Date.parse(row.createdAt)<86400000 && await env.DB.prepare(`SELECT 1 ${hostAudience} AND a.attendee_id=?
+  const payload=JSON.parse(row.payload) as NotificationPayload;
+  const currentHost=payload.kind!=='host_first_post' || await env.DB.prepare(`SELECT 1 FROM room_host_first_posts receipt
+    JOIN attendee_profiles sender ON sender.id=receipt.sender_attendee_id AND sender.status='active' AND sender.email_verified_at IS NOT NULL
+    JOIN staff_accounts host ON host.id=receipt.host_account_id AND host.normalized_email=sender.normalized_email
+      AND host.status='active' AND host.role='organizer' AND host.must_change_password=0
+    JOIN staff_event_assignments assigned ON assigned.account_id=host.id AND assigned.event_slug=receipt.event_slug
+    WHERE receipt.message_id=? AND receipt.event_slug=? AND receipt.event_slug=? AND receipt.host_account_id=? AND receipt.cancelled_at IS NULL AND (host.locked_until IS NULL OR host.locked_until<=?)`)
+    .bind(payload.sourceId ?? '',row.eventSlug,env.ROOM_HOST_FIRST_POST_EVENT_SLUG ?? '',env.ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID ?? '',now).first();
+  const source=payload.kind==='host_first_post' ? await env.THE_ROOM.getByName(row.eventSlug).getMessage(payload.sourceId ?? '') : null;
+  const sourceVisible=payload.kind!=='host_first_post' || Boolean(source && !source.deletedAt);
+  const eligible=currentHost && sourceVisible && Date.now()-Date.parse(row.createdAt)<86400000 && await env.DB.prepare(`SELECT 1 ${hostAudience} AND a.attendee_id=?
     AND NOT EXISTS (SELECT 1 FROM notification_preferences n WHERE n.attendee_id=a.attendee_id AND n.event_slug=t.event_slug AND (n.host_updates=0 OR n.muted_until>?)) LIMIT 1`)
     .bind(row.eventSlug,row.senderId,row.senderId,row.attendeeId,now).first();
   const subscriptions=eligible ? await env.DB.prepare(`SELECT attendee_id AS attendeeId,id AS subscriptionId,endpoint,p256dh,auth FROM push_subscriptions
     WHERE attendee_id=? AND revoked_at IS NULL AND host_updates=1 LIMIT 12`).bind(row.attendeeId).all<PushRow>() : {results:[]};
-  const results=await Promise.all(subscriptions.results.map(device=>deliverPush(env,device,JSON.parse(row.payload) as NotificationPayload)));
+  const results=await Promise.all(subscriptions.results.map(device=>deliverPush(env,device,payload,
+    payload.kind==='host_first_post' ? () => claimFirstHostPushDispatch(env,id,lease,row,device,payload.sourceId ?? '') : undefined)));
   const retry=results.length>0 && !results.some(Boolean) && row.attempts<3;
   await env.DB.prepare(`UPDATE room_announcement_deliveries SET status=?,next_attempt_at=?,lease_token=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease_token=?`)
     .bind(retry?'pending':'complete',new Date(Date.now()+300000).toISOString(),now,id,lease).run();
@@ -247,8 +291,8 @@ export async function deliverHostAnnouncement(env:Cloudflare.Env,id:string) {
 export async function retryHostAnnouncements(env:Cloudflare.Env) {
   if(!env.EMAIL_DELIVERY_QUEUE)return;
   const now=new Date().toISOString();
-  const rows=await env.DB.prepare(`SELECT id FROM room_announcement_deliveries WHERE (status='pending' AND next_attempt_at<=?) OR (status='processing' AND lease_until<=?) ORDER BY created_at LIMIT 100`)
-    .bind(now,now).all<{id:string}>();
+  const rows=await env.DB.prepare(`SELECT id FROM room_announcement_deliveries WHERE (json_extract(payload_json,'$.kind') <> 'host_first_post' OR ? = '1') AND ((status='pending' AND next_attempt_at<=?) OR (status='processing' AND lease_until<=?)) ORDER BY created_at LIMIT 100`)
+    .bind(env.ROOM_HOST_FIRST_POST_ENABLED ?? '',now,now).all<{id:string}>();
   if(rows.results.length)await env.EMAIL_DELIVERY_QUEUE.sendBatch(rows.results.map(row=>({body:{deliveryId:`host-announcement:${row.id}`}})));
   await env.DB.prepare("DELETE FROM room_announcement_deliveries WHERE status='complete' AND created_at<?").bind(new Date(Date.now()-7*86400000).toISOString()).run();
 }

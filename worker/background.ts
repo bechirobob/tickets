@@ -1,3 +1,4 @@
+import { deliverFirstHostEmail, retryFirstHostEmails } from '../lib/room-host-first-post';
 import { deliverOrganizerRsvpPush, retryOrganizerRsvpPush, deliverOrganizerPurchasePush, retryOrganizerPurchasePush } from '../lib/organizer-rsvp-push';
 import { reconcileVpsDeliveries } from "../lib/transactional-email";
 import { observeBackgroundJob } from "../lib/background-health";
@@ -26,6 +27,8 @@ async function processQueueUntracked(batch: MessageBatch<{ deliveryId: string }>
     for (const message of batch.messages) {
       try {
         if (message.body?.deliveryId === "marketing-sync") await processMarketing(env);
+        else if (message.body?.deliveryId === 'host-first-post:tick') { await retryFirstHostEmails(env); await retryHostAnnouncements(env); }
+        else if (message.body?.deliveryId?.startsWith('host-first-email:')) await deliverFirstHostEmail(env,message.body.deliveryId.slice('host-first-email:'.length));
         else if (message.body?.deliveryId?.startsWith('host-announcement:')) await deliverHostAnnouncement(env, message.body.deliveryId.slice('host-announcement:'.length));
         else if (message.body?.deliveryId?.startsWith('organizer-purchase:')) await deliverOrganizerPurchasePush(env, message.body.deliveryId.slice('organizer-purchase:'.length));
         else if (message.body?.deliveryId?.startsWith('organizer-rsvp:')) await deliverOrganizerRsvpPush(env, message.body.deliveryId.slice('organizer-rsvp:'.length));
@@ -59,6 +62,7 @@ async function runScheduledOperationsUntracked(controller: ScheduledController, 
   try { await retryEventRemovals(env); } catch (error) { await failed("event-removal-cleanup", error); }
   try { await retryOrganizerRsvpPush(env); } catch (error) { await failed('host-rsvp-push', error); }
   try { await retryOrganizerPurchasePush(env); } catch (error) { await failed('host-purchase-push', error); }
+  try { await retryFirstHostEmails(env); } catch (error) { await failed('host-first-email', error); }
   try { await retryHostAnnouncements(env); } catch (error) { await failed('host-announcements', error); }
   try { await retryOrderConfirmations(env, "https://tickets.becoreops.com"); } catch (error) { await failed("order-confirmations", error); }
   try { await processRegistrations(env, "https://tickets.becoreops.com"); } catch (error) { await failed("event-registrations", error); }

@@ -18,7 +18,7 @@ function notificationTime(value: string, now: number) {
 }
 
 function NotificationRow({ item, mark, now, onNavigate }: { item: NotificationItem; mark: Feed["mark"]; now: number; onNavigate?: () => void }) {
-  const host = ["host_update", "gate_update", "event_status"].includes(item.kind);
+  const host = ["host_update", "host_first_post", "gate_update", "event_status"].includes(item.kind);
   const ticket = ["ticket_transfer", "purchase_confirmation", "registration_update"].includes(item.kind);
   const Icon = host ? BadgeCheck : ticket ? Ticket : MessageCircle;
   const long = item.body.length > 150;
@@ -43,7 +43,7 @@ export default function NotificationFeed({ feed, compact = false, onNavigate }: 
   const [limit, setLimit] = useState(batch);
   const [now] = useState(() => Date.now());
   const { items, loading, locked, loadError, actionError, markingAll, unread, load, mark } = feed;
-  const filtered = items?.filter((item) => filter === "all" || (filter === "host" ? item.kind === "host_update" : !item.readAt)) ?? [];
+  const filtered = items?.filter((item) => filter === "all" || (filter === "host" ? ["host_update", "host_first_post"].includes(item.kind) : !item.readAt)) ?? [];
   return <div className="notification-feed" aria-busy={loading}>
     {!compact && !locked && items && items.length > 0 ? <h2 className="sr-only">Notifications</h2> : null}
     {!locked && items && <div className="buzz-tools"><div role="group" aria-label="Filter notifications">{(["all", "unread", "host"] as const).map((view) => <button key={view} type="button" aria-pressed={filter === view} onClick={() => { setFilter(view); setLimit(batch); }}>{view === "all" ? "All" : view === "host" ? "Host updates" : "Unread"}{view === "unread" && unread > 0 ? <span>{unread}</span> : null}</button>)}</div><button type="button" onClick={() => void mark()} disabled={!unread || markingAll} aria-busy={markingAll}><CheckCheck size={15} aria-hidden="true" />{markingAll ? "Marking…" : "Mark all read"}</button></div>}

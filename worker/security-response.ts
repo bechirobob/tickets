@@ -40,7 +40,7 @@ export function securityResponse(response: Response, nonce = requestNonce(), pat
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
   }
-  if (path.startsWith("/organizer/join") || path.startsWith("/api/host-applications") || path === "/organizer/activate" || path === "/api/organizer/activate" || path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/") || path === "/my-nights/access" || path === "/rsvp/access" || path === "/payment/return" || path.startsWith("/api/customer/recovery") || path.startsWith("/api/customer/transfers/claim")) {
+  if (path.startsWith("/organizer/join") || path.startsWith("/api/host-applications") || path === "/organizer/activate" || path === "/api/organizer/activate" || path === "/admin/recover" || path === "/api/admin/recovery" || path.startsWith("/announcements/") || path.startsWith("/api/announcements/") || path === "/my-nights/access" || path === "/rsvp/access" || path === "/payment/return" || path.startsWith("/api/customer/host-pass/claim") || path.startsWith("/api/customer/recovery") || path.startsWith("/api/customer/transfers/claim")) {
     headers.set("Referrer-Policy", "no-referrer");
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");

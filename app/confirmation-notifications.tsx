@@ -2,7 +2,7 @@
 import './confirmation-notifications.css';
 
 import { useEffect, useRef, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, X } from 'lucide-react';
 import { requestJson, requestErrorMessage } from '../lib/client-request';
 
 type Configuration = { available: boolean; publicKey: string | null; deviceSubscribed: boolean; confirmationUpdates: boolean; hostUpdates: boolean };
@@ -16,8 +16,8 @@ async function workerReady(): Promise<ServiceWorkerRegistration> {
   } finally { clearTimeout(timer); }
 }
 
-export default function ConfirmationNotifications({ compact = true, onEnabled }: { compact?: boolean; onEnabled?: () => void }) {
-  const [state, setState] = useState<'loading' | 'ready' | 'on' | 'install' | 'unsupported' | 'denied' | 'unavailable'>('loading');
+export default function ConfirmationNotifications({ compact = true, onEnabled, eventSlug, dismissalKey }: { compact?: boolean; onEnabled?: () => void; eventSlug?: string; dismissalKey?: string }) {
+  const [state, setState] = useState<'loading' | 'ready' | 'on' | 'install' | 'unsupported' | 'denied' | 'unavailable' | 'hidden'>('loading');
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
   const active = useRef(false);
   const loadVersion = useRef(0);
@@ -26,11 +26,19 @@ export default function ConfirmationNotifications({ compact = true, onEnabled }:
     async function load() {
       if (active.current) return;
       const version = ++loadVersion.current;
+      if (dismissalKey) { try { if(localStorage.getItem(dismissalKey)==='dismissed')return setState('hidden'); } catch {} }
+      if(eventSlug) {
+        try {
+          const preferences=await requestJson<{hostUpdates:boolean;mutedUntil:string|null}>(`/api/customer/notifications/preferences/${encodeURIComponent(eventSlug)}`);
+          if(cancelled || version!==loadVersion.current)return;
+          if(!preferences.hostUpdates || (preferences.mutedUntil && Date.parse(preferences.mutedUntil)>Date.now()))return setState('hidden');
+        } catch { if(!cancelled)setState('hidden'); return; }
+      }
       const ios = /iPad|iPhone|iPod/u.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const installed = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
       if (ios && !installed) return setState('install');
       if (!('Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window)) return setState('unsupported');
-      if (Notification.permission === 'denied') return setState('denied');
+      if (Notification.permission === 'denied') return setState(dismissalKey ? 'hidden' : 'denied');
       try {
         const registration = await workerReady();
         const subscription = await registration.pushManager.getSubscription();
@@ -43,7 +51,7 @@ export default function ConfirmationNotifications({ compact = true, onEnabled }:
     window.addEventListener('becore-notifications-changed', refresh);
     window.addEventListener('focus', refresh);
     return () => { cancelled = true; window.removeEventListener('becore-notifications-changed', refresh); window.removeEventListener('focus', refresh); };
-  }, []);
+  }, [eventSlug, dismissalKey]);
 
   async function change(enable: boolean) {
     if (active.current) return;
@@ -74,7 +82,7 @@ export default function ConfirmationNotifications({ compact = true, onEnabled }:
     } catch (error) { setMessage(requestErrorMessage(error)); }
     finally { active.current = false; setBusy(false); }
   }
-  if (state === 'loading' || (compact && state === 'on')) return null;
+  if (state === 'loading' || state === 'hidden' || (compact && state === 'on')) return null;
   const content = <>
 
     <Bell size={18} aria-hidden="true" />
@@ -88,7 +96,11 @@ export default function ConfirmationNotifications({ compact = true, onEnabled }:
       {message ? <p role="status">{message}</p> : null}
     </div>
   </>;
-  return compact ? <aside className="event-alert-nudge" aria-label="Event notifications">{state === 'ready' ? <>
+  const dismiss = dismissalKey ? <button type="button" aria-label="Dismiss notification suggestion" onClick={() => {
+    try { localStorage.setItem(dismissalKey,'dismissed'); } catch {}
+    setState('hidden');
+  }}><X size={16} aria-hidden="true" /></button> : null;
+  return compact ? <aside className="event-alert-nudge" aria-label="Event notifications">{dismiss}{state === 'ready' ? <>
     <div className="event-alert-nudge__row"><Bell size={16} aria-hidden="true" /><span>Event &amp; host alerts</span><button type="button" aria-label="Enable event alerts" disabled={busy} aria-busy={busy} onClick={() => void change(true)}>{busy ? 'Saving…' : 'Enable'}</button></div>
     {message ? <p className="event-alert-nudge__message" role="status">{message}</p> : null}
   </> : <details><summary><Bell size={16} aria-hidden="true" /><span>Event &amp; host alerts</span><b>Set up</b></summary><div className="confirmation-notifications">{content}</div></details>}</aside>
