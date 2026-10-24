@@ -96,9 +96,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('Health redirect refused')
 
 
-def health():
+def health(timeout=10):
     request = urllib.request.Request('http://127.0.0.1:8826/healthz', headers={'Cache-Control': 'no-cache'})
-    with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open(request, timeout=10) as response:
+    with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open(request, timeout=timeout) as response:
         raw = response.read(65537)
         if response.status != 200 or len(raw) > 65536:
             raise ValueError('Invalid health response')

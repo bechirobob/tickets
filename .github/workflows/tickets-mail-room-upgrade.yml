@@ -1,0 +1,88 @@
+name: Verify or apply the exact Room mail-service upgrade
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/tickets-mail-room-upgrade.yml]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Read-only preflight, or separately approved mail-only upgrade
+        type: choice
+        options: [preflight, apply]
+        default: preflight
+        required: true
+      confirmation:
+        description: Apply requires UPGRADE ROOM MAIL ONLY after explicit approval
+        type: string
+        default: ''
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  mail:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      OPERATION: ${{ inputs.operation || 'preflight' }}
+      CONFIRMATION: ${{ inputs.confirmation || '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact predecessor, public sources and operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD^1)" = d88b016c0288b261c7cdae6e3f2f24030c34db3c
+          printf '%s\n' '.github/workflows/tickets-mail-room-upgrade.yml' 'docs/operations/mail-room-upgrade.md' 'ops/email/mailer.py' 'ops/email/test_mailer.py' 'ops/email/test_numeric_codes.py' 'ops/vps/inspect-mail-service-readonly.py' 'ops/vps/test_mail_upgrade.py' 'ops/vps/upgrade-room-mail.py' > "$RUNNER_TEMP/expected-paths"
+          git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/actual-paths"
+          diff -u "$RUNNER_TEMP/expected-paths" "$RUNNER_TEMP/actual-paths"
+          printf '%s\n' '37ed2a28acda640f73af4e2db90b5cb9f41b434a016a5b85c978ae579d413fc3  ops/email/mailer.py' 'c4bbdf2b8ce01f401c2724f66e1629647f2de4dcbccc63fa2853d5bef6033ca9  ops/vps/upgrade-room-mail.py' '7bc91b1b3b4354d0135cf068126a8f2bdcce5a16017ea514955f1fe5c8008558  ops/vps/inspect-mail-service-readonly.py' | sha256sum -c -
+          if [ "$OPERATION" = apply ]; then
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$CONFIRMATION" = 'UPGRADE ROOM MAIL ONLY'
+          else
+            test "$OPERATION" = preflight
+          fi
+          PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ops/email -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ops/vps -p test_mail_upgrade.py
+          PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ops/vps -p test_mail_service_readonly.py
+      - name: Package only reviewed public code in memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$RUNNER_TEMP/mail-operation.py"
+          import os,re
+          from pathlib import Path
+          revision=os.environ['GITHUB_SHA']
+          assert re.fullmatch('[a-f0-9]{40}',revision)
+          mode={'preflight':'--preflight','apply':'--approved-mail-upgrade'}[os.environ['OPERATION']]
+          helper=Path('ops/vps/inspect-mail-service-readonly.py').read_text()
+          operator=Path('ops/vps/upgrade-room-mail.py').read_text()
+          source=Path('ops/email/mailer.py').read_bytes()
+          print('import io,sys,types')
+          print("metadata=types.ModuleType('metadata');sys.modules['metadata']=metadata")
+          print('exec(compile('+repr(helper)+",'metadata.py','exec'),metadata.__dict__)")
+          print('sys.argv='+repr(['upgrade-room-mail.py',mode,revision]))
+          print('sys.stdin=io.TextIOWrapper(io.BytesIO('+repr(source)+'))')
+          print('exec(compile('+repr(operator)+",'upgrade-room-mail.py','exec'),{'__name__':'__main__'})")
+          PY
+          python3 -m py_compile "$RUNNER_TEMP/mail-operation.py"
+      - name: Connect existing Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Run the selected bounded operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          tailscale ssh root@hermes 'python3 -B -' < "$RUNNER_TEMP/mail-operation.py"
