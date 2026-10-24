@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./analytics-fixture";
 import { readFile } from "node:fs/promises";
 import { buildSync, transformSync } from "esbuild";
 import { fileURLToPath } from "node:url";
