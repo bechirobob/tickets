@@ -14,6 +14,7 @@ test('internal Worker RPC exports only allowlisted values encrypted for the fixe
       HANDOVER_RECIPIENT_SPKI: pair.publicKey.export({ type: 'spki', format: 'der' }).toString('base64'),
       HANDOVER_EXPIRES_AT: new Date(Date.now() + 600000).toISOString(),
       RELEASE_SHA: 'a'.repeat(40), ENVIRONMENT: 'production', VAPID_PRIVATE_KEY: 'synthetic-private-key',
+      ROOM_HOST_FIRST_POST_ENABLED: '0', ROOM_HOST_FIRST_POST_EVENT_SLUG: 'synthetic-event', ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID: 'synthetic-host-account',
       UNLISTED_SECRET: 'must-not-transfer',
     } },
     { name: 'collector', modules: true, script: 'export default { async fetch(request,env) { return Response.json(await env.SOURCE.configuration()); } };',
@@ -24,8 +25,9 @@ test('internal Worker RPC exports only allowlisted values encrypted for the fixe
     assert.equal(response.status, 200);
     const envelope = await response.json();
     assert.ok(!JSON.stringify(envelope).includes('synthetic-private-key'));
+    assert.ok(!JSON.stringify(envelope).includes('synthetic-host-account'));
     const result = openEnvelope(envelope, pair.privateKey, 'configuration');
-    assert.deepEqual(result, { revision: 'a'.repeat(40), values: { VAPID_PRIVATE_KEY: 'synthetic-private-key', ENVIRONMENT: 'production' } });
+    assert.deepEqual(result, { revision: 'a'.repeat(40), values: { VAPID_PRIVATE_KEY: 'synthetic-private-key', ENVIRONMENT: 'production', ROOM_HOST_FIRST_POST_ENABLED: '0', ROOM_HOST_FIRST_POST_EVENT_SLUG: 'synthetic-event', ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID: 'synthetic-host-account' } });
     assert.equal((await (await mf.getWorker('source')).fetch('https://internal.test/')).status, 404);
   } finally { await mf.dispose(); }
 });

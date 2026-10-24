@@ -1,5 +1,6 @@
 "use client";
 
+import EventHostPass from "./event-host-pass";
 import OrganizerAccess from "../organizer-access";
 
 import { operationsFetch } from "../../../lib/operations-client";
@@ -95,6 +96,7 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
           <section className="role-boundary" aria-live="polite"><header><span>{roleDefinition.workspace}</span><h3>{roleDefinition.label}</h3><p>{roleDefinition.summary}</p></header><div><section><b><Check size={13} /> Can</b>{roleDefinition.can.map((item) => <p key={item}>{item}</p>)}</section><section><b><ShieldX size={13} /> Cannot</b>{roleDefinition.cannot.map((item) => <p key={item}>{item}</p>)}</section></div></section>
           {roleDefinition.eventScoped ? <fieldset className="staff-events"><legend>Assigned events <small>{draftRole === "organizer" ? "Events submitted with this email are linked automatically. Choose any additional events here." : "Choose the events this person can work on."}</small></legend>{events.length ? events.map((item) => <label key={item.slug}><input name="eventSlugs" value={item.slug} type="checkbox" defaultChecked={selected?.eventSlugs.includes(item.slug)} /><span><b>{item.title}</b><small>{new Date(item.startsAt).toLocaleDateString("en-GH", { dateStyle: "medium" })}</small></span></label>) : <p>No approved events yet.</p>}</fieldset> : null}
           {selected?.role === "organizer" ? <OrganizerAccess key={`${selected.id}:${selected.status}:${selected.mustChangePassword}`} accountId={selected.id} /> : null}
+          {selected?.role === "organizer" && role === "owner" ? <EventHostPass key={`host-pass:${selected.id}`} accountId={selected.id} email={selected.email} /> : null}
           {message ? <p className="ops-message" role="status">{message}</p> : null}<ActionButton type="submit" disabled={busy} icon={busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}>{busy ? "Saving…" : "Save access"}</ActionButton>
           {selected && selected.id !== currentAccountId ? <section className="staff-removal" aria-label="Remove account">
             {confirmRemoval ? <><h3>Remove {selected.displayName}?</h3><p>They’ll lose Operations access and be signed out of every device. Their past work stays in the activity history.</p><div><ActionButton disabled={busy} onClick={() => void removeAccount()}>{busy ? "Removing…" : "Confirm removal"}</ActionButton><ActionButton variant="secondary" disabled={busy} onClick={() => setConfirmRemoval(false)}>Keep account</ActionButton></div></> : <ActionButton variant="text" disabled={busy} onClick={() => setConfirmRemoval(true)}>Remove from Operations</ActionButton>}

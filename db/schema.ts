@@ -1341,3 +1341,10 @@ export const roomHostFirstPosts = sqliteTable("room_host_first_posts", {
   eventSlug:text("event_slug").notNull(), hostAccountId:text("host_account_id").notNull(), messageId:text("message_id").notNull().unique(),
   senderAttendeeId:text("sender_attendee_id").notNull(), createdAt:text("created_at").notNull(), fanoutAt:text("fanout_at"), cancelledAt:text("cancelled_at"),
 }, t=>[primaryKey({columns:[t.eventSlug,t.hostAccountId]}), index("room_host_first_posts_message_idx").on(t.messageId)]);
+
+export const eventHostPassInvitations = sqliteTable('event_host_pass_invitations', {
+ id:text('id').primaryKey(),eventSlug:text('event_slug').notNull(),hostAccountId:text('host_account_id').notNull(),
+ recipientEmail:text('recipient_email').notNull(),ticketId:text('ticket_id').notNull(),provisionNonce:text('provision_nonce').notNull(),
+ createdBy:text('created_by').notNull(),createdAt:text('created_at').notNull(),reused:integer('reused').notNull(),state:text('state').notNull().default('provisioned'),
+ tokenHash:text('token_hash').unique(),expiresAt:text('expires_at'),usedAt:text('used_at'),claimedSessionId:text('claimed_session_id'),deliveryId:text('delivery_id'),
+},t=>[uniqueIndex('event_host_pass_scope_unique').on(t.eventSlug,t.hostAccountId)]);
