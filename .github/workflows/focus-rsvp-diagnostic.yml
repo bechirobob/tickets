@@ -1,0 +1,35 @@
+name: Exact focus RSVP cancellation diagnostic
+on:
+  push:
+    branches: [diagnostic/focus-rsvp-cbd82]
+permissions:
+  contents: read
+env:
+  BECORE_RELEASE_SHA: ${{ github.sha }}
+  BECORE_ISOLATED_PREVIEW: 'true'
+  WRANGLER_SEND_METRICS: 'false'
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: test -z "${E2E_BASE_URL:-}" && test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - run: npm ci --no-audit
+      - run: npm run build && node scripts/prepare-deploy.mjs
+      - run: npx playwright install --with-deps webkit
+      - run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state && node scripts/prepare-registration-browser-fixture.mjs
+      - run: npx playwright test --config playwright.focus-rsvp-diagnostic.config.ts --project mobile-webkit --workers=1 --retries=0 --repeat-each=5 --grep="My Nights distinguishes|event RSVP shows live approval" --output test-results/focus-rsvp
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: synthetic-focus-rsvp-${{ github.sha }}
+          path: |
+            test-results/focus-rsvp
+            playwright-report
+          retention-days: 7
