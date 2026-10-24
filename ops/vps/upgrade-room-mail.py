@@ -54,16 +54,16 @@ FIELDS={
  'mounts':'.Mounts'}
 EXPECTED={
  'entrypoint':['/usr/bin/tini','--','/app/start.sh'],'cmd':None,'user':'','workdir':'',
- 'privileged':False,'readonly_root':False,'network':'default',
+ 'privileged':False,'readonly_root':False,'network':'bridge',
  'ports':{'8826/tcp':[{'HostIp':'127.0.0.1','HostPort':'8826'}]},
  'tmpfs':{'/run':'rw,nosuid,nodev,size=16m'},'memory':536870912,'memory_swap':1073741824,
  'nano_cpus':1000000000,'pids':128,'restart':{'Name':'unless-stopped','MaximumRetryCount':0},
  'security':['no-new-privileges:true'],'cap_add':None,'cap_drop':None,'devices':[],
  'device_requests':None,'extra_hosts':None,'pid_mode':'','ipc_mode':'private','userns':'',
  'volumes_from':None,'links':None,'dns':[],'binds':None,'init':None,'auto_remove':False,
- 'runtime':'runc','cgroup_parent':'','sysctls':None,'groups':None,'oom_disable':False,
+ 'runtime':'runc','cgroup_parent':'','sysctls':None,'groups':None,'oom_disable':None,
  'publish_all':False,'tty':False,'open_stdin':False,'domainname':'',
- 'log_config':{'Type':'json-file','Config':{}},'ulimits':None,'cpuset':'','cpu_shares':0,'cpu_quota':0,'cgroupns':'private',
+ 'log_config':{'Type':'json-file','Config':{}},'ulimits':[],'cpuset':'','cpu_shares':0,'cpu_quota':0,'cgroupns':'private',
  'readonly_paths':['/proc/bus','/proc/fs','/proc/irq','/proc/sys','/proc/sysrq-trigger'],
  'masked_paths':['/proc/asound','/proc/acpi','/proc/interrupts','/proc/kcore','/proc/keys','/proc/latency_stats','/proc/timer_list','/proc/timer_stats','/proc/sched_debug','/proc/scsi','/sys/firmware','/sys/devices/virtual/powercap']}
 MOUNTS={
