@@ -3,6 +3,13 @@ on:
   push:
     branches: [main]
     paths: [.github/workflows/tickets-mail-room-upgrade.yml]
+  pull_request:
+    paths:
+      - .github/workflows/tickets-mail-room-upgrade.yml
+      - ops/email/**
+      - ops/vps/upgrade-room-mail.py
+      - ops/vps/test_mail_upgrade.py
+      - ops/vps/inspect-mail-service-readonly.py
   workflow_dispatch:
     inputs:
       operation:
@@ -17,15 +24,34 @@ on:
         default: ''
 permissions:
   contents: read
-  id-token: write
-concurrency:
-  group: tickets-vps-handover
-  cancel-in-progress: false
 jobs:
+  focused-tests:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify mail protocol, guarded upgrade and metadata tests without host access
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ops/email -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ops/vps -p test_mail_upgrade.py
+          PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ops/vps -p test_mail_service_readonly.py
   mail:
     if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: tickets-vps-handover
+      cancel-in-progress: false
     env:
       OPERATION: ${{ inputs.operation || 'preflight' }}
       CONFIRMATION: ${{ inputs.confirmation || '' }}
