@@ -113,7 +113,8 @@ test('My Nights distinguishes waitlisted guests from confirmed passes and suppor
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
   status = 'confirmed'; await page.reload();
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
-  await section.locator('summary').click();
+  const manage = section.locator('summary');
+  if (test.info().project.use.hasTouch) await manage.tap(); else await manage.click();
   await section.getByRole('button', { name: 'Cancel RSVP' }).click();
   await section.getByRole('button', { name: 'Yes, cancel' }).click();
   await expect(section).toContainText('Cancelled');
@@ -133,7 +134,10 @@ for (const routeName of ['event', 'rsvp']) {
     await page.route('**/api/registrations', route => { status = 'requested'; return route.fulfill({ status: 202, json: { message: 'RSVP received.', canManage: true } }); });
     await page.goto(`/${routeName}/after-dark-osu`);
     const form = page.locator('.registration-form');
-    if (routeName === 'event') await form.getByRole('button', { name: 'RSVP', exact: true }).click();
+    if (routeName === 'event') {
+      const trigger = form.getByRole('button', { name: 'RSVP', exact: true });
+      if (test.info().project.use.hasTouch) await trigger.tap(); else await trigger.click();
+    }
     await form.getByLabel('Your name').fill('Approval Guest');
     await form.getByLabel('Email address').fill('approval-fixture@example.com');
     await form.getByRole('checkbox', { name: /I accept the event terms/ }).check();

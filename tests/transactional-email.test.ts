@@ -20,13 +20,13 @@ async function queue(provider?: string, kind = 'operational_alert', acceptedId: 
 }
 const state = (id: string) => env.DB.prepare('SELECT status,attempt_count AS attempts,next_attempt_at AS next,payload_json AS payload,provider_id AS providerId FROM delivery_events WHERE id=?').bind(id).first<{status:string;attempts:number;next:string|null;payload:string;providerId:string|null}>();
 
-it.each(['team_invitation','organizer_report','organizer_invitation','organizer_signup','registration_access','registration_update','payment_confirmation','ticket_recovery','ticket_transfer','waitlist_offer','payment_recovery','support_update','operational_alert'])('uses VPS for supported %s only after explicit opt-in', kind => {
+it.each(['team_invitation','organizer_report','organizer_invitation','organizer_signup','registration_access','registration_update','payment_confirmation','ticket_recovery','ticket_transfer','waitlist_offer','payment_recovery','support_update','operational_alert','room_host_post'])('uses VPS for supported %s only after explicit opt-in', kind => {
   expect(transactionalProvider(configuration(), kind)).toBe('vps');
   expect(transactionalProvider(env, kind)).toBe('resend');
   expect(transactionalProvider({ ...configuration(), TRANSACTIONAL_EMAIL_PROVIDER:'resend' }, kind)).toBe('resend');
 });
 
-it.each(['event_announcement','owner_approval_request','host_application_decision','host_application_verify','future_kind'])('keeps unsupported %s on Resend and rejects a forced VPS route', kind => {
+it.each(['event_host_pass','event_announcement','owner_approval_request','host_application_decision','host_application_verify','future_kind'])('keeps unsupported %s on Resend and rejects a forced VPS route', kind => {
   expect(transactionalProvider(configuration(), kind)).toBe('resend');
   expect(() => sendTransactional(configuration(), 'vps', { ...message, kind })).toThrow('must use Resend');
 });
@@ -212,4 +212,27 @@ it('defers a non-JSON VPS outage response without consuming retry attempts', asy
   await env.DB.prepare('UPDATE delivery_events SET next_attempt_at=? WHERE id=?').bind(dueAt,id).run();
   await retryFailedDeliveries(configuration());
   expect(await state(id)).toMatchObject({status:'failed',attempts:0,next:expect.any(String)});
+});
+
+it.each(['room_host_post'])('reconciles accepted %s without a send or retry',async kind=>{
+  const id=await queue('vps',kind,providerId(),'sent');
+  const fetcher=vi.fn<typeof fetch>(async()=>Response.json({messages:[{id:providerId(),status:'delivered',updatedAt:Date.now()}]}));
+  vi.stubGlobal('fetch',fetcher);
+  await reconcileVpsDeliveries(configuration());await retryFailedDeliveries(configuration());
+  expect(await state(id)).toMatchObject({status:'delivered',next:null});
+  expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0][0]).toBe('https://mail.becoreops.com/v1/status');
+});
+
+it('retains safe VPS numeric delivery evidence for Room mail without retrying it',async()=>{
+  const id=await queue('vps','room_host_post',providerId(),'sent');
+  const detail='The recipient mail server rejected delivery. (DSN 5.7.1; SMTP 550)';
+  const timestamp=Date.now();
+  const fetcher=vi.fn<typeof fetch>(async()=>Response.json({messages:[{id:providerId(),status:'bounced',detail,updatedAt:timestamp}]}));
+  vi.stubGlobal('fetch',fetcher);
+  await reconcileVpsDeliveries(configuration());
+  await retryFailedDeliveries(configuration());
+  await reconcileVpsDeliveries(configuration());
+  expect(await env.DB.prepare('SELECT status,failure_reason AS reason,provider_event_at AS occurred,next_attempt_at AS next FROM delivery_events WHERE id=?').bind(id).first()).toEqual({status:'bounced',reason:detail,occurred:new Date(timestamp).toISOString(),next:null});
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0][0]).toBe('https://mail.becoreops.com/v1/status');
 });

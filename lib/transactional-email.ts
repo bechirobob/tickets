@@ -1,9 +1,9 @@
 type Provider = 'resend' | 'vps';
 type Message = { recipient: string; subject: string; html: string; text: string; idempotencyKey: string; kind: string; replyTo?: string };
 const VPS_ORIGIN = 'https://mail.becoreops.com';
-// Match the installed mail service protocol, revision dc835509. New kinds stay
-// on Resend until support is verified in that service; campaigns never use it.
-const VPS_KINDS = new Set(['team_invitation', 'organizer_report', 'organizer_invitation', 'organizer_signup', 'registration_access', 'registration_update', 'payment_confirmation', 'ticket_recovery', 'ticket_transfer', 'waitlist_offer', 'payment_recovery', 'support_update', 'operational_alert']);
+// Deploy the matching mail-service allowlist before enabling these routes.
+// Provider selection is pinned per delivery; campaigns never use this transport.
+const VPS_KINDS = new Set(['team_invitation', 'organizer_report', 'organizer_invitation', 'organizer_signup', 'registration_access', 'registration_update', 'payment_confirmation', 'ticket_recovery', 'ticket_transfer', 'waitlist_offer', 'payment_recovery', 'support_update', 'operational_alert', 'room_host_post']);
 
 export function transactionalProvider(env: Cloudflare.Env, kind: string): Provider {
   return VPS_KINDS.has(kind) && env.TRANSACTIONAL_EMAIL_PROVIDER === 'vps' ? 'vps' : 'resend';
