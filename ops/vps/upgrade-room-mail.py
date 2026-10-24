@@ -94,9 +94,22 @@ def failure_report(error,read_only):
     if isinstance(error,subprocess.CalledProcessError):
         raw=error.stderr if isinstance(error.stderr,bytes) else b''
         # Classify locally; never return stderr, arguments, or template values.
-        for marker,category in [(b'template parsing error','template_parse'),(b'error calling len','template_length'),(b'No such container','container_missing'),(b'No such image','image_missing'),(b'permission denied','permission_denied')]:
+        categories=[(b'error calling len','template_length'),(b"can't evaluate field",'template_field'),
+                    (b'map has no entry for key','template_missing_key'),(b'function "','template_function'),
+                    (b'template parsing error','template_parse'),(b'No such container','container_missing'),
+                    (b'No such image','image_missing'),(b'permission denied','permission_denied')]
+        for marker,category in categories:
             if marker in raw[:8192]:result['command_category']=category;break
         else:result['command_category']='unclassified'
+        # Return only a symbolic field from our own projection inventory, never
+        # an arbitrary Docker error fragment or its associated value.
+        projected={**FIELDS,'labels':'.Config.Labels','environment':'.Config.Env','networks':'.NetworkSettings.Networks'}
+        for key,path in projected.items():
+            leaf=path.rsplit('.',1)[-1].encode()
+            if ('<'+path+'>').encode() in raw[:8192] or b'field '+leaf+b' in type ' in raw[:8192] or b'key "'+leaf+b'"' in raw[:8192]:
+                result['projection_field']=key;break
+    diagnostic=getattr(error,'projection_diagnostic',None)
+    if diagnostic is not None:result['projection_diagnostic']=diagnostic
     return result
 
 
@@ -156,11 +169,31 @@ def image_check():
         raise CheckFailed('config_env')
 
 
+def projection_failures(name,revision):
+    # Diagnose all fixed projections in one bounded read, with no values retained
+    # or returned. An unsupported security field remains a hard failure.
+    probes={key:'{{json '+path+'}}' for key,path in FIELDS.items()}
+    probes.update(environment=ENV_TEMPLATE.replace('REVISION',revision),
+                  labels='{{if .Config.Labels}}{{len .Config.Labels}}{{else}}0{{end}}',
+                  networks='{{range $name, $value := .NetworkSettings.Networks}}{{$name}};{{end}}')
+    deadline=time.monotonic()+15;failed=[];completed=0
+    for key,template in probes.items():
+        remaining=deadline-time.monotonic()
+        if remaining<=0:break
+        try:command(['docker','inspect','--type=container','--format',template,name],timeout=min(2,remaining),limit=65536)
+        except (subprocess.CalledProcessError,subprocess.TimeoutExpired,ValueError):failed.append(key)
+        completed+=1
+    return {'failed_fields':failed,'completed':completed,'expected':len(probes),'incomplete':completed!=len(probes)}
+
+
 def inspect_config(name,revision,image,running=True):
     read_step('container_config')
     template='{'+','.join(json.dumps(k)+':{{json '+v+'}}' for k,v in FIELDS.items())
     template+=',"env":"'+ENV_TEMPLATE.replace('REVISION',revision)+'","labels":{{if .Config.Labels}}{{len .Config.Labels}}{{else}}0{{end}},"networks":"{{range $name, $value := .NetworkSettings.Networks}}{{$name}};{{end}}"}'
-    item=json.loads(command(['docker','inspect','--type=container','--format',template,name]))
+    try:item=json.loads(command(['docker','inspect','--type=container','--format',template,name]))
+    except subprocess.CalledProcessError as error:
+        error.projection_diagnostic=projection_failures(name,revision)
+        raise
     if item['image']!=image or item['running'] is not running or not re.fullmatch('[a-f0-9]{64}',item['id']):raise CheckFailed('config_identity')
     if item['hostname']!=item['id'][:12] or item['networks']!='bridge;':raise CheckFailed('config_network_identity')
     for key,value in EXPECTED.items():
