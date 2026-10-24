@@ -1,5 +1,6 @@
 import { hasPermission, readAdminSession, mutationHasValidOrigin, recordAudit, hashToken, requestMetadata } from '../../../../lib/admin-session';
 import { hostPassScope, hostPassStatus, provisionHostPass, sendHostPass } from '../../../../lib/event-host-pass';
+import { firstHostDeliveryIssues } from '../../../../lib/room-host-first-post';
 import { limitRequestBody } from '../../../../lib/request-body';
 import { enforceRateLimit } from '../../../../lib/security-controls';
 const headers={'cache-control':'no-store, private'};
@@ -18,7 +19,8 @@ export async function GET(request:Request) {
   const scope=hostPassScope(env),query=new URL(request.url).searchParams;
   if(query.get('accountId')!==scope.accountId)return Response.json({available:false},{headers});
   const email=query.get('email')??'';
-  return Response.json({available:true,...await hostPassStatus(env,email)},{headers});
+  const status=await hostPassStatus(env,email);
+  return Response.json({available:true,...status,...(query.get('deliveryIssues')==='first-host'?{deliveryIssues:await firstHostDeliveryIssues(env)}:{})},{headers});
  } catch {return Response.json({available:false},{headers});}
 }
 export async function POST(request:Request) {
