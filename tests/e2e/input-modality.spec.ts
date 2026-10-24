@@ -23,6 +23,8 @@ test("shared pointer focus policy preserves keyboard and editing cues across sur
         <div class="chat-message-anchor is-active"><div class="room-bubble">Synthetic message</div></div></section>
       <div tabindex="0" id="scroll">Synthetic scroll region</div>
       <input id="editing" aria-label="Editing"><textarea aria-label="Message" id="message"></textarea>
+      <label class="payment-method-choice" id="payment"><input type="radio" id="payment-radio">Payment choice</label>
+      <section class="submission-page"><label class="poster-upload" id="poster"><input type="file" id="poster-file">Poster upload</label></section>
       <button id="open">Open dialog</button><dialog><button id="close">Close</button></dialog>
     </main>`);
   await page.addScriptTag({ content: policy + ";inputModality.installInputModality(document);" });
@@ -40,16 +42,28 @@ test("shared pointer focus policy preserves keyboard and editing cues across sur
     await page.keyboard.press("ArrowRight");
     expect(await outline(id)).not.toBe("none");
   }
+  await page.locator("#customer").focus();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#staff")).toBeFocused();
+  expect(await outline("#staff")).not.toBe("none");
   await page.locator("#customer").dispatchEvent("pointerdown", { pointerType: "touch" });
   await page.locator("#editing").focus();
   expect(await outline("#editing")).not.toBe("none");
   await page.locator("#message").focus();
   expect(await outline("#message")).not.toBe("none");
   expect(await page.locator(".room-bubble").evaluate(el => getComputedStyle(el).outlineStyle)).toBe("none");
+  for (const [wrapper, control] of [["#payment", "#payment-radio"], ["#poster", "#poster-file"]]) {
+    await page.locator("#customer").dispatchEvent("pointerdown", { pointerType: "touch" });
+    await page.locator(control).focus();
+    expect(await outline(wrapper)).toBe("none");
+    await page.keyboard.press("ArrowRight");
+    expect(await outline(wrapper)).not.toBe("none");
+  }
   await page.locator("#open").click();
   await expect(page.locator("#close")).toBeFocused();
   expect(await outline("#close")).toBe("none");
-  await page.keyboard.press("Tab");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#close")).toBeFocused();
   expect(await outline("#close")).not.toBe("none");
   await page.keyboard.press("Escape");
   await expect(page.locator("dialog")).not.toBeVisible();
@@ -76,7 +90,7 @@ test("real Room toolbar keeps touch quiet and keyboard navigation visible", asyn
     bundle: true, write: false, format: "iife", platform: "browser", jsx: "automatic",
   }).outputFiles[0].text;
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.setContent(`<style>${css}\n${shared}</style><main class="room-page" id="fixture"></main>`);
+  await page.setContent(`<style>${css}\n${shared}</style><main class="room-page"><section class="room-stream"><article class="room-message"><div class="room-avatar">T</div><div class="room-message__body"><header>Test guest</header><div id="fixture"></div></div></article></section></main>`);
   await page.addScriptTag({ content: policy + ";inputModality.installInputModality(document);" });
   await page.addScriptTag({ content: bundle });
   const trigger = page.getByRole("button", { name: "Actions for Test guest's message" });
