@@ -3,9 +3,9 @@ import datetime, fcntl, hashlib, json, os, pathlib, pwd, sqlite3, subprocess, ti
 SLUG = 'puro-exceso-20261024'
 REVISION = '8f43707d9f656b5638659acb9e25595e8903797a'
 CREATED = '2026-10-24T11:24:04.728Z'
-LIMIT = 66
+LIMIT = 65
 # Set only from the independently observed existing provider dashboard.
-QUOTA_CHECKED_AT = '2026-10-24T12:14:21Z'
+QUOTA_CHECKED_AT = '2026-10-24T12:26:49Z'
 QUOTA_DAILY_USED = 15
 QUOTA_DAILY_LIMIT = 100
 QUOTA_MONTHLY_USED = 20
@@ -61,7 +61,7 @@ def recover(db, room, receipt, template, sender, cap=LIMIT):
     assert visible(room,receipt), 'Source unavailable'
     candidates=[dict(row) for row in eligible(db,receipt) if not existing(db,receipt,row['attendee_id'])]
     assert len(candidates)<=cap<=LIMIT, 'Recovery cohort exceeds reviewed cap'
-    outcome={'eligibleAtStart':len(candidates),'accepted':0,'uncertain':0,'suppressedBeforeSend':0,'alreadyExists':0}
+    outcome={'eligibleAtStart':len(candidates),'accepted':0,'uncertain':0,'suppressedBeforeSend':0,'alreadyExists':0,'knownUnsentFailures':0,'explicitRejections':0}
     for candidate in candidates:
         attendee=candidate['attendee_id'];identifier=f"room-first-email/{receipt['message_id']}/{attendee}"
         payload={**template,'attendeeId':attendee,'idempotencyKey':identifier}
@@ -88,16 +88,84 @@ def recover(db, room, receipt, template, sender, cap=LIMIT):
             provider_id=sender(candidate['recipient'],payload)
             assert isinstance(provider_id,str) and 0<len(provider_id)<=256
             db.execute("UPDATE delivery_events SET status='sent',provider_id=?,failure_reason=NULL,updated_at=? WHERE id=? AND status='sending'",(provider_id,now(),identifier));db.commit();outcome['accepted']+=1
-        except Exception:
-            # Any failure after handoff might have reached the provider. Retain
-            # the normal uncertain status and never retry or switch providers.
-            db.execute("UPDATE delivery_events SET status='uncertain',failure_reason='Delivery outcome needs review; automatic resend is disabled.',next_attempt_at=NULL,updated_at=? WHERE id=? AND status='sending'",(now(),identifier));db.commit();outcome['uncertain']+=1
+        except Exception as error:
+            metadata=error.metadata if isinstance(error,ProviderFailure) else {'category':'provider_outcome_uncertain','phase':'request'}
+            # Actionable structured metadata stays linked privately to the
+            # outbox record. Public result omits provider request identifiers.
+            outcome['failure']={k:v for k,v in metadata.items() if k!='requestId'}
+            known_local=isinstance(error,ProviderFailure) and not error.handed_off
+            rejected=isinstance(error,ProviderFailure) and error.rejected
+            state='failed' if known_local or rejected else 'uncertain'
+            db.execute("UPDATE delivery_events SET status=?,failure_reason=?,next_attempt_at=NULL,updated_at=? WHERE id=? AND status='sending'",(state,json.dumps(metadata,sort_keys=True),now(),identifier));db.commit()
+            outcome['knownUnsentFailures' if known_local else 'explicitRejections' if rejected else 'uncertain']+=1
             break
     return outcome
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self,*args,**kwargs):
-        raise RuntimeError('Provider redirect rejected')
+class ProviderFailure(Exception):
+    def __init__(self, category, handed_off=True, metadata=None, rejected=False):
+        self.category=category;self.handed_off=handed_off;self.metadata=metadata or {'phase':'request' if handed_off else 'input','category':category};self.rejected=rejected
+
+# Exact deployed application's fetch contract. Secrets and recipients are sent
+# through private stdin, never command arguments, files or public stdout.
+NODE_REQUEST = r"""
+let started=false,phase='input';
+try {
+  let raw='';
+  for await (const chunk of process.stdin) { raw+=chunk; if(raw.length>2097152) throw new Error(); }
+  const input=JSON.parse(raw);
+  if(typeof input.key!=='string'||!input.key||typeof input.idempotencyKey!=='string'||!input.message)throw new Error();
+  const body=JSON.stringify(input.message);
+  started=true;phase='request';
+  const response=await fetch('https://api.resend.com/emails',{
+    method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),
+    headers:{authorization:`Bearer ${input.key}`,'content-type':'application/json','idempotency-key':input.idempotencyKey},body
+  });
+  phase='response';
+  const result=await response.json().catch(()=>null);
+  const requestId=response.headers.get('x-request-id')??response.headers.get('request-id');
+  const metadata={phase,status:response.status};
+  if(requestId&&/^[A-Za-z0-9_-]{1,128}$/.test(requestId))metadata.requestId=requestId;
+  const allowedCodes=new Set(['validation_error','restricted_api_key','invalid_api_key','rate_limit_exceeded','invalid_idempotent_request','concurrent_idempotent_requests','not_found','missing_api_key','application_error']);
+  if(result&&allowedCodes.has(result.name))metadata.code=result.name;
+  if(!response.ok){
+    const rejected=[400,401,403,404,405,413,422,429].includes(response.status)&&Boolean(metadata.code)&&!result?.id;
+    console.log(JSON.stringify({ok:false,handedOff:true,rejected,category:'provider_http_error',metadata}));
+  } else if(!result||typeof result.id!=='string'||!result.id||result.id.length>256){
+    console.log(JSON.stringify({ok:false,handedOff:true,category:'provider_receipt_invalid',metadata:{...metadata,phase:'receipt'}}));
+  } else console.log(JSON.stringify({ok:true,id:result.id}));
+} catch(error) {
+  const category=!started?'local_input_invalid':error?.name==='TimeoutError'||error?.name==='AbortError'?'provider_timeout':'provider_network_error';
+  console.log(JSON.stringify({ok:false,handedOff:started,category,metadata:{phase,category}}));
+}
+"""
+
+def request_packet(api_key,recipient,payload):
+    assert isinstance(api_key,str) and api_key
+    assert isinstance(recipient,str) and 3<=len(recipient)<=254 and '@' in recipient
+    assert all(isinstance(payload.get(k),str) and payload[k] for k in ('subject','html','text','idempotencyKey'))
+    message={'from':FROM,'to':[recipient],'subject':payload['subject'],'html':payload['html'],'text':payload['text'],'reply_to':'tickets@becoreops.com'}
+    packet=json.dumps({'key':api_key,'idempotencyKey':payload['idempotencyKey'],'message':message})
+    assert len(packet.encode())<=2097152
+    return packet
+
+def send_node(executable,api_key,recipient,payload):
+    try:packet=request_packet(api_key,recipient,payload)
+    except Exception:raise ProviderFailure('local_input_invalid',False) from None
+    try:
+        result=subprocess.run([str(executable),'--input-type=module','-e',NODE_REQUEST],input=packet,text=True,capture_output=True,timeout=15,check=False)
+        response=json.loads(result.stdout)
+    except Exception:raise ProviderFailure('provider_transport_uncertain') from None
+    if result.returncode!=0 or not isinstance(response,dict):raise ProviderFailure('provider_transport_uncertain')
+    if response.get('ok') is True and isinstance(response.get('id'),str) and 0<len(response['id'])<=256:return response['id']
+    category=response.get('category')
+    if category not in ('provider_http_error','provider_receipt_invalid','provider_transport_uncertain','provider_timeout','provider_network_error','local_input_invalid'):category='provider_transport_uncertain'
+    metadata=response.get('metadata') or {}
+    safe={'category':category,'phase':metadata.get('phase') if metadata.get('phase') in ('input','request','response','receipt') else 'request'}
+    if isinstance(metadata.get('status'),int) and 100<=metadata['status']<=599:safe['status']=metadata['status']
+    if metadata.get('code') in ('validation_error','restricted_api_key','invalid_api_key','rate_limit_exceeded','invalid_idempotent_request','concurrent_idempotent_requests','not_found','missing_api_key','application_error'):safe['code']=metadata['code']
+    import re
+    if isinstance(metadata.get('requestId'),str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}',metadata['requestId']):safe['requestId']=metadata['requestId']
+    raise ProviderFailure(category,response.get('handedOff') is not False,safe,response.get('rejected') is True)
 
 def main():
     os.umask(0o077)
@@ -134,19 +202,15 @@ def main():
     assert template['provider']=='resend' and template['eventSlug']==SLUG and template['messageId']==receipt['message_id']
     assert template['hostAccountId']==receipt['host_account_id'] and template['senderAttendeeId']==receipt['sender_attendee_id']
     assert template['subject']=='PURO EXCESO · Your host has posted'
-    opener=urllib.request.build_opener(NoRedirect())
+    executable=pathlib.Path(props['WorkingDirectory'])/'bin/node'
+    assert executable.is_file() and os.access(executable,os.X_OK)
     def send(recipient,payload):
-        # Same provider, same approved message, same normal deterministic key.
-        body=json.dumps({'from':FROM,'to':[recipient],'subject':payload['subject'],'html':payload['html'],'text':payload['text'],'reply_to':'tickets@becoreops.com'}).encode()
-        request=urllib.request.Request('https://api.resend.com/emails',data=body,method='POST',headers={'authorization':'Bearer '+values['RESEND_API_KEY'],'content-type':'application/json','idempotency-key':payload['idempotencyKey']})
-        with opener.open(request,timeout=15) as response:
-            assert response.status==200
-            result=json.load(response)
+        provider_id=send_node(executable,values['RESEND_API_KEY'],recipient,payload)
         time.sleep(0.6)
-        return result.get('id')
+        return provider_id
     # Private same-host recoverable snapshot before any outbox change. Never
     # overwrite an earlier recovery snapshot or upload it to CI artifacts.
-    backup_path=database.parent/'first-host-recovery-20261024.sqlite'
+    backup_path=database.parent/'first-host-recovery65-20261024.sqlite'
     fd=os.open(backup_path,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600);os.close(fd)
     backup=sqlite3.connect(backup_path);db.backup(backup)
     assert backup.execute('PRAGMA integrity_check').fetchone()[0]=='ok'

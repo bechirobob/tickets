@@ -1,4 +1,4 @@
-import importlib.util,json,pathlib,sqlite3,unittest
+import importlib.util,json,pathlib,sqlite3,unittest,shutil
 spec=importlib.util.spec_from_file_location('recovery',pathlib.Path(__file__).with_name('recover-puro-first-host-20261024.py'))
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
@@ -79,7 +79,50 @@ class Recovery(unittest.TestCase):
   m.visible=changed
   try:self.assertEqual(m.recover(d,r,p,t,lambda *_:self.fail('Deleted source'))['suppressedBeforeSend'],1)
   finally:m.visible=original
- def test_no_redirect(self):
-  with self.assertRaises(RuntimeError):m.NoRedirect().redirect_request(None,None,None,None,None,None)
+ def test_node_contract_and_receipts(self):
+  original=m.NODE_REQUEST
+  prefix="""import assert from 'node:assert/strict';globalThis.fetch=async(url,options)=>{
+   assert.equal(url,'https://api.resend.com/emails');assert.equal(options.method,'POST');assert.equal(options.redirect,'error');
+   assert.equal(options.headers.authorization,'Bearer synthetic-key');assert.equal(options.headers['idempotency-key'],'normal/key');
+   assert.deepEqual(JSON.parse(options.body),{from:'BeCore Tickets <tickets@becoreops.com>',to:['synthetic@example.com'],subject:'Subject',html:'<p>Approved</p>',text:'Approved',reply_to:'tickets@becoreops.com'});
+   return new Response(JSON.stringify({id:'synthetic-receipt'}),{status:201});};"""
+  m.NODE_REQUEST=prefix+original
+  try:self.assertEqual(m.send_node(shutil.which('node'),'synthetic-key','synthetic@example.com',{'subject':'Subject','html':'<p>Approved</p>','text':'Approved','idempotencyKey':'normal/key'}),'synthetic-receipt')
+  finally:m.NODE_REQUEST=original
+ def test_node_safe_errors_no_retry(self):
+  original=m.NODE_REQUEST
+  for mock,category in [("throw new Error('private@example.com')",'provider_network_error'),("return new Response('{}',{status:403})",'provider_http_error'),("return new Response('{}',{status:200})",'provider_receipt_invalid')]:
+   with self.subTest(category=category):
+    m.NODE_REQUEST='globalThis.fetch=async()=>{'+mock+'};'+original
+    try:
+     with self.assertRaises(m.ProviderFailure) as error:m.send_node(shutil.which('node'),'synthetic-key','synthetic@example.com',{'subject':'Subject','html':'Body','text':'Body','idempotencyKey':'key'})
+     self.assertEqual(error.exception.category,category);self.assertTrue(error.exception.handed_off)
+    finally:m.NODE_REQUEST=original
+  with self.assertRaises(m.ProviderFailure) as error:m.send_node(shutil.which('node'),'synthetic-key','synthetic@example.com',{})
+  self.assertFalse(error.exception.handed_off)
+ def test_explicit_rejection_private_request_metadata(self):
+  original=m.NODE_REQUEST
+  m.NODE_REQUEST="globalThis.fetch=async()=>new Response(JSON.stringify({name:'validation_error',message:'private@example.com'}),{status:422,headers:{'x-request-id':'request_123'}});"+original
+  try:
+   with self.assertRaises(m.ProviderFailure) as error:m.send_node(shutil.which('node'),'synthetic-key','synthetic@example.com',{'subject':'Subject','html':'Body','text':'Body','idempotencyKey':'key'})
+   failure=error.exception;self.assertTrue(failure.rejected);self.assertEqual(failure.metadata['status'],422);self.assertEqual(failure.metadata['requestId'],'request_123')
+   d,r,p,t=fixture()
+   def send(*args):raise failure
+   outcome=m.recover(d,r,p,t,send)
+   self.assertEqual(outcome['explicitRejections'],1);self.assertNotIn('request_123',json.dumps(outcome));self.assertNotIn('private@example.com',json.dumps(outcome))
+   recorded=d.execute('SELECT status,failure_reason FROM delivery_events').fetchone();self.assertEqual(recorded[0],'failed');self.assertIn('request_123',recorded[1]);self.assertNotIn('private@example.com',recorded[1])
+  finally:m.NODE_REQUEST=original
+ def test_timeout_is_distinct_and_uncertain(self):
+  original=m.NODE_REQUEST;m.NODE_REQUEST="globalThis.fetch=async()=>{throw new DOMException('private','TimeoutError')};"+original
+  try:
+   with self.assertRaises(m.ProviderFailure) as error:m.send_node(shutil.which('node'),'synthetic-key','synthetic@example.com',{'subject':'Subject','html':'Body','text':'Body','idempotencyKey':'key'})
+   self.assertEqual(error.exception.category,'provider_timeout');self.assertTrue(error.exception.handed_off);self.assertFalse(error.exception.rejected)
+  finally:m.NODE_REQUEST=original
+ def test_pre_request_failure_is_known_unsent_and_not_retried(self):
+  d,r,p,t=fixture()
+  def send(*args):raise m.ProviderFailure('local_input_invalid',False)
+  self.assertEqual(m.recover(d,r,p,t,send)['knownUnsentFailures'],1)
+  self.assertEqual(d.execute('SELECT status FROM delivery_events').fetchone()[0],'failed')
+  self.assertEqual(m.recover(d,r,p,t,lambda *_:self.fail('No automatic retry'))['eligibleAtStart'],0)
 
 if __name__=='__main__':unittest.main()
