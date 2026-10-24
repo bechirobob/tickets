@@ -1,0 +1,85 @@
+name: Inspect PURO first-host email outcomes read-only
+
+# Fixed live-revision, aggregate-only inspection. No deployment, provider calls or data writes.
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/puro-first-host-delivery-readonly-20261024.yml]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before == '8f43707d9f656b5638659acb9e25595e8903797a' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify one-file exact predecessor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD^1)" = '8f43707d9f656b5638659acb9e25595e8903797a'
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.github/workflows/puro-first-host-delivery-readonly-20261024.yml'
+      - name: Connect existing Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Read exact active PURO delivery evidence without mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          tailscale ssh root@hermes "python3 -" <<'PYREAD'
+          import fcntl,json,os,pathlib,sqlite3,subprocess,time,urllib.request
+          SLUG="puro-exceso-20261024"
+          EXPECTED="8f43707d9f656b5638659acb9e25595e8903797a"
+          def rows(db,sql,args=()):
+              cur=db.execute(sql,args)
+              return [dict(zip([c[0] for c in cur.description],r)) for r in cur]
+          def diagnose(db):
+              receipts=rows(db,"SELECT message_id,created_at,fanout_at,cancelled_at FROM room_host_first_posts WHERE event_slug=?",(SLUG,))
+              assert len(receipts)<=1,"Ambiguous first-host receipt"
+              if not receipts:return {"receiptCount":0}
+              receipt=receipts[0];mid=receipt["message_id"]
+              mail="FROM delivery_events d WHERE d.kind='room_host_post' AND json_extract(d.payload_json,'$.eventSlug')=? AND json_extract(d.payload_json,'$.messageId')=?"
+              args=(SLUG,mid)
+              status="CASE WHEN d.status IN ('queued','sending','sent','delivered','delayed','failed','bounced','complained','suppressed','uncertain') THEN d.status ELSE 'other' END"
+              groups=rows(db,"SELECT "+status+" AS status,COUNT(*) AS count,SUM(d.provider_id IS NOT NULL) AS providerReceipts,MIN(d.created_at) AS firstCreated,MAX(d.updated_at) AS lastUpdated,MAX(d.provider_event_at) AS lastProviderEvent,MIN(d.attempt_count) AS minAttempts,MAX(d.attempt_count) AS maxAttempts "+mail+" GROUP BY 1",args)
+              no_push=rows(db,"SELECT "+status+" AS status,COUNT(*) AS count "+mail+" AND NOT EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.attendee_id=json_extract(d.payload_json,'$.attendeeId') AND s.revoked_at IS NULL AND s.host_updates=1) GROUP BY 1",args)
+              reasons=rows(db,"SELECT CASE WHEN d.failure_reason IS NULL THEN 'none' WHEN d.failure_reason='Delivery outcome needs review; automatic resend is disabled.' THEN 'provider_outcome_uncertain' WHEN d.failure_reason='Delivery interrupted; review provider receipt before any resend.' THEN 'interrupted_outcome_uncertain' ELSE 'other_redacted' END AS reason,COUNT(*) AS count "+mail+" AND d.status IN ('failed','uncertain','bounced','complained','delayed') GROUP BY 1",args)
+              inbox=db.execute("SELECT count(*) FROM attendee_notifications WHERE event_slug=? AND kind='host_first_post' AND source_id=?",args).fetchone()[0]
+              push=rows(db,"SELECT CASE WHEN status IN ('pending','processing','complete') THEN status ELSE 'other' END AS status,COUNT(*) AS count,MIN(attempts) AS minAttempts,MAX(attempts) AS maxAttempts FROM room_announcement_deliveries WHERE event_slug=? AND json_extract(payload_json,'$.kind')='host_first_post' AND json_extract(payload_json,'$.sourceId')=? GROUP BY 1",args)
+              missing=db.execute("SELECT count(*) FROM attendee_notifications n WHERE n.event_slug=? AND n.kind='host_first_post' AND n.source_id=? AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE d.kind='room_host_post' AND json_extract(d.payload_json,'$.messageId')=n.source_id AND json_extract(d.payload_json,'$.attendeeId')=n.attendee_id)",args).fetchone()[0]
+              health=rows(db,"SELECT job_key,started_at,finished_at,last_success_at,last_failure_at,failure_count FROM background_job_health WHERE job_key IN ('scheduled:minute','scheduled:five-minute','delivery-loop')")
+              return {"receiptCount":1,"createdAt":receipt['created_at'],"fanoutAt":receipt['fanout_at'],"cancelled":receipt['cancelled_at'] is not None,"inboxRecipients":inbox,"emailGroups":groups,"emailRecipientsWithoutCurrentPushSubscription":no_push,"emailFailureGroups":reasons,"inboxRecipientsWithoutEmailJob":missing,"pushJobGroups":push,"pushCompleteDoesNotProveDeviceDelivery":True,"currentSubscriptionDoesNotProvePushDelivery":True,"backgroundHealth":health}
+          def main():
+              lock=os.open('/run/lock/becore-tickets-deploy.lock',os.O_RDONLY|os.O_NOFOLLOW)
+              fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+              props=dict(line.split('=',1) for line in subprocess.check_output(['systemctl','show','becore-tickets.service','--property=ActiveState,WorkingDirectory'],text=True).splitlines())
+              assert props=={'ActiveState':'active','WorkingDirectory':'/srv/becore-tickets/releases/'+EXPECTED}
+              request=urllib.request.Request('http://127.0.0.1:3119/healthz',headers={'Host':'tickets.becoreops.com'})
+              with urllib.request.urlopen(request,timeout=10) as response: health=json.load(response)
+              assert health.get('revision')==EXPECTED and health.get('runtime')=='vps' and health.get('active') is True
+              path=pathlib.Path('/var/lib/becore-tickets/tickets.sqlite')
+              assert path.is_file() and not path.is_symlink()
+              db=sqlite3.connect('file:'+str(path)+'?mode=ro',uri=True,timeout=5)
+              deadline=time.monotonic()+15
+              db.set_progress_handler(lambda:int(time.monotonic()>deadline),1000)
+              db.execute('PRAGMA query_only=ON');db.execute('BEGIN')
+              result=diagnose(db)
+              assert db.total_changes==0
+              db.rollback();db.close()
+              print(json.dumps({'readOnly':True,'eventSlug':SLUG,'activeRevision':EXPECTED,'observedAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'resends':0,**result},sort_keys=True))
+          if __name__=='__main__':main()
+          PYREAD
