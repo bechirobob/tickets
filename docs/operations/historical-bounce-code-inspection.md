@@ -19,9 +19,11 @@ sendingEnabled true. The wrapper pins and rechecks these values at action time.
    access, active assigned host, event state, suspension/block/mute/push/opt-out
    checks. Instead of excluding bounce suppression, require it; exclude complaints.
    Exclude existing non-suppressed canonical first-host email jobs.
-3. For each private contact, require exactly one historical bad-delivery row per contact, ordered by
+3. For each private contact, select its latest historical bad-delivery event, ordered by
    COALESCE(provider_event_at,updated_at) DESC,id DESC as in the private endpoint,
-   with the exact four previously observed Oct19 event timestamps and a valid VPS provider ID. Cap at two rows to fail ambiguity.
+   with the exact four previously observed Oct19 event timestamps and a valid VPS provider ID.
+   Read at most two rows to reject a tied latest timestamp. Older distinct events
+   do not invalidate the exact identified latest event; newer events fail its pin.
    No private contact, attendee ID or provider ID is printed, persisted or placed
    in command arguments. No payload or failure text is selected.
 4. Resolve exactly those four provider IDs in the mail outbox, selecting only
@@ -103,8 +105,8 @@ then exec this reviewed bounce script as __main__. The metadata module name keep
 its own CLI inactive. Both source strings must come only from the exact checked-out
 commit with predecessor/path gates, never downloaded external input. The wrapper
 also supports normal local sibling-module import for tests. The workflow requires
-main predecessor 48f40f80941210d4663c8470012c42c53f146b05, attempt one and exactly
-these four added paths. Do not run it outside the approved operator context.
+the exact main predecessor pinned in the workflow, attempt one and its exact
+changed-path inventory. Do not run it outside the approved operator context.
 
 ## Remaining gates
 
