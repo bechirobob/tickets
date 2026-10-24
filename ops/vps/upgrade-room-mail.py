@@ -159,7 +159,7 @@ def image_check():
 def inspect_config(name,revision,image,running=True):
     read_step('container_config')
     template='{'+','.join(json.dumps(k)+':{{json '+v+'}}' for k,v in FIELDS.items())
-    template+=',"env":"'+ENV_TEMPLATE.replace('REVISION',revision)+'","labels":{{len .Config.Labels}},"networks":"{{range $name, $value := .NetworkSettings.Networks}}{{$name}};{{end}}"}'
+    template+=',"env":"'+ENV_TEMPLATE.replace('REVISION',revision)+'","labels":{{if .Config.Labels}}{{len .Config.Labels}}{{else}}0{{end}},"networks":"{{range $name, $value := .NetworkSettings.Networks}}{{$name}};{{end}}"}'
     item=json.loads(command(['docker','inspect','--type=container','--format',template,name]))
     if item['image']!=image or item['running'] is not running or not re.fullmatch('[a-f0-9]{64}',item['id']):raise CheckFailed('config_identity')
     if item['hostname']!=item['id'][:12] or item['networks']!='bridge;':raise CheckFailed('config_network_identity')
