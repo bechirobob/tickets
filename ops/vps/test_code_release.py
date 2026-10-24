@@ -1147,7 +1147,7 @@ def room_mail_focus_source_family(root):
 
 
 
-ROOM_MAIL_VPS_OPERATOR_BLOB = '05d9248b006a60449f7d6303a49e7b8225a2aeb1'
+ROOM_MAIL_VPS_OPERATOR_BLOB = '3ce9952c547073a76b5bfb43a8996d1c9c65af1e'
 ROOM_MAIL_VPS_STAGED_BASE = dict(ROOM_MAIL_FOCUS_STAGED_BASE)
 ROOM_MAIL_VPS_STAGED_BASE['ops/email/mailer.py'] = ("100644", 'fc99c522457e487837e276d5acdd31b2cce2fcd0')
 ROOM_MAIL_VPS_STAGED_BASE['ops/vps/inspect-bounce-codes-readonly.py'] = ("100644", '6e344e7047c9897047c9dffda27e0f699d25e893')
@@ -1156,7 +1156,7 @@ ROOM_MAIL_VPS_STAGED_BASE['ops/vps/test_bounce_codes_readonly.py'] = ("100644", 
 ROOM_MAIL_VPS_STAGED_BASE['ops/vps/test_mail_service_readonly.py'] = ("100644", 'f02a6d1e30d0dfe464af9d3d4ade87726e67eb94')
 ROOM_MAIL_VPS_STAGED_BASE['ops/vps/test_mail_upgrade.py'] = ("100644", '56067f377765b39d5ec7b6029e42fc9ec3bd146e')
 ROOM_MAIL_VPS_STAGED_BASE['ops/vps/upgrade-room-mail.py'] = ("100644", '0f8b77d5bf2ed3df86a17475923cd1ea5a0d1358')
-ROOM_MAIL_VPS_STAGED_BASE['.github/workflows/tickets-release-operator-checks.yml'] = ('100644', '099d2c6b7745296955f7b2c4e8fce3bf56507351')
+ROOM_MAIL_VPS_STAGED_BASE['.github/workflows/tickets-release-operator-checks.yml'] = ('100644', 'a0099e4403e2f7f84e1ee5651899cdbe1823866b')
 ROOM_MAIL_VPS_STAGED_BASE['.github/workflows/tickets-code-release.yml'] = ('100644', '8e516ab2b92cf9c9fdb59cf3ef802f23fc2b5879')
 ROOM_MAIL_VPS_TEST_FILE = Path(__file__).resolve()
 
@@ -12385,7 +12385,7 @@ class RoomMailVpsPrerequisiteTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     FirstHostConfigurationTests().test_workflow_activation_is_default_off_step_local_stdin_only()
 
-    def test_workflow_only_adds_the_exact_required_mailer_archive_path(self):
+    def test_workflow_only_adds_required_mailer_archive_and_bounded_test_budget(self):
         root = Path(__file__).resolve().parents[2]
         for name, revision in (('.github/workflows/tickets-release-operator-checks.yml', 'HEAD'),
                                ('.github/workflows/tickets-code-release.yml', '"$OPERATOR_SHA"')):
@@ -12393,6 +12393,9 @@ class RoomMailVpsPrerequisiteTests(unittest.TestCase):
             anchor = ('git archive ' + revision + ' ops/vps ops/email/mailer.py ').encode()
             self.assertEqual(raw.count(anchor), 1)
             before = raw.replace(anchor, ('git archive ' + revision + ' ops/vps ').encode(), 1)
+            if name == '.github/workflows/tickets-release-operator-checks.yml':
+                self.assertEqual(before.count(b'    timeout-minutes: 20\n'), 1)
+                before = before.replace(b'    timeout-minutes: 20\n', b'    timeout-minutes: 10\n', 1)
             digest = lambda data: release.hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
             self.assertEqual(digest(raw), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name])
             self.assertEqual(digest(before), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS[name])

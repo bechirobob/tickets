@@ -2165,7 +2165,7 @@ ROOM_MAIL_VPS_MAIL_REVISION = 'ddf24949e2a42c2f00ca0502a75cdc52a4352324'
 ROOM_MAIL_VPS_MAIL_SOURCE_SHA256 = '37ed2a28acda640f73af4e2db90b5cb9f41b434a016a5b85c978ae579d413fc3'
 
 ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS = {'.github/workflows/tickets-release-operator-checks.yml': '33a7e8cc3e38dc6f58f10113dd12f1c7c3042ce1', '.github/workflows/tickets-code-release.yml': '9326b937cfb42f3056c5187e498563c63720c392'}
-ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS = {'.github/workflows/tickets-release-operator-checks.yml': '099d2c6b7745296955f7b2c4e8fce3bf56507351', '.github/workflows/tickets-code-release.yml': '8e516ab2b92cf9c9fdb59cf3ef802f23fc2b5879'}
+ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS = {'.github/workflows/tickets-release-operator-checks.yml': 'a0099e4403e2f7f84e1ee5651899cdbe1823866b', '.github/workflows/tickets-code-release.yml': '8e516ab2b92cf9c9fdb59cf3ef802f23fc2b5879'}
 
 def load_room_mail_vps_inspector():
     """Load only the exact reviewed read-only helper, never an import cache."""
