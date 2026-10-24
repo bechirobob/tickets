@@ -20,7 +20,7 @@
 .room-page .chat-action-links button { gap: 4px; font-size: 12px; font-weight: 600; padding-inline: 8px; }
 .room-page .chat-action-tray button:focus-visible { outline-color: #eee; outline-offset: -2px; clip-path: none; }
 .chat-action-feedback { font-size: 12px; margin: 0; padding: 5px; background: #30212c; }
-.chat-message-anchor.is-active > .room-bubble { outline: 1px solid #bca4b3; outline-offset: 2px; }
+/* The action tray identifies its message without an extra decorative bubble ring. */
 .chat-tapbacks .chat-reaction { animation: room-tapback-in 180ms cubic-bezier(.2,.8,.3,1.2); }
 .room-page .room-pinned { width: min(832px, calc(100% - 40px)); margin: 0 auto; padding: 0; border: 0; border-radius: 0; background: #30212c; }
 .room-page .room-pinned summary { display: flex; flex-wrap: nowrap; gap: 7px; min-height: 40px; padding: 4px 10px; }
