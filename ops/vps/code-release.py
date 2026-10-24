@@ -1034,6 +1034,8 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    'drizzle/0069_event_host_pass_invitations.sql': {'blob': '49994f90d3c9bf3bafaf7ba0f510e95323803885', 'sha256': '483bd1fe3d8966272469012c73cab6dbf06acfb335ac34cb0feee6dbeda71bda', 'schemaSha256': 'a2a2adbe30c602029fe2135c486046b706dacc57815f1f837f3bca860d26be3e', 'tables': ['event_host_pass_invitations']},
+    'drizzle/0068_room_host_first_posts.sql': {'blob': '2754afa9baf9c823997986eddfb06a870579134e', 'sha256': '36df4f6d0080c64b92a37adecbff99e1968d1b03af4e370957dc8e49f602bcbf', 'schemaSha256': '54d86e75418768001f4e37dda81e36f58b85b1156d2675a4c53fd9f0d56c8cb3', 'tables': ['room_host_first_posts']},
     HOST_BRAND_IDENTITY_PATH: {
         "kind": "kofi-bills-brand-identity",
         "blob": "03341823c192635fdb84fa51cb56b7b742e84bd0",
@@ -1256,6 +1258,116 @@ def enable_crypto_bytes(raw):
     expected = dict(values, SEEV_CRYPTO_ENABLED="true")
     require(configuration(result.encode()) == expected, "Configuration edit was not isolated.")
     return result.encode()
+
+
+def first_host_account_from_stdin(stream):
+    """Accept one bounded private UUID; never accept an account argument or echo it."""
+    raw = stream.read(128)
+    require(re.fullmatch(rb"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\n?", raw),
+            "First host activation requires one private canonical account UUID on stdin.")
+    return raw.rstrip(b"\n").decode("ascii")
+
+
+def enable_first_host_bytes(raw, account_id):
+    """Set only this reviewed scope, preserving every unrelated configuration byte."""
+    require(isinstance(account_id, str)
+            and re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", account_id),
+            "First host activation requires a private canonical account UUID.")
+    values = configuration(raw)
+    selected = {"ROOM_HOST_FIRST_POST_EVENT_SLUG": "puro-exceso-20261024",
+                "ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID": account_id,
+                "ROOM_HOST_FIRST_POST_ENABLED": "1"}
+    require(values.get("ROOM_HOST_FIRST_POST_ENABLED") in (None, "0", "false", "1")
+            and all(values.get(key) in (None, value) for key, value in selected.items()
+                    if key != "ROOM_HOST_FIRST_POST_ENABLED")
+            and (values.get("ROOM_HOST_FIRST_POST_ENABLED") != "1"
+                 or all(values.get(key) == value for key, value in selected.items())),
+            "Existing first-host configuration conflicts with the reviewed scope.")
+    original = values
+    text = raw.decode("utf-8")
+    for selected_key, selected_value in selected.items():
+        values = configuration(text.encode())
+        decoder = json.JSONDecoder()
+        index = text.index("{") + 1
+        while True:
+            while text[index].isspace(): index += 1
+            if text[index] == "}":
+                addition = ("," if values else "") + json.dumps(selected_key) + ":" + json.dumps(selected_value)
+                text = text[:index] + addition + text[index:]
+                break
+            key, index = decoder.raw_decode(text, index)
+            while text[index].isspace(): index += 1
+            require(text[index] == ":", "Invalid configuration separator.")
+            index += 1
+            while text[index].isspace(): index += 1
+            start = index
+            _, index = decoder.raw_decode(text, index)
+            if key == selected_key:
+                text = text[:start] + json.dumps(selected_value) + text[index:]
+                break
+            while text[index].isspace(): index += 1
+            if text[index] == ",": index += 1
+    result = text.encode()
+    require(configuration(result) == {**original, **selected}, "First host configuration edit was not isolated.")
+    return result
+
+
+def verify_first_host_target(database, account_id, uid, gid):
+    """Validate the explicit protected target as the service user, without a data write."""
+    require(isinstance(account_id, str)
+            and re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", account_id),
+            "First host activation requires a private canonical account UUID.")
+    database = Path(database)
+    directory, info = database.parent.lstat(), database.lstat()
+    require(stat.S_ISDIR(directory.st_mode) and directory.st_uid == uid
+            and stat.S_IMODE(directory.st_mode) == 0o700
+            and stat.S_ISREG(info.st_mode) and info.st_uid == uid
+            and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1,
+            "First host activation requires the private canonical database.")
+    for suffix in ("-wal", "-shm", "-journal"):
+        sidecar = Path(str(database) + suffix)
+        if os.path.lexists(sidecar):
+            info = sidecar.lstat()
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == uid and info.st_nlink == 1
+                    and not stat.S_IMODE(info.st_mode) & 0o077,
+                    "First host activation found an unsafe database sidecar.")
+    # Do not let root create SQLite WAL/SHM files owned by the wrong identity.
+    child = os.fork()
+    if child == 0:
+        try:
+            if os.geteuid() == 0: os.setgroups([])
+            os.setgid(gid)
+            os.setuid(uid)
+            now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True, timeout=10)) as connection:
+                connection.execute("PRAGMA query_only=ON")
+                deadline = time.monotonic() + 10
+                connection.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
+                rows = connection.execute("""SELECT 1 FROM staff_accounts s
+                    JOIN staff_event_assignments assignment ON assignment.account_id=s.id
+                    JOIN curated_event_records event ON event.slug=assignment.event_slug
+                    JOIN event_hosts link ON link.event_slug=event.slug
+                    JOIN hosts host ON host.id=link.host_id
+                    WHERE s.id=? AND s.role='organizer' AND s.status='active' AND s.must_change_password=0
+                      AND (s.locked_until IS NULL OR julianday(s.locked_until)<=julianday(?))
+                      AND event.slug='puro-exceso-20261024' AND event.status='published'
+                      AND event.schedule_status='confirmed' AND event.removed_at IS NULL AND event.archived_at IS NULL
+                      AND event.event_state IN ('on_sale','sold_out','rescheduled')
+                      AND julianday(event.ends_at)>julianday(?) AND julianday(event.ends_at)>julianday(event.starts_at)
+                      AND host.id='host:kofi-bills' AND host.slug='kofi-bills' AND host.verification_status='verified'
+                    LIMIT 2""", (account_id, now, now)).fetchall()
+            os._exit(0 if rows == [(1,)] else 1)
+        except BaseException:
+            os._exit(1)
+    try:
+        _, status = os.waitpid(child, 0)
+    except BaseException:
+        try: os.kill(child, signal.SIGTERM)
+        except ProcessLookupError: pass
+        os.waitpid(child, 0)
+        raise
+    require(os.waitstatus_to_exitcode(status) == 0,
+            "First host target is missing, ambiguous, revoked or outside the reviewed active event.")
 
 
 def release_override(raw, previous, candidate):
@@ -1822,6 +1934,258 @@ CAMERA_LOOKS_PREREQUISITE_INPUTS = {'package.json': '543f7f006d606f32f5435c83b51
 CAMERA_LOOKS_PREREQUISITE_BLOBS = {'package.json': '13eb8bb5069320ed6f9b4f82dd1a7b0fad84cf87',
  'package-lock.json': 'b2d43a53b9ad10388b35c0464642959fd94fadc1'}
 
+
+# Exact first-host receipt release; activation remains a separate operation.
+FIRST_HOST_RELEASE_BASELINE = 'b522542484bf576f2e5dfcd835be7768eea4c8f0'
+FIRST_HOST_RELEASE_BASE_TREE = '284ba498be1c3249b69f097f40672616cd6a19b0'
+FIRST_HOST_APP_SNAPSHOT = '6ac0a38242fa7fe78bf8b505a474529c3e0d1871'
+FIRST_HOST_APP_TREE = '21a0d1b3f66076bc8c85fd25e644699360792477'
+FIRST_HOST_CONTROL_FILES = {'ops/vps/test_code_release.py', 'ops/vps/code-release.py'}
+FIRST_HOST_APPLICATION_INPUTS = {'app/admin/accounts/event-host-pass.tsx': None,
+ 'app/admin/accounts/staff-accounts.tsx': '18aec6ea528807a157a5bb55278c1c9b8b35c407',
+ 'app/api/admin/host-pass/route.ts': None,
+ 'app/api/customer/host-pass/claim/route.ts': None,
+ 'app/api/customer/notifications/route.ts': '6712aa29c24593ee65650c2c0e1a2e52e1636462',
+ 'app/confirmation-notifications.css': '876fa2dbcea724e82800734cdcccf12801e6ffe3',
+ 'app/confirmation-notifications.tsx': 'e50d57f72fa11cb8154747266e532ff4196854b1',
+ 'app/my-nights/access/page.tsx': '5efa8d87c33e90d72a2364dc94fefff1a27de7e7',
+ 'app/notifications/notification-feed.tsx': '80bd660965bf1aaed79ec931046a6b5e89a9835d',
+ 'app/room/[slug]/room-client.tsx': '8ac1b0535e85abdca999598cd30dac01c7d949d7',
+ 'app/room/[slug]/room-notifications.tsx': '6e407e59381616a7bbafb2fc059a5df438e399da',
+ 'cloudflare-env.d.ts': 'e60d968c61a6c622191f9c3c53a2514c25770979',
+ 'db/schema.ts': '530e44bb6c4145cd0daf7d1d90a900fbf1bddbc0',
+ 'drizzle/0068_room_host_first_posts.sql': None,
+ 'drizzle/0069_event_host_pass_invitations.sql': None,
+ 'lib/email-delivery.ts': 'dcad73b8a824af75949a8b02cba9977d00b182f8',
+ 'lib/event-host-pass-email.ts': None,
+ 'lib/event-host-pass.ts': None,
+ 'lib/notifications.ts': '633fa174ccb6e365684a0293ec4118d87456f46c',
+ 'lib/room-host-email.ts': None,
+ 'lib/room-host-first-post.ts': None,
+ 'lib/room-updates.ts': 'cf4b3fccf25f1d280fef807c8c88fc3c51badbf3',
+ 'lib/ticket-access-redirect.ts': None,
+ 'lib/transactional-email.ts': '6d7ea0dda0b1b0538e07be352b0b7ae39de1d8ce',
+ 'ops/handover/sqlite-snapshot.mjs': 'dcf680e1b723cd0873e5d006f8c549db61bcfb83',
+ 'package.json': '13eb8bb5069320ed6f9b4f82dd1a7b0fad84cf87',
+ 'scripts/customer-email-previews.mjs': 'afbba02f4a1db052ad830bee1d11c7f6fb2c12a7',
+ 'scripts/event-host-pass-preview.mjs': None,
+ 'tests/e2e/event-host-pass-claim.spec.ts': None,
+ 'tests/email-preview/customer-email.spec.ts': '2259c6dafc53fd38f67a71d950837008b5e39de6',
+ 'tests/event-host-pass-handover.test.mjs': None,
+ 'tests/event-host-pass.test.ts': None,
+ 'tests/handover-rpc.test.mjs': '9e6a85d4038cd2f346a9feac220e4c8d32f2fe68',
+ 'tests/mobile-ui.test.mjs': 'f09ae5135a867cc229f787c2fd61214a9006b165',
+ 'tests/room-host-email.test.mjs': None,
+ 'tests/room-host-first-post.test.ts': None,
+ 'tests/room-host-handover.test.mjs': None,
+ 'tests/room-host-push-fence.test.ts': None,
+ 'tests/room-host-review.test.ts': None,
+ 'worker/background.ts': 'd5683c2699242330cec52fe5962614e33e635bdb',
+ 'worker/handover-reconciliation.ts': '3f2ef3f75d1a670bc884944495cb467d05aadb76',
+ 'worker/handover.ts': 'ce005f25d16a19ad9b271131ade36c61489bd65c',
+ 'worker/room-handover.ts': 'ff4b48549b895f4d771b8ccd36d1834b7b266c79',
+ 'worker/room-return.ts': 'c13ee5e4f85ea69e20cb7da619bd92195c10fadf',
+ 'worker/security-response.ts': '3d9d92746405583edcd173694d763c868a1b09fd',
+ 'worker/the-room.ts': 'f5849f1cd02093e6d752631b36267af336b31a14'}
+FIRST_HOST_APPLICATION_BLOBS = {'app/admin/accounts/event-host-pass.tsx': 'e7ce9486260f5ca4aeb0f2721ebd0e6a1afc4b30',
+ 'app/admin/accounts/staff-accounts.tsx': '1a9d8928c1d059a314aec22728d9182bcb81f653',
+ 'app/api/admin/host-pass/route.ts': '2b8b37e324d5f4ce7501da710334072634b99c87',
+ 'app/api/customer/host-pass/claim/route.ts': '453f5b9e11859481e9d39639134e6c254a3d99c7',
+ 'app/api/customer/notifications/route.ts': '7efdb739bb3438f06101a648f7b12ef1a57a5022',
+ 'app/confirmation-notifications.css': '41cb034b7c6909c5d5419f1903ceea79dd6fd155',
+ 'app/confirmation-notifications.tsx': '085cfb56d620bca4730bf739bfbac6790c176540',
+ 'app/my-nights/access/page.tsx': 'cfefc35a106ce2cbc94e6f6423b9a2dfd8b6c634',
+ 'app/notifications/notification-feed.tsx': '60e10c9b40660e693cc8336fb71ef641190d39fb',
+ 'app/room/[slug]/room-client.tsx': 'a4c03030b52a005313074e6e00e46133e4bd5f6c',
+ 'app/room/[slug]/room-notifications.tsx': 'e7f696863f45a570adb85b30c4d6854423378587',
+ 'cloudflare-env.d.ts': '3615be75474a7eb5ee00a6ed9bd8a8f832da27c2',
+ 'db/schema.ts': '76245da8cce074420d5bffa7966b3f689e9f89d3',
+ 'drizzle/0068_room_host_first_posts.sql': '2754afa9baf9c823997986eddfb06a870579134e',
+ 'drizzle/0069_event_host_pass_invitations.sql': '49994f90d3c9bf3bafaf7ba0f510e95323803885',
+ 'lib/email-delivery.ts': 'a488df528226f01e4620b2740da6ed8e657c53c6',
+ 'lib/event-host-pass-email.ts': 'b9d7ce59ff2a9028b4767574c8569ef4da97ee18',
+ 'lib/event-host-pass.ts': 'a60f2c627f34639abf1d905175b665d88d3f5c13',
+ 'lib/notifications.ts': 'b0722ff95663126507863c546ab6aaa8e88dd080',
+ 'lib/room-host-email.ts': '24cea15f10e30dca14426b1811302e5e7568b138',
+ 'lib/room-host-first-post.ts': '524763d3666280b817d5e91ad5e845208af9919d',
+ 'lib/room-updates.ts': '8a76dd2110a8fca5b42d93e96b262ceeed2969d4',
+ 'lib/ticket-access-redirect.ts': '4225a8b644c4805c6640f80b399431a2c72d60fa',
+ 'lib/transactional-email.ts': '5e8a293e880418fd6d9f7a94e2d96b9b5744836b',
+ 'ops/handover/sqlite-snapshot.mjs': '8174110bacb363f1d7fb5b5055dbdbbc91cca916',
+ 'package.json': '60b73e4d803eb7d36c66378e110c261c7a6a3fb7',
+ 'scripts/customer-email-previews.mjs': '0e3c0f62d6793163eee3d47490c39092ec717c5e',
+ 'scripts/event-host-pass-preview.mjs': '8b2cd024cbec4322aee5c3546e6b7fca05766e00',
+ 'tests/e2e/event-host-pass-claim.spec.ts': '71a310712de6c741b6c06fc5c8290fe754b3dd7a',
+ 'tests/email-preview/customer-email.spec.ts': 'dd962b38c5fbc837bab9d9f3bbce534c6bd293f8',
+ 'tests/event-host-pass-handover.test.mjs': 'c00d50b74fcb81bfa5b0bccb43b4b1bd45850f51',
+ 'tests/event-host-pass.test.ts': 'e0561bbec44ce09fc212a4d054622970fb05882e',
+ 'tests/handover-rpc.test.mjs': 'cce5029c6816135602957a211970f7291f64ba66',
+ 'tests/mobile-ui.test.mjs': 'e63e0223e2ad45e8e8d58d7abc0f002412fbf450',
+ 'tests/room-host-email.test.mjs': '0b2b27eb2b3f224ca1d9e823269fea9c90e284e8',
+ 'tests/room-host-first-post.test.ts': '840142312b41e01fbbcaa391865e28b516a9316e',
+ 'tests/room-host-handover.test.mjs': '6e4007cbae8482ad8c62c44c017c31adca1eac70',
+ 'tests/room-host-push-fence.test.ts': '8c10c917ee4c1a0cc3f49b006953177b7d975f44',
+ 'tests/room-host-review.test.ts': '9d8df7882158f2869820c56b451f5e8dcabd7820',
+ 'worker/background.ts': 'b3d9370e528866149c4587e8e178792630875744',
+ 'worker/handover-reconciliation.ts': '48f5c592dcce3b3f078c5186c4e1f2f293255461',
+ 'worker/handover.ts': '653dc0fd78c48cd6dca71ec0fb6d94a186639c66',
+ 'worker/room-handover.ts': '14e205946e411072f2c90720139b3cfa673c6dc3',
+ 'worker/room-return.ts': '2a0c015ca1edb595db2b938325c980c37e1587fc',
+ 'worker/security-response.ts': 'c13ac91d606accd05d2f40686610cc001a63e5b8',
+ 'worker/the-room.ts': '68cdc89d2470aff2702c662a91ab1878b726a7a3'}
+FIRST_HOST_DEPENDENCY_BLOBS = {'package-lock.json': 'b2d43a53b9ad10388b35c0464642959fd94fadc1',
+ 'mobile/package.json': '552fbe9817bdcfd4d9ecc898fbbabcc8cf17dc92',
+ 'mobile/package-lock.json': 'ef19daa868045d26c686ed003a29f183bc144e84',
+ 'runtime/vps/package.json': 'e37de887cb29595c07fa90025cb314e978222baa'}
+
+FIRST_HOST_PREREQUISITE_INPUTS = {'.github/workflows/tickets-code-release.yml': '9c5ca1129fe7e97215b3d895060a4f01256473bf'}
+FIRST_HOST_PREREQUISITE_BLOBS = {'.github/workflows/tickets-code-release.yml': '9326b937cfb42f3056c5187e498563c63720c392'}
+
+def reviewed_first_host_application_blobs(expected, source):
+    """Bind exact M/S inputs and outputs to independent control C and promotion P."""
+    snapshot = FIRST_HOST_APP_SNAPSHOT
+    controls = FIRST_HOST_CONTROL_FILES
+    application = FIRST_HOST_APPLICATION_BLOBS
+    dependencies = FIRST_HOST_DEPENDENCY_BLOBS
+    prerequisites = FIRST_HOST_PREREQUISITE_BLOBS
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and set(dependencies) == {'package-lock.json', 'mobile/package.json',
+                                      'mobile/package-lock.json', 'runtime/vps/package.json'}
+            and set(prerequisites) == set(FIRST_HOST_PREREQUISITE_INPUTS)
+            == {".github/workflows/tickets-code-release.yml"}
+            and set(application) == set(FIRST_HOST_APPLICATION_INPUTS)
+            == {'app/admin/accounts/event-host-pass.tsx',
+ 'app/admin/accounts/staff-accounts.tsx',
+ 'app/api/admin/host-pass/route.ts',
+ 'app/api/customer/host-pass/claim/route.ts',
+ 'app/api/customer/notifications/route.ts',
+ 'app/confirmation-notifications.css',
+ 'app/confirmation-notifications.tsx',
+ 'app/my-nights/access/page.tsx',
+ 'app/notifications/notification-feed.tsx',
+ 'app/room/[slug]/room-client.tsx',
+ 'app/room/[slug]/room-notifications.tsx',
+ 'cloudflare-env.d.ts',
+ 'db/schema.ts',
+ 'drizzle/0068_room_host_first_posts.sql',
+ 'drizzle/0069_event_host_pass_invitations.sql',
+ 'lib/email-delivery.ts',
+ 'lib/event-host-pass-email.ts',
+ 'lib/event-host-pass.ts',
+ 'lib/notifications.ts',
+ 'lib/room-host-email.ts',
+ 'lib/room-host-first-post.ts',
+ 'lib/room-updates.ts',
+ 'lib/ticket-access-redirect.ts',
+ 'lib/transactional-email.ts',
+ 'ops/handover/sqlite-snapshot.mjs',
+ 'package.json',
+ 'scripts/customer-email-previews.mjs',
+ 'scripts/event-host-pass-preview.mjs',
+ 'tests/e2e/event-host-pass-claim.spec.ts',
+ 'tests/email-preview/customer-email.spec.ts',
+ 'tests/event-host-pass-handover.test.mjs',
+ 'tests/event-host-pass.test.ts',
+ 'tests/handover-rpc.test.mjs',
+ 'tests/mobile-ui.test.mjs',
+ 'tests/room-host-email.test.mjs',
+ 'tests/room-host-first-post.test.ts',
+ 'tests/room-host-handover.test.mjs',
+ 'tests/room-host-push-fence.test.ts',
+ 'tests/room-host-review.test.ts',
+ 'worker/background.ts',
+ 'worker/handover-reconciliation.ts',
+ 'worker/handover.ts',
+ 'worker/room-handover.ts',
+ 'worker/room-return.ts',
+ 'worker/security-response.ts',
+ 'worker/the-room.ts'}
+            and not (controls | set(dependencies) | set(prerequisites)) & set(application)
+            and not (controls | set(dependencies)) & set(prerequisites),
+            "First host inventory or scope changed.")
+    require(expected == FIRST_HOST_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == FIRST_HOST_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == FIRST_HOST_APP_TREE,
+            "First host live or snapshot tree changed.")
+    for ancestor, descendant in ((expected, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, snapshot).splitlines()) == set(application),
+            "First host snapshot differs from its complete reviewed inventory.")
+    verify_changed_modes(expected, snapshot)
+    for name, blob in FIRST_HOST_APPLICATION_INPUTS.items():
+        entry = git("ls-tree", expected, "--", name)
+        require(entry == ("100644 blob " + blob + "\t" + name if blob is not None else ""),
+                "First host application input differs from reviewed source: " + name)
+    for name, blob in application.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + blob + "\t" + name,
+                "First host snapshot output differs from reviewed source: " + name)
+    for name, blob in FIRST_HOST_PREREQUISITE_INPUTS.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot)),
+                "First host workflow prerequisite input changed: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, snapshot, source),
+            "First host requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, trusted), (trusted, "refs/remotes/origin/main")):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, trusted).splitlines()) == controls | set(prerequisites),
+            "First host trusted controls contain unreviewed changes.")
+    require(set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls | set(prerequisites),
+            "First host candidate differs from the complete reviewed application patch.")
+    verify_changed_modes(expected, trusted)
+    verify_changed_modes(trusted, source)
+    for name, blob in prerequisites.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (trusted, source)),
+                "First host workflow prerequisite output changed: " + name)
+    pins = {**prerequisites, **application}
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "First host output differs from its reviewed blob or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "First host controls differ from their independent trusted entry.")
+        pins[name] = git("rev-parse", trusted + ":" + name)
+    # The complete M/S/C/P diffs freeze every other path, including every workflow.
+    for name, blob in dependencies.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (expected, snapshot, trusted, source)),
+                "First host dependencies must remain unchanged: " + name)
+    before = strict_json(git("show", expected + ":package.json"))
+    after = strict_json(git("show", source + ":package.json"))
+    registration = " tests/customer-email-rendering.test.mjs"
+    require(before["scripts"]["test:repo"].count(registration) == 1,
+            "First host baseline test registration changed.")
+    before["scripts"]["test:repo"] = before["scripts"]["test:repo"].replace(
+        registration, registration + " tests/room-host-email.test.mjs tests/room-host-handover.test.mjs tests/event-host-pass-handover.test.mjs")
+    require(before == after, "First host package change is not the exact three test registrations.")
+    before_handover = git("show", expected + ":worker/handover.ts")
+    after_handover = git("show", source + ":worker/handover.ts")
+    scope_anchor = "  'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT',\n"
+    scope_addition = ("  'ROOM_HOST_FIRST_POST_ENABLED', 'ROOM_HOST_FIRST_POST_EVENT_SLUG', "
+                      "'ROOM_HOST_FIRST_POST_HOST_ACCOUNT_ID',\n")
+    require(before_handover.count(scope_anchor) == 1
+            and after_handover == before_handover.replace(scope_anchor, scope_anchor + scope_addition),
+            "First host handover change is not the exact three configuration names.")
+    require(migration_plan(pins) == [dict(path="drizzle/0068_room_host_first_posts.sql",
+            blob="2754afa9baf9c823997986eddfb06a870579134e",
+            sha256="36df4f6d0080c64b92a37adecbff99e1968d1b03af4e370957dc8e49f602bcbf",
+            schemaSha256="54d86e75418768001f4e37dda81e36f58b85b1156d2675a4c53fd9f0d56c8cb3",
+            tables=["room_host_first_posts"]), dict(path="drizzle/0069_event_host_pass_invitations.sql",
+            blob="49994f90d3c9bf3bafaf7ba0f510e95323803885",
+            sha256="483bd1fe3d8966272469012c73cab6dbf06acfb335ac34cb0feee6dbeda71bda",
+            schemaSha256="a2a2adbe30c602029fe2135c486046b706dacc57815f1f837f3bca860d26be3e",
+            tables=["event_host_pass_invitations"])],
+            "First host requires only its exact additive receipt and invitation migrations.")
+    return pins
+
+
 def reviewed_camera_looks_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
     snapshot = CAMERA_LOOKS_APP_SNAPSHOT
@@ -2124,6 +2488,8 @@ def reviewed_navigation_application_blobs(expected, source):
 
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == FIRST_HOST_RELEASE_BASELINE:
+        return reviewed_first_host_application_blobs(expected, source)
     if expected == CAMERA_LOOKS_RELEASE_BASELINE:
         return reviewed_camera_looks_application_blobs(expected, source)
     if expected == INTEGRATED_EXPERIENCE_RELEASE_BASELINE:
@@ -2182,6 +2548,10 @@ def vetted_changes(expected, source):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=git_environment(), timeout=60)
     verify_changed_modes(expected, source)
     changed = git("diff", "--name-only", expected, source).splitlines()
+    require(not {"drizzle/0068_room_host_first_posts.sql",
+                 "drizzle/0069_event_host_pass_invitations.sql"}.intersection(changed)
+            or expected == FIRST_HOST_RELEASE_BASELINE,
+            "First host receipt migration requires its exact release family.")
     application_pins = reviewed_application_blobs(expected, source)
     for name in changed:
         if name == "ops/vps/code-release.py":
@@ -2200,7 +2570,7 @@ def vetted_changes(expected, source):
             continue
         require(name in APPLICATION_FILES or name.startswith(("docs/", "tests/"))
                 or name == "worker/handover.ts", "Unvetted source path: " + name)
-    if "worker/handover.ts" in changed:
+    if "worker/handover.ts" in changed and expected != FIRST_HOST_RELEASE_BASELINE:
         before = git("show", expected + ":worker/handover.ts")
         after = git("show", source + ":worker/handover.ts")
         original = "'SEEV_ENABLED', 'SEEV_ENVIRONMENT',"
@@ -2209,6 +2579,8 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == FIRST_HOST_RELEASE_BASELINE:
+        return changed
     if expected == CAMERA_LOOKS_RELEASE_BASELINE:
         require(not migration_plan(changed), "Camera looks release cannot introduce migrations.")
         return changed
@@ -3537,7 +3909,8 @@ class AuditReleaseApproval:
 
 class Deployment:
     def __init__(self, *, source, expected, run_id, attempt, archive, provenance,
-                 archive_digest, provenance_digest, enable_crypto=False, recover_prepared=None,
+                 archive_digest, provenance_digest, enable_crypto=False, enable_first_host=False,
+                 first_host_account_id=None, recover_prepared=None,
                  root=Path("/"), system=None, audit_report=None):
         require(SHA.fullmatch(source) and SHA.fullmatch(expected) and source != expected,
                 "Distinct exact release SHAs required.")
@@ -3554,6 +3927,17 @@ class Deployment:
         self.archive, self.provenance = Path(archive), Path(provenance)
         self.audit_report = Path(audit_report) if audit_report is not None else None
         self.archive_digest, self.provenance_digest = archive_digest, provenance_digest
+        require(type(enable_first_host) is bool and not (enable_first_host and enable_crypto),
+                "First host activation is explicit and cannot be combined with crypto activation.")
+        require((not enable_first_host and first_host_account_id is None) or (enable_first_host
+                and isinstance(first_host_account_id, str)
+                and re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", first_host_account_id)),
+                "First host activation requires its private canonical account UUID only when enabled.")
+        self.enable_first_host = enable_first_host
+        self.first_host_account_id = first_host_account_id
+        self.first_host_evidence = ({"firstHostEnabledRequested": True,
+            "firstHostScopeSha256": hashlib.sha256(("puro-exceso-20261024\0" + first_host_account_id).encode()).hexdigest()}
+            if enable_first_host else {})
         self.enable_crypto = enable_crypto
         self.root, self.system = Path(root), system or System()
         self.home = self.root / "srv/becore-tickets"
@@ -3691,6 +4075,16 @@ class Deployment:
                     "Existing production Seev configuration is not ready.")
         self.system.verify_effective_config(self.before["config"])
         self.next_config = enable_crypto_bytes(self.before["config"]) if self.enable_crypto else self.before["config"]
+        if self.enable_first_host:
+            require(self.expected == FIRST_HOST_RELEASE_BASELINE
+                    and len(changes) == len(set(changes))
+                    and set(changes) == set(FIRST_HOST_APPLICATION_BLOBS) | FIRST_HOST_CONTROL_FILES | set(FIRST_HOST_PREREQUISITE_BLOBS)
+                    and self.migrations == migration_plan(FIRST_HOST_APPLICATION_BLOBS),
+                    "First host activation requires the exact reviewed first-host release family.")
+            self.next_config = enable_first_host_bytes(self.before["config"], self.first_host_account_id)
+            self.system.verify_database_binding()
+            verify_first_host_target(self.root / "var/lib/becore-tickets/tickets.sqlite", self.first_host_account_id,
+                                     self.system.application_uid(), self.system.application_gid())
         health(self.system, self.expected)
         health(self.system, self.expected, public=True)
         if self.recover_prepared:
@@ -3716,7 +4110,8 @@ class Deployment:
             "version": 1, "phase": "prepared", "runId": run_id, "attempt": attempt,
             "source": self.source, "previous": self.expected,
             "archiveSha256": self.archive_digest, "provenanceSha256": self.provenance_digest,
-            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": bool(self.migrations)},
+            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": bool(self.migrations),
+            **self.first_host_evidence},
             "Prepared recovery evidence does not match this exact failed transaction.")
         for name, raw in self.before.items():
             require(self.file(failed / (name + ".before"), private=True) == raw,
@@ -4023,7 +4418,8 @@ class Deployment:
             "version": 1, "phase": phase, "runId": self.run_id, "attempt": self.attempt,
             "source": self.source, "previous": self.expected,
             "archiveSha256": self.archive_digest, "provenanceSha256": self.provenance_digest,
-            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": bool(self.migrations)})
+            "cryptoEnabledRequested": self.enable_crypto, "dataMigration": bool(self.migrations),
+            **self.first_host_evidence})
 
     def preserved(self):
         require(self.file(self.handoff, private=True, owner=self.system.application_uid()) == self.before["handoff"], "Handoff state changed.")
@@ -4072,6 +4468,10 @@ class Deployment:
             if self.approval is not None:
                 self.approval.check_window()
             self.retention_safe()
+            if self.enable_first_host:
+                self.system.verify_database_binding()
+                verify_first_host_target(self.root / "var/lib/becore-tickets/tickets.sqlite", self.first_host_account_id,
+                                         self.system.application_uid(), self.system.application_gid())
             if self.next_config != self.before["config"]:
                 atomic_write(self.config, self.next_config)
             atomic_write(self.override, self.next_override, self.modes["override"])
@@ -4101,7 +4501,8 @@ class Deployment:
                 "runId": self.run_id, "attempt": self.attempt, "previous": self.expected,
                 "revision": self.source, "archiveSha256": self.archive_digest,
                 "provenanceSha256": self.provenance_digest,
-                "cryptoEnabledRequested": self.enable_crypto}
+                "cryptoEnabledRequested": self.enable_crypto,
+                **({"firstHostEnabledRequested": True} if self.enable_first_host else {})}
             if self.migrations and not pink_after_code:
                 key = "reviewedDataMigrations" if any(item.get("kind") for item in self.migrations) else "additiveMigrations"
                 record["lastCodeRelease"][key] = self.migrations
@@ -4179,7 +4580,8 @@ class Deployment:
                 raise ReleaseError("Compatible runtime retained; event correction needs review. No old-code rollback or database restore was performed.") from failure
         return {"released": self.source, "previous": self.expected, "active": True,
                 "runtime": "vps", "publicVerified": True, "dataMigration": bool(self.migrations),
-                "cryptoEnabledRequested": self.enable_crypto}
+                "cryptoEnabledRequested": self.enable_crypto,
+                **({"firstHostEnabledRequested": True} if self.enable_first_host else {})}
 
     def apply(self):
         require(os.geteuid() == 0, "Root access required.")
@@ -4212,6 +4614,7 @@ def main():
         apply.add_argument("--" + name, required=True)
     apply.add_argument("--audit-report", required=True)
     apply.add_argument("--enable-crypto", choices=("true", "false"), default="false")
+    apply.add_argument("--enable-first-host", choices=("true", "false"), default="false")
     apply.add_argument("--recover-prepared", default="",
                        help="Exact failed run-attempt identity; only a proven prepared empty release is quarantined.")
     args = parser.parse_args()
@@ -4224,6 +4627,10 @@ def main():
             values = vars(args)
             values.pop("command")
             values["enable_crypto"] = values["enable_crypto"] == "true"
+            values["enable_first_host"] = values["enable_first_host"] == "true"
+            if values["enable_first_host"]:
+                require(not values["enable_crypto"], "First host activation cannot be combined with crypto activation.")
+                values["first_host_account_id"] = first_host_account_from_stdin(sys.stdin.buffer)
             def interrupted(_number, _frame):
                 raise ReleaseError("Release interrupted.")
             signal.signal(signal.SIGTERM, interrupted)

@@ -45,6 +45,11 @@ on:
         required: false
         default: ''
         type: string
+      enable_first_host:
+        description: Enable the approved PURO first-host flow using its private account setting
+        required: false
+        default: false
+        type: boolean
       enable_crypto:
         description: Enable requested USDC checkout after owner-confirmed merchant wallet setup (no payment test)
         required: false
@@ -78,6 +83,7 @@ jobs:
       INSPECT_MODE: ${{ inputs.inspect_failed_release && 'true' || 'false' }}
       RECOVER_PREPARED: ${{ inputs.recover_prepared }}
       ENABLE_CRYPTO: ${{ inputs.enable_crypto && 'true' || 'false' }}
+      ENABLE_FIRST_HOST: ${{ inputs.enable_first_host && 'true' || 'false' }}
     steps:
       - name: Require main and exact bounded release inputs
         shell: bash
@@ -85,6 +91,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
           if [[ "$VERIFY_ONLY" == true ]]; then test "$INSPECT_MODE" = false; fi
+          if [[ "$ENABLE_FIRST_HOST" == true ]]; then test "$ENABLE_CRYPTO" = false; fi
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ && "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
           [[ "$CANDIDATE_MODE" = legacy || "$CANDIDATE_MODE" = parallel-v1 ]]
@@ -200,6 +207,8 @@ jobs:
             --audit-directory "$RUNNER_TEMP/tickets-final-audit"
       - name: Apply reversible Tickets-only code transaction
         if: ${{ !inputs.verify_only }}
+        env:
+          FIRST_HOST_ACCOUNT_ID: ${{ inputs.enable_first_host && secrets.TICKETS_FIRST_HOST_ACCOUNT_ID || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -208,13 +217,19 @@ jobs:
           digest=$(sha256sum "$metadata/artifact/tickets-vps-runtime.tar.gz" | cut -d ' ' -f 1)
           proof_digest=$(sha256sum "$metadata/provenance.json" | cut -d ' ' -f 1)
           script_digest=$(sha256sum "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" | cut -d ' ' -f 1)
+          # The private account stays out of arguments, artifacts and output.
+          if [[ "$ENABLE_FIRST_HOST" == true ]]; then
+            [[ "$FIRST_HOST_ACCOUNT_ID" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || { echo "The approved private Host account setting is missing or invalid."; exit 1; }
+          else
+            test -z "$FIRST_HOST_ACCOUNT_ID"
+          fi
           # Exclusive staging prevents blind retry over an earlier uncertain run.
           tailscale ssh root@hermes "umask 077; mkdir '$stage'"
           tailscale ssh root@hermes "umask 077; cat > '$stage/runtime.tar.gz'" < "$metadata/artifact/tickets-vps-runtime.tar.gz"
           tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
           tailscale ssh root@hermes "umask 077; cat > '$stage/npm-audit.json'" < "$RUNNER_TEMP/tickets-final-audit/npm-audit.json"
           tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py"
-          tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --audit-report '$stage/npm-audit.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --recover-prepared '$RECOVER_PREPARED'"
+          printf '%s' "$FIRST_HOST_ACCOUNT_ID" | tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --audit-report '$stage/npm-audit.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --enable-first-host '$ENABLE_FIRST_HOST' --recover-prepared '$RECOVER_PREPARED'"
           # Retain private staging and the verified audit snapshot for this one release.
 
       - name: Record verification-only result
@@ -234,6 +249,7 @@ jobs:
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
       RECOVER_PREPARED: ${{ inputs.recover_prepared }}
       ENABLE_CRYPTO: ${{ inputs.enable_crypto && 'true' || 'false' }}
+      ENABLE_FIRST_HOST: ${{ inputs.enable_first_host && 'true' || 'false' }}
     steps:
       - name: Require exact read-only diagnostic context and failed release pins
         shell: bash
@@ -247,6 +263,7 @@ jobs:
           test "$CANDIDATE_RUN" = 36801064451
           test -z "$RECOVER_PREPARED"
           test "$ENABLE_CRYPTO" = false
+          test "$ENABLE_FIRST_HOST" = false
       - name: Connect existing dedicated Tickets identity for read-only inspection
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
