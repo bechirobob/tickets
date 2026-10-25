@@ -1,0 +1,233 @@
+name: Release pinned Tickets Room helper transport
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/tickets-room-helper-transport.yml
+      - tests/test_room_helper_transport.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tickets-vps-handover
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact transport and fail-closed helper loading
+        run: python3 -B -m unittest discover -s tests -p test_room_helper_transport.py -v
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: 36c30bd61415460b7383e857b9407bef753185ea
+      BECORE_RELEASE_SHA: 36c30bd61415460b7383e857b9407bef753185ea
+      OPERATOR_SHA: a62985c899de8e82728d5c0a515504f9e405443d
+      BECORE_TRUSTED_BASE: a62985c899de8e82728d5c0a515504f9e405443d
+      EXPECTED_ACTIVE: 885bd1b2d97ff687fe884c86314ae9b368d4abff
+      RUNTIME_RUN: '40143329504'
+      CANDIDATE_RUN: '40141189481'
+      CANDIDATE_MODE: parallel-v1
+      VERIFY_ONLY: 'false'
+      INSPECT_MODE: 'false'
+      RECOVER_PREPARED: ''
+      ENABLE_CRYPTO: 'false'
+      ENABLE_FIRST_HOST: 'false'
+    steps:
+      - name: Require main and exact bounded release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          if [[ "$VERIFY_ONLY" == true ]]; then test "$INSPECT_MODE" = false; fi
+          if [[ "$ENABLE_FIRST_HOST" == true ]]; then test "$ENABLE_CRYPTO" = false; fi
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ && "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$CANDIDATE_MODE" = legacy || "$CANDIDATE_MODE" = parallel-v1 ]]
+          [[ -z "$RECOVER_PREPARED" || "$RECOVER_PREPARED" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 36c30bd61415460b7383e857b9407bef753185ea
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject unmerged source before executing checkout code
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          test "$BECORE_TRUSTED_BASE" != "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$SOURCE_SHA"
+          git merge-base --is-ancestor "$EXPECTED_ACTIVE" "$SOURCE_SHA"
+      - name: Stage reviewed trusted operator without changing the verified application tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$OPERATOR_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$OPERATOR_SHA" = "$BECORE_TRUSTED_BASE"
+          git merge-base --is-ancestor "$OPERATOR_SHA" "$SOURCE_SHA"
+          git merge-base --is-ancestor "$OPERATOR_SHA" origin/main
+          operator="$RUNNER_TEMP/tickets-operator"
+          mkdir -m 700 "$operator"
+          git archive "$OPERATOR_SHA" ops/vps ops/email/mailer.py .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/candidate-parallel-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$operator"
+          printf 'Application artifact: %s\nReviewed operator: %s\n' "$SOURCE_SHA" "$OPERATOR_SHA"
+      - name: Verify independently trusted operator before any host access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator --source "$SOURCE_SHA"
+      - name: Verify updater regression suite
+        run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
+      - name: Verify exact CI runs, source tree, ancestry and artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          mkdir -m 700 "$metadata"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
+          runtime_attempt=$(jq -er '.run_attempt | select(type == "number" and . > 0 and floor == .)' "$metadata/runtime.json")
+          candidate_attempt=$(jq -er '.run_attempt | select(type == "number" and . > 0 and floor == .)' "$metadata/candidate.json")
+          [[ "$runtime_attempt" =~ ^[1-9][0-9]*$ && "$candidate_attempt" =~ ^[1-9][0-9]*$ ]]
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN/attempts/$runtime_attempt/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/runtime-jobs.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/attempts/$candidate_attempt/jobs?per_page=100" | jq -s '[.[].jobs[]]' > "$metadata/candidate-jobs.json"
+          candidate_sha=$(jq -r '.head_sha' "$metadata/candidate.json")
+          [[ "$candidate_sha" =~ ^[a-f0-9]{40}$ ]]
+          git fetch --no-tags origin "$candidate_sha"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/runtime_release.py" download \
+            --source "$SOURCE_SHA" --run-id "$RUNTIME_RUN" --attempt "$runtime_attempt" --directory "$metadata/artifact"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
+            --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
+      - name: Set up the shipping runtime version for final audit
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - name: Capture final dependency audit privately
+        id: final_dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase preinstall
+      - name: Install the exact approved dependency lock for final audit
+        run: npm ci --no-audit
+      - name: Verify installed dependencies against the final private audit
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase postinstall
+      - name: Connect existing dedicated Tickets identity
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Inspect loaded credential binding metadata without reading secret values
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          tailscale ssh root@hermes "systemctl show becore-tickets.service --no-pager --property=NeedDaemonReload --property=WorkingDirectory --property=ActiveState && busctl --system --timeout=10 --no-pager --json=short get-property org.freedesktop.systemd1 /org/freedesktop/systemd1/unit/becore_2dtickets_2eservice org.freedesktop.systemd1.Service LoadCredential"
+      - name: Reconfirm exact CI attempts immediately before the host transaction
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          # Keep the previously fetched exact-attempt jobs and transport receipt.
+          # Replacing only the run snapshots makes any newer attempt or changed
+          # source/status fail the verifier; never switch to a newer artifact.
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUNTIME_RUN" > "$metadata/runtime.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$metadata/candidate.json"
+          python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
+            --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
+            --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json" \
+            --audit-directory "$RUNNER_TEMP/tickets-final-audit"
+      - name: Apply reversible Tickets-only code transaction
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          FIRST_HOST_ACCOUNT_ID: ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/tickets-code-release"
+          stage="/var/tmp/tickets-code-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          digest=$(sha256sum "$metadata/artifact/tickets-vps-runtime.tar.gz" | cut -d ' ' -f 1)
+          proof_digest=$(sha256sum "$metadata/provenance.json" | cut -d ' ' -f 1)
+          script_digest=$(sha256sum "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" | cut -d ' ' -f 1)
+          # The private account stays out of arguments, artifacts and output.
+          if [[ "$ENABLE_FIRST_HOST" == true ]]; then
+            [[ "$FIRST_HOST_ACCOUNT_ID" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || { echo "The approved private Host account setting is missing or invalid."; exit 1; }
+          else
+            test -z "$FIRST_HOST_ACCOUNT_ID"
+          fi
+          # Exclusive staging prevents blind retry over an earlier uncertain run.
+          tailscale ssh root@hermes "umask 077; mkdir '$stage'"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/runtime.tar.gz'" < "$metadata/artifact/tickets-vps-runtime.tar.gz"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/npm-audit.json'" < "$RUNNER_TEMP/tickets-final-audit/npm-audit.json"
+          tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py"
+          tailscale ssh root@hermes "umask 022; cat > '$stage/inspect-mail-service-readonly.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/inspect-mail-service-readonly.py"
+          printf '%s' "$FIRST_HOST_ACCOUNT_ID" | tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --audit-report '$stage/npm-audit.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --enable-first-host '$ENABLE_FIRST_HOST' --recover-prepared '$RECOVER_PREPARED'"
+          # Retain private staging and the verified audit snapshot for this one release.
+
+      - name: Record verification-only result
+        if: false
+        run: printf 'Verification only; no deployment, host connection or production browser checks were performed.\n' >> "$GITHUB_STEP_SUMMARY"
+
+  retired_preview:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: Verify retired checkout preview (${{ matrix.browser }})
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
+    env:
+      E2E_BASE_URL: https://tickets.becoreops.com
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 36c30bd61415460b7383e857b9407bef753185ea
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
+      - name: Verify only the removed preview page and API
+        run: npx playwright test tests/e2e/checkout-preview-retired.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0
+      # This endpoint-only smoke gate has no distributable build output. Its
+      # assertions and exact-source identity remain in the job logs; it must not
+      # fail after deployment merely because unrelated Actions storage is full.
+      - name: Record preview retirement source
+        run: test "$(git rev-parse HEAD)" = "36c30bd61415460b7383e857b9407bef753185ea"
