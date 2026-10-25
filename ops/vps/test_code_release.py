@@ -1158,6 +1158,11 @@ ROOM_MAIL_VPS_STAGED_BASE['ops/vps/test_mail_upgrade.py'] = ("100644", '56067f37
 ROOM_MAIL_VPS_STAGED_BASE['ops/vps/upgrade-room-mail.py'] = ("100644", '0f8b77d5bf2ed3df86a17475923cd1ea5a0d1358')
 ROOM_MAIL_VPS_STAGED_BASE['.github/workflows/tickets-release-operator-checks.yml'] = ('100644', 'a0099e4403e2f7f84e1ee5651899cdbe1823866b')
 ROOM_MAIL_VPS_STAGED_BASE['.github/workflows/tickets-code-release.yml'] = ('100644', '8e516ab2b92cf9c9fdb59cf3ef802f23fc2b5879')
+# Test-only main-branch overlay; deployment admission remains pinned to C/P.
+ROOM_MAIL_VPS_TRANSPORT_OVERLAY = {
+    '.github/workflows/tickets-room-helper-transport.yml': ('100644', 'eb6275216ab5c32e47862977d451bbd4da4d18a2'),
+    'tests/test_room_helper_transport.py': ('100644', 'a7c2934eaf8313812664f94b15a2323d4059ad6c'),
+}
 ROOM_MAIL_VPS_TEST_FILE = Path(__file__).resolve()
 
 def room_mail_vps_source_family(root):
@@ -1200,6 +1205,10 @@ def room_mail_vps_source_family(root):
                 raise AssertionError('Room VPS mail application family has partial or unreviewed bytes')
             tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
             untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            # Accept only the complete independently pinned transport pair.
+            # Existing index, mode and byte checks below validate both additions.
+            if tracked & ROOM_MAIL_VPS_TRANSPORT_OVERLAY.keys():
+                manifest.update(ROOM_MAIL_VPS_TRANSPORT_OVERLAY)
             if tracked != set(manifest) or untracked:
                 raise AssertionError('Room VPS mail full inventory differs from complete tracked C/P family')
             # A restored worktree cannot conceal staged application changes.
@@ -3815,6 +3824,84 @@ class PuroExcesoOverlayTests(unittest.TestCase):
         with patch.dict(PURO_EXCESO_TEST_OVERLAY, {'README.md': ('100644', self.blob(b'baseline\n'))}):
             with self.assertRaisesRegex(AssertionError, 'cannot replace'):
                 checkout_parallel_source_family(self.root)
+
+
+class RoomMailTransportInventoryTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.git('init', '--quiet')
+        self.git('config', 'user.email', 'fixture@example.invalid')
+        self.git('config', 'user.name', 'Inventory fixture')
+        (self.root / 'ops/vps').mkdir(parents=True)
+        (self.root / 'package.json').write_text('{}')
+        (self.root / 'ops/vps/code-release.py').write_bytes(Path(release.__file__).read_bytes())
+        (self.root / 'ops/vps/test_code_release.py').write_text('# synthetic inventory fixture\n')
+        self.git('add', '.')
+        self.git('commit', '--quiet', '-m', 'Synthetic baseline')
+        baseline = self.git('rev-parse', 'HEAD').stdout.decode().strip()
+        tree = self.git('rev-parse', 'HEAD^{tree}').stdout.decode().strip()
+        self.baseline = baseline
+        overlay = {}
+        for name in ROOM_MAIL_VPS_TRANSPORT_OVERLAY:
+            content = ('synthetic exact overlay: ' + name + '\n').encode()
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+            overlay[name] = ('100644', release.hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest())
+        self.git('add', '.')
+        self.git('commit', '--quiet', '-m', 'Synthetic exact pair')
+        self.overlay_commit = self.git('rev-parse', 'HEAD').stdout.decode().strip()
+        # Exercise the real full-inventory validator with isolated Git objects.
+        # No external repository or Git history is required in archive execution.
+        for key, value in {
+            'ROOM_MAIL_VPS_RELEASE_BASELINE': baseline,
+            'ROOM_MAIL_VPS_RELEASE_BASE_TREE': tree,
+            'ROOM_MAIL_VPS_PREREQUISITE_BLOBS': {},
+            'ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS': {},
+            'ROOM_MAIL_VPS_APPLICATION_BLOBS': {},
+        }.items():
+            patcher = patch.object(release, key, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+        patcher = patch.dict(ROOM_MAIL_VPS_TRANSPORT_OVERLAY, overlay, clear=True)
+        patcher.start(); self.addCleanup(patcher.stop)
+
+    def git(self, *args):
+        return subprocess.run(['git', '-C', str(self.root), *args], check=True, capture_output=True)
+
+    def test_complete_exact_overlay_and_original_family_are_accepted(self):
+        self.assertIsNotNone(room_mail_vps_source_family(self.root))
+        self.git('checkout', '--quiet', self.baseline)
+        self.assertIsNotNone(room_mail_vps_source_family(self.root))
+
+    def test_overlay_rejects_partial_altered_extra_mode_and_index(self):
+        names = list(ROOM_MAIL_VPS_TRANSPORT_OVERLAY)
+        mutations = ['partial-first', 'partial-second', 'altered', 'extra-tracked', 'extra-untracked', 'mode', 'index']
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                try:
+                    target = self.root / names[0]
+                    if mutation.startswith('partial'):
+                        self.git('rm', '--quiet', names[0 if mutation == 'partial-first' else 1])
+                    elif mutation == 'altered':
+                        target.write_bytes(target.read_bytes() + b'\n# unreviewed\n')
+                    elif mutation.startswith('extra'):
+                        (self.root / 'unreviewed-extra.txt').write_text('extra')
+                        if mutation == 'extra-tracked':
+                            self.git('add', 'unreviewed-extra.txt')
+                    elif mutation == 'mode':
+                        target.chmod(0o755)
+                    elif mutation == 'index':
+                        original = target.read_bytes()
+                        target.write_bytes(original + b'\n# staged-only mutation\n')
+                        self.git('add', names[0])
+                        target.write_bytes(original)
+                    with self.assertRaises(AssertionError):
+                        room_mail_vps_source_family(self.root)
+                finally:
+                    self.git('reset', '--hard', '--quiet', 'HEAD')
+                    (self.root / 'unreviewed-extra.txt').unlink(missing_ok=True)
 
 
 class RuntimeTransportWorkflowTests(unittest.TestCase):
