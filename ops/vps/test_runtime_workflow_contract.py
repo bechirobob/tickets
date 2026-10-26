@@ -61,6 +61,17 @@ class RuntimeWorkflowContractTests(unittest.TestCase):
         self.assertEqual(self.runtime_names['verify'].count(transport.PUBLISH_STEP), 1)
         self.assertIn(transport.PUBLISH_STEP, operator.RUNTIME_VERIFY_STEPS)
 
+    def test_workflow_node_builders_pin_october_security_releases(self):
+        # These are build-tool versions, not an attestation of the live VPS.
+        # Exact pins make future runtime changes an explicit reviewed diff.
+        versions = []
+        for workflow in (ROOT / '.github/workflows').glob('*.yml'):
+            for version in re.findall(r'^\s*node-version:\s*([^\s#]+)', workflow.read_text(), re.M):
+                with self.subTest(workflow=workflow.name, version=version):
+                    self.assertIn(version, {'22.23.4', '24.22.1'})
+                versions.append(version)
+        self.assertTrue(versions, 'No Node.js builder pins found')
+
     def test_actual_declared_workflows_pass_consumer(self):
         operator.verify_jobs(self.runtime, self.candidate)
 

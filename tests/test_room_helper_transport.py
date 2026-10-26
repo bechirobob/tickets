@@ -48,6 +48,11 @@ def blob(raw):
 
 def expected_workflow():
     raw = (ROOT / '.github/workflows/tickets-code-release.yml').read_bytes()
+    if blob(raw) != '227200c0e27f4c0d207ebacc66083bb44b8afc44':
+        raise AssertionError('Current combined workflow differs from its exact reviewed source')
+    # Current shipping controls may update only the reviewed Node pins and add
+    # the same sibling helper. Recover the historical job before its old hash.
+    raw = raw.replace(HELPER_COPY.encode(), b'').replace(b'24.22.1', b'24.21.0').replace(b'node-version: 22.23.4', b'node-version: 22')
     if blob(raw) != BASE_WORKFLOW_BLOB:
         raise AssertionError('Original reviewed workflow changed')
     job = raw.decode().split('\n  release:\n', 1)[1].split('\n  inspect_failure:', 1)[0]
@@ -81,13 +86,26 @@ def expected_workflow():
     postflight = postflight.replace('${{ !inputs.verify_only }}', "${{ github.event_name == 'workflow_dispatch' }}").replace('${{ inputs.source_sha }}', SOURCE)
     if 'inputs.' in postflight:
         raise AssertionError('Unbounded postflight job')
-    return HEADER + job.replace(anchor, anchor + HELPER_COPY, 1) + postflight
+    return (HEADER + job.replace(anchor, anchor + HELPER_COPY, 1) + postflight).replace('24.21.0', '24.22.1').replace('node-version: 22\n', 'node-version: 22.23.4\n')
 
 
 class RoomHelperTransportTests(unittest.TestCase):
     def test_exact_reviewed_job_only_adds_helper_and_fixed_inputs(self):
         self.assertEqual((ROOT / WORKFLOW).read_text(), expected_workflow())
-        self.assertEqual(blob((ROOT / 'ops/vps/code-release.py').read_bytes()), OPERATOR_BLOB)
+        self.assertIn('OPERATOR_SHA: ' + TRUSTED, (ROOT / WORKFLOW).read_text())
+        self.assertIn('git archive "$OPERATOR_SHA"', (ROOT / WORKFLOW).read_text())
+
+    def test_combined_transport_rejects_duplicate_moved_or_modified_helper(self):
+        original = (ROOT / '.github/workflows/tickets-code-release.yml').read_text()
+        for modified in (original.replace(HELPER_COPY, HELPER_COPY * 2),
+                         original.replace(HELPER_COPY, '') + HELPER_COPY,
+                         original.replace('umask 022; cat', 'umask 077; cat')):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                path = root / '.github/workflows/tickets-code-release.yml'
+                path.parent.mkdir(parents=True); path.write_text(modified)
+                with patch(__name__ + '.ROOT', root), self.assertRaisesRegex(AssertionError, 'exact reviewed source'):
+                    expected_workflow()
 
     def test_host_transport_supplies_the_exact_loadable_helper(self):
         workflow = expected_workflow()

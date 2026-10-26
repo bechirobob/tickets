@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -161,6 +162,190 @@ class ReadinessTests(unittest.TestCase):
             self.assertEqual(result['overdue'], 1)
             self.assertNotIn('secret payload', json.dumps(result))
 
+
+
+class NodeVersionProbeTests(unittest.TestCase):
+    def probe(self, script, timeout=5):
+        real_popen = audit.subprocess.Popen
+        self.children = []
+        def start(args, **kwargs):
+            self.assertEqual(args, ['/usr/sbin/runuser', '-u', 'becore-tickets', '--', '/fixed/bin/node', '--version'])
+            self.assertEqual(kwargs, {'env': {'PATH': '/usr/bin:/bin'}, 'cwd': '/',
+                'stdin': audit.subprocess.DEVNULL, 'stdout': audit.subprocess.PIPE,
+                'stderr': audit.subprocess.DEVNULL, 'start_new_session': True})
+            child = real_popen([sys.executable, '-c', script], **kwargs)
+            self.children.append(child)
+            return child
+        with patch.object(audit.subprocess, 'Popen', side_effect=start), patch.object(audit, 'NODE_VERSION_TIMEOUT', timeout):
+            return audit.node_version(Path('/fixed/bin/node'))
+
+    def test_fixed_sanitized_probe_reads_small_version_and_reaps_child(self):
+        self.assertEqual(self.probe("print('v24.22.1')"), b'v24.22.1\n')
+        self.assertEqual(self.children[0].returncode, 0)
+        self.assertTrue(self.children[0].stdout.closed)
+
+    def test_oversized_output_is_rejected_before_waiting_for_eof(self):
+        with self.assertRaisesRegex(ValueError, 'exceeded bound'):
+            self.probe("import os,time; os.write(1,b'x'*65); time.sleep(30)")
+        self.assertIsNotNone(self.children[0].returncode)
+        self.assertTrue(self.children[0].stdout.closed)
+
+    def test_partial_output_timeout_terminates_and_reaps_probe(self):
+        with self.assertRaises(TimeoutError):
+            self.probe("import os,time; os.write(1,b'v'); time.sleep(30)", timeout=0.1)
+        self.assertIsNotNone(self.children[0].returncode)
+        self.assertTrue(self.children[0].stdout.closed)
+
+    def test_nonzero_exit_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'probe failed'):
+            self.probe("raise SystemExit(1)")
+        self.assertEqual(self.children[0].returncode, 1)
+        self.assertTrue(self.children[0].stdout.closed)
+
+
+class RuntimeMetadataTests(unittest.TestCase):
+    def test_default_ca_and_presence_only(self):
+        server = Path('/fixed/server.mjs')
+        argv = b'/fixed/bin/node\0/fixed/server.mjs\0'
+        summary = audit.ca_selection_summary({}, argv, server)
+        self.assertEqual(summary['selection'], 'bundled_default_indicated')
+        self.assertFalse(summary['application_ca_overrides_verified'])
+        self.assertFalse(summary['certificate_contents_read'])
+        env = {name.encode(): b'private-sentinel' for name in audit.CA_ENV_NAMES}
+        summary = audit.ca_selection_summary(env, argv, server)
+        self.assertTrue(all(summary['environment_present'].values()))
+        self.assertNotIn('private-sentinel', json.dumps(summary))
+        self.assertEqual(summary['selection'], 'explicit_configuration_present')
+
+    def test_ca_flags_only_before_entrypoint_and_normalized_names(self):
+        server = Path('/fixed/server.mjs')
+        summary = audit.ca_selection_summary({b'NODE_OPTIONS': b'--use_openssl_ca --require private-sentinel'},
+            b'/fixed/bin/node\0--use-system-ca\0/fixed/server.mjs\0--use-bundled-ca\0', server)
+        self.assertTrue(summary['flags_present']['--use-system-ca'])
+        self.assertTrue(summary['flags_present']['--use-openssl-ca'])
+        self.assertFalse(summary['flags_present']['--use-bundled-ca'])
+        self.assertEqual(summary['unclassified_option_count'], 2)
+        self.assertNotIn('private-sentinel', json.dumps(summary))
+
+    def test_invalid_and_oversized_ca_options_are_explicitly_unknown(self):
+        for env, argv in (({b'NODE_OPTIONS': b'"private-sentinel'}, b'node\0/server.mjs\0'),
+                          ({b'NODE_OPTIONS': b'x' * 32769}, b'node\0/server.mjs\0'),
+                          ({}, b'x' * 131073), ({}, b'node\0/wrong\0'),
+                          ({}, b'node\0/server.mjs\0/server.mjs\0'),
+                          ({}, b'node\0\xff\0/server.mjs\0')):
+            result = audit.ca_selection_summary(env, argv, Path('/server.mjs'))
+            self.assertEqual(result['selection'], 'unknown')
+            self.assertFalse(result['options_parseable'])
+            self.assertNotIn('private-sentinel', json.dumps(result))
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.home = Path(folder.name) / 'home'
+        self.active = self.home / 'releases' / ('a' * 40)
+        (self.active / 'bin').mkdir(parents=True)
+        self.binary = self.active / 'bin/node'
+        self.binary.write_bytes(b'fixture executable bytes')
+        self.binary.chmod(0o755)
+        self.proc = Path(folder.name) / 'proc'
+        (self.proc / '123').mkdir(parents=True)
+        (self.proc / '123/exe').symlink_to(self.binary)
+        (self.proc / '123/environ').write_bytes(b'NODE_OPTIONS=--require private-sentinel\0')
+        (self.proc / '123/cmdline').write_bytes((str(self.binary) + '\0' + str(self.active / 'server.mjs') + '\0').encode())
+        for name, value in (('HOME', self.home), ('PROC', self.proc)):
+            patcher = patch.object(audit, name, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+        # Fixture-only owner model; retain all real inode/mode/size/race fields.
+        real_lstat, real_fstat = Path.lstat, os.fstat
+        def owned(meta):
+            return SimpleNamespace(**{field: (0 if field == 'st_uid' else getattr(meta, field))
+                for field in ('st_mode','st_uid','st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns')})
+        for patcher in (patch.object(Path, 'lstat', lambda path: owned(real_lstat(path))),
+                        patch.object(audit.os, 'fstat', lambda fd: owned(real_fstat(fd)))):
+            patcher.start(); self.addCleanup(patcher.stop)
+        self.version = patch.object(audit, 'node_version', return_value=b'v24.22.1\n').start()
+        self.addCleanup(patch.stopall)
+
+    def test_runtime_reports_actual_exe_hash_version_and_sanitizes_subprocess(self):
+        before = self.binary.read_bytes()
+        result = audit.runtime_metadata(self.active, '123')
+        self.assertEqual(result['status'], 'observed')
+        self.assertEqual(result['version'], 'v24.22.1')
+        self.assertEqual(result['binary_sha256'], audit.hashlib.sha256(before).hexdigest())
+        self.assertTrue(result['active_process_executable_matches'])
+        self.version.assert_called_once_with(self.binary)
+        self.assertNotIn('private-sentinel', json.dumps(result))
+        self.assertEqual(self.binary.read_bytes(), before)
+
+    def test_mismatched_process_executable_never_runs_binary(self):
+        other = self.active / 'other'
+        other.write_bytes(b'other binary')
+        (self.proc / '123/exe').unlink()
+        (self.proc / '123/exe').symlink_to(other)
+        self.assertEqual(audit.runtime_metadata(self.active, '123')['status'], 'unverified')
+        self.version.assert_not_called()
+
+    def test_flock_wrapper_selects_only_matching_direct_child(self):
+        child = self.proc / '124'
+        child.mkdir()
+        (child / 'exe').symlink_to(self.binary)
+        (child / 'environ').write_bytes(b'SSL_CERT_FILE=private-sentinel\0')
+        (child / 'cmdline').write_bytes((self.proc / '123/cmdline').read_bytes())
+        wrapper = self.active / 'wrapper'
+        wrapper.write_bytes(b'flock wrapper')
+        (self.proc / '123/exe').unlink()
+        (self.proc / '123/exe').symlink_to(wrapper)
+        children = self.proc / '123/task/123'
+        children.mkdir(parents=True)
+        (children / 'children').write_bytes(b'124 ')
+        result = audit.runtime_metadata(self.active, '123')
+        self.assertEqual(result['status'], 'observed')
+        self.assertEqual(result['process_relation'], 'direct_child')
+        self.assertTrue(result['ca']['environment_present']['SSL_CERT_FILE'])
+        self.assertFalse(result['ca']['environment_present']['NODE_OPTIONS'])
+        self.assertNotIn('private-sentinel', json.dumps(result))
+        (children / 'children').write_bytes(b'124 ' * 17)
+        self.version.reset_mock()
+        self.assertEqual(audit.runtime_metadata(self.active, '123')['status'], 'unverified')
+        self.version.assert_not_called()
+
+    def test_environment_bound_is_enforced_without_values_or_execution(self):
+        (self.proc / '123/environ').write_bytes(b'private-sentinel=' + b'x' * 131072)
+        result = audit.runtime_metadata(self.active, '123')
+        self.assertEqual(result['status'], 'unverified')
+        self.assertNotIn('private-sentinel', json.dumps(result))
+        self.version.assert_not_called()
+
+    def test_unsafe_binary_and_directory_rejected_before_execution(self):
+        for path in (self.binary, self.active / 'bin', self.active, self.home):
+            original = path.stat().st_mode
+            path.chmod(0o777)
+            self.assertEqual(audit.runtime_metadata(self.active, '123')['status'], 'unverified')
+            path.chmod(original)
+        self.version.assert_not_called()
+
+    def test_symlink_binary_rejected_before_execution(self):
+        target = self.binary.with_name('other')
+        self.binary.rename(target)
+        self.binary.symlink_to(target)
+        self.assertEqual(audit.runtime_metadata(self.active, '123')['status'], 'unverified')
+        self.version.assert_not_called()
+
+    def test_version_and_errors_are_allowlisted_and_suppressed(self):
+        for value in (b'private-sentinel', b'v24.22.1 private-sentinel', b'v24.22.1\nprivate-sentinel'):
+            self.version.return_value = value
+            result = audit.runtime_metadata(self.active, '123')
+            self.assertEqual(result['status'], 'unverified')
+            self.assertNotIn('private-sentinel', json.dumps(result))
+        self.version.side_effect = RuntimeError('private-sentinel')
+        self.assertNotIn('private-sentinel', json.dumps(audit.runtime_metadata(self.active, '123')))
+
+    def test_binary_changed_during_version_probe_is_not_attested(self):
+        def change(*args, **kwargs):
+            self.binary.write_bytes(b'changed executable')
+            return b'v24.22.1\n'
+        self.version.side_effect = change
+        self.assertEqual(audit.runtime_metadata(self.active, '123')['status'], 'unverified')
 
 class ReleaseRetentionMetadataTests(unittest.TestCase):
     NOW = 2000000

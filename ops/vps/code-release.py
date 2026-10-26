@@ -1034,6 +1034,7 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    'drizzle/0070_yorkeway_early_access.sql': {'blob': '812f1a2ad2f8e58f725d32757c6a0aba524972f5', 'sha256': 'd2342cf62ce76df40c3750c9ecc10041b93f6c9b24d8f9861708fc306c954e04', 'schemaSha256': '1d8bb11bbb8e0eb2eb0b9807632b12db6ac82a92a90a4f4c30bf2015e4c786a0', 'tables': ['yorkeway_early_access']},
     'drizzle/0069_event_host_pass_invitations.sql': {'blob': '49994f90d3c9bf3bafaf7ba0f510e95323803885', 'sha256': '483bd1fe3d8966272469012c73cab6dbf06acfb335ac34cb0feee6dbeda71bda', 'schemaSha256': 'a2a2adbe30c602029fe2135c486046b706dacc57815f1f837f3bca860d26be3e', 'tables': ['event_host_pass_invitations']},
     'drizzle/0068_room_host_first_posts.sql': {'blob': '2754afa9baf9c823997986eddfb06a870579134e', 'sha256': '36df4f6d0080c64b92a37adecbff99e1968d1b03af4e370957dc8e49f602bcbf', 'schemaSha256': '54d86e75418768001f4e37dda81e36f58b85b1156d2675a4c53fd9f0d56c8cb3', 'tables': ['room_host_first_posts']},
     HOST_BRAND_IDENTITY_PATH: {
@@ -2898,8 +2899,236 @@ def reviewed_navigation_application_blobs(expected, source):
     return pins
 
 
+# Exact single-opt-in Yorke Way application and approved patched Node controls.
+# C is independently merged on the pinned main snapshot; P adds only S's app
+# bytes. This grants no generic path, dependency, configuration or migration waiver.
+YORKEWAY_RELEASE_BASELINE = '36c30bd61415460b7383e857b9407bef753185ea'
+YORKEWAY_RELEASE_BASE_TREE = '1127bcd09b312cfd22c01d79657ed8de59111fbb'
+YORKEWAY_MAIN_SNAPSHOT = 'e6979526d709ac859e54c2af0e63deff698add4f'
+YORKEWAY_MAIN_TREE = 'b4b2a76006a4bba3cdd0ea4798874bda0d07aeac'
+YORKEWAY_APP_SNAPSHOT = '26422bc7b92cd58a36b899ec48fcc6d70df58a26'
+YORKEWAY_APP_TREE = 'fae7582f9c473eb5400b7ad5743b615105b77053'
+YORKEWAY_CONTROL_FILES = {'ops/vps/test_code_release.py', 'ops/vps/code-release.py'}
+YORKEWAY_MAIN_BLOBS = {'.github/workflows/tickets-room-helper-transport.yml': 'eb6275216ab5c32e47862977d451bbd4da4d18a2',
+ 'ops/vps/test_code_release.py': 'bbddb86fdd88a72bea8198604e79db82286ef638',
+ 'tests/test_room_helper_transport.py': 'a7c2934eaf8313812664f94b15a2323d4059ad6c'}
+YORKEWAY_APPLICATION_BLOBS = {'.github/workflows/yorkeway-previews.yml': '70c912bc8686da5e1d4d1d94233a6d6b1a8d7b4f',
+ 'app/admin/yorkeway-audience/page.tsx': '9feba0e450a23e60fa44705293a2ef1f37d0acc9',
+ 'app/admin/yorkeway-audience/yorkeway-audience.tsx': 'b02d3ed480edd4b6cd05e391ec1bd6948fe59ddf',
+ 'app/api/admin/yorkeway-audience/route.ts': '24ffa7eec2a1170a8b0d19119ff4a333c7af9416',
+ 'app/api/yorkeway/route.ts': '92c1450d97650097625d658576235f7a1ae79581',
+ 'app/api/yorkeway/withdraw/route.ts': '2d0bf774471a20251291d4c6ffaa1cf5b0f2bb8d',
+ 'app/customer-dock.tsx': 'd9f2934ef94ce8c663dba8ccbcfeaac255316a6e',
+ 'app/privacy/page.tsx': '56dd2eaa164411094d10286fc9717c0c9723abcd',
+ 'app/scan/scanner.tsx': 'd149ad781428b6c01f5bb249bc8a77b2123ba730',
+ 'app/the-yorke-way/layout.tsx': '96c887fbd4f9e0189b17f4fcc070ac4ecceeaf44',
+ 'app/the-yorke-way/page.tsx': '6555ff94c27cb4c0d6ad634feb187487d8b3ced4',
+ 'app/the-yorke-way/signup.tsx': '54b29b904cd013ff8bb3ff4f659ad30f748c1c54',
+ 'app/the-yorke-way/token-action.tsx': 'f4926f53544ce25832af78781c86a9971c6c3304',
+ 'app/the-yorke-way/unsubscribe/page.tsx': 'e8a909b97555b3cfb83f43dc7b0eeb9f531cb38f',
+ 'app/the-yorke-way/yorke-brand.tsx': '1556cf946cd0c3eb0b6e6ccee2b0cac3c602fd35',
+ 'app/the-yorke-way/yorke-way.css': '489cc4844cd11d0516ce4100c702a1cbaaf01274',
+ 'app/workspace-chrome.tsx': '37809241b7bb6f79a63b1beb12642959a73df7f0',
+ 'db/schema.ts': '3110f1440361a2e52d54e34b6546252342aa8615',
+ 'docs/operations/yorkeway-early-access.md': 'd189aad0b0854633e6ad18a342c44c5bf7304b9e',
+ 'drizzle/0070_yorkeway_early_access.sql': '812f1a2ad2f8e58f725d32757c6a0aba524972f5',
+ 'lib/customer-email.ts': 'f178111b286d84443dc2ebbb70f41cd8b5d44b93',
+ 'lib/email-delivery.ts': '1762e109dd294111287f5b07acc10e2c5931fd03',
+ 'lib/preview-cleanup.ts': '895e944cf54fd01ddd5f8a2c3043459ff10adaba',
+ 'lib/staff-roles.ts': '74b2dda9b333bec05bbc3061f25eea824551d599',
+ 'lib/yorkeway-early-access.ts': 'c0fb85c564cb84623173bbf410a5e100529ae07e',
+ 'public/hosts/the-yorke-way-email.png': '5d59edbfe3ee959b61760c4e9465b3c96097c3d9',
+ 'scripts/prepare-registration-browser-fixture.mjs': '5d49aebfee687434c862995af02e644e21bf419f',
+ 'scripts/yorkeway-previews.mjs': 'dd7ed15ea7bda2bf579d74d9cf3b886ef9137902',
+ 'tests/e2e/host-profile.spec.ts': 'c2639565bdafaa37beb2633e6432a95a81cabe1f',
+ 'tests/mobile-ui.test.mjs': '5db100e05ea4e13f4886b4dee7fe3ac2057718f3',
+ 'tests/registrations.test.ts': '99f771278704a5936e6d9791944dee7991ab3366',
+ 'tests/scanner-session-client.test.mjs': '370eec7c010f1d4c06be9f35fd02581469c807ad',
+ 'tests/yorkeway-early-access.test.ts': '61ec2274ea43dfb365c341b9fab94e2bed4b2907'}
+YORKEWAY_CONTROL_BLOBS = {'.github/workflows/android-release.yml': 'ff22317244e60ff2a14b1f5144d26763cd718e97',
+ '.github/workflows/booking-consent-previews.yml': '5ebf94ff4d93e263bb8c43f2c1074dc785bd3bc5',
+ '.github/workflows/browser-audit.yml': '5da482ecf6c528672b4eb8cd1db13b09eee5ac34',
+ '.github/workflows/browser-followup.yml': '3ccfe2fbf5eef9d453d69db33971d6df35f846f3',
+ '.github/workflows/candidate-checks.yml': 'c45d7dae42734fbbc8919435c16473115bf8f06c',
+ '.github/workflows/candidate-parallel-checks.yml': '19c44c8a0f569c1ae4ebf4e694987946fded2fd0',
+ '.github/workflows/cinco-confirmation-release-20261019.yml': '74de2fb8f81cd6b307726f2a3999ad1189a2656f',
+ '.github/workflows/customer-email-previews.yml': '80f0f8c13b1849701aa6dcab4275904fbeef2732',
+ '.github/workflows/d1-recovery-rehearsal.yml': '9dad97c137e0c3796513f57d2c2681e1d4af7d5e',
+ '.github/workflows/dependency-security.yml': '6007258c74d03c80bb4610640e15f1479740d856',
+ '.github/workflows/deploy.yml': 'b18eb81d65fd5a93fabebe7ae98c6cf99067076e',
+ '.github/workflows/event-capacity.yml': '50f9ec58b466ba4b679da8acf891016e68c43579',
+ '.github/workflows/fallback-infrastructure.yml': 'd958b6fa9e7764917791ef3093db657ce15985ca',
+ '.github/workflows/full-audit-capacity.yml': '507041f4c51a58f32820adf4d0fccc3a67627cc4',
+ '.github/workflows/handover-preflight.yml': 'a26ce0eaad2984caf9a137b2ea33c64a7595cbf1',
+ '.github/workflows/handover-return-diagnose.yml': 'a2114b798f788379deed067a8ca531420119df20',
+ '.github/workflows/handover-return-prepare.yml': '4cfcb4543d405f61f37d917b6c8baeb373d2eb24',
+ '.github/workflows/handover-return-verify.yml': '2077acba8c886bfc1ed92ad9afd0ca02cba1a964',
+ '.github/workflows/handover-tools.yml': 'e68a712931374eb7bdd318bb631469d3011f6b22',
+ '.github/workflows/hosted-capacity.yml': '1ba1ce79dfcffe1bd78d367197d385f9ae57a3a6',
+ '.github/workflows/input-modality-checks.yml': '0b3f912c08daf5fc9fe6eb626c16b8b4f0467c58',
+ '.github/workflows/ios-release.yml': '45b6e424d350e0a7a991d95ad61fffc8667c0774',
+ '.github/workflows/iphone-layouts.yml': 'b596a2b98a2c174523de26c2757f0af6585d0094',
+ '.github/workflows/marketing-connection.yml': '06dd5680dc6790d6464636d3e6436caff67f9f77',
+ '.github/workflows/native-apps.yml': 'd95f31938c1dbb0ce8e6818a3ceb7eecd0852fac',
+ '.github/workflows/preview-data-inventory.yml': '300d1707f12bb4c8c71be0dab813d140b0b6334d',
+ '.github/workflows/puro-access-release-20261019.yml': 'bbb319a7598fbce4cd99d3344b37893f75a3e5bf',
+ '.github/workflows/tickets-code-release.yml': '227200c0e27f4c0d207ebacc66083bb44b8afc44',
+ '.github/workflows/tickets-room-helper-transport.yml': '216b30db72dff72c66fdfaea7fa123cf1ccd4a23',
+ '.github/workflows/vps-runtime.yml': '06bdc48477eb0977ed471e549630bd6070758a95',
+ 'ops/vps/audit-readiness.py': '2cc3374dade0210e76b386ce7387cd51fdc02f05',
+ 'ops/vps/test_audit_readiness.py': '7a431017c03e99ad0b358b17399b1313cd935606',
+ 'ops/vps/test_first_host_recovery.py': '9f9579d7ffa30b54249a5126b85f60032c9f7d05',
+ 'ops/vps/test_runtime_workflow_contract.py': 'c9620eeb200133ee94c76accc5328ecce28b4b75',
+ 'ops/vps/test_yorkeway_release.py': '79548763aa68c226943f3f20908f754154e0e196',
+ 'scripts/prepare-registration-browser-fixture.mjs': '5d49aebfee687434c862995af02e644e21bf419f',
+ 'tests/e2e/event-details.spec.ts': '87403b730d77d31ad9eec872a5ff237ccd290541',
+ 'tests/e2e/host-profile.spec.ts': 'c2639565bdafaa37beb2633e6432a95a81cabe1f',
+ 'tests/test_room_helper_transport.py': 'b9c168fbf7392e1f0de926e204d7077c31a43659'}
+YORKEWAY_SHARED_FILES = {'scripts/prepare-registration-browser-fixture.mjs', 'tests/e2e/host-profile.spec.ts'}
+YORKEWAY_SCHEMA_PATH = "drizzle/0070_yorkeway_early_access.sql"
+
+def reviewed_yorkeway_application_blobs(expected, source):
+    """Require complete exact M/A/S/C/P inventories and independent trusted C."""
+    main = YORKEWAY_MAIN_SNAPSHOT
+    snapshot = YORKEWAY_APP_SNAPSHOT
+    controls = YORKEWAY_CONTROL_FILES
+    application = YORKEWAY_APPLICATION_BLOBS
+    prerequisites = YORKEWAY_CONTROL_BLOBS
+    require(controls == {'ops/vps/test_code_release.py', 'ops/vps/code-release.py'}
+            and set(application) == {'.github/workflows/yorkeway-previews.yml',
+ 'app/admin/yorkeway-audience/page.tsx',
+ 'app/admin/yorkeway-audience/yorkeway-audience.tsx',
+ 'app/api/admin/yorkeway-audience/route.ts',
+ 'app/api/yorkeway/route.ts',
+ 'app/api/yorkeway/withdraw/route.ts',
+ 'app/customer-dock.tsx',
+ 'app/privacy/page.tsx',
+ 'app/scan/scanner.tsx',
+ 'app/the-yorke-way/layout.tsx',
+ 'app/the-yorke-way/page.tsx',
+ 'app/the-yorke-way/signup.tsx',
+ 'app/the-yorke-way/token-action.tsx',
+ 'app/the-yorke-way/unsubscribe/page.tsx',
+ 'app/the-yorke-way/yorke-brand.tsx',
+ 'app/the-yorke-way/yorke-way.css',
+ 'app/workspace-chrome.tsx',
+ 'db/schema.ts',
+ 'docs/operations/yorkeway-early-access.md',
+ 'drizzle/0070_yorkeway_early_access.sql',
+ 'lib/customer-email.ts',
+ 'lib/email-delivery.ts',
+ 'lib/preview-cleanup.ts',
+ 'lib/staff-roles.ts',
+ 'lib/yorkeway-early-access.ts',
+ 'public/hosts/the-yorke-way-email.png',
+ 'scripts/prepare-registration-browser-fixture.mjs',
+ 'scripts/yorkeway-previews.mjs',
+ 'tests/e2e/host-profile.spec.ts',
+ 'tests/mobile-ui.test.mjs',
+ 'tests/registrations.test.ts',
+ 'tests/scanner-session-client.test.mjs',
+ 'tests/yorkeway-early-access.test.ts'}
+            and set(prerequisites) == {'.github/workflows/android-release.yml',
+ '.github/workflows/booking-consent-previews.yml',
+ '.github/workflows/browser-audit.yml',
+ '.github/workflows/browser-followup.yml',
+ '.github/workflows/candidate-checks.yml',
+ '.github/workflows/candidate-parallel-checks.yml',
+ '.github/workflows/cinco-confirmation-release-20261019.yml',
+ '.github/workflows/customer-email-previews.yml',
+ '.github/workflows/d1-recovery-rehearsal.yml',
+ '.github/workflows/dependency-security.yml',
+ '.github/workflows/deploy.yml',
+ '.github/workflows/event-capacity.yml',
+ '.github/workflows/fallback-infrastructure.yml',
+ '.github/workflows/full-audit-capacity.yml',
+ '.github/workflows/handover-preflight.yml',
+ '.github/workflows/handover-return-diagnose.yml',
+ '.github/workflows/handover-return-prepare.yml',
+ '.github/workflows/handover-return-verify.yml',
+ '.github/workflows/handover-tools.yml',
+ '.github/workflows/hosted-capacity.yml',
+ '.github/workflows/input-modality-checks.yml',
+ '.github/workflows/ios-release.yml',
+ '.github/workflows/iphone-layouts.yml',
+ '.github/workflows/marketing-connection.yml',
+ '.github/workflows/native-apps.yml',
+ '.github/workflows/preview-data-inventory.yml',
+ '.github/workflows/puro-access-release-20261019.yml',
+ '.github/workflows/tickets-code-release.yml',
+ '.github/workflows/tickets-room-helper-transport.yml',
+ '.github/workflows/vps-runtime.yml',
+ 'ops/vps/audit-readiness.py',
+ 'ops/vps/test_audit_readiness.py',
+ 'ops/vps/test_first_host_recovery.py',
+ 'ops/vps/test_runtime_workflow_contract.py',
+ 'ops/vps/test_yorkeway_release.py',
+ 'scripts/prepare-registration-browser-fixture.mjs',
+ 'tests/e2e/event-details.spec.ts',
+ 'tests/e2e/host-profile.spec.ts',
+ 'tests/test_room_helper_transport.py'}
+            and not controls & (set(application) | set(prerequisites))
+            and set(application) & set(prerequisites) == YORKEWAY_SHARED_FILES
+            == {'scripts/prepare-registration-browser-fixture.mjs', 'tests/e2e/host-profile.spec.ts'}
+            and all(application[name] == prerequisites[name] for name in YORKEWAY_SHARED_FILES),
+            "Yorkeway release inventory or scope changed.")
+    require(expected == YORKEWAY_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == YORKEWAY_RELEASE_BASE_TREE
+            and git("rev-parse", main + "^{tree}") == YORKEWAY_MAIN_TREE
+            and git("rev-parse", snapshot + "^{tree}") == YORKEWAY_APP_TREE,
+            "Yorkeway release live, main or application snapshot tree changed.")
+    for ancestor, descendant in ((expected, main), (main, snapshot), (snapshot, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, main).splitlines()) == set(YORKEWAY_MAIN_BLOBS)
+            and set(git("diff", "--name-only", main, snapshot).splitlines()) == set(application),
+            "Yorkeway historical main or application snapshot inventory changed.")
+    verify_changed_modes(expected, main)
+    verify_changed_modes(main, snapshot)
+    for revision, outputs in ((main, YORKEWAY_MAIN_BLOBS), (snapshot, application)):
+        for name, blob in outputs.items():
+            require(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name,
+                    "Yorkeway reviewed snapshot bytes or mode changed: " + name)
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, main, snapshot, source),
+            "Yorkeway requires independent merged controls.")
+    verify_trusted_operator(source)
+    subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", main, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", main, trusted).splitlines()) == controls | set(prerequisites)
+            and set(git("diff", "--name-only", trusted, source).splitlines()) == set(application) - YORKEWAY_SHARED_FILES
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls | (set(prerequisites) - YORKEWAY_SHARED_FILES),
+            "Yorkeway controls or promotion differ from their complete reviewed inventories.")
+    verify_changed_modes(main, trusted)
+    verify_changed_modes(trusted, source)
+    for name, blob in prerequisites.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + blob + "\t" + name
+                    for revision in (trusted, source)),
+                "Yorkeway control prerequisite differs from reviewed bytes or mode: " + name)
+    pins = {**YORKEWAY_MAIN_BLOBS, **application, **prerequisites}
+    for name, blob in application.items():
+        require(git("ls-tree", source, "--", name) == "100644 blob " + blob + "\t" + name,
+                "Yorkeway application differs from reviewed bytes or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Yorkeway candidate controls differ from independent trusted controls: " + name)
+        pins[name] = entry.split()[2]
+    require(migration_plan(pins) == yorkeway_migration_plan(),
+            "Yorkeway permits only its exact additive signup migration.")
+    return pins
+
+
+def yorkeway_migration_plan():
+    """Independent literal pins prevent a changed registry extending this family."""
+    return [dict(path=YORKEWAY_SCHEMA_PATH, blob='812f1a2ad2f8e58f725d32757c6a0aba524972f5', sha256='d2342cf62ce76df40c3750c9ecc10041b93f6c9b24d8f9861708fc306c954e04', schemaSha256='1d8bb11bbb8e0eb2eb0b9807632b12db6ac82a92a90a4f4c30bf2015e4c786a0', tables=['yorkeway_early_access'])]
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == YORKEWAY_RELEASE_BASELINE:
+        return reviewed_yorkeway_application_blobs(expected, source)
     if expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
         return reviewed_room_mail_vps_application_blobs(expected, source)
     if expected == ROOM_MAIL_FOCUS_RELEASE_BASELINE:
@@ -2968,6 +3197,9 @@ def vetted_changes(expected, source):
                  "drizzle/0069_event_host_pass_invitations.sql"}.intersection(changed)
             or expected == FIRST_HOST_RELEASE_BASELINE,
             "First host receipt migration requires its exact release family.")
+    require("drizzle/0070_yorkeway_early_access.sql" not in changed
+            or expected == YORKEWAY_RELEASE_BASELINE,
+            "Yorkeway signup migration requires its exact release family.")
     application_pins = reviewed_application_blobs(expected, source)
     for name in changed:
         if name == "ops/vps/code-release.py":
@@ -2995,6 +3227,10 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == YORKEWAY_RELEASE_BASELINE:
+        require(migration_plan(changed) == yorkeway_migration_plan(),
+                "Yorkeway requires its sole exact migration.")
+        return changed
     if expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
         require(not migration_plan(changed), "Room VPS mail release cannot introduce migrations.")
         return changed
@@ -4441,6 +4677,14 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
+        if self.expected == YORKEWAY_RELEASE_BASELINE:
+            require(not self.enable_crypto and not self.enable_first_host,
+                    "Yorkeway must preserve the current runtime configuration.")
+            require(len(changes) == len(set(changes))
+                    and set(changes) == (set(YORKEWAY_MAIN_BLOBS) | set(YORKEWAY_APPLICATION_BLOBS)
+                                        | set(YORKEWAY_CONTROL_BLOBS) | YORKEWAY_CONTROL_FILES)
+                    and migration_plan(changes) == yorkeway_migration_plan(),
+                    "Yorkeway host transaction requires its exact complete source and schema manifest.")
         if self.expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
             require(not self.enable_crypto and not self.enable_first_host,
                     "Room VPS mail is code-only and must preserve the current runtime configuration.")
@@ -4515,7 +4759,7 @@ class Deployment:
                                      self.system.application_uid(), self.system.application_gid())
         health(self.system, self.expected)
         health(self.system, self.expected, public=True)
-        if self.expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
+        if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE):
             verify_room_mail_vps_service()
         if self.recover_prepared:
             self.check_prepared_recovery()
@@ -4766,6 +5010,9 @@ class Deployment:
             self.release.mkdir(mode=0o755)
             archive.extractall(self.release, filter="data")
         self.manifest(self.release, self.source)
+        if self.expected == YORKEWAY_RELEASE_BASELINE:
+            require(strict_json(self.file(self.release / "release.json")).get("node") == "v24.22.1",
+                    "Yorkeway packaged Node must be the exact approved v24.22.1.")
         require((self.release / "bin/node").is_file() and not (self.release / "bin/node").is_symlink()
                 and (self.release / "server.mjs").is_file() and not (self.release / "server.mjs").is_symlink(),
                 "Runtime executables missing or unsafe.")
@@ -4898,7 +5145,7 @@ class Deployment:
             if self.approval is not None:
                 self.approval.check_window()
             self.retention_safe()
-            if self.expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
+            if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE):
                 verify_room_mail_vps_service()
             if self.enable_first_host:
                 self.system.verify_database_binding()

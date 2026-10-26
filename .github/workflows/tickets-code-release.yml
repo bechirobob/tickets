@@ -162,7 +162,7 @@ jobs:
       - name: Set up the shipping runtime version for final audit
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 24.21.0
+          node-version: 24.22.1
       - name: Capture final dependency audit privately
         id: final_dependency_audit
         env:
@@ -229,6 +229,7 @@ jobs:
           tailscale ssh root@hermes "umask 077; cat > '$stage/provenance.json'" < "$metadata/provenance.json"
           tailscale ssh root@hermes "umask 077; cat > '$stage/npm-audit.json'" < "$RUNNER_TEMP/tickets-final-audit/npm-audit.json"
           tailscale ssh root@hermes "umask 077; cat > '$stage/code-release.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py"
+          tailscale ssh root@hermes "umask 022; cat > '$stage/inspect-mail-service-readonly.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/inspect-mail-service-readonly.py"
           printf '%s' "$FIRST_HOST_ACCOUNT_ID" | tailscale ssh root@hermes "test \"\$(sha256sum '$stage/code-release.py' | cut -d ' ' -f 1)\" = '$script_digest' && python3 '$stage/code-release.py' apply --source '$SOURCE_SHA' --expected '$EXPECTED_ACTIVE' --run-id '$GITHUB_RUN_ID' --attempt '$GITHUB_RUN_ATTEMPT' --archive '$stage/runtime.tar.gz' --provenance '$stage/provenance.json' --audit-report '$stage/npm-audit.json' --archive-digest '$digest' --provenance-digest '$proof_digest' --enable-crypto '$ENABLE_CRYPTO' --enable-first-host '$ENABLE_FIRST_HOST' --recover-prepared '$RECOVER_PREPARED'"
           # Retain private staging and the verified audit snapshot for this one release.
 
@@ -546,7 +547,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
       - run: npm ci
       - name: Install browser engines

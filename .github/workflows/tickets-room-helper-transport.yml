@@ -123,7 +123,7 @@ jobs:
       - name: Set up the shipping runtime version for final audit
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 24.21.0
+          node-version: 24.22.1
       - name: Capture final dependency audit privately
         id: final_dependency_audit
         env:
@@ -219,7 +219,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
       - run: npm ci
       - name: Install browser engines

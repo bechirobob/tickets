@@ -24,6 +24,26 @@ def fixture():
  return d,room,receipt,{'provider':'resend','subject':'Approved subject','html':'Approved body','text':'Approved text'}
 
 class Recovery(unittest.TestCase):
+ def setUp(self):
+  # Exercise the original one-day recovery window without extending production eligibility.
+  real_datetime = datetime.datetime
+  class FrozenDateTime(real_datetime):
+   @classmethod
+   def now(cls, tz=None):
+    value = real_datetime.fromisoformat(m.CREATED.replace('Z', '+00:00')) + datetime.timedelta(hours=1)
+    return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+  clock = patch.object(m.datetime, 'datetime', FrozenDateTime)
+  clock.start();self.addCleanup(clock.stop)
+ def test_expired_original_receipt_window_still_rejects_before_send(self):
+  d,r,p,t=fixture()
+  clock_type=m.datetime.datetime
+  class ExpiredDateTime(clock_type):
+   @classmethod
+   def now(cls,tz=None):
+    return super().now(tz)+datetime.timedelta(days=2)
+  with patch.object(m.datetime,'datetime',ExpiredDateTime):
+   with self.assertRaises(AssertionError):
+    m.recover(d,r,p,t,lambda *_:self.fail('Expired recovery sent'))
  def test_once_and_existing_statuses(self):
   for status in ('delivered','sent','sending','queued','suppressed','uncertain','failed'):
    with self.subTest(status=status):

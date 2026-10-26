@@ -105,7 +105,7 @@ jobs:
           git rev-parse HEAD^{tree} > "$RUNNER_TEMP/production-browser-audit/checked-out-tree.txt"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
       - run: npm ci
       - name: Install real-browser engines
