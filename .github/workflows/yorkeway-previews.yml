@@ -6,6 +6,8 @@ on:
     paths:
       - app/the-yorke-way/**
       - lib/yorkeway-early-access.ts
+      - lib/customer-email.ts
+      - public/hosts/the-yorke-way*
       - scripts/yorkeway-previews.mjs
       - .github/workflows/yorkeway-previews.yml
   workflow_dispatch:
@@ -36,7 +38,7 @@ jobs:
         run: npm ci --no-audit
       - name: Install isolated rendering browser
         run: npx playwright install --with-deps chromium
-      - name: Render synthetic page and confirmation email without provider traffic
+      - name: Render synthetic page and welcome email without provider traffic
         run: node scripts/yorkeway-previews.mjs
       - name: Retain visual review screenshots
         if: always()

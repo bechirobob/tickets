@@ -1,157 +1,227 @@
 import { adminCookieHeader, createStaffSession } from '../lib/admin-session';
+import { hashToken } from '../lib/attendee-auth';
 import { retryFailedDeliveries } from '../lib/email-delivery';
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { POST as signup } from '../app/api/yorkeway/route';
-import { POST as confirm } from '../app/api/yorkeway/confirm/route';
-import { POST as withdraw } from '../app/api/yorkeway/withdraw/route';
+import * as signupRoute from '../app/api/yorkeway/route';
+import * as withdrawRoute from '../app/api/yorkeway/withdraw/route';
 import { GET as audience } from '../app/api/admin/yorkeway-audience/route';
-import { captureYorkewaySignup, confirmYorkewaySignup, parseYorkewaySignup, withdrawYorkewaySignup, yorkewayConfirmationEmail } from '../lib/yorkeway-early-access';
+import { captureYorkewaySignup, parseYorkewaySignup, withdrawYorkewaySignup, yorkewayEligible, yorkewayWelcomeEmail } from '../lib/yorkeway-early-access';
 
-const origin='https://tickets.becoreops.com';
-const email=()=>`${crypto.randomUUID()}@example.com`;
-const request=(path:string,body:unknown,source=origin)=>new Request(`${origin}${path}`,{method:'POST',headers:{origin:source,'content-type':'application/json'},body:JSON.stringify(body)});
-async function saved(address:string) { return env.DB.prepare('SELECT * FROM yorkeway_early_access WHERE email=?').bind(address).first<Record<string,unknown>>(); }
-async function links(address:string) {
-  const row=await env.DB.prepare("SELECT payload_json AS payload FROM delivery_events WHERE recipient=? AND kind='yorkeway_confirmation' ORDER BY created_at DESC LIMIT 1").bind(address).first<{payload:string}>();
-  const payload=JSON.parse(row!.payload) as {text:string};
-  return {confirm:payload.text.match(/\/confirm#([\w-]+)/)![1],withdraw:payload.text.match(/\/unsubscribe#([\w-]+)/)![1]};
+const origin = 'https://tickets.becoreops.com';
+const fixtureEmails = new Set<string>();
+const email = () => { const address = `${crypto.randomUUID()}@example.com`; fixtureEmails.add(address); return address; };
+const request = (path: string, body: unknown, source = origin) => new Request(`${origin}${path}`, {
+  method: 'POST', headers: { origin: source, 'content-type': 'application/json' }, body: JSON.stringify(body),
+});
+async function saved(address: string) {
+  return env.DB.prepare('SELECT * FROM yorkeway_early_access WHERE email=?').bind(address).first<Record<string, unknown>>();
 }
-beforeEach(()=>{ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({id:'synthetic-message'}))); });
-afterEach(()=>vi.unstubAllGlobals());
+type Delivery = { id: string; status: string; payload: string; attempts: number; providerId: string | null };
+async function delivery(address: string) {
+  return env.DB.prepare("SELECT id,status,payload_json AS payload,attempt_count AS attempts,provider_id AS providerId FROM delivery_events WHERE recipient=? AND kind='yorkeway_welcome'")
+    .bind(address).first<Delivery>();
+}
+async function withdrawalToken(address: string) {
+  const row = await delivery(address);
+  return (JSON.parse(row!.payload) as { text: string }).text.match(/\/unsubscribe#([\w-]+)/)![1];
+}
+async function eligible(address: string) {
+  return env.DB.prepare(`SELECT 1 FROM yorkeway_early_access s WHERE email=? AND ${yorkewayEligible}`).bind(address).first();
+}
+async function staffCookie(role = 'owner', change = 0) {
+  const id = crypto.randomUUID(), stamp = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO staff_accounts
+    (id,normalized_email,display_name,role,password_hash,password_salt,password_iterations,must_change_password,status,password_changed_at,created_at,created_by,updated_at)
+    VALUES (?,?,'Staff',?,'test','test',1,?,'active',?,?,'test',?)`)
+    .bind(id, email(), role, change, stamp, stamp, stamp).run();
+  return adminCookieHeader(await createStaffSession(env.DB, { id })).split(';')[0];
+}
+async function suppress(address: string, status: 'bounced' | 'complained' | 'suppressed', providerEvent = true) {
+  const stamp = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO delivery_events
+    (id,kind,recipient,status,attempt_count,provider_event_at,created_at,updated_at)
+    VALUES (?,'support_update',?,?,1,?,?,?)`)
+    .bind(crypto.randomUUID(), address, status, providerEvent ? stamp : null, stamp, stamp).run();
+}
+beforeEach(() => { vi.stubGlobal('fetch', vi.fn(async () => Response.json({ id: 'synthetic-message' }))); });
+afterEach(async () => {
+  vi.restoreAllMocks(); vi.unstubAllGlobals();
+  const addresses = JSON.stringify([...fixtureEmails]);
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM delivery_events WHERE recipient IN (SELECT value FROM json_each(?))').bind(addresses),
+    env.DB.prepare('DELETE FROM yorkeway_early_access WHERE email IN (SELECT value FROM json_each(?))').bind(addresses),
+    env.DB.prepare('DELETE FROM marketing_contacts WHERE email IN (SELECT value FROM json_each(?))').bind(addresses),
+  ]);
+  fixtureEmails.clear();
+});
 
-describe('Yorke Way isolated double opt-in',()=>{
-  it('requires explicit consent and bounded input',()=>{
-    expect(parseYorkewaySignup({name:'Guest',email:'a@example.com',consent:false})).toBeNull();
-    expect(parseYorkewaySignup({name:'x'.repeat(101),email:'a@example.com',consent:true})).toBeNull();
-    expect(parseYorkewaySignup({name:'Guest',email:'bad',consent:true})).toBeNull();
-    expect(parseYorkewaySignup({name:' Guest ',email:' A@EXAMPLE.COM ',consent:true})).toEqual({name:'Guest',email:'a@example.com'});
+describe('Yorke Way isolated single opt-in', () => {
+  it('requires explicit consent and bounded input', () => {
+    for (const consent of [false, undefined, 'true', 1]) expect(parseYorkewaySignup({ name: 'Guest', email: 'a@example.com', consent })).toBeNull();
+    expect(parseYorkewaySignup({ name: 'x'.repeat(101), email: 'a@example.com', consent: true })).toBeNull();
+    expect(parseYorkewaySignup({ name: 'Guest\nName', email: 'a@example.com', consent: true })).toBeNull();
+    expect(parseYorkewaySignup({ name: 'Guest', email: 'bad', consent: true })).toBeNull();
+    expect(parseYorkewaySignup({ name: 'Guest', email: `${'x'.repeat(250)}@example.com`, consent: true })).toBeNull();
+    expect(parseYorkewaySignup({ name: ' Guest ', email: ' A@EXAMPLE.COM ', consent: true })).toEqual({ name: 'Guest', email: 'a@example.com' });
   });
-  it('stores pending only; confirmation email has list-only links',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'});
-    expect((await saved(address))?.status).toBe('pending');
-    const tokens=await links(address); expect(tokens.confirm).not.toBe(tokens.withdraw);
+  it('joins immediately without claiming email ownership was verified', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    const row = await saved(address);
+    expect(row?.status).toBe('subscribed'); expect(await eligible(address)).not.toBeNull();
+    expect(row).not.toHaveProperty('verified_at'); expect(row).not.toHaveProperty('email_verified'); expect(row).not.toHaveProperty('confirmed_grant');
+    expect(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='yorkeway_signup_grants'").first()).toBeNull();
+  });
+  it('queues one welcome with only a hashed withdrawal secret on the subscription', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    const row = await saved(address), outbox = await delivery(address), token = await withdrawalToken(address);
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/u); expect(row?.withdrawal_hash).toBe(await hashToken(token));
+    expect(JSON.stringify(row)).not.toContain(token); expect(outbox?.id).toBe(`yorkeway-welcome/${row?.id}`);
+    const payload = JSON.parse(outbox!.payload) as { idempotencyKey: string; provider: string; html: string; text: string };
+    expect(payload.idempotencyKey).toBe(outbox?.id); expect(payload.provider).toBe('resend');
+    expect(payload.text).not.toContain('/confirm'); expect(payload.html).not.toContain('/confirm'); expect(fetch).not.toHaveBeenCalled();
+  });
+  it('rolls consent back if durable welcome creation fails', async () => {
+    const address = email();
+    await env.DB.exec("CREATE TRIGGER yorkeway_test_outbox_failure BEFORE INSERT ON delivery_events WHEN NEW.kind='yorkeway_welcome' BEGIN SELECT RAISE(ABORT,'Synthetic outbox failure'); END;");
+    try {
+      await expect(captureYorkewaySignup(env.DB, { email: address, name: 'Guest' })).rejects.toThrow();
+      expect(await saved(address)).toBeNull(); expect(await delivery(address)).toBeNull();
+    } finally { await env.DB.exec('DROP TRIGGER yorkeway_test_outbox_failure;'); }
+    await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    expect((await saved(address))?.status).toBe('subscribed'); expect(await delivery(address)).not.toBeNull();
+  });
+  it('creates no account, registration, wider subscription, provider contact or campaign email', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
     expect(await env.DB.prepare('SELECT 1 FROM attendee_profiles WHERE normalized_email=?').bind(address).first()).toBeNull();
     expect(await env.DB.prepare('SELECT 1 FROM event_registrations WHERE normalized_email=?').bind(address).first()).toBeNull();
     expect(await env.DB.prepare('SELECT 1 FROM platform_announcement_subscriptions WHERE email=?').bind(address).first()).toBeNull();
-    expect(await confirmYorkewaySignup(env.DB,tokens.confirm)).toBe(true);
-    expect((await saved(address))?.status).toBe('subscribed');
-    expect(await confirmYorkewaySignup(env.DB,tokens.confirm)).toBe(false);
+    expect(await env.DB.prepare('SELECT 1 FROM marketing_contacts WHERE email=?').bind(address).first()).toBeNull();
+    expect((await env.DB.prepare('SELECT kind FROM delivery_events WHERE recipient=?').bind(address).all()).results).toEqual([{ kind: 'yorkeway_welcome' }]);
   });
-  it('duplicate submission sends once and does not alter name or consent',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Original'});
-    const before=await saved(address); await captureYorkewaySignup(env.DB,{email:address,name:'Changed'});
+  it('does not import existing contacts into the separate list', async () => {
+    const existing = email();
+    await env.DB.prepare('INSERT INTO marketing_contacts(email,provider_id,unsubscribed,updated_at) VALUES(?,?,0,?)')
+      .bind(existing, crypto.randomUUID(), new Date().toISOString()).run();
+    await captureYorkewaySignup(env.DB, { email: email(), name: 'New guest' });
+    expect(await saved(existing)).toBeNull(); expect(await delivery(existing)).toBeNull();
+  });
+  it('duplicate submissions preserve first consent and queue no second welcome', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Original' });
+    const before = await saved(address), initial = await delivery(address);
+    await captureYorkewaySignup(env.DB, { email: address, name: 'Changed' });
+    expect(await saved(address)).toEqual(before); expect(await delivery(address)).toEqual(initial);
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM delivery_events WHERE recipient=?').bind(address).first<{ n: number }>())?.n).toBe(1);
+  });
+  it('deduplicates simultaneous submissions atomically', async () => {
+    const address = email(); await Promise.all(Array.from({ length: 5 }, () => captureYorkewaySignup(env.DB, { email: address, name: 'Guest' })));
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM yorkeway_early_access WHERE email=?').bind(address).first<{ n: number }>())?.n).toBe(1);
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM delivery_events WHERE recipient=?').bind(address).first<{ n: number }>())?.n).toBe(1);
+    expect(await eligible(address)).not.toBeNull();
+  });
+  it('withdraws immediately and repeated withdrawal is harmless', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' }); const token = await withdrawalToken(address);
+    await withdrawYorkewaySignup(env.DB, token); const before = await saved(address);
+    expect(before?.status).toBe('withdrawn'); expect(before?.withdrawn_at).toBeTruthy(); expect(await eligible(address)).toBeNull();
+    await withdrawYorkewaySignup(env.DB, token); expect(await saved(address)).toEqual(before);
+  });
+  it('never resubscribes or queues another welcome after withdrawal', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    await withdrawYorkewaySignup(env.DB, await withdrawalToken(address)); const before = await saved(address);
+    await captureYorkewaySignup(env.DB, { email: address, name: 'Another name' });
     expect(await saved(address)).toEqual(before);
-    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_events WHERE recipient=? AND kind='yorkeway_confirmation'").bind(address).first<{n:number}>())?.n).toBe(1);
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM delivery_events WHERE recipient=?').bind(address).first<{ n: number }>())?.n).toBe(1);
   });
-  it('withdrawal blocks old confirmation, replay and duplicate resubscription',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const tokens=await links(address);
-    await withdrawYorkewaySignup(env.DB,tokens.withdraw);
-    expect(await confirmYorkewaySignup(env.DB,tokens.confirm)).toBe(false);
-    const before=await saved(address); await withdrawYorkewaySignup(env.DB,tokens.withdraw);
-    await captureYorkewaySignup(env.DB,{email:address,name:'Other'});
+  it('invalid and unrelated withdrawal tokens cannot change a subscription', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' }); const before = await saved(address);
+    for (const token of ['', 'short', 'x'.repeat(44), 'x'.repeat(43)]) await withdrawYorkewaySignup(env.DB, token);
     expect(await saved(address)).toEqual(before);
   });
-  it('withdrawing a fresh request after a previous withdrawal invalidates its proof',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const first=await links(address);
-    await withdrawYorkewaySignup(env.DB,first.withdraw);
-    await env.DB.prepare("UPDATE yorkeway_signup_grants SET created_at='2000-01-01T00:00:00.000Z' WHERE email=?").bind(address).run();
-    await env.DB.prepare("UPDATE delivery_events SET created_at='2000-01-01T00:00:00.000Z' WHERE recipient=?").bind(address).run();
-    await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const fresh=await links(address);
-    expect(fresh.confirm).not.toBe(first.confirm);
-    await withdrawYorkewaySignup(env.DB,fresh.withdraw);
-    expect(await confirmYorkewaySignup(env.DB,fresh.confirm)).toBe(false);
-    const before=await saved(address); await withdrawYorkewaySignup(env.DB,fresh.withdraw);
-    expect(await saved(address)).toEqual(before);
+  it('respects provider-wide suppression without queuing welcome mail', async () => {
+    const address = email(); await env.DB.prepare('INSERT INTO marketing_contacts(email,provider_id,unsubscribed,updated_at) VALUES(?,?,1,?)')
+      .bind(address, crypto.randomUUID(), new Date().toISOString()).run();
+    await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    expect(await delivery(address)).toBeNull(); expect(await eligible(address)).toBeNull();
   });
-  it('honours withdrawal from any email in the confirmed consent cycle',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const first=await links(address);
-    await env.DB.prepare("UPDATE yorkeway_signup_grants SET created_at='2000-01-01T00:00:00.000Z' WHERE email=?").bind(address).run();
-    await env.DB.prepare("UPDATE delivery_events SET created_at='2000-01-01T00:00:00.000Z' WHERE recipient=?").bind(address).run();
-    await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const second=await links(address);
-    expect(await confirmYorkewaySignup(env.DB,first.confirm)).toBe(true);
-    await withdrawYorkewaySignup(env.DB,second.withdraw);
-    expect((await saved(address))?.status).toBe('withdrawn');
-    expect(await confirmYorkewaySignup(env.DB,second.confirm)).toBe(false);
-  });
-  it('supports unsubscribe after confirmation without affecting other lists',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const tokens=await links(address);
-    await confirmYorkewaySignup(env.DB,tokens.confirm); await withdrawYorkewaySignup(env.DB,tokens.withdraw);
-    expect((await saved(address))?.status).toBe('withdrawn');
-    expect(await confirmYorkewaySignup(env.DB,tokens.confirm)).toBe(false);
-  });
-  it('expired tokens cannot activate',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const tokens=await links(address);
-    await env.DB.prepare("UPDATE yorkeway_signup_grants SET expires_at='2000-01-01T00:00:00.000Z' WHERE email=?").bind(address).run();
-    expect(await confirmYorkewaySignup(env.DB,tokens.confirm)).toBe(false);
-  });
-  it('respects provider-wide suppression without sending',async()=>{
-    const address=email(); await env.DB.prepare('INSERT INTO marketing_contacts(email,provider_id,unsubscribed,updated_at) VALUES(?,?,1,?)').bind(address,crypto.randomUUID(),new Date().toISOString()).run();
-    await captureYorkewaySignup(env.DB,{email:address,name:'Guest'});
-    expect(await env.DB.prepare("SELECT 1 FROM delivery_events WHERE recipient=? AND kind='yorkeway_confirmation'").bind(address).first()).toBeNull();
-  });
-  it('does not send to known complaints or activate proof after a hard bounce',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const tokens=await links(address);
-    await env.DB.prepare("UPDATE delivery_events SET status='bounced' WHERE recipient=?").bind(address).run();
-    expect(await confirmYorkewaySignup(env.DB,tokens.confirm)).toBe(false);
-    await env.DB.prepare("UPDATE yorkeway_signup_grants SET created_at='2000-01-01T00:00:00.000Z' WHERE email=?").bind(address).run();
-    await captureYorkewaySignup(env.DB,{email:address,name:'Guest'});
-    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_events WHERE recipient=?").bind(address).first<{n:number}>())?.n).toBe(1);
-  });
-  it('rejects cross-origin writes and oversized input',async()=>{
-    expect((await signup(request('/api/yorkeway',{name:'Guest',email:email(),consent:true},'https://evil.example'))).status).toBe(403);
-    expect((await signup(request('/api/yorkeway',{name:'x'.repeat(3000),email:email(),consent:true}))).status).toBe(413);
-    expect((await confirm(request('/api/yorkeway/confirm',{token:'x'},'https://evil.example'))).status).toBe(403);
-    expect((await withdraw(request('/api/yorkeway/withdraw',{token:'x'},'https://evil.example'))).status).toBe(403);
-  });
-  it('returns generic signup response without tokens or status',async()=>{
-    const response=await signup(request('/api/yorkeway',{name:'Guest',email:email(),consent:true}));
-    expect(response.status).toBe(202); expect(await response.json()).toEqual({received:true});
-    expect(response.headers.get('cache-control')).toContain('no-store');
-  });
-  it('keeps the contact list private',async()=>{
-    const response=await audience(new Request(`${origin}/api/admin/yorkeway-audience`));
-    expect(response.status).toBe(403); expect(response.headers.get('cache-control')).toContain('private');
-  });
-  it('deduplicates simultaneous submissions atomically',async()=>{
-    const address=email(); await Promise.all(Array.from({length:5},()=>captureYorkewaySignup(env.DB,{email:address,name:'Guest'})));
-    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM yorkeway_signup_grants WHERE email=?').bind(address).first<{n:number}>())?.n).toBe(1);
-    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM delivery_events WHERE recipient=?").bind(address).first<{n:number}>())?.n).toBe(1);
-  });
-  it('rejects other staff roles and a password-change-required owner',async()=>{
-    for (const [role,change] of [['organizer',0],['support',0],['owner',1]] as const) {
-      const id=crypto.randomUUID(),stamp=new Date().toISOString();
-      await env.DB.prepare(`INSERT INTO staff_accounts (id, normalized_email, display_name, role, password_hash, password_salt, password_iterations, must_change_password, status, password_changed_at, created_at, created_by, updated_at)
-        VALUES (?, ?, 'Staff', ?, 'test', 'test', 1, ?, 'active', ?, ?, 'test', ?)`)
-        .bind(id,email(),role,change,stamp,stamp,stamp).run();
-      const cookie=adminCookieHeader(await createStaffSession(env.DB,{id})).split(';')[0];
-      expect((await audience(new Request(`${origin}/api/admin/yorkeway-audience`,{headers:{cookie}}))).status).toBe(403);
+  it('excludes known bounces, complaints and provider suppression', async () => {
+    for (const status of ['bounced', 'complained', 'suppressed'] as const) {
+      const address = email(); await suppress(address, status);
+      await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+      expect(await delivery(address)).toBeNull(); expect(await eligible(address)).toBeNull();
     }
   });
-  it('shows the owner only confirmed unsuppressed contacts and separate counts',async()=>{
-    const address=email(),pending=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Confirmed guest'}); const token=await links(address);
-    await confirmYorkewaySignup(env.DB,token.confirm); await captureYorkewaySignup(env.DB,{email:pending,name:'Pending guest'});
-    const id=crypto.randomUUID(),stamp=new Date().toISOString();
-    await env.DB.prepare(`INSERT INTO staff_accounts (id,normalized_email,display_name,role,password_hash,password_salt,password_iterations,must_change_password,status,password_changed_at,created_at,created_by,updated_at)
-      VALUES (?,?,'Owner','owner','test','test',1,0,'active',?,?,'test',?)`).bind(id,email(),stamp,stamp,stamp).run();
-    const cookie=adminCookieHeader(await createStaffSession(env.DB,{id})).split(';')[0];
-    const response=await audience(new Request(`${origin}/api/admin/yorkeway-audience`,{headers:{cookie}}));
-    expect(response.status).toBe(200); const body=await response.json() as {contacts:{email:string}[];summary:{pending:number;subscribed:number}};
-    expect(body.contacts.some(x=>x.email===pending)).toBe(false); expect(body.summary.pending).toBeGreaterThan(0); expect(body.summary.subscribed).toBeGreaterThan(0);
-    expect(JSON.stringify(body)).not.toContain('token_hash');
+  it('does not mistake internally cancelled mail for provider suppression', async () => {
+    const address = email(); await suppress(address, 'suppressed', false);
+    await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    expect(await delivery(address)).not.toBeNull(); expect(await eligible(address)).not.toBeNull();
   });
-  it('suppresses a queued confirmation after withdrawal without a provider call',async()=>{
-    const address=email(); await captureYorkewaySignup(env.DB,{email:address,name:'Guest'}); const tokens=await links(address);
-    await withdrawYorkewaySignup(env.DB,tokens.withdraw);
-    await env.DB.prepare("UPDATE delivery_events SET status='failed',provider_id=NULL,attempt_count=0,next_attempt_at='2000-01-01T00:00:00.000Z' WHERE recipient=?").bind(address).run();
-    vi.mocked(fetch).mockClear(); await retryFailedDeliveries(env);
-    expect(fetch).not.toHaveBeenCalled();
-    expect((await env.DB.prepare('SELECT status FROM delivery_events WHERE recipient=?').bind(address).first<{status:string}>())?.status).toBe('suppressed');
+  it('rejects cross-origin writes and oversized requests', async () => {
+    expect((await signupRoute.POST(request('/api/yorkeway', { name: 'Guest', email: email(), consent: true }, 'https://evil.example'))).status).toBe(403);
+    expect((await signupRoute.POST(request('/api/yorkeway', { name: 'x'.repeat(3000), email: email(), consent: true }))).status).toBe(413);
+    expect((await withdrawRoute.POST(request('/api/yorkeway/withdraw', { token: 'x' }, 'https://evil.example'))).status).toBe(403);
+    expect((await withdrawRoute.POST(request('/api/yorkeway/withdraw', { token: 'x'.repeat(2048) }))).status).toBe(413);
   });
-  it('uses the established email shell without account or ticket links',()=>{
-    const message=yorkewayConfirmationEmail('sample-confirmation','sample-withdrawal');
-    expect(message.html).toContain('bgcolor="#301d2c"'); expect(message.html).toContain('bgcolor="#f8f4ec"');
-    expect(message.html).toContain('bgcolor="#d6f075"'); expect(message.text).toContain('not an event RSVP');
-    expect(message.html).not.toContain('/my-nights');
+  it('rejects missing consent without saving the address and exposes no GET mutations', async () => {
+    const address = email();
+    expect((await signupRoute.POST(request('/api/yorkeway', { name: 'Guest', email: address, consent: false }))).status).toBe(400);
+    expect(await saved(address)).toBeNull(); expect(signupRoute).not.toHaveProperty('GET'); expect(withdrawRoute).not.toHaveProperty('GET');
+  });
+  it('returns a generic private response without personal data or verification claims', async () => {
+    const address = email(), response = await signupRoute.POST(request('/api/yorkeway', { name: 'Guest', email: address, consent: true }));
+    expect(response.status).toBe(202); expect(await response.json()).toEqual({ received: true });
+    expect(response.headers.get('cache-control')).toContain('no-store'); expect((await saved(address))?.status).toBe('subscribed');
+  });
+  it('closes new signups at the end of the stated 2026 period', async () => {
+    const address = email(); vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2027-01-01T00:00:00.000Z'));
+    expect((await signupRoute.POST(request('/api/yorkeway', { name: 'Guest', email: address, consent: true }))).status).toBe(410);
+    expect(await saved(address)).toBeNull();
+  });
+  it('keeps the contact list private from anonymous users and unauthorized staff', async () => {
+    const anonymous = await audience(new Request(`${origin}/api/admin/yorkeway-audience`));
+    expect(anonymous.status).toBe(403); expect(anonymous.headers.get('cache-control')).toContain('private');
+    for (const [role, change] of [['organizer', 0], ['support', 0], ['owner', 1]] as const) {
+      expect((await audience(new Request(`${origin}/api/admin/yorkeway-audience`, { headers: { cookie: await staffCookie(role, change) } }))).status).toBe(403);
+    }
+  });
+  it('shows the owner only active unsuppressed signups and never calls them verified', async () => {
+    const active = email(), withdrawn = email(), suppressed = email();
+    for (const address of [active, withdrawn, suppressed]) await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    await withdrawYorkewaySignup(env.DB, await withdrawalToken(withdrawn)); await suppress(suppressed, 'complained');
+    const response = await audience(new Request(`${origin}/api/admin/yorkeway-audience`, { headers: { cookie: await staffCookie() } }));
+    expect(response.status).toBe(200);
+    const body = await response.json() as { contacts: { email: string; verifiedAt?: string }[]; emailOwnershipVerified: boolean; deliveryEnabled: boolean };
+    expect(body.contacts.map(contact => contact.email)).toContain(active);
+    expect(body.contacts.map(contact => contact.email)).not.toContain(withdrawn); expect(body.contacts.map(contact => contact.email)).not.toContain(suppressed);
+    expect(body.emailOwnershipVerified).toBe(false); expect(body.deliveryEnabled).toBe(false);
+    expect(body.contacts.every(contact => !contact.verifiedAt)).toBe(true); expect(JSON.stringify(body)).not.toMatch(/withdrawal_hash|token_hash|yorkeway-welcome\//u);
+  });
+  it('suppresses a queued welcome after withdrawal without a provider call', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    await withdrawYorkewaySignup(env.DB, await withdrawalToken(address)); await retryFailedDeliveries(env);
+    expect(fetch).not.toHaveBeenCalled(); expect((await delivery(address))?.status).toBe('suppressed');
+  });
+  it('rechecks provider suppression before sending queued welcome mail', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' }); await suppress(address, 'complained');
+    await retryFailedDeliveries(env); expect(fetch).not.toHaveBeenCalled(); expect((await delivery(address))?.status).toBe('suppressed');
+  });
+  it('retries the same outbox after provider failure without duplicate signup mail', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' }); const original = await delivery(address);
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('Synthetic provider outage'));
+    await retryFailedDeliveries(env); expect((await delivery(address))?.status).toBe('failed');
+    await env.DB.prepare("UPDATE delivery_events SET next_attempt_at='2000-01-01T00:00:00.000Z' WHERE id=?").bind(original!.id).run();
+    await retryFailedDeliveries(env); expect((await delivery(address))?.status).toBe('sent');
+    expect((await delivery(address))?.id).toBe(original!.id); expect(fetch).toHaveBeenCalledTimes(2);
+    const first = vi.mocked(fetch).mock.calls[0][1] as RequestInit, second = vi.mocked(fetch).mock.calls[1][1] as RequestInit;
+    expect(new Headers(first.headers).get('idempotency-key')).toBe(original!.id); expect(new Headers(second.headers).get('idempotency-key')).toBe(original!.id);
+    await captureYorkewaySignup(env.DB, { email: address, name: 'Repeat guest' }); await retryFailedDeliveries(env); expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('uses the approved welcome identity without verification, account or ticket links', () => {
+    const message = yorkewayWelcomeEmail('sample-withdrawal');
+    expect(message.html).toContain('bgcolor="#301d2c"'); expect(message.html).toContain('bgcolor="#f8f4ec"'); expect(message.html).toContain('bgcolor="#d6f075"');
+    expect(message.html).toContain('/hosts/the-yorke-way-email.png'); expect(message.html).toContain('alt="The Yorke Way logo" width="128" height="128"');
+    expect(message.html).toContain('Sponsored by BeCore Tickets'); expect(message.subject).toContain('The Yorke Way');
+    expect(message.text).toContain('/the-yorke-way/unsubscribe#sample-withdrawal');
+    expect(`${message.html} ${message.text}`).not.toMatch(/\/confirm|\/my-nights|confirm your email|verify your email|verification link/iu);
+    expect(message.text).toMatch(/not.{0,30}(ticket|RSVP)/iu);
   });
 });

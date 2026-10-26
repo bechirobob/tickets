@@ -59,10 +59,11 @@ export default function YorkeSignup() {
 
   if (state === 'success') return <div className="yorke-success" role="status" tabIndex={-1} ref={success}>
     <svg className="yorke-status-icon" aria-hidden="true" viewBox="0 0 32 32" fill="none"><path d="M4 8h24v17H4zM4 8l12 10L28 8" /></svg>
-    <p className="yorke-eyebrow">One more step</p>
-    <h2>Check your inbox.</h2>
-    <p>If this signup needs confirmation, you’ll receive an email with the next step. Follow the link to finish joining the list.</p>
-    <p className="yorke-success-hint">Nothing there? Check your spam folder, or try again a little later.</p>
+    <p className="yorke-eyebrow">Good call.</p>
+    <h2>You’re on the list.</h2>
+    <p>Your year-end plans just got a little more interesting. Keep an eye on your inbox for The Yorke Way updates.</p>
+    <p className="yorke-success-hint">For new signups, a welcome email is on its way. No extra confirmation needed.</p>
+    <p className="yorke-success-hint">Previously unsubscribed? We’ll keep that choice. Contact <a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a> if you want to rejoin.</p>
     <button className="yorke-text-button" type="button" onClick={() => { setState('idle'); window.requestAnimationFrame(() => form.current?.querySelector<HTMLInputElement>('input')?.focus()); }}>Use another email <span aria-hidden="true">↗</span></button>
   </div>;
 
@@ -73,7 +74,7 @@ export default function YorkeSignup() {
     </div>
     <label className="yorke-consent" htmlFor="yorke-consent"><input id="yorke-consent" name="consent" type="checkbox" required disabled={!ready || state === 'sending'} /><span>{consentText}</span></label>
     {state === 'error' && <p className="yorke-error" role="alert">{error}</p>}
-    <button className="yorke-submit" type="submit" disabled={!ready || state === 'sending'}><span>{!ready ? 'Preparing signup…' : state === 'sending' ? 'Sending your request…' : 'Sign up for early access'}</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 12h14m-6-6 6 6-6 6" /></svg></button>
-    <p className="yorke-form-note">We’ll ask you to confirm your email before joining the list.</p>
+    <button className="yorke-submit" type="submit" disabled={!ready || state === 'sending'}><span>{!ready ? 'Preparing signup…' : state === 'sending' ? 'Sending your request…' : 'Put me on the list'}</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 12h14m-6-6 6 6-6 6" /></svg></button>
+    <p className="yorke-form-note">One signup. Year-end updates. Unsubscribe whenever.</p>
   </form>;
 }

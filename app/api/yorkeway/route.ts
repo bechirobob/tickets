@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const input = parseYorkewaySignup(await request.json().catch(() => null));
   if (!input) return Response.json({ error: 'Enter your name and email, then choose whether to receive these updates.' }, { status: 400, headers });
   const { env } = await import('cloudflare:workers');
-  if (!transactionalConfigured(env, transactionalProvider(env, 'yorkeway_confirmation'))) return Response.json({ error: 'Signup is temporarily unavailable. Please try again later.' }, { status: 503, headers });
+  if (!transactionalConfigured(env, transactionalProvider(env, 'yorkeway_welcome'))) return Response.json({ error: 'Signup is temporarily unavailable. Please try again later.' }, { status: 503, headers });
   const ip = requestMetadata(request).ip || 'anonymous';
   if (!await enforceCompositeRateLimit(env.PUBLIC_WRITE_RATE_LIMITER, [`yorkeway-ip:${await hashToken(ip)}`, `yorkeway-email:${await hashToken(input.email)}`])) {
     return Response.json({ error: 'Please wait a little before trying again.' }, { status: 429, headers });

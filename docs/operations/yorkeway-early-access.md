@@ -1,48 +1,38 @@
 # The Yorke Way early-access list
 
-## Scope and state
+Draft PR346; not deployed. The latest owner request replaces double opt-in with
+single opt-in. Public route `/the-yorke-way`, owner list `/admin/yorkeway-audience`.
 
-Requested 26 October 2026: a standalone email signup for Kofi Bills’ year-end
-2026 events, sponsored by BeCore Tickets. `/the-yorke-way` is not an RSVP,
-ticket, reservation or admission promise. No existing audience is imported.
-Preview-first implementation on `feat/yorkeway-early-access`, base `e697952`.
-Not published or deployed. Confirmation email flow was approved separately;
-campaign delivery is not part of this increment.
+## Current design direction
+Original metallic Yorke Way logo is the hero; no Kofi portrait, including social
+cards. Cheeky public voice, sponsor secondary. Logo also leads the welcome email.
+This supersedes the first portrait-led/confirmation-email preview.
 
 ## Consent and access
+Name, normalized email, explicit unchecked consent, wording/version/date. Immediate
+subscription on valid new submission; one welcome email. No verification claim,
+account, event registration, ticket, QR, guaranteed entry, attendee import or campaign.
+Only the owner can see this list. Known withdrawn addresses remain withdrawn on
+anonymous resubmission; provider and platform suppression remain effective.
 
-Name, normalized email, exact consent wording/version and timestamp are saved.
-Consent starts unchecked; ownership is established only through an explicit
-POST from the 24-hour emailed confirmation link. Opening a link does not
-change anything. List-only confirmation and withdrawal capabilities are hashed
-at rest in the campaign tables. They grant no attendee or staff access.
-Existing transactional outbox necessarily stores the message payload containing
-the private links, under its existing restricted storage lifecycle.
+A hashed private withdrawal capability is emailed, not an account login. Opening
+its link makes no change; explicit POST unsubscribes idempotently. Tokens stay out
+of query strings, referrers and analytics. Signup closes at 2027-01-01T00:00:00Z.
 
-Duplicate submits have a 15-minute database-enforced cooldown. All signup
-responses are generic, with no email-existence or subscription-state disclosure.
-A fresh signup cannot reverse a withdrawal without fresh email proof. Revision
-binding prevents old proof/withdrawal links from changing a later preference.
-Provider-wide suppression remains effective. Campaign capture/confirmation
-closes at 00:00 UTC on 1 January 2027 (Accra year end); unsubscribe remains open.
+## Delivery
+One atomic database batch creates the consent row and deterministic welcome outbox
+entry. Existing delivery loop processes it using the established Resend identity;
+new email kind `yorkeway_welcome`. No VPS mail allowlist change. Failed/repeated
+requests cannot enqueue duplicate welcomes. Retries recheck current subscription,
+suppression and campaign closure. No live email test was sent during development.
 
-Only the owner can view the confirmed list at `/admin/yorkeway-audience`.
-No provider contact import/export, host grant, campaign, paid resource or new
-credential is introduced. Existing preview cleanup preserves these records.
-The normal schema-driven database backup includes the additive tables.
+The existing read-only readiness audit40383877809 on2026-10-26 verified Resend
+credential presence, allowed sender, verified domain, current healthy deliveryloop
+and empty queue. Quota and actual welcome delivery have not been tested.
 
-## Delivery boundary
-
-The new `yorkeway_confirmation` kind uses the existing transactional pipeline
-and approved customer email shell. It currently selects Resend, without
-expanding the VPS mail allowlist. Actual production provider configuration and
-capacity must be checked before release. No real email was sent in local tests.
-Retries suppress expired, used, superseded or provider-suppressed proof.
-
-## Verification
-
-Focused synthetic SQLite and Worker suites cover consent validation, duplicate
-capture, confirmation, expiry, withdrawal/replay, suppression, request origin,
-body bounds and anonymous list access. Record final exact-candidate results
-before release. UI and email preview review precedes publication. No local
-passes establish production configuration, delivery or deployed readiness.
+## Release
+Migration0070 has never been deployed; its draft schema was simplified before
+release. Preserve current/previous production recovery releases. Require latest
+exact-head tests, owner visual review of logo-only page/welcome email, standard
+migration/backup/deployment checks and post-release route verification. Never merge
+an older preview or claim the old confirmation workflow remains the intended flow.

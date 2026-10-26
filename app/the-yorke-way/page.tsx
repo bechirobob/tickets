@@ -5,19 +5,19 @@ import YorkeSignup from './signup';
 
 export const metadata: Metadata = {
   title: 'The Yorke Way — Early access',
-  description: 'End the year with Kofi Bills. Sign up for early access to all his upcoming year-end events. Sponsored by BeCore Tickets.',
+  description: 'Your year-end plans called. They said Kofi Bills. Get early access to The Yorke Way’s year-end events. Sponsored by BeCore Tickets.',
   alternates: { canonical: '/the-yorke-way' },
   openGraph: {
-    title: 'The Yorke Way — End the year with Kofi Bills',
-    description: 'Sign up for early access to all his upcoming year-end events. Sponsored by BeCore Tickets.',
+    title: 'The Yorke Way — Your year-end plans called',
+    description: 'Get early access to Kofi Bills’ year-end events. Give the group chat something to work with. Sponsored by BeCore Tickets.',
     url: '/the-yorke-way',
-    images: [{ url: '/hosts/kofi-bills.webp', width: 886, height: 1080, alt: 'Kofi Bills' }],
+    images: [{ url: '/hosts/the-yorke-way-email.png', width: 384, height: 384, alt: 'The Yorke Way metallic logo' }],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'The Yorke Way — End the year with Kofi Bills',
-    description: 'Sign up for early access to all his upcoming year-end events. Sponsored by BeCore Tickets.',
-    images: ['/hosts/kofi-bills.webp'],
+    card: 'summary',
+    title: 'The Yorke Way — Your year-end plans called',
+    description: 'Get early access to Kofi Bills’ year-end events. Give the group chat something to work with. Sponsored by BeCore Tickets.',
+    images: ['/hosts/the-yorke-way-email.png'],
   },
 };
 
@@ -27,13 +27,13 @@ export default function YorkeWayPage() {
     <main className="yorke-main" id="main">
       <section className="yorke-intro" aria-labelledby="yorke-title">
         <p className="yorke-eyebrow"><span aria-hidden="true" />Early access · Year-end 2026</p>
-        <h1 id="yorke-title">End the year<br />with <span>Kofi Bills.</span></h1>
-        <p className="yorke-description">Sign up for early access to all his upcoming year-end events.</p>
+        <h1 id="yorke-title">Your year-end<br />plans called.<br /><span>They said <strong>Kofi Bills.</strong></span></h1>
+        <p className="yorke-description">Get early access to Kofi Bills’ year-end events. Give the group chat something to work with.</p>
       </section>
-      <figure className="yorke-portrait">
-        <Image src="/hosts/kofi-bills.webp" alt="Kofi Bills, dressed in black, standing against a pale textured wall" width={886} height={1080} sizes="(max-width: 700px) 100vw, 48vw" priority unoptimized />
-        <div className="yorke-year" aria-hidden="true"><span>Year-end</span><strong>20<br />26</strong></div>
-        <figcaption><span>The Yorke Way</span><strong>Kofi Bills</strong><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" /></svg></figcaption>
+      <figure className="yorke-logo-stage">
+        <div className="yorke-logo-stage__top"><span>The Yorke Way</span><span>Year-end 2026</span></div>
+        <div className="yorke-logo-stage__art"><Image src="/hosts/the-yorke-way.svg" alt="The Yorke Way metallic logo" width={771} height={771} sizes="(max-width: 700px) 72vw, 40vw" priority unoptimized /></div>
+        <figcaption><span>The year’s not over.<br /><strong>Act accordingly.</strong></span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" /></svg></figcaption>
       </figure>
       <section className="yorke-form-section" aria-label="Early-access signup">
         <YorkeSignup />

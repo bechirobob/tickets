@@ -32,18 +32,17 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
 .yorke-eyebrow { margin: 0; color: var(--yorke-lime); font-size: 11px; line-height: 1.5; font-weight: 650; letter-spacing: .14em; text-transform: uppercase; }
 .yorke-intro .yorke-eyebrow { display: flex; align-items: center; gap: 10px; }
 .yorke-intro .yorke-eyebrow > span { width: 7px; height: 7px; flex: 0 0 auto; background: currentColor; }
-.yorke-intro h1 { margin: 23px 0 22px; font-size: clamp(42px, 4.65vw, 72px); font-weight: 620; line-height: 1.055; letter-spacing: -.065em; }
-.yorke-intro h1 > span { color: var(--yorke-lime); white-space: nowrap; }
-.yorke-description { max-width: 370px; margin: 0; font-size: 17px; line-height: 1.6; color: var(--yorke-muted); }
-.yorke-portrait { grid-column: 2; grid-row: 1 / 3; min-height: 650px; position: relative; overflow: hidden; margin: 0; background: #e2e5e1; }
-.yorke-portrait > img { display: block; position: absolute; inset: auto 0 0; width: 100%; max-width: none; height: 125%; object-fit: cover; object-position: 50% 100%; }
-.yorke-year { position: absolute; top: 0; right: 0; padding: 22px 24px 19px; background: var(--yorke-lime); color: var(--yorke-plum); }
-.yorke-year > span { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
-.yorke-year > strong { display: block; padding-top: 9px; font-size: 53px; line-height: .86; letter-spacing: -.07em; font-weight: 650; }
-.yorke-portrait figcaption { position: absolute; inset: auto 22px 22px; display: grid; grid-template-columns: 1fr auto; gap: 5px 24px; padding: 18px 20px; background: var(--yorke-plum); color: var(--yorke-cream); }
-.yorke-portrait figcaption > span { grid-column: 1; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--yorke-muted); }
-.yorke-portrait figcaption > strong { grid-column: 1; font-size: 24px; font-weight: 550; letter-spacing: -.04em; }
-.yorke-portrait figcaption > svg { grid-column: 2; grid-row: 1 / 3; width: 33px; height: 33px; align-self: center; stroke: var(--yorke-lime); stroke-width: 1.5; }
+.yorke-intro h1 { margin: 23px 0 22px; font-size: clamp(40px, 4.2vw, 65px); font-weight: 620; line-height: 1.055; letter-spacing: -.065em; }
+.yorke-intro h1 > span { color: var(--yorke-lime); }
+.yorke-intro h1 strong { font: inherit; white-space: nowrap; }
+.yorke-description { max-width: 420px; margin: 0; font-size: 17px; line-height: 1.6; color: var(--yorke-muted); }
+.yorke-logo-stage { grid-column: 2; grid-row: 1 / 3; min-height: 705px; display: grid; grid-template-rows: auto 1fr auto; margin: 0; background: var(--yorke-cream); color: var(--yorke-plum); }
+.yorke-logo-stage__top { display: flex; justify-content: space-between; gap: 20px; padding: 27px 28px; font-size: 10px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
+.yorke-logo-stage__art { display: grid; place-items: center; padding: 26px 36px 38px; }
+.yorke-logo-stage__art > img { display: block; width: 100%; max-width: 530px; height: auto; aspect-ratio: 1; }
+.yorke-logo-stage figcaption { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 25px 28px; background: var(--yorke-lime); color: var(--yorke-plum); font-size: 15px; line-height: 1.45; }
+.yorke-logo-stage figcaption strong { font-size: 27px; font-weight: 650; letter-spacing: -.04em; }
+.yorke-logo-stage figcaption > svg { width: 40px; height: 40px; flex: 0 0 auto; stroke: currentColor; stroke-width: 1.4; }
 .yorke-form-section { align-self: start; padding: 3px 0 28px; }
 .yorke-form { margin: 0; }
 .yorke-fields { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; }
@@ -71,7 +70,8 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
 .yorke-status-icon { width: 34px; height: 34px; margin-bottom: 20px; stroke: var(--yorke-lime); stroke-width: 1.5; }
 .yorke-success h2 { margin: 10px 0 16px; font-size: 34px; line-height: 1.1; font-weight: 580; letter-spacing: -.05em; }
 .yorke-success > p:not(.yorke-eyebrow) { font-size: 14px; line-height: 1.65; color: var(--yorke-muted); }
-.yorke-success > p.yorke-success-hint { font-size: 12px; }
+.yorke-success a { text-decoration: underline; text-underline-offset: 3px; }
+.yorke-success > p.yorke-success-hint { margin-top: 12px; font-size: 12px; }
 .yorke-text-button { display: inline-flex; align-items: center; gap: 18px; min-height: 44px; padding: 8px 0; border: 0; border-radius: 0; background: transparent; color: var(--yorke-cream); font: inherit; font-size: 13px; font-weight: 550; text-decoration: underline; text-underline-offset: 5px; cursor: pointer; }
 .yorke-token { max-width: 620px; margin: 0 auto; padding: 90px 32px 80px; }
 .yorke-token h1 { margin: 22px 0; font-size: clamp(35px, 5vw, 56px); line-height: 1.08; letter-spacing: -.055em; font-weight: 600; }
@@ -85,7 +85,7 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
 @media (min-width: 1600px) { .yorke-main { column-gap: 80px; }.yorke-header, .yorke-main, .yorke-footer { padding-left: 80px; padding-right: 80px; } }
 @media (max-width: 1000px) and (min-width: 701px) {
   .yorke-header { padding: 22px 4vw; }.yorke-main { padding: 10px 4vw 0; column-gap: 4vw; grid-template-columns: 1.05fr 1fr; }.yorke-footer { padding-left: 4vw; padding-right: 4vw; }
-  .yorke-fields { grid-template-columns: 1fr; gap: 14px; }.yorke-intro h1 { font-size: 44px; }.yorke-portrait { min-height: 760px; }.yorke-portrait > img { height: 100%; }.yorke-year { padding: 17px; }.yorke-year > strong { font-size: 43px; }.yorke-portrait figcaption { inset: auto 15px 15px; padding: 16px; }
+  .yorke-fields { grid-template-columns: 1fr; gap: 14px; }.yorke-intro h1 { font-size: 40px; }.yorke-logo-stage { min-height: 760px; }.yorke-logo-stage__top { padding: 22px 20px; font-size: 9px; }.yorke-logo-stage__art { padding: 20px; }.yorke-logo-stage figcaption { padding: 23px 20px; }.yorke-logo-stage figcaption strong { font-size: 24px; }
 }
 @media (max-width: 700px) {
   .yorke-header { padding: max(22px, env(safe-area-inset-top)) 22px 18px; gap: 12px; }
@@ -95,10 +95,10 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
   .yorke-main { padding: 0 22px; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 0; }
   .yorke-intro { padding: 22px 0 26px; }.yorke-eyebrow { font-size: 10px; letter-spacing: .12em; }
   .yorke-intro h1 { margin: 18px 0; font-size: clamp(37px, 9.7vw, 58px); line-height: 1.07; letter-spacing: -.06em; }.yorke-description { max-width: 360px; font-size: 15px; line-height: 1.6; }
-  .yorke-portrait { grid-column: 1; grid-row: auto; height: clamp(260px, 77vw, 390px); min-height: 0; }
-  .yorke-portrait > img { height: 155%; object-position: 50% 81%; bottom: -22%; }
-  .yorke-year { padding: 15px 17px; }.yorke-year > span { font-size: 9px; }.yorke-year > strong { font-size: 38px; }
-  .yorke-portrait figcaption { inset: auto 14px 14px; padding: 13px 15px; gap: 4px 15px; }.yorke-portrait figcaption > span { font-size: 8px; }.yorke-portrait figcaption > strong { font-size: 20px; }.yorke-portrait figcaption > svg { width: 27px; height: 27px; }
+  .yorke-logo-stage { grid-column: 1; grid-row: auto; min-height: 0; }
+  .yorke-logo-stage__top { padding: 18px 19px; gap: 12px; font-size: 9px; }
+  .yorke-logo-stage__art { padding: 7px 46px 25px; }.yorke-logo-stage__art > img { max-width: 310px; }
+  .yorke-logo-stage figcaption { padding: 17px 19px; font-size: 12px; }.yorke-logo-stage figcaption strong { font-size: 23px; }.yorke-logo-stage figcaption > svg { width: 32px; height: 32px; }
   .yorke-form-section { padding: 27px 0 0; }.yorke-fields { grid-template-columns: 1fr; gap: 17px; }.yorke-field label { font-size: 13px; }.yorke-field input { min-height: 53px; }
   .yorke-consent { margin: 20px 0 23px; font-size: 12px; }.yorke-submit { min-height: 55px; }.yorke-form-note { font-size: 11px; }.yorke-fine-print { margin-top: 24px; padding-top: 17px; }
   .yorke-footer { padding: 24px 22px max(26px, env(safe-area-inset-bottom)); flex-direction: column; gap: 4px; }

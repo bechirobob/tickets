@@ -33,19 +33,17 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
   const posts = [];
   let signupStatus = 202;
-  let confirmResult = true;
   await context.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin === origin && url.pathname.startsWith('/api/')) {
       if (request.method() === 'POST') posts.push({ path: url.pathname, body: request.postDataJSON() });
       if (url.pathname === '/api/yorkeway') return route.fulfill({ status: signupStatus, json: signupStatus === 202 ? { received: true } : { error: 'Synthetic preview failure' } });
-      if (url.pathname === '/api/yorkeway/confirm') return route.fulfill({ status: 200, json: { confirmed: confirmResult } });
       if (url.pathname === '/api/yorkeway/withdraw') return route.fulfill({ status: 200, json: { received: true } });
       if (url.pathname === '/api/admin/workspace') return route.fulfill({ status: 401, json: { error: 'Not signed in' } });
       return route.fulfill({ status: 404, json: { error: 'Not part of this isolated preview' } });
     }
     // The source email's approved brand asset is served locally, never fetched externally.
-    if (url.hostname === 'tickets.becoreops.com' && url.pathname.startsWith('/brand/')) {
+    if (url.hostname === 'tickets.becoreops.com' && (url.pathname.startsWith('/brand/') || url.pathname === '/hosts/the-yorke-way-email.png')) {
       const file = path.join(root, 'public', url.pathname);
       return route.fulfill({ status: 200, contentType: url.pathname.endsWith('.png') ? 'image/png' : 'image/webp', body: await readFile(file) });
     }
@@ -74,7 +72,7 @@ try {
     let html = await page.content();
     const css = await page.evaluate(() => [...document.styleSheets].flatMap(sheet => { try { return [...sheet.cssRules].map(rule => rule.cssText); } catch { return []; } }).join('\n'));
     html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*>/gi, '');
-    for (const [asset, mime] of [['/hosts/the-yorke-way.svg','image/svg+xml'],['/hosts/kofi-bills.webp','image/webp'],['/brand/becore-ticket.webp','image/webp']]) {
+    for (const [asset, mime] of [['/hosts/the-yorke-way.svg','image/svg+xml'],['/brand/becore-ticket.webp','image/webp']]) {
       const data = `data:${mime};base64,${(await readFile(path.join(root, 'public', asset))).toString('base64')}`;
       html = html.replaceAll(asset, data);
     }
@@ -84,9 +82,12 @@ try {
   }
 
   await open();
-  await page.getByRole('button', { name: 'Sign up for early access', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Put me on the list', exact: true }).waitFor();
   assert.equal(await page.locator('#yorke-consent').isChecked(), false);
   assert.equal(await page.locator('.customer-dock').count(), 0);
+  assert.equal(await page.locator('img[src*="kofi-bills"]').count(), 0, 'No portrait in the revised page');
+  assert.equal(await page.locator('meta[content*="kofi-bills.webp"]').count(), 0, 'No portrait in social metadata');
+  assert.equal(await page.locator('.yorke-logo-stage img[src*="the-yorke-way.svg"]').count(), 1, 'Original host logo is the hero');
   await page.screenshot({ path: path.join(output, 'yorke-way-desktop.png'), fullPage: true });
   await assertLayout('Desktop 1440');
   await snapshot('yorke-way-visual-preview.html');
@@ -100,56 +101,57 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel('Your name', { exact: true }).fill('Preview Guest');
   await page.getByLabel('Email address', { exact: true }).fill('preview@example.invalid');
-  await page.getByRole('button', { name: 'Sign up for early access', exact: true }).click();
+  await page.getByRole('button', { name: 'Put me on the list', exact: true }).click();
   assert.equal(posts.length, 0, 'Unchecked consent must not POST');
   await page.locator('#yorke-consent').check();
   signupStatus = 503;
-  await page.getByRole('button', { name: 'Sign up for early access', exact: true }).click();
+  await page.getByRole('button', { name: 'Put me on the list', exact: true }).click();
   await page.getByRole('alert').waitFor();
   assert.equal(await page.getByLabel('Your name', { exact: true }).inputValue(), 'Preview Guest');
   assert.equal(await page.getByLabel('Email address', { exact: true }).inputValue(), 'preview@example.invalid');
   await page.screenshot({ path: path.join(output, 'yorke-way-retry-mobile.png'), fullPage: true });
   signupStatus = 202;
-  await page.getByRole('button', { name: 'Sign up for early access', exact: true }).click();
-  await page.getByRole('heading', { name: 'Check your inbox.' }).waitFor();
+  await page.getByRole('button', { name: 'Put me on the list', exact: true }).click();
+  await page.getByRole('heading', { name: 'You’re on the list.' }).waitFor();
   assert.deepEqual(posts.at(-1).body, { name: 'Preview Guest', email: 'preview@example.invalid', consent: true });
   await page.screenshot({ path: path.join(output, 'yorke-way-success-mobile.png'), fullPage: true });
-  checks.push('Signup: unchecked consent blocks POST; synthetic failure preserves draft; retry reaches confirmation-needed state');
+  checks.push('Signup: unchecked consent blocks POST; synthetic failure preserves draft; retry reaches early-access signup success without another confirmation step');
 
-  for (const [route, endpoint, button] of [['confirm','confirm','Confirm my email'],['unsubscribe','withdraw','Unsubscribe']]) {
-    const before = posts.length;
-    await open(`/the-yorke-way/${route}#${syntheticToken}`);
-    assert.equal(new URL(page.url()).hash, '');
-    assert.equal(posts.length, before, `${route}: GET must not mutate`);
-    await page.screenshot({ path: path.join(output, `yorke-way-${route}-mobile.png`), fullPage: true });
-    await page.getByRole('button', { name: button, exact: true }).click();
-    await page.getByRole('heading', { name: route === 'confirm' ? 'You’re on the list.' : 'Request received.' }).waitFor();
-    assert.equal(posts.at(-1).path, `/api/yorkeway/${endpoint}`);
-    assert.equal(posts.at(-1).body.token, syntheticToken);
-    checks.push(`${route}: hash removed; no automatic POST; deliberate action accepted`);
-  }
-  confirmResult = false;
-  await open(`/the-yorke-way/confirm#${syntheticToken}`);
-  await page.getByRole('button', { name: 'Confirm my email', exact: true }).click();
-  await page.getByRole('alert').waitFor();
-  assert.equal(await page.getByRole('heading', { name: 'You’re on the list.' }).count(), 0);
-  checks.push('Invalid/expired confirmation never claims subscription');
+  const beforeUnsubscribe = posts.length;
+  await open(`/the-yorke-way/unsubscribe#${syntheticToken}`);
+  assert.equal(new URL(page.url()).hash, '');
+  assert.equal(posts.length, beforeUnsubscribe, 'Unsubscribe GET must not mutate');
+  await page.screenshot({ path: path.join(output, 'yorke-way-unsubscribe-mobile.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Unsubscribe', exact: true }).click();
+  await page.getByRole('heading', { name: 'Request received.' }).waitFor();
+  assert.equal(posts.at(-1).path, '/api/yorkeway/withdraw');
+  assert.equal(posts.at(-1).body.token, syntheticToken);
+  checks.push('Unsubscribe: hash removed; no automatic POST; deliberate action accepted');
 
   // Build the actual email renderer with a non-working synthetic token, not a copy of its markup.
   const emailModule = path.join(output, 'email-renderer.mjs');
-  await build({ stdin: { contents: `export { yorkewayConfirmationEmail } from './lib/yorkeway-early-access.ts';`, resolveDir: root, loader: 'ts' }, outfile: emailModule, bundle: true, platform: 'node', format: 'esm', packages: 'external' });
-  const { yorkewayConfirmationEmail } = await import(pathToFileURL(emailModule).href);
-  const email = yorkewayConfirmationEmail(syntheticToken, 'b'.repeat(43));
+  await build({ stdin: { contents: `export { yorkewayWelcomeEmail } from './lib/yorkeway-early-access.ts';`, resolveDir: root, loader: 'ts' }, outfile: emailModule, bundle: true, platform: 'node', format: 'esm', packages: 'external' });
+  const { yorkewayWelcomeEmail } = await import(pathToFileURL(emailModule).href);
+  const email = yorkewayWelcomeEmail(syntheticToken);
   const inertEmail = email.html.replace(/href="[^"]*"/g, 'href="#preview-link-disabled"');
-  await writeFile(path.join(output, 'confirmation-email.html'), inertEmail);
+  await writeFile(path.join(output, 'welcome-email.html'), inertEmail);
   for (const [name, width, height] of [['desktop',800,900], ['mobile',390,844]]) {
     await page.setViewportSize({ width, height });
     await page.setContent(inertEmail, { waitUntil: 'networkidle' });
     await page.evaluate(async () => { await document.fonts.ready; });
+    const hostLogo = page.locator('img[src*="the-yorke-way-email.png"]');
+    assert.equal(await hostLogo.count(), 1, 'Welcome email contains the actual host logo');
+    assert.match(await hostLogo.getAttribute('alt'), /The Yorke Way/i);
+    assert.ok(Number(await hostLogo.getAttribute('width')) > 0 && Number(await hostLogo.getAttribute('height')) > 0, 'Email logo has dimensions');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Email ${name}: overflow`);
-    await page.screenshot({ path: path.join(output, `confirmation-email-${name}.png`), fullPage: true });
+    await page.screenshot({ path: path.join(output, `welcome-email-${name}.png`), fullPage: true });
   }
-  checks.push('Actual confirmation-email renderer: desktop/mobile snapshots, inert links, no delivery');
+  await page.route('**/*', route => route.request().resourceType() === 'image' ? route.abort() : route.fallback());
+  await page.setContent(inertEmail, { waitUntil: 'networkidle' });
+  await page.getByRole('heading', { name: 'You’re on the list. Good call.' }).waitFor();
+  assert.equal(await page.getByText('The Yorke Way', { exact: true }).isVisible(), true, 'Email brand remains readable with images blocked');
+  await page.screenshot({ path: path.join(output, 'welcome-email-images-blocked-mobile.png'), fullPage: true });
+  checks.push('Actual welcome-email renderer: host logo and alt/dimensions; desktop/mobile and blocked-image snapshots; inert links; no delivery');
   assert.deepEqual(errors, [], 'Browser runtime errors');
   await writeFile(path.join(output, 'report.json'), JSON.stringify({ sourceRevision: process.env.PREVIEW_SOURCE_SHA ?? null, localOnly: true, apiResponses: 'mocked', databaseUsed: false, emailSent: false, checks, browserErrors: errors }, null, 2));
   console.log(`Saved ${checks.length} passed preview checks and unpublished artifacts to outputs/yorkeway-previews.`);

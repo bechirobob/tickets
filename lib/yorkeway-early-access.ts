@@ -1,11 +1,11 @@
 import { createSecureToken, hashToken } from './attendee-auth';
-import { sendEmail } from './email-delivery';
+import { transactionalProvider } from './transactional-email';
 import { customerEmail, emailParagraph } from './customer-email';
 
 export const YORKEWAY_CONSENT = 'Email me early-access updates about Kofi Bills’ events through the end of 2026. I can unsubscribe at any time.';
 export const YORKEWAY_CONSENT_VERSION = 'yorkeway-year-end-2026-v1';
 export const YORKEWAY_CLOSES_AT = '2027-01-01T00:00:00.000Z';
-export const yorkewayEligible = `s.status = 'subscribed' AND s.verified_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM marketing_contacts m WHERE m.email = s.email AND m.unsubscribed = 1) AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE LOWER(TRIM(d.recipient))=s.email AND (d.status IN ('bounced','complained') OR (d.status='suppressed' AND d.provider_event_at IS NOT NULL)))`;
+export const yorkewayEligible = `s.status = 'subscribed' AND NOT EXISTS (SELECT 1 FROM marketing_contacts m WHERE m.email = s.email AND m.unsubscribed = 1) AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE LOWER(TRIM(d.recipient))=s.email AND (d.status IN ('bounced','complained') OR (d.status='suppressed' AND d.provider_event_at IS NOT NULL)))`;
 
 export function parseYorkewaySignup(value: unknown): { email: string; name: string } | null {
   if (!value || typeof value !== 'object') return null;
@@ -16,54 +16,40 @@ export function parseYorkewaySignup(value: unknown): { email: string; name: stri
   return { email, name };
 }
 
-export function yorkewayConfirmationEmail(token: string, withdrawalToken: string) {
-  const confirmUrl = `https://tickets.becoreops.com/the-yorke-way/confirm#${token}`;
+export function yorkewayWelcomeEmail(withdrawalToken: string) {
   const unsubscribeUrl = `https://tickets.becoreops.com/the-yorke-way/unsubscribe#${withdrawalToken}`;
-  const subject = 'Confirm your early access to The Yorke Way';
-  const intro = 'End the year with Kofi Bills. Confirm your email to join The Yorke Way early-access list, sponsored by BeCore Tickets.';
-  const detail = 'You’ll receive early-access email updates about Kofi Bills’ events through the end of 2026. This is not an event RSVP, ticket or guarantee of entry.';
-  return { subject, html: customerEmail({ title: 'Your next invite starts here.', preheader: 'Confirm your email for The Yorke Way early-access list.',
-    body: emailParagraph(intro) + emailParagraph(detail) + emailParagraph(`Changed your mind? <a href="${unsubscribeUrl}" style="color:#301d2c;text-decoration:underline">Withdraw this signup or unsubscribe</a>.`),
-    action: { label: 'Confirm my email', url: confirmUrl }, note: 'This confirmation link is valid for up to 24 hours. If you did not request it, ignore this email. You will not join the list without confirming.' }),
-    text: `${intro}\n\n${detail}\n\nConfirm your email: ${confirmUrl}\n\nWithdraw or unsubscribe: ${unsubscribeUrl}\n\nThe confirmation link is valid for up to 24 hours. If you did not request it, ignore this email. You will not join the list without confirming.` };
+  const subject = 'The Yorke Way: you’re on the list. Good call.';
+  const intro = 'Your year-end plans called. They said Kofi Bills. You’re on The Yorke Way early-access list. Give the group chat something to work with.';
+  const detail = 'We’ll email you early-access updates about Kofi Bills’ events through the end of 2026. Sponsored by BeCore Tickets. This is not an event RSVP, ticket or guarantee of entry.';
+  return { subject, html: customerEmail({ campaign: 'yorkeway', title: 'You’re on the list. Good call.', preheader: 'Kofi Bills. Year-end plans. You’re in the loop.',
+    body: emailParagraph(intro) + emailParagraph(detail),
+    action: { label: 'Back to The Yorke Way', url: 'https://tickets.becoreops.com/the-yorke-way' },
+    note: 'No extra confirmation needed. Didn’t sign up? Use the unsubscribe link below to stop these updates.' })
+      .replace('</body>', `<div style="padding:0 24px 24px;text-align:center;font:13px/20px Arial,sans-serif;color:#301d2c"><a href="${unsubscribeUrl}" style="color:#301d2c;text-decoration:underline">Unsubscribe from The Yorke Way updates</a></div></body>`),
+    text: `${intro}\n\n${detail}\n\nNo extra confirmation needed. Didn’t sign up, or changed your mind? Unsubscribe: ${unsubscribeUrl}` };
 }
 
 export async function captureYorkewaySignup(db: D1Database, input: { email: string; name: string }): Promise<void> {
-  const now = new Date().toISOString(), id = crypto.randomUUID();
-  const token = createSecureToken(), withdrawalToken = createSecureToken();
-  const expires = new Date(Math.min(Date.now() + 86400000, Date.parse(YORKEWAY_CLOSES_AT))).toISOString();
-  const [, created] = await db.batch([
-    db.prepare(`INSERT INTO yorkeway_early_access (email, guest_name, consent_version, consent_text, consented_at)
-      VALUES (?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING`).bind(input.email, input.name, YORKEWAY_CONSENT_VERSION, YORKEWAY_CONSENT, now),
-    db.prepare(`INSERT INTO yorkeway_signup_grants (id,email,guest_name,subscription_revision,token_hash,withdrawal_hash,created_at,expires_at)
-      SELECT ?,email,?,revision,?,?,?,? FROM yorkeway_early_access s WHERE email = ? AND status <> 'subscribed'
-      AND NOT EXISTS (SELECT 1 FROM yorkeway_signup_grants g WHERE g.email = s.email AND g.created_at > ?)
-      AND NOT EXISTS (SELECT 1 FROM marketing_contacts m WHERE m.email = s.email AND m.unsubscribed = 1) AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE LOWER(TRIM(d.recipient))=s.email AND (d.status IN ('bounced','complained') OR (d.status='suppressed' AND d.provider_event_at IS NOT NULL)))`)
-      .bind(id, input.name, await hashToken(token), await hashToken(withdrawalToken), now, expires, input.email, new Date(Date.now() - 15 * 60000).toISOString()),
+  const { env } = await import('cloudflare:workers');
+  const now = new Date().toISOString(), id = crypto.randomUUID(), token = createSecureToken();
+  const message = yorkewayWelcomeEmail(token);
+  const idempotencyKey = `yorkeway-welcome/${id}`;
+  const provider = transactionalProvider(env, 'yorkeway_welcome');
+  // Consent and the one welcome delivery are committed together. Duplicates and
+  // withdrawn/suppressed addresses are never reactivated by an anonymous request.
+  await db.batch([
+    db.prepare(`INSERT INTO yorkeway_early_access (email,id,guest_name,status,consent_version,consent_text,consented_at,withdrawal_hash)
+      SELECT ?,?,?,'subscribed',?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM marketing_contacts WHERE email=? AND unsubscribed=1)
+      AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE LOWER(TRIM(d.recipient))=? AND (d.status IN ('bounced','complained') OR (d.status='suppressed' AND d.provider_event_at IS NOT NULL)))
+      ON CONFLICT(email) DO NOTHING`).bind(input.email,id,input.name,YORKEWAY_CONSENT_VERSION,YORKEWAY_CONSENT,now,await hashToken(token),input.email,input.email),
+    db.prepare(`INSERT INTO delivery_events (id,kind,recipient,status,attempt_count,payload_json,created_at,updated_at,next_attempt_at)
+      SELECT ?,'yorkeway_welcome',email,'failed',0,?,?,?,? FROM yorkeway_early_access WHERE id=?`)
+      .bind(idempotencyKey,JSON.stringify({...message,idempotencyKey,provider}),now,now,now,id),
   ]);
-  if (created.meta.changes !== 1) return;
-  const message = yorkewayConfirmationEmail(token, withdrawalToken);
-  await sendEmail({ db, kind: 'yorkeway_confirmation', recipient: input.email, ...message, idempotencyKey: `yorkeway-confirmation/${id}`, deliveryId: `yorkeway-confirmation/${id}` });
-}
-
-export async function confirmYorkewaySignup(db: D1Database, token: string): Promise<boolean> {
-  if (!/^[A-Za-z0-9_-]{43}$/u.test(token) || Date.now() >= Date.parse(YORKEWAY_CLOSES_AT)) return false;
-  const digest = await hashToken(token), now = new Date().toISOString();
-  const [updated] = await db.batch([
-    db.prepare(`UPDATE yorkeway_early_access SET status='subscribed', revision=revision+1, verified_at=?, consented_at=?, withdrawn_at=NULL,
-      guest_name=(SELECT guest_name FROM yorkeway_signup_grants WHERE token_hash=?), confirmed_grant=(SELECT id FROM yorkeway_signup_grants WHERE token_hash=?)
-      WHERE status <> 'subscribed' AND EXISTS (SELECT 1 FROM yorkeway_signup_grants g WHERE g.email=yorkeway_early_access.email
-        AND g.subscription_revision=yorkeway_early_access.revision AND g.token_hash=? AND g.consumed_at IS NULL AND g.expires_at>?)
-      AND NOT EXISTS (SELECT 1 FROM marketing_contacts m WHERE m.email=yorkeway_early_access.email AND m.unsubscribed=1) AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE LOWER(TRIM(d.recipient))=yorkeway_early_access.email AND (d.status IN ('bounced','complained') OR (d.status='suppressed' AND d.provider_event_at IS NOT NULL)))`)
-      .bind(now, now, digest, digest, digest, now),
-    db.prepare(`UPDATE yorkeway_signup_grants SET consumed_at=? WHERE changes()=1 AND token_hash=? AND consumed_at IS NULL`).bind(now,digest),
-  ]);
-  return updated.meta.changes === 1;
 }
 
 export async function withdrawYorkewaySignup(db: D1Database, token: string): Promise<void> {
   if (!/^[A-Za-z0-9_-]{43}$/u.test(token)) return;
-  await db.prepare(`UPDATE yorkeway_early_access SET status='withdrawn', revision=revision+1, withdrawn_at=? WHERE EXISTS (SELECT 1 FROM yorkeway_signup_grants g WHERE g.email=yorkeway_early_access.email AND g.withdrawal_hash=?
-      AND (g.subscription_revision=yorkeway_early_access.revision OR (yorkeway_early_access.status='subscribed' AND g.subscription_revision=yorkeway_early_access.revision-1)))`)
-    .bind(new Date().toISOString(), await hashToken(token)).run();
+  await db.prepare(`UPDATE yorkeway_early_access SET status='withdrawn',withdrawn_at=? WHERE withdrawal_hash=? AND status='subscribed'`)
+    .bind(new Date().toISOString(),await hashToken(token)).run();
 }
