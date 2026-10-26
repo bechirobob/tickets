@@ -48,6 +48,9 @@ def blob(raw):
 
 def expected_workflow():
     raw = (ROOT / '.github/workflows/tickets-code-release.yml').read_bytes()
+    if blob(raw) == '45ba3acf065c330da75f67d1f39d98e1fe300ce9':
+        raw = raw.replace(b'node-version: 24.22.1\n', b'node-version: 24.21.0\n').replace(
+            b'node-version: 22.23.4\n', b'node-version: 22\n')
     if blob(raw) != BASE_WORKFLOW_BLOB:
         raise AssertionError('Original reviewed workflow changed')
     job = raw.decode().split('\n  release:\n', 1)[1].split('\n  inspect_failure:', 1)[0]
@@ -81,13 +84,28 @@ def expected_workflow():
     postflight = postflight.replace('${{ !inputs.verify_only }}', "${{ github.event_name == 'workflow_dispatch' }}").replace('${{ inputs.source_sha }}', SOURCE)
     if 'inputs.' in postflight:
         raise AssertionError('Unbounded postflight job')
-    return HEADER + job.replace(anchor, anchor + HELPER_COPY, 1) + postflight
+    return (HEADER + job.replace(anchor, anchor + HELPER_COPY, 1) + postflight).replace(
+        'node-version: 24.21.0\n', 'node-version: 24.22.1\n').replace(
+        'node-version: 22\n', 'node-version: 22.23.4\n')
 
 
 class RoomHelperTransportTests(unittest.TestCase):
     def test_exact_reviewed_job_only_adds_helper_and_fixed_inputs(self):
         self.assertEqual((ROOT / WORKFLOW).read_text(), expected_workflow())
         self.assertEqual(blob((ROOT / 'ops/vps/code-release.py').read_bytes()), OPERATOR_BLOB)
+
+    def test_unreviewed_workflow_changes_are_not_normalized(self):
+        original = (ROOT / '.github/workflows/tickets-code-release.yml').read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / '.github/workflows/tickets-code-release.yml'
+            target.parent.mkdir(parents=True)
+            for raw in (original.replace(b'contents: read', b'contents: write', 1),
+                        original + HELPER_COPY.encode(),
+                        original.replace(b'node-version: 24.22.1', b'node-version: 24.21.0', 1)):
+                target.write_bytes(raw)
+                with patch(__name__ + '.ROOT', root), self.assertRaises(AssertionError):
+                    expected_workflow()
 
     def test_host_transport_supplies_the_exact_loadable_helper(self):
         workflow = expected_workflow()

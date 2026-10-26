@@ -1165,7 +1165,8 @@ ROOM_MAIL_VPS_TRANSPORT_OVERLAY = {
 }
 # Exact test-only overlay for reviewed Node build pins; production admission,
 # historical families, permissions and runtime behavior remain unchanged.
-NODE_SECURITY_TEST_OVERLAY = {'.github/workflows/android-release.yml': ('100644', 'ff22317244e60ff2a14b1f5144d26763cd718e97'),
+NODE_SECURITY_TEST_OVERLAY = {'tests/test_room_helper_transport.py': ('100644', '1c68e111f7f33f9f1e4af78973a49f5424acfccf'),
+ '.github/workflows/android-release.yml': ('100644', 'ff22317244e60ff2a14b1f5144d26763cd718e97'),
  '.github/workflows/booking-consent-previews.yml': ('100644', '5ebf94ff4d93e263bb8c43f2c1074dc785bd3bc5'),
  '.github/workflows/browser-audit.yml': ('100644', '5da482ecf6c528672b4eb8cd1db13b09eee5ac34'),
  '.github/workflows/browser-followup.yml': ('100644', '3ccfe2fbf5eef9d453d69db33971d6df35f846f3'),
