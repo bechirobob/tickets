@@ -62,13 +62,14 @@ export function customerEmail(input: {
   body: string;
   action: { label: string; url: string };
   note?: string;
+  campaign?: 'yorkeway';
 }) {
   const url = safeActionUrl(input.action.url);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escapeHtml(input.title)}</title><style>@media(max-width:480px){.email-padding{padding-left:24px!important;padding-right:24px!important}.email-title{font-size:34px!important;line-height:38px!important}}</style></head><body style="margin:0;padding:0;background:#ede9e4;color:#301d2c;"><div aria-hidden="true" style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapeHtml(input.preheader)}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#ede9e4" style="width:100%;border-collapse:collapse;background:#ede9e4;"><tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600" cellspacing="0" cellpadding="0"><tr><td><![endif]-->
 <div style="max-width:600px;margin:0 auto;"><table role="presentation" width="600" cellspacing="0" cellpadding="0" bgcolor="#f8f4ec" style="width:100%;max-width:600px;border-collapse:collapse;table-layout:fixed;background:#f8f4ec;color:#301d2c;font-family:Arial,Helvetica,sans-serif;">
 <tr><td class="email-padding" bgcolor="#301d2c" style="padding:32px 36px 35px;background:#301d2c;color:#f8f4ec;">
-<table role="presentation" cellspacing="0" cellpadding="0"><tr><td><img src="https://tickets.becoreops.com/brand/becore-ticket.png?v=5" alt="" width="36" height="39" style="display:block;border:0;width:36px;height:39px;"></td><td style="padding-left:12px;font-size:19px;font-weight:bold;color:#f8f4ec;">BeCore Tickets</td></tr></table>
+${input.campaign === 'yorkeway' ? `<table role="presentation" cellspacing="0" cellpadding="0"><tr><td><img src="https://tickets.becoreops.com/hosts/the-yorke-way-email.png" alt="The Yorke Way logo" width="128" height="128" style="display:block;border:0;width:128px;height:128px;color:#f8f4ec;font-size:14px;"></td></tr><tr><td style="padding-top:20px;font-size:22px;font-weight:bold;color:#f8f4ec;">The Yorke Way</td></tr><tr><td style="padding-top:7px;font-size:12px;color:#d2c5d1;">Sponsored by BeCore Tickets</td></tr></table>` : `<table role="presentation" cellspacing="0" cellpadding="0"><tr><td><img src="https://tickets.becoreops.com/brand/becore-ticket.png?v=5" alt="" width="36" height="39" style="display:block;border:0;width:36px;height:39px;"></td><td style="padding-left:12px;font-size:19px;font-weight:bold;color:#f8f4ec;">BeCore Tickets</td></tr></table>`}
 
 <h1 class="email-title" style="margin:26px 0 0;font-size:40px;line-height:44px;letter-spacing:-1px;color:#f8f4ec;overflow-wrap:anywhere;">${escapeHtml(input.title)}</h1>
 </td></tr><tr><td class="email-padding" bgcolor="#f8f4ec" style="padding:34px 36px 12px;font-size:16px;line-height:25px;color:#301d2c;background:#f8f4ec;overflow-wrap:anywhere;">${input.body}

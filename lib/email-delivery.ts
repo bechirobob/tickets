@@ -7,7 +7,7 @@ import { customerEmail, emailDetails, emailEvent, emailParagraph, emailFlyer, em
 import { createSecureToken, hashToken } from "./attendee-auth";
 import { findPrimaryHost } from "./event-experience";
 
-type DeliveryKind = "owner_approval_request" | "host_application_decision" | "host_application_verify" | "team_invitation" | "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
+type DeliveryKind = "yorkeway_welcome" | "owner_approval_request" | "host_application_decision" | "host_application_verify" | "team_invitation" | "organizer_report" | "organizer_invitation" | "organizer_signup" | "registration_access" | "registration_update" | "event_announcement" | "payment_confirmation" | "ticket_recovery" | "ticket_transfer" | "waitlist_offer" | "payment_recovery" | "support_update" | "operational_alert";
 
 type OrderForEmail = {
   paymentProvider?: string;
@@ -182,6 +182,10 @@ export async function retryFailedDeliveries(env: Cloudflare.Env, limit = 20, sco
       if (item.kind === "ticket_transfer") accessValid = Boolean(await env.DB.prepare("SELECT 1 FROM ticket_transfers WHERE id=? AND status='pending' AND expires_at>?").bind(item.grantId, now).first());
       if (item.kind === "waitlist_offer") accessValid = Boolean(await env.DB.prepare("SELECT 1 FROM event_waitlist_entries WHERE id=? AND status='offered' AND offer_expires_at>?").bind(item.grantId, now).first());
       if (item.kind === "registration_access") accessValid = Boolean(await env.DB.prepare("SELECT 1 FROM registration_access_grants WHERE token_hash=? AND claimed_session_id IS NULL AND expires_at>?").bind(payload.idempotencyKey.split('/')[1] ?? '', now).first());
+      if (item.kind === "yorkeway_welcome") accessValid = now < '2027-01-01T00:00:00.000Z' && Boolean(await env.DB.prepare(`SELECT 1 FROM yorkeway_early_access s
+        WHERE s.id=? AND s.status='subscribed'
+          AND NOT EXISTS (SELECT 1 FROM marketing_contacts m WHERE m.email=s.email AND m.unsubscribed=1) AND NOT EXISTS (SELECT 1 FROM delivery_events d WHERE LOWER(TRIM(d.recipient))=s.email AND (d.status IN ('bounced','complained') OR (d.status='suppressed' AND d.provider_event_at IS NOT NULL)))`)
+        .bind(payload.idempotencyKey.split('/')[1] ?? '').first());
       if (!accessValid) {
         await env.DB.prepare("UPDATE delivery_events SET status='suppressed',next_attempt_at=NULL,failure_reason='The access link expired or was cancelled before delivery.',updated_at=? WHERE id=?").bind(now,item.id).run();
         continue;

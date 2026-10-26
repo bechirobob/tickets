@@ -11,7 +11,7 @@ import { useHeaderPanel } from './use-header-panel';
 import { useTopPanelPosition } from './use-top-panel-position';
 import './room-shortcut.css';
 
-const hiddenPrefixes = ["/admin", "/checkout", "/organizer", "/payment", "/room", "/scan", "/rsvp/"];
+const hiddenPrefixes = ["/the-yorke-way", "/admin", "/checkout", "/organizer", "/payment", "/room", "/scan", "/rsvp/"];
 const dockMediaQuery = '(max-width: 700px)';
 const dockIsVisible = () => window.matchMedia(dockMediaQuery).matches;
 const serverDockIsVisible = () => false;

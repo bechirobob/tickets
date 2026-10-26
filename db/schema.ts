@@ -1348,3 +1348,11 @@ export const eventHostPassInvitations = sqliteTable('event_host_pass_invitations
  createdBy:text('created_by').notNull(),createdAt:text('created_at').notNull(),reused:integer('reused').notNull(),state:text('state').notNull().default('provisioned'),
  tokenHash:text('token_hash').unique(),expiresAt:text('expires_at'),usedAt:text('used_at'),claimedSessionId:text('claimed_session_id'),deliveryId:text('delivery_id'),
 },t=>[uniqueIndex('event_host_pass_scope_unique').on(t.eventSlug,t.hostAccountId)]);
+
+// Standalone, campaign-specific early access. No attendee account is created.
+export const yorkewayEarlyAccess = sqliteTable("yorkeway_early_access", {
+  email: text("email").primaryKey(), id: text("id").notNull().unique(), guestName: text("guest_name").notNull(),
+  status: text("status").notNull().default("subscribed"),
+  consentVersion: text("consent_version").notNull(), consentText: text("consent_text").notNull(),
+  consentedAt: text("consented_at").notNull(), withdrawalHash: text("withdrawal_hash").notNull().unique(), withdrawnAt: text("withdrawn_at"),
+});
