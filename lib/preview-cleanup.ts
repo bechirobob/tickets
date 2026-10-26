@@ -30,6 +30,7 @@ const platformRelationship=(email:string,t:Targets)=>`(
  OR EXISTS (SELECT 1 FROM platform_announcement_choices pc WHERE pc.email=${email} AND NOT ${previewChoice('pc',t)})
 )`;
 function condition(table:string,columns:string[],t:Targets) {
+ if(table==='yorkeway_early_access'||table==='yorkeway_signup_grants')return '0';
  if(platformTables.includes(table)&&table!=='platform_announcement_choices')return '0';
  if(table==='platform_announcement_choices')return `(${previewChoice(table,t)} AND NOT ${platformRelationship(`${table}.email`,t)})`;
  const clauses=columns.filter(c=>t[c]?.length).map(c=>inside(c,t[c]));

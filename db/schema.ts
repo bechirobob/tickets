@@ -1348,3 +1348,17 @@ export const eventHostPassInvitations = sqliteTable('event_host_pass_invitations
  createdBy:text('created_by').notNull(),createdAt:text('created_at').notNull(),reused:integer('reused').notNull(),state:text('state').notNull().default('provisioned'),
  tokenHash:text('token_hash').unique(),expiresAt:text('expires_at'),usedAt:text('used_at'),claimedSessionId:text('claimed_session_id'),deliveryId:text('delivery_id'),
 },t=>[uniqueIndex('event_host_pass_scope_unique').on(t.eventSlug,t.hostAccountId)]);
+
+// Standalone, campaign-specific early access. No attendee account is created.
+export const yorkewayEarlyAccess = sqliteTable("yorkeway_early_access", {
+  email: text("email").primaryKey(), guestName: text("guest_name").notNull(),
+  status: text("status").notNull().default("pending"), revision: integer("revision").notNull().default(1),
+  consentVersion: text("consent_version").notNull(), consentText: text("consent_text").notNull(),
+  consentedAt: text("consented_at").notNull(), verifiedAt: text("verified_at"), withdrawnAt: text("withdrawn_at"), confirmedGrant: text("confirmed_grant"),
+});
+export const yorkewaySignupGrants = sqliteTable("yorkeway_signup_grants", {
+  id: text("id").primaryKey(), email: text("email").notNull().references(() => yorkewayEarlyAccess.email),
+  guestName: text("guest_name").notNull(), subscriptionRevision: integer("subscription_revision").notNull(),
+  tokenHash: text("token_hash").notNull().unique(), withdrawalHash: text("withdrawal_hash").notNull().unique(),
+  createdAt: text("created_at").notNull(), expiresAt: text("expires_at").notNull(), consumedAt: text("consumed_at"),
+});
