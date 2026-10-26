@@ -30,11 +30,9 @@ export default function YorkeWayPage() {
         <h1 id="yorke-title">Your year-end<br />plans called.<br /><span>They said <strong>Kofi Bills.</strong></span></h1>
         <p className="yorke-description">Get early access to Kofi Bills’ year-end events. Give the group chat something to work with.</p>
       </section>
-      <figure className="yorke-logo-stage">
-        <div className="yorke-logo-stage__top"><span>The Yorke Way</span><span>Year-end 2026</span></div>
-        <div className="yorke-logo-stage__art"><Image src="/hosts/the-yorke-way.svg" alt="The Yorke Way metallic logo" width={771} height={771} sizes="(max-width: 700px) 72vw, 40vw" priority unoptimized /></div>
-        <figcaption><span>The year’s not over.<br /><strong>Act accordingly.</strong></span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" /></svg></figcaption>
-      </figure>
+      <div className="yorke-logo-stage">
+        <Image src="/hosts/the-yorke-way.svg" alt="The Yorke Way metallic logo" width={771} height={771} sizes="(max-width: 700px) 72vw, 40vw" priority unoptimized />
+      </div>
       <section className="yorke-form-section" aria-label="Early-access signup">
         <YorkeSignup />
         <p className="yorke-fine-print">Early-access updates only. Signing up isn’t a ticket or guarantee of entry. <a href="/privacy">Privacy policy</a></p>

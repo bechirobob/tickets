@@ -146,11 +146,17 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Email ${name}: overflow`);
     await page.screenshot({ path: path.join(output, `welcome-email-${name}.png`), fullPage: true });
   }
-  await page.route('**/*', route => route.request().resourceType() === 'image' ? route.abort() : route.fallback());
-  await page.setContent(inertEmail, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: 'You’re on the list. Good call.' }).waitFor();
-  assert.equal(await page.getByText('The Yorke Way', { exact: true }).isVisible(), true, 'Email brand remains readable with images blocked');
-  await page.screenshot({ path: path.join(output, 'welcome-email-images-blocked-mobile.png'), fullPage: true });
+  // A fresh context avoids reusing the already-decoded logo from the normal render.
+  const blockedContext = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  await blockedContext.route('**/*', route => route.abort());
+  const blockedPage = await blockedContext.newPage();
+  await blockedPage.setContent(inertEmail, { waitUntil: 'networkidle' });
+  await blockedPage.getByRole('heading', { name: 'You’re on the list. Good call.' }).waitFor();
+  assert.equal(await blockedPage.getByText('The Yorke Way', { exact: true }).isVisible(), true, 'Email brand remains readable with images blocked');
+  const blockedLogo = await blockedPage.locator('img[src*="the-yorke-way-email.png"]').evaluate(image => ({ complete: image.complete, naturalWidth: image.naturalWidth }));
+  assert.deepEqual(blockedLogo, { complete: true, naturalWidth: 0 }, 'Blocked-image preview must not reuse a cached logo');
+  await blockedPage.screenshot({ path: path.join(output, 'welcome-email-images-blocked-mobile.png'), fullPage: true });
+  await blockedContext.close();
   checks.push('Actual welcome-email renderer: host logo and alt/dimensions; desktop/mobile and blocked-image snapshots; inert links; no delivery');
   assert.deepEqual(errors, [], 'Browser runtime errors');
   await writeFile(path.join(output, 'report.json'), JSON.stringify({ sourceRevision: process.env.PREVIEW_SOURCE_SHA ?? null, localOnly: true, apiResponses: 'mocked', databaseUsed: false, emailSent: false, checks, browserErrors: errors }, null, 2));

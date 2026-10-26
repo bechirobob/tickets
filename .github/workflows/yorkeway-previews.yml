@@ -37,7 +37,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit
       - name: Install isolated rendering browser
-        run: npx playwright install --with-deps chromium
+        # Standard Ubuntu runner already supplies Chromium runtime libraries.
+        # Avoid optional international-font apt downloads in this English-only preview.
+        run: npx playwright install chromium --only-shell
       - name: Render synthetic page and welcome email without provider traffic
         run: node scripts/yorkeway-previews.mjs
       - name: Retain visual review screenshots
