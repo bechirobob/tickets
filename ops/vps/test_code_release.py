@@ -1163,6 +1163,49 @@ ROOM_MAIL_VPS_TRANSPORT_OVERLAY = {
     '.github/workflows/tickets-room-helper-transport.yml': ('100644', 'eb6275216ab5c32e47862977d451bbd4da4d18a2'),
     'tests/test_room_helper_transport.py': ('100644', 'a7c2934eaf8313812664f94b15a2323d4059ad6c'),
 }
+# Exact test-only overlay for reviewed Node build pins; production admission,
+# historical families, permissions and runtime behavior remain unchanged.
+NODE_SECURITY_TEST_OVERLAY = {'.github/workflows/android-release.yml': ('100644', 'ff22317244e60ff2a14b1f5144d26763cd718e97'),
+ '.github/workflows/booking-consent-previews.yml': ('100644', '5ebf94ff4d93e263bb8c43f2c1074dc785bd3bc5'),
+ '.github/workflows/browser-audit.yml': ('100644', '5da482ecf6c528672b4eb8cd1db13b09eee5ac34'),
+ '.github/workflows/browser-followup.yml': ('100644', '3ccfe2fbf5eef9d453d69db33971d6df35f846f3'),
+ '.github/workflows/candidate-checks.yml': ('100644', 'c45d7dae42734fbbc8919435c16473115bf8f06c'),
+ '.github/workflows/candidate-parallel-checks.yml': ('100644', '19c44c8a0f569c1ae4ebf4e694987946fded2fd0'),
+ '.github/workflows/cinco-confirmation-release-20261019.yml': ('100644', '74de2fb8f81cd6b307726f2a3999ad1189a2656f'),
+ '.github/workflows/customer-email-previews.yml': ('100644', '80f0f8c13b1849701aa6dcab4275904fbeef2732'),
+ '.github/workflows/d1-recovery-rehearsal.yml': ('100644', '9dad97c137e0c3796513f57d2c2681e1d4af7d5e'),
+ '.github/workflows/dependency-security.yml': ('100644', '6007258c74d03c80bb4610640e15f1479740d856'),
+ '.github/workflows/deploy.yml': ('100644', 'b18eb81d65fd5a93fabebe7ae98c6cf99067076e'),
+ '.github/workflows/event-capacity.yml': ('100644', '50f9ec58b466ba4b679da8acf891016e68c43579'),
+ '.github/workflows/fallback-infrastructure.yml': ('100644', 'd958b6fa9e7764917791ef3093db657ce15985ca'),
+ '.github/workflows/full-audit-capacity.yml': ('100644', '507041f4c51a58f32820adf4d0fccc3a67627cc4'),
+ '.github/workflows/handover-preflight.yml': ('100644', 'a26ce0eaad2984caf9a137b2ea33c64a7595cbf1'),
+ '.github/workflows/handover-return-diagnose.yml': ('100644', 'a2114b798f788379deed067a8ca531420119df20'),
+ '.github/workflows/handover-return-prepare.yml': ('100644', '4cfcb4543d405f61f37d917b6c8baeb373d2eb24'),
+ '.github/workflows/handover-return-verify.yml': ('100644', '2077acba8c886bfc1ed92ad9afd0ca02cba1a964'),
+ '.github/workflows/handover-tools.yml': ('100644', 'e68a712931374eb7bdd318bb631469d3011f6b22'),
+ '.github/workflows/hosted-capacity.yml': ('100644', '1ba1ce79dfcffe1bd78d367197d385f9ae57a3a6'),
+ '.github/workflows/input-modality-checks.yml': ('100644', '0b3f912c08daf5fc9fe6eb626c16b8b4f0467c58'),
+ '.github/workflows/ios-release.yml': ('100644', '45b6e424d350e0a7a991d95ad61fffc8667c0774'),
+ '.github/workflows/iphone-layouts.yml': ('100644', 'b596a2b98a2c174523de26c2757f0af6585d0094'),
+ '.github/workflows/marketing-connection.yml': ('100644', '06dd5680dc6790d6464636d3e6436caff67f9f77'),
+ '.github/workflows/native-apps.yml': ('100644', 'd95f31938c1dbb0ce8e6818a3ceb7eecd0852fac'),
+ '.github/workflows/preview-data-inventory.yml': ('100644', '300d1707f12bb4c8c71be0dab813d140b0b6334d'),
+ '.github/workflows/puro-access-release-20261019.yml': ('100644', 'bbb319a7598fbce4cd99d3344b37893f75a3e5bf'),
+ '.github/workflows/tickets-code-release.yml': ('100644', '45ba3acf065c330da75f67d1f39d98e1fe300ce9'),
+ '.github/workflows/tickets-room-helper-transport.yml': ('100644', '216b30db72dff72c66fdfaea7fa123cf1ccd4a23'),
+ '.github/workflows/vps-runtime.yml': ('100644', '06bdc48477eb0977ed471e549630bd6070758a95'),
+ 'ops/vps/test_first_host_recovery.py': ('100644', '9f9579d7ffa30b54249a5126b85f60032c9f7d05'),
+ 'ops/vps/test_runtime_workflow_contract.py': ('100644', 'c9620eeb200133ee94c76accc5328ecce28b4b75')}
+
+def historical_node_workflow(name, raw):
+    expected = NODE_SECURITY_TEST_OVERLAY.get(name)
+    digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+    if expected and digest(raw) == expected[1]:
+        return raw.replace(b'node-version: 24.22.1\n', b'node-version: 24.21.0\n').replace(
+            b'node-version: 22.23.4\n', b'node-version: 22\n')
+    return raw
+
 ROOM_MAIL_VPS_TEST_FILE = Path(__file__).resolve()
 
 def room_mail_vps_source_family(root):
@@ -1178,6 +1221,11 @@ def room_mail_vps_source_family(root):
                          or digest(operator.read_bytes()) != ROOM_MAIL_VPS_OPERATOR_BLOB):
         return None
     full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    # Bind to the actual reviewed baseline, never choose policy from candidate bytes.
+    # Synthetic historical fixtures replace the baseline and retain their own pins.
+    node_security = (release.ROOM_MAIL_VPS_RELEASE_BASELINE == '885bd1b2d97ff687fe884c86314ae9b368d4abff'
+                     and release.ROOM_MAIL_VPS_RELEASE_BASE_TREE == '187c9e53e052cc70062065ed7388f7786a17b9ca'
+                     and ROOM_MAIL_VPS_OPERATOR_BLOB == '3ce9952c547073a76b5bfb43a8996d1c9c65af1e')
     if full:
         try:
             baseline = release.ROOM_MAIL_VPS_RELEASE_BASELINE
@@ -1209,6 +1257,8 @@ def room_mail_vps_source_family(root):
             # Existing index, mode and byte checks below validate both additions.
             if tracked & ROOM_MAIL_VPS_TRANSPORT_OVERLAY.keys():
                 manifest.update(ROOM_MAIL_VPS_TRANSPORT_OVERLAY)
+            if node_security:
+                manifest.update(NODE_SECURITY_TEST_OVERLAY)
             if tracked != set(manifest) or untracked:
                 raise AssertionError('Room VPS mail full inventory differs from complete tracked C/P family')
             # A restored worktree cannot conceal staged application changes.
@@ -1227,6 +1277,8 @@ def room_mail_vps_source_family(root):
             raise AssertionError('Room VPS mail family requires its independently pinned baseline') from exc
     else:
         manifest = dict(ROOM_MAIL_VPS_STAGED_BASE)
+        if node_security:
+            manifest.update({name: item for name, item in NODE_SECURITY_TEST_OVERLAY.items() if name in manifest})
     # Only this test file cannot self-pin; production binds both controls to C.
     manifest['ops/vps/code-release.py'] = ('100644', ROOM_MAIL_VPS_OPERATOR_BLOB)
     manifest['ops/vps/test_code_release.py'] = ('100644', None)
@@ -11575,8 +11627,9 @@ class FirstHostConfigurationTests(unittest.TestCase):
             name = '.github/workflows/tickets-code-release.yml'
             data = (Path(__file__).resolve().parents[2] / name).read_bytes()
             digest = lambda raw: release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
-            self.assertEqual(digest(data), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name])
             self.assertEqual(family[name], digest(data))
+            data = historical_node_workflow(name, data)
+            self.assertEqual(digest(data), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name])
             archive = b'git archive "$OPERATOR_SHA" ops/vps ops/email/mailer.py '
             self.assertEqual(data.count(archive), 1)
             historical = data.replace(archive, b'git archive "$OPERATOR_SHA" ops/vps ', 1)
@@ -12445,7 +12498,7 @@ class RoomMailVpsPrerequisiteTests(unittest.TestCase):
 
     def test_historical_activation_compatibility_rejects_permission_command_and_family_drift(self):
         name = '.github/workflows/tickets-code-release.yml'
-        original = (Path(__file__).resolve().parents[2] / name).read_bytes()
+        original = historical_node_workflow(name, (Path(__file__).resolve().parents[2] / name).read_bytes())
         family = {'ops/vps/code-release.py': ROOM_MAIL_VPS_OPERATOR_BLOB,
                   name: release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name]}
         mutations = (original.replace(b'contents: read', b'contents: write', 1),
@@ -12476,7 +12529,7 @@ class RoomMailVpsPrerequisiteTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         for name, revision in (('.github/workflows/tickets-release-operator-checks.yml', 'HEAD'),
                                ('.github/workflows/tickets-code-release.yml', '"$OPERATOR_SHA"')):
-            raw = (root / name).read_bytes()
+            raw = historical_node_workflow(name, (root / name).read_bytes())
             anchor = ('git archive ' + revision + ' ops/vps ops/email/mailer.py ').encode()
             self.assertEqual(raw.count(anchor), 1)
             before = raw.replace(anchor, ('git archive ' + revision + ' ops/vps ').encode(), 1)
