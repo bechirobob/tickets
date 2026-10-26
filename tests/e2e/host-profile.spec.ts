@@ -30,6 +30,12 @@ test('confirmed October RSVP respects its opening and avoids paid checkout',asyn
   const event=catalogue.events.find((event:{slug:string})=>event.slug==='sun-chasers-labadi');
   expect(event.startsAt).toBe('2026-10-25T14:00:00.000Z');
   expect(event.scheduleStatus).toBe('confirmed');
+  // The historical migration has three states, not only unopened/open. Use
+  // the server's observation time so runner clock skew cannot reopen the event.
+  const observedAt=Date.parse(catalogue.updatedAt), opensAt=Date.parse('2026-10-12T00:00:00.000Z');
+  expect(Number.isFinite(observedAt)).toBe(true);
+  expect(event.registrationOpen).toBe(observedAt>=opensAt && observedAt<Date.parse(event.startsAt));
+  const unavailable=observedAt<opensAt?'RSVP opens 12 October, 12 AM GMT. See you here.':'The guest list is closed for this one.';
   await page.goto('/event/sun-chasers-labadi');
   await expect(page.locator('.event-host')).toContainText('Kofi Bills');
   await expect(page.locator('.event-host')).toContainText('Verified host');
@@ -39,13 +45,16 @@ test('confirmed October RSVP respects its opening and avoids paid checkout',asyn
     await page.getByRole('button',{name:/^(Request an )?RSVP$/}).click();
     await expect(page.getByLabel('Your name')).toBeVisible();
   }else{
-    await expect(page.getByText('RSVP opens 12 October, 12 AM GMT. See you here.')).toBeVisible();
+    await expect(page.getByText(unavailable,{exact:true})).toBeVisible();
     await expect(page.getByLabel('Your name')).toHaveCount(0);
   }
   await expect(page.getByRole('link',{name:/Get tickets/})).toHaveCount(0);
   await page.goto('/rsvp/sun-chasers-labadi');
   if(event.registrationOpen)await expect(page.getByLabel('Your name')).toBeVisible();
-  else await expect(page.getByRole('heading',{name:'RSVP opens 12 October, 12 AM GMT. See you here.'})).toBeVisible();
+  else {
+    await expect(page.getByRole('heading',{name:unavailable,exact:true})).toBeVisible();
+    await expect(page.getByLabel('Your name')).toHaveCount(0);
+  }
   await expect(page.locator('.rsvp-signup__facts')).toContainText('Sunday, 25 October 2026');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({path:`test-results/october-rsvp-${test.info().project.name}.png`,fullPage:true});

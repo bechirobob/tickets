@@ -662,6 +662,19 @@ test("fees and named staff stay inside one compact, role-bound operations system
   assert.match(css, /\.role-boundary\s*\{/u);
 });
 
+test("every role-scoped workspace link has an exhaustive renderable icon mapping", async () => {
+  const [chrome, roles] = await Promise.all([
+    readFile(new URL("../app/workspace-chrome.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/staff-roles.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(chrome, /Record<\(typeof STAFF_WORKSPACE_LINKS\)\[number\]\["href"\], typeof Menu>/u);
+  const links = roles.split("export const STAFF_WORKSPACE_LINKS = [")[1].split("] as const")[0];
+  const iconMap = chrome.split("const icons:")[1].split("};")[0];
+  for (const [, href] of links.matchAll(/href: "([^"]+)"/gu)) {
+    assert.ok(iconMap.includes(`"${href}":`), `Missing workspace icon for ${href}`);
+  }
+});
+
 test("every private workspace shares role-scoped navigation and collapsible tools", async () => {
   const [chrome,navigation,account,scanner,organiser,css] = await Promise.all([
     readFile(new URL("../app/workspace-chrome.tsx",import.meta.url),"utf8"),
