@@ -1314,7 +1314,7 @@ def room_mail_vps_source_family(root):
 
 # Complete Yorkeway C/P test inventory; independent production admission is
 # defined in code-release.py. Only this executing test file cannot self-pin.
-YORKEWAY_OPERATOR_BLOB = '832f15a21ecab15ee0a53be3962054c070032c48'
+YORKEWAY_OPERATOR_BLOB = '62ed438a1ca9f7229a57fbc48228fa22f51068e7'
 YORKEWAY_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'c45d7dae42734fbbc8919435c16473115bf8f06c'),

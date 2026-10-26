@@ -2981,6 +2981,7 @@ YORKEWAY_CONTROL_BLOBS = {'.github/workflows/android-release.yml': 'ff22317244e6
  'ops/vps/test_runtime_workflow_contract.py': 'c9620eeb200133ee94c76accc5328ecce28b4b75',
  'ops/vps/test_yorkeway_release.py': '79548763aa68c226943f3f20908f754154e0e196',
  'scripts/prepare-registration-browser-fixture.mjs': '5d49aebfee687434c862995af02e644e21bf419f',
+ 'tests/e2e/event-details.spec.ts': '87403b730d77d31ad9eec872a5ff237ccd290541',
  'tests/e2e/host-profile.spec.ts': 'c2639565bdafaa37beb2633e6432a95a81cabe1f',
  'tests/test_room_helper_transport.py': 'b9c168fbf7392e1f0de926e204d7077c31a43659'}
 YORKEWAY_SHARED_FILES = {'scripts/prepare-registration-browser-fixture.mjs', 'tests/e2e/host-profile.spec.ts'}
@@ -3063,6 +3064,7 @@ def reviewed_yorkeway_application_blobs(expected, source):
  'ops/vps/test_runtime_workflow_contract.py',
  'ops/vps/test_yorkeway_release.py',
  'scripts/prepare-registration-browser-fixture.mjs',
+ 'tests/e2e/event-details.spec.ts',
  'tests/e2e/host-profile.spec.ts',
  'tests/test_room_helper_transport.py'}
             and not controls & (set(application) | set(prerequisites))
