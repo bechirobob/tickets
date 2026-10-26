@@ -7,7 +7,9 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import selectors
 import shutil
+import shlex
 import signal
 import sqlite3
 import stat
@@ -22,6 +24,7 @@ STATE = Path('/var/lib/becore-tickets')
 HOME = Path('/srv/becore-tickets')
 MAX_RELEASE_ENTRIES = 128
 SYSTEMD_UNITS = Path('/etc/systemd/system')
+PROC = Path('/proc')
 # Identical in reviewed active 4ec84f8645e237596129669205565eb214b6e09e and
 # candidate 531ff7afb6035cc691a6428c86c4ee45b06dc14a. Never load expected hashes
 # from the host being attested.
@@ -100,6 +103,140 @@ def resend_domain_summary(values):
         result['http_status'] = error.code
     except Exception:
         result['reason'] = 'metadata_unavailable'
+    return result
+
+
+
+CA_FLAGS = ('--use-bundled-ca', '--use-openssl-ca', '--use-system-ca',
+            '--no-use-bundled-ca', '--no-use-openssl-ca', '--no-use-system-ca')
+CA_ENV_NAMES = ('NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+                'NODE_USE_SYSTEM_CA', 'NODE_OPTIONS', 'OPENSSL_CONF')
+NODE_VERSION_TIMEOUT = 5
+MAX_NODE_VERSION_BYTES = 64
+
+
+def node_version(binary):
+    """Fixed non-root probe, bounded by both elapsed time and captured bytes."""
+    process = subprocess.Popen(
+        ['/usr/sbin/runuser', '-u', 'becore-tickets', '--', str(binary), '--version'],
+        env={'PATH': '/usr/bin:/bin'}, cwd='/', stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+    completed = False
+    try:
+        deadline = time.monotonic() + NODE_VERSION_TIMEOUT
+        output = bytearray()
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not selector.select(remaining):
+                    raise TimeoutError('Node version probe timed out')
+                chunk = os.read(process.stdout.fileno(), MAX_NODE_VERSION_BYTES + 1 - len(output))
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > MAX_NODE_VERSION_BYTES:
+                    raise ValueError('Node version output exceeded bound')
+        returncode = process.wait(timeout=max(0, deadline - time.monotonic()))
+        completed = True
+        if returncode != 0:
+            raise ValueError('Node version probe failed')
+        return bytes(output)
+    finally:
+        try:
+            if not completed:
+                # Terminate the wrapper and its probe child, never the live service.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait(timeout=5)
+        finally:
+            process.stdout.close()
+
+
+def ca_selection_summary(env, argv, server):
+    """Only fixed flag names and presence bits escape; never paths or option values."""
+    present = {name: bool(env.get(name.encode())) for name in CA_ENV_NAMES}
+    result = {'environment_present': present, 'application_ca_overrides_verified': False,
+              'certificate_contents_read': False, 'selection': 'unknown'}
+    try:
+        assert len(argv) <= 131072 and len(env.get(b'NODE_OPTIONS', b'')) <= 32768
+        args = argv.decode('utf-8').rstrip('\0').split('\0')
+        # Only interpret Node arguments before the exact installed entry point.
+        assert args.count(str(server)) == 1
+        options = args[1:args.index(str(server))] + shlex.split(env.get(b'NODE_OPTIONS', b'').decode('utf-8'))
+        option_names = [option.split('=', 1)[0].replace('_', '-') for option in options]
+        selected = {flag: flag in option_names for flag in CA_FLAGS}
+        result.update(flags_present=selected, options_parseable=True,
+                      unclassified_option_count=sum(option not in CA_FLAGS for option in option_names))
+        result['selection'] = ('bundled_default_indicated' if not options and not any(present.values()) else 'explicit_configuration_present')
+    except (AssertionError, UnicodeError, ValueError):
+        result['options_parseable'] = False
+    return result
+
+
+def runtime_metadata(active, pid):
+    """Observe the running executable, not an OS Node or release manifest claim."""
+    result = {'read_only': True, 'status': 'unverified', 'snapshot_atomic': False,
+              'application_ca_overrides_verified': False}
+    binary = active / 'bin/node'
+    proc = PROC / pid
+    try:
+        assert active.parent == HOME / 'releases' and re.fullmatch('[a-f0-9]{40}', active.name)
+        # Reject replaceable path components before invoking even --version.
+        for path in (HOME, HOME / 'releases', active, active / 'bin'):
+            metadata = path.lstat()
+            assert stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == 0 and not metadata.st_mode & 0o022
+        with contextlib.ExitStack() as stack:
+            fd = os.open(binary, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            stack.callback(os.close, fd)
+            before = os.fstat(fd)
+            identity = lambda m: (m.st_dev, m.st_ino, m.st_size, m.st_mtime_ns, m.st_ctime_ns)
+            assert stat.S_ISREG(before.st_mode) and before.st_uid == 0 and not before.st_mode & 0o7022
+            assert 0 < before.st_size <= 268435456 and before.st_mode & 0o111
+            relation = 'main_process'
+            if identity((proc / 'exe').stat()) != identity(before):
+                # systemd may track the fixed flock wrapper instead of its Node child.
+                with (proc / 'task' / pid / 'children').open('rb') as children:
+                    raw = children.read(4097)
+                assert len(raw) <= 4096
+                child_ids = raw.decode('ascii').split()
+                assert len(child_ids) <= 16 and all(re.fullmatch('[1-9][0-9]*', child) for child in child_ids)
+                matches = [PROC / child for child in child_ids
+                           if identity((PROC / child / 'exe').stat()) == identity(before)]
+                assert len(matches) == 1
+                proc = matches[0]
+                relation = 'direct_child'
+            with (proc / 'environ').open('rb') as environment:
+                raw_env = environment.read(131073)
+            assert len(raw_env) <= 131072
+            process_env = dict(item.split(b'=', 1) for item in raw_env.split(b'\0') if b'=' in item)
+            digest = hashlib.sha256()
+            total = 0
+            while True:
+                chunk = os.read(fd, 1048576)
+                if not chunk:
+                    break
+                total += len(chunk)
+                assert total <= before.st_size
+                digest.update(chunk)
+            assert total == before.st_size
+            # No inherited NODE_OPTIONS/preload/CA credentials; never execute as root.
+            version = node_version(binary).decode('ascii').strip()
+            assert re.fullmatch(r'v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}', version)
+            with (proc / 'cmdline').open('rb') as command:
+                argv = command.read(131073)
+            assert len(argv) <= 131072
+            assert all(identity(m) == identity(before) for m in
+                       (os.fstat(fd), binary.lstat(), (proc / 'exe').stat()))
+            result.update(status='observed', version=version, binary_sha256=digest.hexdigest(),
+                          binary_size_bytes=total, active_process_executable_matches=True,
+                          process_relation=relation,
+                          ca=ca_selection_summary(process_env, argv, active / 'server.mjs'))
+    except Exception:
+        # No exception text, arbitrary process arguments, paths or env values escape.
+        result['reason'] = 'runtime_observation_unavailable'
     return result
 
 
@@ -478,6 +615,7 @@ def main():
               'revision': active.name, 'service_active': True, 'restarts': int(props['NRestarts']),
               'memory_bytes': int(props['MemoryCurrent']), 'free_disk_bytes': shutil.disk_usage(HOME).free,
               'configuration': configuration_summary(effective),
+              'runtime': runtime_metadata(active, pid),
               'backup_key_private_present': False}
     key = Path('/etc/becore-tickets/backup.key').lstat()
     output['backup_key_private_present'] = stat.S_ISREG(key.st_mode) and key.st_size == 32 and not key.st_mode & 0o077
