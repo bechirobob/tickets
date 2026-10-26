@@ -83,6 +83,18 @@ describe('RSVP admission and interest registrations', () => {
     vi.useRealTimers();
     await env.DB.prepare('UPDATE curated_event_records SET sales_open_at=NULL WHERE slug=?').bind(slug).run();
   });
+  it('closes dated RSVP at its start and keeps only genuinely undated interest open', async () => {
+    const settings = { ...(await registrationSettings(env.DB, slug))!, opensAt: null, closesAt: null,
+      startsAt: '2026-10-25T14:00:00.000Z', endsAt: '2026-10-25T22:00:00.000Z' };
+    vi.useFakeTimers({toFake:['Date']});
+    vi.setSystemTime(new Date('2026-10-25T13:59:59.999Z'));
+    expect(registrationsOpen(settings)).toBe(true);
+    vi.setSystemTime(new Date(settings.startsAt));
+    expect(registrationsOpen(settings)).toBe(false);
+    vi.setSystemTime(new Date('2026-10-26T00:00:00.000Z'));
+    expect(registrationsOpen({...settings,mode:'interest'})).toBe(false);
+    expect(registrationsOpen({...settings,mode:'interest',scheduleStatus:'coming_soon'})).toBe(true);
+  });
   it('verifies inbox ownership before reserving a group and issues real, zero-cost QR passes', async () => {
     const pending = await access('rsvp-group@example.com', 2);
     expect((await readRegistration(env.DB, pending.id))?.status).toBe('unverified');

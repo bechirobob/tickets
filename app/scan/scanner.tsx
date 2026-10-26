@@ -43,6 +43,7 @@ export default function Scanner({ actor, role, events, initialEvent, access }: {
   const [connection, setConnection] = useState({ event: '', reachable: false, lastContact: 0, lastSync: 0 });
   const [clock, setClock] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [refreshingEvent, setRefreshingEvent] = useState('');
   const [storageError, setStorageError] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [reviews, setReviews] = useState<GateReview[]>([]);
@@ -112,6 +113,7 @@ export default function Scanner({ actor, role, events, initialEvent, access }: {
   const loadEventState = useCallback(async () => {
     if (!eventSlug || refreshBusy.current === eventSlug) return;
     refreshBusy.current = eventSlug;
+    setRefreshingEvent(eventSlug);
     try {
       const response = await fetch(`/api/admin/check-in?eventSlug=${encodeURIComponent(eventSlug)}&manifest=1`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
       if (eventSlug !== currentEvent.current) return;
@@ -137,7 +139,12 @@ export default function Scanner({ actor, role, events, initialEvent, access }: {
       markContact(eventSlug, false);
       setManifest(readGateManifest(window.localStorage, access, eventSlug));
       setSyncMessage('Cannot reach the door service. Your saved entries remain on this device.');
-    } finally { if (refreshBusy.current === eventSlug) refreshBusy.current = ''; }
+    } finally {
+      if (refreshBusy.current === eventSlug) {
+        refreshBusy.current = '';
+        setRefreshingEvent(current => current === eventSlug ? '' : current);
+      }
+    }
   }, [access, denyGateAccess, eventSlug, heartbeat, markContact]);
 
   const syncQueue = useCallback(async () => {
@@ -320,6 +327,6 @@ export default function Scanner({ actor, role, events, initialEvent, access }: {
     <section className="manual-entry"><div><Keyboard size={19} /><span><strong>Enter ticket code</strong><small>Use when the camera cannot read the QR</small></span></div><label><Search size={17} /><input aria-label="Ticket code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="BCT-XXXX-XXXX-XXXX-XXXX" /><button onClick={() => void checkTicket(code)}>Check</button></label></section>
     <section className="gate-search"><header><Search size={18} /><span><strong>Find a guest or purchase</strong><small>Name, email, phone or payment reference</small></span></header><form onSubmit={(event) => { event.preventDefault(); void search(); }}><input aria-label="Find a guest or purchase" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search the door list" disabled={!online} /><button disabled={!online || searching || searchQuery.trim().length < 2}>{searching ? <Loader2 className="spin" size={14} /> : "Find"}</button></form>{matches.length ? <div>{matches.map((match) => <article key={match.ticketId}><span><b>{match.attendeeName ?? match.customerName ?? "Guest"}</b><small>{match.reference} · {match.ticketType?.replaceAll("-", " ")}</small><small>{match.customerEmail} · {match.customerPhone}</small></span><i className={match.status}>{match.status?.replaceAll("_", " ")}</i></article>)}</div> : null}</section>
     <DoorDesk key={eventSlug} eventSlug={eventSlug} />
-    <footer className="scanner-stats"><span><Users size={17} /><b>{stats.checkedIn}</b> admitted</span><span><b>{Math.max(0, stats.issued - stats.checkedIn)}</b> remaining</span><span><b>{stats.issued}</b> active tickets</span><button type="button" disabled={syncing} onClick={() => { void loadEventState(); void syncQueue(); }}><RefreshCw size={14} /> Refresh</button>{stats.tiers.map((tier) => <span key={tier.ticketType}><b>{tier.checkedIn ?? 0}/{tier.issued}</b> {tier.ticketType.replaceAll("-", " ")}</span>)}</footer>
+    <footer className="scanner-stats"><span><Users size={17} /><b>{stats.checkedIn}</b> admitted</span><span><b>{Math.max(0, stats.issued - stats.checkedIn)}</b> remaining</span><span><b>{stats.issued}</b> active tickets</span><button type="button" disabled={syncing || refreshingEvent === eventSlug} aria-busy={refreshingEvent === eventSlug} onClick={() => { void loadEventState(); void syncQueue(); }}><RefreshCw size={14} /> Refresh</button>{stats.tiers.map((tier) => <span key={tier.ticketType}><b>{tier.checkedIn ?? 0}/{tier.issued}</b> {tier.ticketType.replaceAll("-", " ")}</span>)}</footer>
   </section></main>;
 }

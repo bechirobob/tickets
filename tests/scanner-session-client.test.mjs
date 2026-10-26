@@ -65,7 +65,7 @@ for (const scenario of ['stale storage', 'storage failure', 'newer scanner']) te
     normalizeToken:()=>token,tokenHash:()=>new Promise(resolve=>{finishHash=resolve;}),
     readGateList:()=>[],QUEUE_KEY:GATE_QUEUE_KEY,GATE_REVIEW_KEY,saveQueue:next=>{saved=next;},
     setMode:next=>{mode=next;},setManifest:next=>{manifest=next;},setCanUndo:next=>{canUndo=next;},setMatches:next=>{matches=next;},
-    setTicket:()=>{},setMessage:()=>{},setStats:()=>{},setStorageError:()=>{},setSyncMessage:()=>{},markContact:()=>{},heartbeat:async()=>{},
+    setTicket:()=>{},setMessage:()=>{},setStats:()=>{},setStorageError:()=>{},setSyncMessage:()=>{},setRefreshingEvent:()=>{},markContact:()=>{},heartbeat:async()=>{},
     fetch:async()=>Response.json({checkedIn:0,issued:1,canUndo:true,manifest:list.tickets,generatedAt:list.generatedAt,access:nextAccess}),
   };
   scope.denyGateAccess = scannerCallback('denyGateAccess', scope);
@@ -107,4 +107,30 @@ test('every scanner gate response applies the shared authorization-denial latch'
 test('confirmed workspace logout invalidates offline gate lists',async()=>{
   const chrome=await readFile(new URL('../app/workspace-chrome.tsx',import.meta.url),'utf8');
   assert.match(chrome,/if \(response\.ok\) \{[\s\S]*?clearGateManifests\(window\.localStorage\)/u);
+});
+
+
+test('scanner refresh remains visibly busy through its heartbeat and unlocks after a failed refresh', async () => {
+  let refreshing = '', finishHeartbeat, reachedHeartbeat;
+  const heartbeatStarted = new Promise(resolve => { reachedHeartbeat = resolve; });
+  const contact = [], eventSlug = 'synthetic-event';
+  const scope = {
+    eventSlug, currentEvent: {current:eventSlug}, refreshBusy:{current:''}, access:{},
+    setRefreshingEvent: next => { refreshing = typeof next === 'function' ? next(refreshing) : next; },
+    fetch: async () => Response.json({checkedIn:0,issued:0,manifest:[]}),
+    denyGateAccess:()=>false, setStats:()=>{}, setCanUndo:()=>{}, setManifest:()=>{},
+    saveGateManifest:()=>true, readGateManifest:()=>null, readGateList:()=>[],
+    window:{localStorage:{}}, QUEUE_KEY:'queue', GATE_REVIEW_KEY:'review',
+    setStorageError:()=>{}, setSyncMessage:()=>{}, markContact:(_slug, reachable)=>contact.push(reachable),
+    heartbeat:()=>new Promise(resolve=>{finishHeartbeat=resolve;reachedHeartbeat();}),
+  };
+  const refresh = scannerCallback('loadEventState', scope);
+  const initial = refresh(); await heartbeatStarted;
+  assert.equal(refreshing,eventSlug); assert.equal(scope.refreshBusy.current,eventSlug);
+  assert.match(source,/disabled=\{syncing \|\| refreshingEvent === eventSlug\} aria-busy=\{refreshingEvent === eventSlug\}/u);
+  finishHeartbeat(); await initial;
+  assert.equal(refreshing,''); assert.equal(scope.refreshBusy.current,'');
+  scope.fetch=async()=>{throw new Error('Synthetic connection failure');};
+  await scannerCallback('loadEventState',scope)();
+  assert.equal(contact.at(-1),false); assert.equal(refreshing,''); assert.equal(scope.refreshBusy.current,'');
 });
