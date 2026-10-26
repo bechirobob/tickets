@@ -17,9 +17,10 @@ await mkdir(output, { recursive: true });
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--config', 'vite.vps.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } });
 let serverLog = '';
 for (const stream of [server.stdout, server.stderr]) stream.on('data', chunk => { serverLog = (serverLog + chunk.toString()).slice(-16000); });
-let browser;
+let browser, page;
 const checks = [];
 const errors = [];
+const consoleErrors = [];
 const syntheticToken = 'a'.repeat(43);
 try {
   // Vite announces readiness before the first route compile. Never print request data.
@@ -40,7 +41,8 @@ try {
       if (url.pathname === '/api/yorkeway') return route.fulfill({ status: signupStatus, json: signupStatus === 202 ? { received: true } : { error: 'Synthetic preview failure' } });
       if (url.pathname === '/api/yorkeway/confirm') return route.fulfill({ status: 200, json: { confirmed: confirmResult } });
       if (url.pathname === '/api/yorkeway/withdraw') return route.fulfill({ status: 200, json: { received: true } });
-      return route.fulfill({ status: 200, json: {} });
+      if (url.pathname === '/api/admin/workspace') return route.fulfill({ status: 401, json: { error: 'Not signed in' } });
+      return route.fulfill({ status: 404, json: { error: 'Not part of this isolated preview' } });
     }
     // The source email's approved brand asset is served locally, never fetched externally.
     if (url.hostname === 'tickets.becoreops.com' && url.pathname.startsWith('/brand/')) {
@@ -50,8 +52,9 @@ try {
     if (url.origin !== origin && !['data:', 'blob:'].includes(url.protocol)) return route.abort();
     return route.continue();
   });
-  const page = await context.newPage();
+  page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.setDefaultTimeout(20000);
   async function open(route = '/the-yorke-way') {
     const response = await page.goto(origin + route, { waitUntil: 'networkidle', timeout: 120000 });
@@ -84,15 +87,15 @@ try {
   await page.getByRole('button', { name: 'Sign up for early access', exact: true }).waitFor();
   assert.equal(await page.locator('#yorke-consent').isChecked(), false);
   assert.equal(await page.locator('.customer-dock').count(), 0);
-  await assertLayout('Desktop 1440');
   await page.screenshot({ path: path.join(output, 'yorke-way-desktop.png'), fullPage: true });
+  await assertLayout('Desktop 1440');
   await snapshot('yorke-way-visual-preview.html');
   await page.setViewportSize({ width: 390, height: 844 });
-  await assertLayout('Mobile 390');
   await page.screenshot({ path: path.join(output, 'yorke-way-mobile.png'), fullPage: true });
+  await assertLayout('Mobile 390');
   await page.setViewportSize({ width: 320, height: 740 });
-  await assertLayout('Mobile 320');
   await page.screenshot({ path: path.join(output, 'yorke-way-mobile-320.png'), fullPage: true });
+  await assertLayout('Mobile 320');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel('Your name', { exact: true }).fill('Preview Guest');
@@ -151,7 +154,15 @@ try {
   await writeFile(path.join(output, 'report.json'), JSON.stringify({ sourceRevision: process.env.PREVIEW_SOURCE_SHA ?? null, localOnly: true, apiResponses: 'mocked', databaseUsed: false, emailSent: false, checks, browserErrors: errors }, null, 2));
   console.log(`Saved ${checks.length} passed preview checks and unpublished artifacts to outputs/yorkeway-previews.`);
 } catch (error) {
-  await writeFile(path.join(output, 'preview-error.txt'), String(error.stack ?? error));
+  // Only synthetic preview state is present. Preserve useful visual evidence even
+  // when hydration, layout, or accessibility fails before the normal captures.
+  let diagnostic = null;
+  if (page && !page.isClosed()) {
+    await page.screenshot({ path: path.join(output, 'preview-failure.png'), fullPage: true }).catch(() => {});
+    diagnostic = await page.evaluate(() => ({ path: location.pathname, title: document.title, text: document.body.innerText.slice(0, 3000), campaignNodes: document.querySelectorAll('.yorke-way').length })).catch(() => null);
+  }
+  await writeFile(path.join(output, 'preview-error.txt'), `${String(error.stack ?? error)}\n\nBrowser errors:\n${errors.join('\n')}\n\nPage:\n${JSON.stringify(diagnostic, null, 2)}\n\nLocal server:\n${stripVTControlCharacters(serverLog)}`);
+  await writeFile(path.join(output, 'report.json'), JSON.stringify({ sourceRevision: process.env.PREVIEW_SOURCE_SHA ?? null, localOnly: true, apiResponses: 'mocked', databaseUsed: false, emailSent: false, passed: false, checks, browserErrors: errors, consoleErrors, diagnostic }, null, 2));
   throw error;
 } finally {
   await browser?.close();
