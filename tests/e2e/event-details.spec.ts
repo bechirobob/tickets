@@ -156,6 +156,8 @@ test("event lettering and colours work on both events and narrow future details"
   for (const [slug, palette] of [["the-weekend-braai", "sunset"], ["sun-chasers-labadi", "blush"]]) {
     await page.goto(`/event/${slug}`);
     await expect(page.locator(".poster-event-page")).toHaveAttribute("data-colour-scheme", palette);
+    // SSR attributes can arrive before the route stylesheet on a slow device.
+    await expect(page.locator(".poster-event-page")).toHaveCSS("--event-wash", /\S/);
     const wash = await page.locator(".poster-event-page").evaluate((main) => getComputedStyle(main).getPropertyValue("--event-wash").trim());
     await expect(page.locator("body")).toHaveCSS("--event-shell-wash", wash);
     await expectVisibleLettering(page, ".event-detail-layout");
