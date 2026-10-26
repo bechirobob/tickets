@@ -1,5 +1,6 @@
 /** Private, synthetic preview only. No database, email delivery, or deployment. */
 import assert from 'node:assert/strict';
+import { stripVTControlCharacters } from 'node:util';
 import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -23,7 +24,7 @@ const syntheticToken = 'a'.repeat(43);
 try {
   // Vite announces readiness before the first route compile. Never print request data.
   const started = Date.now();
-  while (!serverLog.includes('Local:')) {
+  while (!stripVTControlCharacters(serverLog).includes('Local:')) {
     if (server.exitCode !== null || Date.now() - started > 60000) throw new Error(`Local preview server did not start. ${serverLog}`);
     await new Promise(resolve => setTimeout(resolve, 200));
   }
