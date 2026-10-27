@@ -29,8 +29,14 @@ concurrency:
 
 jobs:
   preview:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -46,8 +52,8 @@ jobs:
         run: node --test tests/customer-email-rendering.test.mjs
       - name: Generate synthetic previews from production templates
         run: node scripts/customer-email-previews.mjs outputs/customer-emails
-      - name: Install preview browsers
-        run: npx playwright install --with-deps chromium webkit
+      - name: Verify prepared preview browsers
+        run: node scripts/verify-browser-environment.mjs chromium webkit
       - name: Verify desktop and phone email rendering without provider traffic
         run: npx playwright test --config playwright.customer-email.config.ts
       # Only fictional email previews are uploaded. Never upload outbox data,
