@@ -1,8 +1,7 @@
+# Explicit fallback; parallel exact-head review is the normal candidate gate.
 name: Candidate verification
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       trusted_base:
@@ -24,10 +23,20 @@ env:
 jobs:
   verify:
     name: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     # Core gates plus all three full browser suites now run sequentially.
     timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Set up Python for existing verification scripts
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -114,9 +123,9 @@ jobs:
           echo "sha256=$(sha256sum "$archive" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Verify candidate evidence transport
         run: python3 -m unittest discover -s ops/vps -p 'test_candidate_evidence.py' -v
-      - name: Install browsers for event-page verification
+      - name: Verify prepared browsers for event-page verification
         id: browsers
-        run: npx playwright install --with-deps chromium webkit
+        run: node scripts/verify-browser-environment.mjs chromium webkit
       # This job never transfers a build through Actions artifacts or caches.
       # Logs retain bounded synthetic-fixture PNG/JSON evidence for review only;
       # they are not a runtime package and never replace any failing test gate.

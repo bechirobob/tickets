@@ -472,7 +472,7 @@ class CollectionTests(unittest.TestCase):
         artifact["workflow_run"]["head_sha"] = self.candidate
         for job in jobs:
             job["head_sha"] = self.candidate
-            if job["name"] == "verify":
+            if job["name"] == "tickets-candidate-verified":
                 continue
             lines = logs[job["id"]].splitlines()
             prefix, payload = lines[-1].split(verifier.PREFIX.encode(), 1)

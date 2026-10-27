@@ -21,7 +21,7 @@ import subprocess
 REPOSITORY = "bechirobob/tickets"
 WORKFLOW = ".github/workflows/candidate-parallel-checks.yml"
 BRANCH = "improve/release-evidence-parallel-20261013"
-JOBS = {"build", "desktop-chromium", "mobile-chromium", "mobile-webkit", "verify"}
+JOBS = {"build", "desktop-chromium", "mobile-chromium", "mobile-webkit", "tickets-candidate-verified"}
 CONTROL_PATHS = (WORKFLOW, "ops/vps/candidate_build.py", "ops/vps/public_runtime_guard.py",
                  "scripts/audit-release-dependencies.py", "scripts/verify-audit-release-source.py",
                  "scripts/audit-checkbox-hotfix.py", "scripts/audit-release-manifest.json")

@@ -341,7 +341,8 @@ class CandidateWorkflowTests(unittest.TestCase):
             self.assertIn("run: " + command, self.workflow)
         self.assertEqual(self.workflow.count("run: npm test\n"), 1)
         self.assertEqual(self.workflow.count('tar -czf "$archive" dist/client dist/server'), 1)
-        self.assertIn("npx playwright install --with-deps chromium webkit", self.workflow)
+        self.assertIn("node scripts/verify-browser-environment.mjs chromium webkit", self.workflow)
+        self.assertNotIn("playwright install", self.workflow)
         self.assertIn("test_candidate_evidence.py", self.workflow)
 
     def test_every_browser_has_independent_gates_and_pristine_restore(self):

@@ -39,7 +39,7 @@ def proof_fixture():
             'run_id': 456, 'run_attempt': 2, 'event': 'push', 'head_branch': BRANCH,
             'artifact': artifact, 'receipts': receipts,
             'jobs': [{'id': index + 100, 'name': name, 'log_sha256': '4' * 64, 'steps_sha256': '5' * 64}
-                     for index, name in enumerate(('build', *BROWSERS, 'verify'))],
+                     for index, name in enumerate(('build', *BROWSERS, 'tickets-candidate-verified'))],
             'metadata_sha256': dict.fromkeys(('run', 'jobs', 'artifact'), '6' * 64)}
 
 
@@ -263,7 +263,7 @@ class ParallelSelectionTests(unittest.TestCase):
                'path': '.github/workflows/candidate-parallel-checks.yml', 'head_branch': BRANCH, 'event': 'push',
                'repository': {'full_name': REPOSITORY}, 'head_repository': {'full_name': REPOSITORY}}
         jobs = [{'id': index + 100, 'name': name, 'run_id': 456, 'head_sha': CANDIDATE,
-                 'status': 'completed', 'conclusion': 'success'} for index, name in enumerate(('build', *BROWSERS, 'verify'))]
+                 'status': 'completed', 'conclusion': 'success'} for index, name in enumerate(('build', *BROWSERS, 'tickets-candidate-verified'))]
         return run, jobs
 
     def test_exact_parallel_jobs_allow_absent_attempt_only_with_later_authentication(self):

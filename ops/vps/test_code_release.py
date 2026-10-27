@@ -1202,6 +1202,7 @@ NODE_SECURITY_TEST_OVERLAY = {'scripts/prepare-registration-browser-fixture.mjs'
  'ops/vps/test_runtime_workflow_contract.py': ('100644', 'c9620eeb200133ee94c76accc5328ecce28b4b75')}
 
 def historical_node_workflow(name, raw):
+    raw = parallel_gate_historical_workflow(name, raw)
     expected = NODE_SECURITY_TEST_OVERLAY.get(name)
     digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
     # Exact combined Yorkeway transport only. Never normalize candidate-chosen
@@ -1888,7 +1889,325 @@ def security_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
+# Test-only complete source recognition for the approved next CI controls.
+# These pins grant no production source admission and cannot select application bytes.
+PARALLEL_GATE_BASELINE = 'ab92219f25d10e133b77778e83e8a69e17d6e418'
+PARALLEL_GATE_BASE_TREE = '903d4424205ee199bc7e344b8e17426e434cf38b'
+PARALLEL_GATE_OUTPUTS = {'.github/workflows/booking-consent-previews.yml': ('100644',
+                                                    '07a3832723e242021bd1886069eb582b51a3f0b8'),
+ '.github/workflows/candidate-checks.yml': ('100644',
+                                            'fce0c733744bf53af146a1c707d347935ce80fd3'),
+ '.github/workflows/candidate-parallel-checks.yml': ('100644',
+                                                     'dce7d33d0e6054d2cad285146b4afa258dd0d8d0'),
+ '.github/workflows/tickets-code-release.yml': ('100644',
+                                                'e3d0e157cacaf5b4aede03d257c7f7bb0fb16656'),
+ 'ops/vps/code-release.py': ('100644',
+                             'd925d570a4560645a0acaa56922c4f1b72f24de3'),
+ 'ops/vps/parallel_candidate.py': ('100644',
+                                   'a63444b9c650da5a13c770efd2a286af634304f4'),
+ 'ops/vps/parallel_candidate_control.py': ('100644',
+                                           '28fce119dc22b65780a3461ca5da9d1b435bca46'),
+ 'ops/vps/test_candidate_evidence.py': ('100644',
+                                        '5683f38b8cb10b02abc687f35be02a8a6749b996'),
+ 'ops/vps/test_parallel_admission.py': ('100644',
+                                        'ec9fc0edd8abc210749b4eb6f962ad8a898dd4a8'),
+ 'ops/vps/test_parallel_candidate.py': ('100644',
+                                        '808359153e33f74681056bba586dbcf7c8df7601'),
+ 'ops/vps/test_parallel_candidate_control.py': ('100644',
+                                                '87dac06c7b8f71332e32e89a1e2858d5f849abf6'),
+ 'ops/vps/test_yorkeway_release.py': ('100644',
+                                      '8145296d9863c4788a486081acde67ccb1e5de9e'),
+ 'package.json': ('100644', 'cd080a08e3350d17b414e6e62015c9b31cced055'),
+ 'scripts/browser-environment.json': ('100644',
+                                      '5364ab400ce4a79e05ac45cfadf322dd9d97cca8'),
+ 'scripts/verify-browser-environment.mjs': ('100644',
+                                            '53eba71962ec08f37723096e4320c0634d7ec151'),
+ 'tests/browser-environment.test.mjs': ('100644',
+                                        '08279cdc7c970991447c6a5ef782c6cc9226d3f7'),
+ 'tests/repository-boundaries.test.mjs': ('100644',
+                                          '46a6e6a0c166b1c3e1561ccdad714c2c1fa4d493'),
+ 'tests/test_candidate_parallel_workflow.py': ('100644',
+                                               'c0b4c9802d97921e7d2b7a29fae296a7f5e5a924')}
+PARALLEL_GATE_TEST_FILE = Path(__file__).resolve()
+PARALLEL_GATE_STAGED_ADDITIONS = frozenset()
+
+
+PARALLEL_GATE_WORKFLOW_BASE = {'.github/workflows/tickets-code-release.yml': '227200c0e27f4c0d207ebacc66083bb44b8afc44',
+ '.github/workflows/tickets-release-operator-checks.yml': 'a0099e4403e2f7f84e1ee5651899cdbe1823866b'}
+PARALLEL_GATE_WORKFLOW_REVERSE = {'.github/workflows/tickets-code-release.yml': ((b'        default: false\n        type: boolean'
+                                                 b'\n      candidate_mode:\n        description: '
+                                                 b'Authenticated parallel evidence by default; lega'
+                                                 b'cy is an explicit fallback\n        required:'
+                                                 b' false\n        default: parallel-v1\n        '
+                                                 b'type: choice\n        options: [legacy, paral'
+                                                 b'lel-v1]\n      expected_active:\n',
+                                                 b'        default: false\n        type: boolean'
+                                                 b'\n      candidate_mode:\n        description: '
+                                                 b'Explicit browser evidence contract; legacy remai'
+                                                 b'ns the default\n        required: false\n     '
+                                                 b'   default: legacy\n        type: choice\n    '
+                                                 b'    options: [legacy, parallel-v1]\n      exp'
+                                                 b'ected_active:\n'),
+                                                (b'      EXPECTED_ACTIVE: ${{ inputs.expected_activ'
+                                                 b'e }}\n      RUNTIME_RUN: ${{ inputs.runtime_r'
+                                                 b'un }}\n      CANDIDATE_RUN: ${{ inputs.candid'
+                                                 b'ate_run }}\n      CANDIDATE_MODE: ${{ inputs.'
+                                                 b"candidate_mode || 'parallel-v1' }}\n      VER"
+                                                 b"IFY_ONLY: ${{ inputs.verify_only && 'true' || 'f"
+                                                 b"alse' }}\n      INSPECT_MODE: ${{ inputs.insp"
+                                                 b"ect_failed_release && 'true' || 'false' }}\n "
+                                                 b'     RECOVER_PREPARED: ${{ inputs.recover_prepar'
+                                                 b'ed }}\n',
+                                                 b'      EXPECTED_ACTIVE: ${{ inputs.expected_activ'
+                                                 b'e }}\n      RUNTIME_RUN: ${{ inputs.runtime_r'
+                                                 b'un }}\n      CANDIDATE_RUN: ${{ inputs.candid'
+                                                 b'ate_run }}\n      CANDIDATE_MODE: ${{ inputs.'
+                                                 b"candidate_mode || 'legacy' }}\n      VERIFY_O"
+                                                 b"NLY: ${{ inputs.verify_only && 'true' || 'false'"
+                                                 b' }}\n      INSPECT_MODE: ${{ inputs.inspect_f'
+                                                 b"ailed_release && 'true' || 'false' }}\n      "
+                                                 b'RECOVER_PREPARED: ${{ inputs.recover_prepared }}'
+                                                 b'\n'),
+                                                (b'    if: ${{ !inputs.verify_only }}\n    name:'
+                                                 b' Verify retired checkout preview (${{ matrix.bro'
+                                                 b'wser }})\n    needs: release\n    runs-on: ubu'
+                                                 b'ntu-24.04\n    container:\n      image: mcr.mi'
+                                                 b'crosoft.com/playwright:v1.62.1-noble@sha256:dcc5'
+                                                 b'531e97840b9b5e794f2814476b21571c5124a3fca2267d73'
+                                                 b'041f56e7580e\n      options: --user 1001 --sh'
+                                                 b'm-size=1g\n    timeout-minutes: 15\n    permis'
+                                                 b'sions:\n      contents: read\n',
+                                                 b'    if: ${{ !inputs.verify_only }}\n    name:'
+                                                 b' Verify retired checkout preview (${{ matrix.bro'
+                                                 b'wser }})\n    needs: release\n    runs-on: ubu'
+                                                 b'ntu-latest\n    timeout-minutes: 15\n    permi'
+                                                 b'ssions:\n      contents: read\n'),
+                                                (b'        browser: [desktop-chromium, mobile-chrom'
+                                                 b'ium, mobile-webkit]\n    env:\n      E2E_BASE_'
+                                                 b'URL: https://tickets.becoreops.com\n    defau'
+                                                 b'lts:\n      run:\n        shell: bash\n    step'
+                                                 b's:\n      - uses: actions/checkout@11d5960a32'
+                                                 b'6750d5838078e36cf38b85af677262\n        with:\n',
+                                                 b'        browser: [desktop-chromium, mobile-chrom'
+                                                 b'ium, mobile-webkit]\n    env:\n      E2E_BASE_'
+                                                 b'URL: https://tickets.becoreops.com\n    steps'
+                                                 b':\n      - uses: actions/checkout@11d5960a326'
+                                                 b'750d5838078e36cf38b85af677262\n        with:\n'),
+                                                (b'          node-version: 22.23.4\n          ca'
+                                                 b'che: npm\n      - run: npm ci\n      - name: V'
+                                                 b'erify prepared browser engines\n        run: '
+                                                 b'node scripts/verify-browser-environment.mjs chro'
+                                                 b'mium webkit\n      - name: Verify only the re'
+                                                 b'moved preview page and API\n        run: npx '
+                                                 b'playwright test tests/e2e/checkout-preview-retir'
+                                                 b'ed.spec.ts --project ${{ matrix.browser }} --wor'
+                                                 b'kers=1 --retries=0\n      # This endpoint-onl'
+                                                 b'y smoke gate has no distributable build output. '
+                                                 b'Its\n',
+                                                 b'          node-version: 22.23.4\n          ca'
+                                                 b'che: npm\n      - run: npm ci\n      - name: I'
+                                                 b'nstall browser engines\n        run: npx play'
+                                                 b'wright install --with-deps chromium webkit\n '
+                                                 b'     - name: Verify only the removed preview pag'
+                                                 b'e and API\n        run: npx playwright test t'
+                                                 b'ests/e2e/checkout-preview-retired.spec.ts --proj'
+                                                 b'ect ${{ matrix.browser }} --workers=1 --retries='
+                                                 b'0\n      # This endpoint-only smoke gate has '
+                                                 b'no distributable build output. Its\n'))}
+
+def parallel_gate_historical_workflow(name, raw):
+    """Reverse only the complete exact approved CI delta for historical assertions."""
+    expected = PARALLEL_GATE_OUTPUTS.get(name)
+    digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+    if name not in PARALLEL_GATE_WORKFLOW_REVERSE or expected is None or digest(raw) != expected[1]:
+        return raw
+    for current, historical in PARALLEL_GATE_WORKFLOW_REVERSE[name]:
+        if raw.count(current) != 1:
+            raise AssertionError('Parallel gate workflow reverse is ambiguous or incomplete')
+        raw = raw.replace(current, historical, 1)
+    if digest(raw) != PARALLEL_GATE_WORKFLOW_BASE[name]:
+        raise AssertionError('Parallel gate workflow did not reconstruct the pinned baseline')
+    return raw
+
+
+def parallel_gate_source_family(root):
+    """Require the exact baseline plus the independently reviewed finite CI delta."""
+    root = Path(root)
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root / 'ops/vps/code-release.py'
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == PARALLEL_GATE_TEST_FILE
+    expected_operator = PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1]
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != expected_operator):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            if checkout_git(root, 'rev-parse', PARALLEL_GATE_BASELINE + '^{tree}').decode().strip() != PARALLEL_GATE_BASE_TREE:
+                raise AssertionError('Parallel gate baseline tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', PARALLEL_GATE_BASELINE).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Parallel gate baseline has unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(PARALLEL_GATE_OUTPUTS)
+            manifest['ops/vps/test_code_release.py'] = ('100644', None)
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Parallel gate full inventory differs')
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, blob, stage = metadata.decode().split()
+                    name = os.fsdecode(name)
+                    expected = manifest.get(name)
+                    if expected == ('100644', None):
+                        expected = ('100644', digest((root / name).read_bytes()))
+                    if stage != '0' or expected != (mode, blob):
+                        raise AssertionError('Parallel gate index differs from complete reviewed family')
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise AssertionError('Parallel gate requires its exact independent baseline') from error
+    else:
+        manifest = dict(SECURITY_STAGED_BASE)
+        # The staging command includes all tracked ops/vps files and only its
+        # explicitly enumerated workflows/scripts. No arbitrary new paths ship.
+        manifest.update({name: value for name, value in PARALLEL_GATE_OUTPUTS.items()
+                         if name in manifest or name in PARALLEL_GATE_STAGED_ADDITIONS})
+        manifest['ops/vps/test_code_release.py'] = ('100644', None)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Parallel gate requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as error:
+            raise AssertionError('Parallel gate source is incomplete') from error
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Parallel gate has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
+class ParallelGateWorkflowHistoryTests(unittest.TestCase):
+    def test_only_exact_reviewed_workflow_reconstructs_pinned_baseline(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in PARALLEL_GATE_WORKFLOW_REVERSE:
+            raw = (root/name).read_bytes()
+            before = parallel_gate_historical_workflow(name, raw)
+            digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+            self.assertEqual(digest(before), PARALLEL_GATE_WORKFLOW_BASE[name])
+            self.assertNotEqual(before, raw)
+            mutations = (raw + b'\n# unrelated mutation\n', raw.replace(b'contents: read', b'contents: write', 1),
+                         raw.replace(b'tar -x', b'tar --wildcards -x', 1), raw.replace(b'node-version:', b'node-version-bad:', 1))
+            for changed in mutations:
+                self.assertNotEqual(changed, raw)
+                self.assertEqual(parallel_gate_historical_workflow(name, changed), changed)
+
+
+class ParallelGateSourceFamilyTests(unittest.TestCase):
+    """Real isolated Git inventories: the finite CI delta cannot hide app drift."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.files = {'package.json': b'{}\n', 'package-lock.json': b'locked\n',
+                      'app/page.tsx': b'application\n', 'drizzle/0001.sql': b'schema\n',
+                      'wrangler.json': b'configuration\n', '.github/workflows/candidate-parallel-checks.yml': b'workflow\n',
+                      'ops/vps/code-release.py': b'old operator\n',
+                      'ops/vps/test_code_release.py': b'control tests\n'}
+        self.git('init', '-q'); self.git('config', 'user.name', 'Isolated controls tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        for name, raw in self.files.items(): self.write(name, raw)
+        self.git('add', '-A'); self.git('commit', '-qm', 'independent baseline')
+        baseline = self.git('rev-parse', 'HEAD'); tree = self.git('rev-parse', 'HEAD^{tree}')
+        self.outputs = {'ops/vps/code-release.py': ('100644', self.blob(b'new operator\n')),
+                       '.github/workflows/candidate-parallel-checks.yml': ('100644', self.blob(b'new workflow\n'))}
+        staged = {name: ('100644', self.blob(raw)) for name, raw in self.files.items() if name.startswith(('ops/', '.github/'))}
+        for name, value in (('PARALLEL_GATE_BASELINE', baseline), ('PARALLEL_GATE_BASE_TREE', tree),
+                            ('PARALLEL_GATE_OUTPUTS', self.outputs), ('SECURITY_STAGED_BASE', staged),
+                            ('PARALLEL_GATE_TEST_FILE', self.root/'ops/vps/test_code_release.py')):
+            patcher = patch.object(sys.modules[__name__], name, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+        self.write('ops/vps/code-release.py', b'new operator\n')
+        self.write('.github/workflows/candidate-parallel-checks.yml', b'new workflow\n')
+        self.git('add', '-A'); self.git('commit', '-qm', 'exact CI delta')
+
+    @staticmethod
+    def blob(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    def write(self, name, raw):
+        path = self.root/name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
+
+    def test_exact_complete_family_and_historical_operator_do_not_alias(self):
+        result = parallel_gate_source_family(self.root)
+        self.assertEqual(result['ops/vps/code-release.py'], self.outputs['ops/vps/code-release.py'][1])
+        self.assertEqual(set(result), set(self.files)-{'ops/vps/test_code_release.py'})
+        self.write('ops/vps/code-release.py', b'old operator\n')
+        with self.assertRaises(AssertionError): parallel_gate_source_family(self.root)
+
+    def test_changed_application_dependencies_schema_config_workflow_and_modes_reject(self):
+        for name in self.files:
+            if name == 'ops/vps/test_code_release.py': continue
+            self.git('reset', '--hard', '-q', 'HEAD')
+            self.write(name, b'unreviewed\n')
+            with self.subTest(name=name), self.assertRaises(AssertionError): parallel_gate_source_family(self.root)
+            self.git('add', name)
+            with self.subTest(staged=name), self.assertRaises(AssertionError): parallel_gate_source_family(self.root)
+        self.git('reset', '--hard', '-q', 'HEAD')
+        (self.root/'app/page.tsx').chmod(0o755)
+        with self.assertRaises(AssertionError): parallel_gate_source_family(self.root)
+
+    def test_missing_extra_symlink_and_restored_worktree_cannot_hide_index_drift(self):
+        for mutation in ('missing', 'extra', 'symlink', 'index'):
+            self.git('reset', '--hard', '-q', 'HEAD'); (self.root/'extra').unlink(missing_ok=True)
+            path = self.root/'app/page.tsx'
+            if mutation == 'missing': path.unlink()
+            elif mutation == 'extra': self.write('extra', b'untracked')
+            elif mutation == 'symlink': path.unlink(); path.symlink_to('../package.json')
+            else:
+                path.write_bytes(b'wrong staged content'); self.git('add', 'app/page.tsx'); path.write_bytes(self.files['app/page.tsx'])
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError): parallel_gate_source_family(self.root)
+
+    def test_staged_archive_rejects_partial_extra_mode_and_wrong_operator(self):
+        for mutation in (None, 'missing', 'extra', 'mode', 'operator'):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name in SECURITY_STAGED_BASE:
+                    destination = root/name; destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes((self.root/name).read_bytes())
+                if mutation == 'missing': (root/'.github/workflows/candidate-parallel-checks.yml').unlink()
+                elif mutation == 'extra': (root/'extra').mkdir()
+                elif mutation == 'mode': (root/'ops/vps/code-release.py').chmod(0o755)
+                elif mutation == 'operator': (root/'ops/vps/code-release.py').write_bytes(b'old operator\n')
+                with patch.object(sys.modules[__name__], 'PARALLEL_GATE_TEST_FILE', root/'ops/vps/test_code_release.py'):
+                    if mutation is None: self.assertIsNotNone(parallel_gate_source_family(root))
+                    else:
+                        with self.subTest(mutation=mutation), self.assertRaises(AssertionError): parallel_gate_source_family(root)
+
+    def test_wrong_independent_tree_pin_rejects(self):
+        with patch.object(sys.modules[__name__], 'PARALLEL_GATE_BASE_TREE', 'f'*40), self.assertRaises(AssertionError):
+            parallel_gate_source_family(self.root)
+
+
 def checkout_source_family(root):
+    gate = parallel_gate_source_family(root)
+    if gate is not None:
+        return gate
     security = security_source_family(root)
     if security is not None:
         return security
@@ -12220,7 +12539,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB):
+        if family.get('ops/vps/code-release.py') in (ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1]):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'

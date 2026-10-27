@@ -1,14 +1,18 @@
-# Full-coverage isolated browser evidence; legacy release mode stays the default.
+# Full-coverage isolated browser evidence; independent exact-source review remains required.
 # Parallel admission requires independently trusted v2 provenance.
 # The branch push trigger gives the executed workflow the exact source SHA;
 # pull_request merge-ref workflow code is deliberately not used for this proof.
-name: Candidate parallel benchmark
+name: Candidate parallel verification
 
 on:
   push:
     branches: [improve/release-evidence-parallel-20261013]
   workflow_dispatch:
     inputs:
+      expected_source:
+        description: Exact reviewed candidate SHA; branch movement must fail before candidate code executes
+        required: true
+        type: string
       trusted_base:
         description: Independently selected reviewed controls ancestor on main
         required: true
@@ -23,6 +27,7 @@ concurrency:
 
 env:
   BECORE_RELEASE_SHA: ${{ github.sha }}
+  BECORE_EXPECTED_SOURCE: ${{ github.event_name == 'push' && github.sha || inputs.expected_source }}
   BECORE_TRUSTED_BASE: ${{ inputs.trusted_base || 'd257f41b669a542de0eebbe09993e7efa8dd5074' }}
 
 jobs:
@@ -49,6 +54,8 @@ jobs:
           unset "${!GIT_@}"
           export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$BECORE_EXPECTED_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_RELEASE_SHA" = "$BECORE_EXPECTED_SOURCE"
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
@@ -139,14 +146,24 @@ jobs:
   desktop_chromium:
     name: desktop-chromium
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     timeout-minutes: 45
     env:
       BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
       BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Set up Python for existing verification scripts
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -160,6 +177,8 @@ jobs:
           unset "${!GIT_@}"
           export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$BECORE_EXPECTED_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_RELEASE_SHA" = "$BECORE_EXPECTED_SOURCE"
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
@@ -207,8 +226,8 @@ jobs:
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
         run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
 
-      - name: Install browsers for event-page verification
-        run: npx playwright install --with-deps chromium webkit
+      - name: Verify prepared browsers for event-page verification
+        run: node scripts/verify-browser-environment.mjs chromium webkit
       - name: Download exact producer artifact by immutable ID
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -264,14 +283,24 @@ jobs:
   mobile_chromium:
     name: mobile-chromium
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     timeout-minutes: 45
     env:
       BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
       BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Set up Python for existing verification scripts
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -285,6 +314,8 @@ jobs:
           unset "${!GIT_@}"
           export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$BECORE_EXPECTED_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_RELEASE_SHA" = "$BECORE_EXPECTED_SOURCE"
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
@@ -332,8 +363,8 @@ jobs:
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
         run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
 
-      - name: Install browsers for event-page verification
-        run: npx playwright install --with-deps chromium webkit
+      - name: Verify prepared browsers for event-page verification
+        run: node scripts/verify-browser-environment.mjs chromium webkit
       - name: Download exact producer artifact by immutable ID
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -389,14 +420,24 @@ jobs:
   mobile_webkit:
     name: mobile-webkit
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     timeout-minutes: 45
     env:
       BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
       BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Set up Python for existing verification scripts
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -410,6 +451,8 @@ jobs:
           unset "${!GIT_@}"
           export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
           [[ "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ && "$BECORE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$BECORE_EXPECTED_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          test "$BECORE_RELEASE_SHA" = "$BECORE_EXPECTED_SOURCE"
           test "$BECORE_TRUSTED_BASE" != "$BECORE_RELEASE_SHA"
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
           git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
@@ -457,8 +500,8 @@ jobs:
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
         run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
 
-      - name: Install browsers for event-page verification
-        run: npx playwright install --with-deps chromium webkit
+      - name: Verify prepared browsers for event-page verification
+        run: node scripts/verify-browser-environment.mjs chromium webkit
       - name: Download exact producer artifact by immutable ID
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -512,7 +555,7 @@ jobs:
         run: npx playwright test --config playwright.operations.config.ts --project mobile-webkit --grep 'host lands on their event' --workers=1 --retries=0 --repeat-each=3 --output test-results/host-overview
 
   verify:
-    name: verify
+    name: tickets-candidate-verified
     needs: [build, desktop_chromium, mobile_chromium, mobile_webkit]
     if: ${{ always() }}
     runs-on: ubuntu-latest
@@ -529,4 +572,4 @@ jobs:
           test "$DESKTOP" = success
           test "$MOBILE" = success
           test "$WEBKIT" = success
-          echo 'Advisory parallel benchmark only; production admission remains unchanged.'
+          echo 'Full parallel coverage succeeded; independent exact-source provenance review is still required.'

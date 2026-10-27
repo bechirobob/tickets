@@ -1,6 +1,8 @@
 """Parallel workflow coverage and explicit opt-in admission contract tests."""
 from pathlib import Path
 import re
+import os
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +26,43 @@ class ParallelWorkflowTests(unittest.TestCase):
         self.assertIn('BECORE_RELEASE_SHA: ${{ github.sha }}',self.new)
         self.assertEqual(re.findall(r'^  ([a-z_]+):$',self.new.split('jobs:\n',1)[1],re.M),
                          ['build','desktop_chromium','mobile_chromium','mobile_webkit','verify'])
+
+    def test_unique_aggregate_with_explicit_serial_fallback(self):
+        self.assertIn('  verify:\n    name: tickets-candidate-verified\n', self.new)
+        self.assertNotIn('    name: verify\n', self.new)
+        self.assertNotIn('  pull_request:', self.old)
+        self.assertIn('  workflow_dispatch:', self.old)
+        self.assertNotIn('  pull_request:', self.new)
+        self.assertNotIn('  pull_request_target:', self.new)
+        self.assertIn('  workflow_dispatch:', self.new)
+
+    def test_dispatch_branch_movement_fails_before_candidate_code(self):
+        self.assertIn('      expected_source:', self.new)
+        self.assertIn("BECORE_EXPECTED_SOURCE: ${{ github.event_name == 'push' && github.sha || inputs.expected_source }}", self.new)
+        self.assertEqual(self.new.count('test "$BECORE_RELEASE_SHA" = "$BECORE_EXPECTED_SOURCE"'), 4)
+        for block in self.new.split('      - name: Verify exact source ancestry before executing checkout code')[1:]:
+            guard = block.split('      - name: Stage trusted audit verifier', 1)[0]
+            self.assertIn('test "$BECORE_RELEASE_SHA" = "$BECORE_EXPECTED_SOURCE"', guard)
+        release = (ROOT/'.github/workflows/tickets-code-release.yml').read_text()
+        self.assertIn('default: parallel-v1', release)
+        self.assertIn("CANDIDATE_MODE: ${{ inputs.candidate_mode || 'parallel-v1' }}", release)
+        self.assertIn('--candidate-mode "$CANDIDATE_MODE"', release)
+
+    def test_expected_source_guard_rejects_moved_or_malformed_dispatch(self):
+        start = self.new.index('          [[ "$BECORE_EXPECTED_SOURCE"')
+        end = self.new.index('          test "$BECORE_TRUSTED_BASE"', start)
+        script = 'set -euo pipefail\n' + self.new[start:end] + 'printf candidate-code-reached'
+        expected = 'a' * 40
+        for requested, actual, allowed in ((expected, expected, True),
+                                           (expected, 'b' * 40, False),
+                                           ('', expected, False),
+                                           ('A' * 40, expected, False),
+                                           ('main', expected, False)):
+            with self.subTest(requested=requested, actual=actual):
+                result = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
+                    env={**os.environ, 'BECORE_EXPECTED_SOURCE': requested, 'BECORE_RELEASE_SHA': actual})
+                self.assertEqual(result.returncode == 0, allowed)
+                self.assertEqual('candidate-code-reached' in result.stdout, allowed)
 
     def test_operator_checks_trigger_for_each_parallel_helper_and_test(self):
         workflow=(ROOT/'.github/workflows/tickets-release-operator-checks.yml').read_text()

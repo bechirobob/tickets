@@ -27,12 +27,14 @@ def fixture():
            'status': 'completed', 'conclusion': 'success', 'repository': {'id': 10, 'full_name': parallel.REPOSITORY},
            'head_repository': {'id': 10, 'full_name': parallel.REPOSITORY}, 'event': 'push',
            'head_branch': parallel.EXPERIMENT_BRANCH, 'created_at': stamp(0), 'run_started_at': stamp(0),
-           'updated_at': stamp(150)}
+           'updated_at': stamp(170)}
     inventory = parallel.workflow_inventory(workflow, blob)
     jobs, logs, receipts = [], {}, []
     for index, name in enumerate(parallel.JOB_NAMES):
-        offset = 1 if name == 'build' else (130 if name == 'verify' else 60)
-        names = ['Set up job', *inventory[name], 'Complete job']
+        offset = 1 if name == 'build' else (145 if name == parallel.AGGREGATE_JOB else 60)
+        names = (['Set up job', 'Initialize containers', *inventory[name],
+                  'Post Set up Python for existing verification scripts', 'Stop containers', 'Complete job']
+                 if name in parallel.BROWSERS else ['Set up job', *inventory[name], 'Complete job'])
         steps = [{'name': step, 'number': number, 'status': 'completed', 'conclusion': 'success',
                   'started_at': stamp(offset + number * 2), 'completed_at': stamp(offset + number * 2 + 1)}
                  for number, step in enumerate(names, 1)]
@@ -41,7 +43,7 @@ def fixture():
                'completed_at': stamp(offset + len(names) * 2 + 2), 'steps': steps}
         jobs.append(job)
         logs[job['id']] = b'2026-10-14T00:00:00Z ordinary harmless output\n'
-        if name == 'verify':
+        if name == parallel.AGGREGATE_JOB:
             continue
         browser = None if name == 'build' else name
         receipt = {'schema': parallel.RECEIPT_SCHEMA, 'kind': 'producer' if browser is None else 'consumer',
@@ -83,6 +85,32 @@ class ParallelTests(unittest.TestCase):
         change(value)
         lines[-1] = line[:marker] + parallel.canonical(value).rstrip(b'\n')
         self.logs[job['id']] = b'\n'.join(lines) + b'\n'
+
+    def test_container_lifecycle_missing_unknown_failed_or_reordered_rejected(self):
+        import copy
+        original = copy.deepcopy(self.jobs)
+        for mutation in ('missing-init', 'missing-stop', 'unknown', 'failed', 'late-init', 'early-stop'):
+            self.jobs = copy.deepcopy(original)
+            steps = self.jobs[1]['steps']
+            init = next(step for step in steps if step['name'] == 'Initialize containers')
+            stop = next(step for step in steps if step['name'] == 'Stop containers')
+            if mutation == 'missing-init': steps.remove(init)
+            elif mutation == 'missing-stop': steps.remove(stop)
+            elif mutation == 'unknown': init['name'] = 'Run arbitrary lifecycle command'
+            elif mutation == 'failed': stop['conclusion'] = 'failure'
+            elif mutation == 'late-init':
+                steps[2]['name'], init['name'] = init['name'], steps[2]['name']
+            elif mutation == 'early-stop':
+                steps[3]['name'], stop['name'] = stop['name'], steps[3]['name']
+            with self.subTest(mutation=mutation): self.reject()
+
+    def test_generic_verify_or_missing_aggregate_cannot_satisfy_unique_gate(self):
+        for name in ('verify', 'other-project-verified', 'build'):
+            with self.subTest(name=name):
+                self.jobs[-1]['name'] = name
+                self.reject()
+        self.jobs.pop()
+        self.reject()
 
     def test_valid_proof_binds_complete_inventory_and_raw_hashes(self):
         proof = self.verify()

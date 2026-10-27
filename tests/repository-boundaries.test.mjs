@@ -140,7 +140,10 @@ test("candidate CI runs core gates once and restores the same local build for ev
   assert.deepEqual(workflow.permissions, { contents: "read" });
   const { verify } = workflow.jobs;
   assert.equal(verify.name, "verify");
-  assert.equal(verify["runs-on"], "ubuntu-latest");
+  assert.equal(verify["runs-on"], "ubuntu-24.04");
+  const browserEnvironment = JSON.parse(await readFile(new URL("../scripts/browser-environment.json", import.meta.url), "utf8"));
+  assert.deepEqual(verify.container, { image: browserEnvironment.image, options: "--user 1001 --shm-size=1g" });
+  assert.equal(verify.defaults.run.shell, "bash");
   assert.equal(verify["timeout-minutes"], 120);
   assert.equal(verify.needs, undefined);
   assert.equal(verify.if, undefined);
@@ -182,12 +185,12 @@ test("candidate CI runs core gates once and restores the same local build for ev
   const source = candidateStep(verify, "Verify exact candidate source");
   const pack = candidateStep(verify, "Package verified browser build");
   const evidence = candidateStep(verify, "Verify candidate evidence transport");
-  const install = candidateStep(verify, "Install browsers for event-page verification");
+  const install = candidateStep(verify, "Verify prepared browsers for event-page verification");
   for (const step of [source, pack, evidence, install]) assert.equal(step.if, undefined);
   assert.equal(source.id, "source");
   assert.equal(pack.id, "build");
   assert.equal(install.id, "browsers");
-  assert.equal(install.run, "npx playwright install --with-deps chromium webkit");
+  assert.equal(install.run, "node scripts/verify-browser-environment.mjs chromium webkit");
   assert.equal(evidence.run, "python3 -m unittest discover -s ops/vps -p 'test_candidate_evidence.py' -v");
   assert.equal(verify.steps.filter((step) => step.run?.includes('tar -czf "$archive"')).length, 1);
   assert.ok(verify.steps.indexOf(source) < verify.steps.indexOf(pack));

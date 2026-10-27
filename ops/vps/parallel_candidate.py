@@ -23,7 +23,8 @@ SCHEMA = 'tickets-parallel-candidate/v2'
 RECEIPT_SCHEMA = 'tickets-browser-build/v2'
 PREFIX = 'TICKETS_BROWSER_BUILD_RECEIPT '
 BROWSERS = ('desktop-chromium', 'mobile-chromium', 'mobile-webkit')
-JOB_NAMES = ('build', *BROWSERS, 'verify')
+AGGREGATE_JOB = 'tickets-candidate-verified'
+JOB_NAMES = ('build', *BROWSERS, AGGREGATE_JOB)
 JOB_KEYS = ('build', 'desktop_chromium', 'mobile_chromium', 'mobile_webkit', 'verify')
 MAX_JSON = 8 * 1024 * 1024
 MAX_WORKFLOW = 256 * 1024
@@ -192,7 +193,7 @@ def workflow_inventory(raw, workflow_blob):
         require(0 < len(steps) <= 100 and len(steps) == len(set(steps))
                 and all(0 < len(step) <= 256 for step in steps), 'Ambiguous workflow steps')
         required = BUILD_STEPS if key == 'build' else ((AGGREGATE_STEP,) if key == 'verify' else
-            (*COMMON_STEPS, 'Install browsers for event-page verification',
+            (*COMMON_STEPS, 'Verify prepared browsers for event-page verification',
              'Download exact producer artifact by immutable ID',
              *(f'{step} ({name})' for step in BROWSER_STEPS)))
         positions = [steps.index(step) if step in steps else -1 for step in required]
@@ -256,6 +257,7 @@ def verify_run_jobs(run, jobs, workflow_bytes, *, repository, source_sha, source
         require(isinstance(steps, list) and 0 < len(steps) <= 110, 'Bounded step inventory required')
         seen, required_seen, previous_number, previous_time = set(), [], 0, lower
         for step in steps:
+            require('Complete job' not in seen, 'Steps after job completion')
             require(isinstance(step, dict), 'Invalid step metadata')
             step_name, number = step.get('name'), step.get('number')
             require(isinstance(step_name, str) and step_name not in seen
@@ -272,17 +274,28 @@ def verify_run_jobs(run, jobs, workflow_bytes, *, repository, source_sha, source
             if step_name in inventory[name]:
                 required_seen.append(step_name)
             else:
-                require(step_name in ('Set up job', 'Post Set up Node.js', 'Post Check out exact candidate', 'Complete job'),
-                        'Unexpected workflow step')
-                require((step_name == 'Set up job' and not required_seen) or
-                        (step_name != 'Set up job' and required_seen == inventory[name]),
+                before = ('Set up job', 'Initialize containers') if name in BROWSERS else ('Set up job',)
+                after = ('Post Set up Node.js', 'Post Check out exact candidate', 'Complete job')
+                if name in BROWSERS:
+                    after += ('Post Set up Python for existing verification scripts', 'Stop containers')
+                require(step_name in (*before, *after), 'Unexpected workflow step')
+                require((step_name in before and not required_seen) or
+                        (step_name in after and required_seen == inventory[name]),
                         'Lifecycle step interrupts required gates')
+                if step_name == 'Initialize containers':
+                    require('Set up job' in seen, 'Container initialization precedes job setup')
+                if step_name.startswith('Post '):
+                    require('Stop containers' not in seen, 'Post action after container shutdown')
         require(required_seen == inventory[name], 'Required gates missing or reordered')
+        if name in BROWSERS:
+            require({'Set up job', 'Initialize containers', 'Post Set up Python for existing verification scripts',
+                     'Stop containers', 'Complete job'} <= seen,
+                    'Complete container lifecycle evidence required')
         result[name] = job
     build_end = timestamp(result['build']['completed_at'])
     require(all(timestamp(result[name]['started_at']) >= build_end for name in BROWSERS),
             'Browser job began before immutable build completed')
-    verify_start = timestamp(result['verify']['started_at'])
+    verify_start = timestamp(result[AGGREGATE_JOB]['started_at'])
     require(all(timestamp(result[name]['completed_at']) <= verify_start for name in JOB_NAMES[:-1]),
             'Aggregate job began before required lanes completed')
     return result
@@ -313,7 +326,7 @@ def receipt_from_log(raw, job, **expected):
         require(len(line) <= MAX_RECEIPT, 'Receipt line exceeds bound')
         match = LOG_LINE.fullmatch(line)
         require(match is not None, 'Receipt must be anchored in a timestamped raw log line')
-        require(job['name'] != 'verify', 'Aggregate job cannot produce a build receipt')
+        require(job['name'] != AGGREGATE_JOB, 'Aggregate job cannot produce a build receipt')
         receipt_time = timestamp(match[1].decode('ascii'))
         step_name = ('Record exact producer transport receipt' if browser is None else
                      f'Verify and restore the exact candidate build ({browser})')
@@ -324,7 +337,7 @@ def receipt_from_log(raw, job, **expected):
         value = strict_json(match[2], MAX_RECEIPT)
         require(canonical(value).rstrip(b'\n') == match[2], 'Receipt JSON is not canonical')
         receipts.append(validate_receipt(value, browser=browser, **expected))
-    require(len(receipts) == (0 if job['name'] == 'verify' else 1), 'Exactly one receipt per build/browser job required')
+    require(len(receipts) == (0 if job['name'] == AGGREGATE_JOB else 1), 'Exactly one receipt per build/browser job required')
     return receipts[0] if receipts else None
 
 
