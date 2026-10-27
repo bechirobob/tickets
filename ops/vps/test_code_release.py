@@ -1924,6 +1924,8 @@ PARALLEL_GATE_OUTPUTS = {'.github/workflows/booking-consent-previews.yml': ('100
                                             '53eba71962ec08f37723096e4320c0634d7ec151'),
  'tests/browser-environment.test.mjs': ('100644',
                                         '08279cdc7c970991447c6a5ef782c6cc9226d3f7'),
+ 'tests/e2e/my-nights-studio.spec.ts': ('100644',
+                                        '85ae6c972144274551a18493976a90ee39d21b86'),
  'tests/repository-boundaries.test.mjs': ('100644',
                                           '46a6e6a0c166b1c3e1561ccdad714c2c1fa4d493'),
  'tests/test_candidate_parallel_workflow.py': ('100644',
@@ -2122,6 +2124,7 @@ class ParallelGateSourceFamilyTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.files = {'package.json': b'{}\n', 'package-lock.json': b'locked\n',
+                      'tests/e2e/journey.spec.ts': b'original browser assertions\n',
                       'app/page.tsx': b'application\n', 'drizzle/0001.sql': b'schema\n',
                       'wrangler.json': b'configuration\n', '.github/workflows/candidate-parallel-checks.yml': b'workflow\n',
                       'ops/vps/code-release.py': b'old operator\n',
@@ -2132,6 +2135,7 @@ class ParallelGateSourceFamilyTests(unittest.TestCase):
         self.git('add', '-A'); self.git('commit', '-qm', 'independent baseline')
         baseline = self.git('rev-parse', 'HEAD'); tree = self.git('rev-parse', 'HEAD^{tree}')
         self.outputs = {'ops/vps/code-release.py': ('100644', self.blob(b'new operator\n')),
+                       'tests/e2e/journey.spec.ts': ('100644', self.blob(b'original browser assertions\nawait readiness\n')),
                        '.github/workflows/candidate-parallel-checks.yml': ('100644', self.blob(b'new workflow\n'))}
         staged = {name: ('100644', self.blob(raw)) for name, raw in self.files.items() if name.startswith(('ops/', '.github/'))}
         for name, value in (('PARALLEL_GATE_BASELINE', baseline), ('PARALLEL_GATE_BASE_TREE', tree),
@@ -2140,6 +2144,7 @@ class ParallelGateSourceFamilyTests(unittest.TestCase):
             patcher = patch.object(sys.modules[__name__], name, value)
             patcher.start(); self.addCleanup(patcher.stop)
         self.write('ops/vps/code-release.py', b'new operator\n')
+        self.write('tests/e2e/journey.spec.ts', b'original browser assertions\nawait readiness\n')
         self.write('.github/workflows/candidate-parallel-checks.yml', b'new workflow\n')
         self.git('add', '-A'); self.git('commit', '-qm', 'exact CI delta')
 

@@ -40,6 +40,7 @@ test("plans filter, search and restore without duplicated navigation", async ({ 
   await expect(page.locator(".night-listing")).toContainText("Last Summer");
   await page.reload();
   await expect(nav.getByRole("button", { name: /^Past/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("brand-arrival")).toBeHidden();
   await nav.getByRole("button", { name: /^Following/ }).click();
   await expect(page.locator(".night-listing")).toContainText("Sunday Social");
   await expectSegmentedSelection(nav);
