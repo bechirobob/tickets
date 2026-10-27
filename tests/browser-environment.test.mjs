@@ -28,6 +28,11 @@ const jobs = {
   'candidate-parallel-checks.yml': ['desktop_chromium', 'mobile_chromium', 'mobile_webkit'],
   'tickets-code-release.yml': ['retired_preview'],
   'booking-consent-previews.yml': ['preview'],
+  'customer-email-previews.yml': ['preview'],
+  'yorkeway-previews.yml': ['preview'],
+  'browser-followup.yml': ['verify'],
+  'input-modality-checks.yml': ['browser'],
+  'native-apps.yml': ['web-client'],
 
 };
 for (const [filename, names] of Object.entries(jobs)) {
@@ -39,7 +44,7 @@ for (const [filename, names] of Object.entries(jobs)) {
     assert.match(job, /runs-on: ubuntu-24\.04/);
     assert.match(job, /shell: bash/);
     assert.match(job, /node-version: 22\.23\.4/);
-    assert.match(job, /node (?:\.\.\/)?scripts\/verify-browser-environment\.mjs/);
+    assert.match(job, /node (?:(?:\.\.|\.prepared-browser-tools)\/)?scripts\/verify-browser-environment\.mjs/);
     assert.doesNotMatch(job, /playwright install|apt-get|--privileged|SYS_ADMIN/);
   });
 }

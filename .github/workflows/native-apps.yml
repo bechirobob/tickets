@@ -15,12 +15,19 @@ concurrency:
 
 jobs:
   web-client:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     timeout-minutes: 15
     defaults:
       run:
+        shell: bash
         working-directory: mobile
     steps:
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -47,7 +54,7 @@ jobs:
             git show "$BASE_SHA:mobile/android/release.json" > "$RUNNER_TEMP/base-android-release.json"
             node scripts/android-release.mjs validate "$RUNNER_TEMP/base-android-release.json"
           fi
-      - run: npx playwright install --with-deps chromium webkit
+      - run: node ../scripts/verify-browser-environment.mjs chromium webkit
       - run: npm run test:browser
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
