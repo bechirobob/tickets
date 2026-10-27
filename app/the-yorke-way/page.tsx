@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import YorkeBrand from './yorke-brand';
 import YorkeSignup from './signup';
+import YorkeMotion from './yorke-motion';
 
 export const metadata: Metadata = {
   title: 'The Yorke Way — Early access',
@@ -25,11 +26,11 @@ export default function YorkeWayPage() {
   return <>
     <YorkeBrand />
     <main className="yorke-main" id="main">
-      <section className="yorke-intro" aria-labelledby="yorke-title">
+      <YorkeMotion>
         <p className="yorke-eyebrow"><span aria-hidden="true" />Early access · Year-end 2026</p>
-        <h1 id="yorke-title">Your year-end<br />plans called.<br /><span>They said <strong>Kofi Bills.</strong></span></h1>
+        <h1 id="yorke-title"><span className="yorke-line"><span data-yorke-phrase>Your year-end</span></span><br /><span className="yorke-line"><span data-yorke-phrase>plans called.</span></span><br /><span className="yorke-punchline"><span data-yorke-phrase>They said</span>{' '}<strong data-yorke-phrase>Kofi Bills.</strong></span></h1>
         <p className="yorke-description">Get early access to Kofi Bills’ year-end events. Give the group chat something to work with.</p>
-      </section>
+      </YorkeMotion>
       <div className="yorke-logo-stage">
         <Image src="/hosts/the-yorke-way.svg" alt="The Yorke Way metallic logo" width={771} height={771} sizes="(max-width: 700px) 72vw, 40vw" priority unoptimized />
       </div>

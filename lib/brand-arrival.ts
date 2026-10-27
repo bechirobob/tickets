@@ -28,7 +28,7 @@ function pageWasInteractedWith(): boolean {
 function safeBrowsingUrl(value: string): boolean {
   const url = new URL(value);
   const path = url.pathname.replace(/\/$/, "") || "/";
-  if (!(/^\/(?:events|hosts|about|help|privacy|terms|my-nights)?$/.test(path) || /^\/(?:event|hosts)\/[^/]+$/.test(path))) return false;
+  if (!(/^\/(?:events|hosts|about|help|privacy|terms|my-nights|the-yorke-way)?$/.test(path) || /^\/(?:event|hosts)\/[^/]+$/.test(path))) return false;
   if ([...url.searchParams.keys()].some(key => criticalQuery.has(key.toLowerCase()))) return false;
   if (/^(?:passes|purchase|ticket|qr)$/i.test(url.searchParams.get("view") ?? "")) return false;
   if (url.searchParams.get("kind") === "transfer") return false;

@@ -1,3 +1,4 @@
+import { deliverYorkewayOwnerPush, retryYorkewayOwnerPush } from '../lib/yorkeway-owner-push';
 import { deliverFirstHostEmail, retryFirstHostEmails } from '../lib/room-host-first-post';
 import { deliverOrganizerRsvpPush, retryOrganizerRsvpPush, deliverOrganizerPurchasePush, retryOrganizerPurchasePush } from '../lib/organizer-rsvp-push';
 import { reconcileVpsDeliveries } from "../lib/transactional-email";
@@ -30,6 +31,7 @@ async function processQueueUntracked(batch: MessageBatch<{ deliveryId: string }>
         else if (message.body?.deliveryId === 'host-first-post:tick') { await retryFirstHostEmails(env); await retryHostAnnouncements(env); }
         else if (message.body?.deliveryId?.startsWith('host-first-email:')) await deliverFirstHostEmail(env,message.body.deliveryId.slice('host-first-email:'.length));
         else if (message.body?.deliveryId?.startsWith('host-announcement:')) await deliverHostAnnouncement(env, message.body.deliveryId.slice('host-announcement:'.length));
+        else if (message.body?.deliveryId?.startsWith('yorkeway-owner:')) await deliverYorkewayOwnerPush(env, message.body.deliveryId.slice('yorkeway-owner:'.length));
         else if (message.body?.deliveryId?.startsWith('organizer-purchase:')) await deliverOrganizerPurchasePush(env, message.body.deliveryId.slice('organizer-purchase:'.length));
         else if (message.body?.deliveryId?.startsWith('organizer-rsvp:')) await deliverOrganizerRsvpPush(env, message.body.deliveryId.slice('organizer-rsvp:'.length));
         else if (message.body?.deliveryId === "organizer-reports:tick") await processOrganizerReports(env.DB);
@@ -61,6 +63,7 @@ async function runScheduledOperationsUntracked(controller: ScheduledController, 
   if(controller.cron === "* * * * *"){try { if (new Date(controller.scheduledTime).getUTCMinutes() % 2 === 0) await processMarketing(env); else await processEventAnnouncements(env,"https://tickets.becoreops.com"); } catch(error) { await failed("event-announcements",error); } return failures;}
   try { await retryEventRemovals(env); } catch (error) { await failed("event-removal-cleanup", error); }
   try { await retryOrganizerRsvpPush(env); } catch (error) { await failed('host-rsvp-push', error); }
+  try { await retryYorkewayOwnerPush(env); } catch (error) { await failed('yorkeway-owner-push', error); }
   try { await retryOrganizerPurchasePush(env); } catch (error) { await failed('host-purchase-push', error); }
   try { await retryFirstHostEmails(env); } catch (error) { await failed('host-first-email', error); }
   try { await retryHostAnnouncements(env); } catch (error) { await failed('host-announcements', error); }
