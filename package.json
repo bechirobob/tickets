@@ -86,7 +86,8 @@
     },
     "@next/eslint-plugin-next": "$@next/eslint-plugin-next",
     "vite-plugin-dynamic-import": "$vite-plugin-dynamic-import",
-    "zod": "4.6.6"
+    "zod": "4.6.6",
+    "@vercel/og": "1.0.3"
   },
   "type": "module"
 }
