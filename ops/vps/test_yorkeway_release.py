@@ -562,4 +562,136 @@ class OwnerPushMailPrerequisiteTests(unittest.TestCase):
             self.assertTrue(failure.exception.__suppress_context__)
 
 
+
+
+class YorkewaySecuritySourceTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name); previous = Path.cwd(); os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q'); self.git('config', 'user.name', 'Isolated release tests')
+        self.git('config', 'user.email', 'tests@example.invalid')
+        self.files = tuple(release.SECURITY_PATCH_BLOBS)
+        self.prerequisites = tuple(release.SECURITY_BASE_BLOBS)
+        for name in {'package.json', 'package-lock.json', 'README.md', *release.SECURITY_CONTROL_FILES,
+                     *self.files, *self.prerequisites}:
+            self.write(name, 'original fixture ' + name)
+        # OWNER_PUSH_SQL is new, not an old schema edit.
+        (self.root / release.OWNER_PUSH_SCHEMA_PATH).unlink()
+        self.live = self.commit()
+        for name in self.prerequisites: self.write(name, OWNER_PUSH_SQL if name == release.OWNER_PUSH_SCHEMA_PATH else 'reviewed existing release ' + name)
+        self.main = self.commit()
+        for name in self.files: self.write(name, OWNER_PUSH_SQL if name == release.OWNER_PUSH_SCHEMA_PATH else 'reviewed app ' + name)
+        self.snapshot = self.commit()
+        self.app = self.pins(self.snapshot, self.files)
+        self.git('checkout', '-q', self.snapshot)
+        self.operator = b'independent bounded operator\n'
+        for name in release.SECURITY_CONTROL_FILES: self.write(name, self.operator if name.endswith('code-release.py') else 'reviewed control tests')
+        self.control = self.commit(); self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('commit', '--allow-empty', '-qm', 'equivalent-tree merged source')
+        self.candidate = self.git('rev-parse', 'HEAD')
+        values = {'OWNER_PUSH_RELEASE_BASELINE': self.live, 'OWNER_PUSH_BASE_TREE': self.tree(self.live),
+                  'SECURITY_LIVE_BASELINE': self.live,
+                  'SECURITY_RELEASE_BASE': self.main, 'SECURITY_RELEASE_BASE_TREE': self.tree(self.main),
+                  'SECURITY_PATCH_SNAPSHOT': self.snapshot, 'SECURITY_PATCH_TREE': self.tree(self.snapshot),
+                  'SECURITY_PATCH_BLOBS': self.app, 'SECURITY_BASE_BLOBS': self.pins(self.main, self.prerequisites),
+                  'OWNER_PUSH_MAIL_REVISION': self.live,
+                  '__file__': str(self.root / 'ops/vps/code-release.py')}
+        for name, value in values.items():
+            p = patch.object(release, name, value); p.start(); self.addCleanup(p.stop)
+        p = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control); p.start(); self.addCleanup(p.stop)
+        operator_blob = release.hashlib.sha1(b'blob ' + str(len(self.operator)).encode() + b'\0' + self.operator).hexdigest()
+        p = patch.object(controls, 'SECURITY_OPERATOR_BLOB', operator_blob); p.start(); self.addCleanup(p.stop)
+        test_blob = self.git('rev-parse', self.control + ':ops/vps/test_yorkeway_release.py')
+        p = patch.object(controls, 'SECURITY_TEST_BLOB', test_blob); p.start(); self.addCleanup(p.stop)
+
+    def git(self, *args): return controls.checkout_git(self.root, *args).decode().strip()
+    def tree(self, revision): return self.git('rev-parse', revision + '^{tree}')
+    def pins(self, revision, paths): return {name: self.git('rev-parse', revision + ':' + name) for name in paths}
+    def write(self, name, content):
+        path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content.encode() if isinstance(content, str) else content); path.chmod(0o644)
+        return path
+    def commit(self):
+        self.git('add', '-A'); self.git('commit', '-qm', 'isolated fixture'); return self.git('rev-parse', 'HEAD')
+    def verify(self, source=None): return release.vetted_changes(self.live, source or self.git('rev-parse', 'HEAD'))
+
+    def test_complete_independent_control_and_promotion_is_accepted(self):
+        self.assertEqual(set(self.verify()), set(self.files)
+                         | release.SECURITY_CONTROL_FILES | set(release.SECURITY_BASE_BLOBS))
+
+    def test_complete_c_and_p_test_families_and_partial_promotion_rejection(self):
+        for revision in (self.control, self.candidate):
+            self.git('checkout', '-q', revision)
+            self.assertIn('ops/vps/code-release.py', controls.checkout_source_family(self.root))
+        self.write(self.files[0], 'unreviewed partial output'); self.commit()
+        with self.assertRaisesRegex(AssertionError, 'partial or unreviewed'):
+            controls.checkout_source_family(self.root)
+
+    def test_each_application_and_control_prerequisite_byte_is_pinned(self):
+        for name in (*self.files, *release.SECURITY_CONTROL_FILES, *self.prerequisites):
+            self.git('checkout', '-q', self.candidate); self.write(name, 'unreviewed bytes'); self.commit()
+            with self.subTest(name=name), self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_missing_unrelated_dependency_and_mode_changes_reject(self):
+        for mutation in ('missing', 'extra', 'dependency', 'mode', 'symlink'):
+            self.git('checkout', '-q', self.candidate)
+            name = self.files[0]; path = self.root / name
+            if mutation == 'missing': self.git('rm', name)
+            elif mutation == 'extra': self.write('tests/unapproved.py', 'unreviewed')
+            elif mutation == 'dependency': self.write('package-lock.json', 'unreviewed dependency')
+            elif mutation == 'mode': path.chmod(0o755)
+            else: path.unlink(); path.symlink_to('README.md')
+            self.commit()
+            with self.subTest(mutation=mutation), self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_own_source_and_unmerged_trusted_controls_reject(self):
+        with patch.dict(os.environ, BECORE_TRUSTED=self.candidate, BECORE_TRUSTED_BASE=self.candidate):
+            with self.assertRaisesRegex(release.ReleaseError, 'independent'): self.verify()
+        self.git('update-ref', 'refs/remotes/origin/main', self.main)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_wrong_tree_pins_and_extended_scope_reject(self):
+        for name in ('OWNER_PUSH_BASE_TREE', 'SECURITY_RELEASE_BASE_TREE', 'SECURITY_PATCH_TREE'):
+            with patch.object(release, name, 'f' * 40), self.assertRaises(release.ReleaseError): self.verify()
+        for name in ('SECURITY_CONTROL_FILES', 'SECURITY_PATCH_BLOBS', 'SECURITY_BASE_BLOBS'):
+            original = getattr(release, name)
+            value = original | {'extra'} if isinstance(original, set) else {**original, 'extra': 'f' * 40}
+            with patch.object(release, name, value), self.assertRaisesRegex(release.ReleaseError, 'scope'): self.verify()
+
+    def test_source_cannot_be_its_own_trusted_control(self):
+        with self.assertRaisesRegex(release.ReleaseError, 'independent'): self.verify(self.control)
+
+    def test_application_cannot_be_sneaked_into_independent_controls(self):
+        with patch.dict(os.environ, BECORE_TRUSTED_BASE=self.snapshot):
+            with self.assertRaisesRegex(release.ReleaseError, 'independent'): self.verify()
+
+    def test_old_unpatched_candidate_is_not_admitted(self):
+        with self.assertRaises(subprocess.CalledProcessError): self.verify(self.main)
+
+    def test_patched_application_cannot_modify_old_relay_or_schema(self):
+        for name in ('ops/email/mailer.py', release.OWNER_PUSH_SCHEMA_PATH):
+            self.git('checkout', '-q', self.candidate); self.write(name, 'unreviewed'); self.commit()
+            with self.assertRaises(release.ReleaseError): self.verify()
+
+
+
+class YorkewaySecurityDeploymentTests(OwnerPushDeploymentTests):
+    def setUp(self):
+        super().setUp()
+        p = patch.object(release, 'SECURITY_LIVE_BASELINE', controls.OLD)
+        p.start(); self.addCleanup(p.stop)
+        self.proof['changedFiles'] = sorted(release.security_release_paths())
+        self.refresh_digests()
+
+    def test_old_unpatched_manifest_refuses_before_snapshot(self):
+        self.proof['changedFiles'] = sorted(set(release.OWNER_PUSH_APPLICATION_BLOBS)
+            | release.OWNER_PUSH_CONTROL_FILES | set(release.OWNER_PUSH_PREREQUISITE_BLOBS))
+        self.refresh_digests()
+        with self.assertRaisesRegex(release.ReleaseError, 'complete source'):
+            self.deployment.preflight()
+        self.assertFalse(self.deployment.snapshot.exists())
+        self.assertEqual(self.system.restarts, 0)
+
+
 if __name__ == '__main__': unittest.main()
