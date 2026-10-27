@@ -259,7 +259,9 @@ class YorkewayStagedInventoryTests(unittest.TestCase):
 
 class YorkewayTransportTests(unittest.TestCase):
     def test_generic_transport_adds_only_the_exact_existing_sibling_helper(self):
-        raw = (ROOT / '.github/workflows/tickets-code-release.yml').read_text()
+        raw = controls.parallel_gate_historical_workflow(
+            '.github/workflows/tickets-code-release.yml',
+            (ROOT / '.github/workflows/tickets-code-release.yml').read_bytes()).decode()
         line = '''          tailscale ssh root@hermes "umask 022; cat > '$stage/inspect-mail-service-readonly.py'" < "$RUNNER_TEMP/tickets-operator/ops/vps/inspect-mail-service-readonly.py"\n'''
         self.assertEqual(raw.count(line), 1)
         self.assertLess(raw.index(line), raw.index("printf '%s' \"$FIRST_HOST_ACCOUNT_ID\""))

@@ -1124,11 +1124,12 @@ RUNTIME_HANDOFF_STEPS = {
     "Inspect current data and private connection readiness",
 }
 CANDIDATE_CORE_STEPS = {
+    "Set up Python for existing verification scripts",
     "Verify installed audited dependencies",
     "Stage trusted audit verifier",
     "Check out exact candidate", "Set up Node.js", "Install locked dependencies",
     "Verify exact source ancestry before executing checkout code",
-    "Install browsers for event-page verification",
+    "Verify prepared browsers for event-page verification",
     "Verify exact candidate source", "Audit dependencies", "Lint application",
     "Check application types", "Verify unit tests and rendered production build",
     "Check database schema", "Validate the deployable Worker without publishing",
@@ -3719,7 +3720,7 @@ def verify_parallel_run(run, jobs, *, repository):
             and run.get("repository", {}).get("full_name") == repository
             and run.get("head_repository", {}).get("full_name") == repository,
             "Parallel candidate run identity differs from the exact branch workflow.")
-    names = {"build", "desktop-chromium", "mobile-chromium", "mobile-webkit", "verify"}
+    names = {"build", "desktop-chromium", "mobile-chromium", "mobile-webkit", "tickets-candidate-verified"}
     require(type(jobs) is list and len(jobs) == 5 and all(type(job) is dict for job in jobs),
             "Parallel candidate requires exactly five jobs.")
     identifiers = set()
@@ -3843,7 +3844,7 @@ def validate_parallel_proof(proof, *, repository, candidate, tree, run_id, attem
     require(type(jobs) is list and len(jobs) == 5, "Parallel proof requires five jobs.")
     identifiers = set()
     browsers = ("desktop-chromium", "mobile-chromium", "mobile-webkit")
-    for job, name in zip(jobs, ("build", *browsers, "verify")):
+    for job, name in zip(jobs, ("build", *browsers, "tickets-candidate-verified")):
         require(type(job) is dict and set(job) == {"id", "name", "log_sha256", "steps_sha256"}
                 and number(job["id"]) and job["id"] not in identifiers and job["name"] == name
                 and digest(job["log_sha256"]) and digest(job["steps_sha256"]),

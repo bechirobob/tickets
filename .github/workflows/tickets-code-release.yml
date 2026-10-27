@@ -26,9 +26,9 @@ on:
         default: false
         type: boolean
       candidate_mode:
-        description: Explicit browser evidence contract; legacy remains the default
+        description: Authenticated parallel evidence by default; legacy is an explicit fallback
         required: false
-        default: legacy
+        default: parallel-v1
         type: choice
         options: [legacy, parallel-v1]
       expected_active:
@@ -78,7 +78,7 @@ jobs:
       EXPECTED_ACTIVE: ${{ inputs.expected_active }}
       RUNTIME_RUN: ${{ inputs.runtime_run }}
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
-      CANDIDATE_MODE: ${{ inputs.candidate_mode || 'legacy' }}
+      CANDIDATE_MODE: ${{ inputs.candidate_mode || 'parallel-v1' }}
       VERIFY_ONLY: ${{ inputs.verify_only && 'true' || 'false' }}
       INSPECT_MODE: ${{ inputs.inspect_failed_release && 'true' || 'false' }}
       RECOVER_PREPARED: ${{ inputs.recover_prepared }}
@@ -530,7 +530,10 @@ jobs:
     if: ${{ !inputs.verify_only }}
     name: Verify retired checkout preview (${{ matrix.browser }})
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     timeout-minutes: 15
     permissions:
       contents: read
@@ -540,6 +543,9 @@ jobs:
         browser: [desktop-chromium, mobile-chromium, mobile-webkit]
     env:
       E2E_BASE_URL: https://tickets.becoreops.com
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -550,8 +556,8 @@ jobs:
           node-version: 22.23.4
           cache: npm
       - run: npm ci
-      - name: Install browser engines
-        run: npx playwright install --with-deps chromium webkit
+      - name: Verify prepared browser engines
+        run: node scripts/verify-browser-environment.mjs chromium webkit
       - name: Verify only the removed preview page and API
         run: npx playwright test tests/e2e/checkout-preview-retired.spec.ts --project ${{ matrix.browser }} --workers=1 --retries=0
       # This endpoint-only smoke gate has no distributable build output. Its

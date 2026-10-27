@@ -44,9 +44,19 @@ env:
 # deployable artifact, or a waiver of Candidate verification/security failures.
 jobs:
   preview:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
     timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Set up Python for existing verification scripts
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
       - name: Check out exact preview source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -72,9 +82,9 @@ jobs:
           npm run build
           node scripts/prepare-deploy.mjs
           node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; assert.equal(JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")).vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
-      - name: Install desktop and phone preview browsers
+      - name: Verify prepared desktop and phone preview browsers
         id: browsers
-        run: npx playwright install --with-deps chromium webkit
+        run: node scripts/verify-browser-environment.mjs chromium webkit
       - name: Prepare isolated local database
         id: fixtures
         run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
