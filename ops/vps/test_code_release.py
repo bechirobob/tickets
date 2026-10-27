@@ -2209,7 +2209,136 @@ class ParallelGateSourceFamilyTests(unittest.TestCase):
             parallel_gate_source_family(self.root)
 
 
+# Separate finite continuation of the merged stage1 family. No production
+# admission changes and no mutation of any earlier family's source pins.
+PREPARED_BROWSER_STAGE2_BASELINE = '670eaec9c36ce826a08b26697875a05d577111af'
+PREPARED_BROWSER_STAGE2_BASE_TREE = '096a23f14cbffd0b9f4edec0eb3396b31e8ca57a'
+PREPARED_BROWSER_STAGE2_OUTPUTS = {'.github/workflows/browser-followup.yml': ('100644',
+                                            '6476c6d3313354731a83686fbc90fa3f4e754aec'),
+ '.github/workflows/customer-email-previews.yml': ('100644',
+                                                   'b667d6f54ee7a2d230c474c26d3a8a2855a0d4a3'),
+ '.github/workflows/input-modality-checks.yml': ('100644',
+                                                 '74c855d9ad7eb75821b20ea8f3a81caccf2fc350'),
+ '.github/workflows/native-apps.yml': ('100644',
+                                       '77eb667c29f5e8ad4b73d3e17825ad67d496f00f'),
+ '.github/workflows/yorkeway-previews.yml': ('100644',
+                                             'b3b0872fcc9348d9c192eb7c8fad5ade12bf4afd'),
+ 'tests/browser-environment.test.mjs': ('100644',
+                                        '7692439ced79cc5e5794bdf6c301fe658f92fca5')}
+PREPARED_BROWSER_STAGE2_TEST_FILE = Path(__file__).resolve()
+PREPARED_BROWSER_STAGE2_STAGED_ADDITIONS = frozenset()
+PREPARED_BROWSER_STAGE2_STAGED_BASE = dict(SECURITY_STAGED_BASE)
+PREPARED_BROWSER_STAGE2_STAGED_BASE.update({name: value for name, value in PARALLEL_GATE_OUTPUTS.items()
+    if name in PREPARED_BROWSER_STAGE2_STAGED_BASE or name in PARALLEL_GATE_STAGED_ADDITIONS})
+
+
+def prepared_browser_stage2_source_family(root):
+    """Require the exact baseline plus the independently reviewed finite stage2 CI delta."""
+    root = Path(root)
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root / 'ops/vps/code-release.py'
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == PREPARED_BROWSER_STAGE2_TEST_FILE
+    # Stage2 does not change the operator, so that hash cannot distinguish it
+    # from stage1. A partial exact stage2 marker selects the stricter full family;
+    # the executing control never falls back when any current byte is changed.
+    marked = any((root / name).is_file() and not (root / name).is_symlink()
+                 and digest((root / name).read_bytes()) == value[1]
+                 for name, value in PREPARED_BROWSER_STAGE2_OUTPUTS.items())
+    if not selected and not marked:
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            if checkout_git(root, 'rev-parse', PREPARED_BROWSER_STAGE2_BASELINE + '^{tree}').decode().strip() != PREPARED_BROWSER_STAGE2_BASE_TREE:
+                raise AssertionError('Prepared browser stage2 baseline tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', PREPARED_BROWSER_STAGE2_BASELINE).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Prepared browser stage2 baseline has unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(PREPARED_BROWSER_STAGE2_OUTPUTS)
+            manifest['ops/vps/test_code_release.py'] = ('100644', None)
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Prepared browser stage2 full inventory differs')
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, blob, stage = metadata.decode().split()
+                    name = os.fsdecode(name)
+                    expected = manifest.get(name)
+                    if expected == ('100644', None):
+                        expected = ('100644', digest((root / name).read_bytes()))
+                    if stage != '0' or expected != (mode, blob):
+                        raise AssertionError('Prepared browser stage2 index differs from complete reviewed family')
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise AssertionError('Prepared browser stage2 requires its exact independent baseline') from error
+    else:
+        manifest = dict(PREPARED_BROWSER_STAGE2_STAGED_BASE)
+        # The staging command includes all tracked ops/vps files and only its
+        # explicitly enumerated workflows/scripts. No arbitrary new paths ship.
+        manifest.update({name: value for name, value in PREPARED_BROWSER_STAGE2_OUTPUTS.items()
+                         if name in manifest or name in PREPARED_BROWSER_STAGE2_STAGED_ADDITIONS})
+        manifest['ops/vps/test_code_release.py'] = ('100644', None)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Prepared browser stage2 requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as error:
+            raise AssertionError('Prepared browser stage2 source is incomplete') from error
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Prepared browser stage2 has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
+class PreparedBrowserStage2SourceFamilyTests(ParallelGateSourceFamilyTests):
+    """The exact stage2 family also rejects every existing inventory mutation."""
+    def setUp(self):
+        super().setUp()
+        for name, value in (
+                ('PREPARED_BROWSER_STAGE2_BASELINE', PARALLEL_GATE_BASELINE),
+                ('PREPARED_BROWSER_STAGE2_BASE_TREE', PARALLEL_GATE_BASE_TREE),
+                ('PREPARED_BROWSER_STAGE2_OUTPUTS', PARALLEL_GATE_OUTPUTS),
+                ('PREPARED_BROWSER_STAGE2_TEST_FILE', PARALLEL_GATE_TEST_FILE),
+                ('PREPARED_BROWSER_STAGE2_STAGED_BASE', SECURITY_STAGED_BASE),
+                ('parallel_gate_source_family', prepared_browser_stage2_source_family)):
+            patcher = patch.object(sys.modules[__name__], name, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+
+    def test_wrong_independent_tree_pin_rejects(self):
+        with patch.object(sys.modules[__name__], 'PREPARED_BROWSER_STAGE2_BASE_TREE', 'f'*40), self.assertRaises(AssertionError):
+            prepared_browser_stage2_source_family(self.root)
+
+    def test_stage1_without_any_stage2_marker_is_not_reclassified(self):
+        other = self.root / 'unrelated-archive'
+        other.mkdir()
+        self.assertIsNone(prepared_browser_stage2_source_family(other))
+
+    def test_partial_stage2_overlay_never_falls_back_to_stage1(self):
+        self.write('tests/e2e/journey.spec.ts', self.files['tests/e2e/journey.spec.ts'])
+        self.git('add', 'tests/e2e/journey.spec.ts')
+        with self.assertRaises(AssertionError): prepared_browser_stage2_source_family(self.root)
+
+
 def checkout_source_family(root):
+    stage2 = prepared_browser_stage2_source_family(root)
+    if stage2 is not None:
+        return stage2
     gate = parallel_gate_source_family(root)
     if gate is not None:
         return gate

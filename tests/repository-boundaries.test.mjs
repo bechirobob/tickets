@@ -375,22 +375,10 @@ test("production audit covers the deployed main revision while candidate CI cove
     { browser: "mobile-webkit", engine: "webkit" },
   ]);
   assert.deepEqual(Object.keys(job.strategy.matrix).sort(), ["browser", "include"], "Do not add duplicate matrix jobs");
-  const install = candidateStep(job, "Verify prepared real-browser engines");
-  assert.equal(install.run, "node .prepared-browser-tools/scripts/verify-browser-environment.mjs ${{ matrix.engine }}");
+  const install = candidateStep(job, "Install real-browser engines");
+  assert.equal(install.run, "npx playwright install --with-deps ${{ matrix.engine }}");
   const resolve = candidateStep(job, "Resolve and verify the active production revision");
-  assert.deepEqual(job.steps[0], {
-    uses: "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
-    with: { "python-version": "3.12" },
-  }, "Only the pinned Python runtime setup precedes production identity verification");
-  assert.equal(job.steps[1], resolve, "No repository code may run before production identity is verified");
-  const readiness = candidateStep(job, "Stage prepared-browser readiness tooling");
-  assert.deepEqual(readiness.with, {
-    ref: "${{ github.sha }}", path: ".prepared-browser-tools", "persist-credentials": false,
-    "sparse-checkout-cone-mode": false,
-    "sparse-checkout": "/scripts/browser-environment.json\n/scripts/verify-browser-environment.mjs\n",
-  });
-  assert.ok(job.steps.indexOf(readiness) > job.steps.indexOf(resolve));
-  assert.ok(job.steps.indexOf(readiness) < job.steps.indexOf(install));
+  assert.equal(job.steps[0], resolve, "No repository code may run before production identity is verified");
   assert.match(resolve.run, /--proto '=https' --tlsv1\.2 --connect-timeout 5 --max-time 20 --max-filesize 65536/u);
   assert.doesNotMatch(resolve.run, /--location|--insecure|curl\s+-[^\s]*[Lk]/u);
   assert.equal(resolve.run.match(/test "\$status" = 200/gu)?.length, 2);

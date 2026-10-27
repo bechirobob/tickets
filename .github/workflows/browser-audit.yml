@@ -12,11 +12,9 @@ permissions:
 jobs:
   browser-audit:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-24.04
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
-      options: --user 1001 --shm-size=1g
-    # Launch only the selected prepared engine; preserve the audited live revision.
+    runs-on: ubuntu-latest
+    # Each job installs only its selected engine. Keep enough headroom for
+    # WebKit system dependencies and evidence upload on a slow mirror.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -29,13 +27,7 @@ jobs:
             engine: chromium
           - browser: mobile-webkit
             engine: webkit
-    defaults:
-      run:
-        shell: bash
     steps:
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.12'
       # Candidate verification tests the full PR tree against its isolated build.
       # This separate audit must use the tests belonging to the actual live build.
       - name: Resolve and verify the active production revision
@@ -116,20 +108,8 @@ jobs:
           node-version: 22.23.4
           cache: npm
       - run: npm ci
-      # Older deployed revisions predate the helper. Keep their source intact;
-      # load only readiness tooling from this exact workflow revision.
-      - name: Stage prepared-browser readiness tooling
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.sha }}
-          path: .prepared-browser-tools
-          persist-credentials: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /scripts/browser-environment.json
-            /scripts/verify-browser-environment.mjs
-      - name: Verify prepared real-browser engines
-        run: node .prepared-browser-tools/scripts/verify-browser-environment.mjs ${{ matrix.engine }}
+      - name: Install real-browser engines
+        run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Confirm production still matches the audited source
         env:
           DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}

@@ -30,7 +30,6 @@ const jobs = {
   'booking-consent-previews.yml': ['preview'],
   'customer-email-previews.yml': ['preview'],
   'yorkeway-previews.yml': ['preview'],
-  'browser-audit.yml': ['browser-audit'],
   'browser-followup.yml': ['verify'],
   'input-modality-checks.yml': ['browser'],
   'native-apps.yml': ['web-client'],
