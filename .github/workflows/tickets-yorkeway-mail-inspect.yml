@@ -1,0 +1,62 @@
+name: Inspect exact installed mail service for Yorke Way welcome upgrade
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/tickets-yorkeway-mail-inspect.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: tickets-vps-handover
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact public inspection inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD^1)" = 3ba45d0831d130949d7d0cd50e3abbcc4432f8cd
+          printf '%s\n' '.github/workflows/tickets-yorkeway-mail-inspect.yml' > "$RUNNER_TEMP/expected-paths"
+          git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/actual-paths"
+          diff -u "$RUNNER_TEMP/expected-paths" "$RUNNER_TEMP/actual-paths"
+          printf '%s\n' '7bc91b1b3b4354d0135cf068126a8f2bdcce5a16017ea514955f1fe5c8008558  ops/vps/inspect-mail-service-readonly.py' | sha256sum -c -
+      - name: Package fixed read-only inspection in memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE' > "$RUNNER_TEMP/mail-operation.py"
+          from pathlib import Path
+          helper=Path('ops/vps/inspect-mail-service-readonly.py').read_text()
+          print('import json,sys,types')
+          print("metadata=types.ModuleType('metadata')")
+          print('exec(compile('+repr(helper)+",'metadata.py','exec'),metadata.__dict__)")
+          print("metadata.EXPECTED_APP='3ba45d0831d130949d7d0cd50e3abbcc4432f8cd'")
+          print('try: metadata.main()')
+          print('except Exception as error:')
+          print(' print(json.dumps(metadata.safe_failure(error),sort_keys=True),file=sys.stderr);sys.exit(1)')
+          PYCODE
+          python3 -m py_compile "$RUNNER_TEMP/mail-operation.py"
+      - name: Connect existing Tickets identity
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          audience: api.tailscale.com/TQyYk1uNME11CNTRL-kCerQyAvJU11CNTRL
+          tags: tag:tickets-ci
+          ping: hermes
+      - name: Inspect existing mail service without messages or database access
+        shell: bash
+        run: |
+          set -euo pipefail
+          tailscale ssh root@hermes 'python3 -B -' < "$RUNNER_TEMP/mail-operation.py"

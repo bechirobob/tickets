@@ -239,7 +239,7 @@ class YorkewayStagedInventoryTests(unittest.TestCase):
         for mutation in (None, 'missing', 'extra', 'mode', 'operator'):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                for name in controls.YORKEWAY_STAGED_BASE:
+                for name in controls.OWNER_PUSH_STAGED_BASE:
                     path = root / name; path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes((ROOT / name).read_bytes()); path.chmod(0o644)
                 target = root / 'ops/vps/inspect-mail-service-readonly.py'
@@ -249,7 +249,7 @@ class YorkewayStagedInventoryTests(unittest.TestCase):
                 elif mutation == 'operator': (root / 'ops/vps/code-release.py').write_bytes(b'older or unreviewed operator')
                 # Match the staged executing test path: no historical fallback
                 # is available when this new suite's operator is replaced.
-                with patch.object(controls, 'YORKEWAY_TEST_FILE', root / 'ops/vps/test_code_release.py'):
+                with patch.object(controls, 'OWNER_PUSH_TEST_FILE', root / 'ops/vps/test_code_release.py'):
                     if mutation is None:
                         self.assertIn('ops/vps/code-release.py', controls.checkout_source_family(root))
                     else:
@@ -280,8 +280,9 @@ class OwnerPushSourceTests(unittest.TestCase):
         self.git('init', '-q'); self.git('config', 'user.name', 'Isolated release tests')
         self.git('config', 'user.email', 'tests@example.invalid')
         self.files = tuple(release.OWNER_PUSH_APPLICATION_BLOBS)
+        self.prerequisites = tuple(release.OWNER_PUSH_PREREQUISITE_BLOBS)
         for name in {'package.json', 'package-lock.json', 'README.md', *release.OWNER_PUSH_CONTROL_FILES,
-                     *self.files}:
+                     *self.files, *self.prerequisites}:
             self.write(name, 'original fixture ' + name)
         # OWNER_PUSH_SQL is new, not an old schema edit.
         (self.root / release.OWNER_PUSH_SCHEMA_PATH).unlink()
@@ -293,12 +294,15 @@ class OwnerPushSourceTests(unittest.TestCase):
         self.git('checkout', '-q', self.main)
         self.operator = b'independent bounded operator\n'
         for name in release.OWNER_PUSH_CONTROL_FILES: self.write(name, self.operator if name.endswith('code-release.py') else 'reviewed control tests')
+        for name in self.prerequisites: self.write(name, 'reviewed prerequisite ' + name)
         self.control = self.commit(); self.git('update-ref', 'refs/remotes/origin/main', self.control)
         self.git('merge', '--no-ff', '--no-commit', self.snapshot)
         self.candidate = self.commit()
         values = {'OWNER_PUSH_RELEASE_BASELINE': self.live, 'OWNER_PUSH_BASE_TREE': self.tree(self.live),
                   'OWNER_PUSH_APP_SNAPSHOT': self.snapshot, 'OWNER_PUSH_APP_TREE': self.tree(self.snapshot),
                   'OWNER_PUSH_APPLICATION_BLOBS': self.app,
+                  'OWNER_PUSH_PREREQUISITE_BLOBS': self.pins(self.control, self.prerequisites),
+                  'OWNER_PUSH_MAIL_REVISION': self.control,
                   '__file__': str(self.root / 'ops/vps/code-release.py')}
         for name, value in values.items():
             p = patch.object(release, name, value); p.start(); self.addCleanup(p.stop)
@@ -321,7 +325,7 @@ class OwnerPushSourceTests(unittest.TestCase):
 
     def test_complete_independent_control_and_promotion_is_accepted(self):
         self.assertEqual(set(self.verify()), set(self.files)
-                         | release.OWNER_PUSH_CONTROL_FILES)
+                         | release.OWNER_PUSH_CONTROL_FILES | set(release.OWNER_PUSH_PREREQUISITE_BLOBS))
 
     def test_complete_c_and_p_test_families_and_partial_promotion_rejection(self):
         for revision in (self.control, self.candidate):
@@ -332,7 +336,7 @@ class OwnerPushSourceTests(unittest.TestCase):
             controls.checkout_source_family(self.root)
 
     def test_each_application_and_control_prerequisite_byte_is_pinned(self):
-        for name in (*self.files, *release.OWNER_PUSH_CONTROL_FILES):
+        for name in (*self.files, *release.OWNER_PUSH_CONTROL_FILES, *self.prerequisites):
             self.git('checkout', '-q', self.candidate); self.write(name, 'unreviewed bytes'); self.commit()
             with self.subTest(name=name), self.assertRaises(release.ReleaseError): self.verify()
 
@@ -357,7 +361,7 @@ class OwnerPushSourceTests(unittest.TestCase):
     def test_wrong_tree_pins_and_extended_scope_reject(self):
         for name in ('OWNER_PUSH_BASE_TREE', 'OWNER_PUSH_APP_TREE'):
             with patch.object(release, name, 'f' * 40), self.assertRaises(release.ReleaseError): self.verify()
-        for name in ('OWNER_PUSH_CONTROL_FILES', 'OWNER_PUSH_APPLICATION_BLOBS'):
+        for name in ('OWNER_PUSH_CONTROL_FILES', 'OWNER_PUSH_APPLICATION_BLOBS', 'OWNER_PUSH_PREREQUISITE_BLOBS'):
             original = getattr(release, name)
             value = original | {'extra'} if isinstance(original, set) else {**original, 'extra': 'f' * 40}
             with patch.object(release, name, value), self.assertRaisesRegex(release.ReleaseError, 'scope'): self.verify()
@@ -410,14 +414,14 @@ class OwnerPushDeploymentTests(controls.DeploymentFixture):
     def setUp(self):
         super().setUp()
         p = patch.object(release, 'OWNER_PUSH_RELEASE_BASELINE', controls.OLD); p.start(); self.addCleanup(p.stop)
-        p = patch.object(release, 'verify_room_mail_vps_service'); self.mail = p.start(); self.addCleanup(p.stop)
+        p = patch.object(release, 'verify_owner_push_mail_service'); self.mail = p.start(); self.addCleanup(p.stop)
         state = self.root / 'var/lib/becore-tickets'; state.chmod(0o700)
         with release.sqlite3.connect(state / 'tickets.sqlite') as c:
             c.execute('CREATE TABLE orders (id TEXT)'); c.execute("INSERT INTO orders VALUES ('synthetic-order')")
         (state / 'tickets.sqlite').chmod(0o600)
         member = tarfile.TarInfo('migrations/0071_yorkeway_owner_push.sql'); member.mode = 0o644
         self.make_archive(manifest={'revision': controls.NEW, 'dirty': False, 'node': 'v24.22.1'}, extra=(member, OWNER_PUSH_SQL))
-        self.proof['changedFiles'] = sorted(set(release.OWNER_PUSH_APPLICATION_BLOBS) | release.OWNER_PUSH_CONTROL_FILES)
+        self.proof['changedFiles'] = sorted(set(release.OWNER_PUSH_APPLICATION_BLOBS) | release.OWNER_PUSH_CONTROL_FILES | set(release.OWNER_PUSH_PREREQUISITE_BLOBS))
         self.proof['migrations'] = release.owner_push_migration_plan(); self.refresh_digests()
 
     def test_success_preserves_config_and_checks_mail_twice(self):
@@ -486,6 +490,76 @@ class OwnerPushStagedInventoryTests(unittest.TestCase):
                     else:
                         with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
                             controls.checkout_source_family(root)
+
+
+
+
+class OwnerPushMailPrerequisiteTests(unittest.TestCase):
+    def inspect(self, *, health=None, marker=None, identity=None, evidence=None, failure=None):
+        expected = {'service': 'becore-tickets-mail', 'revision': release.OWNER_PUSH_MAIL_REVISION,
+                    'sendingEnabled': True}
+        ident = ['a' * 64, 'sha256:' + 'b' * 64, True, '2026-10-24T17:01:12Z']
+        source = {'source_sha256': release.OWNER_PUSH_MAIL_SOURCE_SHA256,
+                  'room_host_post_supported': True, 'event_host_pass_supported': False, 'unknown_kind_count': 1}
+        module = controls.types.SimpleNamespace(CONTAINER='becore-tickets-mail', SOURCE_READ='fixed reviewed source read')
+        calls = []
+        def sequence(name, values):
+            iterator = iter(values)
+            def call_once(*args):
+                calls.append(name)
+                if failure == name: raise ValueError('PRIVATE_SENTINEL address@example.invalid')
+                return next(iterator)
+            return call_once
+        module.health = sequence('health', health if health is not None else [expected, expected])
+        module.marker = sequence('marker', marker if marker is not None else [release.OWNER_PUSH_MAIL_REVISION] * 2)
+        module.identity = sequence('identity', identity if identity is not None else [ident, ident])
+        def command(args):
+            calls.append('source')
+            self.assertEqual(args, ['docker', 'exec', 'becore-tickets-mail', 'python3', '-B', '-c', module.SOURCE_READ])
+            if failure == 'source': raise subprocess.TimeoutExpired(['private command'], 15, output=b'PRIVATE_SENTINEL')
+            return 'reviewed public source'
+        module.command = command
+        module.source_evidence = lambda raw: source if evidence is None else evidence
+        with patch.object(release, 'load_room_mail_vps_inspector', return_value=module), \
+             patch.object(release.subprocess, 'run', side_effect=AssertionError('unexpected process')), \
+             patch.object(release.urllib.request, 'urlopen', side_effect=AssertionError('unexpected network')):
+            release.verify_owner_push_mail_service()
+        return calls
+
+    def test_exact_service_is_checked_twice_with_fixed_read_only_source_command(self):
+        self.assertEqual(self.inspect(), ['identity', 'marker', 'health', 'source', 'health', 'marker', 'identity'])
+
+    def test_wrong_health_revision_or_paused_sending_is_rejected_at_either_boundary(self):
+        good = {'service': 'becore-tickets-mail', 'revision': release.OWNER_PUSH_MAIL_REVISION, 'sendingEnabled': True}
+        for value in ({**good, 'sendingEnabled': False}, {**good, 'revision': 'f' * 40},
+                      {**good, 'service': 'other'}, {}, None):
+            for index in (0, 1):
+                health = [good, good];health[index] = value
+                with self.subTest(value=value, index=index), self.assertRaises(release.ReleaseError):
+                    self.inspect(health=health)
+
+    def test_exact_source_room_only_allowlist_and_unknown_kind_count_are_required(self):
+        good = {'source_sha256': release.OWNER_PUSH_MAIL_SOURCE_SHA256,
+                'room_host_post_supported': True, 'event_host_pass_supported': False, 'unknown_kind_count': 1}
+        for value in ({**good, 'source_sha256': 'f' * 64}, {**good, 'room_host_post_supported': False},
+                      {**good, 'event_host_pass_supported': True}, {**good, 'unknown_kind_count': 0}, {**good, 'unknown_kind_count': 2}, {}):
+            with self.subTest(value=value), self.assertRaises(release.ReleaseError): self.inspect(evidence=value)
+
+    def test_revision_marker_and_container_replacement_are_rejected(self):
+        for marker in (['f' * 40, 'f' * 40], [release.OWNER_PUSH_MAIL_REVISION, 'f' * 40]):
+            with self.assertRaises(release.ReleaseError): self.inspect(marker=marker)
+        good = ['a' * 64, 'sha256:' + 'b' * 64, True, '2026-10-24T17:01:12Z']
+        for index, value in ((0, 'c' * 64), (1, 'sha256:' + 'd' * 64), (2, False), (3, '2026-10-24T17:02:00Z')):
+            changed = list(good);changed[index] = value
+            with self.assertRaises(release.ReleaseError): self.inspect(identity=[good, changed])
+
+    def test_errors_have_no_source_identity_private_output_or_command_details(self):
+        for stage in ('identity', 'marker', 'health', 'source'):
+            with self.subTest(stage=stage), self.assertRaises(release.ReleaseError) as failure:
+                self.inspect(failure=stage)
+            for private in ('PRIVATE_SENTINEL', 'address@', 'private command'):
+                self.assertNotIn(private, str(failure.exception))
+            self.assertTrue(failure.exception.__suppress_context__)
 
 
 if __name__ == '__main__': unittest.main()

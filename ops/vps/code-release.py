@@ -2214,6 +2214,29 @@ def verify_room_mail_vps_service():
     except Exception:
         raise ReleaseError("Exact Room VPS mail prerequisite is unavailable; no application activation is permitted.") from None
 
+def verify_owner_push_mail_service():
+    """Read-only prerequisite under the shared deployment lock; never sends or upgrades."""
+    try:
+        metadata = load_room_mail_vps_inspector()
+        before = metadata.identity()
+        revision = metadata.marker()
+        expected = {"service": "becore-tickets-mail", "revision": OWNER_PUSH_MAIL_REVISION,
+                    "sendingEnabled": True}
+        require(revision == OWNER_PUSH_MAIL_REVISION and metadata.health() == expected,
+                "Room VPS mail prerequisite is not the exact healthy sending-enabled release.")
+        evidence = metadata.source_evidence(metadata.command(
+            ["docker", "exec", metadata.CONTAINER, "python3", "-B", "-c", metadata.SOURCE_READ]))
+        require(evidence["source_sha256"] == OWNER_PUSH_MAIL_SOURCE_SHA256
+                and evidence["room_host_post_supported"] is True
+                and evidence["event_host_pass_supported"] is False
+                and evidence["unknown_kind_count"] == 1,
+                "Room VPS mail source or Room plus Yorke Way welcome scope changed.")
+        require(metadata.health() == expected and metadata.marker() == revision
+                and metadata.identity() == before,
+                "Room VPS mail prerequisite changed during inspection.")
+    except Exception:
+        raise ReleaseError("Exact Yorke Way VPS mail prerequisite is unavailable; no application activation is permitted.") from None
+
 
 def reviewed_room_mail_vps_application_blobs(expected, source):
     """Bind exact M/S inputs and outputs to independent control C and promotion P."""
@@ -3128,9 +3151,9 @@ def yorkeway_migration_plan():
 
 OWNER_PUSH_RELEASE_BASELINE = '3ba45d0831d130949d7d0cd50e3abbcc4432f8cd'
 OWNER_PUSH_BASE_TREE = 'e98c6b563ab1b8092154d3c6c956e4ce18d2339b'
-OWNER_PUSH_APP_SNAPSHOT = 'ce72c2885f970f6c33b8cd083ba5993b48f1c484'
-OWNER_PUSH_APP_TREE = 'bfebb5de66ea87df05e6f1a160da36997bf1e50f'
-OWNER_PUSH_CONTROL_FILES = {'ops/vps/test_code_release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/code-release.py'}
+OWNER_PUSH_APP_SNAPSHOT = '1864c4e9687fdabf0e0f2f47463e8fb714952582'
+OWNER_PUSH_APP_TREE = '67dbe2ec7da0abd75739da6334d356e125e96a09'
+OWNER_PUSH_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/test_code_release.py'}
 OWNER_PUSH_APPLICATION_BLOBS = {'app/organizer/workspace/host-rsvp-alerts.tsx': 'a000af310eed3c14a7568d85189fb2f47ff65377',
  'app/the-yorke-way/page.tsx': 'd3ed72340d07ce98f2b377041e8040289799e315',
  'app/the-yorke-way/yorke-motion.tsx': '54d5915443f5678b4c7aee85e9d61d5764c5918c',
@@ -3138,6 +3161,7 @@ OWNER_PUSH_APPLICATION_BLOBS = {'app/organizer/workspace/host-rsvp-alerts.tsx': 
  'docs/operations/yorkeway-owner-notifications.md': '1d5814083c9385337e4cac5804d852e78bddac3f',
  'drizzle/0071_yorkeway_owner_push.sql': 'bcf9b06657a8c546e59cc87de51c63204cdca920',
  'lib/brand-arrival.ts': '5053e246614fac432deb641405a37e514512fd5d',
+ 'lib/transactional-email.ts': '3268b4ec5429b48b53fe552a34064128c1868d44',
  'lib/yorke-motion.ts': '33bdb24bdee95c2e5cffa508a70af784db5f2fcf',
  'lib/yorkeway-early-access.ts': 'e8e2276a58a8a36eee656105d9074a29b96fb879',
  'lib/yorkeway-owner-push.ts': '30aa3241bcbd71c8fe83be0732704870bce676d5',
@@ -3148,8 +3172,20 @@ OWNER_PUSH_APPLICATION_BLOBS = {'app/organizer/workspace/host-rsvp-alerts.tsx': 
  'tests/brand-arrival.test.mjs': '762dfbb527595b730ab8bb096ae71d7624513b5d',
  'tests/owner-notification-wiring.test.mjs': 'e29194209f35a503983a609d194cee53ffa30bcf',
  'tests/yorke-motion.test.mjs': '3d708aa6e17f829b848b16c2d97de0ce21bd6f36',
+ 'tests/yorkeway-early-access.test.ts': 'ca78e2ec2ee1dad9852988953ddc01d323d2a309',
  'tests/yorkeway-owner-push.test.ts': '23606a9837e22ce708654b004052cfcb295dbc78',
  'worker/background.ts': 'e0054f763f7c84ad4ba5f30b46daec5665bd6ccb'}
+OWNER_PUSH_PREREQUISITE_BLOBS = {'.github/workflows/tickets-yorkeway-mail-inspect.yml': '19798f30a2d824ac18b38a49efe44412cbe971a3',
+ '.github/workflows/tickets-yorkeway-mail-upgrade.yml': '038852c4e78e28fe30cf2faeea072f373b315da7',
+ 'ops/email/mailer.py': 'e5abf1bda64ea8b3b6829df09eed22bf81ac78bb',
+ 'ops/email/test_mailer.py': '45d0ee9bb5ca54617a44c40a8038e2fedf164484',
+ 'ops/email/test_numeric_codes.py': 'a7b2c0515a23e187f51a8122a9427a78d83a9af4',
+ 'ops/vps/test_mail_upgrade.py': 'bed5cdca2491fe06345044f395721d82b09029e0',
+ 'ops/vps/test_yorkeway_mail_upgrade.py': 'e3cfbdcb713204e0c71c13ff40fb3d4eb3bf5c89',
+ 'ops/vps/upgrade-yorkeway-mail.py': '9c3fc4896f10e25eb61b7937eea2035b0757ad4f',
+ 'tests/e2e/event-details.spec.ts': '3c34fe1c0a93d80803017d8e77851462250e05d0'}
+OWNER_PUSH_MAIL_REVISION = 'a06a7b0e80ae04fcf2d31e85f786e94b5dad28c1'
+OWNER_PUSH_MAIL_SOURCE_SHA256 = 'acabd6ce85a04cdb59de4d93f2d248749e4af566e558cb39dc97d5307b1bb455'
 OWNER_PUSH_SCHEMA_PATH = 'drizzle/0071_yorkeway_owner_push.sql'
 
 
@@ -3162,9 +3198,13 @@ def reviewed_owner_push_application_blobs(expected, source):
     """Bind the owner-only push increment to independent exact C/S/P inventories."""
     controls = OWNER_PUSH_CONTROL_FILES
     application = OWNER_PUSH_APPLICATION_BLOBS
-    require(controls == {'ops/vps/test_code_release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/code-release.py'}
-            and set(application) == {'scripts/yorke-motion-checks.mjs', 'worker/background.ts', 'lib/yorkeway-owner-push.ts', 'lib/brand-arrival.ts', 'public/sw.js', 'app/organizer/workspace/host-rsvp-alerts.tsx', 'package.json', 'tests/yorkeway-owner-push.test.ts', 'scripts/yorkeway-previews.mjs', 'tests/yorke-motion.test.mjs', 'lib/yorke-motion.ts', 'app/the-yorke-way/yorke-way.css', 'lib/yorkeway-early-access.ts', 'tests/brand-arrival.test.mjs', 'drizzle/0071_yorkeway_owner_push.sql', 'app/the-yorke-way/yorke-motion.tsx', 'docs/operations/yorkeway-owner-notifications.md', 'tests/owner-notification-wiring.test.mjs', 'app/the-yorke-way/page.tsx'}
-            and not controls & set(application),
+    prerequisites = OWNER_PUSH_PREREQUISITE_BLOBS
+    supporting = controls | set(prerequisites)
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/test_code_release.py'}
+            and set(application) == {'tests/brand-arrival.test.mjs', 'app/organizer/workspace/host-rsvp-alerts.tsx', 'lib/yorkeway-owner-push.ts', 'tests/yorkeway-early-access.test.ts', 'drizzle/0071_yorkeway_owner_push.sql', 'lib/transactional-email.ts', 'scripts/yorkeway-previews.mjs', 'public/sw.js', 'scripts/yorke-motion-checks.mjs', 'lib/yorkeway-early-access.ts', 'docs/operations/yorkeway-owner-notifications.md', 'app/the-yorke-way/yorke-motion.tsx', 'lib/brand-arrival.ts', 'tests/yorke-motion.test.mjs', 'tests/yorkeway-owner-push.test.ts', 'lib/yorke-motion.ts', 'worker/background.ts', 'app/the-yorke-way/page.tsx', 'package.json', 'app/the-yorke-way/yorke-way.css', 'tests/owner-notification-wiring.test.mjs'}
+            and set(prerequisites) == {'ops/email/test_mailer.py', 'ops/email/test_numeric_codes.py', 'ops/vps/test_mail_upgrade.py', 'ops/vps/test_yorkeway_mail_upgrade.py', '.github/workflows/tickets-yorkeway-mail-inspect.yml', '.github/workflows/tickets-yorkeway-mail-upgrade.yml', 'ops/vps/upgrade-yorkeway-mail.py', 'tests/e2e/event-details.spec.ts', 'ops/email/mailer.py'}
+            and not controls & set(application)
+            and not set(prerequisites) & (controls | set(application)),
             "Owner push release inventory or scope changed.")
     require(expected == OWNER_PUSH_RELEASE_BASELINE
             and git("rev-parse", expected + "^{tree}") == OWNER_PUSH_BASE_TREE
@@ -3175,13 +3215,13 @@ def reviewed_owner_push_application_blobs(expected, source):
             "Owner push requires independent merged controls.")
     verify_trusted_operator(source)
     for ancestor, descendant in ((expected, OWNER_PUSH_APP_SNAPSHOT), (expected, trusted),
-                                 (OWNER_PUSH_APP_SNAPSHOT, source)):
+                                 (OWNER_PUSH_APP_SNAPSHOT, source), (OWNER_PUSH_MAIL_REVISION, trusted)):
         subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
                        check=True, env=git_environment(), timeout=60)
     require(set(git("diff", "--name-only", expected, OWNER_PUSH_APP_SNAPSHOT).splitlines()) == set(application)
-            and set(git("diff", "--name-only", expected, trusted).splitlines()) == controls
+            and set(git("diff", "--name-only", expected, trusted).splitlines()) == supporting
             and set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
-            and set(git("diff", "--name-only", OWNER_PUSH_APP_SNAPSHOT, source).splitlines()) == controls,
+            and set(git("diff", "--name-only", OWNER_PUSH_APP_SNAPSHOT, source).splitlines()) == supporting,
             "Owner push controls or application differ from complete reviewed inventories.")
     for before, after in ((expected, OWNER_PUSH_APP_SNAPSHOT), (expected, trusted), (trusted, source)):
         verify_changed_modes(before, after)
@@ -3190,6 +3230,11 @@ def reviewed_owner_push_application_blobs(expected, source):
         require(all(git("ls-tree", revision, "--", name) == "100644 blob " + reviewed + "\t" + name
                     for revision in (OWNER_PUSH_APP_SNAPSHOT, source)),
                 "Owner push application differs from reviewed bytes or mode: " + name)
+    for name, reviewed in prerequisites.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + reviewed + "\t" + name
+                    for revision in (trusted, source)),
+                "Owner push operational prerequisite differs from exact reviewed bytes: " + name)
+        pins[name] = reviewed
     for name in sorted(controls):
         entry = git("ls-tree", trusted, "--", name)
         require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
@@ -4765,7 +4810,7 @@ class Deployment:
             require(not self.enable_crypto and not self.enable_first_host,
                     "Owner push must preserve the current runtime configuration.")
             require(len(changes) == len(set(changes))
-                    and set(changes) == set(OWNER_PUSH_APPLICATION_BLOBS) | OWNER_PUSH_CONTROL_FILES
+                    and set(changes) == set(OWNER_PUSH_APPLICATION_BLOBS) | OWNER_PUSH_CONTROL_FILES | set(OWNER_PUSH_PREREQUISITE_BLOBS)
                     and migration_plan(changes) == owner_push_migration_plan(),
                     "Owner push host transaction requires its exact complete source and schema manifest.")
         if self.expected == YORKEWAY_RELEASE_BASELINE:
@@ -4850,7 +4895,9 @@ class Deployment:
                                      self.system.application_uid(), self.system.application_gid())
         health(self.system, self.expected)
         health(self.system, self.expected, public=True)
-        if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE, OWNER_PUSH_RELEASE_BASELINE):
+        if self.expected == OWNER_PUSH_RELEASE_BASELINE:
+            verify_owner_push_mail_service()
+        elif self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE):
             verify_room_mail_vps_service()
         if self.recover_prepared:
             self.check_prepared_recovery()
@@ -5236,7 +5283,9 @@ class Deployment:
             if self.approval is not None:
                 self.approval.check_window()
             self.retention_safe()
-            if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE, OWNER_PUSH_RELEASE_BASELINE):
+            if self.expected == OWNER_PUSH_RELEASE_BASELINE:
+                verify_owner_push_mail_service()
+            elif self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE):
                 verify_room_mail_vps_service()
             if self.enable_first_host:
                 self.system.verify_database_binding()

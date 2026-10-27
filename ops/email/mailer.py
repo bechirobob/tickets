@@ -19,7 +19,7 @@ from socketserver import ThreadingMixIn
 SENDER = 'BeCore Tickets <tickets@becoreops.com>'
 ADDRESS = 'tickets@becoreops.com'
 HOST = 'mail.becoreops.com'
-KINDS = {'team_invitation', 'organizer_report', 'organizer_invitation', 'organizer_signup', 'registration_access', 'registration_update', 'payment_confirmation', 'ticket_recovery', 'ticket_transfer', 'waitlist_offer', 'payment_recovery', 'support_update', 'operational_alert', 'room_host_post', 'connection_test'}
+KINDS = {'team_invitation', 'organizer_report', 'organizer_invitation', 'organizer_signup', 'registration_access', 'registration_update', 'payment_confirmation', 'ticket_recovery', 'ticket_transfer', 'waitlist_offer', 'payment_recovery', 'support_update', 'operational_alert', 'room_host_post', 'yorkeway_welcome', 'connection_test'}
 STATES = {'queued': 'sent', 'submitting': 'sent', 'accepted': 'sent', 'delayed': 'delayed', 'delivered': 'delivered', 'bounced': 'bounced', 'failed': 'failed', 'review': 'delayed'}
 
 

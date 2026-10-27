@@ -1463,8 +1463,8 @@ def yorkeway_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
-OWNER_PUSH_OPERATOR_BLOB = '26362174e6cb57945c5b14f845c4183eb530a153'
-OWNER_PUSH_TEST_BLOB = '2e935d9d71e96966d6b22c7dd393fc222accb502'
+OWNER_PUSH_OPERATOR_BLOB = '1cb80310e216ed7991c4f6a98cad0f5fa8eb7444'
+OWNER_PUSH_TEST_BLOB = '3b98c6e268f21c8eea74928e63034095e6f2d97e'
 OWNER_PUSH_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644',
                                              '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644',
@@ -1481,7 +1481,7 @@ OWNER_PUSH_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644',
                                                            'a0099e4403e2f7f84e1ee5651899cdbe1823866b'),
  '.github/workflows/vps-runtime.yml': ('100644',
                                        '06bdc48477eb0977ed471e549630bd6070758a95'),
- 'ops/email/mailer.py': ('100644', 'fc99c522457e487837e276d5acdd31b2cce2fcd0'),
+ 'ops/email/mailer.py': ('100644', 'e5abf1bda64ea8b3b6829df09eed22bf81ac78bb'),
  'ops/vps/audit-readiness.py': ('100644',
                                 '2cc3374dade0210e76b386ce7387cd51fdc02f05'),
  'ops/vps/backup.mjs': ('100644', 'ca2c1a0fa1aa4cb075fa0b90d9d46218666c7967'),
@@ -1537,7 +1537,7 @@ OWNER_PUSH_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644',
  'ops/vps/test_mail_service_readonly.py': ('100644',
                                            'f02a6d1e30d0dfe464af9d3d4ade87726e67eb94'),
  'ops/vps/test_mail_upgrade.py': ('100644',
-                                  '56067f377765b39d5ec7b6029e42fc9ec3bd146e'),
+                                  'bed5cdca2491fe06345044f395721d82b09029e0'),
  'ops/vps/test_parallel_admission.py': ('100644',
                                         '35b8fb438193184f8e1654d44981f6c3564d0ca0'),
  'ops/vps/test_parallel_candidate.py': ('100644',
@@ -1562,10 +1562,14 @@ OWNER_PUSH_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644',
                                      '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14'),
  'ops/vps/test_runtime_workflow_contract.py': ('100644',
                                                'c9620eeb200133ee94c76accc5328ecce28b4b75'),
+ 'ops/vps/test_yorkeway_mail_upgrade.py': ('100644',
+                                           'e3cfbdcb713204e0c71c13ff40fb3d4eb3bf5c89'),
  'ops/vps/test_yorkeway_release.py': ('100644',
-                                      '2e935d9d71e96966d6b22c7dd393fc222accb502'),
+                                      '3b98c6e268f21c8eea74928e63034095e6f2d97e'),
  'ops/vps/upgrade-room-mail.py': ('100644',
                                   '0f8b77d5bf2ed3df86a17475923cd1ea5a0d1358'),
+ 'ops/vps/upgrade-yorkeway-mail.py': ('100644',
+                                      '9c3fc4896f10e25eb61b7937eea2035b0757ad4f'),
  'scripts/audit-checkbox-hotfix.py': ('100644',
                                       '5313d8cdc4076b36d434fe8017cc0e7b4824e876'),
  'scripts/audit-release-dependencies.py': ('100644',
@@ -1616,6 +1620,7 @@ def owner_push_source_family(root):
                         raise AssertionError('Owner push baseline contains unsupported entries')
                     manifest[os.fsdecode(name)] = (mode, blob)
             manifest['ops/vps/test_yorkeway_release.py'] = ('100644', OWNER_PUSH_TEST_BLOB)
+            manifest.update({name: ('100644', blob) for name, blob in release.OWNER_PUSH_PREREQUISITE_BLOBS.items()})
             application = release.OWNER_PUSH_APPLICATION_BLOBS
             observed = {}
             for name in application:

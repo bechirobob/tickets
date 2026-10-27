@@ -87,6 +87,21 @@ class MailTests(unittest.TestCase):
         self.assertIn(b'Reply-To: tickets@becoreops.com', mime)
         self.assertIn(b'multipart/alternative', mime)
 
+    def test_yorkeway_welcome_keeps_sender_recipient_and_idempotency_guards(self):
+        welcome = {**payload('yorkeway-welcome/test'), 'kind': 'yorkeway_welcome'}
+        self.assertEqual(validate(welcome), welcome)
+        first = self.outbox.enqueue(welcome)
+        self.assertEqual(self.outbox.enqueue(welcome)['id'], first['id'])
+        with self.outbox.db() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM messages').fetchone()[0], 1)
+        for change in [{'from': 'other@example.com'}, {'to': 'a@example.com,b@example.com'},
+                       {'kind': 'yorkeway_campaign'}, {'kind': 'event_announcement'}]:
+            with self.assertRaises(Rejected):
+                validate({**welcome, **change})
+        with self.assertRaises(Rejected) as error:
+            self.outbox.enqueue({**welcome, 'to': 'different@example.com'})
+        self.assertEqual(error.exception.status, 409)
+
     def test_crash_reconciliation_does_not_resend(self):
         ident = self.outbox.enqueue(payload())['id']
         with self.outbox.db() as db:
