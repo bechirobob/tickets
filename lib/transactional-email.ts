@@ -3,7 +3,7 @@ type Message = { recipient: string; subject: string; html: string; text: string;
 const VPS_ORIGIN = 'https://mail.becoreops.com';
 // Deploy the matching mail-service allowlist before enabling these routes.
 // Provider selection is pinned per delivery; campaigns never use this transport.
-const VPS_KINDS = new Set(['team_invitation', 'organizer_report', 'organizer_invitation', 'organizer_signup', 'registration_access', 'registration_update', 'payment_confirmation', 'ticket_recovery', 'ticket_transfer', 'waitlist_offer', 'payment_recovery', 'support_update', 'operational_alert', 'room_host_post']);
+const VPS_KINDS = new Set(['yorkeway_welcome', 'team_invitation', 'organizer_report', 'organizer_invitation', 'organizer_signup', 'registration_access', 'registration_update', 'payment_confirmation', 'ticket_recovery', 'ticket_transfer', 'waitlist_offer', 'payment_recovery', 'support_update', 'operational_alert', 'room_host_post']);
 
 export function transactionalProvider(env: Cloudflare.Env, kind: string): Provider {
   return VPS_KINDS.has(kind) && env.TRANSACTIONAL_EMAIL_PROVIDER === 'vps' ? 'vps' : 'resend';

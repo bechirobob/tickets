@@ -215,6 +215,58 @@ describe('Yorke Way isolated single opt-in', () => {
     expect(new Headers(first.headers).get('idempotency-key')).toBe(original!.id); expect(new Headers(second.headers).get('idempotency-key')).toBe(original!.id);
     await captureYorkewaySignup(env.DB, { email: address, name: 'Repeat guest' }); await retryFailedDeliveries(env); expect(fetch).toHaveBeenCalledTimes(2);
   });
+  it('routes new welcomes through the configured VPS with stable idempotency and no duplicate mail', async () => {
+    const previousProvider = env.TRANSACTIONAL_EMAIL_PROVIDER, previousKey = env.VPS_EMAIL_SIGNING_KEY;
+    try {
+      env.TRANSACTIONAL_EMAIL_PROVIDER = 'vps'; env.VPS_EMAIL_SIGNING_KEY = 'synthetic-signing-key-for-isolated-tests';
+      const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+      const original = await delivery(address);
+      expect(JSON.parse(original!.payload).provider).toBe('vps');
+      vi.mocked(fetch).mockResolvedValueOnce(Response.json({ id: 'vps-' + 'a'.repeat(64) }));
+      await retryFailedDeliveries(env);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = vi.mocked(fetch).mock.calls[0];
+      expect(url).toBe('https://mail.becoreops.com/v1/emails');
+      const body = JSON.parse(init!.body as string);
+      expect(body).toMatchObject({ kind: 'yorkeway_welcome', to: address, idempotencyKey: original!.id });
+      expect(new Headers(init!.headers).get('x-tickets-signature')).toMatch(/^[a-f0-9]{64}$/u);
+      expect(new Headers(init!.headers).has('authorization')).toBe(false);
+      expect((await delivery(address))?.status).toBe('sent');
+      await captureYorkewaySignup(env.DB, { email: address, name: 'Repeat guest' });
+      await retryFailedDeliveries(env);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      if (previousProvider === undefined) delete env.TRANSACTIONAL_EMAIL_PROVIDER; else env.TRANSACTIONAL_EMAIL_PROVIDER = previousProvider;
+      if (previousKey === undefined) delete env.VPS_EMAIL_SIGNING_KEY; else env.VPS_EMAIL_SIGNING_KEY = previousKey;
+    }
+  });
+  it('preserves an already queued welcome provider when the default changes to VPS', async () => {
+    const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
+    const original = await delivery(address), previousProvider = env.TRANSACTIONAL_EMAIL_PROVIDER;
+    expect(JSON.parse(original!.payload).provider).toBe('resend');
+    try {
+      env.TRANSACTIONAL_EMAIL_PROVIDER = 'vps';
+      await retryFailedDeliveries(env);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://api.resend.com/emails');
+      expect((await delivery(address))?.payload).toBe(original!.payload);
+      expect(new Headers(vi.mocked(fetch).mock.calls[0][1]!.headers).get('idempotency-key')).toBe(original!.id);
+    } finally {
+      if (previousProvider === undefined) delete env.TRANSACTIONAL_EMAIL_PROVIDER; else env.TRANSACTIONAL_EMAIL_PROVIDER = previousProvider;
+    }
+  });
+  it('refuses a new welcome when VPS is selected but its existing signing key is unavailable', async () => {
+    const previousProvider = env.TRANSACTIONAL_EMAIL_PROVIDER, previousKey = env.VPS_EMAIL_SIGNING_KEY;
+    try {
+      env.TRANSACTIONAL_EMAIL_PROVIDER = 'vps'; delete env.VPS_EMAIL_SIGNING_KEY;
+      const address = email();
+      const response = await signupRoute.POST(request('/api/yorkeway', { name: 'Guest', email: address, consent: true }));
+      expect(response.status).toBe(503); expect(await saved(address)).toBeNull(); expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      if (previousProvider === undefined) delete env.TRANSACTIONAL_EMAIL_PROVIDER; else env.TRANSACTIONAL_EMAIL_PROVIDER = previousProvider;
+      if (previousKey === undefined) delete env.VPS_EMAIL_SIGNING_KEY; else env.VPS_EMAIL_SIGNING_KEY = previousKey;
+    }
+  });
   it('uses the approved welcome identity without verification, account or ticket links', () => {
     const message = yorkewayWelcomeEmail('sample-withdrawal');
     expect(message.html).toContain('bgcolor="#301d2c"'); expect(message.html).toContain('bgcolor="#f8f4ec"'); expect(message.html).toContain('bgcolor="#d6f075"');
