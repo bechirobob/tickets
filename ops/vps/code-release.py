@@ -1034,6 +1034,7 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    'drizzle/0071_yorkeway_owner_push.sql': {'blob': 'bcf9b06657a8c546e59cc87de51c63204cdca920', 'sha256': '532c87fb7dfc9112f00be309aafa9238c3991e7ab002c7d648b309b6d6175803', 'schemaSha256': '82a5a374798a76a283d4b47a7579f937df57c969f753cc590d2f6cc2aaf71ab5', 'tables': ['yorkeway_owner_push_deliveries']},
     'drizzle/0070_yorkeway_early_access.sql': {'blob': '812f1a2ad2f8e58f725d32757c6a0aba524972f5', 'sha256': 'd2342cf62ce76df40c3750c9ecc10041b93f6c9b24d8f9861708fc306c954e04', 'schemaSha256': '1d8bb11bbb8e0eb2eb0b9807632b12db6ac82a92a90a4f4c30bf2015e4c786a0', 'tables': ['yorkeway_early_access']},
     'drizzle/0069_event_host_pass_invitations.sql': {'blob': '49994f90d3c9bf3bafaf7ba0f510e95323803885', 'sha256': '483bd1fe3d8966272469012c73cab6dbf06acfb335ac34cb0feee6dbeda71bda', 'schemaSha256': 'a2a2adbe30c602029fe2135c486046b706dacc57815f1f837f3bca860d26be3e', 'tables': ['event_host_pass_invitations']},
     'drizzle/0068_room_host_first_posts.sql': {'blob': '2754afa9baf9c823997986eddfb06a870579134e', 'sha256': '36df4f6d0080c64b92a37adecbff99e1968d1b03af4e370957dc8e49f602bcbf', 'schemaSha256': '54d86e75418768001f4e37dda81e36f58b85b1156d2675a4c53fd9f0d56c8cb3', 'tables': ['room_host_first_posts']},
@@ -3125,8 +3126,85 @@ def yorkeway_migration_plan():
     return [dict(path=YORKEWAY_SCHEMA_PATH, blob='812f1a2ad2f8e58f725d32757c6a0aba524972f5', sha256='d2342cf62ce76df40c3750c9ecc10041b93f6c9b24d8f9861708fc306c954e04', schemaSha256='1d8bb11bbb8e0eb2eb0b9807632b12db6ac82a92a90a4f4c30bf2015e4c786a0', tables=['yorkeway_early_access'])]
 
 
+OWNER_PUSH_RELEASE_BASELINE = '3ba45d0831d130949d7d0cd50e3abbcc4432f8cd'
+OWNER_PUSH_BASE_TREE = 'e98c6b563ab1b8092154d3c6c956e4ce18d2339b'
+OWNER_PUSH_APP_SNAPSHOT = 'ce72c2885f970f6c33b8cd083ba5993b48f1c484'
+OWNER_PUSH_APP_TREE = 'bfebb5de66ea87df05e6f1a160da36997bf1e50f'
+OWNER_PUSH_CONTROL_FILES = {'ops/vps/test_code_release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/code-release.py'}
+OWNER_PUSH_APPLICATION_BLOBS = {'app/organizer/workspace/host-rsvp-alerts.tsx': 'a000af310eed3c14a7568d85189fb2f47ff65377',
+ 'app/the-yorke-way/page.tsx': 'd3ed72340d07ce98f2b377041e8040289799e315',
+ 'app/the-yorke-way/yorke-motion.tsx': '54d5915443f5678b4c7aee85e9d61d5764c5918c',
+ 'app/the-yorke-way/yorke-way.css': 'ecbed2245fd5ceba3cfd52672f3eb96fa453e3ed',
+ 'docs/operations/yorkeway-owner-notifications.md': '1d5814083c9385337e4cac5804d852e78bddac3f',
+ 'drizzle/0071_yorkeway_owner_push.sql': 'bcf9b06657a8c546e59cc87de51c63204cdca920',
+ 'lib/brand-arrival.ts': '5053e246614fac432deb641405a37e514512fd5d',
+ 'lib/yorke-motion.ts': '33bdb24bdee95c2e5cffa508a70af784db5f2fcf',
+ 'lib/yorkeway-early-access.ts': 'e8e2276a58a8a36eee656105d9074a29b96fb879',
+ 'lib/yorkeway-owner-push.ts': '30aa3241bcbd71c8fe83be0732704870bce676d5',
+ 'package.json': '80fa4312aef9ac25b97020447bf5a1c29de576b4',
+ 'public/sw.js': '3f1e2b2eb4d06ed5fd5a1a930110a12dddd67a20',
+ 'scripts/yorke-motion-checks.mjs': '234b0c9fde8d8e1a4270f9c34a624bf4390d1435',
+ 'scripts/yorkeway-previews.mjs': 'bce92a5407eb5f0ecb64c910a54652babfba1850',
+ 'tests/brand-arrival.test.mjs': '762dfbb527595b730ab8bb096ae71d7624513b5d',
+ 'tests/owner-notification-wiring.test.mjs': 'e29194209f35a503983a609d194cee53ffa30bcf',
+ 'tests/yorke-motion.test.mjs': '3d708aa6e17f829b848b16c2d97de0ce21bd6f36',
+ 'tests/yorkeway-owner-push.test.ts': '23606a9837e22ce708654b004052cfcb295dbc78',
+ 'worker/background.ts': 'e0054f763f7c84ad4ba5f30b46daec5665bd6ccb'}
+OWNER_PUSH_SCHEMA_PATH = 'drizzle/0071_yorkeway_owner_push.sql'
+
+
+def owner_push_migration_plan():
+    """Only this new empty outbox; no signup backfill or existing-row mutation."""
+    return [dict(path=OWNER_PUSH_SCHEMA_PATH, **{'blob': 'bcf9b06657a8c546e59cc87de51c63204cdca920', 'sha256': '532c87fb7dfc9112f00be309aafa9238c3991e7ab002c7d648b309b6d6175803', 'schemaSha256': '82a5a374798a76a283d4b47a7579f937df57c969f753cc590d2f6cc2aaf71ab5', 'tables': ['yorkeway_owner_push_deliveries']})]
+
+
+def reviewed_owner_push_application_blobs(expected, source):
+    """Bind the owner-only push increment to independent exact C/S/P inventories."""
+    controls = OWNER_PUSH_CONTROL_FILES
+    application = OWNER_PUSH_APPLICATION_BLOBS
+    require(controls == {'ops/vps/test_code_release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/code-release.py'}
+            and set(application) == {'scripts/yorke-motion-checks.mjs', 'worker/background.ts', 'lib/yorkeway-owner-push.ts', 'lib/brand-arrival.ts', 'public/sw.js', 'app/organizer/workspace/host-rsvp-alerts.tsx', 'package.json', 'tests/yorkeway-owner-push.test.ts', 'scripts/yorkeway-previews.mjs', 'tests/yorke-motion.test.mjs', 'lib/yorke-motion.ts', 'app/the-yorke-way/yorke-way.css', 'lib/yorkeway-early-access.ts', 'tests/brand-arrival.test.mjs', 'drizzle/0071_yorkeway_owner_push.sql', 'app/the-yorke-way/yorke-motion.tsx', 'docs/operations/yorkeway-owner-notifications.md', 'tests/owner-notification-wiring.test.mjs', 'app/the-yorke-way/page.tsx'}
+            and not controls & set(application),
+            "Owner push release inventory or scope changed.")
+    require(expected == OWNER_PUSH_RELEASE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == OWNER_PUSH_BASE_TREE
+            and git("rev-parse", OWNER_PUSH_APP_SNAPSHOT + "^{tree}") == OWNER_PUSH_APP_TREE,
+            "Owner push baseline or application snapshot tree changed.")
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, OWNER_PUSH_APP_SNAPSHOT, source),
+            "Owner push requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, OWNER_PUSH_APP_SNAPSHOT), (expected, trusted),
+                                 (OWNER_PUSH_APP_SNAPSHOT, source)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, OWNER_PUSH_APP_SNAPSHOT).splitlines()) == set(application)
+            and set(git("diff", "--name-only", expected, trusted).splitlines()) == controls
+            and set(git("diff", "--name-only", trusted, source).splitlines()) == set(application)
+            and set(git("diff", "--name-only", OWNER_PUSH_APP_SNAPSHOT, source).splitlines()) == controls,
+            "Owner push controls or application differ from complete reviewed inventories.")
+    for before, after in ((expected, OWNER_PUSH_APP_SNAPSHOT), (expected, trusted), (trusted, source)):
+        verify_changed_modes(before, after)
+    pins = dict(application)
+    for name, reviewed in application.items():
+        require(all(git("ls-tree", revision, "--", name) == "100644 blob " + reviewed + "\t" + name
+                    for revision in (OWNER_PUSH_APP_SNAPSHOT, source)),
+                "Owner push application differs from reviewed bytes or mode: " + name)
+    for name in sorted(controls):
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Owner push candidate controls differ from independent trusted controls: " + name)
+        pins[name] = entry.split()[2]
+    require(migration_plan(pins) == owner_push_migration_plan(),
+            "Owner push permits only its exact additive outbox migration.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == OWNER_PUSH_RELEASE_BASELINE:
+        return reviewed_owner_push_application_blobs(expected, source)
     if expected == YORKEWAY_RELEASE_BASELINE:
         return reviewed_yorkeway_application_blobs(expected, source)
     if expected == ROOM_MAIL_VPS_RELEASE_BASELINE:
@@ -3200,6 +3278,8 @@ def vetted_changes(expected, source):
     require("drizzle/0070_yorkeway_early_access.sql" not in changed
             or expected == YORKEWAY_RELEASE_BASELINE,
             "Yorkeway signup migration requires its exact release family.")
+    require(OWNER_PUSH_SCHEMA_PATH not in changed or expected == OWNER_PUSH_RELEASE_BASELINE,
+            "Owner push migration requires its exact release family.")
     application_pins = reviewed_application_blobs(expected, source)
     for name in changed:
         if name == "ops/vps/code-release.py":
@@ -3227,6 +3307,10 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == OWNER_PUSH_RELEASE_BASELINE:
+        require(migration_plan(changed) == owner_push_migration_plan(),
+                "Owner push requires its sole exact migration.")
+        return changed
     if expected == YORKEWAY_RELEASE_BASELINE:
         require(migration_plan(changed) == yorkeway_migration_plan(),
                 "Yorkeway requires its sole exact migration.")
@@ -4677,6 +4761,13 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
+        if self.expected == OWNER_PUSH_RELEASE_BASELINE:
+            require(not self.enable_crypto and not self.enable_first_host,
+                    "Owner push must preserve the current runtime configuration.")
+            require(len(changes) == len(set(changes))
+                    and set(changes) == set(OWNER_PUSH_APPLICATION_BLOBS) | OWNER_PUSH_CONTROL_FILES
+                    and migration_plan(changes) == owner_push_migration_plan(),
+                    "Owner push host transaction requires its exact complete source and schema manifest.")
         if self.expected == YORKEWAY_RELEASE_BASELINE:
             require(not self.enable_crypto and not self.enable_first_host,
                     "Yorkeway must preserve the current runtime configuration.")
@@ -4759,7 +4850,7 @@ class Deployment:
                                      self.system.application_uid(), self.system.application_gid())
         health(self.system, self.expected)
         health(self.system, self.expected, public=True)
-        if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE):
+        if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE, OWNER_PUSH_RELEASE_BASELINE):
             verify_room_mail_vps_service()
         if self.recover_prepared:
             self.check_prepared_recovery()
@@ -5010,7 +5101,7 @@ class Deployment:
             self.release.mkdir(mode=0o755)
             archive.extractall(self.release, filter="data")
         self.manifest(self.release, self.source)
-        if self.expected == YORKEWAY_RELEASE_BASELINE:
+        if self.expected in (YORKEWAY_RELEASE_BASELINE, OWNER_PUSH_RELEASE_BASELINE):
             require(strict_json(self.file(self.release / "release.json")).get("node") == "v24.22.1",
                     "Yorkeway packaged Node must be the exact approved v24.22.1.")
         require((self.release / "bin/node").is_file() and not (self.release / "bin/node").is_symlink()
@@ -5145,7 +5236,7 @@ class Deployment:
             if self.approval is not None:
                 self.approval.check_window()
             self.retention_safe()
-            if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE):
+            if self.expected in (ROOM_MAIL_VPS_RELEASE_BASELINE, YORKEWAY_RELEASE_BASELINE, OWNER_PUSH_RELEASE_BASELINE):
                 verify_room_mail_vps_service()
             if self.enable_first_host:
                 self.system.verify_database_binding()
