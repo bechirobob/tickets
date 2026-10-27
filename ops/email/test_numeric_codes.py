@@ -117,13 +117,13 @@ class NumericCodes(unittest.TestCase):
             row=db.execute('SELECT payload,detail,dsn_code,smtp_code FROM messages WHERE id=?',(ident,)).fetchone()
             self.assertEqual(tuple(row),(None,mailer.DELIVERY_DETAILS['bounced'],'5.7.1','550'))
 
-    def test_only_room_kind_is_added_and_html_is_unchanged(self):
+    def test_only_room_and_welcome_kinds_are_added_and_html_is_unchanged(self):
         box=mailer.Outbox(self.path,enabled=lambda:True)
         message={**payload(),'kind':'room_host_post'}
         ident=box.enqueue(message)['id']
         with box.db() as db:self.assertEqual(json.loads(db.execute('SELECT payload FROM messages WHERE id=?',(ident,)).fetchone()[0]),message)
         with self.assertRaises(mailer.Rejected):box.enqueue({**message,'kind':'event_host_pass'})
-        self.assertEqual(mailer.KINDS-baseline_mailer.KINDS,{'room_host_post'})
+        self.assertEqual(mailer.KINDS-baseline_mailer.KINDS,{'room_host_post', 'yorkeway_welcome'})
 
     def test_matched_queue_stores_only_numeric_codes_and_generic_status_detail(self):
         box=mailer.Outbox(self.path,enabled=lambda:True);ident=self.queued(box)
