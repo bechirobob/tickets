@@ -43,22 +43,24 @@ self.addEventListener("push", (event) => {
     tag: data.tag || "becore-tickets",
     renotify: false,
     data: { url: data.url || "/notifications", eventSlug: data.eventSlug || null, kind: data.kind },
-    actions: ["organizer_rsvp", "organizer_purchase"].includes(data.kind) ? [{ action: "open", title: "View guest list" }] : data.kind === "host_update" ? [{ action: "open", title: "Read host announcement" }, { action: "quiet", title: "Quiet this Room" }] : data.eventSlug && ["room_message", "host_update"].includes(data.kind) ? [{ action: "open", title: "Open The Room" }, { action: "quiet", title: "Quiet this Room" }] : [{ action: "open", title: "Open My Nights" }],
+    actions: data.kind === "yorkeway_owner_signup" ? [{ action: "open", title: "View audience list" }] : ["organizer_rsvp", "organizer_purchase"].includes(data.kind) ? [{ action: "open", title: "View guest list" }] : data.kind === "host_update" ? [{ action: "open", title: "Read host announcement" }, { action: "quiet", title: "Quiet this Room" }] : data.eventSlug && ["room_message", "host_update"].includes(data.kind) ? [{ action: "open", title: "Open The Room" }, { action: "quiet", title: "Quiet this Room" }] : [{ action: "open", title: "Open My Nights" }],
   }));
 });
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const eventSlug = event.notification.data?.eventSlug;
   const hostAlert = ["organizer_rsvp", "organizer_purchase"].includes(event.notification.data?.kind);
-  let target = hostAlert ? "/organizer/workspace" : "/notifications";
+  const ownerSignupAlert = event.notification.data?.kind === "yorkeway_owner_signup";
+  let target = ownerSignupAlert ? "/admin/yorkeway-audience" : hostAlert ? "/organizer/workspace" : "/notifications";
   try {
     const candidate = new URL(event.notification.data?.url || "/notifications", self.location.origin);
+    if (ownerSignupAlert && candidate.origin === self.location.origin && candidate.pathname === "/admin/yorkeway-audience") target = candidate.pathname;
     if (hostAlert && candidate.origin === self.location.origin && candidate.pathname === "/organizer/workspace") target = candidate.pathname + candidate.search;
-    if (!hostAlert && candidate.origin === self.location.origin && /^\/(?:notifications|my-nights|event|events|room|tickets|hosts)(?:\/|$)/u.test(candidate.pathname)) target = candidate.pathname + candidate.search + candidate.hash;
+    if (!hostAlert && !ownerSignupAlert && candidate.origin === self.location.origin && /^\/(?:notifications|my-nights|event|events|room|tickets|hosts)(?:\/|$)/u.test(candidate.pathname)) target = candidate.pathname + candidate.search + candidate.hash;
   } catch { /* Invalid payloads open the inbox. */ }
-  if (!hostAlert && event.action === "quiet" && typeof eventSlug === "string" && /^[a-z0-9-]{1,80}$/u.test(eventSlug)) target = `/notifications?mute=${encodeURIComponent(eventSlug)}`;
+  if (!hostAlert && !ownerSignupAlert && event.action === "quiet" && typeof eventSlug === "string" && /^[a-z0-9-]{1,80}$/u.test(eventSlug)) target = `/notifications?mute=${encodeURIComponent(eventSlug)}`;
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-    const existing = clients.find((client) => "focus" in client && (hostAlert ? new URL(client.url).pathname === "/organizer/workspace" : !/\/(?:admin|organizer|scan)(?:\/|$)/u.test(new URL(client.url).pathname)));
+    const existing = clients.find((client) => "focus" in client && (ownerSignupAlert ? new URL(client.url).pathname === "/admin/yorkeway-audience" : hostAlert ? new URL(client.url).pathname === "/organizer/workspace" : !/\/(?:admin|organizer|scan)(?:\/|$)/u.test(new URL(client.url).pathname)));
     if (existing) return existing.navigate(target).then((navigated) => navigated ? navigated.focus() : self.clients.openWindow(target));
     return self.clients.openWindow(target);
   }));

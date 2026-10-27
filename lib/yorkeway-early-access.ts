@@ -1,3 +1,4 @@
+import { captureYorkewayOwnerPush, enqueueYorkewayOwnerPush } from './yorkeway-owner-push';
 import { createSecureToken, hashToken } from './attendee-auth';
 import { transactionalProvider } from './transactional-email';
 import { customerEmail, emailParagraph } from './customer-email';
@@ -45,7 +46,11 @@ export async function captureYorkewaySignup(db: D1Database, input: { email: stri
     db.prepare(`INSERT INTO delivery_events (id,kind,recipient,status,attempt_count,payload_json,created_at,updated_at,next_attempt_at)
       SELECT ?,'yorkeway_welcome',email,'failed',0,?,?,?,? FROM yorkeway_early_access WHERE id=?`)
       .bind(idempotencyKey,JSON.stringify({...message,idempotencyKey,provider}),now,now,now,id),
+    captureYorkewayOwnerPush(db,id,now),
   ]);
+  // A queue outage must not turn a committed signup into an error. The scheduled
+  // recovery scans only captured outbox rows; it never creates historical alerts.
+  try { await enqueueYorkewayOwnerPush(db,env.EMAIL_DELIVERY_QUEUE,id); } catch { /* Durable retry. */ }
 }
 
 export async function withdrawYorkewaySignup(db: D1Database, token: string): Promise<void> {
