@@ -106,14 +106,14 @@ function fixture(options = {}) {
   };
 }
 
-for (const path of ['/', '/events', '/events?utm_source=message', '/event/one?ref=PROMOTER', '/hosts', '/hosts/one', '/about', '/help', '/privacy', '/terms', '/my-nights', '/my-nights?source=pwa', '/my-nights?view=rsvps']) {
+for (const path of ['/', '/the-yorke-way', '/the-yorke-way/', '/the-yorke-way?utm_source=message', '/events', '/events?utm_source=message', '/event/one?ref=PROMOTER', '/hosts', '/hosts/one', '/about', '/help', '/privacy', '/terms', '/my-nights', '/my-nights?source=pwa', '/my-nights?view=rsvps']) {
   test(`fresh public document is eligible: ${path}`, () => {
     const page = fixture({ path });
     assert.equal(page.api.eligibleArrivalEntry(page.entry), true);
   });
 }
 
-for (const path of ['/payment/return', '/checkout/one', '/rsvp/access#token=secret', '/rsvp/one', '/tickets', '/my-nights/one?view=passes', '/my-nights/access', '/scan', '/admin/login', '/organizer/workspace', '/room/one', '/account/privacy', '/auth/callback', '/api/customer/session', '/notifications', '/unknown']) {
+for (const path of ['/the-yorke-way/confirm', '/the-yorke-way/unsubscribe', '/the-yorke-way/other', '/the-yorke-way-extra', '/the-yorke-way?token=secret', '/the-yorke-way#token=secret', '/payment/return', '/checkout/one', '/rsvp/access#token=secret', '/rsvp/one', '/tickets', '/my-nights/one?view=passes', '/my-nights/access', '/scan', '/admin/login', '/organizer/workspace', '/room/one', '/account/privacy', '/auth/callback', '/api/customer/session', '/notifications', '/unknown']) {
   test(`critical or unapproved document is ineligible: ${path}`, () => {
     const page = fixture({ path });
     assert.equal(page.api.eligibleArrivalEntry(page.entry), false);

@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
+import { verifyYorkeMotion } from './yorke-motion-checks.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'outputs/yorkeway-previews');
@@ -98,6 +99,7 @@ try {
   await page.screenshot({ path: path.join(output, 'yorke-way-mobile-320.png'), fullPage: true });
   await assertLayout('Mobile 320');
 
+  await verifyYorkeMotion({ page, origin, output, checks });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel('Your name', { exact: true }).fill('Preview Guest');
   await page.getByLabel('Email address', { exact: true }).fill('preview@example.invalid');
