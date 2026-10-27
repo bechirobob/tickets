@@ -100,6 +100,16 @@ jobs:
           git diff --cached --exit-code HEAD --
       - name: Prepare only isolated local synthetic fixtures
         run: npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+      - name: Wait for actual opening animation readiness in the focused test
+        run: |
+          python3 - <<'PYREADY'
+          from pathlib import Path
+          p = Path("tests/e2e/my-nights-studio.spec.ts")
+          source = p.read_text()
+          anchor = '  await expect(nav.getByRole("button", { name: /^Past/ })).toHaveAttribute("aria-current", "page");'
+          assert source.count(anchor) == 1
+          p.write_text(source.replace(anchor, anchor + '\n  await expect(page.getByTestId("brand-arrival")).toBeHidden();', 1))
+          PYREADY
       - name: Repeat only the failing mobile WebKit synthetic journey
         run: npx playwright test tests/e2e/my-nights-studio.spec.ts --grep 'plans filter, search' --project mobile-webkit --workers=1 --retries=0 --repeat-each=10 --trace=on
       - name: Preserve only synthetic test evidence
