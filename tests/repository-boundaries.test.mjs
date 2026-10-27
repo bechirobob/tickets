@@ -19,6 +19,22 @@ import './cloudflare-notification-metering.test.mjs';
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 
+test("OG dependency includes the patched Satori serializer, not just an audit override", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  assert.equal(manifest.overrides["@vercel/og"], "1.0.3");
+  assert.equal(lock.packages["node_modules/@vercel/og"].version, "1.0.3");
+  assert.equal(lock.packages["node_modules/@vercel/og"].dependencies.satori, "0.33.5");
+  assert.equal(lock.packages["node_modules/satori"].version, "0.33.5");
+  for (const target of ["node", "edge"]) {
+    const bundle = await readFile(new URL(`../node_modules/@vercel/og/dist/index.${target}.js`, import.meta.url), "utf8");
+    assert.match(bundle, /satori@0\.33\.5/u);
+    assert.doesNotMatch(bundle, /satori@0\.16\.0/u);
+    assert.match(bundle, /Invalid XML/u);
+    assert.match(bundle, /Invalid style property/u);
+  }
+});
+
 test("Tickets automation remains scoped to the Tickets product", async () => {
   const workflowNames = (await readdir(workflowsDirectory)).filter((name) =>
     /\.ya?ml$/u.test(name),

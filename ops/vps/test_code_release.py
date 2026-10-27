@@ -1676,7 +1676,222 @@ def owner_push_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
 
 
+SECURITY_OPERATOR_BLOB = '695dced2a5a013acc617bcf87c6d56e7cb33ceab'
+SECURITY_TEST_BLOB = '69521792dfce290e85c70120fbe11bca8353b1f4'
+SECURITY_STAGED_BASE = {'.github/scripts/verify-audit-control.py': ('100644',
+                                             '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
+ '.github/scripts/verify-caption-control.py': ('100644',
+                                               '19366f37243794bba916dd6cff0b7731aaec8f1c'),
+ '.github/workflows/candidate-checks.yml': ('100644',
+                                            'c45d7dae42734fbbc8919435c16473115bf8f06c'),
+ '.github/workflows/candidate-parallel-checks.yml': ('100644',
+                                                     '19c44c8a0f569c1ae4ebf4e694987946fded2fd0'),
+ '.github/workflows/deploy.yml': ('100644',
+                                  'b18eb81d65fd5a93fabebe7ae98c6cf99067076e'),
+ '.github/workflows/tickets-code-release.yml': ('100644',
+                                                '227200c0e27f4c0d207ebacc66083bb44b8afc44'),
+ '.github/workflows/tickets-release-operator-checks.yml': ('100644',
+                                                           'a0099e4403e2f7f84e1ee5651899cdbe1823866b'),
+ '.github/workflows/vps-runtime.yml': ('100644',
+                                       '06bdc48477eb0977ed471e549630bd6070758a95'),
+ 'ops/email/mailer.py': ('100644', 'e5abf1bda64ea8b3b6829df09eed22bf81ac78bb'),
+ 'ops/vps/audit-readiness.py': ('100644',
+                                '2cc3374dade0210e76b386ce7387cd51fdc02f05'),
+ 'ops/vps/backup.mjs': ('100644', 'ca2c1a0fa1aa4cb075fa0b90d9d46218666c7967'),
+ 'ops/vps/becore-tickets-preview.service': ('100644',
+                                            '889233505917ae749ee276050d7f9060c975ed4a'),
+ 'ops/vps/becore-tickets-retention.service': ('100644',
+                                              '68f4ab992f05742a086f23af7983f9c5561b1b13'),
+ 'ops/vps/becore-tickets-retention.timer': ('100644',
+                                            '7d77baf5059b0fc725976e8d4eceeb53a53ed2ff'),
+ 'ops/vps/candidate_build.py': ('100644',
+                                '502b3f8cddc2038113498824e430620eb1b55d0f'),
+ 'ops/vps/candidate_evidence.py': ('100644',
+                                   'd65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba'),
+ 'ops/vps/code-release.py': ('100644',
+                             '62ed438a1ca9f7229a57fbc48228fa22f51068e7'),
+ 'ops/vps/initialize-preview.mjs': ('100644',
+                                    '6171616a2d73ed536aad0896d3016d2d41a6ba95'),
+ 'ops/vps/inspect-bounce-codes-readonly.py': ('100644',
+                                              '6e344e7047c9897047c9dffda27e0f699d25e893'),
+ 'ops/vps/inspect-mail-service-readonly.py': ('100644',
+                                              '819baa97ef82c687c52ed288daf49db6486f0a21'),
+ 'ops/vps/install-preview.py': ('100644',
+                                '0fb837d72409234a074b2891c784f0f7605e600f'),
+ 'ops/vps/journal-limits.conf': ('100644',
+                                 'bd9c88d6d78144830b5d4ce26dce2d86825b84e5'),
+ 'ops/vps/parallel_candidate.py': ('100644',
+                                   '08e44556ad630ee5227463b74bce990f943d939f'),
+ 'ops/vps/parallel_candidate_control.py': ('100644',
+                                           '1000acb20a4e8b3a0d9c5771ea5269db006805a4'),
+ 'ops/vps/prepare-origin.py': ('100644',
+                               '8939073562dd7e73073f092a09c3c973003c6b63'),
+ 'ops/vps/public_runtime_guard.py': ('100644',
+                                     '9a9739f1bd88cbd02dc420001efa3de5b85e3538'),
+ 'ops/vps/recover-puro-first-host-20261024.py': ('100644',
+                                                 'e4d2fecee02ad2b24304beec755f1b161ad6b4b0'),
+ 'ops/vps/restore-backup.mjs': ('100644',
+                                '0a05f18c17205ef4c2f59e2d50bd06180035b8c6'),
+ 'ops/vps/retention.py': ('100644', '9ab0304f00d2a96fd6fbb8e4c992d96db5eb08a1'),
+ 'ops/vps/runtime_release.py': ('100644',
+                                '043e310a41ff28d23adc20383c88566b181232a6'),
+ 'ops/vps/test_audit_readiness.py': ('100644',
+                                     '7a431017c03e99ad0b358b17399b1313cd935606'),
+ 'ops/vps/test_bounce_codes_readonly.py': ('100644',
+                                           '6d105f85df2362711ab5b128592d3d3a18342d02'),
+ 'ops/vps/test_candidate_build.py': ('100644',
+                                     'a9920c4d21804074d4ab176c541247787b46639f'),
+ 'ops/vps/test_candidate_evidence.py': ('100644',
+                                        'f63544c3ea061f75db1f544c85cddaae109a0f4e'),
+ 'ops/vps/test_code_release.py': ('100644',
+                                  '952c1a101b07813489d20b86578689a388a99eeb'),
+ 'ops/vps/test_first_host_recovery.py': ('100644',
+                                         '9f9579d7ffa30b54249a5126b85f60032c9f7d05'),
+ 'ops/vps/test_mail_service_readonly.py': ('100644',
+                                           'f02a6d1e30d0dfe464af9d3d4ade87726e67eb94'),
+ 'ops/vps/test_mail_upgrade.py': ('100644',
+                                  'bed5cdca2491fe06345044f395721d82b09029e0'),
+ 'ops/vps/test_parallel_admission.py': ('100644',
+                                        '35b8fb438193184f8e1654d44981f6c3564d0ca0'),
+ 'ops/vps/test_parallel_candidate.py': ('100644',
+                                        '3af28a1b01a08c19a97155229f6e0b5efc592fc0'),
+ 'ops/vps/test_parallel_candidate_control.py': ('100644',
+                                                '6ddbd74138168c8538406920d9fda7432ce67f49'),
+ 'ops/vps/test_parallel_source_family.py': ('100644',
+                                            '54ac92e721b51dda03bca69862816fa78d1c0737'),
+ 'ops/vps/test_pink_edition.py': ('100644',
+                                  'be26c898ac1e19f7f737dbe5112c5e40b6e90c68'),
+ 'ops/vps/test_public_runtime_guard.py': ('100644',
+                                          'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'),
+ 'ops/vps/test_release_approval.py': ('100644',
+                                      '48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f'),
+ 'ops/vps/test_release_source.py': ('100644',
+                                    'ec8a7a5bbbe585941583f50624823b85ec51e586'),
+ 'ops/vps/test_retention.py': ('100644',
+                               'f35d71212ec6ae521e3144c57e708297c513dce0'),
+ 'ops/vps/test_runtime_packaging.py': ('100644',
+                                       '6f215f441ff1d9b92b3c870a6f438a54e5ccc1a1'),
+ 'ops/vps/test_runtime_release.py': ('100644',
+                                     '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14'),
+ 'ops/vps/test_runtime_workflow_contract.py': ('100644',
+                                               'c9620eeb200133ee94c76accc5328ecce28b4b75'),
+ 'ops/vps/test_yorkeway_mail_upgrade.py': ('100644',
+                                           'e3cfbdcb713204e0c71c13ff40fb3d4eb3bf5c89'),
+ 'ops/vps/test_yorkeway_release.py': ('100644',
+                                      '69521792dfce290e85c70120fbe11bca8353b1f4'),
+ 'ops/vps/upgrade-room-mail.py': ('100644',
+                                  '0f8b77d5bf2ed3df86a17475923cd1ea5a0d1358'),
+ 'ops/vps/upgrade-yorkeway-mail.py': ('100644',
+                                      '9c3fc4896f10e25eb61b7937eea2035b0757ad4f'),
+ 'scripts/audit-checkbox-hotfix.py': ('100644',
+                                      '5313d8cdc4076b36d434fe8017cc0e7b4824e876'),
+ 'scripts/audit-release-dependencies.py': ('100644',
+                                           '47c7951e8db95ac666680bd2bf32fde3f1748c8e'),
+ 'scripts/audit-release-manifest.json': ('100644',
+                                         'bcb787e744f9fc5fc201e8068d553c1543b35b86'),
+ 'scripts/caption-source-manifest.json': ('100644',
+                                          '1b178a1a371ae047f8bf26498d249e272c11497d'),
+ 'scripts/verify-audit-release-source.py': ('100644',
+                                            '129d7bdbd2d631ad385a9edd7be4ea9895f173cf'),
+ 'scripts/verify-caption-source.py': ('100644',
+                                      'fa474c5d8cfaad8df53e77004c063e1511ed0b68'),
+ 'tests/test_audit_release_dependencies.py': ('100644',
+                                              '6983998bf40fc1cb424e6dafbb7ba35e5653336d'),
+ 'tests/test_audit_release_source.py': ('100644',
+                                        '6516f3f4b8582d3874ceda34e1fc3e3b799fec8d'),
+ 'tests/test_caption_source.py': ('100644',
+                                  '6871fcc1ab410acaa74d8bd953ac9e0e61f4f670'),
+ 'tests/test_checkbox_hotfix_audit.py': ('100644',
+                                         '421ec5fd992b1ba258e357ff4a65f6c3a647d2ce')}
+SECURITY_TEST_FILE = Path(__file__).resolve()
+
+def security_source_family(root):
+    """Recognize only the complete Yorke Way security C/P family for local test execution."""
+    root = Path(root)
+    operator = root / 'ops/vps/code-release.py'
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    # The executing new test family cannot downgrade to a historical operator.
+    # Capture its real module path once, independent of historical fixture mocks.
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == SECURITY_TEST_FILE
+    if not selected and (not operator.is_file() or operator.is_symlink()
+                         or digest(operator.read_bytes()) != SECURITY_OPERATOR_BLOB):
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            baseline = release.SECURITY_PATCH_SNAPSHOT
+            if (checkout_git(root, 'rev-parse', baseline + '^{tree}').decode().strip()
+                    != release.SECURITY_PATCH_TREE):
+                raise AssertionError('Yorke Way security family baseline tree changed')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', baseline).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Yorke Way security baseline contains unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest['ops/vps/test_yorkeway_release.py'] = ('100644', SECURITY_TEST_BLOB)
+            application = release.SECURITY_PATCH_BLOBS
+            observed = {}
+            for name in application:
+                path = root / name
+                observed[name] = digest(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+            if observed == application:
+                manifest.update({name: ('100644', blob) for name, blob in application.items()})
+            elif any(observed[name] != manifest.get(name, (None, None))[1] for name in application):
+                raise AssertionError('Yorke Way security application family has partial or unreviewed bytes')
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Yorke Way security full inventory differs from complete tracked C/P family')
+            # A restored worktree cannot conceal staged application changes.
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if not record:
+                    continue
+                metadata, raw_name = record.split(b'\t', 1)
+                mode, blob, stage = metadata.decode().split()
+                name = os.fsdecode(raw_name)
+                if (stage != '0' or name not in manifest
+                        or (name in release.SECURITY_CONTROL_FILES
+                            and (mode != '100644' or blob != digest((root / name).read_bytes())))
+                        or (name not in release.SECURITY_CONTROL_FILES and manifest[name] != (mode, blob))):
+                    raise AssertionError('Yorke Way security index differs from complete application family')
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AssertionError('Yorke Way security family requires its independently pinned baseline') from exc
+    else:
+        manifest = dict(SECURITY_STAGED_BASE)
+    # Only this test file cannot self-pin; production binds both controls to C.
+    manifest['ops/vps/code-release.py'] = ('100644', SECURITY_OPERATOR_BLOB)
+    manifest['ops/vps/test_code_release.py'] = ('100644', None)
+    manifest['ops/vps/test_yorkeway_release.py'] = ('100644', SECURITY_TEST_BLOB)
+    if not full:
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Yorke Way security family requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise AssertionError('Yorke Way security family is incomplete') from exc
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Yorke Way security family has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
 def checkout_source_family(root):
+    security = security_source_family(root)
+    if security is not None:
+        return security
     owner_push = owner_push_source_family(root)
     if owner_push is not None:
         return owner_push
@@ -12005,7 +12220,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB):
+        if family.get('ops/vps/code-release.py') in (ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'

@@ -3246,8 +3246,111 @@ def reviewed_owner_push_application_blobs(expected, source):
     return pins
 
 
+SECURITY_LIVE_BASELINE = '3ba45d0831d130949d7d0cd50e3abbcc4432f8cd'
+SECURITY_RELEASE_BASE = '52dc52fe62f709c82224df33688cbba7c4e62349'
+SECURITY_RELEASE_BASE_TREE = '487cf9b8734aadf830389390b581c3ee7031901c'
+SECURITY_BASE_BLOBS = {'.github/workflows/tickets-yorkeway-mail-inspect.yml': '19798f30a2d824ac18b38a49efe44412cbe971a3',
+ '.github/workflows/tickets-yorkeway-mail-upgrade.yml': '038852c4e78e28fe30cf2faeea072f373b315da7',
+ 'app/organizer/workspace/host-rsvp-alerts.tsx': 'a000af310eed3c14a7568d85189fb2f47ff65377',
+ 'app/the-yorke-way/page.tsx': 'd3ed72340d07ce98f2b377041e8040289799e315',
+ 'app/the-yorke-way/yorke-motion.tsx': '54d5915443f5678b4c7aee85e9d61d5764c5918c',
+ 'app/the-yorke-way/yorke-way.css': 'ecbed2245fd5ceba3cfd52672f3eb96fa453e3ed',
+ 'docs/operations/yorkeway-owner-notifications.md': '1d5814083c9385337e4cac5804d852e78bddac3f',
+ 'drizzle/0071_yorkeway_owner_push.sql': 'bcf9b06657a8c546e59cc87de51c63204cdca920',
+ 'lib/brand-arrival.ts': '5053e246614fac432deb641405a37e514512fd5d',
+ 'lib/transactional-email.ts': '3268b4ec5429b48b53fe552a34064128c1868d44',
+ 'lib/yorke-motion.ts': '33bdb24bdee95c2e5cffa508a70af784db5f2fcf',
+ 'lib/yorkeway-early-access.ts': 'e8e2276a58a8a36eee656105d9074a29b96fb879',
+ 'lib/yorkeway-owner-push.ts': '30aa3241bcbd71c8fe83be0732704870bce676d5',
+ 'ops/email/mailer.py': 'e5abf1bda64ea8b3b6829df09eed22bf81ac78bb',
+ 'ops/email/test_mailer.py': '45d0ee9bb5ca54617a44c40a8038e2fedf164484',
+ 'ops/email/test_numeric_codes.py': 'a7b2c0515a23e187f51a8122a9427a78d83a9af4',
+ 'ops/vps/code-release.py': '1cb80310e216ed7991c4f6a98cad0f5fa8eb7444',
+ 'ops/vps/test_code_release.py': '543d015e9e945664e3825ecb0957c8c2a191244d',
+ 'ops/vps/test_mail_upgrade.py': 'bed5cdca2491fe06345044f395721d82b09029e0',
+ 'ops/vps/test_yorkeway_mail_upgrade.py': 'e3cfbdcb713204e0c71c13ff40fb3d4eb3bf5c89',
+ 'ops/vps/test_yorkeway_release.py': '3b98c6e268f21c8eea74928e63034095e6f2d97e',
+ 'ops/vps/upgrade-yorkeway-mail.py': '9c3fc4896f10e25eb61b7937eea2035b0757ad4f',
+ 'package.json': '80fa4312aef9ac25b97020447bf5a1c29de576b4',
+ 'public/sw.js': '3f1e2b2eb4d06ed5fd5a1a930110a12dddd67a20',
+ 'scripts/yorke-motion-checks.mjs': '234b0c9fde8d8e1a4270f9c34a624bf4390d1435',
+ 'scripts/yorkeway-previews.mjs': 'bce92a5407eb5f0ecb64c910a54652babfba1850',
+ 'tests/brand-arrival.test.mjs': '762dfbb527595b730ab8bb096ae71d7624513b5d',
+ 'tests/e2e/event-details.spec.ts': '3c34fe1c0a93d80803017d8e77851462250e05d0',
+ 'tests/owner-notification-wiring.test.mjs': 'e29194209f35a503983a609d194cee53ffa30bcf',
+ 'tests/yorke-motion.test.mjs': '3d708aa6e17f829b848b16c2d97de0ce21bd6f36',
+ 'tests/yorkeway-early-access.test.ts': 'ca78e2ec2ee1dad9852988953ddc01d323d2a309',
+ 'tests/yorkeway-owner-push.test.ts': '23606a9837e22ce708654b004052cfcb295dbc78',
+ 'worker/background.ts': 'e0054f763f7c84ad4ba5f30b46daec5665bd6ccb'}
+SECURITY_PATCH_SNAPSHOT = '0643ce2ee005d0285180e4e7058af2b8c01f4bd5'
+SECURITY_PATCH_TREE = '3f261ab4e01f5327468b6f5e2a36883df9969a2a'
+SECURITY_PATCH_BLOBS = {'package-lock.json': 'b140ccc0ad69811d614050717352dd80d757dc83',
+ 'package.json': '53d147f0d7b00eb21b8194a13d5d207559498790',
+ 'tests/repository-boundaries.test.mjs': 'c97f1cb3ff0f3b5607a0d7b15611cdbf960d27cc'}
+SECURITY_CONTROL_FILES = {'ops/vps/test_code_release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/code-release.py'}
+
+
+def security_release_paths():
+    return set(SECURITY_BASE_BLOBS) | set(SECURITY_PATCH_BLOBS) | SECURITY_CONTROL_FILES
+
+
+def reviewed_yorkeway_security_blobs(expected, source):
+    """Exact patched successor to the already reviewed, not-yet-deployed release."""
+    base, snapshot = SECURITY_RELEASE_BASE, SECURITY_PATCH_SNAPSHOT
+    patch, controls = SECURITY_PATCH_BLOBS, SECURITY_CONTROL_FILES
+    require(expected == SECURITY_LIVE_BASELINE
+            and git("rev-parse", expected + "^{tree}") == OWNER_PUSH_BASE_TREE
+            and git("rev-parse", base + "^{tree}") == SECURITY_RELEASE_BASE_TREE
+            and git("rev-parse", snapshot + "^{tree}") == SECURITY_PATCH_TREE,
+            "Yorke Way security release baseline or snapshot changed.")
+    require(controls == {'ops/vps/test_code_release.py', 'ops/vps/test_yorkeway_release.py', 'ops/vps/code-release.py'} and set(patch) == {'package-lock.json', 'tests/repository-boundaries.test.mjs', 'package.json'}
+            and set(SECURITY_BASE_BLOBS) == {'ops/vps/test_mail_upgrade.py', 'app/the-yorke-way/yorke-motion.tsx', 'tests/yorkeway-owner-push.test.ts', 'ops/vps/code-release.py', 'tests/e2e/event-details.spec.ts', 'tests/brand-arrival.test.mjs', 'ops/vps/upgrade-yorkeway-mail.py', 'ops/email/mailer.py', 'lib/yorkeway-early-access.ts', 'tests/owner-notification-wiring.test.mjs', 'tests/yorkeway-early-access.test.ts', 'docs/operations/yorkeway-owner-notifications.md', 'worker/background.ts', 'scripts/yorkeway-previews.mjs', 'scripts/yorke-motion-checks.mjs', 'lib/yorkeway-owner-push.ts', 'drizzle/0071_yorkeway_owner_push.sql', 'ops/vps/test_yorkeway_mail_upgrade.py', 'ops/vps/test_yorkeway_release.py', 'lib/transactional-email.ts', 'public/sw.js', 'app/the-yorke-way/page.tsx', 'ops/email/test_numeric_codes.py', '.github/workflows/tickets-yorkeway-mail-inspect.yml', 'tests/yorke-motion.test.mjs', 'ops/vps/test_code_release.py', '.github/workflows/tickets-yorkeway-mail-upgrade.yml', 'lib/yorke-motion.ts', 'lib/brand-arrival.ts', 'app/organizer/workspace/host-rsvp-alerts.tsx', 'app/the-yorke-way/yorke-way.css', 'package.json', 'ops/email/test_mailer.py'}
+            and not controls & set(patch), "Yorke Way security release scope changed.")
+    trusted = os.environ.get("BECORE_TRUSTED_BASE", "")
+    require(SHA.fullmatch(trusted) and trusted not in (expected, base, snapshot, source),
+            "Yorke Way security release requires independent merged controls.")
+    verify_trusted_operator(source)
+    for ancestor, descendant in ((expected, base), (base, snapshot), (snapshot, trusted),
+                                 (snapshot, source), (OWNER_PUSH_MAIL_REVISION, base)):
+        subprocess.run(["git", "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git("diff", "--name-only", expected, base).splitlines()) == set(SECURITY_BASE_BLOBS)
+            and set(git("diff", "--name-only", base, snapshot).splitlines()) == set(patch)
+            and set(git("diff", "--name-only", snapshot, trusted).splitlines()) == controls
+            and not git("diff", "--name-only", trusted, source)
+            and git("rev-parse", trusted + "^{tree}") == git("rev-parse", source + "^{tree}")
+            and set(git("diff", "--name-only", snapshot, source).splitlines()) == controls,
+            "Yorke Way security release differs from exact base, patch or control inventories.")
+    for before, after in ((expected, base), (base, snapshot), (snapshot, trusted), (trusted, source)):
+        verify_changed_modes(before, after)
+    pins = dict(SECURITY_BASE_BLOBS)
+    for name, reviewed in SECURITY_BASE_BLOBS.items():
+        require(git("ls-tree", base, "--", name) == "100644 blob " + reviewed + "\t" + name,
+                "Yorke Way security release base bytes changed: " + name)
+    pins.update(patch)
+    for name, reviewed in pins.items():
+        if name not in controls:
+            require(git("ls-tree", source, "--", name) == "100644 blob " + reviewed + "\t" + name,
+                    "Yorke Way patched candidate bytes or mode changed: " + name)
+    for name, reviewed in patch.items():
+        require(git("ls-tree", snapshot, "--", name) == "100644 blob " + reviewed + "\t" + name,
+                "Yorke Way security patch differs from reviewed bytes: " + name)
+    for name in controls:
+        entry = git("ls-tree", trusted, "--", name)
+        require(re.fullmatch(r"100644 blob [a-f0-9]{40}\t" + re.escape(name), entry)
+                and git("ls-tree", source, "--", name) == entry,
+                "Yorke Way security controls differ from independently trusted bytes: " + name)
+        pins[name] = entry.split()[2]
+    require(set(git("diff", "--name-only", expected, source).splitlines()) == security_release_paths()
+            and migration_plan(pins) == owner_push_migration_plan(),
+            "Yorke Way security release changed complete scope or its sole additive migration.")
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == SECURITY_LIVE_BASELINE:
+        return reviewed_yorkeway_security_blobs(expected, source)
     if expected == OWNER_PUSH_RELEASE_BASELINE:
         return reviewed_owner_push_application_blobs(expected, source)
     if expected == YORKEWAY_RELEASE_BASELINE:
@@ -4806,7 +4909,13 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
-        if self.expected == OWNER_PUSH_RELEASE_BASELINE:
+        if self.expected == SECURITY_LIVE_BASELINE:
+            require(not self.enable_crypto and not self.enable_first_host,
+                    "Yorke Way security release must preserve runtime configuration.")
+            require(len(changes) == len(set(changes)) and set(changes) == security_release_paths()
+                    and migration_plan(changes) == owner_push_migration_plan(),
+                    "Yorke Way security host transaction requires its exact complete source and schema manifest.")
+        elif self.expected == OWNER_PUSH_RELEASE_BASELINE:
             require(not self.enable_crypto and not self.enable_first_host,
                     "Owner push must preserve the current runtime configuration.")
             require(len(changes) == len(set(changes))
