@@ -9,6 +9,8 @@ import unittest
 from unittest.mock import patch
 import importlib.util
 import sys
+import subprocess
+import hashlib
 BASE=Path(__file__).resolve().parent
 for name,filename in [('metadata','inspect-mail-service-readonly.py'),('upgrade','upgrade-room-mail.py')]:
     spec=importlib.util.spec_from_file_location(name,BASE/filename)
@@ -18,7 +20,10 @@ for name,filename in [('metadata','inspect-mail-service-readonly.py'),('upgrade'
 u=sys.modules['upgrade']
 
 REV='a'*40
-SOURCE=(BASE.parent/'email/mailer.py').read_bytes()
+# Preserve the historical operation's exact reviewed target fixture.
+SOURCE=subprocess.check_output(['git','--no-replace-objects','show','ddf24949e2a42c2f00ca0502a75cdc52a4352324:ops/email/mailer.py'])
+if hashlib.sha256(SOURCE).hexdigest()!=u.NEW_SOURCE:
+    raise RuntimeError('Historical mail upgrade fixture differs.')
 
 
 def config():
