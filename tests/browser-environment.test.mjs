@@ -48,3 +48,27 @@ for (const [filename, names] of Object.entries(jobs)) {
     assert.doesNotMatch(job, /playwright install|apt-get|--privileged|SYS_ADMIN/);
   });
 }
+
+
+test('focused browser diagnostics retain first failures without uploading green-run traces', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/browser-followup.yml', import.meta.url), 'utf8');
+  const commands = [...workflow.matchAll(/^        run: (npx playwright test .+)$/gm)].map(match => match[1]);
+  assert.equal(commands.length, 2);
+  for (const command of commands) {
+    assert.match(command, /--workers=1 --retries=0 --repeat-each=5 --trace=retain-on-failure/);
+    assert.doesNotMatch(command, /--trace=(on|on-first-retry)(?: |$)/);
+  }
+  assert.match(commands[0], /navigation-audit\.spec\.ts member-navigation\.spec\.ts public-journey\.spec\.ts --project mobile-chromium/);
+  assert.match(commands[1], /discovery-pass-access\.spec\.ts --project desktop-chromium/);
+  assert.match(commands[1], /--output=test-results-pass-access$/);
+  const upload = workflow.split('      - uses: actions/upload-artifact@')[1];
+  assert.ok(upload?.startsWith('ea165f8d65b6e75b540449e92b4886f43607fa02'));
+  // failure() overrides the implicit success condition, including when the
+  // first test step failed and the second was skipped. No live retry needed.
+  assert.match(upload, /        if: failure\(\)\n/);
+  assert.match(upload, /name: focused-production-browser-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/);
+  assert.match(upload, /path: \|\n            playwright-report\n            test-results\n            test-results-pass-access\n          retention-days: 14/);
+  assert.doesNotMatch(workflow, /continue-on-error|if: always\(\)|actions: write|contents: write/);
+  const base = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  assert.match(base, /screenshot: "only-on-failure"/);
+});
