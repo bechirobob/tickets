@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /
+    directories: [/, /mobile]
     schedule:
       interval: weekly
       day: monday
@@ -15,3 +15,11 @@ updates:
       development-minor-and-patch:
         dependency-type: development
         update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Africa/Accra
+    open-pull-requests-limit: 2

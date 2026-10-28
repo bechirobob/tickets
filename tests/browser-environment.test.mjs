@@ -108,3 +108,28 @@ test('ordinary deployment excludes only five known tooling paths without changin
   assert.match(runtime, /      - 'tests\/\*\*'/);
   assert.match(runtime, /      - 'ops\/vps\/\*\*'/);
 });
+
+
+test('existing maintenance covers both npm locks and pinned actions without automatic adoption', () => {
+  const updates = readFileSync(new URL('../.github/dependabot.yml', import.meta.url), 'utf8');
+  const entries = updates.split('  - package-ecosystem: ').slice(1);
+  assert.equal(entries.length, 2);
+  const [npm, actions] = entries;
+  assert.ok(npm.startsWith('npm\n    directories: [/, /mobile]\n'));
+  assert.ok(actions.startsWith('github-actions\n    directory: /\n'));
+  for (const entry of entries) {
+    assert.match(entry, /schedule:\n      interval: weekly\n      day: monday\n      time: "05:00"\n      timezone: Africa\/Accra\n/);
+  }
+  assert.match(npm, /open-pull-requests-limit: 5\n/);
+  assert.match(actions, /open-pull-requests-limit: 2\n/);
+  for (const type of ['production', 'development']) {
+    assert.ok(npm.includes(`      ${type}-minor-and-patch:\n        dependency-type: ${type}\n        update-types: [minor, patch]\n`));
+  }
+  assert.doesNotMatch(updates, /registries:|token:|password:|ignore:|auto-merge|insecure-external-code-execution/);
+  // Version proposals do not update image pins. Existing readiness checks must
+  // still reject a lock/image mismatch until the matching image is reviewed.
+  const mismatch = structuredClone(lock);
+  mismatch.packages['node_modules/@playwright/test'].version = '99.0.0';
+  assert.throws(() => check({ lock: mismatch }));
+  assert.match(config.image, /@sha256:[a-f0-9]{64}$/);
+});
