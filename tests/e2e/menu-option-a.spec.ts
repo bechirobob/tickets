@@ -62,7 +62,7 @@ test('Option A keeps full-width rows, quiet controls and keyboard access in port
       if (index > 0) expect(geometry[index].y).toBeGreaterThanOrEqual(geometry[index - 1].y + geometry[index - 1].height);
     }
     if (viewport.width <= 700) {
-      await expect(rows).toHaveCount(4);
+      await expect(rows).toHaveCount(destinations.length);
       for (const [name, href] of destinations) await expect(menu.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
       await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
     }
@@ -138,7 +138,7 @@ test('Option A keeps native keyboard focus inside the short-landscape scrollport
   const close = menu.getByRole('button', { name: 'Close navigation', exact: true });
   const rows = menu.getByRole('link');
   await expect(close).toBeFocused();
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(destinations.length);
   const scrollport = menu.locator('.night-mobile-menu__links');
   await expect(scrollport).toHaveCSS('scroll-padding-top', '6px');
   await expect(scrollport).toHaveCSS('scroll-padding-bottom', '6px');
@@ -159,7 +159,9 @@ test('Option A keeps native keyboard focus inside the short-landscape scrollport
 
   // Only native Tab changes focus/scrolling. Never repair visibility in the test.
   for (const direction of ['Tab', 'Shift+Tab']) {
-    const indices = direction === 'Tab' ? [0, 1, 2, 3] : [2, 1, 0];
+    const indices = direction === 'Tab'
+      ? destinations.map((_, index) => index)
+      : destinations.slice(0, -1).map((_, index) => index).reverse();
     for (const index of indices) {
       await page.keyboard.press(direction);
       const row = rows.nth(index);
