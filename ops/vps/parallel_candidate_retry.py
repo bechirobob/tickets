@@ -79,7 +79,14 @@ def _steps(job, inventory, failure_step=None):
                 after += ('Post Set up Python for existing verification scripts', 'Stop containers')
             require(title in before and not declared or title in after and declared == expected,
                     'Unexpected or misplaced lifecycle step')
-            require(step['conclusion'] == 'success', 'Failed lifecycle cleanup')
+            # Both pinned setup actions declare post-if: success(): their cache
+            # save hooks are skipped after the sole original download failure.
+            # Checkout/container cleanup and every other lifecycle stay strict.
+            cache_post = title in ('Post Set up Node.js',
+                                  'Post Set up Python for existing verification scripts')
+            expected_post = ('skipped' if name in v2.BROWSERS and failure_step == DOWNLOAD_STEP
+                             and cache_post else 'success')
+            require(step['conclusion'] == expected_post, 'Failed or unexpected lifecycle cleanup')
             if title == 'Initialize containers': require('Set up job' in seen, 'Missing job setup')
             if title.startswith('Post '): require('Stop containers' not in seen, 'Post action after shutdown')
         # GitHub skipped entries may carry no timestamps or equal boundary times;

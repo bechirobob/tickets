@@ -24,6 +24,12 @@ def fixture():
                         runner_group_name='GitHub Actions', labels=['ubuntu-24.04'], workflow_name='Candidate',
                         head_branch=run['head_branch'], run_url='https://api.github.com/repos/bechirobob/tickets/actions/runs/12345')
         name = original['name']
+        if name in v2.BROWSERS:
+            # Pinned Node/Python setup both register success-only post hooks.
+            post = next(x for x in original['steps'] if x['name'].startswith('Post Set up Python'))
+            node_post = dict(post, name='Post Set up Node.js', completed_at=post['started_at'])
+            original['steps'].insert(original['steps'].index(post),node_post)
+            for number,step in enumerate(original['steps'],1):step['number']=number
         # Original receipts always carry original producer/execution attempt.
         logs[original['id']] = logs[original['id']].replace(b'"run_attempt":"2"',b'"run_attempt":"1"')
         alias = copy.deepcopy(original)
@@ -46,7 +52,8 @@ def fixture():
             for step in original['steps']:
                 if step['name']==failed:
                     step['conclusion']='failure'; found=True
-                elif found and step['name'] in inventory:
+                elif found and (step['name'] in inventory or name == target and step['name'] in
+                               ('Post Set up Node.js','Post Set up Python for existing verification scripts')):
                     step.update(conclusion='skipped',completed_at=step['started_at'])
             logs[original['id']]=b'2026-10-14T00:01:00Z Failed combined download/unpack\n'
         else:
@@ -62,6 +69,52 @@ class RetryTests(unittest.TestCase):
     def sync(self): self.data[4][:]=copy.deepcopy(self.data[1]+self.data[3])
     def reject(self):
         with self.assertRaises(retry.ParallelError): self.verify()
+    def test_real_failed_download_success_only_cache_posts_are_skipped(self):
+        # Hosted run40739969801 proved Node's post-if success hook is skipped;
+        # pinned setup-python ece7cb06/action.yml has the same post-if condition.
+        for title in ('Post Set up Node.js','Post Set up Python for existing verification scripts'):
+            original=next(x for x in self.data[1][3]['steps'] if x['name']==title)
+            current=next(x for x in self.data[3][3]['steps'] if x['name']==title)
+            self.assertEqual(original['conclusion'],'skipped')
+            self.assertEqual(current['conclusion'],'success')
+        self.verify()
+    def test_original_cache_posts_cannot_claim_success_or_failure(self):
+        for title in ('Post Set up Node.js','Post Set up Python for existing verification scripts'):
+            for conclusion in ('success','failure','cancelled'):
+                with self.subTest(title=title,conclusion=conclusion):
+                    self.data=fixture()
+                    next(x for x in self.data[1][3]['steps'] if x['name']==title)['conclusion']=conclusion
+                    self.sync();self.reject()
+    def test_successful_current_or_retained_cache_post_cannot_skip(self):
+        for index in (1,2,3):
+            for title in ('Post Set up Node.js','Post Set up Python for existing verification scripts'):
+                with self.subTest(index=index,title=title):
+                    self.data=fixture()
+                    next(x for x in self.data[3][index]['steps'] if x['name']==title)['conclusion']='skipped'
+                    if index != 3:
+                        next(x for x in self.data[1][index]['steps'] if x['name']==title)['conclusion']='skipped'
+                    self.sync();self.reject()
+    def test_other_original_lifecycle_cannot_skip(self):
+        for title in ('Set up job','Initialize containers','Stop containers','Complete job'):
+            with self.subTest(title=title):
+                self.data=fixture()
+                next(x for x in self.data[1][3]['steps'] if x['name']==title)['conclusion']='skipped'
+                self.sync();self.reject()
+    def test_original_checkout_post_cleanup_cannot_skip(self):
+        steps=self.data[1][3]['steps']
+        post=dict(steps[-1],name='Post Check out exact candidate',conclusion='skipped',
+                  completed_at=steps[-1]['started_at'])
+        steps.insert(-1,post)
+        for number,step in enumerate(steps,1):step['number']=number
+        self.sync();self.reject()
+    def test_original_cache_posts_allow_null_skipped_timestamps(self):
+        for step in self.data[1][3]['steps']:
+            if step['name'] in ('Post Set up Node.js','Post Set up Python for existing verification scripts'):
+                step.update(started_at=None,completed_at=None)
+        self.sync();self.verify()
+    def test_original_cache_post_skipped_execution_duration_rejected(self):
+        step=next(x for x in self.data[1][3]['steps'] if x['name']=='Post Set up Python for existing verification scripts')
+        step['completed_at']=self.data[1][3]['completed_at'];self.sync();self.reject()
     def test_valid_retains_original_execution_ids_and_attempts(self):
         proof=self.verify()
         self.assertEqual(proof['original_attempt'],1)
