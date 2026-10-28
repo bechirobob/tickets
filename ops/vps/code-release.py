@@ -3473,10 +3473,73 @@ def reviewed_staff_application_blobs(expected, source):
     return pins
 
 
+# Correct only the stale four-link browser contract; accepted application bytes stay exact.
+STAFF_MENU_BASELINE = 'bb54c8f7d18f56301a391b5561aedbf67be55566'
+STAFF_MENU_BASE_TREE = '6aa6012df02f348e3a60902cac1cd7ef6573199b'
+STAFF_MENU_SNAPSHOT = 'a7ad77d11a3599cb10c093193eaeeef6b45caec9'
+STAFF_MENU_TREE = '0acb2f0dd9da0e5ef3233a13b40056750453e4bc'
+STAFF_MENU_PATH = 'tests/e2e/menu-option-a.spec.ts'
+STAFF_MENU_BLOB = '9c46304651cfd575ab218f1f73ecb98d05e2826b'
+
+
+def reviewed_staff_menu_application_blobs(expected, source):
+    """Bind the one-test correction to a separately merged exact control revision."""
+    controls = STAFF_CONTROL_FILES
+    before_pins = {**STAFF_PREREQUISITE_BLOBS, **STAFF_APPLICATION_BLOBS}
+    paths = set(before_pins)
+    require(expected == STAFF_LIVE_BASELINE
+            and controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and controls <= paths and STAFF_MENU_PATH in STAFF_APPLICATION_BLOBS
+            and STAFF_MENU_PATH not in controls,
+            'Staff menu correction scope differs.')
+    for revision, tree in ((expected, STAFF_LIVE_TREE),
+                           (STAFF_MENU_BASELINE, STAFF_MENU_BASE_TREE),
+                           (STAFF_MENU_SNAPSHOT, STAFF_MENU_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree,
+                'Staff menu correction reviewed tree differs.')
+    trusted = os.environ.get('BECORE_TRUSTED_BASE', '')
+    require(SHA.fullmatch(trusted) and trusted not in
+            (expected, STAFF_MENU_BASELINE, STAFF_MENU_SNAPSHOT, source),
+            'Staff menu correction requires independent merged controls.')
+    verify_trusted_operator(source)
+    for before, after in ((expected, STAFF_MENU_BASELINE),
+                          (STAFF_MENU_BASELINE, STAFF_MENU_SNAPSHOT),
+                          (STAFF_MENU_BASELINE, trusted)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    for before, after, changed in (
+            (expected, STAFF_MENU_BASELINE, paths),
+            (STAFF_MENU_BASELINE, STAFF_MENU_SNAPSHOT, {STAFF_MENU_PATH}),
+            (STAFF_MENU_BASELINE, trusted, controls),
+            (trusted, source, {STAFF_MENU_PATH}),
+            (STAFF_MENU_SNAPSHOT, source, controls),
+            (expected, source, paths)):
+        require(set(git('diff', '--name-only', before, after).splitlines()) == changed,
+                'Staff menu correction complete inventory differs.')
+        verify_changed_modes(before, after)
+    pins = {**before_pins, STAFF_MENU_PATH: STAFF_MENU_BLOB}
+    for name in paths - controls:
+        original = '100644 blob ' + before_pins[name] + '\t' + name
+        corrected = '100644 blob ' + pins[name] + '\t' + name
+        require(all(git('ls-tree', revision, '--', name) == original
+                    for revision in (STAFF_MENU_BASELINE, trusted))
+                and all(git('ls-tree', revision, '--', name) == corrected
+                        for revision in (STAFF_MENU_SNAPSHOT, source)),
+                'Staff menu correction accepted bytes or modes differ: ' + name)
+    for name in controls:
+        entry = git('ls-tree', trusted, '--', name)
+        require(re.fullmatch(r'100644 blob [a-f0-9]{40}\t' + re.escape(name), entry)
+                and git('ls-tree', source, '--', name) == entry,
+                'Staff menu correction controls differ from merged controls: ' + name)
+        pins[name] = entry.split()[2]
+    require(not migration_plan(pins), 'Staff menu correction cannot include migrations.')
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
     if expected == STAFF_LIVE_BASELINE:
-        return reviewed_staff_application_blobs(expected, source)
+        return reviewed_staff_menu_application_blobs(expected, source)
     if expected == SECURITY_LIVE_BASELINE:
         return reviewed_yorkeway_security_blobs(expected, source)
     if expected == OWNER_PUSH_RELEASE_BASELINE:
