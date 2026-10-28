@@ -21,6 +21,18 @@ on:
       - 'tests/browser-environment.test.mjs'
       - 'tests/test_operator_retry_workflow.py'
       - 'ops/vps/test_code_release.py'
+      - '.github/workflows/candidate-parallel-checks.yml'
+      - '.github/workflows/tickets-code-release.yml'
+      - 'ops/vps/candidate_build.py'
+      - 'ops/vps/code-release.py'
+      - 'ops/vps/parallel_candidate_retry.py'
+      - 'ops/vps/parallel_candidate_retry_control.py'
+      - 'ops/vps/test_candidate_build.py'
+      - 'ops/vps/test_parallel_candidate_retry.py'
+      - 'ops/vps/test_parallel_candidate_retry_control.py'
+      - 'ops/vps/test_parallel_retry_admission.py'
+      - 'tests/test_candidate_parallel_workflow.py'
+      - 'ops/vps/test_yorkeway_release.py'
   workflow_dispatch:
     inputs:
       trusted_base:

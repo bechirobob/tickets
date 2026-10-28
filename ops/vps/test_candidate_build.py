@@ -279,6 +279,94 @@ class BuildTests(unittest.TestCase):
             with self.assertRaises(build.BuildError):build.receipt('producer',self.manifest,identity,'d'*64,self.manifest_digest)
         with self.assertRaises(build.BuildError):build.receipt('consumer',self.manifest,'17','d'*64,self.manifest_digest,'unknown')
 
+    def test_explicit_retry_transport_keeps_original_manifest_and_v2_strict(self):
+        current = {**self.expected, 'run_attempt': '2'}
+        with self.assertRaisesRegex(build.BuildError, 'Build identity differs'):
+            self.validate(current)
+        shutil.rmtree('dist')
+        restored = build.restore_retry(self.directory, current, '1',
+                                       self.archive_digest, self.manifest_digest)
+        self.assertEqual(restored, self.manifest)
+        self.assertEqual(restored['run_attempt'], '1')
+        self.assertEqual(restored['schema'], build.SCHEMA)
+        for browser in build.BROWSERS:
+            old = build.receipt('consumer', restored, '17', 'd'*64, self.manifest_digest, browser)
+            value = build.retry_receipt(restored, current, '1', '17', 'd'*64,
+                                        self.manifest_digest, browser)
+            self.assertEqual(set(value), set(old) | {'producer_attempt'})
+            self.assertEqual(value, {**old, 'schema': build.RETRY_RECEIPT_SCHEMA,
+                                    'run_attempt': '2', 'producer_attempt': '1'})
+
+    def test_retry_transport_only_allows_exact_first_to_second_attempt(self):
+        for producer, consumer in (('1','1'),('1','3'),('2','2'),('2','3'),('', '2'),
+                                   ('01','2'),(1,'2'),(True,'2'),('1',2),('1',True)):
+            current = {**self.expected, 'run_attempt': consumer}
+            with self.subTest(producer=producer, consumer=consumer), self.assertRaises(build.BuildError):
+                build.retry_producer_identity(current, producer)
+        self.assertEqual(build.retry_producer_identity({**self.expected, 'run_attempt':'2'},'1'), self.expected)
+
+    def test_retry_transport_rejects_every_changed_original_identity_field(self):
+        mutations = {'source_sha':'e'*40, 'source_tree':'e'*40, 'workflow_sha':'e'*40,
+                     'audit_trusted_base':'e'*40, 'run_id':'43', 'lock_sha256':'e'*64,
+                     'node':'v22.23.5', 'repository':'other/tickets', 'browsers':['desktop-chromium']}
+        for field, value in mutations.items():
+            current = {**self.expected, 'run_attempt':'2', field:value}
+            with self.subTest(field=field), self.assertRaises(build.BuildError):
+                build.restore_retry(self.directory, current, '1', self.archive_digest, self.manifest_digest)
+            with self.subTest(receipt_field=field), self.assertRaises(build.BuildError):
+                build.retry_receipt(self.manifest, current, '1', '17', 'd'*64,
+                                    self.manifest_digest, 'desktop-chromium')
+
+    def test_retry_transport_never_overwrites_or_accepts_tampered_archive(self):
+        current = {**self.expected, 'run_attempt':'2'}
+        with self.assertRaisesRegex(build.BuildError, 'absent dist'):
+            build.restore_retry(self.directory, current, '1', self.archive_digest, self.manifest_digest)
+        shutil.rmtree('dist')
+        path = self.directory / build.ARCHIVE
+        path.chmod(0o600)
+        path.write_bytes(path.read_bytes()+b'tampered')
+        with self.assertRaisesRegex(build.BuildError, 'Producer build digest differs'):
+            build.restore_retry(self.directory, current, '1', self.archive_digest, self.manifest_digest)
+        self.assertFalse(Path('dist').exists())
+
+    def test_retry_receipt_rejects_unknown_browser_and_invalid_artifact(self):
+        current = {**self.expected, 'run_attempt':'2'}
+        for artifact, digest, browser in (('', 'd'*64, 'desktop-chromium'),
+                                          ('17', 'invalid', 'desktop-chromium'),
+                                          ('17', 'd'*64, 'unknown'), ('17','d'*64,None)):
+            with self.subTest(artifact=artifact,browser=browser), self.assertRaises(build.BuildError):
+                build.retry_receipt(self.manifest,current,'1',artifact,digest,self.manifest_digest,browser)
+
+
+    def test_cli_requires_explicit_retry_command_and_emits_bound_receipt(self):
+        current = {**self.expected, 'run_attempt':'2'}
+        environment = {'BUILD_PRODUCER_ATTEMPT':'1','BUILD_ARTIFACT_ID':'17',
+                       'BUILD_ARTIFACT_DIGEST':'d'*64,'BUILD_ARCHIVE_DIGEST':self.archive_digest,
+                       'BUILD_MANIFEST_DIGEST':self.manifest_digest}
+        shutil.rmtree('dist')
+        with patch.object(build, 'identity', return_value=current), patch.dict(os.environ, environment):
+            with patch('sys.argv',['candidate_build.py','restore','--directory',str(self.directory),
+                                   '--browser','mobile-webkit']), self.assertRaisesRegex(build.BuildError,'Build identity differs'):
+                build.main()
+            self.assertFalse(Path('dist').exists())
+            with patch('sys.argv',['candidate_build.py','restore-retry','--directory',str(self.directory),
+                                   '--browser','mobile-webkit']), patch('sys.stdout',new_callable=io.StringIO) as output:
+                build.main()
+            value=json.loads(output.getvalue().removeprefix(build.PREFIX))
+            self.assertEqual(value['schema'],build.RETRY_RECEIPT_SCHEMA)
+            self.assertEqual((value['producer_attempt'],value['run_attempt']),('1','2'))
+            self.assertEqual(value['manifest_sha256'],self.manifest_digest)
+
+    def test_package_cli_exports_exact_producer_attempt_without_new_manifest_schema(self):
+        with patch.object(build,'identity',return_value=self.expected), patch.dict(os.environ, {'GITHUB_OUTPUT':'outputs'}), \
+             patch('sys.argv',['candidate_build.py','package','--directory','second-package']):
+            build.main()
+        outputs=dict(line.split('=',1) for line in Path('outputs').read_text().splitlines())
+        self.assertEqual(outputs['producer_attempt'],'1')
+        self.assertEqual(set(outputs),{'producer_attempt','archive_digest','manifest_digest'})
+        self.assertEqual(build.parse(Path('second-package/browser-build.json').read_bytes())['schema'],build.SCHEMA)
+
+
 
 class IdentityTests(unittest.TestCase):
     def setUp(self):

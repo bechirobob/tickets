@@ -19,6 +19,7 @@ import zipfile
 import public_runtime_guard as privacy
 
 SCHEMA = 'tickets-browser-build/v2'
+RETRY_RECEIPT_SCHEMA = 'tickets-browser-build/v3'
 PREFIX = 'TICKETS_BROWSER_BUILD_RECEIPT '
 BROWSERS = ('desktop-chromium', 'mobile-chromium', 'mobile-webkit')
 ARCHIVE = 'browser-build.zip'
@@ -344,20 +345,58 @@ def receipt(kind, manifest, artifact_id, artifact_digest, manifest_digest, brows
             'archive_sha256': manifest['archive_sha256'], 'manifest_sha256': manifest_digest}
 
 
+def retry_producer_identity(current, producer_attempt):
+    """Separate transport identity only; authenticated admission decides eligibility.
+
+    Never relax the v2 validator. A retry is exactly original producer attempt 1
+    and consumer attempt 2 in the same run; every other independently measured
+    identity field (source/tree/workflow/lock/Node/browsers/baseline) stays exact.
+    """
+    validate_identity(current)
+    require(producer_attempt == '1' and current['run_attempt'] == '2',
+            'Retry transport requires producer attempt 1 and consumer attempt 2')
+    return validate_identity({**current, 'run_attempt': producer_attempt})
+
+
+def restore_retry(directory, current, producer_attempt, archive_digest, manifest_digest):
+    producer = retry_producer_identity(current, producer_attempt)
+    return restore(directory, producer, archive_digest, manifest_digest)
+
+
+def retry_receipt(manifest, current, producer_attempt, artifact_id, artifact_digest,
+                  manifest_digest, browser):
+    producer = retry_producer_identity(current, producer_attempt)
+    require(isinstance(manifest, dict)
+            and all(manifest.get(key) == value for key, value in producer.items()),
+            'Retry producer identity differs')
+    value = receipt('consumer', manifest, artifact_id, artifact_digest, manifest_digest, browser)
+    return {**value, 'schema': RETRY_RECEIPT_SCHEMA,
+            'run_attempt': current['run_attempt'], 'producer_attempt': producer_attempt}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('package', 'restore', 'receipt'))
+    parser.add_argument('command', choices=('package', 'restore', 'restore-retry', 'receipt'))
     parser.add_argument('--directory', required=True)
     parser.add_argument('--browser', choices=BROWSERS)
     args = parser.parse_args()
     expected = identity()
     if args.command == 'package':
         manifest = package(args.directory, expected)
-        values = {'archive_digest': manifest['archive_sha256'],
+        values = {'producer_attempt': manifest['run_attempt'],
+                  'archive_digest': manifest['archive_sha256'],
                   'manifest_digest': digest(Path(args.directory) / MANIFEST)}
         with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
             for key, value in values.items():
                 print(f'{key}={value}', file=output)
+    elif args.command == 'restore-retry':
+        producer_attempt = os.environ.get('BUILD_PRODUCER_ATTEMPT', '')
+        manifest = restore_retry(args.directory, expected, producer_attempt,
+                                 os.environ['BUILD_ARCHIVE_DIGEST'], os.environ['BUILD_MANIFEST_DIGEST'])
+        value = retry_receipt(manifest, expected, producer_attempt,
+                              os.environ['BUILD_ARTIFACT_ID'], os.environ['BUILD_ARTIFACT_DIGEST'],
+                              os.environ['BUILD_MANIFEST_DIGEST'], args.browser)
+        print(PREFIX + canonical(value).decode().strip())
     else:
         operation = restore if args.command == 'restore' else validate
         manifest = operation(args.directory, expected, os.environ['BUILD_ARCHIVE_DIGEST'], os.environ['BUILD_MANIFEST_DIGEST'])

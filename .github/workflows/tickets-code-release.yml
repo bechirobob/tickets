@@ -30,7 +30,7 @@ on:
         required: false
         default: parallel-v1
         type: choice
-        options: [legacy, parallel-v1]
+        options: [legacy, parallel-v1, parallel-retry-v3]
       expected_active:
         description: Exact SHA currently serving active VPS traffic
         required: true
@@ -94,7 +94,7 @@ jobs:
           if [[ "$ENABLE_FIRST_HOST" == true ]]; then test "$ENABLE_CRYPTO" = false; fi
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$EXPECTED_ACTIVE" =~ ^[a-f0-9]{40}$ && "$BECORE_TRUSTED_BASE" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RUNTIME_RUN" =~ ^[1-9][0-9]*$ && "$CANDIDATE_RUN" =~ ^[1-9][0-9]*$ ]]
-          [[ "$CANDIDATE_MODE" = legacy || "$CANDIDATE_MODE" = parallel-v1 ]]
+          [[ "$CANDIDATE_MODE" = legacy || "$CANDIDATE_MODE" = parallel-v1 || "$CANDIDATE_MODE" = parallel-retry-v3 ]]
           [[ -z "$RECOVER_PREPARED" || "$RECOVER_PREPARED" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -135,8 +135,25 @@ jobs:
           python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator --source "$SOURCE_SHA"
       - name: Verify updater regression suite
         run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
+      - name: Set up the shipping runtime version for final audit
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.22.1
+      - name: Capture final dependency audit privately
+        id: final_dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase preinstall
+      - name: Install the exact approved dependency lock for final audit
+        run: npm ci --no-audit
+      - name: Verify installed dependencies against the final private audit
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
+        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase postinstall
       - name: Verify exact CI runs, source tree, ancestry and artifact provenance
         env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
@@ -158,23 +175,8 @@ jobs:
           python3 "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-ci \
             --source "$SOURCE_SHA" --expected "$EXPECTED_ACTIVE" --repository "$GITHUB_REPOSITORY" \
             --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
-            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
-      - name: Set up the shipping runtime version for final audit
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 24.22.1
-      - name: Capture final dependency audit privately
-        id: final_dependency_audit
-        env:
-          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
-        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase preinstall
-      - name: Install the exact approved dependency lock for final audit
-        run: npm ci --no-audit
-      - name: Verify installed dependencies against the final private audit
-        env:
-          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.final_dependency_audit.outputs.audit_receipt_sha256 }}
-          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-final-audit
-        run: python3 -I "$RUNNER_TEMP/tickets-operator/scripts/audit-release-dependencies.py" --phase postinstall
+            --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json" \
+            --audit-directory "$RUNNER_TEMP/tickets-final-audit"
       - name: Connect existing dedicated Tickets identity
         if: ${{ !inputs.verify_only }}
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
