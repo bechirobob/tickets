@@ -3119,7 +3119,7 @@ class DownloadRetryWorkflowHistoryTests(unittest.TestCase):
 
 # Only this loaded two-file control revision may describe the finite staff family.
 STAFF_TEST_FILE = Path(__file__).resolve()
-STAFF_OPERATOR_BLOB = '6781850394ceb9260c2326688462eeffcdda79d9'
+STAFF_OPERATOR_BLOB = 'a2bbf64964ae0dcac9d2236eddc76699ec084a9e'
 STAFF_CONTROL_PINS = {
     'ops/vps/code-release.py': ('100644', STAFF_OPERATOR_BLOB),
     'ops/vps/test_code_release.py': ('100644', release.hashlib.sha1(
@@ -14496,12 +14496,18 @@ class StaffAdmissionTests(unittest.TestCase):
         self.controls = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
         for name in self.controls | {'package.json', 'tooling.txt'}:
             self.write(name, 'live\n')
+        self.write('package.json', json.dumps({'scripts': {'test:tooling': 'node --test tests/tooling-glob.test.mjs'},
+                                               'dependencies': {'fixture': '1.0.0'}}))
+        self.write('package-lock.json', 'unchanged fixture lock\n')
         self.live = self.commit()
         for name in self.controls | {'tooling.txt'}:
             self.write(name, 'reviewed prerequisite\n')
+        package = json.loads((self.root/'package.json').read_text())
+        package['scripts']['test:tooling'] += ' tests/browser-environment.test.mjs'
+        self.write('package.json', json.dumps(package))
         self.main = self.commit()
         self.prerequisites = {name: self.git('rev-parse', self.main + ':' + name)
-                              for name in self.controls | {'tooling.txt'}}
+                              for name in self.controls | {'tooling.txt', 'package.json'}}
         self.write('app/staff/page.tsx', 'accepted staff\n')
         self.snapshot = self.commit()
         self.application = {'app/staff/page.tsx': self.git('rev-parse', self.snapshot + ':app/staff/page.tsx')}
@@ -14517,6 +14523,8 @@ class StaffAdmissionTests(unittest.TestCase):
             'STAFF_MAIN_BASELINE': self.main, 'STAFF_MAIN_TREE': self.git('rev-parse', self.main+'^{tree}'),
             'STAFF_APP_SNAPSHOT': self.snapshot, 'STAFF_APP_TREE': self.git('rev-parse', self.snapshot+'^{tree}'),
             'STAFF_APPLICATION_BLOBS': self.application, 'STAFF_PREREQUISITE_BLOBS': self.prerequisites,
+            'STAFF_PACKAGE_BLOBS': tuple(self.git('rev-parse', rev+':package.json') for rev in (self.live, self.main)),
+            'STAFF_LOCK_BLOB': self.git('rev-parse', self.live+':package-lock.json'),
             '__file__': str(self.root/'ops/vps/code-release.py'),
         }.items():
             self.patch(release, name, value)
@@ -14524,7 +14532,7 @@ class StaffAdmissionTests(unittest.TestCase):
             name: ('100644', self.git('rev-parse', self.control+':'+name)) for name in self.controls})
         self.patch(sys.modules[__name__], 'STAFF_TEST_FILE', self.root/'ops/vps/test_code_release.py')
         self.patch(sys.modules[__name__], 'DOWNLOAD_RETRY_STAGED_BASE', {
-            name: ('100644', blob) for name, blob in self.prerequisites.items()})
+            name: ('100644', blob) for name, blob in self.prerequisites.items() if name != 'package.json'})
         self.patch(sys.modules[__name__], 'DOWNLOAD_RETRY_OUTPUTS', {})
         self.patch(sys.modules[__name__], 'DOWNLOAD_RETRY_STAGED_ADDITIONS', set())
         environment = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
@@ -14607,11 +14615,12 @@ class StaffAdmissionTests(unittest.TestCase):
 
     def test_staged_inventory_and_mutations(self):
         stage = self.root/'staged'; stage.mkdir()
-        for name in self.prerequisites:
+        staged = self.prerequisites.keys() - {'package.json'}
+        for name in staged:
             p=stage/name; p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes((self.root/name).read_bytes()); p.chmod(0o644)
         self.assertIsNotNone(staff_source_family(stage))
-        for name in self.prerequisites:
+        for name in staged:
             with self.subTest(name=name):
                 p=stage/name; raw=p.read_bytes(); p.write_bytes(raw+b'changed\n')
                 with self.assertRaises(AssertionError): staff_source_family(stage)
@@ -14663,7 +14672,6 @@ class StaffMenuAdmissionTests(StaffAdmissionTests):
         self.assertEqual(set(pins), self.controls | set(self.application) | set(self.prerequisites))
         self.assertEqual(pins[release.STAFF_MENU_PATH], release.STAFF_MENU_BLOB)
         self.assertEqual(staff_source_family(self.root)[release.STAFF_MENU_PATH], release.STAFF_MENU_BLOB)
-        self.assertEqual(release.reviewed_application_blobs(self.live, self.source), pins)
 
     def test_control_only_checkout_passes(self):
         self.git('checkout', '-q', self.control)
@@ -14683,6 +14691,121 @@ class StaffMenuAdmissionTests(StaffAdmissionTests):
         with patch.object(release, 'STAFF_MENU_BLOB', 'f'*40):
             with self.assertRaises(release.ReleaseError): self.verify()
             with self.assertRaises(AssertionError): staff_source_family(self.root)
+
+
+class StaffToolingAdmissionTests(StaffMenuAdmissionTests):
+    """Real Git admission through vetted_changes, including the root package guard."""
+    def setUp(self):
+        super().setUp()
+        baseline = self.source
+        self.patch(release, 'STAFF_TOOLING_BASELINE', baseline)
+        self.patch(release, 'STAFF_TOOLING_TREE', self.git('rev-parse', baseline+'^{tree}'))
+        self.write('ops/vps/code-release.py', 'independent tooling correction operator\n')
+        self.write('ops/vps/test_code_release.py', 'independent tooling correction tests\n')
+        self.control = self.commit()
+        self.git('commit', '--allow-empty', '-qm', 'merged independent controls')
+        self.source = self.git('rev-parse', 'HEAD')
+        self.git('update-ref', 'refs/remotes/origin/main', self.source)
+        self.patch(sys.modules[__name__], 'STAFF_CONTROL_PINS', {
+            name: ('100644', self.git('rev-parse', self.control+':'+name)) for name in self.controls})
+        environment = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        environment.start(); self.addCleanup(environment.stop)
+
+    def verify(self):
+        return release.reviewed_staff_tooling_application_blobs(self.live, self.git('rev-parse', 'HEAD'))
+
+    def test_control_only_checkout_passes(self):
+        self.git('checkout', '-q', self.control)
+        self.assertEqual(staff_source_family(self.root)[release.STAFF_MENU_PATH], release.STAFF_MENU_BLOB)
+
+    def test_exact_independent_controls_and_accepted_source_pass(self):
+        pins = self.verify()
+        self.assertEqual(release.reviewed_application_blobs(self.live, self.source), pins)
+        self.assertEqual(set(release.vetted_changes(self.live, self.source)), set(pins))
+        self.assertEqual(staff_source_family(self.root)[release.STAFF_MENU_PATH], release.STAFF_MENU_BLOB)
+
+    def test_wrong_tree_pins_reject(self):
+        for name in ('STAFF_LIVE_TREE', 'STAFF_TOOLING_TREE'):
+            with self.subTest(name=name), patch.object(release, name, 'f'*40):
+                with self.assertRaises(release.ReleaseError): release.vetted_changes(self.live, self.source)
+
+    def test_package_dependency_script_and_lock_mutations_reject(self):
+        original = (self.root/'package.json').read_text()
+        changes = [('package-lock.json', 'different lock\n')]
+        for key, value in (('dependencies', {'fixture': '2.0.0'}), ('scripts', {'test:tooling': 'other command'})):
+            package = json.loads(original); package[key] = value
+            changes.append(('package.json', json.dumps(package)))
+        for name, value in changes:
+            with self.subTest(name=name, value=value):
+                self.git('checkout', '-q', self.source)
+                self.write(name, value); changed = self.commit()
+                with self.assertRaises(release.ReleaseError): release.vetted_changes(self.live, changed)
+
+    def test_wrong_package_or_lock_pins_reject_through_vetted_changes(self):
+        for key, value in (('STAFF_PACKAGE_BLOBS', ('f'*40, 'e'*40)), ('STAFF_LOCK_BLOB', 'f'*40)):
+            with self.subTest(key=key), patch.object(release, key, value):
+                with self.assertRaisesRegex(release.ReleaseError, 'unchanged dependency lock'):
+                    release.vetted_changes(self.live, self.source)
+
+    def test_complete_verify_ci_source_path_and_negative_boundaries(self):
+        # Real Git and source admission; only online artifact/proof/audit services
+        # are fixtures. This is regression coverage, not hosted release evidence.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = 'bechirobob/tickets'
+            runtime = {'id': 123, 'run_attempt': 1, 'status': 'completed', 'conclusion': 'success',
+                       'head_sha': self.source, 'head_branch': 'main', 'event': 'push',
+                       'path': '.github/workflows/vps-runtime.yml',
+                       'repository': {'full_name': repository}, 'head_repository': {'full_name': repository}}
+            candidate = dict(runtime, id=456, event='workflow_dispatch',
+                             head_branch='improve/release-evidence-parallel-20261013',
+                             path='.github/workflows/candidate-parallel-checks.yml')
+            runtime_jobs = VerifierTests.runtime_jobs()
+            candidate_jobs = [{'name': name, 'conclusion': 'success'} for name in
+                              ('build', 'desktop-chromium', 'mobile-chromium', 'mobile-webkit', 'tickets-candidate-verified')]
+            for run, jobs in ((runtime, runtime_jobs), (candidate, candidate_jobs)):
+                for index, job in enumerate(jobs):
+                    job.update(id=index+100, run_id=run['id'], run_attempt=1,
+                               head_sha=self.source, status='completed')
+            def metadata():
+                for name, value in (('runtime', runtime), ('candidate', candidate),
+                                    ('runtime-jobs', runtime_jobs), ('candidate-jobs', candidate_jobs)):
+                    release.write_json(root/(name+'.json'), value)
+            metadata()
+            archive = root/'tickets-vps-runtime.tar.gz'; archive.write_bytes(b'fixture archive')
+            checksum = root/(archive.name+'.sha256')
+            checksum.write_text(release.digest_file(archive)+'  '+archive.name+'\n')
+            args = argparse.Namespace(source=self.source, expected=self.live, repository=repository,
+                metadata=str(root), runtime_run='123', candidate_run='456', candidate_mode='parallel-v1',
+                archive=str(archive), output=str(root/'proof.json'), audit_directory=str(root/'audit'))
+            with patch.dict(os.environ, GITHUB_REF='refs/heads/main'), \
+                 patch.object(release, 'verify_parallel_candidate', return_value={'fixture': 'parallel'}) as collector, \
+                 patch.object(release, 'verify_runtime_transport', return_value={'fixture': 'transport'}) as transport, \
+                 patch.object(release, 'verify_dependency_audit', return_value={'status': 'clean'}) as audit:
+                release.verify_ci(args)
+                proof = json.loads((root/'proof.json').read_text())
+                self.assertEqual(set(proof['changedFiles']), set(self.verify()))
+                self.assertEqual(proof['migrations'], [])
+                self.assertEqual(proof['sourceTree'], self.git('rev-parse', self.source+'^{tree}'))
+                collector.assert_called_once(); transport.assert_called_once(); audit.assert_called_once()
+                for field, value in (('head_sha', self.live), ('conclusion', 'failure')):
+                    saved = runtime[field]; runtime[field] = value; metadata()
+                    with self.subTest(runtime=field), self.assertRaises(release.ReleaseError): release.verify_ci(args)
+                    runtime[field] = saved
+                metadata()
+                candidate['head_sha'] = self.live
+                for job in candidate_jobs: job['head_sha'] = self.live
+                metadata()
+                with self.assertRaisesRegex(release.ReleaseError, 'tree differs'): release.verify_ci(args)
+                candidate['head_sha'] = self.source
+                for job in candidate_jobs: job['head_sha'] = self.source
+                metadata()
+                checksum.write_text('f'*64+'  '+archive.name+'\n')
+                with self.assertRaisesRegex(release.ReleaseError, 'checksum mismatch'): release.verify_ci(args)
+                with self.assertRaises(subprocess.CalledProcessError):
+                    release.verify_trusted_operator(release.STAFF_TOOLING_BASELINE)
+                self.git('update-ref', 'refs/remotes/origin/main', release.STAFF_TOOLING_BASELINE)
+                with self.assertRaises(subprocess.CalledProcessError): release.verify_ci(args)
 
 
 if __name__ == "__main__":

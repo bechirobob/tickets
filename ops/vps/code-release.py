@@ -3536,10 +3536,57 @@ def reviewed_staff_menu_application_blobs(expected, source):
     return pins
 
 
+STAFF_TOOLING_BASELINE = '0e66c336c7f6dd309618443dbfaa710f35f05731'
+STAFF_TOOLING_TREE = '6cc9b253fcb623dd58cd26881132b6326c5e8f59'
+STAFF_PACKAGE_BLOBS = ('53d147f0d7b00eb21b8194a13d5d207559498790',
+                       'cd080a08e3350d17b414e6e62015c9b31cced055')
+STAFF_LOCK_BLOB = 'b140ccc0ad69811d614050717352dd80d757dc83'
+
+
+def reviewed_staff_tooling_application_blobs(expected, source):
+    """Only the two independently merged controls may change the accepted tree."""
+    controls = STAFF_CONTROL_FILES
+    pins = {**STAFF_PREREQUISITE_BLOBS, **STAFF_APPLICATION_BLOBS,
+            STAFF_MENU_PATH: STAFF_MENU_BLOB}
+    require(expected == STAFF_LIVE_BASELINE
+            and controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and controls <= pins.keys(), 'Staff tooling correction scope differs.')
+    for revision, tree in ((expected, STAFF_LIVE_TREE),
+                           (STAFF_TOOLING_BASELINE, STAFF_TOOLING_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree,
+                'Staff tooling correction reviewed tree differs.')
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, STAFF_TOOLING_BASELINE, source),
+            'Staff tooling correction requires independent merged controls.')
+    for before, after in ((expected, STAFF_TOOLING_BASELINE), (STAFF_TOOLING_BASELINE, trusted)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    for before, after, changed in ((expected, STAFF_TOOLING_BASELINE, set(pins)),
+                                   (STAFF_TOOLING_BASELINE, trusted, controls),
+                                   (trusted, source, set()), (expected, source, set(pins))):
+        require(set(git('diff', '--name-only', before, after).splitlines()) == changed,
+                'Staff tooling correction complete inventory differs.')
+        verify_changed_modes(before, after)
+    for name in pins.keys() - controls:
+        entry = '100644 blob ' + pins[name] + '\t' + name
+        require(all(git('ls-tree', revision, '--', name) == entry
+                    for revision in (STAFF_TOOLING_BASELINE, trusted, source)),
+                'Staff tooling correction accepted bytes or modes differ: ' + name)
+    for name in controls:
+        entry = git('ls-tree', trusted, '--', name)
+        require(re.fullmatch(r'100644 blob [a-f0-9]{40}\t' + re.escape(name), entry)
+                and git('ls-tree', source, '--', name) == entry,
+                'Staff tooling correction controls differ from merged controls: ' + name)
+        pins[name] = entry.split()[2]
+    require(not migration_plan(pins), 'Staff tooling correction cannot include migrations.')
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
     if expected == STAFF_LIVE_BASELINE:
-        return reviewed_staff_menu_application_blobs(expected, source)
+        return reviewed_staff_tooling_application_blobs(expected, source)
     if expected == SECURITY_LIVE_BASELINE:
         return reviewed_yorkeway_security_blobs(expected, source)
     if expected == OWNER_PUSH_RELEASE_BASELINE:
@@ -3787,6 +3834,19 @@ def vetted_changes(expected, source):
         before["scripts"]["test:ui"] = after["scripts"]["test:ui"]
         require(before == after, "Readiness package change is not test:ui-only.")
         require(not migration_plan(changed), "Readiness release cannot introduce migrations.")
+        return changed
+    if expected == STAFF_LIVE_BASELINE:
+        require({'package.json', 'package-lock.json'} & set(changed) == {'package.json'},
+                'Staff release permits only the reviewed package test:tooling append.')
+        for revision, package in zip((expected, source), STAFF_PACKAGE_BLOBS):
+            require(git('rev-parse', revision + ':package.json') == package
+                    and git('rev-parse', revision + ':package-lock.json') == STAFF_LOCK_BLOB,
+                    'Staff package or unchanged dependency lock differs from reviewed source.')
+        before = strict_json(git('show', expected + ':package.json'))
+        after = strict_json(git('show', source + ':package.json'))
+        before['scripts']['test:tooling'] += ' tests/browser-environment.test.mjs'
+        require(before == after, 'Staff package change is not the exact test:tooling append.')
+        require(not migration_plan(changed), 'Staff release cannot introduce migrations.')
         return changed
     # Next 16.3.6 security remediation, including npm's reviewed lock metadata.
     # Pin both complete inputs and outputs: scripts, other dependency versions,
