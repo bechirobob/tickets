@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { validateVersions } from '../scripts/verify-browser-environment.mjs';
@@ -71,4 +72,39 @@ test('focused browser diagnostics retain first failures without uploading green-
   assert.doesNotMatch(workflow, /continue-on-error|if: always\(\)|actions: write|contents: write/);
   const base = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   assert.match(base, /screenshot: "only-on-failure"/);
+});
+
+
+test('ordinary deployment excludes only five known tooling paths without changing its guards', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
+  const added = [
+    '.github/workflows/tickets-release-operator-checks.yml',
+    '.github/workflows/browser-followup.yml',
+    'tests/browser-environment.test.mjs',
+    'tests/test_operator_retry_workflow.py',
+    'ops/vps/test_code_release.py',
+  ];
+  const addition = added.map(path => `      - '${path}'\n`).join('');
+  assert.equal(workflow.split(addition).length, 2);
+  assert.ok(workflow.includes(`${addition}  workflow_dispatch:\n`));
+  // Exact reconstruction preserves every old ignore, manual input, permission,
+  // concurrency setting and deployment/audit/source-verification command.
+  const original = workflow.replace(addition, '');
+  const digest = createHash('sha1').update(`blob ${Buffer.byteLength(original)}\0`).update(original).digest('hex');
+  assert.equal(digest, 'b18eb81d65fd5a93fabebe7ae98c6cf99067076e');
+  // These five entries are literal files, not directories/globs. GitHub skips
+  // paths-ignore only if every changed path matches; mixed changes still run.
+  const passesNewFilter = paths => paths.some(path => !added.includes(path));
+  for (const path of added) assert.equal(passesNewFilter([path]), false);
+  assert.equal(passesNewFilter(added), false);
+  for (const path of ['app/api/example/route.ts', 'package-lock.json', 'runtime/vps/server.mjs',
+    'ops/vps/code-release.py', 'scripts/build-vps.mjs', '.github/workflows/new-check.yml',
+    'tests/new-runtime-fixture.mjs', 'ops/vps/test_code_release.py/extra']) {
+    assert.equal(passesNewFilter([...added, path]), true);
+    // Includes rename destinations and deletion paths outside the exact list.
+    assert.equal(passesNewFilter([path]), true);
+  }
+  const runtime = readFileSync(new URL('../.github/workflows/vps-runtime.yml', import.meta.url), 'utf8');
+  assert.match(runtime, /      - 'tests\/\*\*'/);
+  assert.match(runtime, /      - 'ops\/vps\/\*\*'/);
 });
