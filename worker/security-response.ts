@@ -36,7 +36,7 @@ export function securityResponse(response: Response, nonce = requestNonce(), pat
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
   }
-  if (path === "/help" || path === "/organizer/submit" || path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan" || path.startsWith("/api/customer/") || path.startsWith("/api/organizer/") || path.startsWith("/organizer/workspace") || path.startsWith("/organizer/analytics") || path.startsWith("/organizer/assistant") || path.startsWith("/my-nights") || path.startsWith("/room/")) {
+  if (path === "/help" || path === "/organizer/submit" || path === "/staff" || path.startsWith("/staff/") || path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/") || path === "/scan" || path.startsWith("/api/customer/") || path.startsWith("/api/organizer/") || path.startsWith("/organizer/workspace") || path.startsWith("/organizer/analytics") || path.startsWith("/organizer/assistant") || path.startsWith("/my-nights") || path.startsWith("/room/")) {
     headers.set("Cache-Control", "no-store");
     headers.set("X-Robots-Tag", "noindex, nofollow");
   }

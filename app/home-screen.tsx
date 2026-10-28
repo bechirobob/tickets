@@ -41,7 +41,7 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
       <PaymentFooter />
       <BrandLogo prominent />
       <p>Accra, we’re going out. Tell the group chat.</p>
-      <div><Link href="/admin/login">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div>
+      <div><Link href="/staff">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div>
     </footer>
   </main>;
 }

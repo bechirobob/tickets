@@ -19,7 +19,7 @@ const criticalQuery = new Set([
   "pending", "prompt", "code", "state", "error", "payment", "payment_intent", "redirect_status",
   "client_secret", "access_token", "refresh_token", "transaction_id", "register",
 ]);
-const criticalPath = /^\/(?:payment|checkout|rsvp|tickets|scan|admin|organizer|room|account|auth|api)(?:\/|$)|^\/my-nights\//;
+const criticalPath = /^\/(?:payment|checkout|rsvp|tickets|scan|admin|staff|organizer|room|account|auth|api)(?:\/|$)|^\/my-nights\//;
 
 function pageWasInteractedWith(): boolean {
   return performance.getEntriesByType("first-input").length > 0 || window.scrollY > 0;
@@ -28,7 +28,7 @@ function pageWasInteractedWith(): boolean {
 function safeBrowsingUrl(value: string): boolean {
   const url = new URL(value);
   const path = url.pathname.replace(/\/$/, "") || "/";
-  if (!(/^\/(?:events|hosts|about|help|privacy|terms|my-nights|the-yorke-way)?$/.test(path) || /^\/(?:event|hosts)\/[^/]+$/.test(path))) return false;
+  if (!(/^\/(?:events|hosts|about|help|privacy|terms|my-nights|the-yorke-way|staff)?$/.test(path) || /^\/(?:event|hosts)\/[^/]+$/.test(path))) return false;
   if ([...url.searchParams.keys()].some(key => criticalQuery.has(key.toLowerCase()))) return false;
   if (/^(?:passes|purchase|ticket|qr)$/i.test(url.searchParams.get("view") ?? "")) return false;
   if (url.searchParams.get("kind") === "transfer") return false;

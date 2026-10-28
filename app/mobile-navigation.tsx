@@ -15,6 +15,7 @@ const links = [
   { href: "/organizer/submit", label: "List your event", icon: CalendarPlus },
   { href: "/about", label: "About us", icon: Info },
   { href: "/help", label: "Help", icon: LifeBuoy },
+  { href: "/staff", label: "Event staff", icon: UsersRound },
 ];
 
 const mobileQuery = "(max-width: 760px)";

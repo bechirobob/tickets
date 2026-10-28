@@ -34,7 +34,7 @@ test('Option A gives existing destinations clearer labels without changing route
   }));
   assert.deepEqual(links.map(({ href, label }) => [href, label]), [
     ['/', 'Home'], ['/events', 'The Drop'], ['/hosts', 'Discover hosts'], ['/my-nights', 'My Nights'],
-    ['/organizer/submit', 'List your event'], ['/about', 'About us'], ['/help', 'Help'],
+    ['/organizer/submit', 'List your event'], ['/about', 'About us'], ['/help', 'Help'], ['/staff', 'Event staff'],
   ]);
   assert.equal(links.filter(link => link.attributes.includes('menu-primary-route')).length, 3);
   assert.match(links.find(link => link.href === '/hosts').attributes, /menu-host-route/);
@@ -52,7 +52,7 @@ test('Option A gives existing destinations clearer labels without changing route
 test('closed Option A remains inert and keeps every destination outside keyboard navigation', () => {
   const html = renderMenu({ open: false });
   assert.match(html, /<nav[^>]*inert=""[^>]*aria-hidden="true"/);
-  assert.equal((html.match(/<a[^>]*tabindex="-1"/g) ?? []).length, 7);
+  assert.equal((html.match(/<a[^>]*tabindex="-1"/g) ?? []).length, 8);
   assert.match(html, /aria-label="Close navigation"[^>]*tabindex="-1"/);
   assert.match(html, /aria-expanded="false"[^>]*aria-controls="menu"/);
 });

@@ -45,3 +45,58 @@ test("the browser-compatible Web Crypto path derives the 600,000-round productio
   }, material, 256);
   assert.equal(Buffer.from(bits).toString("base64url"), "XTlKa_gLf3KD0M8mv-ZrlYn-p7YiT-JYfq52B4UNCVI");
 });
+
+// Exercise the server entry with the production role/return-path helpers.
+async function loginEntry(session, returnTo) {
+  const requireDependency = createRequire(import.meta.url);
+  const compile = async (path, dependencies = {}) => {
+    const source = await readFile(new URL(path, import.meta.url), 'utf8');
+    const compiled = transformSync(source, { loader: 'tsx', jsx: 'automatic', format: 'cjs', supported: { 'dynamic-import': false } });
+    const component = { exports: {} };
+    runInNewContext(compiled.code, { module: component, exports: component.exports, require: name => name in dependencies ? dependencies[name] : requireDependency(name) });
+    return component.exports;
+  };
+  const roles = await compile('../lib/staff-roles.ts');
+  const auth = await compile('../lib/admin-session.ts', { './staff-roles': roles, './staff-password-policy': {} });
+  const page = await compile('../app/staff/page.tsx', {
+    '../../lib/admin-session': { ...auth, readAdminSession: async () => session },
+    'next/headers': { headers: async () => new Headers() },
+    'next/navigation': { redirect: path => { throw new Error(`redirect:${path}`); } },
+    '../../styles/workspace.css': {}, '../admin/login/page': { __esModule: true, default: () => createElement('form', { 'data-existing-login': true }) },
+    'cloudflare:workers': { env: { DB: { prepare: () => ({ first: async () => ({ count: 1 }) }) } } },
+  });
+  return page.default({ searchParams: Promise.resolve({ returnTo }) });
+}
+
+for (const [role, destination] of Object.entries({ owner: '/admin', curator: '/admin', finance: '/admin/orders', support: '/admin/support', organizer: '/organizer/workspace', gate: '/scan', moderator: '/admin/rooms' })) {
+  test(`staff entry continues ${role} only to an allowed workspace`, async () => {
+    for (const returnTo of [undefined, 'https://evil.example', '//evil.example', '/admin/../staff', '/staff', '/admin\\evil.example', ['/admin/orders', '/scan']]) {
+      await assert.rejects(loginEntry({ role }, returnTo), { message: `redirect:${destination}` });
+    }
+    await assert.rejects(loginEntry({ role }, `${destination}?view=all`), { message: `redirect:${destination}?view=all` });
+    await assert.rejects(loginEntry({ role, mustChangePassword: true }, destination), { message: 'redirect:/admin/account' });
+  });
+}
+test('missing or rejected staff session renders the existing login form', async () => {
+  const html = renderToStaticMarkup(await loginEntry(null, '/admin/accounts'));
+  assert.match(html, /data-existing-login/);
+});
+
+test('customer notifications do not replace an open staff entry tab', async () => {
+  const source = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  const listeners = new Map();
+  let opened;
+  const self = {
+    location: { origin: 'https://tickets.becoreops.com' },
+    addEventListener: (name, listener) => listeners.set(name, listener),
+    clients: {
+      matchAll: async () => [{ url: 'https://tickets.becoreops.com/staff', focus() {}, navigate() { throw new Error('Staff tab must remain untouched'); } }],
+      openWindow: async target => { opened = target; },
+    },
+  };
+  runInNewContext(source, { self, URL });
+  let pending;
+  listeners.get('notificationclick')({ notification: { close() {}, data: { url: '/notifications' } }, waitUntil: value => { pending = value; } });
+  await pending;
+  assert.equal(opened, '/notifications');
+});

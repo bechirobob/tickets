@@ -976,7 +976,7 @@ test("public browsing is edge-cached without caching private customer journeys",
 
 test("homepage footer stays useful without duplicating the customer dock", async () => {
   const [home, css] = await Promise.all([readFile(homeUrl, "utf8"), readFile(cssUrl, "utf8")]);
-  assert.match(home, /href="\/admin\/login">Event staff/u);
+  assert.match(home, /href="\/staff">Event staff/u);
   assert.match(home, /href="\/organizer\/submit">Organisers/u);
   assert.match(home, /href="\/about">About us/u);
   assert.match(home, /href="\/help">Help/u);
