@@ -3119,7 +3119,7 @@ class DownloadRetryWorkflowHistoryTests(unittest.TestCase):
 
 # Only this loaded two-file control revision may describe the finite staff family.
 STAFF_TEST_FILE = Path(__file__).resolve()
-STAFF_OPERATOR_BLOB = '3cc1949042ba6bc420447862613f78a6523ff6a5'
+STAFF_OPERATOR_BLOB = '6781850394ceb9260c2326688462eeffcdda79d9'
 STAFF_CONTROL_PINS = {
     'ops/vps/code-release.py': ('100644', STAFF_OPERATOR_BLOB),
     'ops/vps/test_code_release.py': ('100644', release.hashlib.sha1(
@@ -3159,6 +3159,9 @@ def staff_source_family(root):
             manifest.update(STAFF_CONTROL_PINS)
             if application:
                 manifest.update({name: ('100644', blob) for name, blob in release.STAFF_APPLICATION_BLOBS.items()})
+                correction = root / release.STAFF_MENU_PATH
+                if correction.is_file() and not correction.is_symlink() and digest(correction.read_bytes()) == release.STAFF_MENU_BLOB:
+                    manifest[release.STAFF_MENU_PATH] = ('100644', release.STAFF_MENU_BLOB)
             tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
             untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
             if tracked != set(manifest) or untracked:
@@ -14619,6 +14622,67 @@ class StaffAdmissionTests(unittest.TestCase):
     def test_unrelated_archive_not_selected(self):
         other=self.root/'unrelated'; other.mkdir()
         self.assertIsNone(staff_source_family(other))
+
+
+
+
+class StaffMenuAdmissionTests(StaffAdmissionTests):
+    """Repeat every mutation boundary for the isolated browser-contract correction."""
+    def setUp(self):
+        super().setUp()
+        baseline = self.source
+        menu_path = 'app/staff/page.tsx'
+        self.write(menu_path, 'accepted browser contract correction\n')
+        self.snapshot = self.commit()
+        corrected = self.git('rev-parse', self.snapshot+':'+menu_path)
+        self.git('checkout', '-q', baseline)
+        self.write('ops/vps/code-release.py', 'independent menu correction operator\n')
+        self.write('ops/vps/test_code_release.py', 'independent menu correction tests\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '-q', '--no-ff', '-m', 'accepted test correction', self.snapshot)
+        self.source = self.git('rev-parse', 'HEAD')
+        for name, value in {
+            'STAFF_MENU_BASELINE': baseline,
+            'STAFF_MENU_BASE_TREE': self.git('rev-parse', baseline+'^{tree}'),
+            'STAFF_MENU_SNAPSHOT': self.snapshot,
+            'STAFF_MENU_TREE': self.git('rev-parse', self.snapshot+'^{tree}'),
+            'STAFF_MENU_PATH': menu_path, 'STAFF_MENU_BLOB': corrected,
+        }.items():
+            self.patch(release, name, value)
+        self.patch(sys.modules[__name__], 'STAFF_CONTROL_PINS', {
+            name: ('100644', self.git('rev-parse', self.control+':'+name)) for name in self.controls})
+        environment = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        environment.start(); self.addCleanup(environment.stop)
+
+    def verify(self):
+        return release.reviewed_staff_menu_application_blobs(self.live, self.git('rev-parse', 'HEAD'))
+
+    def test_exact_independent_controls_and_accepted_source_pass(self):
+        pins = self.verify()
+        self.assertEqual(set(pins), self.controls | set(self.application) | set(self.prerequisites))
+        self.assertEqual(pins[release.STAFF_MENU_PATH], release.STAFF_MENU_BLOB)
+        self.assertEqual(staff_source_family(self.root)[release.STAFF_MENU_PATH], release.STAFF_MENU_BLOB)
+        self.assertEqual(release.reviewed_application_blobs(self.live, self.source), pins)
+
+    def test_control_only_checkout_passes(self):
+        self.git('checkout', '-q', self.control)
+        self.assertEqual(staff_source_family(self.root)['app/staff/page.tsx'], self.application['app/staff/page.tsx'])
+
+    def test_wrong_tree_pins_reject(self):
+        for name in ('STAFF_LIVE_TREE', 'STAFF_MENU_BASE_TREE', 'STAFF_MENU_TREE'):
+            with self.subTest(name=name), patch.object(release, name, 'f'*40):
+                with self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_missing_correction_never_admits_the_old_application(self):
+        self.git('checkout', release.STAFF_MENU_BASELINE, '--', release.STAFF_MENU_PATH)
+        self.commit()
+        with self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_wrong_correction_pin_rejects(self):
+        with patch.object(release, 'STAFF_MENU_BLOB', 'f'*40):
+            with self.assertRaises(release.ReleaseError): self.verify()
+            with self.assertRaises(AssertionError): staff_source_family(self.root)
 
 
 if __name__ == "__main__":
