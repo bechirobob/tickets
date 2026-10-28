@@ -3129,11 +3129,10 @@ STAFF_CONTROL_PINS = {
 
 
 def staff_source_family(root):
-    """Require the exact baseline plus the independently reviewed finite download-retry delta."""
+    """Require the exact main tree with independent controls and optional accepted staff bytes."""
     root = Path(root)
     def digest(raw):
         return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
-    operator = root / 'ops/vps/code-release.py'
     selected = (root / 'ops/vps/test_code_release.py').resolve() == STAFF_TEST_FILE
     marked = any((root / name).is_file() and not (root / name).is_symlink()
                  and digest((root / name).read_bytes()) == value[1]
