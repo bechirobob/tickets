@@ -3119,11 +3119,12 @@ class DownloadRetryWorkflowHistoryTests(unittest.TestCase):
 
 # Only this loaded two-file control revision may describe the finite staff family.
 STAFF_TEST_FILE = Path(__file__).resolve()
+STAFF_OPERATOR_BLOB = '3cc1949042ba6bc420447862613f78a6523ff6a5'
 STAFF_CONTROL_PINS = {
-    'ops/vps/' + name: ('100644', release.hashlib.sha1(
-        b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest())
-    for name in ('code-release.py', 'test_code_release.py')
-    for raw in [Path(__file__).with_name(name).read_bytes()]
+    'ops/vps/code-release.py': ('100644', STAFF_OPERATOR_BLOB),
+    'ops/vps/test_code_release.py': ('100644', release.hashlib.sha1(
+        b'blob ' + str(len(STAFF_TEST_FILE.read_bytes())).encode() + b'\0'
+        + STAFF_TEST_FILE.read_bytes()).hexdigest()),
 }
 
 
