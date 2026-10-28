@@ -35,7 +35,6 @@ jobs:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       WRANGLER_SEND_METRICS: 'false'
-      BROWSER_ENVIRONMENT_PATH: ${{ runner.temp }}/staff-browser-environment.json
     steps:
       - name: Check out exact preview source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -60,6 +59,8 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit
       - name: Verify prepared browser versions and environment
+        env:
+          BROWSER_ENVIRONMENT_PATH: ${{ runner.temp }}/staff-browser-environment.json
         run: node scripts/verify-browser-environment.mjs chromium webkit > "$BROWSER_ENVIRONMENT_PATH"
       - name: Build exact candidate once for local fixtures
         run: |
@@ -84,6 +85,8 @@ jobs:
           --grep 'staff (entry|opening animation)' --workers=1 --retries=0
           --trace=off --reporter=line --output test-results/staff-entry
       - name: Package only named staff fixture images and source manifest
+        env:
+          BROWSER_ENVIRONMENT_PATH: ${{ runner.temp }}/staff-browser-environment.json
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
