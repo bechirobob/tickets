@@ -2514,7 +2514,127 @@ class OperatorRetrySourceFamilyTests(ParallelGateSourceFamilyTests):
 
 
 
+# Exact test-only continuation for failure-only browser follow-up diagnostics.
+# No production gate or earlier source-family pin changes.
+FOLLOWUP_DIAGNOSTICS_BASELINE = 'b1230cb8364c2fe145972351b8d4e576dc3d29e2'
+FOLLOWUP_DIAGNOSTICS_BASE_TREE = '3f38ec1b95c65db64dc5f87b94be61a10e58bf2e'
+FOLLOWUP_DIAGNOSTICS_OUTPUTS = {'.github/workflows/browser-followup.yml': ('100644', 'fc66e7aae7f47be45907af8e16acb7dd6243e8fc'),
+ 'tests/browser-environment.test.mjs': ('100644', '971d9780da05043a32c1a9bc2fdf9127cbecb2de')}
+FOLLOWUP_DIAGNOSTICS_TEST_FILE = Path(__file__).resolve()
+FOLLOWUP_DIAGNOSTICS_STAGED_ADDITIONS = frozenset()
+FOLLOWUP_DIAGNOSTICS_STAGED_BASE = dict(OPERATOR_RETRY_STAGED_BASE)
+FOLLOWUP_DIAGNOSTICS_STAGED_BASE.update({name: value for name, value in OPERATOR_RETRY_OUTPUTS.items()
+    if name in FOLLOWUP_DIAGNOSTICS_STAGED_BASE or name in OPERATOR_RETRY_STAGED_ADDITIONS})
+
+
+def followup_diagnostics_source_family(root):
+    """Require the exact baseline plus the independently reviewed finite followup-diagnostics CI delta."""
+    root = Path(root)
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root / 'ops/vps/code-release.py'
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == FOLLOWUP_DIAGNOSTICS_TEST_FILE
+    # This CI-only change does not alter the operator, so its hash cannot
+    # distinguish it from an earlier family. A partial exact followup-diagnostics marker selects the stricter full family;
+    # the executing control never falls back when any current byte is changed.
+    marked = any((root / name).is_file() and not (root / name).is_symlink()
+                 and digest((root / name).read_bytes()) == value[1]
+                 for name, value in FOLLOWUP_DIAGNOSTICS_OUTPUTS.items())
+    if not selected and not marked:
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            if checkout_git(root, 'rev-parse', FOLLOWUP_DIAGNOSTICS_BASELINE + '^{tree}').decode().strip() != FOLLOWUP_DIAGNOSTICS_BASE_TREE:
+                raise AssertionError('Followup diagnostics baseline tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', FOLLOWUP_DIAGNOSTICS_BASELINE).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Followup diagnostics baseline has unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(FOLLOWUP_DIAGNOSTICS_OUTPUTS)
+            manifest['ops/vps/test_code_release.py'] = ('100644', None)
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Followup diagnostics full inventory differs')
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, blob, stage = metadata.decode().split()
+                    name = os.fsdecode(name)
+                    expected = manifest.get(name)
+                    if expected == ('100644', None):
+                        expected = ('100644', digest((root / name).read_bytes()))
+                    if stage != '0' or expected != (mode, blob):
+                        raise AssertionError('Followup diagnostics index differs from complete reviewed family')
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise AssertionError('Followup diagnostics requires its exact independent baseline') from error
+    else:
+        manifest = dict(FOLLOWUP_DIAGNOSTICS_STAGED_BASE)
+        # The staging command includes all tracked ops/vps files and only its
+        # explicitly enumerated workflows/scripts. No arbitrary new paths ship.
+        manifest.update({name: value for name, value in FOLLOWUP_DIAGNOSTICS_OUTPUTS.items()
+                         if name in manifest or name in FOLLOWUP_DIAGNOSTICS_STAGED_ADDITIONS})
+        manifest['ops/vps/test_code_release.py'] = ('100644', None)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Followup diagnostics requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as error:
+            raise AssertionError('Followup diagnostics source is incomplete') from error
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Followup diagnostics has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
+class FollowupDiagnosticsSourceFamilyTests(ParallelGateSourceFamilyTests):
+    """The exact followup_diagnostics family also rejects every existing inventory mutation."""
+    def setUp(self):
+        super().setUp()
+        for name, value in (
+                ('FOLLOWUP_DIAGNOSTICS_BASELINE', PARALLEL_GATE_BASELINE),
+                ('FOLLOWUP_DIAGNOSTICS_BASE_TREE', PARALLEL_GATE_BASE_TREE),
+                ('FOLLOWUP_DIAGNOSTICS_OUTPUTS', PARALLEL_GATE_OUTPUTS),
+                ('FOLLOWUP_DIAGNOSTICS_TEST_FILE', PARALLEL_GATE_TEST_FILE),
+                ('FOLLOWUP_DIAGNOSTICS_STAGED_BASE', SECURITY_STAGED_BASE),
+                ('parallel_gate_source_family', followup_diagnostics_source_family)):
+            patcher = patch.object(sys.modules[__name__], name, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+
+    def test_wrong_independent_tree_pin_rejects(self):
+        with patch.object(sys.modules[__name__], 'FOLLOWUP_DIAGNOSTICS_BASE_TREE', 'f'*40), self.assertRaises(AssertionError):
+            followup_diagnostics_source_family(self.root)
+
+    def test_earlier_family_without_any_followup_diagnostics_marker_is_not_reclassified(self):
+        other = self.root / 'unrelated-archive'
+        other.mkdir()
+        self.assertIsNone(followup_diagnostics_source_family(other))
+
+    def test_partial_followup_diagnostics_overlay_never_falls_back_to_earlier_family(self):
+        self.write('tests/e2e/journey.spec.ts', self.files['tests/e2e/journey.spec.ts'])
+        self.git('add', 'tests/e2e/journey.spec.ts')
+        with self.assertRaises(AssertionError): followup_diagnostics_source_family(self.root)
+
+
+
 def checkout_source_family(root):
+    diagnostics = followup_diagnostics_source_family(root)
+    if diagnostics is not None:
+        return diagnostics
     retry = operator_retry_source_family(root)
     if retry is not None:
         return retry
