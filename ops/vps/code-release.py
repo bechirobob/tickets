@@ -3349,8 +3349,134 @@ def reviewed_yorkeway_security_blobs(expected, source):
     return pins
 
 
+# Accepted staff entry: immutable application snapshot and preceding tooling only.
+STAFF_LIVE_BASELINE = 'ab92219f25d10e133b77778e83e8a69e17d6e418'
+STAFF_LIVE_TREE = '903d4424205ee199bc7e344b8e17426e434cf38b'
+STAFF_MAIN_BASELINE = '6d3514cfe18487e01f6aaf70787da477c9c71509'
+STAFF_MAIN_TREE = '2db7f36dbd99e71dcf9cc6955d60e5cdad2e861e'
+STAFF_APP_SNAPSHOT = '90c56ba35120615befbd92e51bba1b08c9c1ca46'
+STAFF_APP_TREE = '34ff7ded13e40c95af968761d337c5d400d62b2d'
+STAFF_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+STAFF_APPLICATION_BLOBS = {'.github/workflows/staff-entry-previews.yml': 'dc190779a236d376623db1e251debe2c28ef579c',
+ 'app/customer-dock.tsx': 'ecea1f3d1820bc3984a4c34d6e6c509d31cd902e',
+ 'app/home-screen.tsx': 'bcd395fae2f9aef3b1d4e87db0966fff912e223d',
+ 'app/mobile-navigation.tsx': '2df322fac6ae55b6c173bc55bcacf6cb6cb946d1',
+ 'app/robots.ts': 'ed9cf507a190bcabbcc52b4fc975c64329785116',
+ 'app/staff/page.tsx': '167e8538c4a8e750fbaf8e1e57e888eb5e2576bf',
+ 'app/workspace-return.tsx': '2dc61379aff6d6f3dce570e40aa86511e755778e',
+ 'docs/operations/workspace-navigation.md': 'b39f0da2d4f6d3123960050d1c084cda6264a50a',
+ 'lib/brand-arrival.ts': '1655a61e177c62b1f06449f1539fb0044b2beba7',
+ 'public/sw.js': '97df15b233c507b33a91acf9c28d58fc4ed373fe',
+ 'tests/brand-arrival.test.mjs': 'bb4cd16aac0e6c8d25ae0990c43e9f828566786a',
+ 'tests/e2e/menu-option-a.spec.ts': 'a7dc75a3ab3167fae8427ab14b4476bcff749823',
+ 'tests/e2e/operations.spec.ts': '4c72a934e9fcc473cc69e7416662420b249ea89a',
+ 'tests/menu-option-a.test.mjs': 'c896d685fdb43769f46e46135a10a5563055ba85',
+ 'tests/mobile-ui.test.mjs': '47fdc6106ada1465d0717f683662a521eba94c93',
+ 'tests/public-page-cache.test.ts': 'c15c776d8a40f435b4bc4fe136530d85783c56af',
+ 'tests/staff-access.test.ts': '132664a43895581687322e6f5ae3c0710c10d3e8',
+ 'tests/staff-password-client.test.mjs': 'ceae2279254ea010823d11a5013ee46e7293ce39',
+ 'worker/security-response.ts': 'f636751a47a1abeaa06c799c02b623da7d328738'}
+STAFF_PREREQUISITE_BLOBS = {'.github/dependabot.yml': 'f81cb69d4f90be96c1d66541dcf7d0d5278c1e49',
+ '.github/workflows/booking-consent-previews.yml': '07a3832723e242021bd1886069eb582b51a3f0b8',
+ '.github/workflows/browser-followup.yml': 'fc66e7aae7f47be45907af8e16acb7dd6243e8fc',
+ '.github/workflows/candidate-checks.yml': 'fce0c733744bf53af146a1c707d347935ce80fd3',
+ '.github/workflows/candidate-parallel-checks.yml': '7256549ed343b8308553c01f8591379515460c28',
+ '.github/workflows/customer-email-previews.yml': 'b667d6f54ee7a2d230c474c26d3a8a2855a0d4a3',
+ '.github/workflows/deploy.yml': 'f9be91c0080a8f25bfdb8509ed02ddfc25ff7f70',
+ '.github/workflows/input-modality-checks.yml': '74c855d9ad7eb75821b20ea8f3a81caccf2fc350',
+ '.github/workflows/native-apps.yml': '77eb667c29f5e8ad4b73d3e17825ad67d496f00f',
+ '.github/workflows/tickets-code-release.yml': 'fd18df3deaf74b0ef0e5c9c827daa62ba4e54d40',
+ '.github/workflows/tickets-release-operator-checks.yml': 'df578c820a2102b6749c2296a1933a47e494f52e',
+ '.github/workflows/yorkeway-previews.yml': 'b3b0872fcc9348d9c192eb7c8fad5ade12bf4afd',
+ 'ops/vps/candidate_build.py': '5207b85c785f8dff938af5ce32c4a5c38abb7b1c',
+ 'ops/vps/code-release.py': '5cff6c53ccd98dbbd23451f562a35177089ef042',
+ 'ops/vps/parallel_candidate.py': 'a63444b9c650da5a13c770efd2a286af634304f4',
+ 'ops/vps/parallel_candidate_control.py': '28fce119dc22b65780a3461ca5da9d1b435bca46',
+ 'ops/vps/parallel_candidate_retry.py': 'f77d1c006859176c20f629e94084fd97badc2436',
+ 'ops/vps/parallel_candidate_retry_control.py': '34c65b714662acaea3e97729fb39b741965e3512',
+ 'ops/vps/test_candidate_build.py': '96dd4740c985cddf2e99b6e9dbeeecb194a6062b',
+ 'ops/vps/test_candidate_evidence.py': '5683f38b8cb10b02abc687f35be02a8a6749b996',
+ 'ops/vps/test_code_release.py': '3ae7f2e66b0a83a330637d6652a3b876ee53f7ab',
+ 'ops/vps/test_parallel_admission.py': 'ec9fc0edd8abc210749b4eb6f962ad8a898dd4a8',
+ 'ops/vps/test_parallel_candidate.py': '808359153e33f74681056bba586dbcf7c8df7601',
+ 'ops/vps/test_parallel_candidate_control.py': '87dac06c7b8f71332e32e89a1e2858d5f849abf6',
+ 'ops/vps/test_parallel_candidate_retry.py': 'af3d5e1b510d0f900b138a7fac3987b8d9d1ba3a',
+ 'ops/vps/test_parallel_candidate_retry_control.py': 'f52727b48b1e2308ccbd07c0e432ad607875bf20',
+ 'ops/vps/test_parallel_retry_admission.py': 'd05626f3051a39d2a787b4da1874c37f95cb0da1',
+ 'ops/vps/test_yorkeway_release.py': '05cd127b1b360cb7b1cafa8efe1455408bfabda5',
+ 'package.json': 'cd080a08e3350d17b414e6e62015c9b31cced055',
+ 'scripts/browser-environment.json': '5364ab400ce4a79e05ac45cfadf322dd9d97cca8',
+ 'scripts/verify-browser-environment.mjs': '53eba71962ec08f37723096e4320c0634d7ec151',
+ 'tests/browser-environment.test.mjs': '7fa38e87018ad61646932e3010f0656b2da26f58',
+ 'tests/e2e/my-nights-studio.spec.ts': '85ae6c972144274551a18493976a90ee39d21b86',
+ 'tests/repository-boundaries.test.mjs': '46a6e6a0c166b1c3e1561ccdad714c2c1fa4d493',
+ 'tests/test_candidate_parallel_workflow.py': '64f04506d7045cef64c4399da933429d530f6b72',
+ 'tests/test_operator_retry_workflow.py': '7c5405ab3309f091ee32ff13dd1b628a5217db10'}
+
+
+def reviewed_staff_application_blobs(expected, source):
+    """Admit only accepted staff bytes on independently merged two-file controls."""
+    application = STAFF_APPLICATION_BLOBS
+    prerequisites = STAFF_PREREQUISITE_BLOBS
+    controls = STAFF_CONTROL_FILES
+    require(controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and not set(application) & (set(prerequisites) | controls)
+            and controls <= set(prerequisites), 'Staff release scopes overlap or differ.')
+    for revision, tree in ((STAFF_LIVE_BASELINE, STAFF_LIVE_TREE),
+                           (STAFF_MAIN_BASELINE, STAFF_MAIN_TREE),
+                           (STAFF_APP_SNAPSHOT, STAFF_APP_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree,
+                'Staff reviewed tree differs.')
+    require(expected == STAFF_LIVE_BASELINE, 'Staff live baseline differs.')
+    trusted = os.environ.get('BECORE_TRUSTED_BASE', '')
+    require(SHA.fullmatch(trusted) and trusted not in
+            (expected, STAFF_MAIN_BASELINE, STAFF_APP_SNAPSHOT, source),
+            'Staff requires independent merged controls.')
+    verify_trusted_operator(source)
+    for before, after in ((expected, STAFF_MAIN_BASELINE),
+                          (STAFF_MAIN_BASELINE, STAFF_APP_SNAPSHOT),
+                          (STAFF_MAIN_BASELINE, trusted)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    for before, after, paths in (
+            (expected, STAFF_MAIN_BASELINE, set(prerequisites)),
+            (STAFF_MAIN_BASELINE, STAFF_APP_SNAPSHOT, set(application)),
+            (STAFF_MAIN_BASELINE, trusted, controls),
+            (trusted, source, set(application)),
+            (STAFF_APP_SNAPSHOT, source, controls),
+            (expected, source, set(prerequisites) | set(application))):
+        require(set(git('diff', '--name-only', before, after).splitlines()) == paths,
+                'Staff complete source inventory differs.')
+        verify_changed_modes(before, after)
+    pins = dict(application)
+    for name, blob in application.items():
+        entry = '100644 blob ' + blob + '\t' + name
+        require(all(git('ls-tree', revision, '--', name) == entry
+                    for revision in (STAFF_APP_SNAPSHOT, source)),
+                'Staff accepted application bytes or mode differ: ' + name)
+    for name, blob in prerequisites.items():
+        entry = '100644 blob ' + blob + '\t' + name
+        require(git('ls-tree', STAFF_MAIN_BASELINE, '--', name) == entry,
+                'Staff prerequisite baseline differs: ' + name)
+        if name not in controls:
+            require(all(git('ls-tree', revision, '--', name) == entry
+                        for revision in (trusted, source)),
+                    'Staff prerequisite bytes or mode differ: ' + name)
+            pins[name] = blob
+    for name in controls:
+        entry = git('ls-tree', trusted, '--', name)
+        require(re.fullmatch(r'100644 blob [a-f0-9]{40}\t' + re.escape(name), entry)
+                and git('ls-tree', source, '--', name) == entry,
+                'Staff controls differ from independently merged controls: ' + name)
+        pins[name] = entry.split()[2]
+    require(not migration_plan(pins), 'Staff release cannot include migrations.')
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == STAFF_LIVE_BASELINE:
+        return reviewed_staff_application_blobs(expected, source)
     if expected == SECURITY_LIVE_BASELINE:
         return reviewed_yorkeway_security_blobs(expected, source)
     if expected == OWNER_PUSH_RELEASE_BASELINE:
