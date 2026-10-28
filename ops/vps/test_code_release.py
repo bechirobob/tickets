@@ -3117,7 +3117,95 @@ class DownloadRetryWorkflowHistoryTests(unittest.TestCase):
                 download_retry_historical_workflow(name, raw)
 
 
+# Only this loaded two-file control revision may describe the finite staff family.
+STAFF_TEST_FILE = Path(__file__).resolve()
+STAFF_OPERATOR_BLOB = '3cc1949042ba6bc420447862613f78a6523ff6a5'
+STAFF_CONTROL_PINS = {
+    'ops/vps/code-release.py': ('100644', STAFF_OPERATOR_BLOB),
+    'ops/vps/test_code_release.py': ('100644', release.hashlib.sha1(
+        b'blob ' + str(len(STAFF_TEST_FILE.read_bytes())).encode() + b'\0'
+        + STAFF_TEST_FILE.read_bytes()).hexdigest()),
+}
+
+
+def staff_source_family(root):
+    """Require the exact main tree with independent controls and optional accepted staff bytes."""
+    root = Path(root)
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == STAFF_TEST_FILE
+    marked = any((root / name).is_file() and not (root / name).is_symlink()
+                 and digest((root / name).read_bytes()) == value[1]
+                 for name, value in STAFF_CONTROL_PINS.items())
+    introduced = os.path.lexists(root / 'app/staff') or os.path.lexists(root / '.github/workflows/staff-entry-previews.yml')
+    if not selected and not marked and not introduced:
+        return None
+    application = introduced or any((root / name).is_file() and not (root / name).is_symlink()
+                    and digest((root / name).read_bytes()) == blob
+                    for name, blob in release.STAFF_APPLICATION_BLOBS.items())
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            if checkout_git(root, 'rev-parse', release.STAFF_MAIN_BASELINE + '^{tree}').decode().strip() != release.STAFF_MAIN_TREE:
+                raise AssertionError('Staff baseline tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', release.STAFF_MAIN_BASELINE).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Staff baseline has unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(STAFF_CONTROL_PINS)
+            if application:
+                manifest.update({name: ('100644', blob) for name, blob in release.STAFF_APPLICATION_BLOBS.items()})
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Staff full inventory differs')
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, blob, stage = metadata.decode().split()
+                    name = os.fsdecode(name)
+                    expected = manifest.get(name)
+                    if expected == ('100644', None):
+                        expected = ('100644', digest((root / name).read_bytes()))
+                    if stage != '0' or expected != (mode, blob):
+                        raise AssertionError('Staff index differs from complete reviewed family')
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise AssertionError('Staff requires its exact independent baseline') from error
+    else:
+        manifest = dict(DOWNLOAD_RETRY_STAGED_BASE)
+        manifest.update({name: value for name, value in DOWNLOAD_RETRY_OUTPUTS.items()
+                         if name in manifest or name in DOWNLOAD_RETRY_STAGED_ADDITIONS})
+        manifest.update(STAFF_CONTROL_PINS)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Staff requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as error:
+            raise AssertionError('Staff source is incomplete') from error
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Staff has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
+
 def checkout_source_family(root):
+    staff = staff_source_family(root)
+    if staff is not None:
+        return staff
     retry_download = download_retry_source_family(root)
     if retry_download is not None:
         return retry_download
@@ -13470,7 +13558,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
+        if family.get('ops/vps/code-release.py') in (STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'
@@ -14389,6 +14477,148 @@ class RoomMailVpsPrerequisiteTests(unittest.TestCase):
             self.assertEqual(digest(raw), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_BLOBS[name])
             self.assertEqual(digest(before), release.ROOM_MAIL_VPS_CONTROL_PREREQUISITE_INPUTS[name])
 
+
+
+
+
+class StaffAdmissionTests(unittest.TestCase):
+    """Real Git C/S/P history, with no network or deployment operations."""
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.git('init', '-q')
+        self.git('config', 'user.email', 'fixture@example.invalid')
+        self.git('config', 'user.name', 'Fixture')
+        self.controls = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+        for name in self.controls | {'package.json', 'tooling.txt'}:
+            self.write(name, 'live\n')
+        self.live = self.commit()
+        for name in self.controls | {'tooling.txt'}:
+            self.write(name, 'reviewed prerequisite\n')
+        self.main = self.commit()
+        self.prerequisites = {name: self.git('rev-parse', self.main + ':' + name)
+                              for name in self.controls | {'tooling.txt'}}
+        self.write('app/staff/page.tsx', 'accepted staff\n')
+        self.snapshot = self.commit()
+        self.application = {'app/staff/page.tsx': self.git('rev-parse', self.snapshot + ':app/staff/page.tsx')}
+        self.git('checkout', '-q', self.main)
+        self.write('ops/vps/code-release.py', 'independent operator\n')
+        self.write('ops/vps/test_code_release.py', 'independent tests\n')
+        self.control = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '-q', '--no-ff', '-m', 'accepted application', self.snapshot)
+        self.source = self.git('rev-parse', 'HEAD')
+        for name, value in {
+            'STAFF_LIVE_BASELINE': self.live, 'STAFF_LIVE_TREE': self.git('rev-parse', self.live+'^{tree}'),
+            'STAFF_MAIN_BASELINE': self.main, 'STAFF_MAIN_TREE': self.git('rev-parse', self.main+'^{tree}'),
+            'STAFF_APP_SNAPSHOT': self.snapshot, 'STAFF_APP_TREE': self.git('rev-parse', self.snapshot+'^{tree}'),
+            'STAFF_APPLICATION_BLOBS': self.application, 'STAFF_PREREQUISITE_BLOBS': self.prerequisites,
+            '__file__': str(self.root/'ops/vps/code-release.py'),
+        }.items():
+            self.patch(release, name, value)
+        self.patch(sys.modules[__name__], 'STAFF_CONTROL_PINS', {
+            name: ('100644', self.git('rev-parse', self.control+':'+name)) for name in self.controls})
+        self.patch(sys.modules[__name__], 'STAFF_TEST_FILE', self.root/'ops/vps/test_code_release.py')
+        self.patch(sys.modules[__name__], 'DOWNLOAD_RETRY_STAGED_BASE', {
+            name: ('100644', blob) for name, blob in self.prerequisites.items()})
+        self.patch(sys.modules[__name__], 'DOWNLOAD_RETRY_OUTPUTS', {})
+        self.patch(sys.modules[__name__], 'DOWNLOAD_RETRY_STAGED_ADDITIONS', set())
+        environment = patch.dict(os.environ, BECORE_TRUSTED_BASE=self.control)
+        environment.start(); self.addCleanup(environment.stop)
+        previous = os.getcwd(); os.chdir(self.root); self.addCleanup(os.chdir, previous)
+
+    def patch(self, obj, name, value):
+        p = patch.object(obj, name, value); p.start(); self.addCleanup(p.stop)
+
+    def git(self, *args):
+        return checkout_git(self.root, *args).decode().strip()
+
+    def write(self, name, data):
+        path = self.root/name; path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data); path.chmod(0o644)
+
+    def commit(self):
+        self.git('add', '-A'); self.git('commit', '-qm', 'fixture')
+        return self.git('rev-parse', 'HEAD')
+
+    def verify(self):
+        return release.reviewed_staff_application_blobs(self.live, self.git('rev-parse', 'HEAD'))
+
+    def test_exact_independent_controls_and_accepted_source_pass(self):
+        pins = self.verify()
+        self.assertEqual(set(pins), self.controls | set(self.application) | set(self.prerequisites))
+        self.assertEqual(staff_source_family(self.root)['app/staff/page.tsx'], self.application['app/staff/page.tsx'])
+
+    def test_control_only_checkout_passes(self):
+        self.git('checkout', '-q', self.control)
+        self.assertNotIn('app/staff/page.tsx', staff_source_family(self.root))
+
+    def test_each_application_prerequisite_and_control_mutation_rejects(self):
+        for name in self.controls | set(self.application) | set(self.prerequisites):
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                self.write(name, 'unreviewed\n'); self.commit()
+                with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)): self.verify()
+                with self.assertRaises(AssertionError): staff_source_family(self.root)
+
+    def test_missing_extra_and_executable_paths_reject(self):
+        for mutation in ('missing', 'extra', 'executable'):
+            with self.subTest(mutation=mutation):
+                self.git('reset', '--hard', self.source)
+                target = self.root/'app/staff/page.tsx'
+                if mutation == 'missing': target.unlink()
+                elif mutation == 'extra': self.write('unreviewed.txt', 'extra\n')
+                else: target.chmod(0o755)
+                self.commit()
+                with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)): self.verify()
+                with self.assertRaises(AssertionError): staff_source_family(self.root)
+        self.git('reset', '--hard', self.source)
+
+    def test_index_worktree_untracked_and_symlink_mutations_reject(self):
+        for mutation in ('index', 'worktree', 'untracked', 'symlink'):
+            with self.subTest(mutation=mutation):
+                self.git('reset', '--hard', self.source); self.git('clean', '-fd')
+                target = self.root/'app/staff/page.tsx'
+                if mutation == 'untracked': self.write('extra.txt', 'extra\n')
+                elif mutation == 'symlink': target.unlink(); target.symlink_to('../../tooling.txt')
+                else:
+                    self.write('app/staff/page.tsx', 'mutation\n')
+                    if mutation == 'index': self.git('add', 'app/staff/page.tsx')
+                with self.assertRaises(AssertionError): staff_source_family(self.root)
+
+    def test_wrong_tree_pins_reject(self):
+        for name in ('STAFF_LIVE_TREE', 'STAFF_MAIN_TREE', 'STAFF_APP_TREE'):
+            with self.subTest(name=name), patch.object(release, name, 'f'*40):
+                with self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_wrong_live_and_self_trust_reject(self):
+        with self.assertRaises(release.ReleaseError): release.reviewed_staff_application_blobs(self.main, self.source)
+        for trusted in (self.live, self.main, self.snapshot, self.source):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_unmerged_controls_reject(self):
+        self.git('update-ref', 'refs/remotes/origin/main', self.main)
+        with self.assertRaises(subprocess.CalledProcessError): self.verify()
+
+    def test_staged_inventory_and_mutations(self):
+        stage = self.root/'staged'; stage.mkdir()
+        for name in self.prerequisites:
+            p=stage/name; p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes((self.root/name).read_bytes()); p.chmod(0o644)
+        self.assertIsNotNone(staff_source_family(stage))
+        for name in self.prerequisites:
+            with self.subTest(name=name):
+                p=stage/name; raw=p.read_bytes(); p.write_bytes(raw+b'changed\n')
+                with self.assertRaises(AssertionError): staff_source_family(stage)
+                p.write_bytes(raw)
+        (stage/'extra').write_text('extra')
+        with self.assertRaises(AssertionError): staff_source_family(stage)
+
+    def test_unrelated_archive_not_selected(self):
+        other=self.root/'unrelated'; other.mkdir()
+        self.assertIsNone(staff_source_family(other))
 
 
 if __name__ == "__main__":
