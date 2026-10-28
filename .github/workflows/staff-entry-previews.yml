@@ -35,6 +35,7 @@ jobs:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       WRANGLER_SEND_METRICS: 'false'
+      BECORE_ISOLATED_PREVIEW: 'true'
     steps:
       - name: Check out exact preview source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
