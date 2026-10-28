@@ -12,6 +12,7 @@ on:
       - ops/vps/candidate_build.py
       - ops/vps/test_candidate_build.py
       - tests/test_candidate_parallel_workflow.py
+      - tests/test_operator_retry_workflow.py
       - .github/workflows/candidate-parallel-checks.yml
       - ops/vps/code-release.py
       - ops/vps/test_code_release.py
@@ -46,7 +47,7 @@ on:
 permissions:
   contents: read
 jobs:
-  verify:
+  source_guards:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -63,6 +64,8 @@ jobs:
         run: |
           python3 -I -m unittest discover -s tests -p 'test_caption_source.py' -v
           python3 -I -m unittest discover -s tests -p 'test_audit_release*.py' -v
+      - name: Verify operator retry boundaries
+        run: python3 -I -m unittest discover -s tests -p 'test_operator_retry_workflow.py' -v
       - name: Verify release guards and rollback without host access
         working-directory: ${{ github.event.pull_request.head.ref == 'release/scanner-session-selector-controls-20261004' && github.event.pull_request.base.sha == '45c09a471c44f34a48c1aafbde58298d75843fc8' && format('{0}/tickets-approved-source', runner.temp) || github.workspace }}
         shell: bash
@@ -71,6 +74,18 @@ jobs:
           python3 -m unittest discover -s ops/vps -p 'test_*.py'
           python3 -m py_compile "ops/vps/code-release.py" "ops/vps/test_code_release.py" "ops/vps/runtime_release.py" "ops/vps/public_runtime_guard.py" "ops/vps/candidate_evidence.py"
           git -C "$GITHUB_WORKSPACE" diff --check
+  # Keep source guards as a prerequisite, but give the staged-layout suite its
+  # own retry boundary. A failed staged job need not replay successful guards.
+  staged_layout:
+    needs: source_guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
       - name: Verify the exact staged operator layout used for release
         shell: bash
         run: |
@@ -79,3 +94,20 @@ jobs:
           mkdir -m 700 "$staged"
           git archive HEAD ops/vps ops/email/mailer.py .github/workflows/tickets-code-release.yml .github/workflows/candidate-checks.yml .github/workflows/candidate-parallel-checks.yml .github/workflows/vps-runtime.yml .github/workflows/tickets-release-operator-checks.yml .github/workflows/deploy.yml .github/scripts/verify-caption-control.py scripts/verify-caption-source.py scripts/caption-source-manifest.json tests/test_caption_source.py .github/scripts/verify-audit-control.py scripts/verify-audit-release-source.py scripts/audit-release-dependencies.py scripts/audit-release-manifest.json scripts/audit-checkbox-hotfix.py tests/test_audit_release_source.py tests/test_audit_release_dependencies.py tests/test_checkbox_hotfix_audit.py | tar -x -C "$staged"
           python3 -m unittest discover -s "$staged/ops/vps" -p 'test_*.py'
+  # Preserve the required check name. Skipped, cancelled and failed stages must
+  # never become green through GitHub's default dependency skip behavior.
+  verify:
+    if: ${{ always() }}
+    needs: [source_guards, staged_layout]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require both exact-source operator stages
+        env:
+          SOURCE_GUARDS_RESULT: ${{ needs.source_guards.result }}
+          STAGED_LAYOUT_RESULT: ${{ needs.staged_layout.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SOURCE_GUARDS_RESULT" = success
+          test "$STAGED_LAYOUT_RESULT" = success
