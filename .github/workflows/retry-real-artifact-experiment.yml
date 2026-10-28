@@ -1,0 +1,373 @@
+# Isolated transport integration experiment, NEVER application/release proof.
+# Replace the implementation SHA placeholder only after independent exact review.
+name: Isolated real artifact retry transport
+on:
+  push:
+    branches: [experiment/real-artifact-retry-20261028]
+    paths: [.github/workflows/retry-real-artifact-experiment.yml]
+permissions:
+  contents: read
+env:
+  EXPECTED_IMPLEMENTATION_SHA: fa18f81037586c71312b0eba4213fa88abfe497c
+  BECORE_RELEASE_SHA: ${{ github.sha }}
+  BECORE_TRUSTED_BASE: 8b66eeafcbcb20fc508f694c1746eb3a0f8d2bd4
+jobs:
+  producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      archive_digest: ${{ steps.package.outputs.archive_digest }}
+      manifest_digest: ${{ steps.package.outputs.manifest_digest }}
+      producer_attempt: ${{ steps.package.outputs.producer_attempt }}
+    steps:
+      - name: Check out exact experimental source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify reviewed implementation and isolated workflow-only successor
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$EXPECTED_IMPLEMENTATION_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_REF" = refs/heads/experiment/real-artifact-retry-20261028
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_IMPLEMENTATION_SHA"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = .github/workflows/retry-real-artifact-experiment.yml
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$EXPECTED_IMPLEMENTATION_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+          [[ "$GITHUB_RUN_ATTEMPT" = 1 || "$GITHUB_RUN_ATTEMPT" = 2 ]]
+      - name: Set up identical Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+      - name: Stage independently trusted dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          umask 077
+          for entry in 'verify-audit-release-source.py:tickets-audit-source.py' 'audit-release-dependencies.py:tickets-approved-audit.py'; do
+            source="scripts/${entry%%:*}"
+            target="$RUNNER_TEMP/${entry#*:}"
+            test "$(git ls-tree "$BECORE_TRUSTED_BASE" -- "$source" | cut -d ' ' -f 1)" = 100644
+            git show "$BECORE_TRUSTED_BASE:$source" > "$target"
+            test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
+          done
+      - name: Audit locked dependencies before install
+        id: dependency_audit
+        env:
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit
+      - name: Verify installed audited dependencies
+        env:
+          BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
+          BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
+        run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
+      - name: Build actual application files without deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          npm run build
+          node scripts/prepare-deploy.mjs
+      - name: Package original real artifact
+        id: package
+        run: python3 ops/vps/candidate_build.py package --directory "$RUNNER_TEMP/candidate-build"
+      - name: Upload original immutable real artifact
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: isolated-real-build-${{ github.run_id }}-1
+          path: |
+            ${{ runner.temp }}/candidate-build/browser-build.zip
+            ${{ runner.temp }}/candidate-build/browser-build.json
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
+      - name: Record original producer receipt
+        env:
+          BUILD_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          BUILD_ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          BUILD_ARCHIVE_DIGEST: ${{ steps.package.outputs.archive_digest }}
+          BUILD_MANIFEST_DIGEST: ${{ steps.package.outputs.manifest_digest }}
+        run: python3 ops/vps/candidate_build.py receipt --directory "$RUNNER_TEMP/candidate-build"
+  retained_a:
+    needs: producer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BUILD_ARTIFACT_ID: ${{ needs.producer.outputs.artifact_id }}
+      BUILD_ARTIFACT_DIGEST: ${{ needs.producer.outputs.artifact_digest }}
+      BUILD_ARCHIVE_DIGEST: ${{ needs.producer.outputs.archive_digest }}
+      BUILD_MANIFEST_DIGEST: ${{ needs.producer.outputs.manifest_digest }}
+      BUILD_PRODUCER_ATTEMPT: ${{ needs.producer.outputs.producer_attempt }}
+    steps:
+      - name: Check out exact experimental source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify reviewed implementation and isolated workflow-only successor
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$EXPECTED_IMPLEMENTATION_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_REF" = refs/heads/experiment/real-artifact-retry-20261028
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_IMPLEMENTATION_SHA"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = .github/workflows/retry-real-artifact-experiment.yml
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$EXPECTED_IMPLEMENTATION_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+          [[ "$GITHUB_RUN_ATTEMPT" = 1 || "$GITHUB_RUN_ATTEMPT" = 2 ]]
+      - name: Set up identical Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+      # Consumers run only reviewed Python transport code and Node --version,
+      # not npm packages, browsers, fixtures or application acceptance tests.
+      - name: Download original immutable artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.producer.outputs.artifact_id }}
+          path: ${{ runner.temp }}/candidate-build
+          merge-multiple: true
+      - name: Verify every artifact byte and original producer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$BUILD_PRODUCER_ATTEMPT" = 1
+          if [[ "$GITHUB_RUN_ATTEMPT" = 1 ]]; then
+            python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser desktop-chromium
+          else
+            test "$GITHUB_RUN_ATTEMPT" = 2
+            python3 ops/vps/candidate_build.py restore-retry --directory "$RUNNER_TEMP/candidate-build" --browser desktop-chromium
+          fi
+      - name: Demonstrate tampered archive fails before any second restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          import os, pathlib, sys, tempfile
+          sys.path.insert(0, 'ops/vps')
+          import candidate_build as build
+          source = pathlib.Path(os.environ['RUNNER_TEMP']) / 'candidate-build'
+          current = build.identity()
+          with tempfile.TemporaryDirectory(prefix='isolated-tamper-', dir=os.environ['RUNNER_TEMP']) as temporary:
+              target = pathlib.Path(temporary)
+              (target / build.MANIFEST).write_bytes((source / build.MANIFEST).read_bytes())
+              (target / build.ARCHIVE).write_bytes((source / build.ARCHIVE).read_bytes() + b'tampered')
+              producer = current if current['run_attempt'] == '1' else build.retry_producer_identity(current, '1')
+              try:
+                  build.validate(target, producer, os.environ['BUILD_ARCHIVE_DIGEST'], os.environ['BUILD_MANIFEST_DIGEST'])
+              except build.BuildError as error:
+                  assert str(error) == 'Producer build digest differs', str(error)
+                  print('Expected tampered archive rejection; original artifact untouched; release_authorized=false')
+              else:
+                  raise AssertionError('Tampered artifact was not rejected')
+          PYTHON
+  retained_b:
+    needs: producer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BUILD_ARTIFACT_ID: ${{ needs.producer.outputs.artifact_id }}
+      BUILD_ARTIFACT_DIGEST: ${{ needs.producer.outputs.artifact_digest }}
+      BUILD_ARCHIVE_DIGEST: ${{ needs.producer.outputs.archive_digest }}
+      BUILD_MANIFEST_DIGEST: ${{ needs.producer.outputs.manifest_digest }}
+      BUILD_PRODUCER_ATTEMPT: ${{ needs.producer.outputs.producer_attempt }}
+    steps:
+      - name: Check out exact experimental source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify reviewed implementation and isolated workflow-only successor
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$EXPECTED_IMPLEMENTATION_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_REF" = refs/heads/experiment/real-artifact-retry-20261028
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_IMPLEMENTATION_SHA"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = .github/workflows/retry-real-artifact-experiment.yml
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$EXPECTED_IMPLEMENTATION_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+          [[ "$GITHUB_RUN_ATTEMPT" = 1 || "$GITHUB_RUN_ATTEMPT" = 2 ]]
+      - name: Set up identical Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+      # Consumers run only reviewed Python transport code and Node --version,
+      # not npm packages, browsers, fixtures or application acceptance tests.
+      - name: Download original immutable artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.producer.outputs.artifact_id }}
+          path: ${{ runner.temp }}/candidate-build
+          merge-multiple: true
+      - name: Verify every artifact byte and original producer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$BUILD_PRODUCER_ATTEMPT" = 1
+          if [[ "$GITHUB_RUN_ATTEMPT" = 1 ]]; then
+            python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-chromium
+          else
+            test "$GITHUB_RUN_ATTEMPT" = 2
+            python3 ops/vps/candidate_build.py restore-retry --directory "$RUNNER_TEMP/candidate-build" --browser mobile-chromium
+          fi
+      - name: Demonstrate tampered archive fails before any second restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          import os, pathlib, sys, tempfile
+          sys.path.insert(0, 'ops/vps')
+          import candidate_build as build
+          source = pathlib.Path(os.environ['RUNNER_TEMP']) / 'candidate-build'
+          current = build.identity()
+          with tempfile.TemporaryDirectory(prefix='isolated-tamper-', dir=os.environ['RUNNER_TEMP']) as temporary:
+              target = pathlib.Path(temporary)
+              (target / build.MANIFEST).write_bytes((source / build.MANIFEST).read_bytes())
+              (target / build.ARCHIVE).write_bytes((source / build.ARCHIVE).read_bytes() + b'tampered')
+              producer = current if current['run_attempt'] == '1' else build.retry_producer_identity(current, '1')
+              try:
+                  build.validate(target, producer, os.environ['BUILD_ARCHIVE_DIGEST'], os.environ['BUILD_MANIFEST_DIGEST'])
+              except build.BuildError as error:
+                  assert str(error) == 'Producer build digest differs', str(error)
+                  print('Expected tampered archive rejection; original artifact untouched; release_authorized=false')
+              else:
+                  raise AssertionError('Tampered artifact was not rejected')
+          PYTHON
+  retry_target:
+    needs: producer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BUILD_ARTIFACT_ID: ${{ needs.producer.outputs.artifact_id }}
+      BUILD_ARTIFACT_DIGEST: ${{ needs.producer.outputs.artifact_digest }}
+      BUILD_ARCHIVE_DIGEST: ${{ needs.producer.outputs.archive_digest }}
+      BUILD_MANIFEST_DIGEST: ${{ needs.producer.outputs.manifest_digest }}
+      BUILD_PRODUCER_ATTEMPT: ${{ needs.producer.outputs.producer_attempt }}
+    steps:
+      - name: Check out exact experimental source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify reviewed implementation and isolated workflow-only successor
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$EXPECTED_IMPLEMENTATION_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_REF" = refs/heads/experiment/real-artifact-retry-20261028
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_IMPLEMENTATION_SHA"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = .github/workflows/retry-real-artifact-experiment.yml
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" origin/main
+          git merge-base --is-ancestor "$BECORE_TRUSTED_BASE" "$EXPECTED_IMPLEMENTATION_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          test -z "$(git ls-files --others --exclude-standard)"
+          [[ "$GITHUB_RUN_ATTEMPT" = 1 || "$GITHUB_RUN_ATTEMPT" = 2 ]]
+      - name: Set up identical Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+      # Consumers run only reviewed Python transport code and Node --version,
+      # not npm packages, browsers, fixtures or application acceptance tests.
+      - name: Download original immutable artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          # Deliberate missing ID inside the actual pinned action, not a transport-error classifier.
+          artifact-ids: ${{ github.run_attempt == 1 && '0' || needs.producer.outputs.artifact_id }}
+          path: ${{ runner.temp }}/candidate-build
+          merge-multiple: true
+      - name: Verify every artifact byte and original producer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$BUILD_PRODUCER_ATTEMPT" = 1
+          if [[ "$GITHUB_RUN_ATTEMPT" = 1 ]]; then
+            python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-webkit
+          else
+            test "$GITHUB_RUN_ATTEMPT" = 2
+            python3 ops/vps/candidate_build.py restore-retry --directory "$RUNNER_TEMP/candidate-build" --browser mobile-webkit
+          fi
+      - name: Demonstrate tampered archive fails before any second restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          import os, pathlib, sys, tempfile
+          sys.path.insert(0, 'ops/vps')
+          import candidate_build as build
+          source = pathlib.Path(os.environ['RUNNER_TEMP']) / 'candidate-build'
+          current = build.identity()
+          with tempfile.TemporaryDirectory(prefix='isolated-tamper-', dir=os.environ['RUNNER_TEMP']) as temporary:
+              target = pathlib.Path(temporary)
+              (target / build.MANIFEST).write_bytes((source / build.MANIFEST).read_bytes())
+              (target / build.ARCHIVE).write_bytes((source / build.ARCHIVE).read_bytes() + b'tampered')
+              producer = current if current['run_attempt'] == '1' else build.retry_producer_identity(current, '1')
+              try:
+                  build.validate(target, producer, os.environ['BUILD_ARCHIVE_DIGEST'], os.environ['BUILD_MANIFEST_DIGEST'])
+              except build.BuildError as error:
+                  assert str(error) == 'Producer build digest differs', str(error)
+                  print('Expected tampered archive rejection; original artifact untouched; release_authorized=false')
+              else:
+                  raise AssertionError('Tampered artifact was not rejected')
+          PYTHON
+  aggregate:
+    if: always()
+    needs: [producer, retained_a, retained_b, retry_target]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require complete isolated transport results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          print(json.dumps({'release_authorized': False, 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'needs': results}, sort_keys=True))
+          assert set(results) == {'producer', 'retained_a', 'retained_b', 'retry_target'}
+          assert all(value['result'] == 'success' for value in results.values())
+          PYTHON
