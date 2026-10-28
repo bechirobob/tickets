@@ -236,10 +236,11 @@ class YorkewayDeploymentTests(controls.DeploymentFixture):
 
 class YorkewayStagedInventoryTests(unittest.TestCase):
     def test_complete_archive_and_missing_extra_mode_or_operator_mutations(self):
-        for mutation in (None, 'missing', 'extra', 'mode', 'operator'):
+        for mutation in (None, 'missing', 'extra', 'mode', 'operator', 'new-module-missing', 'new-module-tamper'):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                for name in controls.OWNER_PUSH_STAGED_BASE:
+                # Mirror the exact current staged archive, including new retry controls.
+                for name in set(controls.DOWNLOAD_RETRY_STAGED_BASE) | controls.DOWNLOAD_RETRY_STAGED_ADDITIONS:
                     path = root / name; path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes((ROOT / name).read_bytes()); path.chmod(0o644)
                 target = root / 'ops/vps/inspect-mail-service-readonly.py'
@@ -247,6 +248,8 @@ class YorkewayStagedInventoryTests(unittest.TestCase):
                 elif mutation == 'extra': (root / 'unreviewed').mkdir()
                 elif mutation == 'mode': target.chmod(0o755)
                 elif mutation == 'operator': (root / 'ops/vps/code-release.py').write_bytes(b'older or unreviewed operator')
+                elif mutation == 'new-module-missing': (root / 'ops/vps/parallel_candidate_retry.py').unlink()
+                elif mutation == 'new-module-tamper': (root / 'ops/vps/parallel_candidate_retry.py').write_bytes(b'unreviewed retry module')
                 # Match the staged executing test path: no historical fallback
                 # is available when this new suite's operator is replaced.
                 with patch.object(controls, 'OWNER_PUSH_TEST_FILE', root / 'ops/vps/test_code_release.py'):
@@ -473,10 +476,11 @@ class OwnerPushDeploymentTests(controls.DeploymentFixture):
 
 class OwnerPushStagedInventoryTests(unittest.TestCase):
     def test_complete_archive_and_missing_extra_mode_or_operator_mutations(self):
-        for mutation in (None, 'missing', 'extra', 'mode', 'operator'):
+        for mutation in (None, 'missing', 'extra', 'mode', 'operator', 'new-module-missing', 'new-module-tamper'):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                for name in controls.OWNER_PUSH_STAGED_BASE:
+                # Mirror the exact current staged archive, including new retry controls.
+                for name in set(controls.DOWNLOAD_RETRY_STAGED_BASE) | controls.DOWNLOAD_RETRY_STAGED_ADDITIONS:
                     path = root / name; path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes((ROOT / name).read_bytes()); path.chmod(0o644)
                 target = root / 'ops/vps/inspect-mail-service-readonly.py'
@@ -484,6 +488,8 @@ class OwnerPushStagedInventoryTests(unittest.TestCase):
                 elif mutation == 'extra': (root / 'unreviewed').mkdir()
                 elif mutation == 'mode': target.chmod(0o755)
                 elif mutation == 'operator': (root / 'ops/vps/code-release.py').write_bytes(b'older or unreviewed operator')
+                elif mutation == 'new-module-missing': (root / 'ops/vps/parallel_candidate_retry.py').unlink()
+                elif mutation == 'new-module-tamper': (root / 'ops/vps/parallel_candidate_retry.py').write_bytes(b'unreviewed retry module')
                 # Match the staged executing test path: no historical fallback
                 # is available when this new suite's operator is replaced.
                 with patch.object(controls, 'OWNER_PUSH_TEST_FILE', root / 'ops/vps/test_code_release.py'):

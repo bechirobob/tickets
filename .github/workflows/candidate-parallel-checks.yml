@@ -40,6 +40,7 @@ jobs:
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
       archive_digest: ${{ steps.build.outputs.archive_digest }}
       manifest_digest: ${{ steps.build.outputs.manifest_digest }}
+      producer_attempt: ${{ steps.build.outputs.producer_attempt }}
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -156,6 +157,7 @@ jobs:
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
       BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+      BUILD_PRODUCER_ATTEMPT: ${{ needs.build.outputs.producer_attempt }}
     defaults:
       run:
         shell: bash
@@ -236,7 +238,18 @@ jobs:
           merge-multiple: true
       - name: Verify and restore the exact candidate build (desktop-chromium)
         id: restore_desktop_chromium
-        run: python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser desktop-chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$BUILD_PRODUCER_ATTEMPT" = "$GITHUB_RUN_ATTEMPT" ]]; then
+            python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser desktop-chromium
+          else
+            # Transport only: the independent retry collector must authenticate
+            # the original download failure and retain all original evidence.
+            test "$BUILD_PRODUCER_ATTEMPT" = 1
+            test "$GITHUB_RUN_ATTEMPT" = 2
+            python3 ops/vps/candidate_build.py restore-retry --directory "$RUNNER_TEMP/candidate-build" --browser desktop-chromium
+          fi
       - name: Prepare isolated event fixtures (desktop-chromium)
         id: fixtures_desktop_chromium
         if: ${{ !cancelled() && steps.restore_desktop_chromium.outcome == 'success' }}
@@ -293,6 +306,7 @@ jobs:
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
       BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+      BUILD_PRODUCER_ATTEMPT: ${{ needs.build.outputs.producer_attempt }}
     defaults:
       run:
         shell: bash
@@ -373,7 +387,18 @@ jobs:
           merge-multiple: true
       - name: Verify and restore the exact candidate build (mobile-chromium)
         id: restore_mobile_chromium
-        run: python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$BUILD_PRODUCER_ATTEMPT" = "$GITHUB_RUN_ATTEMPT" ]]; then
+            python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-chromium
+          else
+            # Transport only: the independent retry collector must authenticate
+            # the original download failure and retain all original evidence.
+            test "$BUILD_PRODUCER_ATTEMPT" = 1
+            test "$GITHUB_RUN_ATTEMPT" = 2
+            python3 ops/vps/candidate_build.py restore-retry --directory "$RUNNER_TEMP/candidate-build" --browser mobile-chromium
+          fi
       - name: Prepare isolated event fixtures (mobile-chromium)
         id: fixtures_mobile_chromium
         if: ${{ !cancelled() && steps.restore_mobile_chromium.outcome == 'success' }}
@@ -430,6 +455,7 @@ jobs:
       BUILD_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
       BUILD_ARCHIVE_DIGEST: ${{ needs.build.outputs.archive_digest }}
       BUILD_MANIFEST_DIGEST: ${{ needs.build.outputs.manifest_digest }}
+      BUILD_PRODUCER_ATTEMPT: ${{ needs.build.outputs.producer_attempt }}
     defaults:
       run:
         shell: bash
@@ -510,7 +536,18 @@ jobs:
           merge-multiple: true
       - name: Verify and restore the exact candidate build (mobile-webkit)
         id: restore_mobile_webkit
-        run: python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-webkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$BUILD_PRODUCER_ATTEMPT" = "$GITHUB_RUN_ATTEMPT" ]]; then
+            python3 ops/vps/candidate_build.py restore --directory "$RUNNER_TEMP/candidate-build" --browser mobile-webkit
+          else
+            # Transport only: the independent retry collector must authenticate
+            # the original download failure and retain all original evidence.
+            test "$BUILD_PRODUCER_ATTEMPT" = 1
+            test "$GITHUB_RUN_ATTEMPT" = 2
+            python3 ops/vps/candidate_build.py restore-retry --directory "$RUNNER_TEMP/candidate-build" --browser mobile-webkit
+          fi
       - name: Prepare isolated event fixtures (mobile-webkit)
         id: fixtures_mobile_webkit
         if: ${{ !cancelled() && steps.restore_mobile_webkit.outcome == 'success' }}

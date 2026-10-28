@@ -18,8 +18,8 @@ class ParallelWorkflowTests(unittest.TestCase):
         self.assertIn('Single-job candidate verification missing or incomplete.',(ROOT/'ops/vps/code-release.py').read_text())
         operator=(ROOT/'ops/vps/code-release.py').read_text()
         self.assertIn('getattr(args, "candidate_mode", "legacy")',operator)
-        self.assertIn('choices=("legacy", "parallel-v1"), default="legacy"',operator)
-        self.assertIn('candidate_mode in ("legacy", "parallel-v1")',operator)
+        self.assertIn('choices=("legacy", "parallel-v1", "parallel-retry-v3"), default="legacy"',operator)
+        self.assertIn('candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3")',operator)
         self.assertIn('validate_parallel_proof(proof',operator)
         self.assertNotIn('  pull_request:',self.new)
         self.assertIn('branches: [improve/release-evidence-parallel-20261013]',self.new)
@@ -90,7 +90,8 @@ class ParallelWorkflowTests(unittest.TestCase):
         self.assertIn('retention-days: 1',self.new);self.assertIn('overwrite: false',self.new)
         self.assertIn('if-no-files-found: error',self.new)
         self.assertEqual(self.new.count('artifact-ids: ${{ needs.build.outputs.artifact_id }}'),3)
-        self.assertEqual(self.new.count('python3 ops/vps/candidate_build.py restore'),3)
+        self.assertEqual(self.new.count('python3 ops/vps/candidate_build.py restore --'),3)
+        self.assertEqual(self.new.count('python3 ops/vps/candidate_build.py restore-retry --'),3)
 
     def test_all_consumers_reaudit_and_aggregate_explicit_success(self):
         self.assertEqual(self.new.count('run: npm ci --no-audit'),4)
@@ -99,6 +100,36 @@ class ParallelWorkflowTests(unittest.TestCase):
         for name in ('BUILD','DESKTOP','MOBILE','WEBKIT'):self.assertIn(f'test "${name}" = success',self.new)
         self.assertIn('if: ${{ always() }}',self.new)
         self.assertIn('needs: [build, desktop_chromium, mobile_chromium, mobile_webkit]',self.new)
+
+    def test_explicit_retry_transport_is_bounded_and_does_not_skip_lane_checks(self):
+        self.assertIn('producer_attempt: ${{ steps.build.outputs.producer_attempt }}',self.new)
+        self.assertEqual(self.new.count('BUILD_PRODUCER_ATTEMPT: ${{ needs.build.outputs.producer_attempt }}'),3)
+        for browser in BROWSERS:
+            block=self.new.split(f'      - name: Verify and restore the exact candidate build ({browser})',1)[1].split('      - name:',1)[0]
+            self.assertIn('if [[ "$BUILD_PRODUCER_ATTEMPT" = "$GITHUB_RUN_ATTEMPT" ]]',block)
+            self.assertIn('test "$BUILD_PRODUCER_ATTEMPT" = 1',block)
+            self.assertIn('test "$GITHUB_RUN_ATTEMPT" = 2',block)
+            self.assertIn(f'restore-retry --directory "$RUNNER_TEMP/candidate-build" --browser {browser}',block)
+        # Actual original download failure eligibility is checked independently;
+        # no workflow input may declare evidence authenticated or skip tests.
+        self.assertNotIn('retry_failure:',self.new)
+        self.assertNotIn('continue-on-error:',self.new)
+        self.assertEqual(self.new.count('--phase preinstall'),4)
+        self.assertEqual(self.new.count('--phase postinstall'),4)
+
+    def test_restore_dispatch_executes_only_same_attempt_or_first_retry(self):
+        block=self.new.split('      - name: Verify and restore the exact candidate build (desktop-chromium)',1)[1].split('      - name:',1)[0]
+        body=block.split('        run: |\n',1)[1]
+        script='python3() { printf "%s\\n" "$2"; };\n'+body
+        for producer, consumer, command in (('1','1','restore'),('2','2','restore'),
+                                           ('1','2','restore-retry'),('1','3',None),
+                                           ('2','3',None),('','2',None),('01','2',None)):
+            with self.subTest(producer=producer,consumer=consumer):
+                result=subprocess.run(['bash','-c',script],capture_output=True,text=True,
+                    env={**os.environ,'BUILD_PRODUCER_ATTEMPT':producer,'GITHUB_RUN_ATTEMPT':consumer,
+                         'RUNNER_TEMP':'/unused-local-contract-test'})
+                self.assertEqual(result.returncode==0,command is not None)
+                self.assertEqual(result.stdout.strip(),command or '')
 
 
 if __name__=='__main__': unittest.main()

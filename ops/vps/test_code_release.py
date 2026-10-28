@@ -2019,6 +2019,7 @@ PARALLEL_GATE_WORKFLOW_REVERSE = {'.github/workflows/tickets-code-release.yml': 
 
 def parallel_gate_historical_workflow(name, raw):
     """Reverse only the complete exact approved CI delta for historical assertions."""
+    raw = download_retry_historical_workflow(name, raw)
     raw = operator_retry_historical_workflow(name, raw)
     expected = PARALLEL_GATE_OUTPUTS.get(name)
     digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
@@ -2865,7 +2866,261 @@ class ToolMaintenanceSourceFamilyTests(ParallelGateSourceFamilyTests):
 
 
 
+# Exact test-only continuation for the independently reviewed download-retry controls.
+# This family recognizes source fixtures; it does not grant production admission.
+DOWNLOAD_RETRY_BASELINE = '8b66eeafcbcb20fc508f694c1746eb3a0f8d2bd4'
+DOWNLOAD_RETRY_BASE_TREE = '54b7c1ce0542b192b4df2770cc1bcd97b0c90ab2'
+DOWNLOAD_RETRY_OUTPUTS = {'.github/workflows/candidate-parallel-checks.yml': ('100644',
+                                                     '7256549ed343b8308553c01f8591379515460c28'),
+ '.github/workflows/deploy.yml': ('100644',
+                                  'f9be91c0080a8f25bfdb8509ed02ddfc25ff7f70'),
+ '.github/workflows/tickets-code-release.yml': ('100644',
+                                                'fd18df3deaf74b0ef0e5c9c827daa62ba4e54d40'),
+ 'ops/vps/candidate_build.py': ('100644',
+                                '5207b85c785f8dff938af5ce32c4a5c38abb7b1c'),
+ 'ops/vps/code-release.py': ('100644',
+                             '5cff6c53ccd98dbbd23451f562a35177089ef042'),
+ 'ops/vps/parallel_candidate_retry.py': ('100644',
+                                         '7281b8b1d9a42387f22957d105673db107fcde40'),
+ 'ops/vps/parallel_candidate_retry_control.py': ('100644',
+                                                 '34c65b714662acaea3e97729fb39b741965e3512'),
+ 'ops/vps/test_candidate_build.py': ('100644',
+                                     '96dd4740c985cddf2e99b6e9dbeeecb194a6062b'),
+ 'ops/vps/test_parallel_candidate_retry.py': ('100644',
+                                              '96f1d47a4dfd58738a2db9f5dbb25ebd09402009'),
+ 'ops/vps/test_parallel_candidate_retry_control.py': ('100644',
+                                                      'f52727b48b1e2308ccbd07c0e432ad607875bf20'),
+ 'ops/vps/test_parallel_retry_admission.py': ('100644',
+                                              'd05626f3051a39d2a787b4da1874c37f95cb0da1'),
+ 'ops/vps/test_yorkeway_release.py': ('100644',
+                                      '05cd127b1b360cb7b1cafa8efe1455408bfabda5'),
+ 'tests/browser-environment.test.mjs': ('100644',
+                                        '7fa38e87018ad61646932e3010f0656b2da26f58'),
+ 'tests/test_candidate_parallel_workflow.py': ('100644',
+                                               '64f04506d7045cef64c4399da933429d530f6b72')}
+DOWNLOAD_RETRY_WORKFLOW_BASE = {'.github/workflows/candidate-parallel-checks.yml': 'dce7d33d0e6054d2cad285146b4afa258dd0d8d0',
+ '.github/workflows/deploy.yml': 'd13d8f3e64cd4c56e92754dfd76c5154f86819c7',
+ '.github/workflows/tickets-code-release.yml': 'e3d0e157cacaf5b4aede03d257c7f7bb0fb16656'}
+DOWNLOAD_RETRY_WORKFLOW_REVERSE = {'.github/workflows/candidate-parallel-checks.yml': ((1490, 1558, b''),
+                                                     (7422, 7496, b''),
+                                                     (11491,
+                                                      12161,
+                                                      b'        run: python3 ops/vps/candidate_b'
+                                                      b'uild.py restore --directory "$RUNNER_TEM'
+                                                      b'P/candidate-build" --browser desktop-chr'
+                                                      b'omium\n'),
+                                                     (16559, 16633, b''),
+                                                     (20626,
+                                                      21294,
+                                                      b'        run: python3 ops/vps/candidate_b'
+                                                      b'uild.py restore --directory "$RUNNER_TEM'
+                                                      b'P/candidate-build" --browser mobile-chro'
+                                                      b'mium\n'),
+                                                     (25655, 25729, b''),
+                                                     (29718,
+                                                      30382,
+                                                      b'        run: python3 ops/vps/candidate_b'
+                                                      b'uild.py restore --directory "$RUNNER_TEM'
+                                                      b'P/candidate-build" --browser mobile-webk'
+                                                      b'it\n')),
+ '.github/workflows/deploy.yml': ((883, 1463, b''),),
+ '.github/workflows/tickets-code-release.yml': ((1169,
+                                                 1227,
+                                                 b'        options: [legacy, parallel-v1]\n'),
+                                                (3819,
+                                                 3938,
+                                                 b'          [[ "$CANDIDATE_MODE" = legacy || "$CAN'
+                                                 b'DIDATE_MODE" = parallel-v1 ]]\n'),
+                                                (6920, 7884, b''),
+                                                (7979, 8088, b''),
+                                                (9905,
+                                                 10079,
+                                                 b'            --archive "$metadata/artifact/ticket'
+                                                 b's-vps-runtime.tar.gz" --output "$metadata/proven'
+                                                 b'ance.json"\n      - name: Set up the shipping'
+                                                 b' runtime version for final audit\n        use'
+                                                 b's: actions/setup-node@49933ea5288caeca8642d1e84a'
+                                                 b'fbd3f7d6820020\n        with:\n          node-'
+                                                 b'version: 24.22.1\n      - name: Capture final'
+                                                 b' dependency audit privately\n        id: fina'
+                                                 b'l_dependency_audit\n        env:\n          BE'
+                                                 b'CORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets'
+                                                 b'-final-audit\n        run: python3 -I "$RUNNE'
+                                                 b'R_TEMP/tickets-operator/scripts/audit-release-de'
+                                                 b'pendencies.py" --phase preinstall\n      - na'
+                                                 b'me: Install the exact approved dependency lock f'
+                                                 b'or final audit\n        run: npm ci --no-audi'
+                                                 b't\n      - name: Verify installed dependencie'
+                                                 b's against the final private audit\n        en'
+                                                 b'v:\n          BECORE_PREINSTALL_RECEIPT_SHA25'
+                                                 b'6: ${{ steps.final_dependency_audit.outputs.audi'
+                                                 b't_receipt_sha256 }}\n          BECORE_AUDIT_D'
+                                                 b'IRECTORY: ${{ runner.temp }}/tickets-final-audit'
+                                                 b'\n        run: python3 -I "$RUNNER_TEMP/ticke'
+                                                 b'ts-operator/scripts/audit-release-dependencies.p'
+                                                 b'y" --phase postinstall\n'))}
+DOWNLOAD_RETRY_TEST_FILE = Path(__file__).resolve()
+DOWNLOAD_RETRY_STAGED_ADDITIONS = frozenset(('ops/vps/parallel_candidate_retry.py',
+ 'ops/vps/parallel_candidate_retry_control.py',
+ 'ops/vps/test_parallel_candidate_retry.py',
+ 'ops/vps/test_parallel_candidate_retry_control.py',
+ 'ops/vps/test_parallel_retry_admission.py'))
+DOWNLOAD_RETRY_STAGED_BASE = dict(TOOL_MAINTENANCE_STAGED_BASE)
+DOWNLOAD_RETRY_STAGED_BASE.update({name: value for name, value in TOOL_MAINTENANCE_OUTPUTS.items()
+    if name in DOWNLOAD_RETRY_STAGED_BASE or name in TOOL_MAINTENANCE_STAGED_ADDITIONS})
+
+
+def download_retry_historical_workflow(name, raw):
+    """Reverse only an exact reviewed workflow blob, never mutated input."""
+    digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+    expected = DOWNLOAD_RETRY_OUTPUTS.get(name)
+    if name not in DOWNLOAD_RETRY_WORKFLOW_BASE or expected is None or digest(raw) != expected[1]:
+        return raw
+    for start, end, historical in reversed(DOWNLOAD_RETRY_WORKFLOW_REVERSE[name]):
+        if not (type(start) is int and type(end) is int and 0 <= start <= end <= len(raw)):
+            raise AssertionError('Download retry workflow reverse span is invalid')
+        raw = raw[:start] + historical + raw[end:]
+    if digest(raw) != DOWNLOAD_RETRY_WORKFLOW_BASE[name]:
+        raise AssertionError('Download retry workflow did not reconstruct the pinned baseline')
+    return raw
+
+
+def download_retry_source_family(root):
+    """Require the exact baseline plus the independently reviewed finite download-retry delta."""
+    root = Path(root)
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root / 'ops/vps/code-release.py'
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == DOWNLOAD_RETRY_TEST_FILE
+    marked = any((root / name).is_file() and not (root / name).is_symlink()
+                 and digest((root / name).read_bytes()) == value[1]
+                 for name, value in DOWNLOAD_RETRY_OUTPUTS.items())
+    introduced = any(os.path.lexists(root / name) for name in DOWNLOAD_RETRY_STAGED_ADDITIONS)
+    if not selected and not marked and not introduced:
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            if checkout_git(root, 'rev-parse', DOWNLOAD_RETRY_BASELINE + '^{tree}').decode().strip() != DOWNLOAD_RETRY_BASE_TREE:
+                raise AssertionError('Download retry baseline tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', DOWNLOAD_RETRY_BASELINE).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Download retry baseline has unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(DOWNLOAD_RETRY_OUTPUTS)
+            manifest['ops/vps/test_code_release.py'] = ('100644', None)
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Download retry full inventory differs')
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, blob, stage = metadata.decode().split()
+                    name = os.fsdecode(name)
+                    expected = manifest.get(name)
+                    if expected == ('100644', None):
+                        expected = ('100644', digest((root / name).read_bytes()))
+                    if stage != '0' or expected != (mode, blob):
+                        raise AssertionError('Download retry index differs from complete reviewed family')
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise AssertionError('Download retry requires its exact independent baseline') from error
+    else:
+        manifest = dict(DOWNLOAD_RETRY_STAGED_BASE)
+        # The staging command includes all tracked ops/vps files and only its
+        # explicitly enumerated workflows/scripts. No arbitrary new paths ship.
+        manifest.update({name: value for name, value in DOWNLOAD_RETRY_OUTPUTS.items()
+                         if name in manifest or name in DOWNLOAD_RETRY_STAGED_ADDITIONS})
+        manifest['ops/vps/test_code_release.py'] = ('100644', None)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Download retry requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as error:
+            raise AssertionError('Download retry source is incomplete') from error
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Download retry has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
+
+class DownloadRetrySourceFamilyTests(ParallelGateSourceFamilyTests):
+    """Full/index/staged mutation coverage for this exact finite control delta."""
+    def setUp(self):
+        super().setUp()
+        for name, value in (
+                ('DOWNLOAD_RETRY_BASELINE', PARALLEL_GATE_BASELINE),
+                ('DOWNLOAD_RETRY_BASE_TREE', PARALLEL_GATE_BASE_TREE),
+                ('DOWNLOAD_RETRY_OUTPUTS', PARALLEL_GATE_OUTPUTS),
+                ('DOWNLOAD_RETRY_TEST_FILE', PARALLEL_GATE_TEST_FILE),
+                ('DOWNLOAD_RETRY_STAGED_BASE', SECURITY_STAGED_BASE),
+                ('parallel_gate_source_family', download_retry_source_family)):
+            patcher = patch.object(sys.modules[__name__], name, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+
+    def test_wrong_independent_tree_pin_rejects(self):
+        with patch.object(sys.modules[__name__], 'DOWNLOAD_RETRY_BASE_TREE', 'f'*40), self.assertRaises(AssertionError):
+            download_retry_source_family(self.root)
+
+    def test_earlier_family_without_any_retry_marker_is_not_reclassified(self):
+        other = self.root / 'unrelated-archive'
+        other.mkdir()
+        self.assertIsNone(download_retry_source_family(other))
+
+    def test_partial_retry_overlay_never_falls_back_to_earlier_family(self):
+        self.write('ops/vps/code-release.py', b'old operator\n')
+        self.git('add', 'ops/vps/code-release.py')
+        with self.assertRaises(AssertionError): download_retry_source_family(self.root)
+
+    def test_new_module_marker_selects_strict_family_even_if_mutated(self):
+        other = self.root / 'partial-archive'
+        name = next(iter(DOWNLOAD_RETRY_STAGED_ADDITIONS))
+        path = other/name; path.parent.mkdir(parents=True)
+        path.write_bytes(b'unreviewed partial module\n')
+        with self.assertRaises(AssertionError): download_retry_source_family(other)
+
+
+class DownloadRetryWorkflowHistoryTests(unittest.TestCase):
+    def test_only_exact_reviewed_workflows_reconstruct_pinned_baselines(self):
+        root = Path(__file__).resolve().parents[2]
+        digest = lambda raw: release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+        for name in DOWNLOAD_RETRY_WORKFLOW_REVERSE:
+            raw = (root/name).read_bytes()
+            before = download_retry_historical_workflow(name, raw)
+            self.assertNotEqual(before, raw)
+            self.assertEqual(digest(before), DOWNLOAD_RETRY_WORKFLOW_BASE[name])
+            for changed in (raw+b'\n# unrelated\n', raw.replace(b'contents: read', b'contents: write', 1)):
+                self.assertNotEqual(changed, raw)
+                self.assertEqual(download_retry_historical_workflow(name, changed), changed)
+
+    def test_incorrect_reverse_span_or_baseline_pin_rejects(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in DOWNLOAD_RETRY_WORKFLOW_REVERSE:
+            raw = (root/name).read_bytes()
+            with patch.dict(DOWNLOAD_RETRY_WORKFLOW_BASE, {name: 'f'*40}), self.assertRaises(AssertionError):
+                download_retry_historical_workflow(name, raw)
+            with patch.dict(DOWNLOAD_RETRY_WORKFLOW_REVERSE, {name: ((-1, 0, b''),)}), self.assertRaises(AssertionError):
+                download_retry_historical_workflow(name, raw)
+
+
 def checkout_source_family(root):
+    retry_download = download_retry_source_family(root)
+    if retry_download is not None:
+        return retry_download
     maintenance = tool_maintenance_source_family(root)
     if maintenance is not None:
         return maintenance
@@ -13215,7 +13470,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1]):
+        if family.get('ops/vps/code-release.py') in (ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'

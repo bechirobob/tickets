@@ -75,7 +75,7 @@ test('focused browser diagnostics retain first failures without uploading green-
 });
 
 
-test('ordinary deployment excludes only five known tooling paths without changing its guards', () => {
+test('ordinary deployment excludes only the finite reviewed tooling paths without changing its guards', () => {
   const workflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
   const added = [
     '.github/workflows/tickets-release-operator-checks.yml',
@@ -83,6 +83,18 @@ test('ordinary deployment excludes only five known tooling paths without changin
     'tests/browser-environment.test.mjs',
     'tests/test_operator_retry_workflow.py',
     'ops/vps/test_code_release.py',
+    '.github/workflows/candidate-parallel-checks.yml',
+    '.github/workflows/tickets-code-release.yml',
+    'ops/vps/candidate_build.py',
+    'ops/vps/code-release.py',
+    'ops/vps/parallel_candidate_retry.py',
+    'ops/vps/parallel_candidate_retry_control.py',
+    'ops/vps/test_candidate_build.py',
+    'ops/vps/test_parallel_candidate_retry.py',
+    'ops/vps/test_parallel_candidate_retry_control.py',
+    'ops/vps/test_parallel_retry_admission.py',
+    'tests/test_candidate_parallel_workflow.py',
+    'ops/vps/test_yorkeway_release.py',
   ];
   const addition = added.map(path => `      - '${path}'\n`).join('');
   assert.equal(workflow.split(addition).length, 2);
@@ -92,13 +104,13 @@ test('ordinary deployment excludes only five known tooling paths without changin
   const original = workflow.replace(addition, '');
   const digest = createHash('sha1').update(`blob ${Buffer.byteLength(original)}\0`).update(original).digest('hex');
   assert.equal(digest, 'b18eb81d65fd5a93fabebe7ae98c6cf99067076e');
-  // These five entries are literal files, not directories/globs. GitHub skips
+  // These reviewed entries are literal files, not directories/globs. GitHub skips
   // paths-ignore only if every changed path matches; mixed changes still run.
   const passesNewFilter = paths => paths.some(path => !added.includes(path));
   for (const path of added) assert.equal(passesNewFilter([path]), false);
   assert.equal(passesNewFilter(added), false);
   for (const path of ['app/api/example/route.ts', 'package-lock.json', 'runtime/vps/server.mjs',
-    'ops/vps/code-release.py', 'scripts/build-vps.mjs', '.github/workflows/new-check.yml',
+    'ops/vps/unreviewed-operator.py', 'scripts/build-vps.mjs', '.github/workflows/new-check.yml',
     'tests/new-runtime-fixture.mjs', 'ops/vps/test_code_release.py/extra']) {
     assert.equal(passesNewFilter([...added, path]), true);
     // Includes rename destinations and deletion paths outside the exact list.

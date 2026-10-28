@@ -662,6 +662,7 @@ PARALLEL_OUTPUT_BLOBS = {
 PARALLEL_OUTPUT_MODES = {name: "100644" for name in PARALLEL_OUTPUT_BLOBS}
 PARALLEL_MODULES = ("public_runtime_guard", "runtime_release", "candidate_build",
                     "parallel_candidate", "parallel_candidate_control")
+RETRY_PARALLEL_MODULES = (*PARALLEL_MODULES, "parallel_candidate_retry", "parallel_candidate_retry_control")
 
 
 # Bounded CINCO guest receipt release. Preserve the exact merged operational
@@ -3738,7 +3739,7 @@ def verify_parallel_run(run, jobs, *, repository):
         observed.add(job["name"])
 
 
-def authenticated_parallel_modules(source):
+def authenticated_parallel_modules(source, *, retry=False):
     """Compile only independently authenticated source, ignoring imports/pycache.
 
     Read/authenticate every module before executing any of them. The private
@@ -3749,7 +3750,8 @@ def authenticated_parallel_modules(source):
     baseline = os.environ["BECORE_TRUSTED_BASE"]
     directory = Path(__file__).absolute().parent
     sources = {}
-    for name in PARALLEL_MODULES:
+    module_names = RETRY_PARALLEL_MODULES if retry else PARALLEL_MODULES
+    for name in module_names:
         path = directory / (name + ".py")
         relative = "ops/vps/" + path.name
         info = path.lstat()
@@ -3769,7 +3771,7 @@ def authenticated_parallel_modules(source):
     ordinary_import = builtins.__import__
 
     def trusted_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name in PARALLEL_MODULES:
+        if name in RETRY_PARALLEL_MODULES:
             require(level == 0 and name in modules, "Parallel module dependency order is invalid.")
             return modules[name]
         require(level == 0, "Relative parallel module imports are forbidden.")
@@ -3788,8 +3790,104 @@ def authenticated_parallel_modules(source):
     return modules
 
 
+def validate_retry_parallel_proof(proof, *, repository, candidate, tree, run_id, attempt, baseline=None):
+    """Standalone v3 binding gate; only authenticated collection grants evidence."""
+    keys = {"schema", "repository", "source_sha", "source_tree", "workflow", "workflow_sha",
+            "workflow_blob", "audit_trusted_base", "run_id", "run_attempt", "event", "head_branch",
+            "artifact", "jobs", "receipts", "metadata_sha256", "original_attempt", "retry_browser",
+            "original_jobs", "aliases"}
+    require(type(proof) is dict and set(proof) == keys
+            and proof["schema"] == "tickets-parallel-candidate-retry/v3", "Exact retry proof schema required.")
+    number = lambda value: type(value) is int and 1 <= value < 10 ** 20
+    sha = lambda value: isinstance(value, str) and SHA.fullmatch(value)
+    digest = lambda value: isinstance(value, str) and DIGEST.fullmatch(value)
+    browsers = ("desktop-chromium", "mobile-chromium", "mobile-webkit")
+    names = ("build", *browsers, "tickets-candidate-verified")
+    require(repository == "bechirobob/tickets" and sha(candidate) and sha(tree)
+            and isinstance(run_id, str) and re.fullmatch(r"[1-9][0-9]{0,19}", run_id)
+            and type(attempt) is int and attempt == 2 and sha(proof["audit_trusted_base"])
+            and proof["audit_trusted_base"] != candidate
+            and (baseline is None or proof["audit_trusted_base"] == baseline),
+            "Retry independent identity differs.")
+    expected = {"repository": repository, "source_sha": candidate, "source_tree": tree,
+                "workflow": ".github/workflows/candidate-parallel-checks.yml", "workflow_sha": candidate,
+                "run_id": int(run_id), "run_attempt": 2, "original_attempt": 1}
+    require(all(proof[key] == value for key, value in expected.items())
+            and number(proof["run_id"]) and type(proof["run_attempt"]) is int
+            and type(proof["original_attempt"]) is int and sha(proof["workflow_blob"])
+            and proof["event"] in ("push", "workflow_dispatch")
+            and proof["head_branch"] == "improve/release-evidence-parallel-20261013"
+            and proof["retry_browser"] in browsers, "Retry proof identity differs.")
+    artifact = proof["artifact"]
+    require(type(artifact) is dict and set(artifact) == {"id", "name", "size_in_bytes", "digest",
+            "archive_sha256", "manifest_sha256", "created_at", "expires_at"}
+            and number(artifact["id"]) and type(artifact["size_in_bytes"]) is int
+            and 1 <= artifact["size_in_bytes"] <= 272 * 1024 ** 2
+            and artifact["name"] == "browser-build-" + run_id + "-1"
+            and all(digest(artifact[key]) for key in ("digest", "archive_sha256", "manifest_sha256")),
+            "Retry original artifact identity differs.")
+    times = []
+    for key in ("created_at", "expires_at"):
+        value = artifact[key]
+        require(isinstance(value, str) and re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z", value), "Retry artifact time invalid.")
+        try:
+            times.append(datetime.fromisoformat(value.replace("Z", "+00:00")))
+        except ValueError as exc:
+            raise ReleaseError("Retry artifact date invalid.") from exc
+    require(times[0] < times[1], "Retry artifact lifetime invalid.")
+    original, current, identifiers = {}, {}, set()
+    for key, target in (("original_jobs", original), ("jobs", current)):
+        records = proof[key]
+        require(type(records) is list and len(records) == 5, "Retry requires complete original and current jobs.")
+        for item, name in zip(records, names):
+            fields = {"id", "name", "log_sha256", "steps_sha256"}
+            if key == "original_jobs":
+                fields |= {"run_attempt", "conclusion"}
+            require(type(item) is dict and set(item) == fields and number(item["id"])
+                    and item["id"] not in identifiers and item["name"] == name
+                    and digest(item["log_sha256"]) and digest(item["steps_sha256"]),
+                    "Retry job identity or evidence digest invalid.")
+            if key == "original_jobs":
+                require(type(item["run_attempt"]) is int and item["run_attempt"] == 1
+                        and item["conclusion"] == ("failure" if name in
+                            (proof["retry_browser"], "tickets-candidate-verified") else "success"),
+                        "Original retry failure history differs.")
+            identifiers.add(item["id"])
+            target[name] = item
+    retained = [name for name in names if name not in (proof["retry_browser"], "tickets-candidate-verified")]
+    require(type(proof["aliases"]) is list and len(proof["aliases"]) == 3, "Retry alias inventory differs.")
+    for alias, name in zip(proof["aliases"], retained):
+        expected_alias = {"name": name, "original_job_id": original[name]["id"],
+                          "alias_job_id": current[name]["id"], "original_attempt": 1, "api_attempt": 2}
+        require(type(alias) is dict and alias == expected_alias
+                and all(type(alias[k]) is int for k in ("original_job_id", "alias_job_id", "original_attempt", "api_attempt"))
+                and all(original[name][key] == current[name][key] for key in ("log_sha256", "steps_sha256")),
+                "Retry retained execution does not match original evidence.")
+    require(type(proof["receipts"]) is list and len(proof["receipts"]) == 4, "Retry receipts incomplete.")
+    for receipt, browser in zip(proof["receipts"], (None, *browsers)):
+        retried = browser == proof["retry_browser"]
+        expected_receipt = {"schema": "tickets-browser-build/v3" if retried else "tickets-browser-build/v2",
+            "kind": "producer" if browser is None else "consumer", "browser": browser,
+            "repository": repository, "source_sha": candidate, "source_tree": tree,
+            "workflow_sha": candidate, "audit_trusted_base": proof["audit_trusted_base"],
+            "run_id": run_id, "run_attempt": "2" if retried else "1", "artifact_id": str(artifact["id"]),
+            "artifact_digest": artifact["digest"], "archive_sha256": artifact["archive_sha256"],
+            "manifest_sha256": artifact["manifest_sha256"]}
+        if retried:
+            expected_receipt["producer_attempt"] = "1"
+        require(type(receipt) is dict and receipt == expected_receipt, "Retry receipt identity differs.")
+    hashes = proof["metadata_sha256"]
+    require(type(hashes) is dict and set(hashes) == {"original_run", "original_jobs", "run", "jobs", "all_jobs", "artifact"}
+            and all(digest(value) for value in hashes.values()), "Retry metadata digests invalid.")
+    return proof
+
+
 def validate_parallel_proof(proof, *, repository, candidate, tree, run_id, attempt, baseline=None):
     """Standalone host shape/binding gate, never a replacement for collection."""
+    if type(proof) is dict and proof.get("schema") == "tickets-parallel-candidate-retry/v3":
+        return validate_retry_parallel_proof(proof, repository=repository, candidate=candidate, tree=tree,
+                                            run_id=run_id, attempt=attempt, baseline=baseline)
     keys = {"schema", "repository", "source_sha", "source_tree", "workflow", "workflow_sha",
             "workflow_blob", "audit_trusted_base", "run_id", "run_attempt", "event", "head_branch",
             "artifact", "jobs", "receipts", "metadata_sha256"}
@@ -3872,7 +3970,11 @@ def validate_parallel_proof(proof, *, repository, candidate, tree, run_id, attem
 def verify_parallel_candidate(args, candidate, jobs, source_tree):
     """Authenticated online evidence is required; local receipts are not trust."""
     try:
-        modules = authenticated_parallel_modules(args.source)
+        retry = getattr(args, "candidate_mode", "parallel-v1") == "parallel-retry-v3"
+        modules = authenticated_parallel_modules(args.source, retry=True) if retry else authenticated_parallel_modules(args.source)
+        schema = "tickets-parallel-candidate-retry/v3" if retry else "tickets-parallel-candidate/v2"
+        verifier_name = "parallel_candidate_retry" if retry else "parallel_candidate"
+        collector_name = "parallel_candidate_retry_control" if retry else "parallel_candidate_control"
         previous = None
         output = Path(args.output)
         if os.path.lexists(output):
@@ -3880,14 +3982,19 @@ def verify_parallel_candidate(args, candidate, jobs, source_tree):
             prior = strict_json(output.read_bytes())
             require(type(prior) is dict and "candidateVerification" in prior,
                     "Previous provenance has no selected parallel proof.")
+            require(type(prior["candidateVerification"]) is dict
+                    and prior["candidateVerification"].get("schema") == schema,
+                    "Previous proof belongs to a different explicitly selected admission mode.")
             previous = validate_parallel_proof(prior["candidateVerification"], repository=args.repository,
                 candidate=candidate["head_sha"], tree=source_tree, run_id=args.candidate_run,
                 attempt=candidate["run_attempt"], baseline=os.environ["BECORE_TRUSTED_BASE"])
-        proof = modules["parallel_candidate_control"].collect_or_verify(
-            modules["runtime_release"].GitHub(), Path(args.metadata) / "parallel-evidence",
+        proof = modules[collector_name].collect_or_verify(
+            modules["runtime_release"].GitHub(), Path(args.metadata) / ("parallel-retry-evidence" if retry else "parallel-evidence"),
             root=Path.cwd(), source=args.source, candidate=candidate["head_sha"],
             trusted_baseline=os.environ["BECORE_TRUSTED_BASE"], run_id=args.candidate_run,
-            attempt=str(candidate["run_attempt"]), verifier=modules["parallel_candidate"], expected_proof=previous)
+            attempt=str(candidate["run_attempt"]), verifier=modules[verifier_name], expected_proof=previous)
+        require(type(proof) is dict and proof.get("schema") == schema,
+                "Collector proof differs from explicitly selected admission mode.")
         validate_parallel_proof(proof, repository=args.repository, candidate=candidate["head_sha"],
                                 tree=source_tree, run_id=args.candidate_run,
                                 attempt=candidate["run_attempt"], baseline=os.environ["BECORE_TRUSTED_BASE"])
@@ -3914,7 +4021,9 @@ def verify_ci(args):
     candidate = strict_json((metadata / "candidate.json").read_bytes())
     verify_run(runtime, workflow="vps-runtime.yml", source=args.source, repository=args.repository)
     candidate_mode = getattr(args, "candidate_mode", "legacy")
-    require(candidate_mode in ("legacy", "parallel-v1"), "Unknown candidate verification mode.")
+    require(candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3"), "Unknown candidate verification mode.")
+    if candidate_mode == "parallel-retry-v3":
+        require(getattr(args, "audit_directory", None), "Retry admission requires the final current dependency audit.")
     workflow = "candidate-checks.yml" if candidate_mode == "legacy" else "candidate-parallel-checks.yml"
     if candidate_mode == "legacy":
         verify_run(candidate, workflow=workflow, repository=args.repository)
@@ -3934,7 +4043,7 @@ def verify_ci(args):
             "Candidate browser source tree differs from runtime source tree.")
     changes = vetted_changes(args.expected, args.source)
     candidate_verification = (verify_parallel_candidate(args, candidate, candidate_jobs, source_tree)
-                              if candidate_mode == "parallel-v1" else None)
+                              if candidate_mode in ("parallel-v1", "parallel-retry-v3") else None)
     archive = Path(args.archive)
     checksum = (archive.parent / (archive.name + ".sha256")).read_text().strip()
     require(re.fullmatch(r"[a-f0-9]{64}  tickets-vps-runtime\.tar\.gz", checksum),
@@ -5537,7 +5646,7 @@ def main():
     for name in ("source", "expected", "repository", "metadata", "runtime-run", "candidate-run", "archive", "output"):
         verify.add_argument("--" + name, required=True)
     verify.add_argument("--audit-directory")
-    verify.add_argument("--candidate-mode", choices=("legacy", "parallel-v1"), default="legacy")
+    verify.add_argument("--candidate-mode", choices=("legacy", "parallel-v1", "parallel-retry-v3"), default="legacy")
     apply = commands.add_parser("apply")
     for name in ("source", "expected", "run-id", "attempt", "archive", "provenance", "archive-digest", "provenance-digest"):
         apply.add_argument("--" + name, required=True)
