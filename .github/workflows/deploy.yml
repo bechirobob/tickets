@@ -16,6 +16,11 @@ on:
       - 'ops/handover/**'
       - 'tests/handover-loopback-health.test.mjs'
       - 'docs/operations/dual-hosting.md'
+      - '.github/workflows/tickets-release-operator-checks.yml'
+      - '.github/workflows/browser-followup.yml'
+      - 'tests/browser-environment.test.mjs'
+      - 'tests/test_operator_retry_workflow.py'
+      - 'ops/vps/test_code_release.py'
   workflow_dispatch:
     inputs:
       trusted_base:
