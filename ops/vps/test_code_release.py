@@ -2019,6 +2019,7 @@ PARALLEL_GATE_WORKFLOW_REVERSE = {'.github/workflows/tickets-code-release.yml': 
 
 def parallel_gate_historical_workflow(name, raw):
     """Reverse only the complete exact approved CI delta for historical assertions."""
+    raw = operator_retry_historical_workflow(name, raw)
     expected = PARALLEL_GATE_OUTPUTS.get(name)
     digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
     if name not in PARALLEL_GATE_WORKFLOW_REVERSE or expected is None or digest(raw) != expected[1]:
@@ -2335,7 +2336,188 @@ class PreparedBrowserStage2SourceFamilyTests(ParallelGateSourceFamilyTests):
         with self.assertRaises(AssertionError): prepared_browser_stage2_source_family(self.root)
 
 
+# Separate finite test-only continuation for operator CI retry boundaries.
+# This family grants no production release authority or cross-attempt evidence.
+OPERATOR_RETRY_BASELINE = '694be41b4b8c0f9b4abf96e6a50f515a1101ebd6'
+OPERATOR_RETRY_BASE_TREE = '12b1a9fd6fcb92cdb290ba7c888ed59474b7f852'
+OPERATOR_RETRY_OUTPUTS = {'.github/workflows/tickets-release-operator-checks.yml': ('100644',
+                                                           'df578c820a2102b6749c2296a1933a47e494f52e'),
+ 'tests/test_operator_retry_workflow.py': ('100644', '7c5405ab3309f091ee32ff13dd1b628a5217db10')}
+OPERATOR_RETRY_WORKFLOW = '.github/workflows/tickets-release-operator-checks.yml'
+OPERATOR_RETRY_WORKFLOW_BASE = 'a0099e4403e2f7f84e1ee5651899cdbe1823866b'
+OPERATOR_RETRY_WORKFLOW_REVERSE = ((b'      - tests/test_operator_retry_workflow.py\n', b''),
+ (b'  source_guards:\n', b'  verify:\n'),
+ (b'      - name: Verify operator retry boundaries\n        run: python3 -I -m unittest discover '
+  b"-s tests -p 'test_operator_retry_workflow.py' -v\n",
+  b''),
+ (b'  # Keep source guards as a prerequisite, but give the staged-layout suite its\n  # own retry'
+  b' boundary. A failed staged job need not replay successful guards.\n  staged_layout:\n    needs'
+  b': source_guards\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:\n      - us'
+  b'es: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n        with:\n          ref: $'
+  b'{{ github.event.pull_request.head.sha || github.sha }}\n          persist-credentials: false\n'
+  b'          fetch-depth: 0\n',
+  b''),
+ (b'  # Preserve the required check name. Skipped, cancelled and failed stages must\n  # never be'
+  b"come green through GitHub's default dependency skip behavior.\n  verify:\n    if: ${{ always()"
+  b' }}\n    needs: [source_guards, staged_layout]\n    runs-on: ubuntu-latest\n    timeout-minutes'
+  b': 2\n    steps:\n      - name: Require both exact-source operator stages\n        env:\n    '
+  b'      SOURCE_GUARDS_RESULT: ${{ needs.source_guards.result }}\n          STAGED_LAYOUT_RESULT'
+  b': ${{ needs.staged_layout.result }}\n        shell: bash\n        run: |\n          set -euo pi'
+  b'pefail\n          test "$SOURCE_GUARDS_RESULT" = success\n          test "$STAGED_LAYOUT_RESUL'
+  b'T" = success\n',
+  b''))
+
+
+def operator_retry_historical_workflow(name, raw):
+    """Reverse only the exact finite retry delta; no mutated bytes normalize."""
+    digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+    expected = OPERATOR_RETRY_OUTPUTS.get(name)
+    if name != OPERATOR_RETRY_WORKFLOW or expected is None or digest(raw) != expected[1]:
+        return raw
+    for current, historical in OPERATOR_RETRY_WORKFLOW_REVERSE:
+        if raw.count(current) != 1:
+            raise AssertionError('Operator retry workflow reverse is ambiguous or incomplete')
+        raw = raw.replace(current, historical, 1)
+    if digest(raw) != OPERATOR_RETRY_WORKFLOW_BASE:
+        raise AssertionError('Operator retry workflow did not reconstruct the pinned baseline')
+    return raw
+
+
+OPERATOR_RETRY_TEST_FILE = Path(__file__).resolve()
+OPERATOR_RETRY_STAGED_ADDITIONS = frozenset()
+OPERATOR_RETRY_STAGED_BASE = dict(PREPARED_BROWSER_STAGE2_STAGED_BASE)
+OPERATOR_RETRY_STAGED_BASE.update({name: value for name, value in PREPARED_BROWSER_STAGE2_OUTPUTS.items()
+    if name in OPERATOR_RETRY_STAGED_BASE or name in PREPARED_BROWSER_STAGE2_STAGED_ADDITIONS})
+
+
+def operator_retry_source_family(root):
+    """Require the exact baseline plus the independently reviewed finite operator-retry CI delta."""
+    root = Path(root)
+    def digest(raw):
+        return release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root / 'ops/vps/code-release.py'
+    selected = (root / 'ops/vps/test_code_release.py').resolve() == OPERATOR_RETRY_TEST_FILE
+    # This CI-only change does not alter the operator, so its hash cannot
+    # distinguish it from an earlier family. A partial exact operator-retry marker selects the stricter full family;
+    # the executing control never falls back when any current byte is changed.
+    marked = any((root / name).is_file() and not (root / name).is_symlink()
+                 and digest((root / name).read_bytes()) == value[1]
+                 for name, value in OPERATOR_RETRY_OUTPUTS.items())
+    if not selected and not marked:
+        return None
+    full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
+    if full:
+        try:
+            if checkout_git(root, 'rev-parse', OPERATOR_RETRY_BASELINE + '^{tree}').decode().strip() != OPERATOR_RETRY_BASE_TREE:
+                raise AssertionError('Operator retry baseline tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', OPERATOR_RETRY_BASELINE).split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, kind, blob = metadata.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Operator retry baseline has unsupported entries')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(OPERATOR_RETRY_OUTPUTS)
+            manifest['ops/vps/test_code_release.py'] = ('100644', None)
+            tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
+            untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+            if tracked != set(manifest) or untracked:
+                raise AssertionError('Operator retry full inventory differs')
+            for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+                if record:
+                    metadata, name = record.split(b'\t', 1)
+                    mode, blob, stage = metadata.decode().split()
+                    name = os.fsdecode(name)
+                    expected = manifest.get(name)
+                    if expected == ('100644', None):
+                        expected = ('100644', digest((root / name).read_bytes()))
+                    if stage != '0' or expected != (mode, blob):
+                        raise AssertionError('Operator retry index differs from complete reviewed family')
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise AssertionError('Operator retry requires its exact independent baseline') from error
+    else:
+        manifest = dict(OPERATOR_RETRY_STAGED_BASE)
+        # The staging command includes all tracked ops/vps files and only its
+        # explicitly enumerated workflows/scripts. No arbitrary new paths ship.
+        manifest.update({name: value for name, value in OPERATOR_RETRY_OUTPUTS.items()
+                         if name in manifest or name in OPERATOR_RETRY_STAGED_ADDITIONS})
+        manifest['ops/vps/test_code_release.py'] = ('100644', None)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, expected) in manifest.items():
+        path = root / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or bool(info.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Operator retry requires exact regular file modes')
+            raw = path.read_bytes()
+        except OSError as error:
+            raise AssertionError('Operator retry source is incomplete') from error
+        if expected is not None and digest(raw) != expected:
+            if (name == 'mobile/android/gradlew.bat'
+                    and manifest.get('mobile/.gitattributes') == ('100644', '69b47b5ade88fab2dd055b3cfa0858766fb17a47')):
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != expected:
+                raise AssertionError('Operator retry has unreviewed bytes: ' + name)
+    return {name: blob for name, (_, blob) in manifest.items() if blob is not None}
+
+
+class OperatorRetryWorkflowHistoryTests(unittest.TestCase):
+    def test_exact_retry_delta_reconstructs_baseline_and_rejects_mutations(self):
+        root = Path(__file__).resolve().parents[2]
+        raw = (root / OPERATOR_RETRY_WORKFLOW).read_bytes()
+        before = operator_retry_historical_workflow(OPERATOR_RETRY_WORKFLOW, raw)
+        digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+        self.assertEqual(digest(before), OPERATOR_RETRY_WORKFLOW_BASE)
+        self.assertNotEqual(before, raw)
+        for changed in (raw + b'\n# unrelated mutation\n',
+                        raw.replace(b'contents: read', b'contents: write', 1),
+                        raw.replace(b'needs: source_guards', b'needs: other', 1),
+                        raw.replace(b'= success', b'!= failure', 1)):
+            self.assertNotEqual(changed, raw)
+            self.assertEqual(operator_retry_historical_workflow(OPERATOR_RETRY_WORKFLOW, changed), changed)
+        with patch.dict(OPERATOR_RETRY_OUTPUTS, {OPERATOR_RETRY_WORKFLOW: ('100644', digest(raw))}), \
+             patch.object(sys.modules[__name__], 'OPERATOR_RETRY_WORKFLOW_BASE', 'f' * 40):
+            with self.assertRaises(AssertionError):
+                operator_retry_historical_workflow(OPERATOR_RETRY_WORKFLOW, raw)
+
+
+class OperatorRetrySourceFamilyTests(ParallelGateSourceFamilyTests):
+    """The exact operator_retry family also rejects every existing inventory mutation."""
+    def setUp(self):
+        super().setUp()
+        for name, value in (
+                ('OPERATOR_RETRY_BASELINE', PARALLEL_GATE_BASELINE),
+                ('OPERATOR_RETRY_BASE_TREE', PARALLEL_GATE_BASE_TREE),
+                ('OPERATOR_RETRY_OUTPUTS', PARALLEL_GATE_OUTPUTS),
+                ('OPERATOR_RETRY_TEST_FILE', PARALLEL_GATE_TEST_FILE),
+                ('OPERATOR_RETRY_STAGED_BASE', SECURITY_STAGED_BASE),
+                ('parallel_gate_source_family', operator_retry_source_family)):
+            patcher = patch.object(sys.modules[__name__], name, value)
+            patcher.start(); self.addCleanup(patcher.stop)
+
+    def test_wrong_independent_tree_pin_rejects(self):
+        with patch.object(sys.modules[__name__], 'OPERATOR_RETRY_BASE_TREE', 'f'*40), self.assertRaises(AssertionError):
+            operator_retry_source_family(self.root)
+
+    def test_earlier_family_without_any_operator_retry_marker_is_not_reclassified(self):
+        other = self.root / 'unrelated-archive'
+        other.mkdir()
+        self.assertIsNone(operator_retry_source_family(other))
+
+    def test_partial_operator_retry_overlay_never_falls_back_to_earlier_family(self):
+        self.write('tests/e2e/journey.spec.ts', self.files['tests/e2e/journey.spec.ts'])
+        self.git('add', 'tests/e2e/journey.spec.ts')
+        with self.assertRaises(AssertionError): operator_retry_source_family(self.root)
+
+
+
 def checkout_source_family(root):
+    retry = operator_retry_source_family(root)
+    if retry is not None:
+        return retry
     stage2 = prepared_browser_stage2_source_family(root)
     if stage2 is not None:
         return stage2
