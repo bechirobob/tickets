@@ -1,0 +1,166 @@
+name: Staff entry previews
+
+on:
+  push:
+    branches: [feat/staff-entry]
+  workflow_dispatch:
+    inputs:
+      expected_source:
+        description: Exact reviewed commit at the tip of feat/staff-entry
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staff-entry-previews-${{ github.ref }}
+  cancel-in-progress: false
+
+# Synthetic UI preview only. This is not release evidence or a deployable build.
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/feat/staff-entry'
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      BECORE_RELEASE_SHA: ${{ github.sha }}
+      EXPECTED_SOURCE: ${{ github.event_name == 'push' && github.sha || inputs.expected_source }}
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      WRANGLER_SEND_METRICS: 'false'
+      BECORE_ISOLATED_PREVIEW: 'true'
+    steps:
+      - name: Check out exact preview source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify isolated preview source
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          test "$EXPECTED_SOURCE" = "$BECORE_RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          test "$GITHUB_REF" = refs/heads/feat/staff-entry
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -z "${E2E_BASE_URL:-}"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.23.4
+      - name: Install locked dependencies
+        run: npm ci --no-audit
+      - name: Verify prepared browser versions and environment
+        env:
+          BROWSER_ENVIRONMENT_PATH: ${{ runner.temp }}/staff-browser-environment.json
+        run: node scripts/verify-browser-environment.mjs chromium webkit > "$BROWSER_ENVIRONMENT_PATH"
+      - name: Build exact candidate once for local fixtures
+        run: |
+          set -euo pipefail
+          npm run build
+          node scripts/prepare-deploy.mjs
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('dist/server/wrangler.json', 'utf8'));
+          assert.equal(config.vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);
+          JS
+      - name: Prepare existing isolated Operations fixture
+        run: |
+          set -euo pipefail
+          npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+          node scripts/prepare-operations-browser-fixture.mjs
+      - name: Run only staff entry journeys on desktop and phones
+        run: >-
+          npx playwright test --config playwright.operations.config.ts
+          --project desktop-chromium --project mobile-chromium --project mobile-webkit
+          --grep 'staff (entry|opening animation)' --workers=1 --retries=0
+          --trace=off --reporter=line --output test-results/staff-entry
+      - name: Package only named staff fixture images and source manifest
+        env:
+          BROWSER_ENVIRONMENT_PATH: ${{ runner.temp }}/staff-browser-environment.json
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git diff --exit-code HEAD --
+          git diff --cached --exit-code HEAD --
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+          const browsers = ['desktop-chromium', 'mobile-chromium', 'mobile-webkit'];
+          const names = ['staff-entry.png', 'staff-opening-animation.png', 'staff-login-after-opening.png'];
+          const root = 'test-results/staff-entry';
+          const output = 'staff-preview-evidence';
+          assert.ok(lstatSync(root).isDirectory() && !lstatSync(root).isSymbolicLink());
+          const files = [];
+          function walk(directory) {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+              assert.ok(!entry.isSymbolicLink(), 'Unexpected symlink in local test results');
+              const file = path.join(directory, entry.name);
+              if (entry.isDirectory()) walk(file);
+              else if (entry.isFile() && names.includes(entry.name)) files.push(file);
+            }
+          }
+          walk(root);
+          assert.equal(files.length, browsers.length * names.length, 'All nine named previews are required');
+          mkdirSync(output);
+          const images = [];
+          let totalBytes = 0;
+          for (const browser of browsers) {
+            mkdirSync(path.join(output, browser));
+            for (const name of names) {
+              const matches = files.filter(file => path.basename(file) === name && path.basename(path.dirname(file)).endsWith(`-${browser}`));
+              assert.equal(matches.length, 1, `Expected one ${browser}/${name}`);
+              const bytes = readFileSync(matches[0]);
+              assert.ok(bytes.length >= 33 && bytes.length <= 8 * 1024 * 1024, 'Unexpected PNG size');
+              assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+              assert.equal(bytes.subarray(12, 16).toString(), 'IHDR');
+              const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
+              assert.ok(width > 0 && width <= 4096 && height > 0 && height <= 8192, 'Unexpected screenshot dimensions');
+              totalBytes += bytes.length;
+              assert.ok(totalBytes <= 32 * 1024 * 1024, 'Preview bundle exceeds size bound');
+              const relative = `${browser}/${name}`;
+              writeFileSync(path.join(output, relative), bytes, { flag: 'wx' });
+              images.push({ browser, file: relative, width, height, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
+            }
+          }
+          const environment = JSON.parse(readFileSync(process.env.BROWSER_ENVIRONMENT_PATH, 'utf8'));
+          const manifest = {
+            kind: 'staff-entry-synthetic-preview', releaseEvidence: false,
+            sourceSha: process.env.BECORE_RELEASE_SHA,
+            sourceTree: execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim(),
+            runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            environment, images,
+          };
+          writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' });
+          JS
+      - name: Upload only staff preview images and manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staff-entry-previews-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            staff-preview-evidence/manifest.json
+            staff-preview-evidence/desktop-chromium/staff-entry.png
+            staff-preview-evidence/desktop-chromium/staff-opening-animation.png
+            staff-preview-evidence/desktop-chromium/staff-login-after-opening.png
+            staff-preview-evidence/mobile-chromium/staff-entry.png
+            staff-preview-evidence/mobile-chromium/staff-opening-animation.png
+            staff-preview-evidence/mobile-chromium/staff-login-after-opening.png
+            staff-preview-evidence/mobile-webkit/staff-entry.png
+            staff-preview-evidence/mobile-webkit/staff-opening-animation.png
+            staff-preview-evidence/mobile-webkit/staff-login-after-opening.png
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false

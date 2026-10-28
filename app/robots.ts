@@ -16,6 +16,7 @@ export default function robots(): MetadataRoute.Robots {
         "/payment",
         "/room",
         "/scan",
+        "/staff",
         "/tickets",
       ],
     },

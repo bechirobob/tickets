@@ -59,6 +59,19 @@ async function event(slug: string, title: string) {
 }
 
 describe("named staff access", () => {
+  it("rejects customer, expired and disabled staff sessions at the shared entry boundary", async () => {
+    expect(await readAdminSession("bct_attendee=customer-session", env.DB)).toBeNull();
+    const account = await staff("gate", crypto.randomUUID());
+    await env.DB.prepare("UPDATE staff_sessions SET expires_at = ? WHERE account_id = ?").bind("2000-01-01T00:00:00.000Z", account.id).run();
+    expect(await readAdminSession(account.cookie, env.DB)).toBeNull();
+    const active = await staff("support", crypto.randomUUID());
+    await env.DB.prepare("UPDATE staff_accounts SET status = 'disabled' WHERE id = ?").bind(active.id).run();
+    expect(await readAdminSession(active.cookie, env.DB)).toBeNull();
+    for (const id of [account.id, active.id]) {
+      await env.DB.prepare("DELETE FROM staff_sessions WHERE account_id = ?").bind(id).run();
+      await env.DB.prepare("DELETE FROM staff_accounts WHERE id = ?").bind(id).run();
+    }
+  });
   it("enforces temporary-password changes at the API permission boundary", async () => {
     const account = await staff("finance", crypto.randomUUID());
     await env.DB.prepare("UPDATE staff_accounts SET must_change_password = 1 WHERE id = ?").bind(account.id).run();

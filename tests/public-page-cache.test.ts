@@ -16,7 +16,7 @@ it("never serves a previous release's cached asset references after a deployment
 });
 
 it("keeps private, query-specific and unidentified-release requests outside the page cache", () => {
-  for (const path of ["/my-nights", "/api/customer/registrations", "/admin/orders", "/events?date=2026-09-20", "/api/room/example/access", "/api/room/socket?event=example", "/room/example?from=notification"]) {
+  for (const path of ["/staff", "/staff?returnTo=/scan", "/my-nights", "/api/customer/registrations", "/admin/orders", "/events?date=2026-09-20", "/api/room/example/access", "/api/room/socket?event=example", "/room/example?from=notification"]) {
     const request = new Request(`https://cache-test.example${path}`, { headers: { accept: "text/html" } });
     expect(publicPageCacheKey(request, new URL(request.url), "release")).toBeNull();
   }
@@ -38,4 +38,14 @@ it("requires browser HTML revalidation while preserving a short edge TTL and rem
   const response = publicCacheResponse(new Response("page", { headers: { "set-cookie": "private=value" } }), "HIT");
   expect(response.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=45");
   expect(response.headers.has("set-cookie")).toBe(false);
+});
+
+
+it("staff entry is private and excluded from indexing", async () => {
+  const { securityResponse } = await import("../worker/security-response");
+  for (const path of ["/staff", "/staff/", "/admin/login"]) {
+    const response = securityResponse(new Response("staff"), "test-nonce", path);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  }
 });

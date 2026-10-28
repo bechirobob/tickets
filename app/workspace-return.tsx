@@ -7,7 +7,7 @@ import { isWorkspacePathAllowed, type StaffRole } from "../lib/staff-roles";
 /** Staff and guest sessions are distinct. Public browsing never revokes either. */
 export default function WorkspaceReturn() {
   const pathname = usePathname(), [destination, setDestination] = useState<{ path: string; from: string } | null>(null);
-  const publicPage = !["/admin", "/organizer/workspace", "/organizer/analytics", "/organizer/assistant", "/organizer/activate", "/organizer/team", "/scan"].some(x => pathname.startsWith(x));
+  const publicPage = !["/admin", "/staff", "/organizer/workspace", "/organizer/analytics", "/organizer/assistant", "/organizer/activate", "/organizer/team", "/scan"].some(x => pathname.startsWith(x));
   useEffect(() => {
     if (!publicPage) return;
     const controller = new AbortController();

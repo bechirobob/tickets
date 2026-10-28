@@ -9,6 +9,7 @@ const destinations = [
   ['List your event', '/organizer/submit'],
   ['About us', '/about'],
   ['Help', '/help'],
+  ['Event staff', '/staff'],
 ];
 
 test('Option A keeps full-width rows, quiet controls and keyboard access in portrait and landscape', async ({ page }, info) => {
@@ -112,7 +113,7 @@ test('Option A wraps enlarged labels and retains navigation on a page without th
   await trigger.click();
   const menu = page.getByRole('navigation', { name: 'Main navigation', exact: true });
   const rows = menu.getByRole('link');
-  await expect(rows).toHaveCount(7);
+  await expect(rows).toHaveCount(8);
   for (let index = 0; index < await rows.count(); index++) {
     await expect(rows.nth(index).locator(':scope > span')).toHaveCSS('font-size', '28px');
     await page.keyboard.press('Tab');

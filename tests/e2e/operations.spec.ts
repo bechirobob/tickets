@@ -1351,3 +1351,63 @@ test('host cannot open owner archive management or its deletion controls', async
   await expect(page.getByRole('button', { name: 'Delete permanently…', exact: true })).toHaveCount(0);
   expect(unexpected).toEqual([]);
 });
+
+test('staff entry continues the existing owner session without another login', async ({ page }) => {
+  await page.goto('/staff?returnTo=%2Fadmin%2Foperations');
+  await expect(page).toHaveURL(/\/admin\/operations$/);
+  await page.goto('/staff?returnTo=https%3A%2F%2Fevil.example');
+  await expect(page).toHaveURL(/\/admin$/);
+});
+
+test('staff entry keeps the host in their assigned workspace', async ({ page, context, baseURL }) => {
+  await context.clearCookies();
+  await context.addCookies([{ name: 'bct_staff', value: fixture.organizerToken, url: baseURL!, httpOnly: true, sameSite: 'Strict' }]);
+  await page.goto('/staff?returnTo=%2Fadmin%2Faccounts');
+  await expect(page).toHaveURL(/\/organizer\/workspace$/);
+});
+
+test('staff entry is readable, separate from customer chrome, and recovers interrupted login', async ({ page, context }, info) => {
+  await context.clearCookies();
+  await page.goto('/staff');
+  await expect(page.getByLabel('Work email')).toBeEnabled();
+  await expect(page.locator('.customer-dock, .workspace-return')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath('staff-entry.png'), fullPage: true });
+  await page.getByLabel('Work email').fill(fixture.email);
+  await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+  await page.route('**/api/admin/session?email=*', route => route.abort());
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Work email')).toHaveValue(fixture.email);
+  await page.unroute('**/api/admin/session?email=*');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goto('/staff');
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goto('/about');
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/about$/);
+});
+
+
+test('staff opening animation releases the real login form', async ({ page, context }, info) => {
+  await context.clearCookies();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/staff');
+  const arrival = page.getByTestId('brand-arrival');
+  await expect(arrival).toBeVisible();
+  await page.screenshot({ path: info.outputPath('staff-opening-animation.png') });
+  await page.getByRole('button', { name: 'Skip opening animation' }).click();
+  await expect(arrival).toBeHidden();
+  await page.getByLabel('Work email').fill('staff-preview@example.com');
+  await expect(page.getByLabel('Work email')).toHaveValue('staff-preview@example.com');
+  await page.screenshot({ path: info.outputPath('staff-login-after-opening.png'), fullPage: true });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(arrival).toBeHidden();
+  await expect(page.getByLabel('Work email')).toBeEnabled();
+});

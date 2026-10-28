@@ -106,7 +106,7 @@ function fixture(options = {}) {
   };
 }
 
-for (const path of ['/', '/the-yorke-way', '/the-yorke-way/', '/the-yorke-way?utm_source=message', '/events', '/events?utm_source=message', '/event/one?ref=PROMOTER', '/hosts', '/hosts/one', '/about', '/help', '/privacy', '/terms', '/my-nights', '/my-nights?source=pwa', '/my-nights?view=rsvps']) {
+for (const path of ['/staff', '/staff?returnTo=%2Fscan', '/', '/the-yorke-way', '/the-yorke-way/', '/the-yorke-way?utm_source=message', '/events', '/events?utm_source=message', '/event/one?ref=PROMOTER', '/hosts', '/hosts/one', '/about', '/help', '/privacy', '/terms', '/my-nights', '/my-nights?source=pwa', '/my-nights?view=rsvps']) {
   test(`fresh public document is eligible: ${path}`, () => {
     const page = fixture({ path });
     assert.equal(page.api.eligibleArrivalEntry(page.entry), true);
@@ -493,4 +493,16 @@ test('actual server markup keeps the scene hidden without JavaScript', () => {
   assert.doesNotMatch(markup, /data-running|<video|<audio/);
   assert.match(markup, /href="\/brand\/becore-ticket\.webp"/);
   assert.match(markup, /aria-label="Skip opening animation"/);
+});
+
+
+test('staff arrival preserves Skip, reduced motion and workspace/history exclusions', () => {
+  const page = fixture({ path: '/staff' }); page.mount(); page.frame();
+  assert.equal(page.root.hidden, false);
+  page.root.dispatch('click', { target: page.skip }); page.assertClosed();
+  for (const options of [{ reducedMotion: true }, { navigationType: 'back_forward' }, { referrer: `${origin}/admin` }, { referrer: `${origin}/organizer/workspace` }, { referrer: `${origin}/scan` }]) {
+    const entry = fixture({ path: '/staff', ...options }); entry.mount(); entry.frame(); entry.assertClosed();
+  }
+  const outgoing = fixture({ path: '/events', referrer: `${origin}/staff` });
+  assert.equal(outgoing.api.eligibleArrivalEntry(outgoing.entry), false);
 });

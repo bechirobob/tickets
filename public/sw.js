@@ -60,7 +60,7 @@ self.addEventListener("notificationclick", (event) => {
   } catch { /* Invalid payloads open the inbox. */ }
   if (!hostAlert && !ownerSignupAlert && event.action === "quiet" && typeof eventSlug === "string" && /^[a-z0-9-]{1,80}$/u.test(eventSlug)) target = `/notifications?mute=${encodeURIComponent(eventSlug)}`;
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-    const existing = clients.find((client) => "focus" in client && (ownerSignupAlert ? new URL(client.url).pathname === "/admin/yorkeway-audience" : hostAlert ? new URL(client.url).pathname === "/organizer/workspace" : !/\/(?:admin|organizer|scan)(?:\/|$)/u.test(new URL(client.url).pathname)));
+    const existing = clients.find((client) => "focus" in client && (ownerSignupAlert ? new URL(client.url).pathname === "/admin/yorkeway-audience" : hostAlert ? new URL(client.url).pathname === "/organizer/workspace" : !/\/(?:admin|staff|organizer|scan)(?:\/|$)/u.test(new URL(client.url).pathname)));
     if (existing) return existing.navigate(target).then((navigated) => navigated ? navigated.focus() : self.clients.openWindow(target));
     return self.clients.openWindow(target);
   }));
