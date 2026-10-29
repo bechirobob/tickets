@@ -1,0 +1,83 @@
+name: Verify operator evidence shadow
+on:
+  push:
+    branches: [chore/operator-evidence-shadow-20261029]
+  pull_request:
+    paths:
+      - .github/scripts/operator-evidence-shadow.py
+      - tests/test_operator_evidence_shadow.py
+      - .github/workflows/operator-evidence-shadow.yml
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -p test_operator_evidence_shadow.py -v
+  historical_shadow:
+    # A read-only experiment on an already reviewed historical source. Never
+    # activate a release or give a pull-request checkout an authenticated job.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/chore/operator-evidence-shadow-20261029'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      SOURCE_SHA: 72fa3f6a77d922dadd65fa3a788807e1ec57549f
+      BECORE_TRUSTED_BASE: 46db31c332287840acdfbcce11301a611be6732a
+      EXPECTED_ACTIVE: 6e0e718d9d183072968433eef42cdad090545213
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Prepare exact historical checkout and operator
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 022
+          git worktree add --detach "$RUNNER_TEMP/shadow-source" "$SOURCE_SHA"
+          python3 - <<'PY'
+          import io, os, shlex, subprocess, tarfile
+          from pathlib import Path
+          operator = os.environ['BECORE_TRUSTED_BASE']
+          workflow = subprocess.check_output(['git', 'show', operator + ':.github/workflows/tickets-code-release.yml'], text=True)
+          lines = [line.strip() for line in workflow.splitlines() if line.strip().startswith('git archive "$OPERATOR_SHA" ')]
+          assert len(lines) == 1
+          paths = shlex.split(lines[0].split(' | ', 1)[0])[3:]
+          stage = Path(os.environ['RUNNER_TEMP']) / 'shadow-operator'
+          stage.mkdir(mode=0o700)
+          archive = subprocess.check_output(['git', 'archive', operator, *paths])
+          with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+              tar.extractall(stage, filter='data')
+          PY
+      - name: Compare authenticated historical evidence and still run the suite
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 022
+          python3 .github/scripts/operator-evidence-shadow.py \
+            --checkout "$RUNNER_TEMP/shadow-source" --stage "$RUNNER_TEMP/shadow-operator" \
+            --source "$SOURCE_SHA" --operator "$BECORE_TRUSTED_BASE" --expected-active "$EXPECTED_ACTIVE" \
+            --reference-run 40968104080 --output "$RUNNER_TEMP/operator-shadow.json"
+          cat "$RUNNER_TEMP/operator-shadow.json"
+      - name: Require actual suite execution
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'operator-shadow.json').read_text())
+          assert report['mode'] == 'shadow' and report['testsSkipped'] is False and report['suiteExitCode'] == 0
+          # This historical run predates receipt publication. Its authenticated
+          # missing-artifact response must take the normal execution path.
+          assert report['comparison'] == 'unavailable-or-mismatch'
+          assert report['reason'] == 'Missing or ambiguous receipt artifact'
+          PY
