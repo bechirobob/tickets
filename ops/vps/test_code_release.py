@@ -3317,7 +3317,7 @@ def audit_source_family(root):
 
 
 STAFF_APP_TEST_FILE = Path(__file__).resolve()
-STAFF_APP_OPERATOR_BLOB = 'c180cea967877d0fba519f44e16055a201d7e01d'
+STAFF_APP_OPERATOR_BLOB = '0ee817f53862f1523383b067f8c633b6658a681e'
 STAFF_APP_CONTROL_PINS = {
     'ops/vps/code-release.py': ('100644', STAFF_APP_OPERATOR_BLOB),
     'ops/vps/test_code_release.py': ('100644', release.hashlib.sha1(
