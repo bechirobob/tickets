@@ -4,9 +4,9 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { transformSync } from 'esbuild';
 
-const module = { exports: {} };
-runInNewContext(transformSync(await readFile(new URL('../lib/staff-app-bootstrap.ts', import.meta.url), 'utf8'), { loader: 'ts', format: 'cjs' }).code, { module, exports: module.exports });
-const bootstrap = module.exports.default;
+const bootstrapModule = { exports: {} };
+runInNewContext(transformSync(await readFile(new URL('../lib/staff-app-bootstrap.ts', import.meta.url), 'utf8'), { loader: 'ts', format: 'cjs' }).code, { module: bootstrapModule, exports: bootstrapModule.exports });
+const bootstrap = bootstrapModule.exports.default;
 const origin = 'https://tickets.becoreops.com';
 function windowFixture(path, { standalone = true, saved = false, blocked = false } = {}) {
   const storage = new Map(saved ? [['bct:staff-app:v1', '1']] : []), listeners = new Map(), replacements = [], opened = [];
