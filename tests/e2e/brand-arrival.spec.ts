@@ -33,7 +33,7 @@ async function stallControllerAfterReveal(page: Page) {
   });
 }
 
-for (const path of ['/', '/events', '/event/on-the-guest-list?ref=promoter', '/my-nights?source=pwa']) {
+for (const path of ['/', '/events', '/event/on-the-guest-list?ref=promoter', '/my-nights?source=pwa', '/admin?source=staff-pwa', '/scan?source=staff-pwa']) {
   test(`fresh entry and reload play without changing the target: ${path}`, async ({ page }) => {
     await fixture(page);
     await page.addInitScript(() => {

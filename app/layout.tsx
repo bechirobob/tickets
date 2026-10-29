@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
+import staffAppBootstrap from "../lib/staff-app-bootstrap";
 import "../styles/customer.css";
 import "./booking-consent.css";
 import CustomerDock from "./customer-dock";
@@ -9,6 +11,7 @@ import MobileAppFrame from "./mobile-app-frame";
 import BrandArrival from "./brand-arrival";
 import "./brand-arrival.css";
 import InputModality from "./input-modality";
+import StaffAppSession from "./staff-app-session";
 import "../styles/input-modality.css";
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", interactiveWidget: "resizes-content", themeColor: "#281b2b" };
@@ -57,8 +60,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-GB">
-      <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" /></head>
-      <body><InputModality /><BrandArrival /><MobileAppFrame /><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
+      <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" />{/* Before paint: only an explicitly installed staff window may restore to staff. */}
+        <Script id="staff-app-launch" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: staffAppBootstrap }} />
+      </head>
+      <body><InputModality /><StaffAppSession /><BrandArrival /><MobileAppFrame /><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
     </html>
   );
 }
