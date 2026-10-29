@@ -3583,8 +3583,76 @@ def reviewed_staff_tooling_application_blobs(expected, source):
     return pins
 
 
+
+# Exact privacy/discovery audit repair; event visibility and dependencies are unchanged.
+AUDIT_LIVE_BASELINE = '97d6cd077a0224a517ce1dddee4e8e92661aebc1'
+AUDIT_LIVE_TREE = '69c8c5d2599ad472d68d06aa7d3d05166db8e404'
+AUDIT_APP_SNAPSHOT = 'de657626eb28b783aec4d5ae0118e08c4ac59d71'
+AUDIT_APP_TREE = '8c0ec6cebd634849a7f2353026d42a8496cb79b8'
+AUDIT_CONTROL_FILES = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+AUDIT_APPLICATION_BLOBS = {'.github/workflows/browser-audit.yml': '69c01a00520acb194217da407f1451227acc9f79',
+ '.github/workflows/tickets-code-release.yml': 'd1f3bffa33b6f2d13cbdf4675862071d94346817',
+ 'app/privacy/page.tsx': '7d16058edf37f512b093ae9f9c75b84a4967a6f6',
+ 'tests/browser-audit-harness.test.mjs': '8fdb2851d6123234ad8ecde5af2281e33b546d63',
+ 'tests/e2e/catalogue.ts': '6f26556b679c1b187159a1c1bf9f7b6f985eafff',
+ 'tests/e2e/customer-feedback.spec.ts': '1804ae2b4c49153bf25d53d916507666e559350d',
+ 'tests/e2e/discovery-pass-access.spec.ts': '7d060d0b7c78173ab5b75de0ce79dc0758933f3f',
+ 'tests/e2e/discovery-segments.spec.ts': 'f02a2de762f13aab73bc7983e6a079084d549e9a',
+ 'tests/e2e/mobile-app-behavior.spec.ts': '3e048ad4b7bcd17530e8763fa69afe8322a13a33',
+ 'tests/e2e/public-journey.spec.ts': '9513b96c879cc2e430ad9aa737f4d3fdc628aa9d',
+ 'tests/e2e/published-catalogue.spec.ts': 'ca528a0964fa19ae7ec3b0709deec7111641e1e0',
+ 'tests/e2e/room-identity.spec.ts': 'f86a02629abfd701658a2e0a5f1ab341cab474ad',
+ 'tests/e2e/website-event-unlisting.spec.ts': '532c99c78f34d62b30f02a5193ea5c8e0a8e4285',
+ 'tests/repository-boundaries.test.mjs': '7657e893a8a2aa48d07f2667a1bba011d43b3911',
+ 'tests/support-email-rendering.test.mjs': '455441e4da4ce8dde54b844508d6fea1ca97314f'}
+
+
+def reviewed_audit_application_blobs(expected, source):
+    controls = AUDIT_CONTROL_FILES
+    application = set(AUDIT_APPLICATION_BLOBS)
+    require(expected == AUDIT_LIVE_BASELINE
+            and controls == {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+            and not controls & application, 'Production audit correction scope differs.')
+    for revision, tree in ((expected, AUDIT_LIVE_TREE), (AUDIT_APP_SNAPSHOT, AUDIT_APP_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree,
+                'Production audit reviewed tree differs.')
+    require(git('rev-list', '--parents', '-n', '1', AUDIT_APP_SNAPSHOT)
+            == AUDIT_APP_SNAPSHOT + ' ' + expected, 'Production audit snapshot parent differs.')
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, AUDIT_APP_SNAPSHOT, source),
+            'Production audit requires independently merged controls.')
+    subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', expected, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    for before, after, changed in ((expected, AUDIT_APP_SNAPSHOT, application),
+                                   (expected, trusted, controls), (trusted, source, application),
+                                   (AUDIT_APP_SNAPSHOT, source, controls),
+                                   (expected, source, application | controls)):
+        require(set(git('diff', '--name-only', before, after).splitlines()) == changed,
+                'Production audit complete inventory differs.')
+        verify_changed_modes(before, after)
+    pins = dict(AUDIT_APPLICATION_BLOBS)
+    for name, blob in pins.items():
+        entry = '100644 blob ' + blob + '\t' + name
+        require(all(git('ls-tree', revision, '--', name) == entry for revision in (AUDIT_APP_SNAPSHOT, source)),
+                'Production audit accepted bytes or modes differ: ' + name)
+    for name in controls:
+        entry = git('ls-tree', trusted, '--', name)
+        require(re.fullmatch(r'100644 blob [a-f0-9]{40}\t' + re.escape(name), entry)
+                and git('ls-tree', source, '--', name) == entry,
+                'Production audit controls differ from merged controls: ' + name)
+        pins[name] = entry.split()[2]
+    for name in ('package.json', 'package-lock.json'):
+        require(git('ls-tree', expected, '--', name) == git('ls-tree', source, '--', name),
+                'Production audit dependencies and scripts must remain unchanged.')
+    require(not migration_plan(pins), 'Production audit correction cannot introduce migrations.')
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == AUDIT_LIVE_BASELINE:
+        return reviewed_audit_application_blobs(expected, source)
     if expected == STAFF_LIVE_BASELINE:
         return reviewed_staff_tooling_application_blobs(expected, source)
     if expected == SECURITY_LIVE_BASELINE:
