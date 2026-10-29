@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { load } from 'js-yaml';
+import { runInNewContext } from 'node:vm';
 import { validateVersions } from '../scripts/verify-browser-environment.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../scripts/browser-environment.json', import.meta.url)));
@@ -54,15 +56,16 @@ for (const [filename, names] of Object.entries(jobs)) {
 test('focused browser diagnostics retain first failures without uploading green-run traces', () => {
   const workflow = readFileSync(new URL('../.github/workflows/browser-followup.yml', import.meta.url), 'utf8');
   const commands = [...workflow.matchAll(/^        run: (npx playwright test .+)$/gm)].map(match => match[1]);
-  assert.equal(commands.length, 2);
-  for (const command of commands) {
+  assert.equal(commands.length, 3);
+  for (const command of commands.slice(0, 2)) {
     assert.match(command, /--workers=1 --retries=0 --repeat-each=5 --trace=retain-on-failure/);
     assert.doesNotMatch(command, /--trace=(on|on-first-retry)(?: |$)/);
   }
   assert.match(commands[0], /navigation-audit\.spec\.ts member-navigation\.spec\.ts public-journey\.spec\.ts --project mobile-chromium/);
   assert.match(commands[1], /discovery-pass-access\.spec\.ts --project desktop-chromium/);
   assert.match(commands[1], /--output=test-results-pass-access$/);
-  const upload = workflow.split('      - uses: actions/upload-artifact@')[1];
+  assert.match(commands[2], /room-identity\.spec\.ts --grep 'support email stays intact through hydration' --project desktop-chromium --project mobile-chromium --project mobile-webkit --workers=1 --retries=0 --output=test-results-privacy$/);
+  const upload = workflow.split('      - uses: actions/upload-artifact@').at(-1);
   assert.ok(upload?.startsWith('ea165f8d65b6e75b540449e92b4886f43607fa02'));
   // failure() overrides the implicit success condition, including when the
   // first test step failed and the second was skipped. No live retry needed.
@@ -72,6 +75,41 @@ test('focused browser diagnostics retain first failures without uploading green-
   assert.doesNotMatch(workflow, /continue-on-error|if: always\(\)|actions: write|contents: write/);
   const base = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   assert.match(base, /screenshot: "only-on-failure"/);
+});
+
+test('privacy follow-up rejects a changed production identity and records both source revisions', async () => {
+  const workflow = load(readFileSync(new URL('../.github/workflows/browser-followup.yml', import.meta.url), 'utf8'));
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  const steps = workflow.jobs.verify.steps;
+  const before = steps.find(step => step.id === 'privacy_baseline');
+  assert.equal(before.if, "env.PRIVACY_FOLLOWUP == 'true'");
+  assert.match(before.run, /git diff --exit-code "\$expected" HEAD -- \. ':!tests\/e2e\/room-identity.spec.ts' ':!tests\/browser-environment.test.mjs' ':!\.github\/workflows\/browser-followup.yml'/);
+  assert.match(before.run, /git merge-base --is-ancestor "\$expected" refs\/remotes\/origin\/main/);
+  const script = before.run.split("<<'JS'\n")[1].split('\nJS\n')[0].replace(/^import .*;\n/gm, '');
+  const revision = '6e0e718d9d183072968433eef42cdad090545213';
+  async function run(changes = {}, phase = 'before') {
+    const saved = [];
+    await runInNewContext(`(async () => {${script}})()`, {
+      assert, AbortSignal, Date, console: { log() {} },
+      process: { argv: ['', '', phase], env: { TEST_SOURCE: 'a'.repeat(40), RUNNER_TEMP: '/tmp' } },
+      writeFile: async (path, value) => saved.push(JSON.parse(value)),
+      fetch: async url => {
+        assert.match(url, /^https:\/\/tickets\.becoreops\.com\/(healthz|api\/version)$/);
+        return { status: changes.status ?? 200, json: async () => ({ service: 'becore-tickets', revision, runtime: 'vps', active: true, ...changes }) };
+      },
+    });
+    return saved;
+  }
+  for (const phase of ['before', 'after']) {
+    const [evidence] = await run({}, phase);
+    assert.equal(evidence.productionRevision, revision);
+    assert.equal(evidence.testRevision, 'a'.repeat(40));
+    assert.equal(evidence.phase, phase);
+  }
+  for (const change of [{ status: 403 }, { service: 'other' }, { revision: 'b'.repeat(40) }, { runtime: 'worker' }, { active: false }]) await assert.rejects(run(change));
+  await assert.rejects(run({}, 'invalid'));
+  const after = steps.find(step => step.name === 'Confirm the application stayed on the activated revision');
+  assert.equal(after.if, "${{ always() && steps.privacy_baseline.outcome == 'success' }}");
 });
 
 
