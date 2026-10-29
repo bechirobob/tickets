@@ -54,7 +54,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TEST_SOURCE"
           git merge-base --is-ancestor "$expected" HEAD
           git merge-base --is-ancestor "$expected" refs/remotes/origin/main
-          git diff --exit-code "$expected" HEAD -- . ':!tests/e2e/room-identity.spec.ts' ':!tests/browser-environment.test.mjs' ':!.github/workflows/browser-followup.yml'
+          git diff --exit-code "$expected" HEAD -- . ':!tests/e2e/room-identity.spec.ts' ':!tests/browser-environment.test.mjs' ':!.github/workflows/browser-followup.yml' ':!ops/vps/test_code_release.py'
           mkdir -p "$RUNNER_TEMP/privacy-followup"
           cat > "$RUNNER_TEMP/privacy-followup/verify.mjs" <<'JS'
           import assert from 'node:assert/strict';

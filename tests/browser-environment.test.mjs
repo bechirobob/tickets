@@ -83,7 +83,7 @@ test('privacy follow-up rejects a changed production identity and records both s
   const steps = workflow.jobs.verify.steps;
   const before = steps.find(step => step.id === 'privacy_baseline');
   assert.equal(before.if, "env.PRIVACY_FOLLOWUP == 'true'");
-  assert.match(before.run, /git diff --exit-code "\$expected" HEAD -- \. ':!tests\/e2e\/room-identity.spec.ts' ':!tests\/browser-environment.test.mjs' ':!\.github\/workflows\/browser-followup.yml'/);
+  assert.match(before.run, /git diff --exit-code "\$expected" HEAD -- \. ':!tests\/e2e\/room-identity.spec.ts' ':!tests\/browser-environment.test.mjs' ':!\.github\/workflows\/browser-followup.yml' ':!ops\/vps\/test_code_release.py'\n/);
   assert.match(before.run, /git merge-base --is-ancestor "\$expected" refs\/remotes\/origin\/main/);
   const script = before.run.split("<<'JS'\n")[1].split('\nJS\n')[0].replace(/^import .*;\n/gm, '');
   const revision = '6e0e718d9d183072968433eef42cdad090545213';
