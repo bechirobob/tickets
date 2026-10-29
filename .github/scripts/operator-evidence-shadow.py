@@ -78,7 +78,8 @@ def context(checkout, stage, source, operator, expected_active):
             'workflowBlob': git('rev-parse', operator + ':' + WORKFLOW), 'layout': 'staged',
             'observerDigest': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'inventory': {name: list(value) for name, value in sorted(actual.items())},
-            'suite': ['unittest', 'discover', '-s', 'ops/vps', '-p', 'test_*.py'],
+            'workingDirectory': 'source',
+            'suite': ['unittest', 'discover', '-s', '<stage>/ops/vps', '-p', 'test_*.py'],
             'environment': {'python': sys.version, 'git': git('--version'), 'system': platform.system(),
                             'machine': platform.machine(), 'imageOS': os.environ.get('ImageOS'),
                             'imageVersion': os.environ.get('ImageVersion'),
@@ -164,8 +165,9 @@ def main():
     checkout, stage = Path(args.checkout).resolve(), Path(args.stage).resolve()
     expected = context(checkout, stage, args.source, args.operator, args.expected_active)
     suite_environment = {key: value for key, value in os.environ.items() if key not in ('GH_TOKEN', 'GITHUB_TOKEN')}
+    suite = [value.replace('<stage>', str(stage)) for value in expected['suite']]
     result = shadow(GitHub(), args.reference_run, expected, int(time.time()),
-                    lambda: subprocess.run([sys.executable, '-m', *expected['suite']], cwd=stage,
+                    lambda: subprocess.run([sys.executable, '-m', *suite], cwd=checkout,
                                            env=suite_environment, timeout=1200, check=False).returncode)
     Path(args.output).write_text(json.dumps(result, indent=2) + '\n')
     if args.receipt_output and result['suiteExitCode'] == 0:

@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location('shadow', Path(__file__).resolve().parents[1] / '.github/scripts/operator-evidence-shadow.py')
@@ -148,6 +149,27 @@ class EvidenceTests(unittest.TestCase):
 
 
 class ContextTests(unittest.TestCase):
+    def test_cli_runs_staged_tests_from_source_without_api_tokens(self):
+        class Unavailable:
+            def json(self, path):
+                raise OSError('unavailable')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            expected = {'suite': ['unittest', 'discover', '-s', '<stage>/ops/vps', '-p', 'test_*.py']}
+            argv = ['shadow', '--checkout', str(root / 'repo'), '--stage', str(root / 'stage'),
+                    '--source', 'a' * 40, '--operator', 'b' * 40, '--expected-active', 'c' * 40,
+                    '--reference-run', '12', '--output', str(root / 'report.json')]
+            with patch.object(shadow.sys, 'argv', argv), patch.object(shadow, 'context', return_value=expected), \
+                 patch.object(shadow, 'GitHub', return_value=Unavailable()), \
+                 patch.dict(shadow.os.environ, GH_TOKEN='fixture', GITHUB_TOKEN='fixture'), \
+                 patch.object(shadow.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as execute:
+                self.assertEqual(shadow.main(), 0)
+            args, kwargs = execute.call_args
+            self.assertEqual(args[0], [shadow.sys.executable, '-m', 'unittest', 'discover', '-s', str(root / 'stage/ops/vps'), '-p', 'test_*.py'])
+            self.assertEqual(kwargs['cwd'], root / 'repo')
+            self.assertNotIn('GH_TOKEN', kwargs['env'])
+            self.assertNotIn('GITHUB_TOKEN', kwargs['env'])
+
     def test_context_checks_real_git_stage_bytes_modes_and_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); repo = root / 'repo'; repo.mkdir(); stage = root / 'stage'; stage.mkdir()
