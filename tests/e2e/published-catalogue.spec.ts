@@ -1,6 +1,6 @@
 import { isWebsiteListedEvent } from "../../lib/website-event-listings";
 import AxeBuilder from "@axe-core/playwright";
-import { test, expect } from "./catalogue";
+import { test, expect, expectWebsiteDiscovery } from "./catalogue";
 import { expectVisibleLettering } from "./text-visibility";
 import { matchesEventWindow } from "../../lib/event-discovery";
 
@@ -51,10 +51,14 @@ test("discovery shows the available catalogue with full flyers and aligned rows"
   const visible = catalogue.screens!.filter(({ event }) => isWebsiteListedEvent(event) && matchesEventWindow(event, "next", Date.now())).map(({ event }) => event);
   for (const path of ["/", "/events"]) {
     await page.goto(path);
-    await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
+    if (!await expectWebsiteDiscovery(page, catalogue)) continue;
     const expected = visible.slice(0, path === "/" ? 6 : 12);
     const cards = page.locator(".discovery-grid .drop-card");
     await expect(cards).toHaveCount(expected.length);
+    if (!expected.length) {
+      await expect(page.getByRole("heading", { name: "Even Accra has a quiet corner." })).toBeVisible();
+      await expect(page.locator(".discovery-result-count")).toContainText("0 nights");
+    }
     for (const event of expected) {
       const card = cards.filter({ has: page.locator(`h3 a[href="/event/${event.slug}"]`) });
       await expect(card).toBeVisible();

@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from './analytics-fixture';
+import { expect, test, expectWebsiteDiscovery } from './catalogue';
 test.use({ serviceWorkers: 'block' });
 
 test('mobile Back closes navigation before leaving and outside destinations keep the new route', async ({ page }) => {
@@ -138,7 +138,7 @@ test('mobile menu is a compact header-origin menu with working drag, focus and o
   await expect(trigger).toBeFocused();
 });
 
-test('mobile header and visual-viewport keyboard geometry integration preserve usable navigation', async ({ page }) => {
+test('mobile header and visual-viewport keyboard geometry integration preserve usable navigation', async ({ page, catalogue }) => {
   test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile guest shell');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/events');
@@ -170,7 +170,12 @@ test('mobile header and visual-viewport keyboard geometry integration preserve u
   expect(colors.foreground).not.toBe(colors.background);
   // Exercise MobileAppFrame's focus/resize integration. This is simulated
   // viewport geometry, not evidence from a physical device's keyboard.
-  const search = page.getByRole('searchbox', { name: 'Search events, artists or venues' });
+  const listed = await expectWebsiteDiscovery(page, catalogue);
+  if (!listed) {
+    await page.goto('/help');
+    await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeEnabled();
+  }
+  const search = page.getByRole('searchbox', { name: listed ? 'Search events, artists or venues' : 'Search BeCore Help' });
   await expect(search).toBeEnabled();
   await search.focus();
   await page.evaluate(() => {

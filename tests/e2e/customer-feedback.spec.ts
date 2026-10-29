@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./catalogue";
+import { expect, test, expectWebsiteDiscovery, nextWebsiteEvents } from "./catalogue";
 
 // A controlling service worker can bypass Playwright routes in WebKit.
 // These request-failure tests must always use their mocks, never a live write.
@@ -84,7 +84,18 @@ test("filtering keeps search focus and reduced motion leaves posters still", asy
   }
   // External audits retain current time and their actual published listings.
   await page.goto("/events");
+  if (!await expectWebsiteDiscovery(page, catalogue)) return;
   const search = page.getByRole("searchbox", { name: "Search events, artists or venues" });
+  if (!nextWebsiteEvents(catalogue, localFixture ? Date.parse("2026-09-19T12:00:00Z") : Date.now()).length) {
+    await expect(page.locator('.drop-card')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Even Accra has a quiet corner.' })).toBeVisible();
+    await search.fill('No matching night 987654');
+    await expect(search).toBeFocused();
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(search).toHaveValue('');
+    await expect(page.locator('.drop-card')).toHaveCount(0);
+    return;
+  }
   const firstCard = localFixture ? page.locator('.drop-card[data-event-slug="the-weekend-braai"]') : page.locator(".drop-card").first();
   await expect(firstCard).toBeVisible();
   await expect(page.locator('.drop-card[data-event-slug="sun-chasers-labadi"]')).toHaveCount(0);

@@ -66,6 +66,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  production_browser_audit:
+    needs: release
+    if: ${{ needs.release.result == 'success' && !inputs.verify_only && !inputs.inspect_failed_release }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/browser-audit.yml
+    with:
+      expected_source: ${{ inputs.source_sha }}
+      activation_required: true
   release:
     if: github.ref == 'refs/heads/main' && (!inputs.inspect_failed_release || inputs.verify_only)
     runs-on: ubuntu-latest

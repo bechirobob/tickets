@@ -1,7 +1,7 @@
 import { isWebsiteListedEvent } from "../../lib/website-event-listings";
 import { expandEveryVisibleDisclosure } from './disclosures.mjs';
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./catalogue";
+import { expect, test, expectWebsiteDiscovery } from "./catalogue";
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -54,7 +54,15 @@ test("featured nights keep the hero, Drop and Room synchronized", async ({ page,
   const multiple = scenes.length > 1;
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
+  await expectWebsiteDiscovery(page, catalogue);
+  if (!scenes.length) {
+    const fallback = page.getByRole('region', { name: 'Featured nights' });
+    await expect(fallback.getByRole('heading', { level: 1 })).toHaveText('Plans, sorted.');
+    await expect(fallback.getByRole('link', { name: 'Explore The Drop', exact: true })).toHaveAttribute('href', '/events');
+    await expect(fallback.locator('.active-night-autoplay-toggle, .compact-hero__price')).toHaveCount(0);
+    await expect(page.locator('.room-product-phone__header b').first()).toHaveText('After Dark');
+    return;
+  }
   const experience = page.locator(".active-night-experience");
   const hero = page.getByRole("region", { name: "Featured nights" });
   const firstSlug = await experience.getAttribute("data-active-night");
@@ -122,7 +130,15 @@ test("featured motion continues in the Room and resumes after returning to the h
   const multiple = scenes.length > 1;
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/", { timeout: 30_000 });
-  await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
+  await expectWebsiteDiscovery(page, catalogue);
+  if (!scenes.length) {
+    const fallback = page.getByRole('region', { name: 'Featured nights' });
+    await expect(fallback.getByRole('heading', { level: 1 })).toHaveText('Plans, sorted.');
+    await expect(fallback.getByRole('link', { name: 'Explore The Drop', exact: true })).toHaveAttribute('href', '/events');
+    await expect(fallback.locator('.active-night-autoplay-toggle, .compact-hero__price')).toHaveCount(0);
+    await expect(page.locator('.room-product-phone__header b').first()).toHaveText('After Dark');
+    return;
+  }
   const experience = page.locator(".active-night-experience");
   const room = page.locator("#the-room");
   const track = room.locator(".room-product-scene__phones");
@@ -284,15 +300,16 @@ for (const path of publicPages) {
   });
 }
 
-test("customer controls use neutral keyboard focus without halos", async ({ page }) => {
+test("customer controls use neutral keyboard focus without halos", async ({ page, catalogue }) => {
   for (const path of ["/", "/my-nights", "/notifications"]) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
+    let listed = true;
     if (path === "/") {
       // The single-event hero has no playback control. Use the shared
       // interactive readiness signal rather than focusing server markup.
-      await expect(page.getByRole("button", { name: "Next up", exact: true })).toBeEnabled();
+      listed = await expectWebsiteDiscovery(page, catalogue);
     }
-    const controls = path === "/" ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
+    const controls = path === "/" ? (listed ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : page.locator('.event-empty a[href="/organizer/submit"]')) : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
     await page.keyboard.press("Tab");
     await controls.focus();
     await expect(controls).toBeFocused();

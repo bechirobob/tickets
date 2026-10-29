@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { load } from "js-yaml";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { hasRequiredTicketsSpendLimits } from "../scripts/ai-gateway-policy.mjs";
 import './iphone-layout-evidence.test.mjs';
 import './iphone-layout-parity.test.mjs';
@@ -364,8 +365,26 @@ test("production audit covers the deployed main revision while candidate CI cove
   const workflow = load(await readFile(new URL("browser-audit.yml", workflowsDirectory), "utf8"));
   assert.deepEqual(workflow.permissions, { contents: "read" });
   assert.deepEqual(workflow.on.workflow_run, {
-    workflows: ["Deploy to Cloudflare", "Release verified Tickets VPS code"], types: ["completed"],
+    workflows: ["Deploy to Cloudflare"], types: ["completed"],
   });
+  assert.deepEqual(workflow.on.workflow_call.inputs.expected_source, {
+    description: 'Exact source just activated by the guarded VPS release', required: true, type: 'string',
+  });
+  const release = load(await readFile(new URL('tickets-code-release.yml', workflowsDirectory), 'utf8'));
+  const caller = release.jobs.production_browser_audit;
+  assert.equal(caller.needs, 'release');
+  assert.equal(caller.uses, './.github/workflows/browser-audit.yml');
+  assert.deepEqual(caller.permissions, { contents: 'read' });
+  assert.deepEqual(caller.with, { expected_source: '${{ inputs.source_sha }}', activation_required: true });
+  assert.equal(workflow.on.workflow_call.inputs.activation_required.default, true);
+  assert.equal(caller.secrets, undefined);
+  const expression = caller.if.replace(/^\$\{\{\s*|\s*\}\}$/gu, '');
+  for (const result of ['success', 'failure', 'cancelled', 'skipped']) {
+    for (const verify_only of [false, true]) for (const inspect_failed_release of [false, true]) {
+      assert.equal(runInNewContext(expression, { needs: { release: { result } }, inputs: { verify_only, inspect_failed_release } }),
+        result === 'success' && !verify_only && !inspect_failed_release, 'Only confirmed activation starts the production audit');
+    }
+  }
   const job = workflow.jobs["browser-audit"];
   assert.equal(job.if, "github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'");
   assert.deepEqual(job.strategy.matrix.browser, ["desktop-chromium", "mobile-chromium", "mobile-webkit"]);
@@ -480,6 +499,12 @@ fi
   assert.equal(baseline.revision, revision);
   assert.equal(baseline.active, true);
   assert.equal(baseline.runtime, "vps");
+  assert.equal(run(resolve.run, { ACTIVATED_SHA: revision }).status, 0);
+  assert.notEqual(run(resolve.run, { ACTIVATION_REQUIRED: 'true', ACTIVATED_SHA: '' }).status, 0, 'Called activation cannot silently fall back to manual resolution');
+  assert.equal(run(resolve.run, { ACTIVATION_REQUIRED: 'true', ACTIVATED_SHA: revision }).status, 0);
+  for (const ACTIVATED_SHA of ['abc123', 'b'.repeat(40), `${revision}\ninjected=value`]) {
+    assert.notEqual(run(resolve.run, { ACTIVATED_SHA }).status, 0, 'A called audit must bind the exact activated source before checkout');
+  }
   result = run(source.run, { DEPLOYED_SHA: revision });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(await readFile(join(runner, "production-browser-audit/checked-out-revision.txt"), "utf8"), `${revision}\n`);

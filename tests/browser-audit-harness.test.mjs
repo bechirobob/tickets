@@ -2,9 +2,65 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { transformSync } from 'esbuild';
+import { buildSync, transformSync } from 'esbuild';
+import { createRequire } from 'node:module';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { excludeAuditAnalytics } from '../scripts/audit-analytics.mjs';
 import { expandEveryVisibleDisclosure } from './e2e/disclosures.mjs';
+
+test('an empty website catalogue renders the real empty state without nonfunctional discovery controls', () => {
+  const output = buildSync({ entryPoints: [new URL('../app/event-explorer.tsx', import.meta.url).pathname],
+    bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
+    external: ['react', 'react/*', 'next/link', 'next/image'] }).outputFiles[0].text;
+  const component = { exports: {} };
+  runInNewContext(output, { module: component, exports: component.exports, require: createRequire(import.meta.url), process });
+  for (const full of [false, true]) {
+    const html = renderToStaticMarkup(createElement(component.exports.default, { events: [], full }));
+    assert.match(html, /class="event-empty"/u);
+    assert.match(html, /The next plan is still cooking\./u);
+    assert.match(html, /href="\/organizer\/submit"/u);
+    assert.doesNotMatch(html, /drop-card|discovery-search|Pick a date|Next up/u);
+  }
+});
+
+test('discovery audit derives empty expectations from the website policy, never missing DOM', async () => {
+  const source = await readFile(new URL('./e2e/catalogue.ts', import.meta.url), 'utf8');
+  const policy = await readFile(new URL('../lib/website-event-listings.ts', import.meta.url), 'utf8');
+  const policyModule = { exports: {} };
+  runInNewContext(transformSync(policy, { loader: 'ts', format: 'cjs' }).code, { module: policyModule, exports: policyModule.exports });
+  const discoveryModule = { exports: {} };
+  const discovery = await readFile(new URL('../lib/event-discovery.ts', import.meta.url), 'utf8');
+  runInNewContext(transformSync(discovery, { loader: 'ts', format: 'cjs' }).code, { module: discoveryModule, exports: discoveryModule.exports });
+  const calls = [];
+  const expect = value => new Proxy({}, { get: (_, method) => async argument => { calls.push({ value, method, argument }); } });
+  const component = { exports: {} };
+  runInNewContext(transformSync(source, { loader: 'ts', format: 'cjs' }).code, {
+    module: component, exports: component.exports,
+    require: name => name === './analytics-fixture' ? { expect, test: { extend: () => ({}) } }
+      : name === '../../lib/event-discovery' ? discoveryModule.exports : policyModule.exports,
+  });
+  const locator = value => ({ value, getByRole: (role, options) => locator([value, role, options]) });
+  const page = { locator, getByRole: (role, options) => locator([role, options]), getByLabel: locator, evaluate: async () => 0 };
+  for (const events of [[], [{ slug: 'sun-chasers-labadi' }], [{ slug: 'the-weekend-braai' }], [{ slug: 'sun-chasers-labadi' }, { slug: 'the-weekend-braai' }]]) {
+    calls.length = 0;
+    const listed = events.some(policyModule.exports.isWebsiteListedEvent);
+    assert.equal(await component.exports.expectWebsiteDiscovery(page, { events }), listed);
+    assert.equal(calls.some(call => call.value?.value === '.event-empty'), !listed);
+    assert.equal(calls.some(call => call.method === 'toHaveCount' && call.argument === 0), !listed);
+    assert.ok(calls.some(call => call.method === 'toBeEnabled'), 'Both states must wait for hydration');
+  }
+  const now = Date.parse('2026-10-29T12:00:00Z');
+  const events = [
+    { slug: 'sun-chasers-labadi', startsAt: null, eventState: 'on_sale' },
+    { slug: 'past', startsAt: '2026-10-28T12:00:00Z', endsAt: '2026-10-28T16:00:00Z', eventState: 'on_sale' },
+    { slug: 'cancelled', startsAt: null, eventState: 'cancelled' },
+    { slug: 'postponed', startsAt: null, eventState: 'postponed' },
+    { slug: 'upcoming', startsAt: '2026-10-30T12:00:00Z', eventState: 'on_sale' },
+    { slug: 'coming-soon', startsAt: null, eventState: 'on_sale' },
+  ];
+  assert.deepEqual(Array.from(component.exports.nextWebsiteEvents({ screens: events.map(event => ({ event })) }, now), event => event.slug), ['upcoming', 'coming-soon']);
+});
 
 test('synthetic camera selection skips external audits before fixture setup and retains every local case', async () => {
   const source = await readFile(new URL('./e2e/flash-camera.spec.ts', import.meta.url), 'utf8');
