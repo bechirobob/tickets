@@ -1375,7 +1375,7 @@ test('staff app cold launch and a new window open the workspace with the staff m
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/staff.webmanifest?v=1');
   await expect(page.locator('.customer-dock, .workspace-return')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.staffApp)).toBe('true');
-  const nonce = await page.locator('script[src="/staff-app.js"]').evaluate((script: HTMLScriptElement) => script.nonce);
+  const nonce = await page.locator('script#staff-app-launch').evaluate((script: HTMLScriptElement) => script.nonce);
   expect(nonce).not.toBe('');
   expect(response?.headers()['content-security-policy']).toContain(`'nonce-${nonce}'`);
   await page.close();
@@ -1384,6 +1384,29 @@ test('staff app cold launch and a new window open the workspace with the staff m
   await expect(reopened).toHaveURL(/\/admin\?source=staff-pwa$/);
   await expect(reopened.getByRole('heading', { name: 'Submission queue', exact: true })).toBeVisible();
   await reopened.close();
+});
+
+test('staff app inline startup keeps server-rendered sign-in visible while external scripts wait', async ({ page, context }) => {
+  await context.clearCookies();
+  await context.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  let releaseScripts!: () => void;
+  const ready = new Promise<void>(resolve => { releaseScripts = resolve; });
+  await page.route('**/*', async route => {
+    if (route.request().resourceType() === 'script') await ready;
+    await route.fallback();
+  });
+  try {
+    const response = await page.goto('/staff?source=staff-pwa', { waitUntil: 'commit' });
+    await expect(page.getByLabel('Work email')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome back.', exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.staffApp)).toBe('true');
+    const script = page.locator('script#staff-app-launch');
+    await expect(script).not.toHaveAttribute('src');
+    const nonce = await script.evaluate((element: HTMLScriptElement) => element.nonce);
+    expect(nonce).not.toBe('');
+    expect(response?.headers()['content-security-policy']).toContain(`'nonce-${nonce}'`);
+  } finally { releaseScripts(); }
+  await expect(page.getByLabel('Work email')).toBeEnabled();
 });
 
 test('staff app resume sends an expired session to staff sign-in and keeps logout there', async ({ page, context }) => {

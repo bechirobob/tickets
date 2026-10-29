@@ -83,7 +83,7 @@ export default function WorkspaceChrome({ actor, role, active, host = false, eve
       </nav>
       {error ? <p role="alert">{error}</p> : null}
       <Link className="workspace-public" href="/staff/install">Install staff app</Link>
-      <Link className="workspace-public" href="/events" target="_blank" rel="noopener noreferrer">View public site ↗</Link>
+      <Link className="workspace-public" href="/events" onClick={e => follow(e, "/events")}>View public site ↗</Link>
     </aside>
   </>;
 }
