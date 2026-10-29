@@ -95,6 +95,10 @@ jobs:
         run: |
           node scripts/prepare-seev-browser-fixture.mjs
           npx playwright test --config playwright.seev.config.ts --project desktop-chromium --project mobile-chromium --project mobile-webkit --grep 'SeevPlus stays compact' --workers=1 --retries=0 --reporter=line --output test-results/checkout-startup
+      - name: Reproduce WebKit RSVP disclosure on all existing surfaces
+        run: |
+          node scripts/prepare-registration-browser-fixture.mjs
+          npx playwright test --config playwright.registration.config.ts --project mobile-webkit --grep 'RSVP card keeps readable colours' --repeat-each=3 --workers=1 --retries=0 --reporter=line --output test-results/registration-disclosure
       - name: Package only named staff fixture images and source manifest
         env:
           BROWSER_ENVIRONMENT_PATH: ${{ runner.temp }}/staff-browser-environment.json

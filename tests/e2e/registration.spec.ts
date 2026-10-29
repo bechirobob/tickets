@@ -179,7 +179,16 @@ for (const surface of ['event', 'rsvp', 'my-nights']) {
     await expect(card.getByRole('heading', { name: 'After Dark: Osu' })).toBeVisible();
     await expect(card.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
     await expect(card.getByRole('link', { name: 'The Room', exact: true })).toHaveAttribute('href', '/room/after-dark-osu');
+    const disclosureState = () => card.locator('.registration-manage').evaluate(element => {
+      const summary = element.querySelector('summary')!, box = summary.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return { open: (element as HTMLDetailsElement).open, summary: { x: box.x, y: box.y, width: box.width, height: box.height },
+        hit: hit?.tagName, hitClass: hit?.className, arrivalHidden: (document.querySelector('[data-testid="brand-arrival"]') as HTMLElement | null)?.hidden,
+        staffApp: document.documentElement.dataset.staffApp ?? null, scrollY };
+    });
+    console.log('RSVP_DISCLOSURE_BEFORE', surface, JSON.stringify(await disclosureState()));
     await card.locator('.registration-manage summary').click();
+    console.log('RSVP_DISCLOSURE_AFTER', surface, JSON.stringify(await disclosureState()));
     await expect(card.getByRole('button', { name: 'Cancel RSVP', exact: true })).toBeVisible();
     const palettes = surface === 'event' ? Object.keys(eventColourSchemes) : ['dark'];
     for (const colourScheme of palettes) {
