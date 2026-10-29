@@ -7,6 +7,8 @@ on:
     # Operator diagnostics do not change the application. Workflow-only release
     # configuration edits remain deployable through explicit workflow_dispatch.
     paths-ignore:
+      - '.gitignore'
+      - 'tests/staff-app-launch.test.mjs'
       - '.github/workflows/tickets-backup.yml'
       - '.github/workflows/backup-transport-checks.yml'
       - '.github/backup/**'
