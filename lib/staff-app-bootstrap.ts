@@ -1,4 +1,5 @@
-/* Window-local install intent only. Never infer an app identity from cookies. */
+// Inline and nonce-bearing: never block customer HTML on a script download.
+const staffAppBootstrap = String.raw`/* Window-local install intent only. Never infer an app identity from cookies. */
 (() => {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   if (!standalone) return;
@@ -32,3 +33,6 @@
     window.open(target.href, '_blank', 'noopener,noreferrer');
   }, true);
 })();
+`;
+
+export default staffAppBootstrap;

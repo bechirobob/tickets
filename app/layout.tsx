@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import staffAppBootstrap from "../lib/staff-app-bootstrap";
 import "../styles/customer.css";
 import "./booking-consent.css";
 import CustomerDock from "./customer-dock";
@@ -60,7 +61,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <head><link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" />{/* Before paint: only an explicitly installed staff window may restore to staff. */}
-        <Script src="/staff-app.js" strategy="beforeInteractive" />
+        <Script id="staff-app-launch" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: staffAppBootstrap }} />
       </head>
       <body><InputModality /><StaffAppSession /><BrandArrival /><MobileAppFrame /><WorkspaceReturn />{children}<CustomerDock /><AnalyticsBeacon /><PwaRegistration /></body>
     </html>

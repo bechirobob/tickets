@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { transformSync } from 'esbuild';
 
-const bootstrap = await readFile(new URL('../public/staff-app.js', import.meta.url), 'utf8');
+const bootstrapModule = { exports: {} };
+runInNewContext(transformSync(await readFile(new URL('../lib/staff-app-bootstrap.ts', import.meta.url), 'utf8'), { loader: 'ts', format: 'cjs' }).code, { module: bootstrapModule, exports: bootstrapModule.exports });
+const bootstrap = bootstrapModule.exports.default;
 const origin = 'https://tickets.becoreops.com';
 function windowFixture(path, { standalone = true, saved = false, blocked = false } = {}) {
   const storage = new Map(saved ? [['bct:staff-app:v1', '1']] : []), listeners = new Map(), replacements = [], opened = [];
@@ -26,7 +29,10 @@ test('staff and customer installs retain separate identities and launch destinat
   assert.equal(customer.id, '/'); assert.equal(customer.start_url, '/my-nights?source=pwa');
   const root = await readFile(new URL('../app/layout.tsx', import.meta.url), 'utf8');
   assert.match(root, /manifest: "\/manifest.webmanifest\?v=5"/);
-  assert.ok(root.indexOf('<Script src="/staff-app.js" strategy="beforeInteractive"') < root.indexOf('<body>'));
+  const inline = '<Script id="staff-app-launch" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: staffAppBootstrap }} />';
+  assert.ok(root.includes(inline) && root.indexOf(inline) < root.indexOf('<body>'));
+  assert.doesNotMatch(root, /<Script[^>]+src=/);
+  assert.doesNotMatch(bootstrap, /<\/script/i);
   for (const path of ['staff', 'admin', 'scan', 'organizer/workspace', 'organizer/analytics', 'organizer/assistant']) {
     assert.match(await readFile(new URL(`../app/${path}/layout.tsx`, import.meta.url), 'utf8'), /staffAppMetadata as metadata/);
   }
