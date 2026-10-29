@@ -121,6 +121,17 @@ for (const path of ['/the-yorke-way/confirm', '/the-yorke-way/unsubscribe', '/th
   });
 }
 
+test('explicit staff launches retain the opening scene without covering direct workspace actions', () => {
+  for (const path of ['/admin', '/admin/orders', '/admin/account', '/scan', '/organizer/workspace']) {
+    const launch = fixture({ path: `${path}?source=staff-pwa` });
+    assert.equal(launch.api.eligibleArrivalEntry(launch.entry), true);
+    const direct = fixture({ path });
+    assert.equal(direct.api.eligibleArrivalEntry(direct.entry), false);
+    const sensitive = fixture({ path: `${path}?source=staff-pwa&token=secret` });
+    assert.equal(sensitive.api.eligibleArrivalEntry(sensitive.entry), false);
+  }
+});
+
 test('callback, recovery and direct-pass intents never animate on an otherwise public route', () => {
   for (const query of ['welcome=1', 'recovered=1', 'recover=1', 'transfer=accepted', 'token=t', 'claim=c', 'reference=r', 'trxref=r', 'pending=1', 'prompt=1', 'code=c', 'state=s', 'error=e', 'payment=success', 'payment_intent=p', 'redirect_status=succeeded', 'client_secret=s', 'access_token=s', 'refresh_token=s', 'transaction_id=t', 'register=1', 'view=passes', 'view=purchase', 'view=ticket', 'view=qr', 'kind=transfer', 'CLAIM=c']) {
     const page = fixture({ path: `/my-nights?${query}` });

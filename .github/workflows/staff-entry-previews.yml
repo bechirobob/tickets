@@ -83,7 +83,7 @@ jobs:
         run: >-
           npx playwright test --config playwright.operations.config.ts
           --project desktop-chromium --project mobile-chromium --project mobile-webkit
-          --grep 'staff (entry|opening animation)' --workers=1 --retries=0
+          --grep 'staff (entry|opening animation|app)' --workers=1 --retries=0
           --trace=off --reporter=line --output test-results/staff-entry
       - name: Package only named staff fixture images and source manifest
         env:

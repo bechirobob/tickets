@@ -315,7 +315,7 @@ test('owner signs in through the real password flow and signs out', async ({ pag
   await expect(page.getByLabel('Work email')).toHaveValue(fixture.email);
   await expect(page.getByLabel('Password', { exact: true })).toHaveValue(fixture.password);
   await page.getByRole('button', { name: 'Sign in' }).click(); await expect(page).toHaveURL(/\/admin\/operations$/);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expect(page).toHaveURL('https://127.0.0.1:8791/');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expect(page).toHaveURL('https://127.0.0.1:8791/staff');
   await page.goto('/admin/accounts'); await expect(page).toHaveURL(/\/admin\/login/);
 });
 
@@ -1364,6 +1364,84 @@ test('staff entry keeps the host in their assigned workspace', async ({ page, co
   await context.addCookies([{ name: 'bct_staff', value: fixture.organizerToken, url: baseURL!, httpOnly: true, sameSite: 'Strict' }]);
   await page.goto('/staff?returnTo=%2Fadmin%2Faccounts');
   await expect(page).toHaveURL(/\/organizer\/workspace$/);
+});
+
+test('staff app cold launch and a new window open the workspace with the staff manifest', async ({ page, context }) => {
+  await context.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  const manifest = await (await page.request.get('/staff.webmanifest')).json();
+  expect(manifest.id).toBe('/staff');
+  const response = await page.goto(manifest.start_url);
+  await expect(page).toHaveURL(/\/admin\?source=staff-pwa$/);
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/staff.webmanifest?v=1');
+  await expect(page.locator('.customer-dock, .workspace-return')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.staffApp)).toBe('true');
+  const nonce = await page.locator('script[src="/staff-app.js"]').evaluate((script: HTMLScriptElement) => script.nonce);
+  expect(nonce).not.toBe('');
+  expect(response?.headers()['content-security-policy']).toContain(`'nonce-${nonce}'`);
+  await page.close();
+  const reopened = await context.newPage();
+  await reopened.goto(manifest.start_url);
+  await expect(reopened).toHaveURL(/\/admin\?source=staff-pwa$/);
+  await expect(reopened.getByRole('heading', { name: 'Submission queue', exact: true })).toBeVisible();
+  await reopened.close();
+});
+
+test('staff app resume sends an expired session to staff sign-in and keeps logout there', async ({ page, context }) => {
+  await context.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  const authenticated = page.waitForResponse(response => response.url().endsWith('/api/admin/workspace') && response.status() === 200);
+  await page.goto('/staff?source=staff-pwa');
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await (await authenticated).finished();
+  await context.clearCookies();
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await expect(page).toHaveURL(/\/staff\?source=staff-pwa$/);
+  await expect(page.getByLabel('Work email')).toBeEnabled();
+  await expect(page.locator('.customer-dock, .workspace-return')).toHaveCount(0);
+});
+
+test('staff app logout never returns to the customer homepage', async ({ page, context }) => {
+  await context.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  await page.goto('/staff?source=staff-pwa');
+  await page.route('**/api/admin/session', async route => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    await context.clearCookies();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL(/\/staff(?:\?source=staff-pwa)?$/);
+  await expect(page.getByLabel('Work email')).toBeEnabled();
+  await page.reload();
+  await expect(page.getByLabel('Work email')).toBeEnabled();
+});
+
+test('staff app routes hosts by role and opens customer links outside its window', async ({ page, context, baseURL }) => {
+  await context.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  await context.clearCookies();
+  await context.addCookies([{ name: 'bct_staff', value: fixture.organizerToken, url: baseURL!, httpOnly: true, sameSite: 'Strict' }]);
+  await page.goto('/staff?source=staff-pwa&returnTo=%2Fadmin%2Faccounts');
+  await expect(page).toHaveURL(/\/organizer\/workspace\?source=staff-pwa$/);
+  await openWorkspaceMenu(page);
+  const opened = page.waitForEvent('popup');
+  await page.getByRole('link', { name: 'View public site' }).click();
+  const customer = await opened;
+  await customer.waitForURL(/\/events$/);
+  expect(await customer.evaluate(() => window.opener)).toBeNull();
+  await expect(page).toHaveURL(/\/organizer\/workspace\?source=staff-pwa$/);
+  await customer.close();
+});
+
+test('staff app restores public history while an ordinary customer window stays public', async ({ page, context }) => {
+  await context.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  await page.goto('/staff?source=staff-pwa');
+  await expect(page).toHaveURL(/\/admin\?source=staff-pwa$/);
+  await page.goto('/events');
+  await expect(page).toHaveURL(/\/admin\?source=staff-pwa$/);
+  const customer = await context.newPage();
+  await customer.goto('/my-nights?source=pwa');
+  await expect(customer).toHaveURL(/\/my-nights\?source=pwa$/);
+  expect(await customer.evaluate(() => document.documentElement.dataset.staffApp)).toBeUndefined();
+  await expect(customer.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest?v=5');
+  await customer.close();
 });
 
 test('staff entry is readable, separate from customer chrome, and recovers interrupted login', async ({ page, context }, info) => {

@@ -1,7 +1,7 @@
-const CACHE = "becore-tickets-shell-v6";
+const CACHE = "becore-tickets-shell-v7";
 // Cache the host's canonical URL, rather than a redirected .html response.
 const OFFLINE_PAGE = "/offline-ticket";
-const SHELL = [OFFLINE_PAGE, "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/brand/becore-ticket.webp"];
+const SHELL = [OFFLINE_PAGE, "/offline-staff.html", "/offline-staff.css", "/staff-app.js", "/manifest.webmanifest", "/staff.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/brand/becore-ticket.webp"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then(async (cache) => {
@@ -25,12 +25,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(caches.match(OFFLINE_PAGE).then((cached) => cached || fetch(event.request)));
     return;
   }
-  if (url.pathname === "/brand/becore-ticket.webp") {
+  if (["/brand/becore-ticket.webp", "/staff-app.js", "/offline-staff.html", "/offline-staff.css"].includes(url.pathname)) {
     event.respondWith(caches.match(url.pathname).then((cached) => cached || fetch(event.request)));
     return;
   }
   if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE_PAGE)));
+    const staff = /^\/(?:staff|admin|scan)(?:\/|$)/u.test(url.pathname) || /^\/organizer\/(?:workspace|analytics|assistant|activate|team)(?:\/|$)/u.test(url.pathname);
+    event.respondWith(fetch(event.request).catch(() => caches.match(staff ? "/offline-staff.html" : OFFLINE_PAGE)));
   }
 });
 self.addEventListener("push", (event) => {
