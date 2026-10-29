@@ -11,6 +11,7 @@ import './iphone-layout-evidence.test.mjs';
 import './iphone-layout-parity.test.mjs';
 import './support-email-rendering.test.mjs';
 import './browser-audit-harness.test.mjs';
+import './staff-app-launch.test.mjs';
 import './preview-data-inventory.test.mjs';
 import './scanner-session-client.test.mjs';
 import './d1-recovery-privacy.test.mjs';

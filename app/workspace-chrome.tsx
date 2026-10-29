@@ -63,7 +63,7 @@ export default function WorkspaceChrome({ actor, role, active, host = false, eve
       try { sessionStorage.removeItem("bct-workspace-return"); } catch {}
       try { clearGateManifests(window.localStorage); } catch { /* Server logout still wins. */ }
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.assign("/");
+      window.location.assign("/staff");
     } else { setBusy(false); setError("Sign out could not be confirmed. Try again."); }
   }
   const link = (x: Item) => <Link key={x.href} href={x.href} aria-current={x.active ? "page" : undefined} onClick={e => follow(e, x.href)}><x.Icon size={18}/><span>{x.label}</span></Link>;
@@ -82,6 +82,7 @@ export default function WorkspaceChrome({ actor, role, active, host = false, eve
         <details className="workspace-tools" open={settings.some(x => x.active) || undefined}><summary>Tools & settings</summary>{settings.map(link)}</details>
       </nav>
       {error ? <p role="alert">{error}</p> : null}
+      <Link className="workspace-public" href="/staff/install">Install staff app</Link>
       <Link className="workspace-public" href="/events" onClick={e => follow(e, "/events")}>View public site ↗</Link>
     </aside>
   </>;

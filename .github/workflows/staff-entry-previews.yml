@@ -83,8 +83,18 @@ jobs:
         run: >-
           npx playwright test --config playwright.operations.config.ts
           --project desktop-chromium --project mobile-chromium --project mobile-webkit
-          --grep 'staff (entry|opening animation)' --workers=1 --retries=0
+          --grep 'staff (entry|opening animation|app)|workspace submission, help' --workers=1 --retries=0
           --trace=off --reporter=line --output test-results/staff-entry
+      - name: Keep customer recovery and navigation visible before hydration
+        run: >-
+          npx playwright test discovery-pass-access.spec.ts navigation-audit.spec.ts
+          --project desktop-chromium --project mobile-chromium --project mobile-webkit
+          --grep 'recovery is unavailable before hydration|navigation waits for its handlers'
+          --workers=1 --retries=0 --reporter=line --output test-results/customer-startup
+      - name: Keep isolated checkout visible before hydration
+        run: |
+          node scripts/prepare-seev-browser-fixture.mjs
+          npx playwright test --config playwright.seev.config.ts --project desktop-chromium --project mobile-chromium --project mobile-webkit --grep 'SeevPlus stays compact' --workers=1 --retries=0 --reporter=line --output test-results/checkout-startup
       - name: Package only named staff fixture images and source manifest
         env:
           BROWSER_ENVIRONMENT_PATH: ${{ runner.temp }}/staff-browser-environment.json
