@@ -72,8 +72,7 @@ for (const route of ['/help', '/terms', '/privacy']) {
     const html = await response!.text();
     const address = route === '/privacy' ? 'contact@becoreops.com' : 'tickets@becoreops.com';
     expect(html).toContain(`<a href="mailto:${address}">${address}</a>`);
-    if (route === '/help') expect(html).toMatch(/<span>(?:<!--email_off-->)?tickets@becoreops\.com(?:<!--\/email_off-->)?<\/span>/u);
-    if (route === '/privacy') expect(html).toContain('<span><!--email_off-->tickets@becoreops.com<!--/email_off--></span>');
+    if (route === '/help' || route === '/privacy') expect(html).toMatch(/<span>(?:<!--email_off-->)?tickets@becoreops\.com(?:<!--\/email_off-->)?<\/span>/u);
     expect(html).not.toMatch(/__cf_email__|data-cfemail|\/cdn-cgi\/l\/email-protection/u);
     await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeEnabled();
     if (route === '/help') {

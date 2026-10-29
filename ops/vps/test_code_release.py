@@ -3219,6 +3219,12 @@ def staff_source_family(root):
 
 AUDIT_TEST_FILE = Path(__file__).resolve()
 AUDIT_OPERATOR_BLOB = 'db4272aa2060aa3d01f0c9c58627e66fd15e8cef'
+# Diagnostic-only correction; the executing release operator is unchanged.
+AUDIT_FOLLOWUP_BLOBS = {
+    '.github/workflows/browser-followup.yml': '6b901fa313febda8d2ce1e5ba02e1fb98044fe8c',
+    'tests/browser-environment.test.mjs': '537d90f47aec83792fbcef5ae482fed9cb501625',
+    'tests/e2e/room-identity.spec.ts': '7b6eb66a1674052308b337cd1854dcde1644a6bf',
+}
 AUDIT_CONTROL_PINS = {
     'ops/vps/code-release.py': ('100644', AUDIT_OPERATOR_BLOB),
     'ops/vps/test_code_release.py': ('100644', release.hashlib.sha1(
@@ -3239,6 +3245,9 @@ def audit_source_family(root):
     application = any((root / name).is_file() and not (root / name).is_symlink()
                       and digest((root / name).read_bytes()) == blob
                       for name, blob in release.AUDIT_APPLICATION_BLOBS.items())
+    followup = any((root / name).is_file() and not (root / name).is_symlink()
+                   and digest((root / name).read_bytes()) == blob
+                   for name, blob in AUDIT_FOLLOWUP_BLOBS.items())
     if not selected and not marked and not application:
         return None
     full = os.path.lexists(root / 'package.json') or os.path.lexists(root / 'app')
@@ -3257,6 +3266,8 @@ def audit_source_family(root):
             manifest.update(AUDIT_CONTROL_PINS)
             if application:
                 manifest.update({name: ('100644', blob) for name, blob in release.AUDIT_APPLICATION_BLOBS.items()})
+            if followup:
+                manifest.update({name: ('100644', blob) for name, blob in AUDIT_FOLLOWUP_BLOBS.items()})
             tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
             untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
             if tracked != set(manifest) or untracked:
@@ -3280,6 +3291,9 @@ def audit_source_family(root):
         manifest.update(AUDIT_CONTROL_PINS)
         if application:
             manifest.update({name: ('100644', blob) for name, blob in release.AUDIT_APPLICATION_BLOBS.items()
+                             if name in manifest})
+        if followup:
+            manifest.update({name: ('100644', blob) for name, blob in AUDIT_FOLLOWUP_BLOBS.items()
                              if name in manifest})
         validate_staged_inventory(root, manifest)
     for name, (mode, expected) in manifest.items():
@@ -14982,6 +14996,25 @@ class ProductionAuditAdmissionTests(unittest.TestCase):
         self.git('checkout', '-q', self.control)
         self.assertEqual(audit_source_family(self.root)['app/privacy/page.tsx'],
                          self.git('rev-parse', self.live+':app/privacy/page.tsx'))
+
+    def test_exact_diagnostic_followup_and_partial_or_mutated_sources(self):
+        followup = {}
+        for name in self.application:
+            self.write(name, 'exact diagnostic correction ' + name + '\n')
+            followup[name] = self.git('hash-object', name)
+        self.commit()
+        accepted = self.git('rev-parse', 'HEAD')
+        with patch.dict(release.AUDIT_APPLICATION_BLOBS, followup), \
+             patch.dict(AUDIT_FOLLOWUP_BLOBS, followup, clear=True):
+            self.assertEqual({name: audit_source_family(self.root)[name] for name in followup}, followup)
+            for name in followup:
+                for mutation in ('partial', 'modified'):
+                    self.git('reset', '--hard', accepted)
+                    if mutation == 'partial': self.git('checkout', self.source, '--', name)
+                    else:
+                        self.write(name, 'unreviewed diagnostic change\n')
+                        self.git('add', name)
+                    with self.assertRaises(AssertionError): audit_source_family(self.root)
 
     def test_each_application_prerequisite_and_control_mutation_rejects(self):
         for name in self.controls | set(self.application):
