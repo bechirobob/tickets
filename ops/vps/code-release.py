@@ -3655,12 +3655,12 @@ STAFF_APP_LIVE_BASELINE = '6e0e718d9d183072968433eef42cdad090545213'
 STAFF_APP_LIVE_TREE = '72ccac2d9b4db9912c5ebfe3841b8fc92f51917a'
 STAFF_APP_BASELINE = '8049f06d438d8e6a00f92c98ea1a739218774097'
 STAFF_APP_BASE_TREE = '7d6d1ecdcfbdf53859570ebad4b857cc3c9a12bc'
-STAFF_APP_APP_SNAPSHOT = '8dbcb55aec8206d183e8ed7cbbdb62cbf731e978'
-STAFF_APP_APP_TREE = 'c5f912b13fc53a277bb577c728ed76183880e161'
-STAFF_APP_APPLICATION_BLOBS = {'.github/workflows/staff-entry-previews.yml': 'fe5b3f1c42058ad01848be0551224d3a2af1556d',
+STAFF_APP_APP_SNAPSHOT = 'dbf3407f9cfac2dee9174bb87eeef722f6f826dc'
+STAFF_APP_APP_TREE = '43d5188e18ec457994905b6da3170013ae80ede7'
+STAFF_APP_APPLICATION_BLOBS = {'.github/workflows/staff-entry-previews.yml': 'c75f68a764c3264faed7002df36896412f0792de',
  'app/admin/layout.tsx': 'd25c02d40cda43b3d6f673912e64588243b52175',
  'app/admin/login/page.tsx': '6839d198042361ca406af85d74db70a1465ff51f',
- 'app/layout.tsx': '1b2432dacf4ff93d2fe9ec4fe627f20fd5137f88',
+ 'app/layout.tsx': 'f6f1d3576ae7d19c0cd293c95663ab5fdb9b2317',
  'app/organizer/analytics/layout.tsx': 'bdc2fd681d3cfe926989b04e1777d50a88aa9e2a',
  'app/organizer/assistant/layout.tsx': 'bdc2fd681d3cfe926989b04e1777d50a88aa9e2a',
  'app/organizer/workspace/layout.tsx': 'bdc2fd681d3cfe926989b04e1777d50a88aa9e2a',
@@ -3670,19 +3670,19 @@ STAFF_APP_APPLICATION_BLOBS = {'.github/workflows/staff-entry-previews.yml': 'fe
  'app/staff/install/staff-install-button.tsx': 'acfe91d016306b7e7eca6e04344a87fe81a9d02c',
  'app/staff/layout.tsx': '105425d5838e2b1d7344d34ca61ebbfb3431b41c',
  'app/staff/page.tsx': '8fbe86df2d11a26c2887daf9c975a54a52e623c3',
- 'app/workspace-chrome.tsx': '6fd382472035386ac728c910d77b4417054e4255',
+ 'app/workspace-chrome.tsx': '0e4555d8c7278605b056b29d7765d6544d25131f',
  'lib/brand-arrival.ts': 'b01877575c7e7378cb4b8b31baae2f2147b6a79a',
+ 'lib/staff-app-bootstrap.ts': '73b949a57581d0df25e7ecde2817443736df29dc',
  'lib/staff-app-metadata.ts': 'e221586214bc771cb4681e1599a578c21ef6ee86',
  'public/offline-staff.css': 'f3e6ea417217dbd90cbb3598a59dd825696f6f22',
  'public/offline-staff.html': 'd2a08e80572cae36b8561bfb641e132122854308',
- 'public/staff-app.js': '37991b784fbc1061066c1f6b818b724fcda4ba26',
  'public/staff.webmanifest': 'e98d77d9baece303099fb73840339c3d6591b99e',
- 'public/sw.js': 'b05be942c730ea4b3f011a8f60e39b6688b89117',
+ 'public/sw.js': 'cde8ac27f57a22fe539819780231307a15366820',
  'tests/brand-arrival.test.mjs': 'c6752c54840c6ec536e71ea4a14c277a76298bba',
  'tests/e2e/brand-arrival.spec.ts': '21d9660e42b48592d61139660a426e45b4538419',
- 'tests/e2e/operations.spec.ts': 'b48b675fbc3b69ca3f862a517b9203b2c26e85e8',
+ 'tests/e2e/operations.spec.ts': '7e184fecf06228cf1a63b96c9a37f34da2c0f7c2',
  'tests/repository-boundaries.test.mjs': '2c635f15a1ba56b32e8c34fd1af7a5e4c2473278',
- 'tests/staff-app-launch.test.mjs': 'b351144348bd4302a8d4f65d0998f8f4d8c8b20a'}
+ 'tests/staff-app-launch.test.mjs': 'cba58882f999da45ede247e4d4e42668001e86af'}
 STAFF_APP_PREREQUISITE_BLOBS = {'.github/workflows/browser-followup.yml': '6b901fa313febda8d2ce1e5ba02e1fb98044fe8c',
  'tests/browser-environment.test.mjs': '537d90f47aec83792fbcef5ae482fed9cb501625',
  'tests/e2e/room-identity.spec.ts': '7b6eb66a1674052308b337cd1854dcde1644a6bf'}
