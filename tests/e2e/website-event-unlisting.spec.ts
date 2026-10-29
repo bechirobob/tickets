@@ -1,4 +1,4 @@
-import { expect, test } from './catalogue';
+import { expect, test, expectWebsiteDiscovery } from './catalogue';
 
 test.use({ serviceWorkers: 'block' });
 const slug = 'sun-chasers-labadi';
@@ -13,7 +13,7 @@ test('temporary Kempinski unlisting removes website discovery without cutting di
     await expect(page.locator(`a[href="/event/${slug}"], a[href="/rsvp/${slug}"]`)).toHaveCount(0);
     await expect(page.locator('main')).not.toContainText('On The Guest List');
     if (path === '/') await expect(page.locator('.active-night-experience')).not.toHaveAttribute('data-active-night', slug);
-    if (path === '/events') {
+    if (path === '/events' && await expectWebsiteDiscovery(page, catalogue)) {
       const search = page.getByRole('searchbox', { name: 'Search events, artists or venues' });
       await search.fill('Kempinski');
       await expect(page.locator('.drop-card')).toHaveCount(0);

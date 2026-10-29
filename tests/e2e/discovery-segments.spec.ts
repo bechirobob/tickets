@@ -1,11 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./catalogue";
+import { expect, test, expectWebsiteDiscovery } from "./catalogue";
 import { expectSegmentedSelection } from "./segmented-control";
 
 test.use({ serviceWorkers: "block" });
 
-test("discovery keeps dates, count and filters coherent across selection and narrow screens", async ({ page }, info) => {
+test("discovery keeps dates, count and filters coherent across selection and narrow screens", async ({ page, catalogue }, info) => {
   await page.goto("/");
+  if (!await expectWebsiteDiscovery(page, catalogue)) return;
   const control = page.getByRole("group", { name: "When", exact: true });
   const next = control.getByRole("button", { name: "Next up", exact: true });
   await expect(next).toBeEnabled();

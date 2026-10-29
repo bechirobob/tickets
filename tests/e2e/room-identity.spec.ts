@@ -73,6 +73,7 @@ for (const route of ['/help', '/terms', '/privacy']) {
     const address = route === '/privacy' ? 'contact@becoreops.com' : 'tickets@becoreops.com';
     expect(html).toContain(`<a href="mailto:${address}">${address}</a>`);
     if (route === '/help') expect(html).toMatch(/<span>(?:<!--email_off-->)?tickets@becoreops\.com(?:<!--\/email_off-->)?<\/span>/u);
+    if (route === '/privacy') expect(html).toContain('<span><!--email_off-->tickets@becoreops.com<!--/email_off--></span>');
     expect(html).not.toMatch(/__cf_email__|data-cfemail|\/cdn-cgi\/l\/email-protection/u);
     await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeEnabled();
     if (route === '/help') {
@@ -87,6 +88,7 @@ for (const route of ['/help', '/terms', '/privacy']) {
     }
     await expect(page.locator('.__cf_email__, [data-cfemail], a[href*="/cdn-cgi/l/email-protection"]')).toHaveCount(0);
     await expect(page.getByRole('link', { name: address, exact: true })).toHaveAttribute('href', `mailto:${address}`);
+    if (route === '/privacy') await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'The Yorke Way early access', exact: true }) })).toContainText('Contact tickets@becoreops.com if you need help');
     expect(hydrationErrors).toEqual([]);
   });
 }

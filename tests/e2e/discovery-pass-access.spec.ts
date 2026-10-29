@@ -1,5 +1,4 @@
-import { isWebsiteListedEvent } from "../../lib/website-event-listings";
-import { expect, test } from "./catalogue";
+import { expect, test, expectWebsiteDiscovery, nextWebsiteEvents } from "./catalogue";
 import { expectSegmentedSelection } from "./segmented-control";
 
 test.use({ serviceWorkers: "block" });
@@ -8,9 +7,11 @@ test("date selection survives an event visit and clearing restores the catalogue
   await page.emulateMedia({ reducedMotion: "reduce" });
   if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date("2026-09-19T12:00:00Z"));
   await page.goto("/events");
+  if (!await expectWebsiteDiscovery(page, catalogue)) return;
   const date = page.getByLabel("Pick a date");
   await expect(date).toBeEnabled();
-  const datedEvent = catalogue.events.find(event => isWebsiteListedEvent(event) && event.startsAt && Date.parse(event.startsAt) > (process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z")));
+  const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
+  const datedEvent = nextWebsiteEvents(catalogue, now).find(event => event.startsAt && Date.parse(event.startsAt) > now);
   const selectedDate = datedEvent?.startsAt?.slice(0, 10) ?? "2099-12-31";
   const slug = datedEvent?.slug ?? eventSlug;
   await date.fill(selectedDate);
@@ -31,7 +32,9 @@ test("date selection survives an event visit and clearing restores the catalogue
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(date).toHaveValue("");
   await expect(page.getByRole("button", { name: "Next up", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator('.drop-card').first()).toBeVisible();
+  const upcoming = nextWebsiteEvents(catalogue, now);
+  await expect(page.locator('.drop-card')).toHaveCount(Math.min(upcoming.length, 12));
+  if (!upcoming.length) await expect(page.getByRole('heading', { name: 'Even Accra has a quiet corner.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("discovery-dates.png"), fullPage: true });
   await page.locator(".discovery-filters summary").click();

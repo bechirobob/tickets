@@ -28,6 +28,8 @@ test('privacy email SSR protects its existing contact address with the same fixe
   assert.equal(rendered, '<span><!--email_off--><a href="mailto:contact@becoreops.com">contact@becoreops.com</a><!--/email_off--></span>');
   const privacy = await readFile(new URL('../app/privacy/page.tsx', import.meta.url), 'utf8');
   assert.match(privacy, /<PrivacyEmail \/>/u);
+  assert.match(privacy, /Contact <SupportEmail \/> if you need help/u);
+  assert.doesNotMatch(privacy, /tickets@becoreops\.com/u);
   assert.doesNotMatch(privacy, /href="mailto:contact@becoreops\.com"/u);
 });
 

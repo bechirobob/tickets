@@ -2,9 +2,19 @@ name: Production browser audit
 
 on:
   workflow_run:
-    workflows: ["Deploy to Cloudflare", "Release verified Tickets VPS code"]
+    workflows: ["Deploy to Cloudflare"]
     types: [completed]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      expected_source:
+        description: Exact source just activated by the guarded VPS release
+        required: true
+        type: string
+      activation_required:
+        description: Require the successful VPS activation revision
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -32,6 +42,9 @@ jobs:
       # This separate audit must use the tests belonging to the actual live build.
       - name: Resolve and verify the active production revision
         id: deployed
+        env:
+          ACTIVATED_SHA: ${{ inputs.expected_source || '' }}
+          ACTIVATION_REQUIRED: ${{ inputs.activation_required && 'true' || 'false' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -67,6 +80,9 @@ jobs:
               raise SystemExit("Production revision must be an exact full commit SHA")
           if health.get("revision") != revision:
               raise SystemExit("Health and application revisions do not match")
+          activated = os.environ.get("ACTIVATED_SHA", "")
+          if (os.environ.get("ACTIVATION_REQUIRED") == "true" or activated) and (re.fullmatch(r"[a-f0-9]{40}", activated) is None or revision != activated):
+              raise SystemExit("Production does not match the exact activated source")
           expected = os.environ.get("DEPLOYED_SHA")
           if phase != "resolved" and (not expected or revision != expected):
               raise SystemExit("Production changed during the audit; rerun against the new revision")
