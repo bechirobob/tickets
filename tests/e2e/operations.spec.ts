@@ -829,7 +829,7 @@ for (const scannerPath of ['/scan', '/scan/app?source=scanner-pwa']) test(`gate 
     await page.getByRole('button', { name: 'Check', exact: true }).click();
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
     if (result === 'duplicate') {
-      await expect(page.getByText('This ticket was already checked in.', { exact: true })).toBeVisible();
+      await expect(page.locator('.scan-surface > p').filter({ hasText: /^This ticket was already checked in\.$/ })).toBeVisible();
       await expect(page.getByText('Entry recorded.', { exact: true })).toHaveCount(0);
     }
     if (scannerPath.includes('/scan/app') && (result === 'valid' || result === 'duplicate')) await scannerPreview(page, info, result);
