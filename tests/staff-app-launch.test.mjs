@@ -93,3 +93,34 @@ test('offline navigation chooses staff recovery without removing pending local r
   assert.doesNotMatch(source, /localStorage|indexedDB/);
   assert.match(source, /becore-tickets-shell-v7/);
 });
+
+test('staff launch and offline routes agree while animation excludes staff actions', async () => {
+  const arrivalModule = { exports: {} };
+  runInNewContext(transformSync(await readFile(new URL('../lib/brand-arrival.ts', import.meta.url), 'utf8'), { loader: 'ts', format: 'cjs' }).code,
+    { module: arrivalModule, exports: arrivalModule.exports, URL });
+  const listeners = new Map();
+  runInNewContext(await readFile(new URL('../public/sw.js', import.meta.url), 'utf8'), {
+    URL, self: { location: { origin }, addEventListener: (name, fn) => listeners.set(name, fn) },
+    fetch: async () => { throw Error('offline'); }, caches: { match: async key => key },
+  });
+  const entries = ['/staff', '/admin', '/scan', '/organizer/workspace', '/organizer/analytics', '/organizer/assistant',
+    ...['operations', 'events', 'registrations', 'promoters', 'orders', 'support', 'rooms', 'fees', 'yorkeway-audience',
+      'platform-audience', 'hosts', 'accounts', 'account', 'help'].map(name => `/admin/${name}`)];
+  const actions = ['/staff/install', '/admin/login', '/admin/orders/order-1', '/scan/history',
+    '/organizer/workspace/event-1', '/organizer/activate', '/organizer/team', '/organizer/team/member-1'];
+  const publicPaths = ['/events', '/my-nights', '/organizer', '/organizer/submit', '/staffing', '/administrator',
+    '/scanner', '/organizer/workspaces', '/organizer/analytics-extra', '/organizer/assistants', '/organizer/activate-now', '/organizer/teams'];
+  for (const [paths, staff, animated] of [[entries, true, true], [actions, true, false], [publicPaths, false, null]]) {
+    for (const path of paths.flatMap(path => [path, `${path}/`])) {
+      const href = `${origin}${path}?source=staff-pwa`;
+      assert.equal(windowFixture(`${path}?source=staff-pwa`).root.dataset.staffApp === 'true', staff, `launch: ${path}`);
+      assert.equal(windowFixture(path, { saved: true }).replacements.length === 0, staff, `restore: ${path}`);
+      let response;
+      listeners.get('fetch')({ request: { url: href, method: 'GET', mode: 'navigate' }, respondWith: value => { response = value; } });
+      assert.equal(await response, staff ? '/offline-staff.html' : '/offline-ticket', `offline: ${path}`);
+      if (staff) {
+        assert.equal(arrivalModule.exports.eligibleArrivalEntry({ href, navigationHref: href, navigationType: 'navigate', referrer: '' }), animated, `animation: ${path}`);
+      }
+    }
+  }
+});
