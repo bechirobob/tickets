@@ -57,7 +57,7 @@ jobs:
           with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
               tar.extractall(stage, filter='data')
           PY
-      - name: Compare authenticated historical evidence and still run the suite
+      - name: Compare authenticated evidence and run the full suite
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -67,17 +67,28 @@ jobs:
           python3 .github/scripts/operator-evidence-shadow.py \
             --checkout "$RUNNER_TEMP/shadow-source" --stage "$RUNNER_TEMP/shadow-operator" \
             --source "$SOURCE_SHA" --operator "$BECORE_TRUSTED_BASE" --expected-active "$EXPECTED_ACTIVE" \
-            --reference-run 40968104080 --output "$RUNNER_TEMP/operator-shadow.json"
+            --experiment --output "$RUNNER_TEMP/operator-shadow.json" \
+            --receipt-output "$RUNNER_TEMP/receipt.json"
           cat "$RUNNER_TEMP/operator-shadow.json"
       - name: Require actual suite execution
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, subprocess
           from pathlib import Path
           report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'operator-shadow.json').read_text())
           assert report['mode'] == 'shadow' and report['testsSkipped'] is False and report['suiteExitCode'] == 0
-          # This historical run predates receipt publication. Its authenticated
-          # missing-artifact response must take the normal execution path.
-          assert report['comparison'] == 'unavailable-or-mismatch'
-          assert report['reason'] == 'Missing or ambiguous receipt artifact'
+          git = lambda revision: subprocess.check_output(['git', 'rev-parse', revision], text=True).strip()
+          # A second push with identical experiment bytes is the readback run.
+          # It must authenticate a completed prior run, not merely fall back.
+          if git('HEAD^{tree}') == git('HEAD^1^{tree}'):
+              assert report['comparison'] == 'match', report
+          else:
+              assert report['comparison'] in ('match', 'unavailable-or-mismatch'), report
           PY
+      - name: Publish experiment receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: operator-shadow-experiment-receipt-v1
+          path: ${{ runner.temp }}/receipt.json
+          if-no-files-found: error
+          retention-days: 1

@@ -20,6 +20,8 @@ class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.expected = {'source': 'a' * 40, 'operator': 'b' * 40, 'expectedActive': 'c' * 40,
                          'inventory': {'ops/vps/test_code_release.py': ['100644', 'd' * 40]},
+                         'sourceTree': 'e' * 40, 'workflowBlob': 'f' * 40, 'observerDigest': '0' * 64,
+                         'main': '1' * 40, 'workingDirectory': 'source', 'suite': ['unittest', 'discover'],
                          'layout': 'staged', 'environment': {'imageOS': 'ubuntu24', 'imageVersion': 'reviewed-image'}}
         self.run = {'id': 12, 'run_attempt': 1, 'status': 'completed', 'conclusion': 'success',
                     'repository': {'full_name': shadow.REPOSITORY}, 'head_repository': {'full_name': shadow.REPOSITORY},
@@ -147,8 +149,106 @@ class EvidenceTests(unittest.TestCase):
         self.json = changing
         self.check()
 
+    def experiment(self):
+        head = '9' * 40
+        self.expected['experiment'] = {'tree': '8' * 40, 'workflowBlob': '7' * 40}
+        self.run.update(path=shadow.EXPERIMENT_WORKFLOW, event='push',
+                        head_branch=shadow.EXPERIMENT_BRANCH, head_sha=head)
+        job = self.jobs['jobs'][0]
+        job.update(name='historical_shadow', head_sha=head)
+        job['steps'] = [{'name': name, 'status': 'completed', 'conclusion': 'success'} for name in (
+            'Compare authenticated evidence and run the full suite', 'Require actual suite execution',
+            'Publish experiment receipt')]
+        self.artifact.update(name=shadow.EXPERIMENT_ARTIFACT, workflow_run={'id': 12, 'head_sha': head})
+        self.receipt['context'] = copy.deepcopy(self.expected)
+        self.repack()
+        return head
+
+    def test_experiment_receipt_matches_only_explicit_experiment_profile(self):
+        head = self.experiment()
+        result = shadow.shadow(self, 12, self.expected, 1100, self.execute, head)
+        self.assertEqual(result['comparison'], 'match')
+        self.assertEqual(self.calls, 1)
+        self.assertFalse(result['testsSkipped'])
+        self.calls = 0
+        self.check()  # Actual-release profile must reject experiment evidence.
+
+    def test_experiment_producer_and_context_mismatches_still_execute(self):
+        for mutation in ('workflow', 'branch', 'head', 'attempt', 'tree', 'observer', 'publisher'):
+            with self.subTest(mutation=mutation):
+                self.setUp(); head = self.experiment()
+                if mutation == 'workflow': self.run['path'] = shadow.WORKFLOW
+                elif mutation == 'branch': self.run['head_branch'] = 'main'
+                elif mutation == 'head': self.run['head_sha'] = '0' * 40
+                elif mutation == 'attempt': self.receipt['attempt'] = 2
+                elif mutation == 'tree': self.receipt['context']['experiment']['tree'] = '0' * 40
+                elif mutation == 'observer': self.receipt['context']['experiment']['workflowBlob'] = '0' * 40
+                else: self.jobs['jobs'][0]['steps'][-1]['conclusion'] = 'skipped'
+                self.repack()
+                result = shadow.shadow(self, 12, self.expected, 1100, self.execute, head)
+                self.assertEqual(result['comparison'], 'unavailable-or-mismatch')
+                self.assertEqual(self.calls, 1)
+                self.assertFalse(result['testsSkipped'])
+
 
 class ContextTests(unittest.TestCase):
+    def test_experiment_publishes_receipt_only_after_success_and_unchanged_identity(self):
+        identity = {'tree': '8' * 40, 'workflowBlob': '7' * 40}
+        for exit_code, changed in ((0, False), (1, False), (0, True)):
+            with self.subTest(exit_code=exit_code, changed=changed), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                expected = {'suite': ['unittest', 'discover', '-s', '<stage>/ops/vps', '-p', 'test_*.py']}
+                argv = ['shadow', '--checkout', str(root/'repo'), '--stage', str(root/'stage'),
+                        '--source', 'a'*40, '--operator', 'b'*40, '--expected-active', 'c'*40,
+                        '--experiment', '--output', str(root/'report.json'), '--receipt-output', str(root/'receipt.json')]
+                identities = [identity, {'tree': 'different'} if changed else identity]
+                with patch.object(shadow.sys, 'argv', argv), patch.object(shadow, 'context', side_effect=lambda *args: copy.deepcopy(expected)), \
+                     patch.object(shadow, 'experiment_context', side_effect=identities), \
+                     patch.object(shadow, 'experiment_reference', return_value=(0, None)), \
+                     patch.dict(shadow.os.environ, GITHUB_RUN_ID='12', GITHUB_RUN_ATTEMPT='2'), \
+                     patch.object(shadow.subprocess, 'run', return_value=subprocess.CompletedProcess([], exit_code)):
+                    if changed:
+                        with self.assertRaisesRegex(ValueError, 'changed during tests'): shadow.main()
+                    else: self.assertEqual(shadow.main(), exit_code)
+                receipt = root/'receipt.json'
+                self.assertEqual(receipt.exists(), exit_code == 0 and not changed)
+                if receipt.exists():
+                    data = json.loads(receipt.read_text())
+                    self.assertEqual((data['run'], data['attempt']), (12, 2))
+                    self.assertEqual(data['context']['experiment'], identity)
+                    self.assertTrue(data['suitePassed'])
+
+    def test_experiment_reference_requires_identical_tree_and_ancestry(self):
+        class API:
+            def json(self, path):
+                return {'workflow_runs': [{'id': 12, 'head_sha': 'a'*40}]}
+        for tree, ancestor in (('tree', True), ('different', True), ('tree', False)):
+            with self.subTest(tree=tree, ancestor=ancestor):
+                values = [tree.encode(), b'' if ancestor else subprocess.CalledProcessError(1, ['git'])]
+                with patch.object(shadow, 'command', side_effect=values):
+                    result = shadow.experiment_reference(API(), Path('/fixture'), {'tree': 'tree'})
+                self.assertEqual(result, (12, 'a'*40) if tree == 'tree' and ancestor else (0, None))
+
+    def test_experiment_identity_requires_clean_exact_branch_push(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.DEVNULL).decode().strip()
+            git('init', '-q'); git('config', 'user.email', 'fixture@example.invalid'); git('config', 'user.name', 'Fixture')
+            workflow = root/shadow.EXPERIMENT_WORKFLOW
+            workflow.parent.mkdir(parents=True); workflow.write_text('fixture\n')
+            git('add', '.'); git('commit', '-qm', 'fixture')
+            env = {'GITHUB_REPOSITORY': shadow.REPOSITORY, 'GITHUB_EVENT_NAME': 'push',
+                   'GITHUB_REF': 'refs/heads/'+shadow.EXPERIMENT_BRANCH, 'GITHUB_SHA': git('rev-parse', 'HEAD')}
+            with patch.dict(shadow.os.environ, env):
+                self.assertEqual(shadow.experiment_context(root)['tree'], git('rev-parse', 'HEAD^{tree}'))
+                for key, value in (('GITHUB_REPOSITORY', 'other/repo'), ('GITHUB_EVENT_NAME', 'pull_request'),
+                                   ('GITHUB_REF', 'refs/heads/main'), ('GITHUB_SHA', 'a'*40)):
+                    with self.subTest(key=key), patch.dict(shadow.os.environ, {key: value}):
+                        with self.assertRaises(ValueError): shadow.experiment_context(root)
+                workflow.write_text('unreviewed\n')
+                with self.assertRaises(ValueError): shadow.experiment_context(root)
+
     def test_cli_runs_staged_tests_from_source_without_api_tokens(self):
         class Unavailable:
             def json(self, path):
@@ -169,6 +269,7 @@ class ContextTests(unittest.TestCase):
             self.assertEqual(kwargs['cwd'], root / 'repo')
             self.assertNotIn('GH_TOKEN', kwargs['env'])
             self.assertNotIn('GITHUB_TOKEN', kwargs['env'])
+            self.assertEqual(kwargs['env']['PYTHONDONTWRITEBYTECODE'], '1')
 
     def test_context_checks_real_git_stage_bytes_modes_and_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
