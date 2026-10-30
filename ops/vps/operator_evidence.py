@@ -18,6 +18,7 @@ WORKFLOW = '.github/workflows/tickets-code-release.yml'
 ARTIFACT = 'operator-regression-receipt-v2'
 VERIFIER = 'ops/vps/operator_evidence.py'
 LIMIT = 262144
+MAX_RECEIPT_AGE = 7 * 24 * 60 * 60
 
 
 def require(condition, message):
@@ -38,6 +39,16 @@ def decode(raw):
 
 def command(args, cwd=None):
     return subprocess.run(args, cwd=cwd, check=True, capture_output=True, timeout=60).stdout
+
+
+def tool_versions():
+    versions = {}
+    for name, args in {'node': ['node', '--version'], 'npm': ['npm', '--version'], 'go': ['go', 'version']}.items():
+        try:
+            versions[name] = command(args).decode().strip() or None
+        except (OSError, UnicodeError, subprocess.SubprocessError):
+            versions[name] = None
+    return versions
 
 
 def context(checkout, stage, source, operator, expected_active, workflow_source):
@@ -90,7 +101,7 @@ def context(checkout, stage, source, operator, expected_active, workflow_source)
             'inventory': {name: list(value) for name, value in sorted(actual.items())},
             'workingDirectory': 'source',
             'suite': ['unittest', 'discover', '-s', '<stage>/ops/vps', '-p', 'test_*.py'],
-            'environment': {'python': sys.version, 'git': git('--version'), 'system': platform.system(),
+            'environment': {'tools': tool_versions(), 'python': sys.version, 'git': git('--version'), 'system': platform.system(),
                             'machine': platform.machine(), 'imageOS': os.environ.get('ImageOS'),
                             'imageVersion': os.environ.get('ImageVersion'),
                             'locale': {key: os.environ.get(key) for key in ('LANG', 'LC_ALL', 'TZ', 'PYTHONHASHSEED')}}}
@@ -149,10 +160,12 @@ def compare(api, run_id, expected, now):
     require(type(receipt['schema']) is int and receipt['schema'] == 2
             and type(receipt['run']) is int and receipt['run'] == run_id
             and type(receipt['attempt']) is int and receipt['attempt'] == attempt, 'Receipt attempt differs')
-    require(type(receipt['created']) is int and 0 <= now - receipt['created'] <= 86400, 'Receipt is stale')
+    require(type(receipt['created']) is int and 0 <= now - receipt['created'] <= MAX_RECEIPT_AGE, 'Receipt is stale')
     require(receipt['suitePassed'] is True and receipt['context'] == expected, 'Test inputs or outcome differ')
     require(type(receipt['durationSeconds']) in (int, float) and 0 < receipt['durationSeconds'] < 1200, 'Invalid suite duration')
     require(expected['environment']['imageOS'] and expected['environment']['imageVersion'], 'Runner image is not recorded')
+    require(all(expected['environment'].get('tools', {}).get(name) for name in ('node', 'npm', 'go')),
+            'Required tool version is not recorded')
     require(api.json(f'{base}/runs/{run_id}') == run, 'Producer changed during comparison')
     return {'comparison': 'match', 'referenceRun': run_id, 'referenceAttempt': attempt, 'artifact': artifact['id'], 'verifiedSuiteSeconds': receipt['durationSeconds']}
 

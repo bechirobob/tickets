@@ -282,7 +282,7 @@ jobs:
           name: operator-regression-receipt-v2
           path: ${{ runner.temp }}/tickets-operator-evidence/receipt.json
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   inspect_failure:
     # This branch is mutually exclusive with release; no application checkout or apply.
