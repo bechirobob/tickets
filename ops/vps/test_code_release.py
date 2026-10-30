@@ -3328,9 +3328,9 @@ def audit_source_family(root):
 STAFF_APP_TEST_FILE = Path(__file__).resolve()
 HYGIENE_DEPLOY_BLOB = '9e656e4f618a4fc335844b1bee7a864850c134c2'
 EVIDENCE_TEST_GROUP = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768ac8305e1355d86834',
- '.github/workflows/tickets-code-release.yml': '1a1ac9706aed643f09e9c259fd40ffcc4a7cd127',
- 'ops/vps/operator_evidence.py': '6e4096a2269609af4b5daf7d1da6f64b8fee1a22',
- 'ops/vps/test_operator_evidence.py': '36ce8fd23eabfa43096c71bd0369d9567ccf9bed',
+ '.github/workflows/tickets-code-release.yml': 'f7877dec7c650e4a14600c3c24347444e38aefed',
+ 'ops/vps/operator_evidence.py': 'c13b14b53d9310c71b9ca99b23fbf1b072471c00',
+ 'ops/vps/test_operator_evidence.py': '9c2472a91d2709354fab1a3b31c4a50f37f2d6de',
  'ops/vps/test_yorkeway_release.py': '003d1eed8fe86481b1558ceaa53f853e8108bcc8',
  'tests/browser-environment.test.mjs': '75a02ca8dc1f1b511f43cf2d6a5290b573bdeb91'}
 EVIDENCE_TEST_ADDITIONS = {'ops/vps/operator_evidence.py', 'ops/vps/test_operator_evidence.py'}

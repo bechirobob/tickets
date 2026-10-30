@@ -18,7 +18,7 @@ SPEC.loader.exec_module(shadow)
 
 BASE_WORKFLOW_BLOB = 'd1f3bffa33b6f2d13cbdf4675862071d94346817'
 DEPLOY_BLOB = '0bf4539141356389a96f768ac8305e1355d86834'
-WORKFLOW_BLOB = '1a1ac9706aed643f09e9c259fd40ffcc4a7cd127'
+WORKFLOW_BLOB = 'f7877dec7c650e4a14600c3c24347444e38aefed'
 WORKFLOW_REVERSE = [(976, 1409, b''),
  (3728, 3872, b''),
  (7734, 7834, b''),
@@ -66,7 +66,7 @@ class EvidenceTests(unittest.TestCase):
         self.expected = {'source': 'a' * 40, 'workflowSource': 'a' * 40, 'workflowBlob': '1'*40,
                          'sourceTree': '2'*40, 'observerDigest': '3'*64, 'releaseInputs': {'RUNTIME_RUN':'123'}, 'operator': 'b' * 40, 'expectedActive': 'c' * 40,
                          'inventory': {'ops/vps/test_code_release.py': ['100644', 'd' * 40]},
-                         'layout': 'staged', 'environment': {'imageOS': 'ubuntu24', 'imageVersion': 'reviewed-image'}}
+                         'layout': 'staged', 'environment': {'tools': {'node': 'v22.fixture', 'npm': '10.fixture', 'go': 'go version fixture'}, 'imageOS': 'ubuntu24', 'imageVersion': 'reviewed-image'}}
         self.run = {'id': 12, 'run_attempt': 1, 'status': 'completed', 'conclusion': 'success',
                     'repository': {'full_name': shadow.REPOSITORY}, 'head_repository': {'full_name': shadow.REPOSITORY},
                     'path': shadow.WORKFLOW, 'event': 'workflow_dispatch', 'head_branch': 'main', 'head_sha': 'a' * 40}
@@ -115,6 +115,37 @@ class EvidenceTests(unittest.TestCase):
     def test_matching_evidence_reuses_only_in_reuse_mode(self):
         self.check('match')
 
+    def test_seven_day_age_boundary_and_future_timestamps(self):
+        for age in (-1, 0, 86400, 86401, 518400, 604799, 604800, 604801):
+            with self.subTest(age=age):
+                self.setUp()
+                result = shadow.verify_or_run(self, 12, self.expected, 1000 + age, self.execute, 'reuse')
+                accepted = 0 <= age <= 604800
+                self.assertEqual(result['testsSkipped'], accepted)
+                self.assertEqual(self.calls, 0 if accepted else 1)
+
+    def test_each_tool_change_or_missing_version_falls_back_after_six_days(self):
+        for name in ('node', 'npm', 'go'):
+            for value in ('changed', None, ''):
+                with self.subTest(name=name, value=value):
+                    self.setUp()
+                    self.expected['environment']['tools'][name] = value
+                    if not value:
+                        self.receipt['context'] = copy.deepcopy(self.expected)
+                        self.repack()
+                    result = shadow.verify_or_run(self, 12, self.expected, 1000 + 518400, self.execute, 'reuse')
+                    self.assertFalse(result['testsSkipped'])
+                    self.assertEqual(self.calls, 1)
+
+    def test_tool_version_capture_and_unavailable_tools(self):
+        with patch.object(shadow, 'command', side_effect=[b'v22\n', b'10\n', b'go version fixture\n']) as command:
+            self.assertEqual(shadow.tool_versions(), {'node': 'v22', 'npm': '10', 'go': 'go version fixture'})
+            self.assertEqual([call.args[0] for call in command.call_args_list],
+                             [['node', '--version'], ['npm', '--version'], ['go', 'version']])
+        for error in (FileNotFoundError(), subprocess.TimeoutExpired('tool', 60), subprocess.CalledProcessError(1, 'tool')):
+            with self.subTest(error=type(error).__name__), patch.object(shadow, 'command', side_effect=error):
+                self.assertEqual(shadow.tool_versions(), dict.fromkeys(('node', 'npm', 'go')))
+
     def test_suite_failure_propagates_despite_match(self):
         result = shadow.verify_or_run(self, 12, self.expected, 1100, lambda: 7, 'shadow')
         self.assertEqual(result['suiteExitCode'], 7)
@@ -133,7 +164,7 @@ class EvidenceTests(unittest.TestCase):
                 self.setUp(); self.receipt['context'][key] = 'changed'; self.repack(); self.check()
 
     def test_receipt_scope_age_and_success_mutations_fall_back(self):
-        for key, value in [('schema', 3), ('durationSeconds', 0), ('durationSeconds', 1300), ('run', 13), ('attempt', 2), ('created', -90000), ('created', 1200), ('suitePassed', False), ('extra', True)]:
+        for key, value in [('schema', 3), ('durationSeconds', 0), ('durationSeconds', 1300), ('run', 13), ('attempt', 2), ('created', -604800), ('created', 1200), ('suitePassed', False), ('extra', True)]:
             with self.subTest(key=key, value=value):
                 self.setUp(); self.receipt[key] = value; self.repack(); self.check()
 
@@ -211,6 +242,7 @@ class ContextAndWorkflowTests(unittest.TestCase):
         self.assertEqual(restore_workflow(raw+b'changed'), raw+b'changed')
         self.assertIn(b"inputs.verify_only && steps.operator_tests.outputs.executed == 'true'", raw)
         self.assertIn(b'default: shadow', raw)
+        self.assertIn(b'retention-days: 7', raw)
 
     def test_context_checks_real_git_inputs_and_executing_verifier(self):
         with tempfile.TemporaryDirectory() as temporary:
