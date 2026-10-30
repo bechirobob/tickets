@@ -4,6 +4,30 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { transformSync } from 'esbuild';
 
+async function scannerServerPage(session) {
+  const source = (await readFile(new URL('../app/scan/page.tsx', import.meta.url), 'utf8'))
+    .replace(/^import .*;\n/gm, '').replace('export default async function', 'async function')
+    .replace('export const dynamic', 'const dynamic');
+  const code = transformSync(source, { loader: 'tsx' }).code;
+  const scope = {
+    headers: async () => ({ get: () => 'synthetic-session' }), readAdminSession: async () => session,
+    hasPermission: value => !value.mustChangePassword && value.role === 'gate',
+    redirect: path => { throw Object.assign(new Error('redirect'), { path }); },
+    requireAdminSession: async () => { throw new Error('Scanner access must not be granted'); },
+    React: { createElement: (type, props, ...children) => ({ type, props, children }) },
+    ScannerAccount: () => null,
+  };
+  return new Function(...Object.keys(scope), `${code};return ScanPage;`)(...Object.values(scope))({ searchParams: Promise.resolve({}), scannerOnly: true });
+}
+for (const role of ['gate', 'owner', 'organizer']) test(`ordinary browser sends ${role} to required password change before scanner permissions`, async () => {
+  await assert.rejects(scannerServerPage({ role, actor: 'Fixture', mustChangePassword: true }),
+    error => error.path === '/admin/account?source=scanner-pwa');
+});
+test('password-complete account without gate permission still receives access-required screen', async () => {
+  const page = await scannerServerPage({ role: 'organizer', actor: 'Fixture', mustChangePassword: false });
+  assert.match(JSON.stringify(page), /Scanner access required/);
+});
+
 const bootstrapModule = { exports: {} };
 runInNewContext(transformSync(await readFile(new URL('../lib/scanner-app-bootstrap.ts', import.meta.url), 'utf8'), { loader: 'ts', format: 'cjs' }).code, { module: bootstrapModule, exports: bootstrapModule.exports });
 function launch(path, { saved = false, standalone = true, blocked = false } = {}) {
