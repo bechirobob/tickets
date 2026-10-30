@@ -100,7 +100,7 @@ jobs:
         run: node scripts/package-host-brand-previews.mjs
       - name: Preserve candidate host branding for owner visual approval
         if: ${{ !cancelled() && steps.host_brand_evidence.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: host-brand-previews-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
@@ -193,7 +193,7 @@ jobs:
       # Never upload the compiled app, local database, traces, credentials or logs.
       - name: Preserve synthetic consent previews for visual review
         if: ${{ !cancelled() && steps.evidence.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: booking-consent-previews-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
