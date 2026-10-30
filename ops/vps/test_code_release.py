@@ -3322,6 +3322,7 @@ def audit_source_family(root):
 STAFF_APP_TEST_FILE = Path(__file__).resolve()
 HYGIENE_DEPLOY_BLOB = '9e656e4f618a4fc335844b1bee7a864850c134c2'
 HYGIENE_TEST_GROUPS = (
+    {'tests/browser-environment.test.mjs': '5b67757deade96ed9d2ef941ef80526b29185946'},
     {'.github/workflows/deploy.yml': HYGIENE_DEPLOY_BLOB},
     {'.gitignore': 'dc6771e6c281bff03cf033e2d09cddccced236f1',
      'tests/staff-app-launch.test.mjs': '48d034a0c78a0813679eff35f4a1766e816cf6e2'},
