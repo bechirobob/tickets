@@ -2983,6 +2983,9 @@ DOWNLOAD_RETRY_STAGED_BASE.update({name: value for name, value in TOOL_MAINTENAN
 
 def download_retry_historical_workflow(name, raw):
     """Reverse only an exact reviewed workflow blob, never mutated input."""
+    if name == '.github/workflows/deploy.yml' and release.hashlib.sha1(
+            b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == HYGIENE_DEPLOY_BLOB:
+        raw = raw.replace(b"      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n", b'', 1)
     raw = production_audit_historical_workflow(name, raw)
     digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
     expected = DOWNLOAD_RETRY_OUTPUTS.get(name)
@@ -3317,6 +3320,24 @@ def audit_source_family(root):
 
 
 STAFF_APP_TEST_FILE = Path(__file__).resolve()
+HYGIENE_DEPLOY_BLOB = '9e656e4f618a4fc335844b1bee7a864850c134c2'
+HYGIENE_TEST_GROUPS = (
+    {'.github/workflows/deploy.yml': HYGIENE_DEPLOY_BLOB},
+    {'.gitignore': 'dc6771e6c281bff03cf033e2d09cddccced236f1',
+     'tests/staff-app-launch.test.mjs': '48d034a0c78a0813679eff35f4a1766e816cf6e2'},
+)
+
+
+def hygiene_test_manifest(root, manifest):
+    """Accept only the reviewed tooling bytes in test fixtures, not deployment admission."""
+    for group in HYGIENE_TEST_GROUPS:
+        if any((root / name).is_file() and not (root / name).is_symlink()
+               and release.hashlib.sha1(b'blob ' + str((root / name).stat().st_size).encode()
+                                        + b'\0' + (root / name).read_bytes()).hexdigest() == blob
+               for name, blob in group.items()):
+            manifest.update({name: ('100644', blob) for name, blob in group.items() if name in manifest})
+
+
 STAFF_APP_OPERATOR_BLOB = '0ee817f53862f1523383b067f8c633b6658a681e'
 STAFF_APP_CONTROL_PINS = {
     'ops/vps/code-release.py': ('100644', STAFF_APP_OPERATOR_BLOB),
@@ -3356,6 +3377,7 @@ def staff_app_source_family(root):
             manifest.update(STAFF_APP_CONTROL_PINS)
             if application:
                 manifest.update({name: ('100644', blob) for name, blob in release.STAFF_APP_APPLICATION_BLOBS.items()})
+            hygiene_test_manifest(root, manifest)
             tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
             untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
             if tracked != set(manifest) or untracked:
@@ -3381,6 +3403,7 @@ def staff_app_source_family(root):
         if application:
             manifest.update({name: ('100644', blob) for name, blob in release.STAFF_APP_APPLICATION_BLOBS.items()
                              if name in manifest})
+        hygiene_test_manifest(root, manifest)
         validate_staged_inventory(root, manifest)
     for name, (mode, expected) in manifest.items():
         path = root / name
@@ -15479,6 +15502,33 @@ class StaffAppAdmissionTests(unittest.TestCase):
                 self.git('update-ref', 'refs/remotes/origin/main', self.live)
                 with self.assertRaises(subprocess.CalledProcessError): release.verify_ci(args)
 
+
+
+class HygieneDeployTriggerTests(unittest.TestCase):
+    def test_only_exact_hygiene_paths_are_excluded_from_deploy(self):
+        from fnmatch import fnmatchcase
+        raw = (Path(__file__).resolve().parents[2] / '.github/workflows/deploy.yml').read_bytes()
+        digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+        self.assertEqual(digest(raw), HYGIENE_DEPLOY_BLOB)
+        added = b"      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n"
+        self.assertEqual(raw.count(added), 1)
+        self.assertEqual(digest(raw.replace(added, b'', 1)), 'f9be91c0080a8f25bfdb8509ed02ddfc25ff7f70')
+        section = raw.decode().split('    paths-ignore:\n', 1)[1].split('  workflow_dispatch:', 1)[0]
+        ignored = re.findall(r"^      - '([^']+)'$", section, re.M)
+        triggers = lambda paths: any(not any(fnmatchcase(path, pattern) for pattern in ignored) for path in paths)
+        hygiene = ['.gitignore', 'tests/staff-app-launch.test.mjs', '.github/workflows/deploy.yml', 'ops/vps/test_code_release.py']
+        self.assertFalse(triggers(hygiene))
+        for path in ['app/staff/page.tsx', 'lib/staff-app-bootstrap.ts', 'public/sw.js', 'runtime/server.ts',
+                     'package.json', 'package-lock.json', 'drizzle/next.sql', 'tests/brand-arrival.test.mjs',
+                     'tests/staff-app-launch.test.mjs.extra', 'nested/.gitignore']:
+            self.assertTrue(triggers([*hygiene, path]), path)
+        self.assertIn(b'  workflow_dispatch:\n', raw)
+
+    def test_historical_reconstruction_does_not_accept_mutated_workflows(self):
+        name = '.github/workflows/deploy.yml'
+        raw = (Path(__file__).resolve().parents[2] / name).read_bytes()
+        for changed in [raw + b'# changed\n', raw.replace(b"'tests/staff-app-launch.test.mjs'", b"'tests/**'")]:
+            self.assertEqual(download_retry_historical_workflow(name, changed), changed)
 
 
 if __name__ == "__main__":
