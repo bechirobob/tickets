@@ -17,6 +17,7 @@ SPEC.loader.exec_module(shadow)
 
 
 BASE_WORKFLOW_BLOB = 'd1f3bffa33b6f2d13cbdf4675862071d94346817'
+DEPLOY_BLOB = '0bf4539141356389a96f768ac8305e1355d86834'
 WORKFLOW_BLOB = '1a1ac9706aed643f09e9c259fd40ffcc4a7cd127'
 WORKFLOW_REVERSE = [(976, 1409, b''),
  (3728, 3872, b''),
@@ -39,6 +40,15 @@ WORKFLOW_REVERSE = [(976, 1409, b''),
  (8547, 8560, b''),
  (8561, 8594, b"y'"),
  (16801, 17220, b'')]
+
+def restore_deploy(raw):
+    digest = lambda value: hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+    if digest(raw) == DEPLOY_BLOB:
+        raw = raw.replace(b"      - 'ops/vps/operator_evidence.py'\n      - 'ops/vps/test_operator_evidence.py'\n", b'', 1)
+        if digest(raw) != '9e656e4f618a4fc335844b1bee7a864850c134c2':
+            raise AssertionError('Evidence deploy filter changed other bytes')
+    return raw
+
 
 def restore_workflow(raw):
     digest = lambda value: hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
@@ -186,6 +196,13 @@ class EvidenceTests(unittest.TestCase):
 
 
 class ContextAndWorkflowTests(unittest.TestCase):
+    def test_only_new_tooling_files_are_excluded_from_application_deployment(self):
+        raw = (Path(__file__).resolve().parents[2]/'.github/workflows/deploy.yml').read_bytes()
+        digest = lambda value: hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+        self.assertEqual(digest(raw), DEPLOY_BLOB)
+        self.assertEqual(digest(restore_deploy(raw)), '9e656e4f618a4fc335844b1bee7a864850c134c2')
+        self.assertEqual(restore_deploy(raw+b'changed'), raw+b'changed')
+
     def test_workflow_preserves_all_other_release_steps_and_permissions(self):
         raw = (Path(__file__).resolve().parents[2]/shadow.WORKFLOW).read_bytes()
         digest = lambda value: hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()

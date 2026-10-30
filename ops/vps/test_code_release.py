@@ -2983,6 +2983,9 @@ DOWNLOAD_RETRY_STAGED_BASE.update({name: value for name, value in TOOL_MAINTENAN
 
 def download_retry_historical_workflow(name, raw):
     """Reverse only an exact reviewed workflow blob, never mutated input."""
+    if name == '.github/workflows/deploy.yml':
+        from test_operator_evidence import restore_deploy
+        raw = restore_deploy(raw)
     if name == '.github/workflows/deploy.yml' and release.hashlib.sha1(
             b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == HYGIENE_DEPLOY_BLOB:
         raw = raw.replace(b"      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n", b'', 1)
@@ -3324,9 +3327,11 @@ def audit_source_family(root):
 
 STAFF_APP_TEST_FILE = Path(__file__).resolve()
 HYGIENE_DEPLOY_BLOB = '9e656e4f618a4fc335844b1bee7a864850c134c2'
-EVIDENCE_TEST_GROUP = {'.github/workflows/tickets-code-release.yml': '1a1ac9706aed643f09e9c259fd40ffcc4a7cd127',
+EVIDENCE_TEST_GROUP = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768ac8305e1355d86834',
+ '.github/workflows/tickets-code-release.yml': '1a1ac9706aed643f09e9c259fd40ffcc4a7cd127',
  'ops/vps/operator_evidence.py': '6e4096a2269609af4b5daf7d1da6f64b8fee1a22',
- 'ops/vps/test_operator_evidence.py': '4dcdc8d1e2c1fb564150aa61aed9d5b4e7e66e18'}
+ 'ops/vps/test_operator_evidence.py': '36ce8fd23eabfa43096c71bd0369d9567ccf9bed',
+ 'tests/browser-environment.test.mjs': '75a02ca8dc1f1b511f43cf2d6a5290b573bdeb91'}
 EVIDENCE_TEST_ADDITIONS = {'ops/vps/operator_evidence.py', 'ops/vps/test_operator_evidence.py'}
 HYGIENE_TEST_GROUPS = (
     EVIDENCE_TEST_GROUP,
@@ -15518,6 +15523,8 @@ class HygieneDeployTriggerTests(unittest.TestCase):
     def test_only_exact_hygiene_paths_are_excluded_from_deploy(self):
         from fnmatch import fnmatchcase
         raw = (Path(__file__).resolve().parents[2] / '.github/workflows/deploy.yml').read_bytes()
+        from test_operator_evidence import restore_deploy
+        raw = restore_deploy(raw)
         digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
         self.assertEqual(digest(raw), HYGIENE_DEPLOY_BLOB)
         added = b"      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n"
