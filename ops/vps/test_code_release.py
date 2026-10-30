@@ -3331,6 +3331,7 @@ EVIDENCE_TEST_GROUP = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768a
  '.github/workflows/tickets-code-release.yml': '1a1ac9706aed643f09e9c259fd40ffcc4a7cd127',
  'ops/vps/operator_evidence.py': '6e4096a2269609af4b5daf7d1da6f64b8fee1a22',
  'ops/vps/test_operator_evidence.py': '36ce8fd23eabfa43096c71bd0369d9567ccf9bed',
+ 'ops/vps/test_yorkeway_release.py': '003d1eed8fe86481b1558ceaa53f853e8108bcc8',
  'tests/browser-environment.test.mjs': '75a02ca8dc1f1b511f43cf2d6a5290b573bdeb91'}
 EVIDENCE_TEST_ADDITIONS = {'ops/vps/operator_evidence.py', 'ops/vps/test_operator_evidence.py'}
 HYGIENE_TEST_GROUPS = (
@@ -6311,7 +6312,10 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh run download", text)
         self.assertIn('runtime_release.py" download', text)
         self.assertIn('--attempt "$runtime_attempt"', text)
-        self.assertNotIn("actions/upload-artifact", text)
+        from test_operator_evidence import restore_workflow
+        # Only the exact reviewed test receipt may be uploaded; runtime payloads
+        # still use the attempt-bound public release transport.
+        self.assertNotIn("actions/upload-artifact", restore_workflow(text.encode()).decode())
         self.assertIn("tests/e2e/checkout-preview-retired.spec.ts", text)
 
 
