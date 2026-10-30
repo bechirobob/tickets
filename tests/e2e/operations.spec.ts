@@ -2,9 +2,11 @@ import { expandEveryVisibleDisclosure } from './disclosures.mjs';
 import { expectSegmentedSelection } from "./segmented-control";
 import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { Buffer as NodeBuffer } from 'node:buffer';
 import AxeBuilder from '@axe-core/playwright';
 import { expectVisibleLettering } from './text-visibility';
 import { expect, test, type Page } from './analytics-fixture';
+import type { TestInfo } from '@playwright/test';
 async function openWorkspaceMenu(page: Page) {
  const toggle=page.getByRole('button',{name:'Toggle workspace navigation',exact:true});
  if(await toggle.isVisible() && await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
@@ -16,6 +18,42 @@ async function hostArea(page: Page,name: string) {
 const isolated = existsSync('.wrangler/operations-fixture.json');
 const fixture = isolated ? JSON.parse(readFileSync('.wrangler/operations-fixture.json', 'utf8')) : null;
 test.skip(!isolated, 'Run the isolated Operations fixture and config.');
+
+// Supplemental visual review only: exact local synthetic fixture, fixed views,
+// bounded PNGs. Never exports credentials or alters release-admission evidence.
+const scannerPreviewBytes = new WeakMap<TestInfo, number>();
+async function scannerPreview(page: Page, info: TestInfo, name: 'ready' | 'install' | 'login' | 'valid' | 'duplicate') {
+  const url = new URL(page.url());
+  const result = name === 'valid' || name === 'duplicate';
+  const expectedTitle = result
+    ? 'gate camera survives scan results, repeated starts and camera failure at /scan/app?source=scanner-pwa'
+    : 'scanner install opens only the scanner and preserves its identity after reopening and expiry';
+  if (!isolated || fixture?.email !== 'operations-audit@example.com' || url.origin !== 'https://127.0.0.1:8791'
+    || url.pathname !== (name === 'install' ? '/scan/install' : '/scan/app') || info.title !== expectedTitle
+    || !['desktop-chromium', 'mobile-chromium', 'mobile-webkit'].includes(info.project.name)) throw new Error('Scanner preview refuses a non-fixture view');
+  if (name === 'login') {
+    await expect(page.getByLabel('Work email')).toHaveValue('');
+    await expect(page.getByLabel('Password', { exact: true })).toHaveValue('');
+  }
+  if (name === 'valid') await expect(page.getByText('Camera fixture', { exact: false })).toBeVisible();
+  if (name === 'duplicate') await expect(page.getByRole('heading', { name: 'Already admitted', exact: true })).toBeVisible();
+  const png = NodeBuffer.from(await page.locator('main').screenshot({ path: info.outputPath(`scanner-${name}.png`), scale: 'css' }));
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+  const total = (scannerPreviewBytes.get(info) ?? 0) + png.length;
+  scannerPreviewBytes.set(info, total);
+  if (!png.subarray(0, 8).equals(NodeBuffer.from([137,80,78,71,13,10,26,10])) || png.length > 512 * 1024
+    || total > 1024 * 1024 || width > 1600 || height > 2200 || width * height > 2_000_000) throw new Error('Scanner preview exceeds PNG bounds');
+  const source = process.env.BECORE_RELEASE_SHA;
+  if (!source && !process.env.CI) return;
+  if (!process.env.CI || !source || !/^[a-f0-9]{40}$/u.test(source)) throw new Error('Scanner preview needs exact CI source identity');
+  const identity = { source, project: info.project.name, fixture: 'scanner-local-operations-v1', name, sha256: createHash('sha256').update(png).digest('hex') };
+  const emit = (record: object) => console.log(`BECORE_SCANNER_PREVIEW_V1 ${JSON.stringify({ ...identity, ...record })}`);
+  const chunks = Math.ceil(png.length / 3072);
+  emit({ type: 'begin', bytes: png.length, chunks, width, height });
+  for (let index = 0; index < chunks; index++) emit({ type: 'chunk', index, data: png.subarray(index * 3072, (index + 1) * 3072).toString('base64') });
+  emit({ type: 'end', bytes: png.length, chunks });
+}
+
 test.beforeEach(async ({ context, baseURL }) => {
   test.skip(!baseURL?.endsWith(':8791'), 'Isolated local Operations server only.');
   await context.addCookies([{ name: 'bct_staff', value: fixture.token, url: baseURL!, httpOnly: true, sameSite: 'Strict' }]);
@@ -740,7 +778,7 @@ test('owner reviews a host application without an event',async({page},info)=>{
  await expect(page.getByRole('link',{name:'Manage account access'})).toBeVisible();
 });
 
-for (const scannerPath of ['/scan', '/scan/app?source=scanner-pwa']) test(`gate camera survives scan results, repeated starts and camera failure at ${scannerPath}`,  async ({ page }) => {
+for (const scannerPath of ['/scan', '/scan/app?source=scanner-pwa']) test(`gate camera survives scan results, repeated starts and camera failure at ${scannerPath}`,  async ({ page }, info) => {
   await page.addInitScript(() => {
     const state = { denied: false, streams: [] as MediaStream[] };
     Object.assign(window, { gateCameraTest: state });
@@ -790,6 +828,7 @@ for (const scannerPath of ['/scan', '/scan/app?source=scanner-pwa']) test(`gate 
     await page.getByPlaceholder('BCT-XXXX-XXXX-XXXX-XXXX').fill('BCT-ABCD-EFGH-IJKL-MNOP');
     await page.getByRole('button', { name: 'Check', exact: true }).click();
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    if (scannerPath.includes('/scan/app') && (result === 'valid' || result === 'duplicate')) await scannerPreview(page, info, result);
     expect(await page.evaluate(() => (window as unknown as { originalGateVideo: HTMLVideoElement }).originalGateVideo.isConnected)).toBe(true);
     if (holdStats) await expect.poll(() => Boolean(statsGate.release)).toBe(true);
     await page.getByRole('button', { name: 'Scan next ticket', exact: true }).click();
@@ -1527,7 +1566,7 @@ test('scanner install opens only the scanner and preserves its identity after re
   await page.goto('/my-nights');
   await expect(page).toHaveURL(/\/scan\/app\?source=scanner-pwa/);
   await expect(page.locator('.scanner-app')).toBeVisible();
-  await page.screenshot({ path: info.outputPath('scanner-app.png'), fullPage: true });
+  await scannerPreview(page, info, 'ready');
   const violations = (await new AxeBuilder({ page }).analyze()).violations;
   expect(violations).toEqual([]);
   await context.clearCookies();
@@ -1537,4 +1576,26 @@ test('scanner install opens only the scanner and preserves its identity after re
   await expect(page).toHaveURL(/\/scan\/app/);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Sign in to scan tickets' })).toBeVisible();
+  await scannerPreview(page, info, 'login');
+  await page.goto('/scan/install');
+  await expect(page.getByRole('heading', { name: 'BeCore Scanner', exact: true })).toBeVisible();
+  await scannerPreview(page, info, 'install');
+});
+
+test('installed management opens scanner in a separate window and retains its workspace', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  await page.goto('/staff?source=staff-pwa');
+  await expect(page.locator('.workspace-topbar')).toBeVisible();
+  await page.goto('/scan/install');
+  const popupReady = page.waitForEvent('popup');
+  await page.getByRole('link', { name: 'Open scanner', exact: true }).click();
+  const scanner = await popupReady;
+  await expect(scanner).toHaveURL(/\/scan\/app\?source=scanner-pwa/);
+  await expect(scanner.locator('.scanner-app')).toBeVisible();
+  await expect(page).toHaveURL(/\/scan\/install$/);
+  expect(await page.evaluate(() => sessionStorage.getItem('bct:scanner-app:v1'))).toBeNull();
+  await scanner.close();
+  await page.goto('/staff?source=staff-pwa');
+  await expect(page.locator('.workspace-topbar')).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\?source=staff-pwa/);
 });
