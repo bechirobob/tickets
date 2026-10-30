@@ -11,7 +11,7 @@ const subscribeToReadiness = () => () => {};
 const clientIsReady = () => true;
 const serverIsReady = () => false;
 
-export default function AdminLoginForm() {
+export default function AdminLoginForm({ fixedReturnTo }: { fixedReturnTo?: string } = {}) {
   const ready = useSyncExternalStore(subscribeToReadiness, clientIsReady, serverIsReady);
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -60,7 +60,7 @@ export default function AdminLoginForm() {
       const response = await fetch("/api/admin/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, passwordProof, returnTo: searchParams.get("returnTo") ?? "/admin" }),
+        body: JSON.stringify({ email, passwordProof, returnTo: fixedReturnTo ?? searchParams.get("returnTo") ?? "/admin" }),
       });
       const result = (await response.json()) as { error?: string; returnTo?: string; mfaRequired?: boolean; options?: AuthenticationOptions; exchangeToken?: string };
       if (response.status === 202 && result.mfaRequired && result.options && result.exchangeToken) {

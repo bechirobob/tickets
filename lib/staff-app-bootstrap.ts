@@ -2,7 +2,7 @@
 const staffAppBootstrap = String.raw`/* Window-local install intent only. Never infer an app identity from cookies. */
 (() => {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  if (!standalone) return;
+  if (!standalone || document.documentElement.dataset.scannerApp === 'true') return;
   const key = 'bct:staff-app:v1';
   const staffPath = path => /^\/(?:staff|admin|scan)(?:\/|$)/.test(path) || /^\/organizer\/(?:workspace|analytics|assistant|activate|team)(?:\/|$)/.test(path) || path === '/offline-staff.html';
   const url = new URL(location.href);
@@ -27,7 +27,9 @@ const staffAppBootstrap = String.raw`/* Window-local install intent only. Never 
     const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
     if (!link || event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download')) return;
     const target = new URL(link.href, location.href);
-    if (!['https:', 'http:'].includes(target.protocol) || (target.origin === location.origin && staffPath(target.pathname))) return;
+    // A scanner launch must not replace this management window's installed identity.
+    const scannerLaunch = target.origin === location.origin && target.pathname === '/scan/app' && target.searchParams.get('source') === 'scanner-pwa';
+    if (!['https:', 'http:'].includes(target.protocol) || (target.origin === location.origin && staffPath(target.pathname) && !scannerLaunch)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     window.open(target.href, '_blank', 'noopener,noreferrer');

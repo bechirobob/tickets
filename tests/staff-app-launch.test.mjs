@@ -91,7 +91,7 @@ test('offline navigation chooses staff recovery without removing pending local r
     assert.equal(await promise, ['/events', '/my-nights'].includes(path) ? '/offline-ticket' : '/offline-staff.html');
   }
   assert.doesNotMatch(source, /localStorage|indexedDB/);
-  assert.match(source, /becore-tickets-shell-v7/);
+  assert.match(source, /becore-tickets-shell-v8/);
 });
 
 test('staff launch and offline routes agree while animation excludes staff actions', async () => {
@@ -123,4 +123,17 @@ test('staff launch and offline routes agree while animation excludes staff actio
       }
     }
   }
+});
+
+
+test('scanner launch links open separately from the installed management window', () => {
+  const app = windowFixture('/scan/install', { saved: true });
+  let prevented = false, stopped = false;
+  app.listeners.get('click')({ target: new app.Element({ href: '/scan/app?source=scanner-pwa', hasAttribute: () => false }),
+    preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; } });
+  assert.equal(prevented, true); assert.equal(stopped, true);
+  assert.deepEqual(Array.from(app.opened[0]), [origin + '/scan/app?source=scanner-pwa', '_blank', 'noopener,noreferrer']);
+  assert.equal(app.storage.get('bct:staff-app:v1'), '1');
+  assert.equal(app.storage.has('bct:scanner-app:v1'), false);
+  assert.deepEqual(app.replacements, []);
 });

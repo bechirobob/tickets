@@ -9,7 +9,8 @@ export default function StaffAppSession() {
   const pathname = usePathname();
   useLayoutEffect(() => { window.dispatchEvent(new Event("staff-app-route")); }, [pathname]);
   useEffect(() => {
-    if (document.documentElement.dataset.staffApp !== "true" || !STAFF_ROLES.some(role => isWorkspacePathAllowed(role, pathname))) return;
+    const scanner = document.documentElement.dataset.scannerApp === "true";
+    if ((!scanner && document.documentElement.dataset.staffApp !== "true") || (!scanner && !STAFF_ROLES.some(role => isWorkspacePathAllowed(role, pathname)))) return;
     const controller = new AbortController();
     let checking = false;
     const check = async () => {
@@ -19,12 +20,19 @@ export default function StaffAppSession() {
         const response = await fetch("/api/admin/workspace", { cache: "no-store", credentials: "same-origin", signal: controller.signal });
         if (controller.signal.aborted) return;
         if (response.status === 401) {
-          window.location.replace("/staff?source=staff-pwa");
+          if (scanner && document.querySelector(".scanner-login")) return;
+          window.location.replace(scanner ? "/scan/app?source=scanner-pwa" : "/staff?source=staff-pwa");
           return;
         }
         if (!response.ok) return;
         const data = await response.json() as { role: StaffRole; returnTo: string };
         if (controller.signal.aborted || !STAFF_ROLES.includes(data.role) || !isWorkspacePathAllowed(data.role, data.returnTo)) return;
+        if (scanner) {
+          if (pathname === "/admin/account" && data.returnTo !== "/admin/account") { window.location.replace("/scan/app?source=scanner-pwa"); return; }
+          if (data.returnTo === "/admin/account" && pathname !== "/admin/account") window.location.replace("/admin/account");
+          else if (!isWorkspacePathAllowed(data.role, "/scan") && pathname === "/scan/app" && !document.querySelector(".scanner-login")) window.location.reload();
+          return;
+        }
         if (!isWorkspacePathAllowed(data.role, pathname) || (data.returnTo === "/admin/account" && pathname !== "/admin/account")) window.location.replace(data.returnTo);
       } catch { /* A temporary offline state keeps the existing staff screen. */ }
       finally { checking = false; }
