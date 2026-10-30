@@ -2983,9 +2983,15 @@ DOWNLOAD_RETRY_STAGED_BASE.update({name: value for name, value in TOOL_MAINTENAN
 
 def download_retry_historical_workflow(name, raw):
     """Reverse only an exact reviewed workflow blob, never mutated input."""
+    if name == '.github/workflows/deploy.yml':
+        from test_operator_evidence import restore_deploy
+        raw = restore_deploy(raw)
     if name == '.github/workflows/deploy.yml' and release.hashlib.sha1(
             b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == HYGIENE_DEPLOY_BLOB:
         raw = raw.replace(b"      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n", b'', 1)
+    if name == '.github/workflows/tickets-code-release.yml':
+        from test_operator_evidence import restore_workflow
+        raw = restore_workflow(raw)
     raw = production_audit_historical_workflow(name, raw)
     digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
     expected = DOWNLOAD_RETRY_OUTPUTS.get(name)
@@ -3321,7 +3327,15 @@ def audit_source_family(root):
 
 STAFF_APP_TEST_FILE = Path(__file__).resolve()
 HYGIENE_DEPLOY_BLOB = '9e656e4f618a4fc335844b1bee7a864850c134c2'
+EVIDENCE_TEST_GROUP = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768ac8305e1355d86834',
+ '.github/workflows/tickets-code-release.yml': '1a1ac9706aed643f09e9c259fd40ffcc4a7cd127',
+ 'ops/vps/operator_evidence.py': '6e4096a2269609af4b5daf7d1da6f64b8fee1a22',
+ 'ops/vps/test_operator_evidence.py': '36ce8fd23eabfa43096c71bd0369d9567ccf9bed',
+ 'ops/vps/test_yorkeway_release.py': '003d1eed8fe86481b1558ceaa53f853e8108bcc8',
+ 'tests/browser-environment.test.mjs': '75a02ca8dc1f1b511f43cf2d6a5290b573bdeb91'}
+EVIDENCE_TEST_ADDITIONS = {'ops/vps/operator_evidence.py', 'ops/vps/test_operator_evidence.py'}
 HYGIENE_TEST_GROUPS = (
+    EVIDENCE_TEST_GROUP,
     {'tests/browser-environment.test.mjs': '5b67757deade96ed9d2ef941ef80526b29185946'},
     {'.github/workflows/deploy.yml': HYGIENE_DEPLOY_BLOB},
     {'.gitignore': 'dc6771e6c281bff03cf033e2d09cddccced236f1',
@@ -3336,7 +3350,8 @@ def hygiene_test_manifest(root, manifest):
                and release.hashlib.sha1(b'blob ' + str((root / name).stat().st_size).encode()
                                         + b'\0' + (root / name).read_bytes()).hexdigest() == blob
                for name, blob in group.items()):
-            manifest.update({name: ('100644', blob) for name, blob in group.items() if name in manifest})
+            manifest.update({name: ('100644', blob) for name, blob in group.items()
+                             if name in manifest or name in EVIDENCE_TEST_ADDITIONS})
 
 
 STAFF_APP_OPERATOR_BLOB = '0ee817f53862f1523383b067f8c633b6658a681e'
@@ -6297,7 +6312,10 @@ class RuntimeTransportWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh run download", text)
         self.assertIn('runtime_release.py" download', text)
         self.assertIn('--attempt "$runtime_attempt"', text)
-        self.assertNotIn("actions/upload-artifact", text)
+        from test_operator_evidence import restore_workflow
+        # Only the exact reviewed test receipt may be uploaded; runtime payloads
+        # still use the attempt-bound public release transport.
+        self.assertNotIn("actions/upload-artifact", restore_workflow(text.encode()).decode())
         self.assertIn("tests/e2e/checkout-preview-retired.spec.ts", text)
 
 
@@ -15509,6 +15527,8 @@ class HygieneDeployTriggerTests(unittest.TestCase):
     def test_only_exact_hygiene_paths_are_excluded_from_deploy(self):
         from fnmatch import fnmatchcase
         raw = (Path(__file__).resolve().parents[2] / '.github/workflows/deploy.yml').read_bytes()
+        from test_operator_evidence import restore_deploy
+        raw = restore_deploy(raw)
         digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
         self.assertEqual(digest(raw), HYGIENE_DEPLOY_BLOB)
         added = b"      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n"

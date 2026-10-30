@@ -141,14 +141,18 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   const hygieneAddition = hygiene.map(path => `      - '${path}'\n`).join('');
   assert.equal(workflow.split(hygieneAddition).length, 2);
   assert.ok(workflow.includes(`    paths-ignore:\n${hygieneAddition}`));
+  const evidence = ['ops/vps/operator_evidence.py', 'ops/vps/test_operator_evidence.py'];
+  const evidenceAddition = evidence.map(path => `      - '${path}'\n`).join('');
+  assert.equal(workflow.split(evidenceAddition).length, 2);
   // Exact reconstruction preserves every old ignore, manual input, permission,
   // concurrency setting and deployment/audit/source-verification command.
-  const original = workflow.replace(addition, '').replace(hygieneAddition, '');
+  const original = workflow.replace(addition, '').replace(hygieneAddition, '').replace(evidenceAddition, '');
   const digest = createHash('sha1').update(`blob ${Buffer.byteLength(original)}\0`).update(original).digest('hex');
   assert.equal(digest, 'b18eb81d65fd5a93fabebe7ae98c6cf99067076e');
   // These reviewed entries are literal files, not directories/globs. GitHub skips
   // paths-ignore only if every changed path matches; mixed changes still run.
-  const passesNewFilter = paths => paths.some(path => ![...added, ...hygiene].includes(path));
+  const passesNewFilter = paths => paths.some(path => ![...added, ...hygiene, ...evidence].includes(path));
+  for (const path of evidence) assert.equal(passesNewFilter([path]), false);
   for (const path of hygiene) assert.equal(passesNewFilter([path]), false);
   for (const path of added) assert.equal(passesNewFilter([path]), false);
   assert.equal(passesNewFilter(added), false);

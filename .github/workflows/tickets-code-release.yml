@@ -25,6 +25,17 @@ on:
         required: false
         default: false
         type: boolean
+      operator_evidence_run:
+        description: Optional successful verify-only run with exact operator test inputs; mismatch runs the suite
+        required: false
+        default: ''
+        type: string
+      operator_evidence_mode:
+        description: Shadow always runs tests; reuse skips only an authenticated exact match
+        required: false
+        default: shadow
+        type: choice
+        options: [shadow, reuse]
       candidate_mode:
         description: Authenticated parallel evidence by default; legacy is an explicit fallback
         required: false
@@ -89,6 +100,8 @@ jobs:
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
       CANDIDATE_MODE: ${{ inputs.candidate_mode || 'parallel-v1' }}
       VERIFY_ONLY: ${{ inputs.verify_only && 'true' || 'false' }}
+      OPERATOR_EVIDENCE_RUN: ${{ inputs.operator_evidence_run }}
+      OPERATOR_EVIDENCE_MODE: ${{ inputs.operator_evidence_mode || 'shadow' }}
       INSPECT_MODE: ${{ inputs.inspect_failed_release && 'true' || 'false' }}
       RECOVER_PREPARED: ${{ inputs.recover_prepared }}
       ENABLE_CRYPTO: ${{ inputs.enable_crypto && 'true' || 'false' }}
@@ -143,7 +156,22 @@ jobs:
           set -euo pipefail
           python3 -I "$RUNNER_TEMP/tickets-operator/ops/vps/code-release.py" verify-operator --source "$SOURCE_SHA"
       - name: Verify updater regression suite
-        run: python3 -m unittest discover -s "$RUNNER_TEMP/tickets-operator/ops/vps" -p 'test_*.py'
+        id: operator_tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 022
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          evidence="$RUNNER_TEMP/tickets-operator-evidence"
+          mkdir -m 700 "$evidence"
+          git show "$GITHUB_SHA:ops/vps/operator_evidence.py" > "$evidence/operator_evidence.py"
+          python3 -I "$evidence/operator_evidence.py" \
+            --checkout "$GITHUB_WORKSPACE" --stage "$RUNNER_TEMP/tickets-operator" \
+            --source "$SOURCE_SHA" --operator "$OPERATOR_SHA" --expected-active "$EXPECTED_ACTIVE" \
+            --workflow-source "$GITHUB_SHA" --reference-run "$OPERATOR_EVIDENCE_RUN" \
+            --mode "$OPERATOR_EVIDENCE_MODE" --output "$evidence/report.json" --receipt-output "$evidence/receipt.json"
       - name: Set up the shipping runtime version for final audit
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -247,6 +275,14 @@ jobs:
       - name: Record verification-only result
         if: ${{ inputs.verify_only }}
         run: printf 'Verification only; no deployment, host connection or production browser checks were performed.\n' >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish executed operator test receipt
+        if: ${{ inputs.verify_only && steps.operator_tests.outputs.executed == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: operator-regression-receipt-v2
+          path: ${{ runner.temp }}/tickets-operator-evidence/receipt.json
+          if-no-files-found: error
+          retention-days: 1
 
   inspect_failure:
     # This branch is mutually exclusive with release; no application checkout or apply.

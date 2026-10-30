@@ -9,6 +9,8 @@ on:
     paths-ignore:
       - '.gitignore'
       - 'tests/staff-app-launch.test.mjs'
+      - 'ops/vps/operator_evidence.py'
+      - 'ops/vps/test_operator_evidence.py'
       - '.github/workflows/tickets-backup.yml'
       - '.github/workflows/backup-transport-checks.yml'
       - '.github/backup/**'
