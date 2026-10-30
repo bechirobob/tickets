@@ -828,6 +828,10 @@ for (const scannerPath of ['/scan', '/scan/app?source=scanner-pwa']) test(`gate 
     await page.getByPlaceholder('BCT-XXXX-XXXX-XXXX-XXXX').fill('BCT-ABCD-EFGH-IJKL-MNOP');
     await page.getByRole('button', { name: 'Check', exact: true }).click();
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    if (result === 'duplicate') {
+      await expect(page.getByText('This ticket was already checked in.', { exact: true })).toBeVisible();
+      await expect(page.getByText('Entry recorded.', { exact: true })).toHaveCount(0);
+    }
     if (scannerPath.includes('/scan/app') && (result === 'valid' || result === 'duplicate')) await scannerPreview(page, info, result);
     expect(await page.evaluate(() => (window as unknown as { originalGateVideo: HTMLVideoElement }).originalGateVideo.isConnected)).toBe(true);
     if (holdStats) await expect.poll(() => Boolean(statsGate.release)).toBe(true);
@@ -1566,6 +1570,12 @@ test('scanner install opens only the scanner and preserves its identity after re
   await page.goto('/my-nights');
   await expect(page).toHaveURL(/\/scan\/app\?source=scanner-pwa/);
   await expect(page.locator('.scanner-app')).toBeVisible();
+  const startCamera = page.getByRole('button', { name: 'Start camera', exact: true });
+  const bounds = await startCamera.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(await page.evaluate(() => innerHeight));
+  expect(await page.locator('.scanner-header > div[role="status"]').evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
   await scannerPreview(page, info, 'ready');
   const violations = (await new AxeBuilder({ page }).analyze()).violations;
   expect(violations).toEqual([]);

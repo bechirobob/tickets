@@ -52,3 +52,28 @@ test('offline scanner navigation returns to the scanner without changing saved r
   }
   assert.doesNotMatch(source, /localStorage|indexedDB/);
 });
+
+for (const [status, result, mode, feedback] of [
+  [200, 'valid', 'valid', 'Entry recorded.'],
+  [409, 'duplicate', 'duplicate', 'This ticket was already checked in.'],
+  [400, 'invalid', 'invalid', 'Entry could not be confirmed.'],
+  [503, undefined, 'unconfirmed', 'Entry could not be confirmed.'],
+]) test(`scanner fallback feedback does not claim admission for HTTP ${status}`, async () => {
+  const source = await readFile(new URL('../app/scan/scanner.tsx', import.meta.url), 'utf8');
+  const marker = 'const checkTicket = useCallback(';
+  const start = source.indexOf(marker) + marker.length;
+  const callback = source.slice(start, source.indexOf('\n  }, [', start) + '\n  }'.length);
+  const compiled = transformSync(`const callback=${callback};`, { loader: 'ts' }).code;
+  let actualMode, actualMessage, offlineCalls = 0;
+  const scope = {
+    busyRef: { current: false }, crypto: { randomUUID: () => 'synthetic-scan' }, scannerRef: { current: { pause() {} } },
+    setMode: value => { actualMode = value; }, setMessage: value => { actualMessage = value; }, navigator: { onLine: true },
+    offlineCheck: async () => { offlineCalls++; }, fetch: async () => Response.json({ result }, { status }), AbortSignal,
+    eventSlug: 'synthetic-event', currentEvent: { current: 'synthetic-event' }, deviceId: 'synthetic-device',
+    denyGateAccess: () => false, markContact() {}, setTicket() {}, loadEventState: async () => {},
+  };
+  const check = new Function(...Object.keys(scope), `${compiled};return callback;`)(...Object.values(scope));
+  await check('BCT-ABCD-EFGH-IJKL-MNOP');
+  assert.equal(actualMode, mode); assert.equal(actualMessage, feedback); assert.equal(offlineCalls, 0);
+  assert.equal(scope.busyRef.current, false);
+});
