@@ -2,7 +2,7 @@
 const staffAppBootstrap = String.raw`/* Window-local install intent only. Never infer an app identity from cookies. */
 (() => {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  if (!standalone) return;
+  if (!standalone || document.documentElement.dataset.scannerApp === 'true') return;
   const key = 'bct:staff-app:v1';
   const staffPath = path => /^\/(?:staff|admin|scan)(?:\/|$)/.test(path) || /^\/organizer\/(?:workspace|analytics|assistant|activate|team)(?:\/|$)/.test(path) || path === '/offline-staff.html';
   const url = new URL(location.href);

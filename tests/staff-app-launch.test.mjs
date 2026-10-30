@@ -91,7 +91,7 @@ test('offline navigation chooses staff recovery without removing pending local r
     assert.equal(await promise, ['/events', '/my-nights'].includes(path) ? '/offline-ticket' : '/offline-staff.html');
   }
   assert.doesNotMatch(source, /localStorage|indexedDB/);
-  assert.match(source, /becore-tickets-shell-v7/);
+  assert.match(source, /becore-tickets-shell-v8/);
 });
 
 test('staff launch and offline routes agree while animation excludes staff actions', async () => {

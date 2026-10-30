@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
-export default function StaffInstallButton() {
+export default function StaffInstallButton({ appName = "BeCore Staff" }: { appName?: string }) {
   const [prompt, setPrompt] = useState<InstallEvent | null>(null);
   useEffect(() => {
     const capture = (event: Event) => { event.preventDefault(); setPrompt(event as InstallEvent); };
@@ -14,5 +14,5 @@ export default function StaffInstallButton() {
     await prompt.prompt();
     await prompt.userChoice;
     setPrompt(null);
-  }}>Install BeCore Staff</button>;
+  }}>Install {appName}</button>;
 }

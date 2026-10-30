@@ -740,7 +740,7 @@ test('owner reviews a host application without an event',async({page},info)=>{
  await expect(page.getByRole('link',{name:'Manage account access'})).toBeVisible();
 });
 
-test('gate camera survives scan results, repeated starts and camera failure', async ({ page }) => {
+for (const scannerPath of ['/scan', '/scan/app?source=scanner-pwa']) test(`gate camera survives scan results, repeated starts and camera failure at ${scannerPath}`,  async ({ page }) => {
   await page.addInitScript(() => {
     const state = { denied: false, streams: [] as MediaStream[] };
     Object.assign(window, { gateCameraTest: state });
@@ -775,7 +775,7 @@ test('gate camera survives scan results, repeated starts and camera failure', as
     if (route.request().method() !== 'POST' || route.request().postDataJSON().action === 'heartbeat') return route.continue();
     return route.fulfill({ status: outcome === 'valid' ? 200 : 409, json: { result: outcome, error: outcome === 'unavailable' ? 'The host must confirm its date before entry.' : undefined, ticket: { ticketId: 'camera-fixture', ticketType: 'RSVP', attendeeName: 'Camera fixture' } } });
   });
-  await page.goto('/scan');
+  await page.goto(scannerPath);
   await expect(page.getByText('Door list saved', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Start camera', exact: true }).click();
   const video = page.locator('.scan-frame video');
@@ -1511,4 +1511,30 @@ test('staff opening animation releases the real login form', async ({ page, cont
   await page.reload();
   await expect(arrival).toBeHidden();
   await expect(page.getByLabel('Work email')).toBeEnabled();
+});
+
+test('scanner install opens only the scanner and preserves its identity after reopening and expiry', async ({ page, context }, info) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }));
+  await page.goto('/scan/app?source=scanner-pwa');
+  await expect(page.locator('.scanner-app')).toBeVisible();
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/scanner.webmanifest?v=1');
+  await expect(page.getByRole('button', { name: 'Toggle workspace navigation' })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Find a guest or purchase' })).toHaveCount(0);
+  await expect(page.locator('.door-desk')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start camera' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.scanner-app')).toBeVisible();
+  await page.goto('/my-nights');
+  await expect(page).toHaveURL(/\/scan\/app\?source=scanner-pwa/);
+  await expect(page.locator('.scanner-app')).toBeVisible();
+  await page.screenshot({ path: info.outputPath('scanner-app.png'), fullPage: true });
+  const violations = (await new AxeBuilder({ page }).analyze()).violations;
+  expect(violations).toEqual([]);
+  await context.clearCookies();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Sign in to scan tickets' })).toBeVisible();
+  await expect(page.getByLabel('Work email')).toBeEnabled();
+  await expect(page).toHaveURL(/\/scan\/app/);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Sign in to scan tickets' })).toBeVisible();
 });

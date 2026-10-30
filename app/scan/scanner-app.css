@@ -1,0 +1,27 @@
+.scanner-app, .scanner-login { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.scanner-app .workspace-scanner { margin: 0 auto; padding: 16px; max-width: 720px; }
+.scanner-app-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; border-bottom: 1px solid #dedade; }
+.scanner-account { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.scanner-account span { max-width: 180px; overflow-wrap: anywhere; }
+.scanner-account button { min-height: 44px; padding: 8px 12px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+.scanner-app h1, .scanner-app h2, .scanner-login h1 { font-family: inherit; letter-spacing: -.02em; }
+.scanner-app h1 { font-size: 24px; }
+.scanner-app h2 { font-size: 22px; }
+.scanner-app button, .scanner-app select, .scanner-app input { min-height: 44px; font: inherit; }
+.scanner-app button:focus-visible, .scanner-app select:focus-visible, .scanner-app input:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+.scanner-app .scan-surface { box-shadow: none; }
+.scanner-app .scanner-stats { flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .scanner-app-header { align-items: flex-start; }
+  .scanner-account { justify-content: flex-end; }
+  .scanner-account span { max-width: 120px; }
+  .scanner-app .workspace-scanner { padding: 12px; }
+}
+.scanner-app { min-height: 100dvh; background: #f8f8f8; color: #202020; padding-bottom: env(safe-area-inset-bottom); }
+.scanner-app .scanner-header { flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; }
+.scanner-app .scanner-header p { margin: 0; font-size: 12px; }
+.scanner-app .scan-surface { width: 100%; min-height: 360px; margin: 16px auto; padding: 24px 16px; }
+.scanner-app .scan-frame { width: 210px; height: 210px; }
+.scanner-app .manual-entry { width: 100%; }
+html[data-scanner-app="true"] :is(.workspace-topbar, .workspace-sidebar) { display: none; }
+html[data-scanner-app="true"] main:has(>.workspace-topbar) { display: block; }
