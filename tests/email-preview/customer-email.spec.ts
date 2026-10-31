@@ -1,5 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import sharp from 'sharp';
+import { Buffer as NodeBuffer } from 'node:buffer';
 import { expect, test, type Page } from '@playwright/test';
 import { previewData, renderCustomerEmailPreviews, renderFirstHostEmailPreview, renderHostPassEmailPreview } from '../../scripts/customer-email-previews.mjs';
 import { expectVisibleLettering } from '../e2e/text-visibility';
@@ -58,6 +60,8 @@ for (const name of names) {
       return route.abort();
     });
     let lightDigest: string | undefined;
+    let darkDigest: string | undefined;
+    const captures: { name: string; png: Uint8Array }[] = [];
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
       await page.setContent(preview.html, { waitUntil: 'load' });
@@ -109,11 +113,73 @@ for (const name of names) {
         expect(geometry.fit).not.toBe('cover');
       }
       await expectReadableEmail(page);
-      const pixels = await page.screenshot({ fullPage: true, ...(colorScheme === 'light' ? { path: info.outputPath(`${name}.png`) } : {}) });
+      const pixels = await page.screenshot({ fullPage: true, path: info.outputPath(`${name}-${colorScheme}-original.png`) });
+      captures.push({ name: `${colorScheme}-original`, png: NodeBuffer.from(pixels) });
       const digest = createHash('sha256').update(pixels).digest('hex');
       if (colorScheme === 'light') lightDigest = digest;
-      else expect(digest, 'The complete email must preserve its explicit colors in a dark host.').toBe(lightDigest);
+      else darkDigest = digest;
     }
+    // Diagnostic only: preserve both original captures and the original assertion.
+    // A separate settled pass distinguishes image decoding/paint from host colors.
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.setContent(preview.html, { waitUntil: 'load' });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await Promise.all(Array.from(document.images, image => image.decode()));
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      });
+      const pixels = await page.screenshot({ fullPage: true, path: info.outputPath(`${name}-${colorScheme}-settled.png`) });
+      captures.push({ name: `${colorScheme}-settled`, png: NodeBuffer.from(pixels) });
+      console.log('EMAIL_RENDER_DIAGNOSTIC', JSON.stringify({ name, colorScheme, phase: 'settled', sha256: createHash('sha256').update(pixels).digest('hex'), state: await page.evaluate(() => ({ fonts: document.fonts.status, images: Array.from(document.images, image => ({ complete: image.complete, width: image.naturalWidth, height: image.naturalHeight })), animations: document.getAnimations().length })) }));
+    }
+    console.log('EMAIL_RENDER_DIAGNOSTIC', JSON.stringify({ name, phase: 'original', lightDigest, darkDigest }));
+    // Synthetic-only evidence, following the existing bounded scanner-log transport.
+    if (name !== 'purchase-confirmation' || info.project.name !== 'mobile-webkit'
+      || previewData.order.customerEmail !== 'guest@example.invalid'
+      || page.url() !== 'about:blank' || unexpectedRequests.length) throw new Error('Unexpected diagnostic fixture');
+    const source = process.env.GITHUB_SHA;
+    if (!process.env.CI || !source || !/^[a-f0-9]{40}$/u.test(source)
+      || process.env.GITHUB_REF !== 'refs/heads/diag/email-webkit-render-20261031') throw new Error('Diagnostic branch identity required');
+    let totalBytes = 0;
+    for (const capture of captures) {
+      const png = NodeBuffer.from(capture.png);
+      const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+      totalBytes += png.length;
+      if (!png.subarray(0, 8).equals(NodeBuffer.from([137,80,78,71,13,10,26,10]))
+        || png.length > 2 * 1024 * 1024 || totalBytes > 8 * 1024 * 1024
+        || width > 1600 || height > 6000 || width * height > 6_000_000) throw new Error('Diagnostic PNG bounds exceeded');
+      const identity = { source, project: info.project.name, fixture: 'customer-email-synthetic-v1', name: capture.name, sha256: createHash('sha256').update(png).digest('hex') };
+      const emit = (record: object) => console.log(`BECORE_EMAIL_DIAGNOSTIC_V1 ${JSON.stringify({ ...identity, ...record })}`);
+      const chunks = Math.ceil(png.length / 3072);
+      emit({ type: 'begin', bytes: png.length, chunks, width, height });
+      for (let index = 0; index < chunks; index++) emit({ type: 'chunk', index, data: png.subarray(index * 3072, (index + 1) * 3072).toString('base64') });
+      emit({ type: 'end', bytes: png.length, chunks });
+    }
+    const decoded = await Promise.all(captures.map(capture => sharp(NodeBuffer.from(capture.png)).ensureAlpha().raw().toBuffer({ resolveWithObject: true })));
+    for (const [left, right] of [[0, 1], [2, 3], [0, 2], [1, 3]]) {
+      const a = decoded[left], b = decoded[right];
+      const sameDimensions = a.info.width === b.info.width && a.info.height === b.info.height && a.info.channels === b.info.channels;
+      let changedPixels = 0, maxDelta = 0;
+      const bounds = { left: a.info.width, top: a.info.height, right: -1, bottom: -1 };
+      if (sameDimensions) for (let pixel = 0; pixel < a.info.width * a.info.height; pixel++) {
+        let changed = false;
+        for (let channel = 0; channel < a.info.channels; channel++) {
+          const offset = pixel * a.info.channels + channel;
+          const delta = Math.abs(a.data[offset] - b.data[offset]);
+          changed ||= delta !== 0;
+          maxDelta = Math.max(maxDelta, delta);
+        }
+        if (changed) {
+          changedPixels++;
+          const x = pixel % a.info.width, y = Math.floor(pixel / a.info.width);
+          bounds.left = Math.min(bounds.left, x); bounds.right = Math.max(bounds.right, x);
+          bounds.top = Math.min(bounds.top, y); bounds.bottom = Math.max(bounds.bottom, y);
+        }
+      }
+      console.log('EMAIL_PIXEL_COMPARISON', JSON.stringify({ source, left: captures[left].name, right: captures[right].name, sameDimensions, changedPixels: sameDimensions ? changedPixels : null, maxDelta, bounds: changedPixels ? bounds : null }));
+    }
+    expect(darkDigest, 'The complete email must preserve its explicit colors in a dark host.').toBe(lightDigest);
     expect(unexpectedRequests).toEqual([]);
     await writeFile(info.outputPath(`${name}.html`), preview.html);
   });
