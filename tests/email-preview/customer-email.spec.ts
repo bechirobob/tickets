@@ -61,6 +61,8 @@ for (const name of names) {
     });
     let lightDigest: string | undefined;
     let darkDigest: string | undefined;
+    const repetition = info.repeatEachIndex;
+    if (repetition < 0 || repetition >= 10) throw new Error('Diagnostic repetition bound exceeded');
     const captures: { name: string; png: Uint8Array }[] = [];
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
@@ -113,8 +115,9 @@ for (const name of names) {
         expect(geometry.fit).not.toBe('cover');
       }
       await expectReadableEmail(page);
-      const pixels = await page.screenshot({ fullPage: true, path: info.outputPath(`${name}-${colorScheme}-original.png`) });
+      const pixels = await page.screenshot({ fullPage: true, path: info.outputPath(`${name}-repeat-${repetition}-${colorScheme}-original.png`) });
       captures.push({ name: `${colorScheme}-original`, png: NodeBuffer.from(pixels) });
+      console.log('EMAIL_RENDER_DIAGNOSTIC', JSON.stringify({ name, repetition, colorScheme, phase: 'original-after-capture', state: await page.evaluate(() => ({ fonts: document.fonts.status, images: Array.from(document.images, image => ({ complete: image.complete, width: image.naturalWidth, height: image.naturalHeight })), animations: document.getAnimations().length })) }));
       const digest = createHash('sha256').update(pixels).digest('hex');
       if (colorScheme === 'light') lightDigest = digest;
       else darkDigest = digest;
@@ -129,11 +132,11 @@ for (const name of names) {
         await Promise.all(Array.from(document.images, image => image.decode()));
         await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       });
-      const pixels = await page.screenshot({ fullPage: true, path: info.outputPath(`${name}-${colorScheme}-settled.png`) });
+      const pixels = await page.screenshot({ fullPage: true, path: info.outputPath(`${name}-repeat-${repetition}-${colorScheme}-settled.png`) });
       captures.push({ name: `${colorScheme}-settled`, png: NodeBuffer.from(pixels) });
-      console.log('EMAIL_RENDER_DIAGNOSTIC', JSON.stringify({ name, colorScheme, phase: 'settled', sha256: createHash('sha256').update(pixels).digest('hex'), state: await page.evaluate(() => ({ fonts: document.fonts.status, images: Array.from(document.images, image => ({ complete: image.complete, width: image.naturalWidth, height: image.naturalHeight })), animations: document.getAnimations().length })) }));
+      console.log('EMAIL_RENDER_DIAGNOSTIC', JSON.stringify({ name, repetition, colorScheme, phase: 'settled', sha256: createHash('sha256').update(pixels).digest('hex'), state: await page.evaluate(() => ({ fonts: document.fonts.status, images: Array.from(document.images, image => ({ complete: image.complete, width: image.naturalWidth, height: image.naturalHeight })), animations: document.getAnimations().length })) }));
     }
-    console.log('EMAIL_RENDER_DIAGNOSTIC', JSON.stringify({ name, phase: 'original', lightDigest, darkDigest }));
+    console.log('EMAIL_RENDER_DIAGNOSTIC', JSON.stringify({ name, repetition, phase: 'original', lightDigest, darkDigest }));
     // Synthetic-only evidence, following the existing bounded scanner-log transport.
     if (name !== 'purchase-confirmation' || info.project.name !== 'mobile-webkit'
       || previewData.order.customerEmail !== 'guest@example.invalid'
@@ -149,7 +152,7 @@ for (const name of names) {
       if (!png.subarray(0, 8).equals(NodeBuffer.from([137,80,78,71,13,10,26,10]))
         || png.length > 2 * 1024 * 1024 || totalBytes > 8 * 1024 * 1024
         || width > 1600 || height > 6000 || width * height > 6_000_000) throw new Error('Diagnostic PNG bounds exceeded');
-      const identity = { source, project: info.project.name, fixture: 'customer-email-synthetic-v1', name: capture.name, sha256: createHash('sha256').update(png).digest('hex') };
+      const identity = { source, repetition, project: info.project.name, fixture: 'customer-email-synthetic-v1', name: capture.name, sha256: createHash('sha256').update(png).digest('hex') };
       const emit = (record: object) => console.log(`BECORE_EMAIL_DIAGNOSTIC_V1 ${JSON.stringify({ ...identity, ...record })}`);
       const chunks = Math.ceil(png.length / 3072);
       emit({ type: 'begin', bytes: png.length, chunks, width, height });
@@ -177,7 +180,7 @@ for (const name of names) {
           bounds.top = Math.min(bounds.top, y); bounds.bottom = Math.max(bounds.bottom, y);
         }
       }
-      console.log('EMAIL_PIXEL_COMPARISON', JSON.stringify({ source, left: captures[left].name, right: captures[right].name, sameDimensions, changedPixels: sameDimensions ? changedPixels : null, maxDelta, bounds: changedPixels ? bounds : null }));
+      console.log('EMAIL_PIXEL_COMPARISON', JSON.stringify({ source, repetition, left: captures[left].name, right: captures[right].name, sameDimensions, changedPixels: sameDimensions ? changedPixels : null, maxDelta, bounds: changedPixels ? bounds : null }));
     }
     expect(darkDigest, 'The complete email must preserve its explicit colors in a dark host.').toBe(lightDigest);
     expect(unexpectedRequests).toEqual([]);

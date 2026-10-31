@@ -55,7 +55,7 @@ jobs:
       - name: Verify prepared preview browsers
         run: node scripts/verify-browser-environment.mjs chromium webkit
       - name: Verify desktop and phone email rendering without provider traffic
-        run: npx playwright test --config playwright.customer-email.config.ts --project mobile-webkit --grep 'customer email purchase-confirmation is readable in light and dark hosts$'
+        run: npx playwright test --config playwright.customer-email.config.ts --project mobile-webkit --grep 'customer email purchase-confirmation is readable in light and dark hosts$' --repeat-each=10 --workers=1 --retries=0
       # Only fictional email previews are uploaded. Never upload outbox data,
       # credentials, browser traces, customer data or release build artifacts.
       - name: Preserve synthetic email previews for visual review
