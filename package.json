@@ -72,7 +72,8 @@
     "@next/eslint-plugin-next": "file:vendor/eslint-plugin-next",
     "vite-plugin-dynamic-import": "file:vendor/vite-plugin-dynamic-import",
     "@becoreops/tooling-glob": "file:vendor/tooling-glob",
-    "glob": "13.0.6"
+    "glob": "14.0.2",
+    "minimatch": "file:vendor/minimatch-compat"
   },
   "overrides": {
     "sharp": "0.35.5",
@@ -87,7 +88,8 @@
     "@next/eslint-plugin-next": "$@next/eslint-plugin-next",
     "vite-plugin-dynamic-import": "$vite-plugin-dynamic-import",
     "zod": "4.6.6",
-    "@vercel/og": "1.0.3"
+    "@vercel/og": "1.0.3",
+    "minimatch": "$minimatch"
   },
   "type": "module"
 }

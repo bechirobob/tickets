@@ -5,8 +5,8 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // This bounded adapter must remain require-compatible with both upstream callers.
-  { files: ["vendor/tooling-glob/*.cjs"], rules: { "@typescript-eslint/no-require-imports": "off" } },
+  // These CommonJS entry points support pinned upstream callers.
+  { files: ["vendor/tooling-glob/*.cjs", "vendor/minimatch-compat/index.cjs"], rules: { "@typescript-eslint/no-require-imports": "off" } },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
