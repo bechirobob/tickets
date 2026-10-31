@@ -3835,8 +3835,136 @@ def reviewed_scanner_application_blobs(expected, source):
     return pins
 
 
+# Exact patched dependency snapshot for the corrected scanner release.
+SCANNER_DEPS_LIVE = '72fa3f6a77d922dadd65fa3a788807e1ec57549f'
+SCANNER_DEPS_LIVE_TREE = '599bc68256da4460dbc5961f3394e3e073cb0900'
+SCANNER_DEPS_CONTROL_BASE = '21c0f27199aece7640b060b3d4812dc1d183a6f0'
+SCANNER_DEPS_CONTROL_BASE_TREE = '049ffadfd1a675c3ff19f28441b5d3b9672285e1'
+SCANNER_DEPS_BASE = 'b30b3214b59a0a2b933d9936a817dc568ed5981a'
+SCANNER_DEPS_BASE_TREE = '9b0d2c533f97d2c88a0115311606efa2ec5da698'
+SCANNER_DEPS_SNAPSHOT = 'b421372759623b6c7ff6d1965c6072609e7fa894'
+SCANNER_DEPS_SNAPSHOT_TREE = 'fa5f982cd5c59ecdd76e04e099d0e19a714d3216'
+SCANNER_DEPS_DELTA_BLOBS = {'eslint.config.mjs': 'd5739b47e8e3154d1ccefd4fc82adc36e8fd1b10',
+ 'mobile/package-lock.json': '708e1054cdc2360e8c90dfb68b1bc771073e53e1',
+ 'mobile/package.json': 'bbd83a0139297175da0eff0fff163bfc3155ac1c',
+ 'package-lock.json': 'a8f17622f1484fede2e40e10c5d900848a8f8f04',
+ 'package.json': 'fee16fcd126e4cbf33fd0e03ed6a63c8e3e11d17',
+ 'tests/tooling-glob.test.mjs': '4d9a2c02bfc077b238bd0cb4fcfe33746ad7fe49',
+ 'vendor/minimatch-compat/index.cjs': '07a14ab52f9ca7030e2461f1272d7fb87c7d43fd',
+ 'vendor/minimatch-compat/index.d.ts': '40ce6c2426c1dc58611f332aee3a9c1354ae76c2',
+ 'vendor/minimatch-compat/index.js': '206a2432adce71e3c6a157ddc8ad535250867e8c',
+ 'vendor/minimatch-compat/package.json': '06db4af0bcf3f8fc33ca1b9e29ebf86bde205835',
+ 'vendor/tooling-glob/package.json': '4e20b8989378de3ead7927f58731fb11270d954a'}
+SCANNER_DEPS_APP_BLOBS = {'app/admin/login/login-form.tsx': '10c741d727ba3378a436ae4ffaf37508d25b65e0',
+ 'app/layout.tsx': 'd54b86f91f49b55e4ff1e8d3eaac96917d97ada6',
+ 'app/scan/app/layout.tsx': '686bd9af6e57466f209167540d43939aded0ea6d',
+ 'app/scan/app/page.tsx': '2bfc903ac666a1ff49eb5813b737755e42491632',
+ 'app/scan/install/layout.tsx': '686bd9af6e57466f209167540d43939aded0ea6d',
+ 'app/scan/install/page.tsx': 'f3fe9ba1f4148b695839f1b160d7c78df667647b',
+ 'app/scan/page.tsx': 'cb3432dba64cbf781e286b86b47a2aa700901f27',
+ 'app/scan/scanner-account.tsx': '1b392b3d370861e31cec10bac8b497d1f8c3dd69',
+ 'app/scan/scanner-app.css': '45cc73223f8df42f977a651ec61c3662f7498c8d',
+ 'app/scan/scanner.tsx': 'e182a1fb58d7901fb37201f62fa903f88a19b3b5',
+ 'app/staff-app-session.tsx': '5bf6edccd98fa1c6c28311137d526f589645bd8f',
+ 'app/staff/install/page.tsx': '4ae81f5f51fc5f1aa63270666fe7ac5f4fed3041',
+ 'app/staff/install/staff-install-button.tsx': '4129f702045f430dc2da80385fbced5c0b1a17f0',
+ 'eslint.config.mjs': 'd5739b47e8e3154d1ccefd4fc82adc36e8fd1b10',
+ 'lib/scanner-app-bootstrap.ts': 'b367b5a16e827aea934fa7613017e2bd39e6da1d',
+ 'lib/staff-app-bootstrap.ts': 'ebf176654ec02189bcc5e2c04f3733e7e6dc069d',
+ 'lib/staff-app-metadata.ts': '68c477ae71912805603a34a42d05bd30e6dac1ce',
+ 'mobile/package-lock.json': '708e1054cdc2360e8c90dfb68b1bc771073e53e1',
+ 'mobile/package.json': 'bbd83a0139297175da0eff0fff163bfc3155ac1c',
+ 'package-lock.json': 'a8f17622f1484fede2e40e10c5d900848a8f8f04',
+ 'package.json': 'fee16fcd126e4cbf33fd0e03ed6a63c8e3e11d17',
+ 'public/offline-scanner.html': '4e675c20f3d211f137cc623150dfad0d44b713b6',
+ 'public/scanner.webmanifest': 'f98313b7f23865cba47d4befdfb580a287f5d3dd',
+ 'public/sw.js': '32ef48745ad1b88974c1225d26a80793dba50712',
+ 'tests/e2e/operations.spec.ts': '4b2289577b628fe53175a3a41301cc81961848ea',
+ 'tests/public-page-cache.test.ts': '5ab340b9974db51244bfabc31a167a47d118d0ff',
+ 'tests/scanner-app-launch.test.mjs': 'aba104730b0105c81716c7437fcc0c02d8ac81f4',
+ 'tests/staff-app-launch.test.mjs': 'f89af24cf04ccde806de4a5275be6813a3d6af14',
+ 'tests/tooling-glob.test.mjs': '4d9a2c02bfc077b238bd0cb4fcfe33746ad7fe49',
+ 'vendor/minimatch-compat/index.cjs': '07a14ab52f9ca7030e2461f1272d7fb87c7d43fd',
+ 'vendor/minimatch-compat/index.d.ts': '40ce6c2426c1dc58611f332aee3a9c1354ae76c2',
+ 'vendor/minimatch-compat/index.js': '206a2432adce71e3c6a157ddc8ad535250867e8c',
+ 'vendor/minimatch-compat/package.json': '06db4af0bcf3f8fc33ca1b9e29ebf86bde205835',
+ 'vendor/tooling-glob/package.json': '4e20b8989378de3ead7927f58731fb11270d954a',
+ 'worker/security-response.ts': 'fa4f2edd885a95cf93e13c112e318d84cbe886e4'}
+SCANNER_DEPS_PREREQUISITE_BLOBS = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768ac8305e1355d86834',
+ '.github/workflows/tickets-code-release.yml': 'f7877dec7c650e4a14600c3c24347444e38aefed',
+ '.gitignore': 'dc6771e6c281bff03cf033e2d09cddccced236f1',
+ 'ops/vps/operator_evidence.py': 'c13b14b53d9310c71b9ca99b23fbf1b072471c00',
+ 'ops/vps/test_operator_evidence.py': '9c2472a91d2709354fab1a3b31c4a50f37f2d6de',
+ 'ops/vps/test_yorkeway_release.py': '003d1eed8fe86481b1558ceaa53f853e8108bcc8',
+ 'tests/browser-environment.test.mjs': '75a02ca8dc1f1b511f43cf2d6a5290b573bdeb91'}
+SCANNER_DEPS_CORRECTION_BLOBS = {'app/scan/page.tsx': 'cb3432dba64cbf781e286b86b47a2aa700901f27',
+ 'tests/scanner-app-launch.test.mjs': 'aba104730b0105c81716c7437fcc0c02d8ac81f4'}
+
+
+def reviewed_scanner_dependency_blobs(expected, source):
+    controls = {'ops/vps/code-release.py', 'ops/vps/test_code_release.py'}
+    application, prerequisites = set(SCANNER_DEPS_APP_BLOBS), set(SCANNER_DEPS_PREREQUISITE_BLOBS)
+    delta, correction = set(SCANNER_DEPS_DELTA_BLOBS), set(SCANNER_DEPS_CORRECTION_BLOBS)
+    require(expected == SCANNER_DEPS_LIVE and delta | correction <= application
+            and not delta & correction and not controls & (application | prerequisites)
+            and not application & prerequisites, 'Scanner dependency scope differs.')
+    for revision, tree in ((expected, SCANNER_DEPS_LIVE_TREE), (SCANNER_DEPS_CONTROL_BASE, SCANNER_DEPS_CONTROL_BASE_TREE),
+                           (SCANNER_DEPS_BASE, SCANNER_DEPS_BASE_TREE), (SCANNER_DEPS_SNAPSHOT, SCANNER_DEPS_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Scanner dependency reviewed tree differs.')
+    require(git('rev-list', '--parents', '-n', '1', SCANNER_DEPS_SNAPSHOT)
+            == SCANNER_DEPS_SNAPSHOT + ' ' + SCANNER_DEPS_BASE, 'Scanner dependency snapshot parent differs.')
+    for before, after in ((expected, SCANNER_DEPS_CONTROL_BASE), (SCANNER_DEPS_CONTROL_BASE, SCANNER_DEPS_BASE)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, SCANNER_DEPS_CONTROL_BASE, SCANNER_DEPS_BASE, SCANNER_DEPS_SNAPSHOT, source),
+            'Scanner dependencies require independently merged controls.')
+    subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', SCANNER_DEPS_CONTROL_BASE, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    for before, after, changed in ((SCANNER_DEPS_CONTROL_BASE, SCANNER_DEPS_BASE, correction),
+                                   (SCANNER_DEPS_BASE, SCANNER_DEPS_SNAPSHOT, delta),
+                                   (SCANNER_DEPS_CONTROL_BASE, trusted, controls),
+                                   (trusted, source, correction | delta), (SCANNER_DEPS_SNAPSHOT, source, controls),
+                                   (expected, source, application | prerequisites | controls)):
+        require(set(git('diff', '--name-only', before, after).splitlines()) == changed,
+                'Scanner dependency complete inventory differs.')
+        verify_changed_modes(before, after)
+    pins = dict(SCANNER_DEPS_PREREQUISITE_BLOBS, **SCANNER_DEPS_APP_BLOBS)
+    for name, blob in pins.items():
+        entry = '100644 blob ' + blob + '\t' + name
+        require(all(git('ls-tree', revision, '--', name) == entry for revision in (SCANNER_DEPS_SNAPSHOT, source)),
+                'Scanner dependency accepted bytes or modes differ: ' + name)
+    for name, blob in dict(SCANNER_DEPS_DELTA_BLOBS, **SCANNER_DEPS_CORRECTION_BLOBS).items():
+        require(SCANNER_DEPS_APP_BLOBS[name] == blob, 'Scanner dependency pin differs.')
+    for name in controls:
+        entry = git('ls-tree', trusted, '--', name)
+        require(re.fullmatch(r'100644 blob [a-f0-9]{40}\t' + re.escape(name), entry)
+                and git('ls-tree', source, '--', name) == entry,
+                'Scanner dependency controls differ from merged controls: ' + name)
+        pins[name] = entry.split()[2]
+    for name in ('lib/admin-session.ts', 'lib/admin-auth.ts', 'lib/staff-roles.ts',
+                 'public/manifest.webmanifest', 'public/staff.webmanifest'):
+        require(git('ls-tree', expected, '--', name) == git('ls-tree', source, '--', name),
+                'Scanner dependency release changed authorization or existing app identity.')
+    before, after = (strict_json(git('show', revision + ':package.json')) for revision in (SCANNER_DEPS_BASE, source))
+    before['devDependencies']['glob'] = '14.0.2'
+    before['devDependencies']['minimatch'] = 'file:vendor/minimatch-compat'
+    before.setdefault('overrides', {})['minimatch'] = '$minimatch'
+    require(before == after, 'Scanner root dependency manifest exceeds the exact patch.')
+    before, after = (strict_json(git('show', revision + ':mobile/package.json')) for revision in (SCANNER_DEPS_BASE, source))
+    before['overrides'] = {'glob': '14.0.2', 'minimatch': '11.0.1'}
+    require(before == after, 'Scanner mobile dependency manifest exceeds the exact patch.')
+    require({'package.json', 'package-lock.json', 'mobile/package.json', 'mobile/package-lock.json'} <= delta,
+            'Scanner dependency patch requires both exact manifest/lock pairs.')
+    require(not migration_plan(pins), 'Scanner dependency patch cannot introduce migrations.')
+    return pins
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == SCANNER_DEPS_LIVE:
+        return reviewed_scanner_dependency_blobs(expected, source)
     if expected == SCANNER_LIVE:
         return reviewed_scanner_application_blobs(expected, source)
     if expected == STAFF_APP_LIVE_BASELINE:
@@ -3951,6 +4079,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == SCANNER_DEPS_LIVE:
+        require(not migration_plan(changed), 'Scanner dependency patch cannot introduce migrations.')
+        return changed
     if expected == SCANNER_LIVE:
         # The scanner family pins the full package bytes and allows only test:repo.
         require({'package.json', 'package-lock.json'} & set(changed) == {'package.json'},
