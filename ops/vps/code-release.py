@@ -3951,6 +3951,12 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == SCANNER_LIVE:
+        # The scanner family pins the full package bytes and allows only test:repo.
+        require({'package.json', 'package-lock.json'} & set(changed) == {'package.json'},
+                'Scanner test command requires the unchanged dependency lock.')
+        require(not migration_plan(changed), 'Scanner release cannot introduce migrations.')
+        return changed
     if expected == OWNER_PUSH_RELEASE_BASELINE:
         require(migration_plan(changed) == owner_push_migration_plan(),
                 "Owner push requires its sole exact migration.")

@@ -3444,7 +3444,7 @@ def staff_app_source_family(root):
 
 SCANNER_TEST_FILE = Path(__file__).resolve()
 SCANNER_CONTROL_PINS = {
-    'ops/vps/code-release.py': ('100644', 'e6298c04224317d7ee8bb8c9f30773d7d1a8277a'),
+    'ops/vps/code-release.py': ('100644', '4764240631df9fa45dc15bb9e1eaffe66e46baa7'),
     'ops/vps/test_code_release.py': ('100644', release.hashlib.sha1(
         b'blob ' + str(len(SCANNER_TEST_FILE.read_bytes())).encode() + b'\0'
         + SCANNER_TEST_FILE.read_bytes()).hexdigest()),
@@ -15636,12 +15636,13 @@ class ScannerAdmissionTests(unittest.TestCase):
         self.prerequisites = {'tests/prior-diagnostic.txt': self.git('rev-parse', self.baseline+':tests/prior-diagnostic.txt')}
         self.write('app/privacy/page.tsx', 'accepted protected privacy\n')
         self.write('.github/workflows/browser-audit.yml', 'exact activation-bound audit\n')
+        self.write('package.json', json.dumps({'scripts': {'test:tooling': 'node --test tests/tooling-glob.test.mjs', 'test:repo': 'node --test scanner.test.mjs'}, 'dependencies': {'fixture': '1.0.0'}}))
         self.merged = self.commit()
         self.write('app/privacy/page.tsx', 'corrected scanner password order\n')
         self.write('.github/workflows/browser-audit.yml', 'corrected scanner regression\n')
         self.snapshot = self.commit()
         self.application = {name: self.git('rev-parse', self.snapshot + ':' + name)
-                            for name in ('app/privacy/page.tsx', '.github/workflows/browser-audit.yml')}
+                            for name in ('app/privacy/page.tsx', '.github/workflows/browser-audit.yml', 'package.json')}
         self.git('checkout', '-q', self.merged)
         self.write('ops/vps/code-release.py', 'independent operator\n')
         self.write('ops/vps/test_code_release.py', 'independent tests\n')
@@ -15656,7 +15657,7 @@ class ScannerAdmissionTests(unittest.TestCase):
             'SCANNER_TOOLING': self.baseline, 'SCANNER_TOOLING_TREE': self.git('rev-parse', self.baseline+'^{tree}'),
             'SCANNER_PREREQUISITE_BLOBS': self.prerequisites,
             'SCANNER_BASE': self.merged, 'SCANNER_BASE_TREE': self.git('rev-parse', self.merged+'^{tree}'),
-            'SCANNER_CORRECTION_BLOBS': self.application,
+            'SCANNER_CORRECTION_BLOBS': {name: blob for name, blob in self.application.items() if name != 'package.json'},
             '__file__': str(self.root/'ops/vps/code-release.py'),
         }.items():
             self.patch(release, name, value)
@@ -15849,7 +15850,7 @@ class ScannerAdmissionTests(unittest.TestCase):
 
 
     def test_uncorrected_scanner_and_partial_correction_reject(self):
-        for name in self.application:
+        for name in release.SCANNER_CORRECTION_BLOBS:
             with self.subTest(name=name):
                 self.git('reset', '--hard', self.source)
                 self.write(name, self.git('show', self.merged+':'+name)+'\n')
