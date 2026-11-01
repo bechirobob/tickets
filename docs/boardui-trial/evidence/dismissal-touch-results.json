@@ -1,0 +1,119 @@
+{
+  "browser": "154.0.8037.57",
+  "testedApplication": "0415bd0affafa5fce6729647dd07743547cccb2c",
+  "limitations": "Chromium mouse and emulated touch only. Text entry uses fill; select values use selectOption. No OS virtual keyboard, real device or Safari testing.",
+  "scenarios": [
+    {
+      "label": "desktop-mouse",
+      "flow": "Cancel: dirty edit discarded, all fields restored, filter/sort/query/page/rows unchanged, trigger focused; 3 repeated cycles",
+      "passed": true
+    },
+    {
+      "label": "desktop-mouse",
+      "flow": "Close: dirty edit discarded, all fields restored, filter/sort/query/page/rows unchanged, trigger focused; 3 repeated cycles",
+      "passed": true
+    },
+    {
+      "label": "desktop-mouse",
+      "flow": "Backdrop interaction does not dismiss (unsupported by this dialog); unsaved draft retained, then Cancel discards and restores list/focus",
+      "passed": true
+    },
+    {
+      "label": "desktop-mouse",
+      "flow": "New guest Cancel: no record created, empty on reopen, list state and trigger focus restored",
+      "passed": true
+    },
+    {
+      "label": "desktop-mouse",
+      "flow": "New guest Close: no record created, empty on reopen, list state and trigger focus restored",
+      "passed": true
+    },
+    {
+      "label": "desktop-mouse",
+      "flow": "Pointer create, checkbox, edit/save and next/previous navigation",
+      "passed": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "pointerTypes": [
+        "mouse"
+      ]
+    },
+    {
+      "label": "mobile-touch",
+      "flow": "Cancel: dirty edit discarded, all fields restored, filter/sort/query/page/rows unchanged, trigger focused; 3 repeated cycles",
+      "passed": true
+    },
+    {
+      "label": "mobile-touch",
+      "flow": "Close: dirty edit discarded, all fields restored, filter/sort/query/page/rows unchanged, trigger focused; 3 repeated cycles",
+      "passed": true
+    },
+    {
+      "label": "mobile-touch",
+      "flow": "Backdrop interaction does not dismiss (unsupported by this dialog); unsaved draft retained, then Cancel discards and restores list/focus",
+      "passed": true
+    },
+    {
+      "label": "mobile-touch",
+      "flow": "New guest Cancel: no record created, empty on reopen, list state and trigger focus restored",
+      "passed": true
+    },
+    {
+      "label": "mobile-touch",
+      "flow": "New guest Close: no record created, empty on reopen, list state and trigger focus restored",
+      "passed": true
+    },
+    {
+      "label": "mobile-touch",
+      "flow": "Pointer create, checkbox, edit/save and next/previous navigation",
+      "passed": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pointerTypes": [
+        "touch"
+      ]
+    },
+    {
+      "label": "narrow-touch",
+      "flow": "Cancel: dirty edit discarded, all fields restored, filter/sort/query/page/rows unchanged, trigger focused; 3 repeated cycles",
+      "passed": true
+    },
+    {
+      "label": "narrow-touch",
+      "flow": "Close: dirty edit discarded, all fields restored, filter/sort/query/page/rows unchanged, trigger focused; 3 repeated cycles",
+      "passed": true
+    },
+    {
+      "label": "narrow-touch",
+      "flow": "Backdrop interaction does not dismiss (unsupported by this dialog); unsaved draft retained, then Cancel discards and restores list/focus",
+      "passed": true
+    },
+    {
+      "label": "narrow-touch",
+      "flow": "New guest Cancel: no record created, empty on reopen, list state and trigger focus restored",
+      "passed": true
+    },
+    {
+      "label": "narrow-touch",
+      "flow": "New guest Close: no record created, empty on reopen, list state and trigger focus restored",
+      "passed": true
+    },
+    {
+      "label": "narrow-touch",
+      "flow": "Pointer create, checkbox, edit/save and next/previous navigation",
+      "passed": true,
+      "viewport": {
+        "width": 320,
+        "height": 740
+      },
+      "pointerTypes": [
+        "touch"
+      ]
+    }
+  ],
+  "errors": []
+}
