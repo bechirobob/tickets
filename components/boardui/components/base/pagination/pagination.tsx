@@ -76,19 +76,19 @@ const cell = "flex size-8 shrink-0 items-center justify-center rounded-lg text-b
  *  somewhere around 380–420px depending on totalPages' digit count. */
 const COMPACT_WIDTH = 420;
 
-function useIsCompact() {
+function useIsCompact(active: boolean) {
   const ref = useRef<HTMLElement>(null);
   const [isCompact, setIsCompact] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!active || !el) return;
     const observer = new ResizeObserver(([entry]) => {
       setIsCompact(entry.contentRect.width < COMPACT_WIDTH);
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [active]);
 
   return [ref, isCompact] as const;
 }
@@ -104,7 +104,7 @@ export function Pagination({
   "aria-label": ariaLabel = "Pagination",
 }: PaginationProps) {
 
-  const [navRef, isCompact] = useIsCompact();
+  const [navRef, isCompact] = useIsCompact(totalPages > 1);
   if (totalPages <= 1) return null;
   const pages = isCompact ? [...new Set([1, page, totalPages])] : paginationRange(page, totalPages, siblingCount);
 

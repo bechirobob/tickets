@@ -1,6 +1,6 @@
 # Tickets workspace integration candidate
 
-Local integration branch `integrate/boardui-workspace-20261101`, based on approved preview commit `14b2b3789b61ed032e20ac772397c637c0fbfc33` and original main `63f2ead2fb3eaae03696f408b12e9e18cfcee265`. This is application source work, not a live rollout or a claim that Tickets is finished. Preview PR #394 and independent PRs #392/#393 are not modified by this branch.
+Local integration branch `integrate/boardui-workspace-20261101`, based on approved preview commit `14b2b3789b61ed032e20ac772397c637c0fbfc33` and original main `63f2ead2fb3eaae03696f408b12e9e18cfcee265`. This is application source work, not a live rollout or a claim of authenticated release readiness. Preview PR #394 and independent PRs #392/#393 are not modified by this branch.
 
 ## Real routes and contracts
 
@@ -11,12 +11,12 @@ Local integration branch `integrate/boardui-workspace-20261101`, based on approv
 | Host Audience | BoardUI search/pager; contextual guest history | Assigned-event history and event-specific announcement consent unchanged. |
 | Owner `/admin/yorkeway-audience` | Compact subscriber list, server search before existing email cursor pagination, accurate matching count, consent-version dialog, loading/error/retry and stale-request protection | Same owner session/password-change check and private no-store response. Same subscribed/suppression predicates. Bound, parameterised literal substring search; withdrawn/suppressed rows excluded. No send, contact sync, edits or permission changes. |
 | Event Details, Tickets, Room/VIP, Insights and Requests | Existing forms/actions stay connected. Phase 3 adds ticket/question dialogs and request-history search/paging | Established persistence, role checks and mutation contracts remain. See the exact inventory for retained specialist views and outstanding authenticated verification. |
-| Other owner platform screens | Existing shared navigation retained | See phase 2 below for orders, event inventory and Money; staff management and support remain untouched. |
+| Other owner platform screens | Existing shared navigation retained | See phase 2 below for orders, event inventory and Money; phase 4 adds staff-account and support integration. |
 | Public Yorke signup | No change | Remains distinct from owner audience management and staff invitations. The prior isolated signup reference is not a production redesign. |
 
 The same pinned MIT BoardUI source and notices under `components/boardui` are reused. Production adapters live under `components/workspace`; existing Operations button rules explicitly exclude the integrated adapter so they cannot shrink its touch targets or overflow action cells; production layouts reference `/boardui-pressable.css`. Existing trial routes remain separately under `/boardui-trial`. No global theme replacement, customer-data reads, outgoing messages or production credentials. The source-only dependency correction is detailed below.
 
-## Current integration inventory (phase 2)
+## Phase 2 inventory (historical checkpoint; phase 4 completes the dashboard pass)
 
 | Status | Area | What is actually implemented / remaining |
 | --- | --- | --- |
@@ -61,6 +61,16 @@ Library transfer is not retried: owner approval remains valid, but the supported
 
 Ticket-grade editing and guest-question editing now use contextual dialogs. Guest questions have search and ten-row pagination; validation and server errors remain inside the dialog. Ticket-grade reload now remounts the form even when the stored revision is unchanged, fixing the existing false-success reload behavior. Request history has search and ten-row paging without clearing an unsent request. API payloads and existing history/capacity restrictions are preserved. No financial execution, outgoing request/invitation or production write occurred.
 
-See [the exact workspace inventory](workspace-inventory.md) for each owner/organiser area, including retained specialist interfaces that have not been redesigned. See [the read-only fixture assessment](fixture-assessment.md) for generated values, storage, expiry, actual sign-in behavior and the narrower normal-login testing option. No credentials were generated. Phase 3 evidence is under `evidence/phase3`.
+See [the final dashboard inventory](dashboard-pass.md) for each owner/organiser area and the intentional retention of working specialist interfaces. See [the read-only fixture assessment](fixture-assessment.md) for generated values, storage, expiry, actual sign-in behavior and the narrower normal-login testing option. No credentials were generated. Phase 3 evidence is under `evidence/phase3`.
 
 Phase 3 verification: 288 repository tests, 308 UI tests, 23 organiser-business Worker tests and five rendered-build tests passed. Types and Vinext build passed; lint remains zero errors/seven unsuppressed warnings. Chromium component tests passed at 1440×1000, 390×844 and 320×740, including native validation, Cancel/Escape/focus restoration, preserved drafts after mocked 409 rejection, successful question save, ticket history-lock payloads, reload reset, request search/pagination and axe. All three POSTs per viewport were intercepted fictional form contracts; no request-history submit, invitation or financial execution occurred. Credentials, database setup and authenticated browser-to-database verification remain unperformed. Root/mobile dependency files are unchanged from phase 2's zero-vulnerability audits.
+
+## Phase 4: completed staff dashboard interface pass
+
+The final route-by-route disposition and bounded release gates are in [dashboard-pass.md](dashboard-pass.md). Staff-account directory/dialog, submission review return state, host review paging/search, support conversation/draft behavior, promoter/coupon lists and active-device paging are implemented. Existing role-aware navigation and bounded operational/settings/consent views are intentionally retained. Customer Room/VIP and public experiences are outside this dashboard pass. There is no unspecified interface backlog blocking this pass.
+
+The admin parent layout now owns the scoped BoardUI adapter and external React Aria style marker, replacing duplicate per-route markers. No global theme, auth, API, consent, financial handler, release control or dependency file was changed. Host review filtering retains its unsent note; support drafts are isolated per case in component memory, never persisted to storage. Promotion detail forms remain mounted while filtered/paged. Existing permission and action conditions remain.
+
+Phase 4 evidence is under `evidence/phase4`. Browser journeys use fictional intercepted GETs and assert zero writes; no password/session fixture was generated. The pending authorization remains precisely the local normal-sign-in fixture described in `fixture-assessment.md` and `dashboard-pass.md`.
+
+Final phase 4 checks: 288 repository + 308 UI + 72 Worker + five rendered tests passed; types/Vinext build passed; lint zero errors/five warnings; root/mobile audits zero vulnerabilities. Dashboard journeys and earlier integration regressions passed in desktop and simulated touch Chromium. Compiled checks cover 11 protected-page redirects and 10 rejected APIs. The asynchronous pagination observer fix is recorded in BoardUI provenance. See `dashboard-pass.md` for precise boundaries and remaining gates.

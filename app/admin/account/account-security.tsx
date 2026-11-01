@@ -1,5 +1,6 @@
 "use client";
 
+import { Pagination } from '@/components/boardui/components/base/pagination/pagination';
 import { ActionButton } from "../../action";
 
 import { operationsFetch } from "../../../lib/operations-client";
@@ -13,6 +14,7 @@ type Passkey = { id: string; label: string; deviceType: string; backedUp: number
 type Session = { id: string; deviceLabel: string | null; createdAt: string; lastSeenAt: string; expiresAt: string; mfaVerifiedAt: string | null };
 
 export default function AccountSecurity({ mustChangePassword }: { mustChangePassword: boolean }) {
+  const [devicePage,setDevicePage]=useState(1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
@@ -78,9 +80,10 @@ export default function AccountSecurity({ mustChangePassword }: { mustChangePass
     }
   }
 
-  return <div className="account-security-stack"><section className="passkey-security"><header><div><b>Passkeys & devices</b><small>{passkeys.length ? "You can sign in with your passkey." : "Use your device to sign in with a passkey."}</small></div><ActionButton type="button" onClick={() => void addPasskey()} disabled={busy}>{busy ? "Opening device…" : passkeys.length ? "Add another" : "Add passkey"}</ActionButton></header>
+  const devicePages=Math.max(1,Math.ceil(sessions.length/10)),currentDevicePage=Math.min(devicePage,devicePages);
+  return <div className="account-security-stack workspace-boardui"><section className="passkey-security"><header><div><b>Passkeys & devices</b><small>{passkeys.length ? "You can sign in with your passkey." : "Use your device to sign in with a passkey."}</small></div><ActionButton type="button" onClick={() => void addPasskey()} disabled={busy}>{busy ? "Opening device…" : passkeys.length ? "Add another" : "Add passkey"}</ActionButton></header>
     {passkeys.map((passkey) => <article key={passkey.id}><span><b>{passkey.label}</b><small>{passkey.backedUp ? "Synced passkey" : passkey.deviceType.replaceAll("-", " ")} · Added {new Date(passkey.createdAt).toLocaleDateString("en-GH")}</small></span><i>{passkey.lastUsedAt ? `Used ${new Date(passkey.lastUsedAt).toLocaleDateString("en-GH")}` : "New"}</i></article>)}
-    <details><summary>Active devices · {sessions.length}</summary>{sessions.map((item) => <article key={item.id}><span><b>{item.id === currentSessionId ? "This device" : item.deviceLabel ?? "Staff device"}</b><small>Seen {new Date(item.lastSeenAt).toLocaleString("en-GH")} · {item.mfaVerifiedAt ? "Passkey verified" : "Password sign-in"}</small></span>{item.id !== currentSessionId ? <ActionButton type="button" onClick={() => void revokeSession(item.id)}>Sign out</ActionButton> : null}</article>)}</details>
+    <details><summary>Active devices · {sessions.length}</summary>{sessions.slice((currentDevicePage-1)*10,currentDevicePage*10).map((item) => <article key={item.id}><span><b>{item.id === currentSessionId ? "This device" : item.deviceLabel ?? "Staff device"}</b><small>Seen {new Date(item.lastSeenAt).toLocaleString("en-GH")} · {item.mfaVerifiedAt ? "Passkey verified" : "Password sign-in"}</small></span>{item.id !== currentSessionId ? <ActionButton type="button" onClick={() => void revokeSession(item.id)}>Sign out</ActionButton> : null}</article>)}<Pagination aria-label="Active device pages" page={currentDevicePage} totalPages={devicePages} onChange={setDevicePage}/></details>
     <p>{recoveryCodesRemaining} unused recovery codes</p>
   </section>
   {recoveryCodes.length ? <section className="recovery-codes"><header><b>Save these once</b><ActionButton type="button" onClick={() => setRecoveryCodes([])}>I saved them</ActionButton></header><p>Each code works once. Keep a copy where you can find it.</p><div>{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div></section> : null}

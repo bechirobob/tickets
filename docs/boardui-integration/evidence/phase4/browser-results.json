@@ -1,0 +1,25 @@
+{
+  "scenarios": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "passed": true
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "passed": true
+    },
+    {
+      "name": "narrow",
+      "width": 320,
+      "height": 740,
+      "passed": true
+    }
+  ],
+  "writes": [],
+  "errors": [],
+  "limits": "Actual staff dashboard components, fictional intercepted GETs. No credentials, mutations, messages, financial operations or authenticated backend."
+}

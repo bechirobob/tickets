@@ -72,3 +72,31 @@ main.workspace-boardui:has(>.workspace-topbar) .workspace-orders button { border
 .workspace-boardui .organizer-request { background:transparent; border-bottom:1px solid var(--line); border-radius:0; }
 .workspace-boardui .organizer-request > span { color:var(--ink); }
 .workspace-boardui .organizer-panel .workspace-input input { border:0; border-radius:0; padding:0; min-height:0; background:transparent; outline:none; }
+.workspace-pager-guard { margin:0; padding:0; border:0; min-width:0; }
+.workspace-conversation-back { display:none; }
+.staff-page.workspace-boardui .staff-workspace { display:block; }
+.staff-page.workspace-boardui .staff-list { max-width:900px; }
+.workspace-boardui .staff-list > [data-input-size], .workspace-boardui .staff-list > nav { grid-column:1 / -1; }
+.workspace-boardui .staff-editor { background:transparent; padding:0; }
+.workspace-boardui .workspace-input input:not([type='checkbox']):not([type='radio']) { border:0; padding:0; min-height:0; background:transparent; outline:none; }
+@media(max-width:700px) {
+ .workspace-boardui .support-ops__layout[data-conversation-open='false'] > article { display:none; }
+ .workspace-boardui .support-ops__layout[data-conversation-open='true'] > nav { display:none; }
+ .workspace-boardui .workspace-conversation-back { display:block; margin-bottom:16px; }
+}
+.workspace-boardui .passkey-security article { background:transparent; border-bottom:1px solid var(--line); border-radius:0; }
+.workspace-boardui .passkey-security small, .workspace-boardui .passkey-security article i { color:var(--muted); }
+.workspace-boardui .account-security label { color:var(--ink); letter-spacing:0; text-transform:none; }
+.workspace-boardui .account-security small { color:var(--muted); }
+.workspace-boardui .staff-editor .role-boundary, .workspace-boardui .staff-editor .staff-events label, .workspace-boardui .staff-editor .staff-removal { background:transparent; border-top:1px solid var(--line); border-radius:0; padding:16px 0; }
+.workspace-boardui .staff-editor .role-boundary header { display:block; }
+.workspace-boardui .staff-editor .ops-grid label { text-transform:none; letter-spacing:0; font-weight:600; }
+.workspace-boardui .staff-editor .ops-grid :is(input,select) { min-height:44px; font-weight:400; }
+.workspace-boardui .support-ops button { border-radius:7px; }
+.workspace-boardui .support-ops__messages > p { background:transparent; border:1px solid var(--line); color:var(--ink); }
+.workspace-boardui.account-security-stack { min-width:0; grid-template-columns:minmax(0,1fr); }
+.workspace-boardui .passkey-security, .workspace-boardui .passkey-security article > span { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:650px) {
+ .workspace-boardui .passkey-security > header, .workspace-boardui .passkey-security details > article { display:grid; grid-template-columns:minmax(0,1fr); justify-items:start; gap:10px; }
+ .workspace-boardui .passkey-security .ticket-action { width:auto; min-width:max-content; white-space:nowrap; }
+}

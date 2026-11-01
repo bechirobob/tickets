@@ -41,6 +41,7 @@
     "Compact pager shows first/current/last to preserve 44px targets at 320px.",
     "Styles are supplied by the scoped Tickets trial CSS; global BoardUI theme not installed.",
     "Dialog uses native HTML dialog, not a claimed BoardUI component.",
-    "React Aria 3.48.0 pressable touch-action rule is supplied as an external trial stylesheet with its expected ID, avoiding CSP inline-style injection; upgrade-sensitive adapter."
+    "React Aria 3.48.0 pressable touch-action rule is supplied as an external trial stylesheet with its expected ID, avoiding CSP inline-style injection; upgrade-sensitive adapter.",
+    "Pagination reconnects its compact-width ResizeObserver when asynchronously loaded totals first render the pager; original upstream hashes above remain unchanged."
   ]
 }

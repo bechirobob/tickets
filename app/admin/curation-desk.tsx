@@ -1,6 +1,8 @@
 /* eslint-disable @next/next/no-img-element -- moderation images are private API responses and must bypass the public image optimizer. */
 "use client";
 
+import { Input } from '@/components/boardui/components/base/input/input';
+import { Pagination } from '@/components/boardui/components/base/pagination/pagination';
 import HostRsvpAlerts from "../organizer/workspace/host-rsvp-alerts";
 import OrganizerAccess from "./organizer-access";
 
@@ -36,6 +38,7 @@ export default function CurationDesk({ actor, role, accountId, initialSubmission
   const [tagline, setTagline] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
 
+  const listReturn=useRef<{id:string;scroll:number}|null>(null);
   const initialLinkHandled = useRef(false);
   const applyLoadedItems = useCallback((submissions: Submission[]) => {
     setItems(submissions);
@@ -96,7 +99,7 @@ export default function CurationDesk({ actor, role, accountId, initialSubmission
   const pageCount = Math.max(1, Math.ceil(filtered.length / 10));
   const visible = filtered.slice((Math.min(page, pageCount) - 1) * 10, Math.min(page, pageCount) * 10);
   return (
-    <main className="curation-page">
+    <main className="curation-page workspace-boardui">
       <OperationsNav actor={actor} role={role} active="/admin" />
       <section className="curation-main">
         {role === "owner" && accountId ? <HostRsvpAlerts accountId={accountId} owner mode="prompt" /> : null}
@@ -105,10 +108,10 @@ export default function CurationDesk({ actor, role, accountId, initialSubmission
         {notice ? <p className="ops-message" role="status">{notice}</p> : null}
         {!selected ? <>
           <nav className="ops-tabs" aria-label="Submission views">{Object.entries({ active: "Needs review", accepted: "Accepted", rejected: "Rejected", history: "History" }).map(([key, label]) => <button key={key} aria-pressed={view === key} onClick={() => { setView(key); setPage(1); }}>{label} <span>{items.filter(item => groups[key].includes(item.status)).length}</span></button>)}</nav>
-          <label className="ops-search">Search submissions<input value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} placeholder="Event, organiser or area" /></label>
-          {loading ? <p role="status">Loading submissions…</p> : <div className="ops-directory">{visible.map(item => <button key={item.id} className="ops-directory__row" onClick={() => selectItem(item)}><span><b>{item.title}</b><small>{item.organizerName} · {item.area}</small></span><span className={`review-status ${item.status}`}>{labels[item.status]}</span><time>{new Date(item.startsAt).toLocaleDateString("en-GH", { day: "numeric", month: "short", timeZone: "Africa/Accra" })}</time><ChevronRight size={16} /></button>)}{!visible.length ? <p className="ops-empty">{query ? "No matching submissions." : view === "active" ? "Nothing needs review. New submissions will appear here." : "No submissions in this view."}</p> : null}</div>}
-          <nav className="order-pagination" aria-label="Submission pages"><span>{filtered.length} submissions</span><div><button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button><span>{Math.min(page, pageCount)} / {pageCount}</span><button disabled={page >= pageCount} onClick={() => setPage(page + 1)}>Next</button></div></nav>
-        </> : <div className="ops-detail-view"><button className="ops-back" disabled={working} onClick={() => setSelectedId(null)}>← Back to submissions</button>
+          <Input label="Search submissions" value={query} onChange={value=>{setQuery(value);setPage(1);}} placeholder="Event, organiser or area" fieldClassName="workspace-input"/>
+          {loading ? <p role="status">Loading submissions…</p> : <div className="ops-directory">{visible.map(item => <button key={item.id} className="ops-directory__row" data-submission-id={item.id} onClick={() => {listReturn.current={id:item.id,scroll:window.scrollY};selectItem(item);}}><span><b>{item.title}</b><small>{item.organizerName} · {item.area}</small></span><span className={`review-status ${item.status}`}>{labels[item.status]}</span><time>{new Date(item.startsAt).toLocaleDateString("en-GH", { day: "numeric", month: "short", timeZone: "Africa/Accra" })}</time><ChevronRight size={16} /></button>)}{!visible.length ? <p className="ops-empty">{query ? "No matching submissions." : view === "active" ? "Nothing needs review. New submissions will appear here." : "No submissions in this view."}</p> : null}</div>}
+          <p>{filtered.length} submissions</p><Pagination aria-label="Submission pages" page={Math.min(page,pageCount)} totalPages={pageCount} onChange={setPage}/>
+        </> : <div className="ops-detail-view"><button className="ops-back" disabled={working} onClick={() => {setSelectedId(null);requestAnimationFrame(()=>{const item=listReturn.current;if(item){document.querySelector<HTMLElement>(`[data-submission-id="${CSS.escape(item.id)}"]`)?.focus({preventScroll:true});window.scrollTo(0,item.scroll);}});}}>← Back to submissions</button>
             {selected && <article className="curation-detail">
               <div className="curation-detail__head"><div><span className={`review-status ${selected.status}`}>{labels[selected.status]}</span><h2>{selected.title}</h2><p>{selected.organizerName} · submitted {new Date(selected.createdAt).toLocaleDateString("en-GH")}</p></div>{selected.posterObjectKey && <img src={`/api/media/${selected.id}`} alt={`${selected.title} poster`} />}</div>
               <div className="curation-facts"><span><small>When</small>{new Date(selected.startsAt).toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" })}</span><span><small>Where</small>{selected.venueName}, {selected.area}</span><span><small>Commercial</small>GH₵{(selected.priceFromMinor / 100).toFixed(0)} · {selected.capacity} guests</span><span><small>Audience</small>{selected.ageRestriction} · {selected.vibe}</span></div>
