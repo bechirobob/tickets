@@ -1,0 +1,66 @@
+body:has(.boardui-trial dialog[open]) { overflow:hidden; }
+/* Tickets-only adapter. No BoardUI global theme or reset is imported. */
+body:has(.boardui-trial) .customer-dock { display: none; }
+.boardui-trial { min-height:100dvh; background:var(--white); color:var(--ink); font:14px/1.45 var(--font-system); padding:0 32px 24px; }
+.boardui-trial *, .boardui-trial *::before, .boardui-trial *::after { box-shadow:none; }
+.boardui-trial .trial-header { max-width:1120px; margin:auto; min-height:88px; display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); }
+.boardui-trial .trial-header > span:last-child { color:var(--muted); font-size:12px; }
+.boardui-trial .trial-workspace { max-width:1000px; margin:36px auto 0; }
+.boardui-trial .trial-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:28px; }
+.boardui-trial .trial-eyebrow { color:var(--muted); font-size:12px; margin:0 0 6px; }
+.boardui-trial h1 { font-size:28px; font-weight:720; letter-spacing:-.04em; margin:0 0 6px; line-height:1.15; }
+.boardui-trial .trial-heading p:last-child { margin:0; color:var(--muted); }
+.boardui-trial button { min-height:44px; min-width:44px; height:auto; border-radius:7px; padding:8px 10px; color:var(--ink); font:600 14px/1.25 var(--font-system); background:transparent; cursor:pointer; }
+.boardui-trial button:hover { text-decoration:underline; text-underline-offset:3px; }
+.boardui-trial button:disabled { opacity:.45; cursor:default; text-decoration:none; }
+.boardui-trial button.trial-primary { background:var(--ink); color:var(--white); border:1px solid var(--ink); }
+.boardui-trial button:focus-visible, .boardui-trial select:focus-visible, .boardui-trial input:focus-visible, .boardui-trial [data-focus-visible] { outline:2px solid var(--orange); outline-offset:2px; }
+.boardui-trial .trial-toolbar { display:grid; grid-template-columns:minmax(0,1fr) 160px 160px; gap:16px; align-items:end; }
+.boardui-trial [data-label], .boardui-trial .trial-filter { color:var(--ink); font:600 13px/1.4 var(--font-system); }
+.boardui-trial .trial-input, .boardui-trial select { min-height:44px; border:1px solid var(--line); background:var(--white); border-radius:7px; padding:10px; width:100%; }
+.boardui-trial .trial-input:focus-within { outline:2px solid var(--orange); outline-offset:2px; }
+.boardui-trial .trial-input input { font:400 16px/1.4 var(--font-system); color:var(--ink); outline:none; }
+.boardui-trial .trial-input input::placeholder { color:var(--muted); }
+.boardui-trial .trial-filter { display:grid; gap:4px; }
+.boardui-trial select { font:400 14px/1.4 var(--font-system); }
+.boardui-trial .trial-summary { min-height:60px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--muted); font-size:13px; }
+.boardui-trial .bui-table { width:100%; border-collapse:collapse; text-align:left; table-layout:fixed; }
+.boardui-trial .bui-table th { border-block:1px solid var(--line); color:var(--muted); font-size:12px; font-weight:600; padding:12px 8px; }
+.boardui-trial .bui-table th:first-child { width:66%; }
+.boardui-trial .bui-table th:last-child { width:70px; }
+.boardui-trial .bui-table td { padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; overflow-wrap:anywhere; }
+.boardui-trial .trial-name { display:block; font-weight:600; }
+.boardui-trial .trial-email { display:block; margin-top:3px; font-size:12px; color:var(--muted); }
+.boardui-trial .trial-arrival { font-size:13px; }
+.boardui-trial .trial-pagination { padding-top:20px; max-width:640px; margin:auto; }
+.boardui-trial .trial-pagination ul { padding:0; margin:0; list-style:none; }
+.boardui-trial .trial-pagination button[aria-current] { border:1px solid var(--ink); }
+.boardui-trial .trial-notice { color:var(--muted); font-size:12px; margin:24px 0 0; overflow-wrap:anywhere; }
+.boardui-trial .trial-empty { padding:40px 8px; text-align:center; }
+.boardui-trial .trial-dialog { position:fixed; margin:auto; inset:0; width:min(460px, calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--white); color:var(--ink); }
+.boardui-trial .trial-dialog::backdrop { background:rgb(0 0 0 / .3); }
+.boardui-trial .trial-dialog-heading { display:flex; align-items:start; justify-content:space-between; gap:12px; margin-bottom:20px; }
+.boardui-trial h2 { font-size:22px; line-height:1.2; font-weight:700; letter-spacing:-.025em; margin:0; }
+.boardui-trial .trial-dialog form { display:grid; gap:20px; }
+.boardui-trial .trial-ticket-id { color:var(--muted); font-size:12px; margin:-8px 0 20px; }
+.boardui-trial .trial-checkbox { display:flex; gap:10px; align-items:center; min-height:44px; }
+.boardui-trial .trial-checkbox input { width:20px; height:20px; accent-color:var(--ink); }
+.boardui-trial .trial-form-actions { display:flex; justify-content:flex-end; gap:8px; padding-top:4px; }
+.boardui-trial [slot='errorMessage'] { color:var(--status-danger); font-size:13px; }
+.boardui-trial [data-invalid] .trial-input { border-color:var(--status-danger); }
+@media(max-width:600px) {
+ .boardui-trial { padding:0 16px 24px; }
+ .boardui-trial .trial-header { min-height:78px; }
+ .boardui-trial .trial-header > span:last-child { max-width:110px; text-align:right; }
+ .boardui-trial .trial-workspace { margin-top:26px; }
+ .boardui-trial .trial-heading { align-items:start; flex-wrap:wrap; gap:16px; margin-bottom:24px; }
+ .boardui-trial h1 { font-size:26px; }
+ .boardui-trial .trial-toolbar { grid-template-columns:1fr; gap:12px; }
+ .boardui-trial .trial-filter { grid-template-columns:auto 1fr; align-items:center; gap:12px; }
+ .boardui-trial .bui-table th:first-child { width:auto; }
+ .boardui-trial .bui-table th:nth-child(2) { width:80px; }
+ .boardui-trial .bui-table th:last-child { width:58px; }
+ .boardui-trial .bui-table td, .boardui-trial .bui-table th { padding-inline:4px; }
+ .boardui-trial .trial-arrival { font-size:12px; }
+ .boardui-trial .trial-dialog { padding:20px; }
+}

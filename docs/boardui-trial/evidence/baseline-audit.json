@@ -1,0 +1,506 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@becoreops/eslint-plugin-next": {
+      "name": "@becoreops/eslint-plugin-next",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "@becoreops/tooling-glob",
+        "@eslint-community/eslint-utils"
+      ],
+      "effects": [
+        "eslint-config-next"
+      ],
+      "range": "",
+      "nodes": [
+        "node_modules/@next/eslint-plugin-next"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "@becoreops/tooling-glob": {
+      "name": "@becoreops/tooling-glob",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "glob"
+      ],
+      "effects": [
+        "@becoreops/eslint-plugin-next",
+        "@becoreops/vite-plugin-dynamic-import"
+      ],
+      "range": "",
+      "nodes": [
+        "node_modules/@becoreops/tooling-glob"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "@becoreops/vite-plugin-dynamic-import": {
+      "name": "@becoreops/vite-plugin-dynamic-import",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "@becoreops/tooling-glob"
+      ],
+      "effects": [
+        "vite-plugin-commonjs"
+      ],
+      "range": "",
+      "nodes": [
+        "node_modules/vite-plugin-dynamic-import"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "@eslint-community/eslint-utils": {
+      "name": "@eslint-community/eslint-utils",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "eslint"
+      ],
+      "effects": [
+        "@typescript-eslint/utils",
+        "eslint"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@eslint-community/eslint-utils"
+      ],
+      "fixAvailable": {
+        "name": "eslint",
+        "version": "4.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@eslint/config-array": {
+      "name": "@eslint/config-array",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "minimatch"
+      ],
+      "effects": [
+        "eslint"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@eslint/config-array"
+      ],
+      "fixAvailable": {
+        "name": "eslint",
+        "version": "4.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@eslint/eslintrc": {
+      "name": "@eslint/eslintrc",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "minimatch"
+      ],
+      "effects": [
+        "eslint"
+      ],
+      "range": "0.0.1 || >=0.1.1",
+      "nodes": [
+        "node_modules/@eslint/eslintrc"
+      ],
+      "fixAvailable": {
+        "name": "eslint",
+        "version": "4.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@typescript-eslint/eslint-plugin": {
+      "name": "@typescript-eslint/eslint-plugin",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@typescript-eslint/parser",
+        "@typescript-eslint/type-utils",
+        "@typescript-eslint/utils",
+        "eslint"
+      ],
+      "effects": [
+        "typescript-eslint"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@typescript-eslint/eslint-plugin"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "@typescript-eslint/parser": {
+      "name": "@typescript-eslint/parser",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@typescript-eslint/typescript-estree",
+        "eslint"
+      ],
+      "effects": [
+        "@typescript-eslint/eslint-plugin"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@typescript-eslint/parser"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "@typescript-eslint/type-utils": {
+      "name": "@typescript-eslint/type-utils",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@typescript-eslint/typescript-estree",
+        "@typescript-eslint/utils",
+        "eslint"
+      ],
+      "effects": [
+        "@typescript-eslint/eslint-plugin"
+      ],
+      "range": ">=5.9.2-alpha.0",
+      "nodes": [
+        "node_modules/@typescript-eslint/type-utils"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "@typescript-eslint/typescript-estree": {
+      "name": "@typescript-eslint/typescript-estree",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "minimatch"
+      ],
+      "effects": [
+        "@typescript-eslint/parser",
+        "@typescript-eslint/type-utils",
+        "@typescript-eslint/utils",
+        "typescript-eslint"
+      ],
+      "range": ">=6.16.0",
+      "nodes": [
+        "node_modules/@typescript-eslint/typescript-estree"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "@typescript-eslint/utils": {
+      "name": "@typescript-eslint/utils",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@eslint-community/eslint-utils",
+        "@typescript-eslint/typescript-estree",
+        "eslint"
+      ],
+      "effects": [
+        "@typescript-eslint/eslint-plugin",
+        "@typescript-eslint/type-utils",
+        "typescript-eslint"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@typescript-eslint/utils"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "eslint": {
+      "name": "eslint",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "@eslint-community/eslint-utils",
+        "@eslint/config-array",
+        "@eslint/eslintrc",
+        "minimatch"
+      ],
+      "effects": [
+        "@eslint-community/eslint-utils",
+        "@typescript-eslint/eslint-plugin",
+        "@typescript-eslint/parser",
+        "@typescript-eslint/type-utils",
+        "@typescript-eslint/utils",
+        "typescript-eslint"
+      ],
+      "range": "0.7.1 - 2.0.0-rc.1 || >=4.1.0",
+      "nodes": [
+        "node_modules/eslint"
+      ],
+      "fixAvailable": {
+        "name": "eslint",
+        "version": "4.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "eslint-config-next": {
+      "name": "eslint-config-next",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "@becoreops/eslint-plugin-next",
+        "eslint",
+        "eslint-plugin-import",
+        "eslint-plugin-jsx-a11y",
+        "eslint-plugin-react",
+        "typescript-eslint"
+      ],
+      "effects": [],
+      "range": ">=10.2.1-canary.2",
+      "nodes": [
+        "node_modules/eslint-config-next"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "eslint-plugin-import": {
+      "name": "eslint-plugin-import",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "minimatch"
+      ],
+      "effects": [],
+      "range": ">=1.15.0",
+      "nodes": [
+        "node_modules/eslint-plugin-import"
+      ],
+      "fixAvailable": true
+    },
+    "eslint-plugin-jsx-a11y": {
+      "name": "eslint-plugin-jsx-a11y",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "minimatch"
+      ],
+      "effects": [
+        "eslint-config-next"
+      ],
+      "range": ">=6.5.0",
+      "nodes": [
+        "node_modules/eslint-plugin-jsx-a11y"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "eslint-plugin-react": {
+      "name": "eslint-plugin-react",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "minimatch"
+      ],
+      "effects": [
+        "eslint-config-next"
+      ],
+      "range": ">=7.23.0",
+      "nodes": [
+        "node_modules/eslint-plugin-react"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "glob": {
+      "name": "glob",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1244013,
+          "name": "glob",
+          "dependency": "glob",
+          "title": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+          "url": "https://github.com/advisories/GHSA-3g3m-2fjr-6pw4",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=9.0.0 <=14.0.1"
+        },
+        "minimatch"
+      ],
+      "effects": [
+        "@becoreops/tooling-glob"
+      ],
+      "range": "3.0.0 - 14.0.1",
+      "nodes": [
+        "node_modules/glob"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "minimatch": {
+      "name": "minimatch",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1244012,
+          "name": "minimatch",
+          "dependency": "minimatch",
+          "title": "minimatch has potential denial of service via globparts amplification",
+          "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-405"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<11.0.1"
+        }
+      ],
+      "effects": [
+        "@eslint/config-array",
+        "@eslint/eslintrc",
+        "@typescript-eslint/typescript-estree",
+        "eslint",
+        "eslint-plugin-import",
+        "eslint-plugin-jsx-a11y",
+        "eslint-plugin-react",
+        "glob"
+      ],
+      "range": "<11.0.1",
+      "nodes": [
+        "node_modules/@typescript-eslint/typescript-estree/node_modules/minimatch",
+        "node_modules/glob/node_modules/minimatch",
+        "node_modules/minimatch"
+      ],
+      "fixAvailable": {
+        "name": "eslint",
+        "version": "4.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "typescript-eslint": {
+      "name": "typescript-eslint",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@typescript-eslint/eslint-plugin",
+        "@typescript-eslint/parser",
+        "@typescript-eslint/typescript-estree",
+        "@typescript-eslint/utils",
+        "eslint"
+      ],
+      "effects": [
+        "eslint-config-next"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/typescript-eslint"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "12.0.4",
+        "isSemVerMajor": true
+      }
+    },
+    "vinext": {
+      "name": "vinext",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "vite-plugin-commonjs"
+      ],
+      "effects": [],
+      "range": ">=0.0.16",
+      "nodes": [
+        "node_modules/vinext"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "vite-plugin-commonjs": {
+      "name": "vite-plugin-commonjs",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@becoreops/vite-plugin-dynamic-import"
+      ],
+      "effects": [
+        "vinext"
+      ],
+      "range": "",
+      "nodes": [
+        "node_modules/vite-plugin-commonjs"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 21,
+      "high": 0,
+      "critical": 0,
+      "total": 21
+    },
+    "dependencies": {
+      "prod": 176,
+      "dev": 449,
+      "optional": 197,
+      "peer": 45,
+      "peerOptional": 0,
+      "total": 757
+    }
+  }
+}

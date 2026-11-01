@@ -1,0 +1,937 @@
+[
+  {
+    "path": "sw.js",
+    "bytes": 5357,
+    "gzip": 1772
+  },
+  {
+    "path": "boardui-trial-pressable.css",
+    "bytes": 309,
+    "gzip": 240
+  },
+  {
+    "path": "offline-staff.css",
+    "bytes": 241,
+    "gzip": 201
+  },
+  {
+    "path": "_next/static/3ca0d2e9-0853-476d-bde4-1c993e87d9ca/_buildManifest.js",
+    "bytes": 159,
+    "gzip": 121
+  },
+  {
+    "path": "_next/static/3ca0d2e9-0853-476d-bde4-1c993e87d9ca/_ssgManifest.js",
+    "bytes": 76,
+    "gzip": 60
+  },
+  {
+    "path": "_next/static/css/host-applications.BzOdC8qY.css",
+    "bytes": 1608,
+    "gzip": 564
+  },
+  {
+    "path": "_next/static/css/layout.DL53D47Y.css",
+    "bytes": 23041,
+    "gzip": 4485
+  },
+  {
+    "path": "_next/static/css/confirmation-notifications.DkWahzuv.css",
+    "bytes": 2880,
+    "gzip": 838
+  },
+  {
+    "path": "_next/static/css/order-operations.D-Vv9BZp.css",
+    "bytes": 1139,
+    "gzip": 482
+  },
+  {
+    "path": "_next/static/css/organizer-suite.DLuMLzQI.css",
+    "bytes": 18931,
+    "gzip": 4322
+  },
+  {
+    "path": "_next/static/css/workspace.CnQDEPaS.css",
+    "bytes": 59136,
+    "gzip": 10914
+  },
+  {
+    "path": "_next/static/css/recovery.bvrZ8Y3R.css",
+    "bytes": 669,
+    "gzip": 327
+  },
+  {
+    "path": "_next/static/css/join.B44sMqZA.css",
+    "bytes": 2736,
+    "gzip": 1002
+  },
+  {
+    "path": "_next/static/css/page.4DG69QK0.css",
+    "bytes": 608,
+    "gzip": 255
+  },
+  {
+    "path": "_next/static/css/page.E7eclhyk.css",
+    "bytes": 5679,
+    "gzip": 1505
+  },
+  {
+    "path": "_next/static/css/layout.DGtt6FwM.css",
+    "bytes": 508988,
+    "gzip": 92244
+  },
+  {
+    "path": "_next/static/css/loading.Bv95CebG.css",
+    "bytes": 11876,
+    "gzip": 2886
+  },
+  {
+    "path": "_next/static/css/hosts.YcOgeBGC.css",
+    "bytes": 3810,
+    "gzip": 1129
+  },
+  {
+    "path": "_next/static/css/suite.JOyYnsAx.css",
+    "bytes": 12017,
+    "gzip": 2960
+  },
+  {
+    "path": "_next/static/css/event-screen.D7snCTMA.css",
+    "bytes": 13828,
+    "gzip": 3263
+  },
+  {
+    "path": "_next/static/css/layout.BLGIMjfI.css",
+    "bytes": 8763,
+    "gzip": 2516
+  },
+  {
+    "path": "_next/static/css/customer-dock.CnkjnffM.css",
+    "bytes": 1348,
+    "gzip": 589
+  },
+  {
+    "path": "_next/static/css/ticket-wallet.CbiVWT27.css",
+    "bytes": 586,
+    "gzip": 343
+  },
+  {
+    "path": "_next/static/chunks/member-actions-CSzVNVdi.js",
+    "bytes": 2502,
+    "gzip": 1194
+  },
+  {
+    "path": "_next/static/chunks/bootstrap-form-9x_0jVOd.js",
+    "bytes": 2777,
+    "gzip": 1195
+  },
+  {
+    "path": "_next/static/chunks/layout-segment-context-CP6IO7jR.js",
+    "bytes": 496,
+    "gzip": 346
+  },
+  {
+    "path": "_next/static/chunks/plus-BM690EW0.js",
+    "bytes": 153,
+    "gzip": 150
+  },
+  {
+    "path": "_next/static/chunks/public-browsing-memory-BGWAL3Kg.js",
+    "bytes": 186,
+    "gzip": 155
+  },
+  {
+    "path": "_next/static/chunks/camera-DEVLrdCV.js",
+    "bytes": 248,
+    "gzip": 207
+  },
+  {
+    "path": "_next/static/chunks/query-DugiHe4Q.js",
+    "bytes": 984,
+    "gzip": 485
+  },
+  {
+    "path": "_next/static/chunks/headphones-PZzHmBbW.js",
+    "bytes": 237,
+    "gzip": 182
+  },
+  {
+    "path": "_next/static/chunks/staff-roles-D33PfzI-.js",
+    "bytes": 4528,
+    "gzip": 1608
+  },
+  {
+    "path": "_next/static/chunks/global-error-BdOVWcID.js",
+    "bytes": 1325,
+    "gzip": 703
+  },
+  {
+    "path": "_next/static/chunks/createLucideIcon-C_h-ItCC.js",
+    "bytes": 950,
+    "gzip": 572
+  },
+  {
+    "path": "_next/static/chunks/info-CIzNMVDF.js",
+    "bytes": 204,
+    "gzip": 175
+  },
+  {
+    "path": "_next/static/chunks/staff-password-client-D9CGSj43.js",
+    "bytes": 1240,
+    "gzip": 648
+  },
+  {
+    "path": "_next/static/chunks/signup-BAqcVOYG.js",
+    "bytes": 4176,
+    "gzip": 1801
+  },
+  {
+    "path": "_next/static/chunks/staff-install-button-BX9F48X0.js",
+    "bytes": 548,
+    "gzip": 364
+  },
+  {
+    "path": "_next/static/chunks/wallet-OOkvNVrj.js",
+    "bytes": 286,
+    "gzip": 203
+  },
+  {
+    "path": "_next/static/chunks/customer-dock-DG2mmjWc.js",
+    "bytes": 6254,
+    "gzip": 2473
+  },
+  {
+    "path": "_next/static/chunks/segmented-control-CCG9Tbvt.js",
+    "bytes": 1302,
+    "gzip": 654
+  },
+  {
+    "path": "_next/static/chunks/rotate-ccw-CavAI9gb.js",
+    "bytes": 199,
+    "gzip": 180
+  },
+  {
+    "path": "_next/static/chunks/esm-Bfr4HmDY.js",
+    "bytes": 8516,
+    "gzip": 2781
+  },
+  {
+    "path": "_next/static/chunks/my-registrations-BZ29vPUA.js",
+    "bytes": 5569,
+    "gzip": 2188
+  },
+  {
+    "path": "_next/static/chunks/menu-kpjxvmJo.js",
+    "bytes": 569,
+    "gzip": 294
+  },
+  {
+    "path": "_next/static/chunks/wine-CU9aw8yC.js",
+    "bytes": 283,
+    "gzip": 209
+  },
+  {
+    "path": "_next/static/chunks/mobile-navigation-BeU7z9wa.js",
+    "bytes": 6271,
+    "gzip": 2439
+  },
+  {
+    "path": "_next/static/chunks/room-operations-0xrWGVBN.js",
+    "bytes": 10580,
+    "gzip": 3091
+  },
+  {
+    "path": "_next/static/chunks/framework-CgvwdT60.js",
+    "bytes": 190101,
+    "gzip": 58911
+  },
+  {
+    "path": "_next/static/chunks/login-form-n0130p5X.js",
+    "bytes": 3693,
+    "gzip": 1495
+  },
+  {
+    "path": "_next/static/chunks/use-top-panel-position-Cp9zRFWb.js",
+    "bytes": 2414,
+    "gzip": 1065
+  },
+  {
+    "path": "_next/static/chunks/trial-C-biSnrQ.js",
+    "bytes": 239286,
+    "gzip": 70159
+  },
+  {
+    "path": "_next/static/chunks/radio-DdpbB0wy.js",
+    "bytes": 369,
+    "gzip": 252
+  },
+  {
+    "path": "_next/static/chunks/lock-keyhole-xI2Ne-wG.js",
+    "bytes": 254,
+    "gzip": 217
+  },
+  {
+    "path": "_next/static/chunks/triangle-alert-DKkpOa50.js",
+    "bytes": 264,
+    "gzip": 214
+  },
+  {
+    "path": "_next/static/chunks/calendar-days-CtKTRObu.js",
+    "bytes": 493,
+    "gzip": 264
+  },
+  {
+    "path": "_next/static/chunks/order-operations-I7XXExSa.js",
+    "bytes": 18082,
+    "gzip": 5855
+  },
+  {
+    "path": "_next/static/chunks/ticket-CkmRcxG4.js",
+    "bytes": 321,
+    "gzip": 215
+  },
+  {
+    "path": "_next/static/chunks/fee-settings-CQRAuOaG.js",
+    "bytes": 4246,
+    "gzip": 1690
+  },
+  {
+    "path": "_next/static/chunks/registration-manager-D17tMfcZ.js",
+    "bytes": 30487,
+    "gzip": 8964
+  },
+  {
+    "path": "_next/static/chunks/host-application-form-C0wYREvR.js",
+    "bytes": 4914,
+    "gzip": 2067
+  },
+  {
+    "path": "_next/static/chunks/client-analytics-CMKAknB7.js",
+    "bytes": 240,
+    "gzip": 214
+  },
+  {
+    "path": "_next/static/chunks/gem-Bm1SzsQA.js",
+    "bytes": 217,
+    "gzip": 183
+  },
+  {
+    "path": "_next/static/chunks/accept-invitation-CNI5xfI4.js",
+    "bytes": 3438,
+    "gzip": 1540
+  },
+  {
+    "path": "_next/static/chunks/arrow-left-CFtSKKmo.js",
+    "bytes": 164,
+    "gzip": 162
+  },
+  {
+    "path": "_next/static/chunks/brand-logo-HNEGyPpo.js",
+    "bytes": 597,
+    "gzip": 359
+  },
+  {
+    "path": "_next/static/chunks/chevron-down-LADnrr_k.js",
+    "bytes": 127,
+    "gzip": 139
+  },
+  {
+    "path": "_next/static/chunks/ticket-check-wFMnqKoB.js",
+    "bytes": 258,
+    "gzip": 202
+  },
+  {
+    "path": "_next/static/chunks/page-DEz82GQI.js",
+    "bytes": 2760,
+    "gzip": 1351
+  },
+  {
+    "path": "_next/static/chunks/brand-arrival-DmFl8Ovv.js",
+    "bytes": 4995,
+    "gzip": 2151
+  },
+  {
+    "path": "_next/static/chunks/promoter-portal-D_e2gELw.js",
+    "bytes": 2902,
+    "gzip": 1353
+  },
+  {
+    "path": "_next/static/chunks/notification-bell-DU7DTZ6c.js",
+    "bytes": 2712,
+    "gzip": 1243
+  },
+  {
+    "path": "_next/static/chunks/suite-shared-DKgJCumg.js",
+    "bytes": 2453,
+    "gzip": 1289
+  },
+  {
+    "path": "_next/static/chunks/qr-scanner-worker.min-CJaXo3yu.js",
+    "bytes": 43951,
+    "gzip": 10177
+  },
+  {
+    "path": "_next/static/chunks/offline-tickets-CgID7ovF.js",
+    "bytes": 25123,
+    "gzip": 9478
+  },
+  {
+    "path": "_next/static/chunks/yorkeway-audience-B3JB3Qt_.js",
+    "bytes": 2855,
+    "gzip": 1243
+  },
+  {
+    "path": "_next/static/chunks/event-explorer-EeWOpH2L.js",
+    "bytes": 11299,
+    "gzip": 4105
+  },
+  {
+    "path": "_next/static/chunks/concierge-bell-DZka0kWf.js",
+    "bytes": 417,
+    "gzip": 268
+  },
+  {
+    "path": "_next/static/chunks/log-out-DS9NScqW.js",
+    "bytes": 258,
+    "gzip": 216
+  },
+  {
+    "path": "_next/static/chunks/account-security-CthTtcfh.js",
+    "bytes": 5301,
+    "gzip": 1939
+  },
+  {
+    "path": "_next/static/chunks/analytics-beacon-FkLs2nrF.js",
+    "bytes": 634,
+    "gzip": 432
+  },
+  {
+    "path": "_next/static/chunks/loader-circle-DnSpEq47.js",
+    "bytes": 143,
+    "gzip": 152
+  },
+  {
+    "path": "_next/static/chunks/map-pin-lmvJvyW4.js",
+    "bytes": 258,
+    "gzip": 222
+  },
+  {
+    "path": "_next/static/chunks/use-layer-history-kKLmH4ge.js",
+    "bytes": 1323,
+    "gzip": 625
+  },
+  {
+    "path": "_next/static/chunks/shield-alert-B99fubY9.js",
+    "bytes": 352,
+    "gzip": 259
+  },
+  {
+    "path": "_next/static/chunks/download-CSgi4LYh.js",
+    "bytes": 262,
+    "gzip": 217
+  },
+  {
+    "path": "_next/static/chunks/home-screen-1hBbCrdK.js",
+    "bytes": 25050,
+    "gzip": 7588
+  },
+  {
+    "path": "_next/static/chunks/event-operations-CzIN4rKb.js",
+    "bytes": 24055,
+    "gzip": 6761
+  },
+  {
+    "path": "_next/static/chunks/event-images-DQUCF4uV.js",
+    "bytes": 329,
+    "gzip": 217
+  },
+  {
+    "path": "_next/static/chunks/client-request-DazITywS.js",
+    "bytes": 1178,
+    "gzip": 623
+  },
+  {
+    "path": "_next/static/chunks/night-hub-Br95gfyN.js",
+    "bytes": 28120,
+    "gzip": 8656
+  },
+  {
+    "path": "_next/static/chunks/vinext-CkKGO_jh.js",
+    "bytes": 147048,
+    "gzip": 43687
+  },
+  {
+    "path": "_next/static/chunks/support-operations-Dm6JA6ZV.js",
+    "bytes": 4500,
+    "gzip": 1770
+  },
+  {
+    "path": "_next/static/chunks/activation-form-B8q0SM86.js",
+    "bytes": 3493,
+    "gzip": 1536
+  },
+  {
+    "path": "_next/static/chunks/scanner-account-Bd7aO8Sv.js",
+    "bytes": 864,
+    "gzip": 517
+  },
+  {
+    "path": "_next/static/chunks/token-action-Dw0zSEXs.js",
+    "bytes": 2857,
+    "gzip": 1310
+  },
+  {
+    "path": "_next/static/chunks/calendar-clock-C18mqVtn.js",
+    "bytes": 382,
+    "gzip": 254
+  },
+  {
+    "path": "_next/static/chunks/index-B_mJrN91.js",
+    "bytes": 219985,
+    "gzip": 45627
+  },
+  {
+    "path": "_next/static/chunks/host-rsvp-alerts-CxFSM6y_.js",
+    "bytes": 5626,
+    "gzip": 2250
+  },
+  {
+    "path": "_next/static/chunks/check-BBFOYPkp.js",
+    "bytes": 124,
+    "gzip": 140
+  },
+  {
+    "path": "_next/static/chunks/event-operations-hub-Bor8E6hg.js",
+    "bytes": 18294,
+    "gzip": 5510
+  },
+  {
+    "path": "_next/static/chunks/operations-nav-BaDkB_5H.js",
+    "bytes": 161,
+    "gzip": 150
+  },
+  {
+    "path": "_next/static/chunks/bell-Bdk_dHUO.js",
+    "bytes": 290,
+    "gzip": 236
+  },
+  {
+    "path": "_next/static/chunks/workspace-chrome-CWuQRXLr.js",
+    "bytes": 8512,
+    "gzip": 3303
+  },
+  {
+    "path": "_next/static/chunks/user-round-x-BIXTm05M.js",
+    "bytes": 429,
+    "gzip": 299
+  },
+  {
+    "path": "_next/static/chunks/error-BEqfXHAC.js",
+    "bytes": 792,
+    "gzip": 445
+  },
+  {
+    "path": "_next/static/chunks/event-presentation-C6sYY8W4.js",
+    "bytes": 1263,
+    "gzip": 619
+  },
+  {
+    "path": "_next/static/chunks/arrow-up-right-DP6Wb65z.js",
+    "bytes": 165,
+    "gzip": 158
+  },
+  {
+    "path": "_next/static/chunks/my-nights-client-CuZeGYX5.js",
+    "bytes": 11990,
+    "gzip": 4304
+  },
+  {
+    "path": "_next/static/chunks/host-applications-Cnye8yYf.js",
+    "bytes": 5509,
+    "gzip": 2233
+  },
+  {
+    "path": "_next/static/chunks/shield-check-CmWlJiyU.js",
+    "bytes": 319,
+    "gzip": 249
+  },
+  {
+    "path": "_next/static/chunks/submission-form-DMaqGA_R.js",
+    "bytes": 9835,
+    "gzip": 3643
+  },
+  {
+    "path": "_next/static/chunks/clock-3-CDnB_D6x.js",
+    "bytes": 186,
+    "gzip": 171
+  },
+  {
+    "path": "_next/static/chunks/room-client-CO8FHbFq.js",
+    "bytes": 70944,
+    "gzip": 20503
+  },
+  {
+    "path": "_next/static/chunks/yorke-motion-Bo4bYrfu.js",
+    "bytes": 2495,
+    "gzip": 1229
+  },
+  {
+    "path": "_next/static/chunks/image-Y0Z2NnWa.js",
+    "bytes": 32836,
+    "gzip": 10719
+  },
+  {
+    "path": "_next/static/chunks/scanner-manifest-G4ylvmYr.js",
+    "bytes": 1213,
+    "gzip": 563
+  },
+  {
+    "path": "_next/static/chunks/link-DrwlmD_W.js",
+    "bytes": 12625,
+    "gzip": 4859
+  },
+  {
+    "path": "_next/static/chunks/use-current-time-7bZzb9YF.js",
+    "bytes": 492,
+    "gzip": 295
+  },
+  {
+    "path": "_next/static/chunks/ticket-tiers-BgGuvok1.js",
+    "bytes": 127,
+    "gzip": 127
+  },
+  {
+    "path": "_next/static/chunks/circle-check-v78LwKM5.js",
+    "bytes": 177,
+    "gzip": 166
+  },
+  {
+    "path": "_next/static/chunks/confirm-application-C3u5gen8.js",
+    "bytes": 3007,
+    "gzip": 1357
+  },
+  {
+    "path": "_next/static/chunks/wifi-DW-D4uA-.js",
+    "bytes": 280,
+    "gzip": 204
+  },
+  {
+    "path": "_next/static/chunks/mobile-app-frame-DehH3xLV.js",
+    "bytes": 2086,
+    "gzip": 847
+  },
+  {
+    "path": "_next/static/chunks/page-KJcnC9Oz.js",
+    "bytes": 3530,
+    "gzip": 1654
+  },
+  {
+    "path": "_next/static/chunks/page-C6lnipjM.js",
+    "bytes": 3333,
+    "gzip": 1476
+  },
+  {
+    "path": "_next/static/chunks/badge-check-DtKI_Kuu.js",
+    "bytes": 315,
+    "gzip": 210
+  },
+  {
+    "path": "_next/static/chunks/checkout-form-DcDfRDXo.js",
+    "bytes": 16814,
+    "gzip": 5651
+  },
+  {
+    "path": "_next/static/chunks/staff-accounts-DneK7T13.js",
+    "bytes": 10664,
+    "gzip": 3872
+  },
+  {
+    "path": "_next/static/chunks/curation-desk-BVWE_adt.js",
+    "bytes": 9619,
+    "gzip": 3286
+  },
+  {
+    "path": "_next/static/chunks/organizer-analytics-NcPsnIyU.js",
+    "bytes": 22801,
+    "gzip": 6693
+  },
+  {
+    "path": "_next/static/chunks/platform-audience-C59__daY.js",
+    "bytes": 2911,
+    "gzip": 1235
+  },
+  {
+    "path": "_next/static/chunks/organizer-suite-odstdLy9.js",
+    "bytes": 89180,
+    "gzip": 22244
+  },
+  {
+    "path": "_next/static/chunks/action-BgRaBmY6.js",
+    "bytes": 853,
+    "gzip": 353
+  },
+  {
+    "path": "_next/static/chunks/pwa-registration-CLb8nTYk.js",
+    "bytes": 3025,
+    "gzip": 1465
+  },
+  {
+    "path": "_next/static/chunks/ticket-wallet-BREUo3So.js",
+    "bytes": 10298,
+    "gzip": 3792
+  },
+  {
+    "path": "_next/static/chunks/refresh-cw-DDStEtX8.js",
+    "bytes": 320,
+    "gzip": 220
+  },
+  {
+    "path": "_next/static/chunks/rolldown-runtime-hePW80VL.js",
+    "bytes": 716,
+    "gzip": 430
+  },
+  {
+    "path": "_next/static/chunks/calendar-range-Dvpm1XS3.js",
+    "bytes": 414,
+    "gzip": 255
+  },
+  {
+    "path": "_next/static/chunks/chart-column-CuODvaMO.js",
+    "bytes": 250,
+    "gzip": 193
+  },
+  {
+    "path": "_next/static/chunks/save-BGeH1NeS.js",
+    "bytes": 327,
+    "gzip": 223
+  },
+  {
+    "path": "_next/static/chunks/use-header-panel-Csh4iGgC.js",
+    "bytes": 3118,
+    "gzip": 1338
+  },
+  {
+    "path": "_next/static/chunks/event-guest-CJF_QB2c.js",
+    "bytes": 202,
+    "gzip": 158
+  },
+  {
+    "path": "_next/static/chunks/circle-dollar-sign-1s6NsLxH.js",
+    "bytes": 246,
+    "gzip": 203
+  },
+  {
+    "path": "_next/static/chunks/event-screen-DvWRDBem.js",
+    "bytes": 21391,
+    "gzip": 7746
+  },
+  {
+    "path": "_next/static/chunks/staff-password-recovery-client-B0TwVeoO.js",
+    "bytes": 161,
+    "gzip": 159
+  },
+  {
+    "path": "_next/static/chunks/events-screen-DotGIEwm.js",
+    "bytes": 998,
+    "gzip": 474
+  },
+  {
+    "path": "_next/static/chunks/script-1sIHzc6e.js",
+    "bytes": 3811,
+    "gzip": 1595
+  },
+  {
+    "path": "_next/static/chunks/mail-D2lr2GmO.js",
+    "bytes": 215,
+    "gzip": 196
+  },
+  {
+    "path": "_next/static/chunks/external-link-ZnY_llhf.js",
+    "bytes": 250,
+    "gzip": 197
+  },
+  {
+    "path": "_next/static/chunks/registration-workspace-qsI42TZg.js",
+    "bytes": 1767,
+    "gzip": 867
+  },
+  {
+    "path": "_next/static/chunks/operations-client-CFj1yRbZ.js",
+    "bytes": 395,
+    "gzip": 287
+  },
+  {
+    "path": "_next/static/chunks/hybrid-client-route-owner-DzGbwr7f.js",
+    "bytes": 19486,
+    "gzip": 6189
+  },
+  {
+    "path": "_next/static/chunks/users-D6sXi0ws.js",
+    "bytes": 304,
+    "gzip": 226
+  },
+  {
+    "path": "_next/static/chunks/megaphone-D14ADf19.js",
+    "bytes": 192,
+    "gzip": 180
+  },
+  {
+    "path": "_next/static/chunks/sparkles-KZrhqHxR.js",
+    "bytes": 508,
+    "gzip": 296
+  },
+  {
+    "path": "_next/static/chunks/chevron-right-CqqEyK4U.js",
+    "bytes": 129,
+    "gzip": 140
+  },
+  {
+    "path": "_next/static/chunks/customer-runtime-xl60KsUT.js",
+    "bytes": 192,
+    "gzip": 164
+  },
+  {
+    "path": "_next/static/chunks/trash-2-COvcBD_p.js",
+    "bytes": 357,
+    "gzip": 246
+  },
+  {
+    "path": "_next/static/chunks/link-2-CoQbgu-H.js",
+    "bytes": 241,
+    "gzip": 200
+  },
+  {
+    "path": "_next/static/chunks/brand-arrival-Dnhb1UnS.js",
+    "bytes": 2596,
+    "gzip": 955
+  },
+  {
+    "path": "_next/static/chunks/x-CtSqTbNb.js",
+    "bytes": 154,
+    "gzip": 148
+  },
+  {
+    "path": "_next/static/chunks/confirmation-notifications-aPqffAYq.js",
+    "bytes": 5871,
+    "gzip": 2287
+  },
+  {
+    "path": "_next/static/chunks/input-modality-d2sejiU9.js",
+    "bytes": 950,
+    "gzip": 455
+  },
+  {
+    "path": "_next/static/chunks/share-2-CU0VXroW.js",
+    "bytes": 356,
+    "gzip": 235
+  },
+  {
+    "path": "_next/static/chunks/use-notifications-D6CZobdz.js",
+    "bytes": 6889,
+    "gzip": 2704
+  },
+  {
+    "path": "_next/static/chunks/staff-app-session-CGDGntHd.js",
+    "bytes": 1674,
+    "gzip": 758
+  },
+  {
+    "path": "_next/static/chunks/loading-skeleton-CoIvw-V-.js",
+    "bytes": 2232,
+    "gzip": 495
+  },
+  {
+    "path": "_next/static/chunks/message-circle-BZft4zdj.js",
+    "bytes": 147,
+    "gzip": 156
+  },
+  {
+    "path": "_next/static/chunks/recovery-form-D3POmUfz.js",
+    "bytes": 3841,
+    "gzip": 1619
+  },
+  {
+    "path": "_next/static/chunks/copy-Dssm0Es0.js",
+    "bytes": 236,
+    "gzip": 202
+  },
+  {
+    "path": "_next/static/chunks/notifications-client-BLdahvwS.js",
+    "bytes": 2199,
+    "gzip": 1055
+  },
+  {
+    "path": "_next/static/chunks/room-chat-parts-BhBwCcPJ.js",
+    "bytes": 1419,
+    "gzip": 679
+  },
+  {
+    "path": "_next/static/chunks/workspace-return-DUvSWrNb.js",
+    "bytes": 1240,
+    "gzip": 723
+  },
+  {
+    "path": "_next/static/chunks/promoter-operations-BNPVyULk.js",
+    "bytes": 3276,
+    "gzip": 1399
+  },
+  {
+    "path": "_next/static/chunks/users-round-DHO2Njld.js",
+    "bytes": 252,
+    "gzip": 219
+  },
+  {
+    "path": "_next/static/chunks/account-navigation-BGsyUI2c.js",
+    "bytes": 922,
+    "gzip": 435
+  },
+  {
+    "path": "_next/static/chunks/search-C20LW0f5.js",
+    "bytes": 172,
+    "gzip": 166
+  },
+  {
+    "path": "_next/static/chunks/send-NwOJuWJ9.js",
+    "bytes": 290,
+    "gzip": 230
+  },
+  {
+    "path": "_next/static/chunks/chevron-left-CEC5s8mW.js",
+    "bytes": 129,
+    "gzip": 142
+  },
+  {
+    "path": "_next/static/chunks/registration-form-BXnP6qsL.js",
+    "bytes": 7915,
+    "gzip": 3109
+  },
+  {
+    "path": "_next/static/chunks/help-centre-DAvu7cn1.js",
+    "bytes": 25120,
+    "gzip": 8779
+  },
+  {
+    "path": "_next/static/chunks/privacy-settings-Bcbar1bd.js",
+    "bytes": 7309,
+    "gzip": 2537
+  },
+  {
+    "path": "_next/static/chunks/organizer-access-DRBUKTmH.js",
+    "bytes": 3288,
+    "gzip": 1520
+  },
+  {
+    "path": "_next/static/chunks/scanner-Br3LSrqE.js",
+    "bytes": 41752,
+    "gzip": 13512
+  },
+  {
+    "path": "_next/static/chunks/music-2-BtQJao7v.js",
+    "bytes": 169,
+    "gzip": 167
+  },
+  {
+    "path": "_next/static/chunks/arrow-right-C_gXYKDI.js",
+    "bytes": 164,
+    "gzip": 162
+  }
+]

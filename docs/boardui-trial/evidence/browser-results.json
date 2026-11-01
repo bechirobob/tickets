@@ -1,0 +1,62 @@
+{
+  "browser": "154.0.8037.57",
+  "scenarios": [
+    {
+      "label": "desktop",
+      "stage": "list accessibility",
+      "violations": []
+    },
+    {
+      "label": "desktop",
+      "stage": "interactions",
+      "passed": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      }
+    },
+    {
+      "label": "mobile",
+      "stage": "list accessibility",
+      "violations": []
+    },
+    {
+      "label": "mobile",
+      "stage": "interactions",
+      "passed": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "narrow",
+      "stage": "list accessibility",
+      "violations": []
+    },
+    {
+      "label": "narrow",
+      "stage": "interactions",
+      "passed": true,
+      "viewport": {
+        "width": 320,
+        "height": 740
+      }
+    }
+  ],
+  "errors": [],
+  "securityViolations": [
+    {
+      "label": "desktop",
+      "violations": []
+    },
+    {
+      "label": "mobile",
+      "violations": []
+    },
+    {
+      "label": "narrow",
+      "violations": []
+    }
+  ]
+}
