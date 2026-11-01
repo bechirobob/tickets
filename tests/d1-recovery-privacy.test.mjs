@@ -9,7 +9,7 @@ import { load } from 'js-yaml';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const workflow = load(await readFile(new URL('../.github/workflows/d1-recovery-rehearsal.yml', import.meta.url), 'utf8'));
-const exportStep = workflow.jobs.rehearse.steps.find(step => step.name === 'Export production for isolated restore');
+import { checkD1RecoveryRuntime } from '../scripts/check-d1-recovery-runtime.mjs';
 const sentinels = [
   'https://export.invalid/fake.sql?signature=FAKE_SIGNED_URL_SENTINEL',
   "INSERT INTO customers VALUES ('FAKE_CUSTOMER_ROW_SENTINEL');",
@@ -58,21 +58,6 @@ async function assertPrivate(result, fixture, status) {
 }
 
 for (const status of [0, 7]) {
-  test(`D1 export with status ${status} keeps both output streams private and removes diagnostics`, async t => {
-    const files = await fixture(t, 'npx', `
-[[ "$*" == "wrangler d1 export DB --remote --output $D1_EXPORT_FILE --skip-confirmation" ]]
-${privateOutput}`);
-    const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-x', '-c', exportStep.run], {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...files.env, TEST_EXIT_STATUS: String(status) },
-      timeout: 10_000,
-    });
-    await assertPrivate(result, files, status);
-    assert.equal(result.stdout, '');
-    assert.equal(result.stderr, `+ set +x\n${status ? 'D1 export failed; private diagnostics have been withheld.\n' : ''}`);
-  });
-
   test(`SQLite import with status ${status} keeps both output streams private and removes diagnostics`, async t => {
     const files = await fixture(t, 'sqlite3', `
 if [[ "$2" == .read* ]]; then
@@ -108,12 +93,142 @@ esac`);
   });
 }
 
-test('D1 rehearsal uploads only existing non-sensitive proof and always removes the export', () => {
+test('Legacy applicability workflow cannot export customer data or claim restore proof', () => {
   const steps = workflow.jobs.rehearse.steps;
   const uploads = steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'));
   assert.equal(uploads.length, 1);
-  assert.deepEqual(uploads[0].with.path.trim().split('\n'), ['d1-recovery-bookmark.json', 'd1-recovery-rehearsal-report.json']);
-  const cleanup = steps.find(step => step.name === 'Remove customer-data export');
-  assert.equal(cleanup.if, 'always()');
-  assert.equal(cleanup.run, 'rm -f -- /tmp/becore-tickets-recovery-export.sql');
+  assert.equal(uploads[0].with.path, 'd1-recovery-rehearsal-report.json');
+  assert.equal(workflow.jobs.rehearse.env, undefined);
+  assert.deepEqual(steps.filter(step => step.run).map(step => step.run), ['node scripts/check-d1-recovery-runtime.mjs']);
 });
+
+const revision = 'a'.repeat(40);
+const health = { service: 'becore-tickets', runtime: 'vps', active: true, revision };
+const version = { service: 'becore-tickets', revision };
+function identityFetcher(h = health, v = version, status = 200) {
+  return async (url, options) => {
+    assert.equal(new URL(url).origin, 'https://tickets.becoreops.com');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.headers['Cache-Control'], 'no-cache');
+    return { status, json: async () => url.endsWith('/healthz') ? h : v };
+  };
+}
+
+test('Verified active VPS classifies legacy D1 without claiming a restore', async () => {
+  const report = await checkD1RecoveryRuntime(identityFetcher());
+  assert.equal(report.result, 'not-applicable');
+  assert.equal(report.restoreTested, false);
+  assert.equal(report.legacyTarget, 'becore-tickets-db');
+  assert.equal(report.activeRecoveryWorkflow, 'tickets-backup.yml');
+  assert.equal(report.revision, revision);
+});
+
+for (const [name, h, v, status] of [
+  ['inactive VPS', { ...health, active: false }, version, 200],
+  ['unknown runtime', { ...health, runtime: 'unknown' }, version, 200],
+  ['active D1 requires a new explicit target/schema contract', { ...health, runtime: 'cloudflare' }, version, 200],
+  ['unexpected service', { ...health, service: 'other' }, version, 200],
+  ['unexpected application', health, { ...version, service: 'other' }, 200],
+  ['revision mismatch', health, { ...version, revision: 'b'.repeat(40) }, 200],
+  ['missing identity', {}, {}, 200],
+  ['invalid revision', { ...health, revision: 'main' }, { ...version, revision: 'main' }, 200],
+  ['unavailable endpoint', health, version, 503],
+  ['null identity', null, null, 200],
+]) {
+  test(`Runtime check fails closed: ${name}`, async () => {
+    await assert.rejects(checkD1RecoveryRuntime(identityFetcher(h, v, status)));
+  });
+}
+
+test('Network failures do not count as inactive D1', async () => {
+  await assert.rejects(checkD1RecoveryRuntime(async () => { throw new Error('offline'); }));
+});
+
+// Exercise the shell against real SQLite via Python's standard-library engine;
+// no provider access or sqlite3 CLI installation is needed for these fixtures.
+const sqliteShim = `exec python3 - "$@" <<'PYSQL'
+import json, sqlite3, sys
+args = sys.argv[1:]
+json_mode = args[0] == '-json'
+if json_mode: args = args[1:]
+connection = sqlite3.connect(args[0])
+try:
+    sql = args[1]
+    if sql.startswith('.read '):
+        with open(sql[6:]) as source: connection.executescript(source.read())
+    else:
+        cursor = connection.execute(sql)
+        rows = cursor.fetchall()
+        if json_mode:
+            print(json.dumps([dict(zip([c[0] for c in cursor.description], row)) for row in rows]))
+        else:
+            for row in rows: print('|'.join(map(str, row)))
+finally:
+    connection.close()
+PYSQL`;
+const tables = ['curated_event_records', 'orders', 'tickets', 'staff_accounts', 'consent_records',
+  'delivery_events', 'product_metrics_daily', 'platform_announcement_subscriptions',
+  'platform_announcement_choices', 'platform_announcement_unsubscribe_tokens', 'platform_announcement_verifications'];
+for (const missing of [null, ...tables]) {
+  test(`Real SQLite schema: ${missing ? `reject missing ${missing}` : 'complete required schema passes'}`, async t => {
+    const files = await fixture(t, 'sqlite3', sqliteShim);
+    await writeFile(files.env.D1_EXPORT_FILE, tables.filter(table => table !== missing)
+      .map(table => `CREATE TABLE ${table} (id INTEGER);`).join('\n'));
+    const result = spawnSync('bash', ['scripts/rehearse-d1-recovery.sh'], {
+      cwd: root, encoding: 'utf8', env: files.env, timeout: 10_000,
+    });
+    assert.equal(result.status, missing ? 1 : 0, result.stderr);
+    assert.deepEqual(await readdir(files.temporary), []);
+    if (missing) {
+      assert.match(result.stderr, new RegExp(`missing required table: ${missing}`));
+      await assert.rejects(readFile(files.env.RECOVERY_REPORT_FILE), { code: 'ENOENT' });
+    } else {
+      const report = JSON.parse(await readFile(files.env.RECOVERY_REPORT_FILE, 'utf8'));
+      assert.equal(report.restore.integrityCheck, 'ok');
+      assert.equal(report.restore.requiredTables, 'present');
+    }
+  });
+}
+
+test('Integrity mismatch fails without proof and cleans temporary restore', async t => {
+  const files = await fixture(t, 'sqlite3', `
+case "$2" in
+  .read*) touch "$1" ;;
+  'PRAGMA quick_check;') printf 'ok\\n' ;;
+  *) printf 'corrupt\\n' ;;
+esac`);
+  const result = spawnSync('bash', ['scripts/rehearse-d1-recovery.sh'], {
+    cwd: root, encoding: 'utf8', env: files.env, timeout: 10_000,
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /did not pass SQLite integrity checks/);
+  assert.deepEqual(await readdir(files.temporary), []);
+  await assert.rejects(readFile(files.env.RECOVERY_REPORT_FILE), { code: 'ENOENT' });
+});
+
+for (const mode of ['success', 'network-error', 'invalid-json']) {
+  test(`Runtime CLI ${mode}: private diagnostics and stale report handling`, async t => {
+    const directory = await mkdtemp(join(tmpdir(), 'tickets-runtime-check-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const preload = join(directory, 'fetch.mjs');
+    await writeFile(preload, `globalThis.fetch = async url => {
+      ${mode === 'network-error' ? `throw new Error(${JSON.stringify(sentinels[0])});` : `return {
+        status: 200,
+        json: async () => { ${mode === 'invalid-json' ? `throw new Error(${JSON.stringify(sentinels[1])});` : `return url.endsWith('/healthz') ? ${JSON.stringify(health)} : ${JSON.stringify(version)};`} }
+      };`}
+    };`);
+    const reportPath = join(directory, 'd1-recovery-rehearsal-report.json');
+    await writeFile(reportPath, '{"result":"stale"}');
+    const result = spawnSync(process.execPath, ['--import', preload, join(root, 'scripts/check-d1-recovery-runtime.mjs')], {
+      cwd: directory, encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 10_000,
+    });
+    assert.equal(result.status, mode === 'success' ? 0 : 1);
+    for (const sentinel of sentinels) assert.ok(!`${result.stdout}${result.stderr}`.includes(sentinel));
+    if (mode === 'success') {
+      assert.equal(JSON.parse(await readFile(reportPath, 'utf8')).restoreTested, false);
+      assert.match(result.stdout, /not recovery proof/);
+    } else {
+      await assert.rejects(readFile(reportPath), { code: 'ENOENT' });
+    }
+  });
+}
