@@ -7,7 +7,6 @@ import { Button } from '@/components/boardui/components/base/buttons/button';
 import { Input } from '@/components/boardui/components/base/input/input';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@/components/boardui/components/base/table/table';
 import { RecordDialog } from '@/components/workspace/record-dialog';
-import '@/components/workspace/workspace.css';
 import './yorkeway-audience.css';
 
 type Contact = { email: string; consentedAt: string; consentVersion: string; name: string };

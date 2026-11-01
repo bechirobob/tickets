@@ -55,3 +55,17 @@ main.workspace-boardui:has(>.workspace-topbar) .yorkeway-workspace button { back
 main.workspace-boardui:has(>.workspace-topbar) .yorkeway-workspace>header p { text-transform:none; letter-spacing:normal; font-size:14px; }
 
 main.workspace-boardui:has(>.workspace-topbar) .yorkeway-workspace .bui-table button { border-color:transparent; }
+.workspace-boardui .workspace-order-record article { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.workspace-boardui .workspace-order-record h3 { font-size:14px; margin:0 0 8px; color:var(--muted); }
+.workspace-boardui .workspace-order-record small { display:block; margin-top:5px; overflow-wrap:anywhere; }
+.workspace-boardui .workspace-order-record .order-actions { flex-wrap:wrap; }
+.workspace-boardui .workspace-orders .workspace-order-search { display:grid; gap:12px; margin:20px 0; grid-template-columns:minmax(0,1fr) auto auto; align-items:end; }
+@media(max-width:650px) { .workspace-boardui .workspace-order-record article { grid-template-columns:minmax(0,1fr); } .workspace-boardui .workspace-orders .workspace-order-search { display:grid; grid-template-columns:minmax(0,1fr); } }
+
+main.workspace-boardui:has(>.workspace-topbar) .workspace-orders .ops-order-filters { background:transparent; border-radius:0; border-block:1px solid var(--line); padding:0; }
+main.workspace-boardui:has(>.workspace-topbar) .workspace-orders button { border-radius:7px; }
+.workspace-boardui .workspace-team-tabs { display:flex; gap:12px; border-bottom:1px solid var(--line); margin:20px 0; }
+.workspace-boardui .workspace-team-tabs button { border:0; border-radius:0; }
+.workspace-boardui .workspace-team-tabs button[aria-pressed=true] { font-weight:750; text-decoration:underline; text-underline-offset:6px; }
+
+.workspace-boardui .suite-badge { color:var(--ink); background:transparent; }

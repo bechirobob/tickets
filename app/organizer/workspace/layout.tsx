@@ -1,3 +1,4 @@
+import '@/components/workspace/workspace.css';
 export { staffAppMetadata as metadata } from "../../../lib/staff-app-metadata";
 import type { ReactNode } from 'react';
 export default function WorkspaceLayout({children}:{children:ReactNode}) {

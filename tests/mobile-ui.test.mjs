@@ -739,7 +739,8 @@ test("operations lists stay bounded and dashboard selections use straight marker
   assert.match(ordersApi, /LIMIT \? OFFSET \?/u);
   assert.match(ordersApi, /orders: orders\.results\.map/u);
   assert.match(ordersApi, /total, page, pageSize/u);
-  assert.match(orders, /className="order-pagination"/u);
+  assert.match(orders, /<Pagination page=\{page\} totalPages=\{pageCount\} onChange=/u);
+  assert.match(orders, /aria-label="Orders pages"/u);
   assert.match(orders, /Showing \{firstVisible\}–\{lastVisible\} of \{total\}/u);
   assert.match(staff, /className=\{`staff-list__new/u);
   assert.match(staff, />New person</u);

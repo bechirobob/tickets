@@ -1,0 +1,31 @@
+Local source-component harness: http://127.0.0.1:8795
+11:09:12 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:09:12 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/admin/orders/order-operations.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:09:12 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/components/workspace/workspace.css, /@fs/workspace/tickets-integration/styles/customer.css
+11:09:12 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/organizer/workspace/suite-promote.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:09:55 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:10:17 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/organizer/workspace/suite-shared.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:10:17 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/organizer/workspace/suite-records.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:11:21 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:11:21 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/organizer/workspace/suite-records.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:11:49 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:13:30 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/components/workspace/workspace.css, /@fs/workspace/tickets-integration/styles/customer.css
+11:14:22 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:14:26 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:14:32 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/admin/orders/order-operations.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/admin/events/event-operations.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/admin/yorkeway-audience/yorkeway-audience.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/app/organizer/workspace/organizer-suite.tsx, /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:15:35 PM [vite] (client) page reload main.tsx
+11:15:59 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:16:02 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:16:10 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:16:31 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:16:44 PM [vite] (client) page reload main.tsx
+11:17:18 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css
+11:17:53 PM [vite] (client) hmr update /@fs/workspace/tickets-integration/styles/customer.css

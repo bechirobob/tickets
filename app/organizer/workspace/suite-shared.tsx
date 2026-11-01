@@ -26,5 +26,5 @@ export function useMutation(){
  return {busy,message,setMessage,mutate};
 }
 export function RemoteState({error,loading,refresh}:{error?:string;loading:boolean;refresh:()=>void}){return error?<div role="alert"><p>{error}</p><button onClick={refresh}>Try again</button></div>:loading?<p role="status">Loading…</p>:null;}
-export function Pager({offset,total,onChange}:{offset:number;total:number;onChange:(n:number)=>void}){return <div className="suite-pagination"><p>{total?offset+1:0}–{Math.min(offset+25,total)} of {total}</p><Pagination page={Math.floor(offset/25)+1} totalPages={Math.max(1,Math.ceil(total/25))} onChange={page=>onChange((page-1)*25)}/></div>;}
+export function Pager({offset,total,onChange,label="Result pages"}:{offset:number;total:number;onChange:(n:number)=>void;label?:string}){return <div className="suite-pagination"><p>{total?offset+1:0}–{Math.min(offset+25,total)} of {total}</p><Pagination aria-label={label} page={Math.floor(offset/25)+1} totalPages={Math.max(1,Math.ceil(total/25))} onChange={page=>onChange((page-1)*25)}/></div>;}
 export function Message({children}:{children:string}){return children?<p className="suite-message" role="status">{children}</p>:null;}

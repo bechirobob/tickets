@@ -1,0 +1,37 @@
+
+> @becore/tickets-mobile@0.1.0 test
+> node --experimental-strip-types --test tests/*.test.ts
+
+✔ release identity prevents app replacement, invalid versions and certificate placeholders (1.672571ms)
+✔ subsequent releases preserve signer and always increase version code (0.235895ms)
+✔ missing or malformed secrets fail without echoing credentials (4.092828ms)
+✔ artifact gate rejects debug builds, changed signer, wrong package and stale versions (0.456228ms)
+✔ catalogue rejects malformed data and duplicate destinations (1.359843ms)
+✔ public cache expires and tolerates unavailable or corrupt storage (1.31038ms)
+✔ pending, cancelled and sold-out events do not promise checkout (25.293777ms)
+✔ native entry links accept public intents and reject credentials or staff routes (1.246486ms)
+✔ venue maps are isolated while arbitrary external destinations remain blocked (0.273902ms)
+✔ native brand caching preserves both host projections and canonicalizes separate logo and portrait URLs (2.132004ms)
+✔ old caches work without branding or a host list, and explicitly empty lists stay empty (0.354509ms)
+✔ native caching strips unexpected host data from the primary and co-host projections (0.397402ms)
+✔ native caching rejects unsafe brand logo javascript:alert(1) in either host projection (0.435869ms)
+✔ native caching rejects unsafe brand logo http://example.com/logo.svg in either host projection (0.441177ms)
+✔ native caching rejects unsafe brand logo https://user:secret@example.com/logo.svg in either host projection (0.584337ms)
+✔ native caching rejects malformed or oversized host lists and non-text brand names (0.743109ms)
+✔ shared screens reject mismatched, duplicate, preview and malformed public data (1.758897ms)
+✔ the cache projection strips unexpected identity and inventory fields (0.44418ms)
+✔ optional Room eligibility survives projection without breaking older cached screens (0.510919ms)
+✔ canonical native artwork retains the web portrait and approved special guest treatment (0.700246ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 279.988838
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

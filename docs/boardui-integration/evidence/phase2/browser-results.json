@@ -1,0 +1,26 @@
+{
+  "browser": "154.0.8037.57",
+  "scenarios": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "passed": true
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "passed": true
+    },
+    {
+      "name": "narrow",
+      "width": 320,
+      "height": 740,
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "writes": [],
+  "limits": "Actual source components and fictional intercepted HTTP contracts. No financial or invitation action executed. Not compiled authenticated browser-to-database or physical iPhone evidence."
+}
