@@ -232,3 +232,55 @@ for (const mode of ['success', 'network-error', 'invalid-json']) {
     }
   });
 }
+
+const recoveryMaintenancePaths = [
+  '.github/workflows/d1-recovery-rehearsal.yml',
+  'scripts/check-d1-recovery-runtime.mjs',
+  'tests/d1-recovery-privacy.test.mjs',
+  'docs/runbooks/d1-recovery.md',
+];
+const releaseWorkflows = await Promise.all(['deploy', 'vps-runtime'].map(async name => [name,
+  load(await readFile(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8'))]));
+
+// These existing filters use only literals, * and **; fail rather than silently
+// approximating any future unsupported pattern syntax.
+function matchesPath(path, pattern) {
+  assert.ok(!/[?\[\]{}+]/.test(pattern), 'Extend the test matcher for new pattern syntax');
+  const regex = pattern.split('**').map(part => part.split('*')
+    .map(literal => literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*');
+  return new RegExp(`^${regex}$`).test(path);
+}
+function triggersPush(workflow, paths) {
+  const push = workflow.on.push;
+  if (push['paths-ignore']) return paths.some(path => !push['paths-ignore'].some(pattern => matchesPath(path, pattern)));
+  return paths.some(path => {
+    let selected = false;
+    for (const pattern of push.paths) {
+      const excluded = pattern.startsWith('!');
+      if (matchesPath(path, excluded ? pattern.slice(1) : pattern)) selected = !excluded;
+    }
+    return selected;
+  });
+}
+
+for (const [name, current] of releaseWorkflows) {
+  test(`${name}: only the four recovery paths are excluded; safety checks stay byte-equivalent`, () => {
+    const previous = spawnSync('git', ['show', `63f2ead2fb3eaae03696f408b12e9e18cfcee265:.github/workflows/${name}.yml`], {
+      cwd: root, encoding: 'utf8',
+    });
+    assert.equal(previous.status, 0);
+    const expected = load(previous.stdout);
+    if (name === 'deploy') expected.on.push['paths-ignore'].unshift(...recoveryMaintenancePaths);
+    else expected.on.push.paths.push(...recoveryMaintenancePaths.map(path => `!${path}`));
+    assert.deepEqual(current, expected, 'No manual dispatch, jobs, permissions, admission or other trigger changes');
+  });
+  test(`${name}: recovery-only pushes do not release; mixed application and control changes still run`, () => {
+    for (const path of recoveryMaintenancePaths) assert.equal(triggersPush(current, [path]), false, path);
+    assert.equal(triggersPush(current, recoveryMaintenancePaths), false);
+    for (const path of ['app/page.tsx', 'worker/index.ts', 'lib/new.ts', 'drizzle/9999_new.sql',
+      'package.json', 'scripts/other.mjs', 'tests/other.test.mjs', '.github/workflows/vps-runtime.yml']) {
+      assert.equal(triggersPush(current, [...recoveryMaintenancePaths, path]), true, path);
+    }
+    assert.equal(triggersPush(current, ['scripts/check-d1-recovery-runtime.mjs.extra']), true);
+  });
+}

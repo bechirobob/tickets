@@ -7,6 +7,11 @@ on:
     # Operator diagnostics do not change the application. Workflow-only release
     # configuration edits remain deployable through explicit workflow_dispatch.
     paths-ignore:
+      # Recovery maintenance is not an application release.
+      - '.github/workflows/d1-recovery-rehearsal.yml'
+      - 'scripts/check-d1-recovery-runtime.mjs'
+      - 'tests/d1-recovery-privacy.test.mjs'
+      - 'docs/runbooks/d1-recovery.md'
       - '.gitignore'
       - 'tests/staff-app-launch.test.mjs'
       - 'ops/vps/operator_evidence.py'

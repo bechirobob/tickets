@@ -19,6 +19,11 @@ on:
       - 'tests/**'
       - 'package*.json'
       - '*config*'
+      # Keep exclusions after positive patterns; mixed app changes still run.
+      - '!.github/workflows/d1-recovery-rehearsal.yml'
+      - '!scripts/check-d1-recovery-runtime.mjs'
+      - '!tests/d1-recovery-privacy.test.mjs'
+      - '!docs/runbooks/d1-recovery.md'
 permissions:
   contents: read
 concurrency:
