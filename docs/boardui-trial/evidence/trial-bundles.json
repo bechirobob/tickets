@@ -15,16 +15,6 @@
     "gzip": 201
   },
   {
-    "path": "_next/static/3ca0d2e9-0853-476d-bde4-1c993e87d9ca/_buildManifest.js",
-    "bytes": 159,
-    "gzip": 121
-  },
-  {
-    "path": "_next/static/3ca0d2e9-0853-476d-bde4-1c993e87d9ca/_ssgManifest.js",
-    "bytes": 76,
-    "gzip": 60
-  },
-  {
     "path": "_next/static/css/host-applications.BzOdC8qY.css",
     "bytes": 1608,
     "gzip": 564
@@ -43,6 +33,11 @@
     "path": "_next/static/css/order-operations.D-Vv9BZp.css",
     "bytes": 1139,
     "gzip": 482
+  },
+  {
+    "path": "_next/static/css/page.BJyCQBr8.css",
+    "bytes": 5796,
+    "gzip": 1522
   },
   {
     "path": "_next/static/css/organizer-suite.DLuMLzQI.css",
@@ -68,11 +63,6 @@
     "path": "_next/static/css/page.4DG69QK0.css",
     "bytes": 608,
     "gzip": 255
-  },
-  {
-    "path": "_next/static/css/page.E7eclhyk.css",
-    "bytes": 5679,
-    "gzip": 1505
   },
   {
     "path": "_next/static/css/layout.DGtt6FwM.css",
@@ -115,9 +105,29 @@
     "gzip": 343
   },
   {
+    "path": "_next/static/8b535601-ca19-43bc-a4bf-9a33c3a06350/_buildManifest.js",
+    "bytes": 159,
+    "gzip": 121
+  },
+  {
+    "path": "_next/static/8b535601-ca19-43bc-a4bf-9a33c3a06350/_ssgManifest.js",
+    "bytes": 76,
+    "gzip": 60
+  },
+  {
     "path": "_next/static/chunks/member-actions-CSzVNVdi.js",
     "bytes": 2502,
     "gzip": 1194
+  },
+  {
+    "path": "_next/static/chunks/link-BrYfumT3.js",
+    "bytes": 12625,
+    "gzip": 4858
+  },
+  {
+    "path": "_next/static/chunks/help-centre-CMDJBiJ2.js",
+    "bytes": 25120,
+    "gzip": 8779
   },
   {
     "path": "_next/static/chunks/bootstrap-form-9x_0jVOd.js",
@@ -125,9 +135,9 @@
     "gzip": 1195
   },
   {
-    "path": "_next/static/chunks/layout-segment-context-CP6IO7jR.js",
-    "bytes": 496,
-    "gzip": 346
+    "path": "_next/static/chunks/event-operations-hub-Cgij_Me2.js",
+    "bytes": 18294,
+    "gzip": 5510
   },
   {
     "path": "_next/static/chunks/plus-BM690EW0.js",
@@ -155,14 +165,49 @@
     "gzip": 182
   },
   {
+    "path": "_next/static/chunks/registration-workspace-C93cOCqm.js",
+    "bytes": 1767,
+    "gzip": 868
+  },
+  {
+    "path": "_next/static/chunks/trial-DcvTT7rw.js",
+    "bytes": 239286,
+    "gzip": 70159
+  },
+  {
+    "path": "_next/static/chunks/analytics-beacon-BsIs4Tjl.js",
+    "bytes": 634,
+    "gzip": 430
+  },
+  {
     "path": "_next/static/chunks/staff-roles-D33PfzI-.js",
     "bytes": 4528,
     "gzip": 1608
   },
   {
+    "path": "_next/static/chunks/image-xQ9f3Rx1.js",
+    "bytes": 32836,
+    "gzip": 10717
+  },
+  {
+    "path": "_next/static/chunks/notifications-client-Bm-FoxRJ.js",
+    "bytes": 2199,
+    "gzip": 1057
+  },
+  {
     "path": "_next/static/chunks/global-error-BdOVWcID.js",
     "bytes": 1325,
     "gzip": 703
+  },
+  {
+    "path": "_next/static/chunks/registration-form-Bl7RDP7h.js",
+    "bytes": 7915,
+    "gzip": 3107
+  },
+  {
+    "path": "_next/static/chunks/account-security-z_S9PYfM.js",
+    "bytes": 5301,
+    "gzip": 1940
   },
   {
     "path": "_next/static/chunks/createLucideIcon-C_h-ItCC.js",
@@ -173,6 +218,16 @@
     "path": "_next/static/chunks/info-CIzNMVDF.js",
     "bytes": 204,
     "gzip": 175
+  },
+  {
+    "path": "_next/static/chunks/error-CkwxENba.js",
+    "bytes": 792,
+    "gzip": 445
+  },
+  {
+    "path": "_next/static/chunks/staff-accounts-OBIM4seR.js",
+    "bytes": 10664,
+    "gzip": 3874
   },
   {
     "path": "_next/static/chunks/staff-password-client-D9CGSj43.js",
@@ -195,11 +250,6 @@
     "gzip": 203
   },
   {
-    "path": "_next/static/chunks/customer-dock-DG2mmjWc.js",
-    "bytes": 6254,
-    "gzip": 2473
-  },
-  {
     "path": "_next/static/chunks/segmented-control-CCG9Tbvt.js",
     "bytes": 1302,
     "gzip": 654
@@ -215,9 +265,9 @@
     "gzip": 2781
   },
   {
-    "path": "_next/static/chunks/my-registrations-BZ29vPUA.js",
-    "bytes": 5569,
-    "gzip": 2188
+    "path": "_next/static/chunks/use-notifications-DxrMD3yA.js",
+    "bytes": 6889,
+    "gzip": 2705
   },
   {
     "path": "_next/static/chunks/menu-kpjxvmJo.js",
@@ -225,19 +275,39 @@
     "gzip": 294
   },
   {
+    "path": "_next/static/chunks/registration-manager-DTEEM5VJ.js",
+    "bytes": 30487,
+    "gzip": 8964
+  },
+  {
+    "path": "_next/static/chunks/promoter-portal-DbLRTo-N.js",
+    "bytes": 2902,
+    "gzip": 1352
+  },
+  {
     "path": "_next/static/chunks/wine-CU9aw8yC.js",
     "bytes": 283,
     "gzip": 209
   },
   {
-    "path": "_next/static/chunks/mobile-navigation-BeU7z9wa.js",
-    "bytes": 6271,
-    "gzip": 2439
+    "path": "_next/static/chunks/recovery-form-DFXeguWO.js",
+    "bytes": 3841,
+    "gzip": 1618
   },
   {
-    "path": "_next/static/chunks/room-operations-0xrWGVBN.js",
-    "bytes": 10580,
-    "gzip": 3091
+    "path": "_next/static/chunks/event-screen-DRgXPBcR.js",
+    "bytes": 21391,
+    "gzip": 7748
+  },
+  {
+    "path": "_next/static/chunks/night-hub-BKQq3USj.js",
+    "bytes": 28120,
+    "gzip": 8655
+  },
+  {
+    "path": "_next/static/chunks/activation-form-umrPdpj8.js",
+    "bytes": 3493,
+    "gzip": 1535
   },
   {
     "path": "_next/static/chunks/framework-CgvwdT60.js",
@@ -245,19 +315,9 @@
     "gzip": 58911
   },
   {
-    "path": "_next/static/chunks/login-form-n0130p5X.js",
-    "bytes": 3693,
-    "gzip": 1495
-  },
-  {
     "path": "_next/static/chunks/use-top-panel-position-Cp9zRFWb.js",
     "bytes": 2414,
     "gzip": 1065
-  },
-  {
-    "path": "_next/static/chunks/trial-C-biSnrQ.js",
-    "bytes": 239286,
-    "gzip": 70159
   },
   {
     "path": "_next/static/chunks/radio-DdpbB0wy.js",
@@ -280,9 +340,9 @@
     "gzip": 264
   },
   {
-    "path": "_next/static/chunks/order-operations-I7XXExSa.js",
-    "bytes": 18082,
-    "gzip": 5855
+    "path": "_next/static/chunks/mobile-navigation-DDD_x92k.js",
+    "bytes": 6271,
+    "gzip": 2440
   },
   {
     "path": "_next/static/chunks/ticket-CkmRcxG4.js",
@@ -290,19 +350,14 @@
     "gzip": 215
   },
   {
-    "path": "_next/static/chunks/fee-settings-CQRAuOaG.js",
-    "bytes": 4246,
-    "gzip": 1690
+    "path": "_next/static/chunks/use-header-panel-BbpcBw7l.js",
+    "bytes": 3118,
+    "gzip": 1336
   },
   {
-    "path": "_next/static/chunks/registration-manager-D17tMfcZ.js",
-    "bytes": 30487,
-    "gzip": 8964
-  },
-  {
-    "path": "_next/static/chunks/host-application-form-C0wYREvR.js",
-    "bytes": 4914,
-    "gzip": 2067
+    "path": "_next/static/chunks/room-client-Dm767Z-7.js",
+    "bytes": 70944,
+    "gzip": 20504
   },
   {
     "path": "_next/static/chunks/client-analytics-CMKAknB7.js",
@@ -310,24 +365,29 @@
     "gzip": 214
   },
   {
+    "path": "_next/static/chunks/fee-settings-CRQDeixX.js",
+    "bytes": 4246,
+    "gzip": 1689
+  },
+  {
+    "path": "_next/static/chunks/operations-nav-BtWasFwp.js",
+    "bytes": 161,
+    "gzip": 148
+  },
+  {
+    "path": "_next/static/chunks/promoter-operations-B-R1BV-B.js",
+    "bytes": 3276,
+    "gzip": 1398
+  },
+  {
     "path": "_next/static/chunks/gem-Bm1SzsQA.js",
     "bytes": 217,
     "gzip": 183
   },
   {
-    "path": "_next/static/chunks/accept-invitation-CNI5xfI4.js",
-    "bytes": 3438,
-    "gzip": 1540
-  },
-  {
     "path": "_next/static/chunks/arrow-left-CFtSKKmo.js",
     "bytes": 164,
     "gzip": 162
-  },
-  {
-    "path": "_next/static/chunks/brand-logo-HNEGyPpo.js",
-    "bytes": 597,
-    "gzip": 359
   },
   {
     "path": "_next/static/chunks/chevron-down-LADnrr_k.js",
@@ -340,24 +400,14 @@
     "gzip": 202
   },
   {
-    "path": "_next/static/chunks/page-DEz82GQI.js",
-    "bytes": 2760,
-    "gzip": 1351
+    "path": "_next/static/chunks/index-DGFz0voz.js",
+    "bytes": 219985,
+    "gzip": 45631
   },
   {
     "path": "_next/static/chunks/brand-arrival-DmFl8Ovv.js",
     "bytes": 4995,
     "gzip": 2151
-  },
-  {
-    "path": "_next/static/chunks/promoter-portal-D_e2gELw.js",
-    "bytes": 2902,
-    "gzip": 1353
-  },
-  {
-    "path": "_next/static/chunks/notification-bell-DU7DTZ6c.js",
-    "bytes": 2712,
-    "gzip": 1243
   },
   {
     "path": "_next/static/chunks/suite-shared-DKgJCumg.js",
@@ -375,14 +425,9 @@
     "gzip": 9478
   },
   {
-    "path": "_next/static/chunks/yorkeway-audience-B3JB3Qt_.js",
-    "bytes": 2855,
-    "gzip": 1243
-  },
-  {
-    "path": "_next/static/chunks/event-explorer-EeWOpH2L.js",
-    "bytes": 11299,
-    "gzip": 4105
+    "path": "_next/static/chunks/pwa-registration-DnFHRoDC.js",
+    "bytes": 3025,
+    "gzip": 1463
   },
   {
     "path": "_next/static/chunks/concierge-bell-DZka0kWf.js",
@@ -393,16 +438,6 @@
     "path": "_next/static/chunks/log-out-DS9NScqW.js",
     "bytes": 258,
     "gzip": 216
-  },
-  {
-    "path": "_next/static/chunks/account-security-CthTtcfh.js",
-    "bytes": 5301,
-    "gzip": 1939
-  },
-  {
-    "path": "_next/static/chunks/analytics-beacon-FkLs2nrF.js",
-    "bytes": 634,
-    "gzip": 432
   },
   {
     "path": "_next/static/chunks/loader-circle-DnSpEq47.js",
@@ -420,6 +455,11 @@
     "gzip": 625
   },
   {
+    "path": "_next/static/chunks/staff-app-session-DP8nzVBL.js",
+    "bytes": 1674,
+    "gzip": 756
+  },
+  {
     "path": "_next/static/chunks/shield-alert-B99fubY9.js",
     "bytes": 352,
     "gzip": 259
@@ -430,14 +470,9 @@
     "gzip": 217
   },
   {
-    "path": "_next/static/chunks/home-screen-1hBbCrdK.js",
-    "bytes": 25050,
-    "gzip": 7588
-  },
-  {
-    "path": "_next/static/chunks/event-operations-CzIN4rKb.js",
-    "bytes": 24055,
-    "gzip": 6761
+    "path": "_next/static/chunks/event-explorer-CpP4TnmP.js",
+    "bytes": 11299,
+    "gzip": 4107
   },
   {
     "path": "_next/static/chunks/event-images-DQUCF4uV.js",
@@ -450,24 +485,9 @@
     "gzip": 623
   },
   {
-    "path": "_next/static/chunks/night-hub-Br95gfyN.js",
-    "bytes": 28120,
-    "gzip": 8656
-  },
-  {
-    "path": "_next/static/chunks/vinext-CkKGO_jh.js",
-    "bytes": 147048,
-    "gzip": 43687
-  },
-  {
-    "path": "_next/static/chunks/support-operations-Dm6JA6ZV.js",
-    "bytes": 4500,
-    "gzip": 1770
-  },
-  {
-    "path": "_next/static/chunks/activation-form-B8q0SM86.js",
-    "bytes": 3493,
-    "gzip": 1536
+    "path": "_next/static/chunks/event-operations-CW83B3SF.js",
+    "bytes": 24055,
+    "gzip": 6757
   },
   {
     "path": "_next/static/chunks/scanner-account-Bd7aO8Sv.js",
@@ -480,14 +500,19 @@
     "gzip": 1310
   },
   {
+    "path": "_next/static/chunks/host-application-form-COpi9HM5.js",
+    "bytes": 4914,
+    "gzip": 2068
+  },
+  {
+    "path": "_next/static/chunks/script-CoW9pJzK.js",
+    "bytes": 3811,
+    "gzip": 1594
+  },
+  {
     "path": "_next/static/chunks/calendar-clock-C18mqVtn.js",
     "bytes": 382,
     "gzip": 254
-  },
-  {
-    "path": "_next/static/chunks/index-B_mJrN91.js",
-    "bytes": 219985,
-    "gzip": 45627
   },
   {
     "path": "_next/static/chunks/host-rsvp-alerts-CxFSM6y_.js",
@@ -500,14 +525,9 @@
     "gzip": 140
   },
   {
-    "path": "_next/static/chunks/event-operations-hub-Bor8E6hg.js",
-    "bytes": 18294,
-    "gzip": 5510
-  },
-  {
-    "path": "_next/static/chunks/operations-nav-BaDkB_5H.js",
-    "bytes": 161,
-    "gzip": 150
+    "path": "_next/static/chunks/page-B0bwf37O.js",
+    "bytes": 2760,
+    "gzip": 1348
   },
   {
     "path": "_next/static/chunks/bell-Bdk_dHUO.js",
@@ -515,19 +535,19 @@
     "gzip": 236
   },
   {
-    "path": "_next/static/chunks/workspace-chrome-CWuQRXLr.js",
-    "bytes": 8512,
-    "gzip": 3303
-  },
-  {
     "path": "_next/static/chunks/user-round-x-BIXTm05M.js",
     "bytes": 429,
     "gzip": 299
   },
   {
-    "path": "_next/static/chunks/error-BEqfXHAC.js",
-    "bytes": 792,
-    "gzip": 445
+    "path": "_next/static/chunks/events-screen-yMKznx3V.js",
+    "bytes": 998,
+    "gzip": 474
+  },
+  {
+    "path": "_next/static/chunks/ticket-wallet-BTwsGN2b.js",
+    "bytes": 10298,
+    "gzip": 3793
   },
   {
     "path": "_next/static/chunks/event-presentation-C6sYY8W4.js",
@@ -535,19 +555,19 @@
     "gzip": 619
   },
   {
+    "path": "_next/static/chunks/yorkeway-audience-h26ZCm8z.js",
+    "bytes": 2855,
+    "gzip": 1240
+  },
+  {
     "path": "_next/static/chunks/arrow-up-right-DP6Wb65z.js",
     "bytes": 165,
     "gzip": 158
   },
   {
-    "path": "_next/static/chunks/my-nights-client-CuZeGYX5.js",
-    "bytes": 11990,
-    "gzip": 4304
-  },
-  {
-    "path": "_next/static/chunks/host-applications-Cnye8yYf.js",
-    "bytes": 5509,
-    "gzip": 2233
+    "path": "_next/static/chunks/organizer-analytics-DeVTRSJZ.js",
+    "bytes": 22801,
+    "gzip": 6694
   },
   {
     "path": "_next/static/chunks/shield-check-CmWlJiyU.js",
@@ -555,9 +575,14 @@
     "gzip": 249
   },
   {
-    "path": "_next/static/chunks/submission-form-DMaqGA_R.js",
-    "bytes": 9835,
-    "gzip": 3643
+    "path": "_next/static/chunks/accept-invitation-DzLzdOEa.js",
+    "bytes": 3438,
+    "gzip": 1539
+  },
+  {
+    "path": "_next/static/chunks/account-navigation-371VN8Fa.js",
+    "bytes": 922,
+    "gzip": 434
   },
   {
     "path": "_next/static/chunks/clock-3-CDnB_D6x.js",
@@ -565,9 +590,9 @@
     "gzip": 171
   },
   {
-    "path": "_next/static/chunks/room-client-CO8FHbFq.js",
-    "bytes": 70944,
-    "gzip": 20503
+    "path": "_next/static/chunks/privacy-settings-DvuMR1ib.js",
+    "bytes": 7309,
+    "gzip": 2541
   },
   {
     "path": "_next/static/chunks/yorke-motion-Bo4bYrfu.js",
@@ -575,9 +600,9 @@
     "gzip": 1229
   },
   {
-    "path": "_next/static/chunks/image-Y0Z2NnWa.js",
-    "bytes": 32836,
-    "gzip": 10719
+    "path": "_next/static/chunks/order-operations-BMba9IrC.js",
+    "bytes": 18082,
+    "gzip": 5855
   },
   {
     "path": "_next/static/chunks/scanner-manifest-G4ylvmYr.js",
@@ -585,9 +610,9 @@
     "gzip": 563
   },
   {
-    "path": "_next/static/chunks/link-DrwlmD_W.js",
-    "bytes": 12625,
-    "gzip": 4859
+    "path": "_next/static/chunks/organizer-suite-C5r6KxP9.js",
+    "bytes": 89180,
+    "gzip": 22244
   },
   {
     "path": "_next/static/chunks/use-current-time-7bZzb9YF.js",
@@ -600,14 +625,14 @@
     "gzip": 127
   },
   {
+    "path": "_next/static/chunks/layout-segment-context-CrAP446J.js",
+    "bytes": 496,
+    "gzip": 344
+  },
+  {
     "path": "_next/static/chunks/circle-check-v78LwKM5.js",
     "bytes": 177,
     "gzip": 166
-  },
-  {
-    "path": "_next/static/chunks/confirm-application-C3u5gen8.js",
-    "bytes": 3007,
-    "gzip": 1357
   },
   {
     "path": "_next/static/chunks/wifi-DW-D4uA-.js",
@@ -615,19 +640,9 @@
     "gzip": 204
   },
   {
-    "path": "_next/static/chunks/mobile-app-frame-DehH3xLV.js",
-    "bytes": 2086,
-    "gzip": 847
-  },
-  {
-    "path": "_next/static/chunks/page-KJcnC9Oz.js",
-    "bytes": 3530,
-    "gzip": 1654
-  },
-  {
-    "path": "_next/static/chunks/page-C6lnipjM.js",
-    "bytes": 3333,
-    "gzip": 1476
+    "path": "_next/static/chunks/scanner-tcueBo7d.js",
+    "bytes": 41752,
+    "gzip": 13511
   },
   {
     "path": "_next/static/chunks/badge-check-DtKI_Kuu.js",
@@ -635,49 +650,14 @@
     "gzip": 210
   },
   {
-    "path": "_next/static/chunks/checkout-form-DcDfRDXo.js",
-    "bytes": 16814,
-    "gzip": 5651
+    "path": "_next/static/chunks/host-applications-DR5lVMJF.js",
+    "bytes": 5509,
+    "gzip": 2233
   },
   {
-    "path": "_next/static/chunks/staff-accounts-DneK7T13.js",
-    "bytes": 10664,
-    "gzip": 3872
-  },
-  {
-    "path": "_next/static/chunks/curation-desk-BVWE_adt.js",
-    "bytes": 9619,
-    "gzip": 3286
-  },
-  {
-    "path": "_next/static/chunks/organizer-analytics-NcPsnIyU.js",
-    "bytes": 22801,
-    "gzip": 6693
-  },
-  {
-    "path": "_next/static/chunks/platform-audience-C59__daY.js",
-    "bytes": 2911,
-    "gzip": 1235
-  },
-  {
-    "path": "_next/static/chunks/organizer-suite-odstdLy9.js",
-    "bytes": 89180,
-    "gzip": 22244
-  },
-  {
-    "path": "_next/static/chunks/action-BgRaBmY6.js",
-    "bytes": 853,
-    "gzip": 353
-  },
-  {
-    "path": "_next/static/chunks/pwa-registration-CLb8nTYk.js",
-    "bytes": 3025,
-    "gzip": 1465
-  },
-  {
-    "path": "_next/static/chunks/ticket-wallet-BREUo3So.js",
-    "bytes": 10298,
-    "gzip": 3792
+    "path": "_next/static/chunks/hybrid-client-route-owner-4d7KlZo0.js",
+    "bytes": 19486,
+    "gzip": 6188
   },
   {
     "path": "_next/static/chunks/refresh-cw-DDStEtX8.js",
@@ -705,9 +685,9 @@
     "gzip": 223
   },
   {
-    "path": "_next/static/chunks/use-header-panel-Csh4iGgC.js",
-    "bytes": 3118,
-    "gzip": 1338
+    "path": "_next/static/chunks/my-nights-client-DTzTRref.js",
+    "bytes": 11990,
+    "gzip": 4303
   },
   {
     "path": "_next/static/chunks/event-guest-CJF_QB2c.js",
@@ -715,14 +695,14 @@
     "gzip": 158
   },
   {
+    "path": "_next/static/chunks/home-screen-Dt2ih-0Z.js",
+    "bytes": 25050,
+    "gzip": 7590
+  },
+  {
     "path": "_next/static/chunks/circle-dollar-sign-1s6NsLxH.js",
     "bytes": 246,
     "gzip": 203
-  },
-  {
-    "path": "_next/static/chunks/event-screen-DvWRDBem.js",
-    "bytes": 21391,
-    "gzip": 7746
   },
   {
     "path": "_next/static/chunks/staff-password-recovery-client-B0TwVeoO.js",
@@ -730,14 +710,9 @@
     "gzip": 159
   },
   {
-    "path": "_next/static/chunks/events-screen-DotGIEwm.js",
-    "bytes": 998,
-    "gzip": 474
-  },
-  {
-    "path": "_next/static/chunks/script-1sIHzc6e.js",
-    "bytes": 3811,
-    "gzip": 1595
+    "path": "_next/static/chunks/curation-desk-3qGk7uXs.js",
+    "bytes": 9619,
+    "gzip": 3287
   },
   {
     "path": "_next/static/chunks/mail-D2lr2GmO.js",
@@ -745,14 +720,19 @@
     "gzip": 196
   },
   {
+    "path": "_next/static/chunks/customer-dock-Cgclkta1.js",
+    "bytes": 6254,
+    "gzip": 2474
+  },
+  {
     "path": "_next/static/chunks/external-link-ZnY_llhf.js",
     "bytes": 250,
     "gzip": 197
   },
   {
-    "path": "_next/static/chunks/registration-workspace-qsI42TZg.js",
-    "bytes": 1767,
-    "gzip": 867
+    "path": "_next/static/chunks/workspace-return-GGFzMm50.js",
+    "bytes": 1240,
+    "gzip": 720
   },
   {
     "path": "_next/static/chunks/operations-client-CFj1yRbZ.js",
@@ -760,14 +740,14 @@
     "gzip": 287
   },
   {
-    "path": "_next/static/chunks/hybrid-client-route-owner-DzGbwr7f.js",
-    "bytes": 19486,
-    "gzip": 6189
-  },
-  {
     "path": "_next/static/chunks/users-D6sXi0ws.js",
     "bytes": 304,
     "gzip": 226
+  },
+  {
+    "path": "_next/static/chunks/page-BUnQEZ55.js",
+    "bytes": 3530,
+    "gzip": 1654
   },
   {
     "path": "_next/static/chunks/megaphone-D14ADf19.js",
@@ -775,14 +755,29 @@
     "gzip": 180
   },
   {
+    "path": "_next/static/chunks/brand-logo-BuMZshOi.js",
+    "bytes": 597,
+    "gzip": 360
+  },
+  {
     "path": "_next/static/chunks/sparkles-KZrhqHxR.js",
     "bytes": 508,
     "gzip": 296
   },
   {
+    "path": "_next/static/chunks/login-form-DIzIu88H.js",
+    "bytes": 3693,
+    "gzip": 1494
+  },
+  {
     "path": "_next/static/chunks/chevron-right-CqqEyK4U.js",
     "bytes": 129,
     "gzip": 140
+  },
+  {
+    "path": "_next/static/chunks/workspace-chrome-6r6T_TsB.js",
+    "bytes": 8512,
+    "gzip": 3302
   },
   {
     "path": "_next/static/chunks/customer-runtime-xl60KsUT.js",
@@ -810,9 +805,19 @@
     "gzip": 148
   },
   {
+    "path": "_next/static/chunks/confirm-application-DRGL4LhZ.js",
+    "bytes": 3007,
+    "gzip": 1357
+  },
+  {
     "path": "_next/static/chunks/confirmation-notifications-aPqffAYq.js",
     "bytes": 5871,
     "gzip": 2287
+  },
+  {
+    "path": "_next/static/chunks/page-BeHcM8wj.js",
+    "bytes": 3333,
+    "gzip": 1477
   },
   {
     "path": "_next/static/chunks/input-modality-d2sejiU9.js",
@@ -820,19 +825,14 @@
     "gzip": 455
   },
   {
+    "path": "_next/static/chunks/checkout-form-C8gI2ZPL.js",
+    "bytes": 16814,
+    "gzip": 5648
+  },
+  {
     "path": "_next/static/chunks/share-2-CU0VXroW.js",
     "bytes": 356,
     "gzip": 235
-  },
-  {
-    "path": "_next/static/chunks/use-notifications-D6CZobdz.js",
-    "bytes": 6889,
-    "gzip": 2704
-  },
-  {
-    "path": "_next/static/chunks/staff-app-session-CGDGntHd.js",
-    "bytes": 1674,
-    "gzip": 758
   },
   {
     "path": "_next/static/chunks/loading-skeleton-CoIvw-V-.js",
@@ -845,9 +845,14 @@
     "gzip": 156
   },
   {
-    "path": "_next/static/chunks/recovery-form-D3POmUfz.js",
-    "bytes": 3841,
-    "gzip": 1619
+    "path": "_next/static/chunks/submission-form-CCodeMoP.js",
+    "bytes": 9835,
+    "gzip": 3643
+  },
+  {
+    "path": "_next/static/chunks/support-operations-DpIqd9zH.js",
+    "bytes": 4500,
+    "gzip": 1768
   },
   {
     "path": "_next/static/chunks/copy-Dssm0Es0.js",
@@ -855,24 +860,9 @@
     "gzip": 202
   },
   {
-    "path": "_next/static/chunks/notifications-client-BLdahvwS.js",
-    "bytes": 2199,
-    "gzip": 1055
-  },
-  {
     "path": "_next/static/chunks/room-chat-parts-BhBwCcPJ.js",
     "bytes": 1419,
     "gzip": 679
-  },
-  {
-    "path": "_next/static/chunks/workspace-return-DUvSWrNb.js",
-    "bytes": 1240,
-    "gzip": 723
-  },
-  {
-    "path": "_next/static/chunks/promoter-operations-BNPVyULk.js",
-    "bytes": 3276,
-    "gzip": 1399
   },
   {
     "path": "_next/static/chunks/users-round-DHO2Njld.js",
@@ -880,9 +870,19 @@
     "gzip": 219
   },
   {
-    "path": "_next/static/chunks/account-navigation-BGsyUI2c.js",
-    "bytes": 922,
-    "gzip": 435
+    "path": "_next/static/chunks/mobile-app-frame-Cn8oZH2a.js",
+    "bytes": 2086,
+    "gzip": 845
+  },
+  {
+    "path": "_next/static/chunks/notification-bell-BQrZ5XvP.js",
+    "bytes": 2712,
+    "gzip": 1242
+  },
+  {
+    "path": "_next/static/chunks/platform-audience-8wP8x2qy.js",
+    "bytes": 2911,
+    "gzip": 1232
   },
   {
     "path": "_next/static/chunks/search-C20LW0f5.js",
@@ -900,29 +900,29 @@
     "gzip": 142
   },
   {
-    "path": "_next/static/chunks/registration-form-BXnP6qsL.js",
-    "bytes": 7915,
-    "gzip": 3109
+    "path": "_next/static/chunks/vinext-CghzuQl5.js",
+    "bytes": 147048,
+    "gzip": 43685
   },
   {
-    "path": "_next/static/chunks/help-centre-DAvu7cn1.js",
-    "bytes": 25120,
-    "gzip": 8779
+    "path": "_next/static/chunks/action-1_R6EB01.js",
+    "bytes": 853,
+    "gzip": 354
   },
   {
-    "path": "_next/static/chunks/privacy-settings-Bcbar1bd.js",
-    "bytes": 7309,
-    "gzip": 2537
+    "path": "_next/static/chunks/room-operations-CuCAnQUK.js",
+    "bytes": 10580,
+    "gzip": 3090
+  },
+  {
+    "path": "_next/static/chunks/my-registrations-aDlzni8N.js",
+    "bytes": 5569,
+    "gzip": 2189
   },
   {
     "path": "_next/static/chunks/organizer-access-DRBUKTmH.js",
     "bytes": 3288,
     "gzip": 1520
-  },
-  {
-    "path": "_next/static/chunks/scanner-Br3LSrqE.js",
-    "bytes": 41752,
-    "gzip": 13512
   },
   {
     "path": "_next/static/chunks/music-2-BtQJao7v.js",

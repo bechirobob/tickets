@@ -55,9 +55,9 @@ Same clean base and environment, emitted `dist/client` JavaScript and CSS; gzip 
 
 | Output | Baseline bytes / gzip | Trial bytes / gzip | Gzip change |
 | --- | ---: | ---: | ---: |
-| JavaScript | 1,431,505 / 448,978 | 1,671,471 / 519,223 | +70,245 |
-| CSS | 667,679 / 128,504 | 678,193 / 131,065 | +2,561 |
-| Total | 2,099,184 / 577,482 | 2,349,664 / 650,288 | +72,806 |
+| JavaScript | 1,431,505 / 448,978 | 1,671,471 / 519,197 | +70,219 |
+| CSS | 667,679 / 128,504 | 678,310 / 131,082 | +2,578 |
+| Total | 2,099,184 / 577,482 | 2,349,781 / 650,279 | +72,797 |
 
 No speed or Core Web Vitals improvement is claimed. Device profiling and route-specific loading measurements remain needed before adoption.
 
@@ -67,4 +67,4 @@ Final `npm audit` ran without omissions or exceptions: both clean baseline and t
 
 This is a useful, concrete design trial: the selected components work with Tickets' stack and allow its identity to survive. It does not yet justify project-wide adoption. Review the workflow and screenshots first; then resolve the inherited audit findings and verify Safari/device performance, screen-reader use, and the CSP adapter before any wider integration.
 
-The source and verification evidence are in this branch and the accompanying Library package. The final delivery records the confirmed Library IDs separately; local paths are not treated as delivered attachments.
+The source and verification evidence are durably published in draft PR #394. A source/evidence archive and selected screenshots are staged locally, but Library delivery failed before upload: the helper could not connect to its tool-discovery endpoint. A network-escalated retry was denied by automatic approval review because it did not recognize user authorization to copy private repository source and screenshots to Library. No Library IDs were returned and no delivery there is claimed. Explicit user approval for that destination is needed before retrying; local files are not treated as delivered attachments.

@@ -15,12 +15,12 @@
     ".js": {
       "files": 167,
       "bytes": 1671471,
-      "gzip": 519223
+      "gzip": 519197
     },
     ".css": {
       "files": 20,
-      "bytes": 678193,
-      "gzip": 131065
+      "bytes": 678310,
+      "gzip": 131082
     }
   },
   "method": "Sum of emitted dist/client JS and CSS files; gzip.compress(mtime=0), same Node/npm/environment and unchanged package versions. Whole app output, not route download size or runtime speed."

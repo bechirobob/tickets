@@ -56,6 +56,7 @@ for (const [label, width, height] of [['desktop', 1440, 1050], ['mobile', 390, 8
  await add.focus(); await page.keyboard.press('Enter');
  const dialog = page.getByRole('dialog');
  await expect(dialog).toBeVisible();
+ expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
  await expect(dialog.getByLabel('Name')).toBeFocused();
  await dialog.getByRole('button', { name: 'Add guest', exact: true }).click();
  await expect(page.getByText('Enter a name with at least 2 characters.')).toBeVisible();
@@ -83,6 +84,7 @@ for (const [label, width, height] of [['desktop', 1440, 1050], ['mobile', 390, 8
  await expect(dialog.getByLabel('Checked in')).toBeChecked();
  await dialog.getByLabel('Name').fill('Trial guest updated');
  await page.screenshot({ path: `${out}/${label}-dialog.png`, fullPage: false });
+ expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
  const dialogAxe = await new AxeBuilder({ page }).include('.trial-dialog').analyze();
  expect(dialogAxe.violations).toEqual([]);
  // Two submit events in one task must apply only one mutation.

@@ -41,7 +41,8 @@ body:has(.boardui-trial) .customer-dock { display: none; }
 .boardui-trial .trial-dialog::backdrop { background:rgb(0 0 0 / .3); }
 .boardui-trial .trial-dialog-heading { display:flex; align-items:start; justify-content:space-between; gap:12px; margin-bottom:20px; }
 .boardui-trial h2 { font-size:22px; line-height:1.2; font-weight:700; letter-spacing:-.025em; margin:0; }
-.boardui-trial .trial-dialog form { display:grid; gap:20px; }
+.boardui-trial .trial-dialog form { display:grid; grid-template-columns:minmax(0, 1fr); gap:20px; }
+.boardui-trial .trial-dialog form > *, .boardui-trial [data-input-size] { min-width:0; }
 .boardui-trial .trial-ticket-id { color:var(--muted); font-size:12px; margin:-8px 0 20px; }
 .boardui-trial .trial-checkbox { display:flex; gap:10px; align-items:center; min-height:44px; }
 .boardui-trial .trial-checkbox input { width:20px; height:20px; accent-color:var(--ink); }
