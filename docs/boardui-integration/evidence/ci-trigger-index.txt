@@ -1,0 +1,80 @@
+.github/workflows/backup-transport-checks.yml:4:    branches: [main]
+.github/workflows/backup-transport-checks.yml:10:  push:
+.github/workflows/backup-transport-checks.yml:11:    branches: [main]
+.github/workflows/puro-first-host-delivery-readonly-20261024.yml:5:  push:
+.github/workflows/puro-first-host-delivery-readonly-20261024.yml:6:    branches: [main]
+.github/workflows/tickets-bounce-codes-readonly-20261024.yml:3:  push:
+.github/workflows/tickets-bounce-codes-readonly-20261024.yml:4:    branches: [main]
+.github/workflows/fallback-infrastructure.yml:3:  push:
+.github/workflows/fallback-infrastructure.yml:4:    branches: [feat/vps-maintenance-fallback]
+.github/workflows/full-audit-capacity.yml:4:    branches: [main]
+.github/workflows/tickets-mail-room-upgrade.yml:3:  push:
+.github/workflows/tickets-mail-room-upgrade.yml:4:    branches: [main]
+.github/workflows/tickets-vps-access.yml:3:  push:
+.github/workflows/tickets-vps-access.yml:4:    branches: [main]
+.github/workflows/tickets-yorkeway-mail-upgrade.yml:3:  push:
+.github/workflows/tickets-yorkeway-mail-upgrade.yml:4:    branches: [main]
+.github/workflows/native-apps.yml:5:    branches: [main]
+.github/workflows/customer-email-previews.yml:5:    branches: [main]
+.github/workflows/tickets-mail-service-readonly-20261024.yml:3:  push:
+.github/workflows/tickets-mail-service-readonly-20261024.yml:4:    branches: [main]
+.github/workflows/browser-followup.yml:5:    branches: [main]
+.github/workflows/tickets-room-helper-transport.yml:4:    branches: [main]
+.github/workflows/handover-return-diagnose.yml:3:  push:
+.github/workflows/handover-return-diagnose.yml:4:    branches: [ops/vps-standby-completion-20260929]
+.github/workflows/prepare-vps-fallback.yml:3:  push:
+.github/workflows/prepare-vps-fallback.yml:4:    branches: [feat/vps-maintenance-fallback]
+.github/workflows/tickets-release-operator-checks.yml:4:    branches: [main]
+.github/workflows/iphone-layouts.yml:8:    branches: [main]
+.github/workflows/cinco-confirmation-release-20261019.yml:6:  push:
+.github/workflows/cinco-confirmation-release-20261019.yml:7:    branches: [main]
+.github/workflows/puro-first-host-recovery-20261024.yml:5:  push:
+.github/workflows/puro-first-host-recovery-20261024.yml:6:    branches: [main]
+.github/workflows/booking-consent-previews.yml:5:    branches: [main]
+.github/workflows/dependency-security.yml:4:  push:
+.github/workflows/dependency-security.yml:5:    branches: [main]
+.github/workflows/puro-exceso-publish.yml:3:  push:
+.github/workflows/puro-exceso-publish.yml:4:    branches: [main]
+.github/workflows/event-capacity.yml:4:  push:
+.github/workflows/event-capacity.yml:5:    branches: ['perf/event-capacity-400']
+.github/workflows/seev-production-secrets.yml:4:  push:
+.github/workflows/seev-production-secrets.yml:5:    branches: [release/seev-live-checkout]
+.github/workflows/handover-tools.yml:3:  push:
+.github/workflows/handover-tools.yml:4:    branches: [ops/vps-standby-completion-20260929]
+.github/workflows/puro-access-readonly-20261020.yml:6:  push:
+.github/workflows/puro-access-readonly-20261020.yml:7:    branches: [main]
+.github/workflows/hosted-capacity.yml:3:  push:
+.github/workflows/hosted-capacity.yml:4:    branches: [ops/hosted-capacity-readiness, ops/hosted-capacity-diagnostics, fix/room-render-and-browser-reliability]
+.github/workflows/input-modality-checks.yml:3:  push:
+.github/workflows/input-modality-checks.yml:4:    branches: [fix/shared-input-focus-20261024]
+.github/workflows/tickets-vps-diagnostics.yml:3:  push:
+.github/workflows/tickets-vps-diagnostics.yml:4:    branches: [main]
+.github/workflows/deploy.yml:4:  push:
+.github/workflows/deploy.yml:5:    branches:
+.github/workflows/yorkeway-previews.yml:5:    branches: [main]
+.github/workflows/staff-entry-previews.yml:4:  push:
+.github/workflows/staff-entry-previews.yml:5:    branches: [feat/staff-entry]
+.github/workflows/d1-recovery-rehearsal.yml:4:  push:
+.github/workflows/d1-recovery-rehearsal.yml:5:    branches:
+.github/workflows/candidate-parallel-checks.yml:8:  push:
+.github/workflows/candidate-parallel-checks.yml:9:    branches: [improve/release-evidence-parallel-20261013]
+.github/workflows/vps-runtime.yml:4:  push:
+.github/workflows/vps-runtime.yml:5:    branches: [main]
+.github/workflows/handover-preflight.yml:3:  push:
+.github/workflows/handover-preflight.yml:4:    branches: [feat/vps-live-handover-20260929]
+.github/workflows/puro-delivery-readonly-20261020.yml:5:  push:
+.github/workflows/puro-delivery-readonly-20261020.yml:6:    branches: [main]
+.github/workflows/handover-return-prepare.yml:3:  push:
+.github/workflows/handover-return-prepare.yml:4:    branches: [ops/vps-standby-completion-20260929]
+.github/workflows/tickets-readiness-audit.yml:3:  push:
+.github/workflows/tickets-readiness-audit.yml:4:    branches: [main]
+.github/workflows/puro-approval-readonly-20261019.yml:3:  push:
+.github/workflows/puro-approval-readonly-20261019.yml:4:    branches: [main]
+.github/workflows/tickets-yorkeway-mail-inspect.yml:3:  push:
+.github/workflows/tickets-yorkeway-mail-inspect.yml:4:    branches: [main]
+.github/workflows/preview-data-inventory.yml:3:  push:
+.github/workflows/preview-data-inventory.yml:4:    branches: [feat/full-visual-audit]
+.github/workflows/handover-return-verify.yml:3:  push:
+.github/workflows/handover-return-verify.yml:4:    branches: [ops/vps-standby-completion-20260929]
+.github/workflows/puro-access-release-20261019.yml:6:  push:
+.github/workflows/puro-access-release-20261019.yml:7:    branches: [main]

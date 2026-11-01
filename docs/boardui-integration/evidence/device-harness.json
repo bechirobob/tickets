@@ -1,0 +1,13 @@
+{
+  "loopbackVerified": true,
+  "browser": "154.0.8037.57",
+  "mobileSimulation": true,
+  "fixtureGuestAndYorkeLists": true,
+  "writeRejected": {
+    "status": 405,
+    "body": {
+      "error": "Read-only local preview. Nothing was saved or sent."
+    }
+  },
+  "lanAndPhysicalIphoneTested": false
+}

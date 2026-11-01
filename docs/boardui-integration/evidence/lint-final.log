@@ -1,0 +1,27 @@
+
+> becore-tickets@0.1.0 lint
+> eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vinext --ignore-pattern .wrangler --ignore-pattern '.release-dry-run*' --ignore-pattern 'rbac-dry-run*' --ignore-pattern 'live-audit.*' --ignore-pattern 'workers-types-latest.*' --ignore-pattern '.tmp-*' --ignore-pattern worker-configuration.d.ts
+
+
+/workspace/tickets-integration/app/admin/yorkeway-audience/layout.tsx
+  3:12  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+/workspace/tickets-integration/app/boardui-trial/layout.tsx
+  4:12  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+/workspace/tickets-integration/app/organizer/workspace/layout.tsx
+  4:12  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+/workspace/tickets-integration/ops/moderation/worker.ts
+  4:1  warning  Assign object to a variable before exporting as module default  import/no-anonymous-default-export
+
+/workspace/tickets-integration/scripts/boardui-integration/harness/image.tsx
+  2:210  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+✖ 5 problems (0 errors, 5 warnings)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

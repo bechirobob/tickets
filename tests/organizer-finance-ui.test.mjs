@@ -16,6 +16,8 @@ function renderMoney(financialScope){
     useRemote:()=>({data:{financialScope,totals:{collectedMinor:611,feesMinor:49,refundsMinor:208,faceMinor:611,ticketRefundsMinor:208},payoutTotals:{paidMinor:100},statements:[{id:'s',eventTitle:'My event',periodEnd:'2026-10-12',grossMinor:611,feesMinor:49,refundsMinor:225,netMinor:386,status:'ready'}],transfers:[]}}),
     RemoteState:()=>null,apiUrl:()=>'/export',money:value=>`GHS ${value}`,date:value=>value,readable:value=>value,
    };
+   // Record-list primitives are not used by the Money projection under test.
+   if(specifier.startsWith('@/components/boardui/')||specifier==='@/components/workspace/record-dialog')return {};
    if(specifier.startsWith('../../'))return {__esModule:true,default:()=>null};
    return requireDependency(specifier);
   };

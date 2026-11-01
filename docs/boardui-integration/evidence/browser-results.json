@@ -1,0 +1,28 @@
+{
+  "browser": "154.0.8037.57",
+  "errors": [],
+  "scenarios": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "passed": true,
+      "mutationRequests": []
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "passed": true,
+      "mutationRequests": []
+    },
+    {
+      "name": "narrow",
+      "width": 320,
+      "height": 740,
+      "passed": true,
+      "mutationRequests": []
+    }
+  ],
+  "limits": "Real source client components with mocked HTTP contracts. Separate Worker tests exercise authorization/API/database. Not browser-to-database or real Safari/iPhone evidence."
+}
